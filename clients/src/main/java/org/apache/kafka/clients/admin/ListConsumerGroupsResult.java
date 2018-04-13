@@ -51,23 +51,18 @@ public class ListConsumerGroupsResult {
         private Iterator<ConsumerGroupListing> innerIter;
 
         @Override
-        public boolean hasNext() {
+        protected KafkaFuture<ConsumerGroupListing> makeNext() {
             if (futuresIter == null) {
                 try {
                     listFuture.get();
                 } catch (Exception e) {
-                    // the list future has failed, there will be no listings to show at all;
-                    return false;
+                    // the list future has failed, there will be no listings to show at all
+                    return allDone();
                 }
 
                 futuresIter = futuresMap.values().iterator();
             }
 
-            return super.hasNext();
-        }
-
-        @Override
-        protected KafkaFuture<ConsumerGroupListing> makeNext() {
             while (innerIter == null || !innerIter.hasNext()) {
                 if (futuresIter.hasNext()) {
                     KafkaFuture<Collection<ConsumerGroupListing>> collectionFuture = futuresIter.next();

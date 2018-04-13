@@ -46,6 +46,7 @@ import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.BrokerNotAvailableException;
 import org.apache.kafka.common.errors.DisconnectException;
+import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.RetriableException;
@@ -917,8 +918,10 @@ public class KafkaAdminClient extends AdminClient {
          * @param correlationIdToCall   A map of correlation IDs to calls.
          * @param callsInFlight         A map of nodes to the calls they have in flight.
         **/
-        private void handleResponses(long now, List<ClientResponse> responses, Map<String, List<Call>> callsInFlight,
-                Map<Integer, Call> correlationIdToCall) {
+        private void handleResponses(long now,
+                                     List<ClientResponse> responses,
+                                     Map<String, List<Call>> callsInFlight,
+                                     Map<Integer, Call> correlationIdToCall) {
 
             for (ClientResponse response : responses) {
                 int correlationId = response.requestHeader().correlationId();
@@ -1110,11 +1113,11 @@ public class KafkaAdminClient extends AdminClient {
      * those policies on the server, so that they can be changed in the future if needed.
      */
     private static boolean topicNameIsUnrepresentable(String topicName) {
-        return (topicName == null) || topicName.isEmpty();
+        return topicName == null || topicName.isEmpty();
     }
 
     private static boolean groupIdIsUnrepresentable(String groupId) {
-        return (groupId == null) || groupId.isEmpty();
+        return groupId == null;
     }
 
     @Override
@@ -2241,7 +2244,7 @@ public class KafkaAdminClient extends AdminClient {
         for (String groupId: groupIds) {
             if (groupIdIsUnrepresentable(groupId)) {
                 KafkaFutureImpl<ConsumerGroupDescription> future = new KafkaFutureImpl<>();
-                future.completeExceptionally(new ApiException("The given group id '" +
+                future.completeExceptionally(new InvalidGroupIdException("The given group id '" +
                         groupId + "' cannot be represented in a request."));
                 futures.put(groupId, future);
             } else if (!futures.containsKey(groupId)) {
@@ -2249,11 +2252,15 @@ public class KafkaAdminClient extends AdminClient {
             }
         }
 
-        // TODO: we should consider grouping the request per coordinator and send one request with a list of
+        // TODO: KAFKA-6788, we should consider grouping the request per coordinator and send one request with a list of
         // all consumer groups this coordinator host
         for (final String groupId : groupIds) {
-            final long nowFindCoordinator = time.milliseconds();
-            final long deadline = calcDeadlineMs(nowFindCoordinator, options.timeoutMs());
+            // skip sending request for those futures that already failed.
+            if (futures.get(groupId).isCompletedExceptionally())
+                continue;
+
+            final long startFindCoordinatorMs = time.milliseconds();
+            final long deadline = calcDeadlineMs(startFindCoordinatorMs, options.timeoutMs());
 
             runnable.call(new Call("findCoordinator", deadline, new LeastLoadedNodeProvider()) {
                 @Override
@@ -2285,6 +2292,7 @@ public class KafkaAdminClient extends AdminClient {
 
                             final Errors groupError = groupMetadata.error();
                             if (groupError != Errors.NONE) {
+                                // TODO: KAFKA-6789, we can retry based on the error code
                                 future.completeExceptionally(groupError.exception());
                             } else {
                                 final String protocolType = groupMetadata.protocolType();
@@ -2326,7 +2334,7 @@ public class KafkaAdminClient extends AdminClient {
                     KafkaFutureImpl<ConsumerGroupDescription> future = futures.get(groupId);
                     future.completeExceptionally(throwable);
                 }
-            }, nowFindCoordinator);
+            }, startFindCoordinatorMs);
         }
 
         return new DescribeConsumerGroupsResult(new HashMap<String, KafkaFuture<ConsumerGroupDescription>>(futures));
@@ -2355,17 +2363,25 @@ public class KafkaAdminClient extends AdminClient {
                     if (metadata.topic().equals(Topic.GROUP_METADATA_TOPIC_NAME)) {
                         for (final MetadataResponse.PartitionMetadata partitionMetadata : metadata.partitionMetadata()) {
                             final Node leader = partitionMetadata.leader();
-                            if (leader.equals(Node.noNode())) {
+                            if (partitionMetadata.error() != Errors.NONE) {
+                                // TODO: KAFKA-6789, retry based on the error code
                                 KafkaFutureImpl<Collection<ConsumerGroupListing>> future = new KafkaFutureImpl<>();
-                                future.completeExceptionally(new ApiException("Some broker that hosts the consumer listings is not available."));
+                                future.completeExceptionally(partitionMetadata.error().exception());
                                 futuresMap.put(leader, future);
                             } else {
+                                // if it is the leader not found error, then the leader might be NoNode; if there are more than
+                                // one such error, we will only have one entry in the map. For now it is okay since we are not
+                                // guaranteeing to return the full list of consumers still.
                                 futuresMap.put(leader, new KafkaFutureImpl<Collection<ConsumerGroupListing>>());
                             }
                         }
                         listFuture.complete(null);
                     } else {
-                        listFuture.completeExceptionally(new ApiException("Cannot find the brokers to query consumer listings."));
+                        if (metadata.error() != Errors.NONE)
+                            listFuture.completeExceptionally(metadata.error().exception());
+                        else
+                            listFuture.completeExceptionally(new IllegalStateException("Unexpected topic metadata for "
+                                    + metadata.topic() + " is returned; cannot find the brokers to query consumer listings."));
                     }
                 }
 
@@ -2393,6 +2409,10 @@ public class KafkaAdminClient extends AdminClient {
                         });
 
                 for (final Map.Entry<Node, KafkaFutureImpl<Collection<ConsumerGroupListing>>> entry : futuresMap.entrySet()) {
+                    // skip sending the request for those futures who have already failed
+                    if (entry.getValue().isCompletedExceptionally())
+                        continue;
+
                     final long nowList = time.milliseconds();
 
                     final int brokerId = entry.getKey().id();
@@ -2447,8 +2467,8 @@ public class KafkaAdminClient extends AdminClient {
     public ListConsumerGroupOffsetsResult listConsumerGroupOffsets(final String groupId, final ListConsumerGroupOffsetsOptions options) {
         final KafkaFutureImpl<Map<TopicPartition, OffsetAndMetadata>> groupOffsetListingFuture = new KafkaFutureImpl<>();
 
-        final long nowFindCoordinator = time.milliseconds();
-        final long deadline = calcDeadlineMs(nowFindCoordinator, options.timeoutMs());
+        final long startFindCoordinatorMs = time.milliseconds();
+        final long deadline = calcDeadlineMs(startFindCoordinatorMs, options.timeoutMs());
 
         runnable.call(new Call("findCoordinator", deadline, new LeastLoadedNodeProvider()) {
             @Override
@@ -2487,6 +2507,8 @@ public class KafkaAdminClient extends AdminClient {
                                     final Long offset = entry.getValue().offset;
                                     final String metadata = entry.getValue().metadata;
                                     groupOffsetsListing.put(topicPartition, new OffsetAndMetadata(offset, metadata));
+                                } else {
+                                    log.warn("Skipping return offset for {} due to error {}.", topicPartition, error);
                                 }
                             }
                             groupOffsetListingFuture.complete(groupOffsetsListing);
@@ -2504,7 +2526,7 @@ public class KafkaAdminClient extends AdminClient {
             void handleFailure(Throwable throwable) {
                 groupOffsetListingFuture.completeExceptionally(throwable);
             }
-        }, nowFindCoordinator);
+        }, startFindCoordinatorMs);
 
         return new ListConsumerGroupOffsetsResult(groupOffsetListingFuture);
     }
@@ -2524,11 +2546,15 @@ public class KafkaAdminClient extends AdminClient {
             }
         }
 
-        // TODO: we should consider grouping the request per coordinator and send one request with a list of
+        // TODO: KAFKA-6788, we should consider grouping the request per coordinator and send one request with a list of
         // all consumer groups this coordinator host
         for (final String groupId : groupIds) {
-            final long nowFindCoordinator = time.milliseconds();
-            final long deadline = calcDeadlineMs(nowFindCoordinator, options.timeoutMs());
+            // skip sending request for those futures that already failed.
+            if (futures.get(groupId).isCompletedExceptionally())
+                continue;
+
+            final long startFindCoordinatorMs = time.milliseconds();
+            final long deadline = calcDeadlineMs(startFindCoordinatorMs, options.timeoutMs());
 
             runnable.call(new Call("findCoordinator", deadline, new LeastLoadedNodeProvider()) {
                 @Override
@@ -2578,7 +2604,7 @@ public class KafkaAdminClient extends AdminClient {
                     KafkaFutureImpl<Void> future = futures.get(groupId);
                     future.completeExceptionally(throwable);
                 }
-            }, nowFindCoordinator);
+            }, startFindCoordinatorMs);
         }
 
         return new DeleteConsumerGroupsResult(new HashMap<String, KafkaFuture<Void>>(futures));

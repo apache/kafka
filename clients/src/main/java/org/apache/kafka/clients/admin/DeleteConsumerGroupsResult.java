@@ -29,7 +29,7 @@ import java.util.Map;
  */
 @InterfaceStability.Evolving
 public class DeleteConsumerGroupsResult {
-    final Map<String, KafkaFuture<Void>> futures;
+    private final Map<String, KafkaFuture<Void>> futures;
 
     DeleteConsumerGroupsResult(final Map<String, KafkaFuture<Void>> futures) {
         this.futures = futures;
