@@ -61,7 +61,6 @@ import static org.junit.Assert.assertEquals;
 public class StreamThreadStateStoreProviderTest {
 
     private StreamTask taskOne;
-    private StreamTask taskTwo;
     private StreamThreadStateStoreProvider provider;
     private StateDirectory stateDirectory;
     private File stateDir;
@@ -71,19 +70,19 @@ public class StreamThreadStateStoreProviderTest {
 
     @SuppressWarnings("deprecation")
     @Before
-    public void before() throws IOException {
+    public void before() {
         final TopologyBuilder builder = new TopologyBuilder();
         builder.addSource("the-source", topicName);
         builder.addProcessor("the-processor", new MockProcessorSupplier(), "the-source");
         builder.addStateStore(Stores.create("kv-store")
-                                  .withStringKeys()
-                                  .withStringValues().inMemory().build(), "the-processor");
+            .withStringKeys()
+            .withStringValues().inMemory().build(), "the-processor");
 
         builder.addStateStore(Stores.create("window-store")
-                                  .withStringKeys()
-                                  .withStringValues()
-                                  .persistent()
-                                  .windowed(10, 10, 2, false).build(), "the-processor");
+            .withStringKeys()
+            .withStringValues()
+            .persistent()
+            .windowed(10, 10, 2, false).build(), "the-processor");
 
         final Properties properties = new Properties();
         final String applicationId = "applicationId";
@@ -99,18 +98,17 @@ public class StreamThreadStateStoreProviderTest {
 
         builder.setApplicationId(applicationId);
         final ProcessorTopology topology = builder.build(null);
+
         tasks = new HashMap<>();
         stateDirectory = new StateDirectory(streamsConfig, new MockTime());
-        taskOne = createStreamsTask(applicationId, streamsConfig, clientSupplier, topology,
-                                    new TaskId(0, 0));
+
+        taskOne = createStreamsTask(streamsConfig, clientSupplier, topology, new TaskId(0, 0));
         taskOne.initializeStateStores();
-        tasks.put(new TaskId(0, 0),
-                  taskOne);
-        taskTwo = createStreamsTask(applicationId, streamsConfig, clientSupplier, topology,
-                                    new TaskId(0, 1));
+        tasks.put(new TaskId(0, 0), taskOne);
+
+        final StreamTask taskTwo = createStreamsTask(streamsConfig, clientSupplier, topology, new TaskId(0, 1));
         taskTwo.initializeStateStores();
-        tasks.put(new TaskId(0, 1),
-                  taskTwo);
+        tasks.put(new TaskId(0, 1), taskTwo);
 
         threadMock = EasyMock.createNiceMock(StreamThread.class);
         provider = new StreamThreadStateStoreProvider(threadMock);
@@ -121,7 +119,7 @@ public class StreamThreadStateStoreProviderTest {
     public void cleanUp() throws IOException {
         Utils.delete(stateDir);
     }
-    
+
     @Test
     public void shouldFindKeyValueStores() {
         mockThread(true);
@@ -164,8 +162,10 @@ public class StreamThreadStateStoreProviderTest {
     @Test
     public void shouldReturnEmptyListIfStoreExistsButIsNotOfTypeValueStore() {
         mockThread(true);
-        assertEquals(Collections.emptyList(), provider.stores("window-store",
-                                                              QueryableStoreTypes.keyValueStore()));
+        assertEquals(
+            Collections.emptyList(),
+            provider.stores("window-store", QueryableStoreTypes.keyValueStore())
+        );
     }
 
     @Test(expected = InvalidStateStoreException.class)
@@ -174,8 +174,7 @@ public class StreamThreadStateStoreProviderTest {
         provider.stores("kv-store", QueryableStoreTypes.keyValueStore());
     }
 
-    private StreamTask createStreamsTask(final String applicationId,
-                                         final StreamsConfig streamsConfig,
+    private StreamTask createStreamsTask(final StreamsConfig streamsConfig,
                                          final MockClientSupplier clientSupplier,
                                          final ProcessorTopology topology,
                                          final TaskId taskId) {
@@ -193,7 +192,8 @@ public class StreamThreadStateStoreProviderTest {
             clientSupplier.getProducer(new HashMap<String, Object>())) {
 
             @Override
-            protected void updateOffsetLimits() {}
+            protected void updateOffsetLimits() {
+            }
         };
     }
 
@@ -207,26 +207,22 @@ public class StreamThreadStateStoreProviderTest {
                                           final String topic) {
         clientSupplier.restoreConsumer
             .updatePartitions(topic,
-                              Arrays.asList(
-                                  new PartitionInfo(topic, 0, null,
-                                                    null, null),
-                                  new PartitionInfo(topic, 1, null,
-                                                    null, null)));
+                Arrays.asList(
+                    new PartitionInfo(topic, 0, null, null, null),
+                    new PartitionInfo(topic, 1, null, null, null)
+                )
+            );
         final TopicPartition tp1 = new TopicPartition(topic, 0);
         final TopicPartition tp2 = new TopicPartition(topic, 1);
 
         clientSupplier.restoreConsumer
-            .assign(Arrays.asList(
-                tp1,
-                tp2));
+            .assign(Arrays.asList(tp1, tp2));
 
         final Map<TopicPartition, Long> offsets = new HashMap<>();
         offsets.put(tp1, 0L);
         offsets.put(tp2, 0L);
 
-        clientSupplier.restoreConsumer
-            .updateBeginningOffsets(offsets);
-        clientSupplier.restoreConsumer
-            .updateEndOffsets(offsets);
+        clientSupplier.restoreConsumer.updateBeginningOffsets(offsets);
+        clientSupplier.restoreConsumer.updateEndOffsets(offsets);
     }
 }
