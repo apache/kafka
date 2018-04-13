@@ -98,7 +98,7 @@ public final class NodeManager {
             try {
                 client.createWorker(new CreateWorkerRequest(workerId, taskId, spec));
             } catch (Throwable e) {
-                log.error("{}: error creating worker {}.", node.name(), this.toString(), e);
+                log.error("{}: error creating worker {}.", node.name(), this, e);
             }
         }
 
@@ -106,7 +106,7 @@ public final class NodeManager {
             try {
                 client.stopWorker(new StopWorkerRequest(workerId));
             } catch (Throwable e) {
-                log.error("{}: error stopping worker {}.", node.name(), this.toString(), e);
+                log.error("{}: error stopping worker {}.", node.name(), this, e);
             }
         }
 
@@ -276,11 +276,11 @@ public final class NodeManager {
             ManagedWorker worker = workers.get(workerId);
             if (worker != null) {
                 log.error("{}: there is already a worker {} with ID {}.",
-                    node.name(), worker.toString(), workerId);
+                    node.name(), worker, workerId);
                 return null;
             }
             worker = new ManagedWorker(workerId, taskId, spec, true, new WorkerReceiving(taskId, spec));
-            log.info("{}: scheduling worker {} to start.", node.name(), worker.toString());
+            log.info("{}: scheduling worker {} to start.", node.name(), worker);
             workers.put(workerId, worker);
             rescheduleNextHeartbeat(0);
             return null;
@@ -315,10 +315,10 @@ public final class NodeManager {
             }
             if (!worker.shouldRun) {
                 log.error("{}: Worker {} is already scheduled to stop.",
-                    node.name(), worker.toString());
+                    node.name(), worker);
                 return null;
             }
-            log.info("{}: scheduling worker {} to stop.", node.name(), worker.toString());
+            log.info("{}: scheduling worker {} to stop.", node.name(), worker);
             worker.shouldRun = false;
             rescheduleNextHeartbeat(0);
             return null;

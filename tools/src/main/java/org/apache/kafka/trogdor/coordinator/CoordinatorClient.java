@@ -117,14 +117,14 @@ public class CoordinatorClient {
 
     public void createTask(CreateTaskRequest request) throws Exception {
         HttpResponse<Empty> resp =
-            JsonRestServer.<Empty>httpRequest(log, url("/coordinator/task/create"), "POST",
+            JsonRestServer.httpRequest(log, url("/coordinator/task/create"), "POST",
                 request, new TypeReference<Empty>() { }, maxTries);
         resp.body();
     }
 
     public void stopTask(StopTaskRequest request) throws Exception {
         HttpResponse<Empty> resp =
-            JsonRestServer.<Empty>httpRequest(log, url("/coordinator/task/stop"), "PUT",
+            JsonRestServer.httpRequest(log, url("/coordinator/task/stop"), "PUT",
                 request, new TypeReference<Empty>() { }, maxTries);
         resp.body();
     }
@@ -133,7 +133,7 @@ public class CoordinatorClient {
         UriBuilder uriBuilder = UriBuilder.fromPath(url("/coordinator/tasks"));
         uriBuilder.queryParam("taskId", request.id());
         HttpResponse<Empty> resp =
-            JsonRestServer.<Empty>httpRequest(log, uriBuilder.build().toString(), "DELETE",
+            JsonRestServer.httpRequest(log, uriBuilder.build().toString(), "DELETE",
                 null, new TypeReference<Empty>() { }, maxTries);
         resp.body();
     }
@@ -146,14 +146,14 @@ public class CoordinatorClient {
         uriBuilder.queryParam("firstEndMs", request.firstEndMs());
         uriBuilder.queryParam("lastEndMs", request.lastEndMs());
         HttpResponse<TasksResponse> resp =
-            JsonRestServer.<TasksResponse>httpRequest(log, uriBuilder.build().toString(), "GET",
+            JsonRestServer.httpRequest(log, uriBuilder.build().toString(), "GET",
                 null, new TypeReference<TasksResponse>() { }, maxTries);
         return resp.body();
     }
 
     public void shutdown() throws Exception {
         HttpResponse<Empty> resp =
-            JsonRestServer.<Empty>httpRequest(log, url("/coordinator/shutdown"), "PUT",
+            JsonRestServer.httpRequest(log, url("/coordinator/shutdown"), "PUT",
                 null, new TypeReference<Empty>() { }, maxTries);
         resp.body();
     }
