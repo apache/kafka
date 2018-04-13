@@ -546,15 +546,15 @@ class ConsoleConsumerTest {
       "--topic", "test",
       "--property", "print.key=true",
       "--property", "key.deserializer=org.apache.kafka.test.MockDeserializer",
-      "--property", "my-test1=abc"
+      "--property", "key.deserializer.my-props=abc"
     )
     val config = new ConsoleConsumer.ConsumerConfig(args)
     assertTrue(config.formatter.isInstanceOf[DefaultMessageFormatter])
-    assertTrue(config.formatterArgs.containsKey("my-test1"))
+    assertTrue(config.formatterArgs.containsKey("key.deserializer.my-props"))
     val formatter = config.formatter.asInstanceOf[DefaultMessageFormatter]
     assertTrue(formatter.keyDeserializer.get.isInstanceOf[MockDeserializer])
-    assertEquals(3, formatter.keyDeserializer.get.asInstanceOf[MockDeserializer].configs.size)
-    assertEquals("abc", formatter.keyDeserializer.get.asInstanceOf[MockDeserializer].configs.get("my-test1"))
+    assertEquals(1, formatter.keyDeserializer.get.asInstanceOf[MockDeserializer].configs.size)
+    assertEquals("abc", formatter.keyDeserializer.get.asInstanceOf[MockDeserializer].configs.get("my-props"))
     assertTrue(formatter.keyDeserializer.get.asInstanceOf[MockDeserializer].isKey)
   }
 
