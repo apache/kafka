@@ -32,9 +32,7 @@ import kafka.controller.KafkaController
 import kafka.coordinator.group.{GroupCoordinator, JoinGroupResult}
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
 import kafka.log.{Log, LogManager, TimestampOffset}
-import kafka.network
 import kafka.network.RequestChannel
-import kafka.network.RequestChannel.{CloseConnectionAction, NoOpAction, SendAction}
 import kafka.security.SecurityUtils
 import kafka.security.auth.{Resource, _}
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
@@ -57,7 +55,7 @@ import org.apache.kafka.common.resource.{Resource => AdminResource}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.common.{Node, TopicPartition}
+import org.apache.kafka.common.{Node, RecordsProcessingStats, TopicPartition}
 
 import scala.collection.JavaConverters._
 import scala.collection._
@@ -556,10 +554,13 @@ class KafkaApis(val requestChannel: RequestChannel,
         downConvertMagic.map { magic =>
           trace(s"Down converting records from partition $tp to message format version $magic for fetch request from $clientId")
 
+          // Because down-conversion is extremely memory intensive, we want to try and delay the down-conversion as much
+          // as possible. With KIP-283, we have the ability to lazily down-convert in a chunked manner. Because lazy
+          // down-conversion does not guarantee how many messages are actually sent out, we fully down-convert the first
+          // topic-partition here, and lazily down-convert the rest.
           val converted = {
             if (doLazyConversion) {
               new LazyDownConversionRecords(tp, data.records, magic, fetchContext.getFetchOffset(tp).get)
-              // TODO: figure out how to update statistics
             }
             else {
               val convertedRecords = data.records.downConvert(magic, fetchContext.getFetchOffset(tp).get, time)
@@ -2298,7 +2299,6 @@ class KafkaApis(val requestChannel: RequestChannel,
         val responseString =
           if (RequestChannel.isRequestLoggingEnabled) Some(response.toString(request.context.apiVersion))
           else None
-        // new RequestChannel.Response(request, Some(responseSend), SendAction, responseString)
         new RequestChannel.SendResponse(request, responseSend, responseString, processingStatsCallback)
       case None =>
         new RequestChannel.NoOpResponse(request)

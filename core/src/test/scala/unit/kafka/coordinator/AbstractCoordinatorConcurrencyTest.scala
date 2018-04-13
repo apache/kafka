@@ -17,8 +17,8 @@
 
 package kafka.coordinator
 
-import java.util.{ Collections, Random }
-import java.util.concurrent.{ ConcurrentHashMap, Executors }
+import java.util.{Collections, Random}
+import java.util.concurrent.{ConcurrentHashMap, Executors}
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.Lock
 
@@ -28,12 +28,12 @@ import kafka.server._
 import kafka.utils._
 import kafka.utils.timer.MockTimer
 import kafka.zk.KafkaZkClient
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{RecordsProcessingStats, TopicPartition}
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record.{ MemoryRecords, RecordBatch, RecordsProcessingStats }
+import org.apache.kafka.common.record.{MemoryRecords, RecordBatch}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.easymock.EasyMock
-import org.junit.{ After, Before }
+import org.junit.{After, Before}
 
 import scala.collection._
 import scala.collection.JavaConverters._

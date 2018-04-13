@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.record;
 
+import org.apache.kafka.common.RecordsProcessingStats;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
@@ -679,7 +680,7 @@ public class MemoryRecordsBuilderTest {
     }
 
     private void verifyRecordsProcessingStats(RecordsProcessingStats processingStats, int numRecords,
-            int numRecordsConverted, long finalBytes, long preConvertedBytes) {
+                                              int numRecordsConverted, long finalBytes, long preConvertedBytes) {
         assertNotNull("Records processing info is null", processingStats);
         assertEquals(numRecordsConverted, processingStats.numRecordsConverted());
         // Since nanoTime accuracy on build machines may not be sufficient to measure small conversion times,

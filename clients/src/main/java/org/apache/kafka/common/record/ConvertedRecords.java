@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.record;
 
+import org.apache.kafka.common.RecordsProcessingStats;
+
 public class ConvertedRecords<T extends Records> {
 
     private final T records;

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.record;
 
+import org.apache.kafka.common.RecordsProcessingStats;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionRecordsStats;
 import org.apache.kafka.common.utils.AbstractIterator;
@@ -82,7 +83,7 @@ public class LazyDownConversionRecords implements Records {
 
             if (recordsIterator.hasNext()) {
                 // Get next set of down-converted records
-                ConvertedRecords recordsAndStats = recordsIterator.makeNext(length);
+                ConvertedRecords recordsAndStats = recordsIterator.next();
                 convertedRecords = recordsAndStats.records();
                 processingStats.addToProcessingStats(recordsAndStats.recordsProcessingStats());
             } else {
@@ -139,7 +140,7 @@ public class LazyDownConversionRecords implements Records {
     /**
      * Implementation for writing {@link Records} to a particular channel. Internally tracks the progress of writes.
      */
-    private class RecordsWriter {
+    private static class RecordsWriter {
         private final Records records;
         private int position;
 
@@ -184,43 +185,34 @@ public class LazyDownConversionRecords implements Records {
         /**
          * Maximum possible size of messages that will be read. This limit does not apply for the first message batch.
          */
-        private final long maximumReadSize = (16L * 1024L);
+        private static final long MAX_READ_SIZE = 16L * 1024L;
 
         LazyDownConversionRecordsIterator(Records recordsToDownConvert) {
             batchIterator = recordsToDownConvert.batchIterator();
         }
 
         /**
-         * Make next set of down-converted records.
-         * @param readSize Maximum size of records to read.
+         * Make next set of down-converted records
          * @return Down-converted records
          */
-        protected ConvertedRecords makeNext(long readSize) {
-            ConvertedRecords convertedRecords;
+        @Override
+        protected ConvertedRecords makeNext() {
             List<RecordBatch> batches = new ArrayList<>();
             boolean isFirstBatch = true;
             long sizeSoFar = 0;
-            long adjustedReadSize = Math.min(readSize, maximumReadSize);
+
+            if (!batchIterator.hasNext())
+                return allDone();
 
             // Figure out batches we should down-convert based on the size constraints
             while (batchIterator.hasNext() &&
-                    ((isFirstBatch) || (batchIterator.peek().sizeInBytes() + sizeSoFar) <= adjustedReadSize)) {
+                    (isFirstBatch || (batchIterator.peek().sizeInBytes() + sizeSoFar) <= MAX_READ_SIZE)) {
                 RecordBatch currentBatch = batchIterator.next();
                 batches.add(currentBatch);
                 sizeSoFar += currentBatch.sizeInBytes();
                 isFirstBatch = false;
             }
-            convertedRecords = RecordsUtil.downConvert(batches, toMagic, firstOffset, new SystemTime());
-
-            if (!batchIterator.hasNext())
-                allDone();
-
-            return convertedRecords;
-        }
-
-        @Override
-        protected ConvertedRecords makeNext() {
-            return makeNext(maximumReadSize);
+            return RecordsUtil.downConvert(batches, toMagic, firstOffset, new SystemTime());
         }
     }
 }
