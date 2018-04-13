@@ -237,10 +237,12 @@ public class ProcessorTopologyTestDriver {
                     new LogContext("topology-test-driver ")
                 ),
                 config,
-                streamsMetrics, stateDirectory,
+                streamsMetrics,
+                stateDirectory,
                 cache,
                 new MockTime(),
-                producer);
+                producer
+            );
             task.initializeStateStores();
             task.initializeTopology();
         }

@@ -164,8 +164,10 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         return sensor;
     }
 
-    private void addLatencyAndThroughputMetrics(final String scopeName, final Sensor sensor, final String opName, final Map<String, String> tags) {
-
+    private void addLatencyAndThroughputMetrics(final String scopeName,
+                                                final Sensor sensor,
+                                                final String opName,
+                                                final Map<String, String> tags) {
         maybeAddMetric(sensor, metrics.metricName(opName + "-latency-avg", groupNameFromScope(scopeName),
             "The average latency of " + opName + " operation.", tags), new Avg());
         maybeAddMetric(sensor, metrics.metricName(opName + "-latency-max", groupNameFromScope(scopeName),
@@ -173,7 +175,10 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         addThroughputMetrics(scopeName, sensor, opName, tags);
     }
 
-    private void addThroughputMetrics(final String scopeName, final Sensor sensor, final String opName, final Map<String, String> tags) {
+    private void addThroughputMetrics(final String scopeName,
+                                      final Sensor sensor,
+                                      final String opName,
+                                      final Map<String, String> tags) {
         final MetricName rateMetricName = metrics.metricName(opName + "-rate", groupNameFromScope(scopeName),
             "The average number of occurrence of " + opName + " operation per second.", tags);
         final MetricName totalMetricName = metrics.metricName(opName + "-total", groupNameFromScope(scopeName),
@@ -185,12 +190,16 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         }
     }
 
+    /**
+     * Register a metric on the sensor if it isn't already there.
+     *
+     * @param sensor The sensor on which to register the metric
+     * @param name   The name of the metric
+     * @param stat   The metric to track
+     * @throws IllegalArgumentException if the same metric name is already in use elsewhere in the metrics
+     */
     public void maybeAddMetric(final Sensor sensor, final MetricName name, final MeasurableStat stat) {
-        if (!metrics.metrics().containsKey(name)) {
-            sensor.add(name, stat);
-        } else {
-            log.trace("Trying to add metric twice: {}", name);
-        }
+        sensor.add(name, stat);
     }
 
     /**
@@ -229,5 +238,4 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         }
 
     }
-
 }

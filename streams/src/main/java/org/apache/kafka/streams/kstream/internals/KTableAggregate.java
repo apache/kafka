@@ -71,13 +71,15 @@ public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T
         @Override
         public void process(final K key, final Change<V> value) {
             // the keys should never be null
-            if (key == null)
+            if (key == null) {
                 throw new StreamsException("Record key for KTable aggregate operator with state " + storeName + " should not be null.");
+            }
 
             T oldAgg = store.get(key);
 
-            if (oldAgg == null)
+            if (oldAgg == null) {
                 oldAgg = initializer.apply();
+            }
 
             T newAgg = oldAgg;
 

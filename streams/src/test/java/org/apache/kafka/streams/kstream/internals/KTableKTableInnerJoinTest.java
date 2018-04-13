@@ -173,7 +173,6 @@ public class KTableKTableInnerJoinTest {
         doTestJoin(builder, expectedKeys, processor, joined);
     }
 
-
     @Test
     public void testQueryableJoin() {
         final StreamsBuilder builder = new StreamsBuilder();

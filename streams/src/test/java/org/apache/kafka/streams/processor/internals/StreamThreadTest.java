@@ -72,6 +72,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
 
+import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
@@ -155,7 +156,7 @@ public class StreamThreadTest {
         assertEquals(thread.state(), StreamThread.State.PARTITIONS_REVOKED);
 
         // assign single partition
-        assignedPartitions = Collections.singletonList(t1p1);
+        assignedPartitions = singletonList(t1p1);
         thread.taskManager().setAssignmentMetadata(Collections.<TaskId, Set<TopicPartition>>emptyMap(), Collections.<TaskId, Set<TopicPartition>>emptyMap());
 
         final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.consumer;
@@ -168,7 +169,7 @@ public class StreamThreadTest {
         Assert.assertEquals(StreamThread.State.PARTITIONS_ASSIGNED, stateListener.oldState);
 
         thread.shutdown();
-        assertSame(thread.state(), StreamThread.State.PENDING_SHUTDOWN);
+        assertSame(StreamThread.State.PENDING_SHUTDOWN, thread.state());
     }
 
     @Test
@@ -202,7 +203,7 @@ public class StreamThreadTest {
         final Node node = new Node(0, "localhost", 8121);
         return new Cluster(
             "mockClusterId",
-            Collections.singletonList(node),
+            singletonList(node),
             Collections.<PartitionInfo>emptySet(),
             Collections.<String>emptySet(),
             Collections.<String>emptySet(),
@@ -235,7 +236,7 @@ public class StreamThreadTest {
     }
 
     @Test
-    public void testMetrics() {
+    public void testMetricsCreatedAtStartup() {
         final StreamThread thread = createStreamThread(clientId, config, false);
         final String defaultGroupName = "stream-metrics";
         final String defaultPrefix = "thread." + thread.getName();
@@ -252,18 +253,25 @@ public class StreamThreadTest {
         assertNotNull(metrics.metrics().get(metrics.metricName("commit-latency-avg", defaultGroupName, "The average commit time in ms", defaultTags)));
         assertNotNull(metrics.metrics().get(metrics.metricName("commit-latency-max", defaultGroupName, "The maximum commit time in ms", defaultTags)));
         assertNotNull(metrics.metrics().get(metrics.metricName("commit-rate", defaultGroupName, "The average per-second number of commit calls", defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName("commit-total", defaultGroupName, "The total number of commit calls", defaultTags)));
         assertNotNull(metrics.metrics().get(metrics.metricName("poll-latency-avg", defaultGroupName, "The average poll time in ms", defaultTags)));
         assertNotNull(metrics.metrics().get(metrics.metricName("poll-latency-max", defaultGroupName, "The maximum poll time in ms", defaultTags)));
         assertNotNull(metrics.metrics().get(metrics.metricName("poll-rate", defaultGroupName, "The average per-second number of record-poll calls", defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName("poll-total", defaultGroupName, "The total number of record-poll calls", defaultTags)));
         assertNotNull(metrics.metrics().get(metrics.metricName("process-latency-avg", defaultGroupName, "The average process time in ms", defaultTags)));
         assertNotNull(metrics.metrics().get(metrics.metricName("process-latency-max", defaultGroupName, "The maximum process time in ms", defaultTags)));
         assertNotNull(metrics.metrics().get(metrics.metricName("process-rate", defaultGroupName, "The average per-second number of process calls", defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName("process-total", defaultGroupName, "The total number of process calls", defaultTags)));
         assertNotNull(metrics.metrics().get(metrics.metricName("punctuate-latency-avg", defaultGroupName, "The average punctuate time in ms", defaultTags)));
         assertNotNull(metrics.metrics().get(metrics.metricName("punctuate-latency-max", defaultGroupName, "The maximum punctuate time in ms", defaultTags)));
         assertNotNull(metrics.metrics().get(metrics.metricName("punctuate-rate", defaultGroupName, "The average per-second number of punctuate calls", defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName("punctuate-total", defaultGroupName, "The total number of punctuate calls", defaultTags)));
         assertNotNull(metrics.metrics().get(metrics.metricName("task-created-rate", defaultGroupName, "The average per-second number of newly created tasks", defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName("task-created-total", defaultGroupName, "The total number of newly created tasks", defaultTags)));
         assertNotNull(metrics.metrics().get(metrics.metricName("task-closed-rate", defaultGroupName, "The average per-second number of closed tasks", defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName("task-closed-total", defaultGroupName, "The total number of closed tasks", defaultTags)));
         assertNotNull(metrics.metrics().get(metrics.metricName("skipped-records-rate", defaultGroupName, "The average per-second number of skipped records.", defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName("skipped-records-total", defaultGroupName, "The total number of skipped records.", defaultTags)));
     }
 
 
@@ -612,7 +620,7 @@ public class StreamThreadTest {
 
         final MockConsumer<byte[], byte[]> consumer = clientSupplier.consumer;
 
-        consumer.updatePartitions(topic1, Collections.singletonList(new PartitionInfo(topic1, 1, null, null, null)));
+        consumer.updatePartitions(topic1, singletonList(new PartitionInfo(topic1, 1, null, null, null)));
 
         thread.setState(StreamThread.State.RUNNING);
         thread.rebalanceListener.onPartitionsRevoked(null);
@@ -775,7 +783,7 @@ public class StreamThreadTest {
         final MockConsumer<byte[], byte[]> restoreConsumer = clientSupplier.restoreConsumer;
         restoreConsumer.updatePartitions(
             "stream-thread-test-count-one-changelog",
-            Collections.singletonList(new PartitionInfo("stream-thread-test-count-one-changelog",
+            singletonList(new PartitionInfo("stream-thread-test-count-one-changelog",
                 0,
                 null,
                 new Node[0],
@@ -824,7 +832,7 @@ public class StreamThreadTest {
         final StreamThread thread = createStreamThread(clientId, config, false);
         final MockConsumer<byte[], byte[]> restoreConsumer = clientSupplier.restoreConsumer;
         restoreConsumer.updatePartitions(changelogName,
-            Collections.singletonList(
+            singletonList(
                 new PartitionInfo(
                     changelogName,
                     1,
@@ -1041,7 +1049,7 @@ public class StreamThreadTest {
 
         mockConsumer.updatePartitions(
             "topic",
-            Collections.singletonList(
+            singletonList(
                 new PartitionInfo(
                     "topic",
                     0,
@@ -1055,7 +1063,7 @@ public class StreamThreadTest {
 
         mockRestoreConsumer.updatePartitions(
             "stream-thread-test-count-changelog",
-            Collections.singletonList(
+            singletonList(
                 new PartitionInfo(
                     "stream-thread-test-count-changelog",
                     0,
@@ -1065,6 +1073,7 @@ public class StreamThreadTest {
                 )
             )
         );
+
         final TopicPartition changelogPartition = new TopicPartition("stream-thread-test-count-changelog", 0);
         final Set<TopicPartition> changelogPartitionSet = Collections.singleton(changelogPartition);
         mockRestoreConsumer.updateBeginningOffsets(Collections.singletonMap(changelogPartition, 0L));

@@ -320,14 +320,15 @@ public class GlobalStreamThread extends Thread {
             stateMgr.setGlobalProcessorContext(globalProcessorContext);
 
             final StateConsumer stateConsumer = new StateConsumer(
-                this.logContext,
+                logContext,
                 globalConsumer,
                 new GlobalStateUpdateTask(
                     topology,
                     globalProcessorContext,
                     stateMgr,
                     config.defaultDeserializationExceptionHandler(),
-                    logContext),
+                    logContext
+                ),
                 time,
                 config.getLong(StreamsConfig.POLL_MS_CONFIG),
                 config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG));

@@ -672,8 +672,7 @@ public class StreamTaskTest {
         task.initializeTopology();
         task.commit();
         final OffsetCheckpoint checkpoint = new OffsetCheckpoint(
-            new File(stateDirectory.directoryForTask(taskId00),
-                ProcessorStateManager.CHECKPOINT_FILE_NAME)
+            new File(stateDirectory.directoryForTask(taskId00), ProcessorStateManager.CHECKPOINT_FILE_NAME)
         );
 
         assertThat(checkpoint.read(), equalTo(Collections.singletonMap(changelogPartition, offset)));
@@ -1123,7 +1122,6 @@ public class StreamTaskTest {
             }
         };
     }
-
 
     private ConsumerRecord<byte[], byte[]> getConsumerRecord(final TopicPartition topicPartition, final long offset) {
         return new ConsumerRecord<>(

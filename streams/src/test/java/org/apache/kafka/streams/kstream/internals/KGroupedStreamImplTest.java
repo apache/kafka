@@ -544,14 +544,14 @@ public class KGroupedStreamImplTest {
         groupedStream.count((Materialized) null);
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldCountAndMaterializeResults() {
         groupedStream.count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("count").withKeySerde(Serdes.String()));
 
         processData();
 
-        final KeyValueStore<String, Long> count = (KeyValueStore<String, Long>) driver.allStateStores().get("count");
+        @SuppressWarnings("unchecked") final KeyValueStore<String, Long> count =
+            (KeyValueStore<String, Long>) driver.allStateStores().get("count");
 
         assertThat(count.get("1"), equalTo(3L));
         assertThat(count.get("2"), equalTo(1L));
