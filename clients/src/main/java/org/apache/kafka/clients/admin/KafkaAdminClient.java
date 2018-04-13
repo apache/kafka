@@ -2369,11 +2369,11 @@ public class KafkaAdminClient extends AdminClient {
                                 // TODO: KAFKA-6789, retry based on the error code
                                 KafkaFutureImpl<Collection<ConsumerGroupListing>> future = new KafkaFutureImpl<>();
                                 future.completeExceptionally(partitionMetadata.error().exception());
-                                futuresMap.put(leader, future);
-                            } else {
                                 // if it is the leader not found error, then the leader might be NoNode; if there are more than
                                 // one such error, we will only have one entry in the map. For now it is okay since we are not
                                 // guaranteeing to return the full list of consumers still.
+                                futuresMap.put(leader, future);
+                            } else {
                                 futuresMap.put(leader, new KafkaFutureImpl<Collection<ConsumerGroupListing>>());
                             }
                         }
