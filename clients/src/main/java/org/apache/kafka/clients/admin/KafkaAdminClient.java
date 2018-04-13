@@ -2254,10 +2254,12 @@ public class KafkaAdminClient extends AdminClient {
 
         // TODO: KAFKA-6788, we should consider grouping the request per coordinator and send one request with a list of
         // all consumer groups this coordinator host
-        for (final String groupId : groupIds) {
+        for (final Map.Entry<String, KafkaFutureImpl<ConsumerGroupDescription>> entry : futures.entrySet()) {
             // skip sending request for those futures that already failed.
-            if (futures.get(groupId).isCompletedExceptionally())
+            if (entry.getValue().isCompletedExceptionally())
                 continue;
+
+            final String groupId = entry.getKey();
 
             final long startFindCoordinatorMs = time.milliseconds();
             final long deadline = calcDeadlineMs(startFindCoordinatorMs, options.timeoutMs());
@@ -2456,7 +2458,7 @@ public class KafkaAdminClient extends AdminClient {
 
             @Override
             void handleFailure(Throwable throwable) {
-                listFuture.completeExceptionally(new ApiException("Cannot find the brokers to query consumer listings."));
+                listFuture.completeExceptionally(throwable);
             }
         }, nowMetadata);
 
