@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.security.plain;
 
+import org.apache.kafka.common.security.plain.internal.PlainSaslServerProvider;
+
 import java.util.Map;
 
 import javax.security.auth.Subject;

@@ -20,6 +20,7 @@ package org.apache.kafka.trogdor.common;
 
 
 import org.apache.kafka.clients.admin.TopicDescription;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.TopicPartitionInfo;
 
 import org.apache.kafka.common.Node;
@@ -41,6 +42,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 
 
 public class WorkerUtilsTest {
@@ -208,4 +210,56 @@ public class WorkerUtilsTest {
         assertEquals(0, adminClient.listTopics().names().get().size());
     }
 
+    @Test
+    public void testAddConfigsToPropertiesAddsAllConfigs() {
+        Properties props = new Properties();
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        props.put(ProducerConfig.ACKS_CONFIG, "all");
+
+        Properties resultProps = new Properties();
+        resultProps.putAll(props);
+        resultProps.put(ProducerConfig.CLIENT_ID_CONFIG, "test-client");
+        resultProps.put(ProducerConfig.LINGER_MS_CONFIG, "1000");
+
+        WorkerUtils.addConfigsToProperties(
+            props,
+            Collections.singletonMap(ProducerConfig.CLIENT_ID_CONFIG, "test-client"),
+            Collections.singletonMap(ProducerConfig.LINGER_MS_CONFIG, "1000"));
+        assertEquals(resultProps, props);
+    }
+
+    @Test
+    public void testCommonConfigOverwritesDefaultProps() {
+        Properties props = new Properties();
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        props.put(ProducerConfig.ACKS_CONFIG, "all");
+
+        Properties resultProps = new Properties();
+        resultProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        resultProps.put(ProducerConfig.ACKS_CONFIG, "1");
+        resultProps.put(ProducerConfig.LINGER_MS_CONFIG, "1000");
+
+        WorkerUtils.addConfigsToProperties(
+            props,
+            Collections.singletonMap(ProducerConfig.ACKS_CONFIG, "1"),
+            Collections.singletonMap(ProducerConfig.LINGER_MS_CONFIG, "1000"));
+        assertEquals(resultProps, props);
+    }
+
+    @Test
+    public void testClientConfigOverwritesBothDefaultAndCommonConfigs() {
+        Properties props = new Properties();
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        props.put(ProducerConfig.ACKS_CONFIG, "all");
+
+        Properties resultProps = new Properties();
+        resultProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        resultProps.put(ProducerConfig.ACKS_CONFIG, "0");
+
+        WorkerUtils.addConfigsToProperties(
+            props,
+            Collections.singletonMap(ProducerConfig.ACKS_CONFIG, "1"),
+            Collections.singletonMap(ProducerConfig.ACKS_CONFIG, "0"));
+        assertEquals(resultProps, props);
+    }
 }

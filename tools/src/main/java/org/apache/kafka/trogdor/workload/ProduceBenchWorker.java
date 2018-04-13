@@ -109,9 +109,11 @@ public class ProduceBenchWorker implements TaskWorker {
                 Map<String, NewTopic> newTopics = new HashMap<>();
                 for (int i = 0; i < spec.totalTopics(); i++) {
                     String name = topicIndexToName(i);
-                    newTopics.put(name, new NewTopic(name, spec.numPartitions(), spec.replicationFactor()));
+                    newTopics.put(name, new NewTopic(name, spec.numPartitions(),
+                                                     spec.replicationFactor()));
                 }
-                WorkerUtils.createTopics(log, spec.bootstrapServers(), newTopics, false);
+                WorkerUtils.createTopics(log, spec.bootstrapServers(), spec.commonClientConf(),
+                                         spec.adminClientConf(), newTopics, false);
 
                 executor.submit(new SendRecords());
             } catch (Throwable e) {
@@ -182,9 +184,9 @@ public class ProduceBenchWorker implements TaskWorker {
                 new StatusUpdater(histogram), 1, 1, TimeUnit.MINUTES);
             Properties props = new Properties();
             props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, spec.bootstrapServers());
-            for (Map.Entry<String, String> entry : spec.producerConf().entrySet()) {
-                props.setProperty(entry.getKey(), entry.getValue());
-            }
+            // add common client configs to producer properties, and then user-specified producer
+            // configs
+            WorkerUtils.addConfigsToProperties(props, spec.commonClientConf(), spec.producerConf());
             this.producer = new KafkaProducer<>(props, new ByteArraySerializer(), new ByteArraySerializer());
             this.keys = new PayloadIterator(spec.keyGenerator());
             this.values = new PayloadIterator(spec.valueGenerator());

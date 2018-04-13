@@ -44,20 +44,15 @@ public class SmokeTestUtil {
             public Processor<Object, Object> get() {
                 return new AbstractProcessor<Object, Object>() {
                     private int numRecordsProcessed = 0;
-                    private ProcessorContext context;
 
                     @Override
                     public void init(final ProcessorContext context) {
                         System.out.println("initializing processor: topic=" + topic + " taskId=" + context.taskId());
                         numRecordsProcessed = 0;
-                        this.context = context;
                     }
 
                     @Override
                     public void process(final Object key, final Object value) {
-                        if (printOffset) {
-                            System.out.println(">>> " + context.offset());
-                        }
                         numRecordsProcessed++;
                         if (numRecordsProcessed % 100 == 0) {
                             System.out.println(System.currentTimeMillis());
@@ -66,19 +61,19 @@ public class SmokeTestUtil {
                     }
 
                     @Override
-                    public void punctuate(final long timestamp) { }
+                    public void punctuate(final long timestamp) {}
 
                     @Override
-                    public void close() { }
+                    public void close() {}
                 };
             }
         };
     }
 
-    public static final class Unwindow<K, V> implements KeyValueMapper<Windowed<K>, V, KeyValue<K, V>> {
+    public static final class Unwindow<K, V> implements KeyValueMapper<Windowed<K>, V, K> {
         @Override
-        public KeyValue<K, V> apply(final Windowed<K> winKey, final V value) {
-            return new KeyValue<>(winKey.key(), value);
+        public K apply(final Windowed<K> winKey, final V value) {
+            return winKey.key();
         }
     }
 
