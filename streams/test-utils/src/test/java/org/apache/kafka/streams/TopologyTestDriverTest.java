@@ -915,29 +915,8 @@ public class TopologyTestDriverTest {
             Assert.assertNotNull(testDriver.getAllStateStores().get("globalStore"));
             final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
             testDriver.pipeInput(recordFactory.create("topic", "k1", "value1"));
-            // just to serialize keys and values
-            final ConsumerRecord<byte[], byte[]> record = recordFactory.create("dummy", "k2", "value2"); 
-            // send data using the producer
-            testDriver.producer.send(new ProducerRecord<>("topic", null, record.timestamp(), 
-                    record.key(), record.value()));
-            testDriver.advanceWallClockTime(0);
             // we expect to have both in the global store, the one from pipeInput and the one from the producer
             Assert.assertEquals("value1", globalStore.get("k1"));
-            Assert.assertEquals("value2", globalStore.get("k2"));
-            // read back data sent via the producer
-            ProducerRecord<String, String> pr = testDriver.readOutput("topic", new StringDeserializer(), new StringDeserializer());
-            Assert.assertEquals("k2", pr.key());
-            Assert.assertEquals("value2", pr.value());
-            // no data from pipeInput should be present here since the topology has no sink
-            ProducerRecord<String, String> pr2 = testDriver.readOutput("topic", new StringDeserializer(), new StringDeserializer());
-            Assert.assertNull(pr2);
-            // send data using the producer to a topic not used in the topology
-            testDriver.producer.send(new ProducerRecord<>("notInTopologytopic", null, 
-                    record.timestamp(), record.key(), record.value()));
-            testDriver.advanceWallClockTime(0);
-            ProducerRecord<String, String> pr3 = testDriver.readOutput("notInTopologytopic", new StringDeserializer(), new StringDeserializer());
-            Assert.assertEquals("k2", pr3.key());
-            Assert.assertEquals("value2", pr3.value());
         }
     }
 }
