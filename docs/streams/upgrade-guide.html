@@ -72,7 +72,6 @@
         See <a href="#streams_api_changes_0101">below</a> a complete list of 0.10.1 API changes that allow you to advance your application and/or simplify your code base, including the usage of new features.
     </p>
 
-    <h3><a id="streams_api_changes_110" href="#streams_api_changes_110">Streams API changes in 1.1.0</a></h3>
     <!-- TODO: verify release verion and update `id` and `href` attributes (also at other places that link to this headline) -->
     
     <h3><a id="streams_api_changes_120" href="#streams_api_changes_120">Streams API changes in 1.2.0</a></h3>
@@ -102,8 +101,8 @@
       Forwarding based on child index is not supported in the new API any longer.
     </p>
     <p>
-        We have change the default value for methods  <code>retention.ms</code>  to infinity to allow any records be pushed to it with old timestamps.
-        You must rely on the purging API to keep the storage small.
+        <a href="https://cwiki.apache.org/confluence/x/DVyHB">KIP-284</a> changed the retention time for repartition topic by setting its default value to Long.MAX_VALUE.
+        <li>Use purge data API to keep storage small</li>
     </p>
     
     <h3><a id="streams_api_changes_110" href="#streams_api_changes_110">Streams API changes in 1.1.0</a></h3>
