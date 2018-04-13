@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.common.record;
 
-import java.nio.ByteBuffer;
-
 abstract class AbstractRecordBatch implements RecordBatch {
 
     @Override

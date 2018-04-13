@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.nio.channels.GatheringByteChannel;
 import java.util.Iterator;
 
+import org.apache.kafka.common.TopicPartitionRecordsStats;
 import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.Time;
 
@@ -120,4 +121,10 @@ public interface Records {
      * @return The record iterator
      */
     Iterable<Record> records();
+
+    /**
+     * Get records processing statistics, if there are any that were captured while processing records in this instance.
+     * @return Records processing statistics for this instance.
+     */
+    TopicPartitionRecordsStats recordsProcessingStats();
 }

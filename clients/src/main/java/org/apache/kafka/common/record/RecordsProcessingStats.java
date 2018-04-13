@@ -20,14 +20,20 @@ public class RecordsProcessingStats {
 
     public static final RecordsProcessingStats EMPTY = new RecordsProcessingStats(0L, 0, -1);
 
-    private final long temporaryMemoryBytes;
-    private final int numRecordsConverted;
-    private final long conversionTimeNanos;
+    private long temporaryMemoryBytes;
+    private int numRecordsConverted;
+    private long conversionTimeNanos;
 
     public RecordsProcessingStats(long temporaryMemoryBytes, int numRecordsConverted, long conversionTimeNanos) {
         this.temporaryMemoryBytes = temporaryMemoryBytes;
         this.numRecordsConverted = numRecordsConverted;
         this.conversionTimeNanos = conversionTimeNanos;
+    }
+
+    public void addToProcessingStats(RecordsProcessingStats stats) {
+        temporaryMemoryBytes += stats.temporaryMemoryBytes;
+        numRecordsConverted += stats.numRecordsConverted;
+        conversionTimeNanos += stats.conversionTimeNanos;
     }
 
     /**

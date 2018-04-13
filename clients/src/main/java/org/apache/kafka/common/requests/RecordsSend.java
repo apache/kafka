@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.TopicPartitionRecordsStats;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.network.TransportLayers;
 import org.apache.kafka.common.record.Records;
@@ -70,5 +71,16 @@ public class RecordsSend implements Send {
     @Override
     public long size() {
         return records.sizeInBytes();
+    }
+
+    public void onComplete(Send send) {
+    }
+
+    /**
+     * Get processing statistics of underlying records.
+     * @return Processing statistics of records enclosed in this send
+     */
+    public TopicPartitionRecordsStats recordsProcessingStats() {
+        return records.recordsProcessingStats();
     }
 }

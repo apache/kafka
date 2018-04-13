@@ -47,5 +47,4 @@ public interface Send {
      * Size of the send
      */
     long size();
-
 }

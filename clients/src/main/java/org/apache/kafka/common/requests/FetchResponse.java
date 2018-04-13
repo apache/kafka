@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.network.ByteBufferSend;
+import org.apache.kafka.common.network.MultiRecordsSend;
 import org.apache.kafka.common.network.MultiSend;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -364,7 +365,7 @@ public class FetchResponse extends AbstractResponse {
         Queue<Send> sends = new ArrayDeque<>();
         sends.add(new ByteBufferSend(dest, buffer));
         addResponseData(responseBodyStruct, throttleTimeMs, dest, sends);
-        return new MultiSend(dest, sends);
+        return new MultiRecordsSend(dest, sends);
     }
 
     public Errors error() {
@@ -462,7 +463,7 @@ public class FetchResponse extends AbstractResponse {
         List<FetchRequest.TopicAndPartitionData<PartitionData>> topicsData =
             FetchRequest.TopicAndPartitionData.batchByTopic(partIterator);
         List<Struct> topicArray = new ArrayList<>();
-        for (FetchRequest.TopicAndPartitionData<PartitionData> topicEntry: topicsData) {
+        for (FetchRequest.TopicAndPartitionData<PartitionData> topicEntry : topicsData) {
             Struct topicData = struct.instance(RESPONSES_KEY_NAME);
             topicData.set(TOPIC_NAME, topicEntry.topic);
             List<Struct> partitionArray = new ArrayList<>();

@@ -28,6 +28,7 @@ import com.yammer.metrics.core.Gauge
 import kafka.cluster.{BrokerEndPoint, EndPoint}
 import kafka.common.KafkaException
 import kafka.metrics.KafkaMetricsGroup
+import kafka.network.RequestChannel.{CloseConnectionResponse, NoOpResponse, SendResponse}
 import kafka.security.CredentialProvider
 import kafka.server.KafkaConfig
 import kafka.utils._
@@ -35,7 +36,7 @@ import org.apache.kafka.common.Reconfigurable
 import org.apache.kafka.common.memory.{MemoryPool, SimpleMemoryPool}
 import org.apache.kafka.common.metrics._
 import org.apache.kafka.common.metrics.stats.Meter
-import org.apache.kafka.common.network.{ChannelBuilder, ChannelBuilders, KafkaChannel, ListenerName, Selectable, Send, Selector => KSelector}
+import org.apache.kafka.common.network.{ChannelBuilder, ChannelBuilders, KafkaChannel, ListenerName, MultiRecordsSend, Selectable, Send, Selector => KSelector}
 import org.apache.kafka.common.requests.{RequestContext, RequestHeader}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{KafkaThread, LogContext, Time}
@@ -616,23 +617,21 @@ private[kafka] class Processor(val id: Int,
   }
 
   private def processNewResponses() {
-    var curr: RequestChannel.Response = null
-    while ({curr = dequeueResponse(); curr != null}) {
-      val channelId = curr.request.context.connectionId
+    var currentResponse: RequestChannel.Response = null
+    while ({currentResponse = dequeueResponse(); currentResponse != null}) {
+      val channelId = currentResponse.request.context.connectionId
       try {
-        curr.responseAction match {
-          case RequestChannel.NoOpAction =>
+        currentResponse match {
+          case response: NoOpResponse =>
             // There is no response to send to the client, we need to read more pipelined requests
             // that are sitting in the server's socket buffer
-            updateRequestMetrics(curr)
-            trace("Socket server received empty response to send, registering for read: " + curr)
+            updateRequestMetrics(response)
+            trace("Socket server received empty response to send, registering for read: " + response)
             openOrClosingChannel(channelId).foreach(c => selector.unmute(c.id))
-          case RequestChannel.SendAction =>
-            val responseSend = curr.responseSend.getOrElse(
-              throw new IllegalStateException(s"responseSend must be defined for SendAction, response: $curr"))
-            sendResponse(curr, responseSend)
-          case RequestChannel.CloseConnectionAction =>
-            updateRequestMetrics(curr)
+          case response: SendResponse =>
+            sendResponse(response, response.responseSend)
+          case response: CloseConnectionResponse =>
+            updateRequestMetrics(response)
             trace("Closing socket connection actively according to the response code.")
             close(channelId)
         }
@@ -699,14 +698,23 @@ private[kafka] class Processor(val id: Int,
   private def processCompletedSends() {
     selector.completedSends.asScala.foreach { send =>
       try {
-        val resp = inflightResponses.remove(send.destination).getOrElse {
+        val response = inflightResponses.remove(send.destination).getOrElse {
           throw new IllegalStateException(s"Send for ${send.destination} completed, but not in `inflightResponses`")
         }
-        updateRequestMetrics(resp)
+
+        // If we have a callback for updating record processing statistics, invoke that now. This is used for cases
+        // where network threads process records, for example when we lazily down-convert records.
+        (response, send) match {
+          case (response: RequestChannel.SendResponse, send: MultiRecordsSend) if (send.processingStats().size() > 0) =>
+            response.processingStatsCallback.foreach(callback => callback(send.processingStats().asScala.toMap))
+          case _ =>
+        }
+
+        updateRequestMetrics(response)
         selector.unmute(send.destination)
       } catch {
         case e: Throwable => processChannelException(send.destination,
-            s"Exception while processing completed send to ${send.destination}", e)
+          s"Exception while processing completed send to ${send.destination}", e)
       }
     }
   }
