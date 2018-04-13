@@ -779,7 +779,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     val producer1 = createProducer(listenerName, securityProtocol, saslMechanism, retries = 1000)
     val consumer1 = createConsumer(listenerName, securityProtocol, saslMechanism,
       s"remove-listener-group-$securityProtocol")
-    verifyProduceConsume(producer1, consumer1, numRecords = 10, topic)
+    verifyProduceConsume(producer1, consumer1, numRecords = 10, topic, mayReceiveDuplicates = true)
     // send another message to check consumer later
     producer1.send(new ProducerRecord(topic, "key", "value")).get(100, TimeUnit.MILLISECONDS)
 
@@ -824,7 +824,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     val producer = createProducer(securityProtocol.name, securityProtocol, mechanism, retries)
     val consumer = createConsumer(securityProtocol.name, securityProtocol, mechanism,
       s"add-listener-group-$securityProtocol-$mechanism")
-    verifyProduceConsume(producer, consumer, numRecords = 10, topic)
+    verifyProduceConsume(producer, consumer, numRecords = 10, topic, mayReceiveDuplicates = true)
   }
 
   private def fetchBrokerConfigsFromZooKeeper(server: KafkaServer): Properties = {
@@ -945,7 +945,8 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
   private def verifyProduceConsume(producer: KafkaProducer[String, String],
                                    consumer: KafkaConsumer[String, String],
                                    numRecords: Int,
-                                   topic: String): Unit = {
+                                   topic: String,
+                                   mayReceiveDuplicates: Boolean = false): Unit = {
     val producerRecords = (1 to numRecords).map(i => new ProducerRecord(topic, s"key$i", s"value$i"))
     producerRecords.map(producer.send).map(_.get(10, TimeUnit.SECONDS))
     var received = 0
@@ -953,7 +954,8 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       received += consumer.poll(50).count
       received >= numRecords
     }, s"Consumed $received records until timeout instead of the expected $numRecords records")
-    assertEquals(numRecords, received)
+    if (!mayReceiveDuplicates)
+      assertEquals(numRecords, received)
   }
 
   private def verifyAuthenticationFailure(producer: KafkaProducer[_, _]): Unit = {
