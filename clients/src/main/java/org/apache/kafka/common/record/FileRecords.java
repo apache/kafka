@@ -17,6 +17,7 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.TopicPartitionRecordsStats;
 import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.record.FileLogInputStream.FileChannelRecordBatch;
 import org.apache.kafka.common.utils.AbstractIterator;
@@ -372,6 +373,11 @@ public class FileRecords extends AbstractRecords implements Closeable {
         return new RecordBatchIterator<>(inputStream);
     }
 
+    @Override
+    public TopicPartitionRecordsStats recordsProcessingStats() {
+        return null;
+    }
+
     public static FileRecords open(File file,
                                    boolean mutable,
                                    boolean fileAlreadyExists,
@@ -508,5 +514,4 @@ public class FileRecords extends AbstractRecords implements Closeable {
                     ')';
         }
     }
-
 }

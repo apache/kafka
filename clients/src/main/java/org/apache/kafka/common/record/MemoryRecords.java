@@ -18,6 +18,7 @@ package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicPartitionRecordsStats;
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention;
 import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
@@ -116,6 +117,11 @@ public class MemoryRecords extends AbstractRecords {
     @Override
     public ConvertedRecords<MemoryRecords> downConvert(byte toMagic, long firstOffset, Time time) {
         return RecordsUtil.downConvert(batches(), toMagic, firstOffset, time);
+    }
+
+    @Override
+    public TopicPartitionRecordsStats recordsProcessingStats() {
+        return null;
     }
 
     @Override

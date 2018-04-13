@@ -237,8 +237,13 @@ public class KafkaChannel {
 
     private boolean send(Send send) throws IOException {
         send.writeTo(transportLayer);
-        if (send.completed())
+        if (send.completed()) {
+            if (send.getClass() == MultiRecordsSend.class) {
+
+            }
+
             transportLayer.removeInterestOps(SelectionKey.OP_WRITE);
+        }
 
         return send.completed();
     }

@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.record;
 
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicPartitionRecordsStats;
 import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
@@ -37,11 +39,13 @@ import java.util.List;
  * </p>
  */
 public class LazyDownConversionRecords implements Records {
+    private final TopicPartition topicPartition;
     private final Records records;
     private final byte toMagic;
     private final long firstOffset;
     private RecordsWriter convertedRecordsWriter = null;
     private LazyDownConversionRecordsIterator recordsIterator = null;
+    private RecordsProcessingStats processingStats = null;
 
     /**
      * @param records Records to lazily down-convert
@@ -49,7 +53,8 @@ public class LazyDownConversionRecords implements Records {
      * @param firstOffset The starting offset for down-converted records. This only impacts some cases. See
      *                    {@link RecordsUtil#downConvert(Iterable, byte, long, Time)} for an explanation.
      */
-    public LazyDownConversionRecords(Records records, byte toMagic, long firstOffset) {
+    public LazyDownConversionRecords(TopicPartition topicPartition, Records records, byte toMagic, long firstOffset) {
+        this.topicPartition = topicPartition;
         this.records = records;
         this.toMagic = toMagic;
         this.firstOffset = firstOffset;
@@ -67,15 +72,19 @@ public class LazyDownConversionRecords implements Records {
 
     @Override
     public long writeTo(GatheringByteChannel channel, long position, int length) throws IOException {
-        if (position == 0)
+        if (position == 0) {
             recordsIterator = new LazyDownConversionRecordsIterator(records);
+            processingStats = new RecordsProcessingStats(0, 0, 0);
+        }
 
         if ((convertedRecordsWriter == null) || (convertedRecordsWriter.remaining() == 0)) {
             Records convertedRecords;
 
             if (recordsIterator.hasNext()) {
                 // Get next set of down-converted records
-                convertedRecords = recordsIterator.makeNext(length);
+                ConvertedRecords recordsAndStats = recordsIterator.makeNext(length);
+                convertedRecords = recordsAndStats.records();
+                processingStats.addToProcessingStats(recordsAndStats.recordsProcessingStats());
             } else {
                 // We do not have any records left to down-convert. Construct a "fake" message for the length remaining.
                 // This message will be ignored by the consumer because its length will be past the length of maximum
@@ -122,6 +131,11 @@ public class LazyDownConversionRecords implements Records {
         throw new UnsupportedOperationException();
     }
 
+    @Override
+    public TopicPartitionRecordsStats recordsProcessingStats() {
+        return new TopicPartitionRecordsStats(topicPartition, processingStats);
+    }
+
     /**
      * Implementation for writing {@link Records} to a particular channel. Internally tracks the progress of writes.
      */
@@ -161,7 +175,7 @@ public class LazyDownConversionRecords implements Records {
      * it as memory-efficient as possible by not having to maintain all down-converted records in-memory. Maintains
      * a view into batches of down-converted records.
      */
-    private class LazyDownConversionRecordsIterator extends AbstractIterator<Records> {
+    private class LazyDownConversionRecordsIterator extends AbstractIterator<ConvertedRecords> {
         /**
          * Iterator over records that require down-conversion.
          */
@@ -181,8 +195,8 @@ public class LazyDownConversionRecords implements Records {
          * @param readSize Maximum size of records to read.
          * @return Down-converted records
          */
-        protected Records makeNext(long readSize) {
-            Records convertedRecords;
+        protected ConvertedRecords makeNext(long readSize) {
+            ConvertedRecords convertedRecords;
             List<RecordBatch> batches = new ArrayList<>();
             boolean isFirstBatch = true;
             long sizeSoFar = 0;
@@ -196,7 +210,7 @@ public class LazyDownConversionRecords implements Records {
                 sizeSoFar += currentBatch.sizeInBytes();
                 isFirstBatch = false;
             }
-            convertedRecords = RecordsUtil.downConvert(batches, toMagic, firstOffset, new SystemTime()).records();
+            convertedRecords = RecordsUtil.downConvert(batches, toMagic, firstOffset, new SystemTime());
 
             if (!batchIterator.hasNext())
                 allDone();
@@ -205,7 +219,7 @@ public class LazyDownConversionRecords implements Records {
         }
 
         @Override
-        protected Records makeNext() {
+        protected ConvertedRecords makeNext() {
             return makeNext(maximumReadSize);
         }
     }

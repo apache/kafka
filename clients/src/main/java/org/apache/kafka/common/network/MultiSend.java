@@ -88,8 +88,10 @@ public class MultiSend implements Send {
             long written = current.writeTo(channel);
             totalWrittenPerCall += written;
             sendComplete = current.completed();
-            if (sendComplete)
+            if (sendComplete) {
+                onComplete(current);
                 current = sendQueue.poll();
+            }
         } while (!completed() && sendComplete);
 
         totalWritten += totalWrittenPerCall;
@@ -103,4 +105,10 @@ public class MultiSend implements Send {
         return totalWrittenPerCall;
     }
 
+    /**
+     * Method to record completion of an underlying {@link Send}
+     * @param completedSend The {@link Send} that was completed
+     */
+    protected void onComplete(Send completedSend) {
+    }
 }

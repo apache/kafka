@@ -28,6 +28,7 @@ import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.log.{Log, TimestampOffset}
 import kafka.network.RequestChannel
+import kafka.network.RequestChannel.SendResponse
 import kafka.security.auth.Authorizer
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.{MockTime, TestUtils}
@@ -473,7 +474,10 @@ class KafkaApisTest {
   }
 
   private def readResponse(api: ApiKeys, request: AbstractRequest, capturedResponse: Capture[RequestChannel.Response]): AbstractResponse = {
-    val send = capturedResponse.getValue.responseSend.get
+    val response = capturedResponse.getValue
+    assertTrue(s"Unexpected response type: ${response.getClass}", response.isInstanceOf[SendResponse])
+    val sendResponse = response.asInstanceOf[SendResponse]
+    val send = sendResponse.responseSend
     val channel = new ByteBufferChannel(send.size)
     send.writeTo(channel)
     channel.close()

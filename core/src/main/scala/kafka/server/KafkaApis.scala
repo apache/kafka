@@ -32,6 +32,7 @@ import kafka.controller.KafkaController
 import kafka.coordinator.group.{GroupCoordinator, JoinGroupResult}
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
 import kafka.log.{Log, LogManager, TimestampOffset}
+import kafka.network
 import kafka.network.RequestChannel
 import kafka.network.RequestChannel.{CloseConnectionAction, NoOpAction, SendAction}
 import kafka.security.SecurityUtils
@@ -85,6 +86,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                 time: Time,
                 val tokenManager: DelegationTokenManager) extends Logging {
 
+  type FetchResponseStats = Map[TopicPartition, RecordsProcessingStats]
   this.logIdent = "[KafkaApi-%d] ".format(brokerId)
   val adminZkClient = new AdminZkClient(zkClient)
 
@@ -457,7 +459,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         produceResponseCallback)
     }
 
-    def processingStatsCallback(processingStats: Map[TopicPartition, RecordsProcessingStats]): Unit = {
+    def processingStatsCallback(processingStats: FetchResponseStats): Unit = {
       processingStats.foreach { case (tp, info) =>
         updateRecordsProcessingStats(request, tp, info)
       }
@@ -556,7 +558,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
           val converted = {
             if (doLazyConversion) {
-              new LazyDownConversionRecords(data.records, magic, fetchContext.getFetchOffset(tp).get)
+              new LazyDownConversionRecords(tp, data.records, magic, fetchContext.getFetchOffset(tp).get)
               // TODO: figure out how to update statistics
             }
             else {
@@ -608,10 +610,16 @@ class KafkaApis(val requestChannel: RequestChannel,
         trace(s"Sending Fetch response with partitions.size=${unconvertedFetchResponse.responseData().size()}, " +
           s"metadata=${unconvertedFetchResponse.sessionId()}")
 
+        def processingStatsCallback(processingStats: FetchResponseStats): Unit = {
+          processingStats.foreach { case (tp, info) =>
+            updateRecordsProcessingStats(request, tp, info)
+          }
+        }
+
         if (fetchRequest.isFromFollower)
-          sendResponseExemptThrottle(request, createResponse(0))
+          sendResponseExemptThrottle(request, createResponse(0), Some(processingStatsCallback))
         else
-          sendResponseMaybeThrottle(request, requestThrottleMs => createResponse(requestThrottleMs))
+          sendResponseMaybeThrottle(request, requestThrottleMs => createResponse(requestThrottleMs), Some(processingStatsCallback))
       }
 
       // When this callback is triggered, the remote API call has completed.
@@ -2234,18 +2242,22 @@ class KafkaApis(val requestChannel: RequestChannel,
       sendErrorResponseExemptThrottle(request, e)
   }
 
-  private def sendResponseMaybeThrottle(request: RequestChannel.Request, createResponse: Int => AbstractResponse): Unit = {
+  private def sendResponseMaybeThrottle(request: RequestChannel.Request,
+                                        createResponse: Int => AbstractResponse,
+                                        processingStatsCallback: Option[FetchResponseStats => Unit] = None): Unit = {
     quotas.request.maybeRecordAndThrottle(request,
-      throttleTimeMs => sendResponse(request, Some(createResponse(throttleTimeMs))))
+      throttleTimeMs => sendResponse(request, Some(createResponse(throttleTimeMs)), processingStatsCallback))
   }
 
   private def sendErrorResponseMaybeThrottle(request: RequestChannel.Request, error: Throwable) {
     quotas.request.maybeRecordAndThrottle(request, sendErrorOrCloseConnection(request, error))
   }
 
-  private def sendResponseExemptThrottle(request: RequestChannel.Request, response: AbstractResponse): Unit = {
+  private def sendResponseExemptThrottle(request: RequestChannel.Request,
+                                         response: AbstractResponse,
+                                         processingStatsCallback: Option[FetchResponseStats => Unit] = None): Unit = {
     quotas.request.maybeRecordExempt(request)
-    sendResponse(request, Some(response))
+    sendResponse(request, Some(response), processingStatsCallback)
   }
 
   private def sendErrorResponseExemptThrottle(request: RequestChannel.Request, error: Throwable): Unit = {
@@ -2259,35 +2271,39 @@ class KafkaApis(val requestChannel: RequestChannel,
     if (response == null)
       closeConnection(request, requestBody.errorCounts(error))
     else
-      sendResponse(request, Some(response))
+      sendResponse(request, Some(response), None)
   }
 
   private def sendNoOpResponseExemptThrottle(request: RequestChannel.Request): Unit = {
     quotas.request.maybeRecordExempt(request)
-    sendResponse(request, None)
+    sendResponse(request, None, None)
   }
 
   private def closeConnection(request: RequestChannel.Request, errorCounts: java.util.Map[Errors, Integer]): Unit = {
     // This case is used when the request handler has encountered an error, but the client
     // does not expect a response (e.g. when produce request has acks set to 0)
     requestChannel.updateErrorMetrics(request.header.apiKey, errorCounts.asScala)
-    requestChannel.sendResponse(new RequestChannel.Response(request, None, CloseConnectionAction, None))
+    requestChannel.sendResponse(new RequestChannel.CloseConnectionResponse(request))
   }
 
-  private def sendResponse(request: RequestChannel.Request, responseOpt: Option[AbstractResponse]): Unit = {
+  private def sendResponse(request: RequestChannel.Request,
+                           responseOpt: Option[AbstractResponse],
+                           processingStatsCallback: Option[FetchResponseStats => Unit]): Unit = {
     // Update error metrics for each error code in the response including Errors.NONE
     responseOpt.foreach(response => requestChannel.updateErrorMetrics(request.header.apiKey, response.errorCounts.asScala))
 
-    responseOpt match {
+    val response = responseOpt match {
       case Some(response) =>
         val responseSend = request.context.buildResponse(response)
         val responseString =
           if (RequestChannel.isRequestLoggingEnabled) Some(response.toString(request.context.apiVersion))
           else None
-        requestChannel.sendResponse(new RequestChannel.Response(request, Some(responseSend), SendAction, responseString))
+        // new RequestChannel.Response(request, Some(responseSend), SendAction, responseString)
+        new RequestChannel.SendResponse(request, responseSend, responseString, processingStatsCallback)
       case None =>
-        requestChannel.sendResponse(new RequestChannel.Response(request, None, NoOpAction, None))
+        new RequestChannel.NoOpResponse(request)
     }
+    requestChannel.sendResponse(response)
   }
 
 }

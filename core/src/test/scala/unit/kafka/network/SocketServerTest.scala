@@ -22,10 +22,11 @@ import java.net._
 import java.nio.ByteBuffer
 import java.util.{HashMap, Properties, Random}
 import java.nio.channels.SocketChannel
-import javax.net.ssl._
 
+import javax.net.ssl._
 import com.yammer.metrics.core.{Gauge, Meter}
 import com.yammer.metrics.{Metrics => YammerMetrics}
+import kafka.network
 import kafka.network.RequestChannel.SendAction
 import kafka.security.CredentialProvider
 import kafka.server.KafkaConfig
@@ -131,7 +132,7 @@ class SocketServerTest extends JUnitSuite {
     byteBuffer.rewind()
 
     val send = new NetworkSend(request.context.connectionId, byteBuffer)
-    channel.sendResponse(new RequestChannel.Response(request, Some(send), SendAction, Some(request.header.toString)))
+    channel.sendResponse(new network.RequestChannel.SendResponse(request, send, Some(request.header.toString), None))
   }
 
   def connect(s: SocketServer = server, protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT, localAddr: InetAddress = null) = {
@@ -214,7 +215,7 @@ class SocketServerTest extends JUnitSuite {
     for (_ <- 0 until 10) {
       val request = receiveRequest(server.requestChannel)
       assertNotNull("receiveRequest timed out", request)
-      server.requestChannel.sendResponse(new RequestChannel.Response(request, None, RequestChannel.NoOpAction, None))
+      server.requestChannel.sendResponse(new RequestChannel.NoOpResponse(request))
     }
   }
 
@@ -228,7 +229,7 @@ class SocketServerTest extends JUnitSuite {
     for (_ <- 0 until 3) {
       val request = receiveRequest(server.requestChannel)
       assertNotNull("receiveRequest timed out", request)
-      server.requestChannel.sendResponse(new RequestChannel.Response(request, None, RequestChannel.NoOpAction, None))
+      server.requestChannel.sendResponse(new RequestChannel.NoOpResponse(request))
     }
   }
 
@@ -592,7 +593,7 @@ class SocketServerTest extends JUnitSuite {
       // detected. If the buffer is larger than 102400 bytes, a second write is attempted and it fails with an
       // IOException.
       val send = new NetworkSend(request.context.connectionId, ByteBuffer.allocate(550000))
-      channel.sendResponse(new RequestChannel.Response(request, Some(send), SendAction, None))
+      channel.sendResponse(new RequestChannel.SendResponse(request, send, None, None))
       TestUtils.waitUntilTrue(() => totalTimeHistCount() == expectedTotalTimeCount,
         s"request metrics not updated, expected: $expectedTotalTimeCount, actual: ${totalTimeHistCount()}")
 
