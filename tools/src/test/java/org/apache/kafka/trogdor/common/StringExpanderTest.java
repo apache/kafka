@@ -40,23 +40,23 @@ public class StringExpanderTest {
 
     @Test
     public void testExpansions() throws Exception {
-        HashSet<String> expected1 = new HashSet<>(Arrays.asList(new String[] {
+        HashSet<String> expected1 = new HashSet<>(Arrays.asList(
             "foo1",
             "foo2",
             "foo3"
-        }));
+        ));
         assertEquals(expected1, StringExpander.expand("foo[1-3]"));
 
-        HashSet<String> expected2 = new HashSet<>(Arrays.asList(new String[] {
+        HashSet<String> expected2 = new HashSet<>(Arrays.asList(
             "foo bar baz 0"
-        }));
+        ));
         assertEquals(expected2, StringExpander.expand("foo bar baz [0-0]"));
 
-        HashSet<String> expected3 = new HashSet<>(Arrays.asList(new String[] {
+        HashSet<String> expected3 = new HashSet<>(Arrays.asList(
             "[[ wow50 ]]",
             "[[ wow51 ]]",
             "[[ wow52 ]]"
-        }));
+        ));
         assertEquals(expected3, StringExpander.expand("[[ wow[50-52] ]]"));
     }
-};
+}

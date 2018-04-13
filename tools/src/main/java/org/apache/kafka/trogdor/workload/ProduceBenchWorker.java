@@ -80,6 +80,8 @@ public class ProduceBenchWorker implements TaskWorker {
             throw new IllegalStateException("ProducerBenchWorker is already running.");
         }
         log.info("{}: Activating ProduceBenchWorker with {}", id, spec);
+        // Create an executor with 2 threads.  We need the second thread so
+        // that the StatusUpdater can run in parallel with SendRecords.
         this.executor = Executors.newScheduledThreadPool(2,
             ThreadUtils.createThreadFactory("ProduceBenchWorkerThread%d", false));
         this.status = status;
@@ -208,7 +210,7 @@ public class ProduceBenchWorker implements TaskWorker {
                             iter = activePartitions.iterator();
                         }
                         TopicPartition partition = iter.next();
-                        ProducerRecord<byte[], byte[]> record = new ProducerRecord<byte[], byte[]>(
+                        ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(
                             partition.topic(), partition.partition(), keys.next(), values.next());
                         future = producer.send(record,
                             new SendRecordsCallback(this, Time.SYSTEM.milliseconds()));

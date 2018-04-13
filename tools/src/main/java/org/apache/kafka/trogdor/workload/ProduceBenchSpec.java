@@ -32,11 +32,6 @@ import java.util.Set;
  * The specification for a benchmark that produces messages to a set of topics.
  */
 public class ProduceBenchSpec extends TaskSpec {
-
-    private static final String DEFAULT_TOPIC_PREFIX = "produceBenchTopic";
-    private static final int DEFAULT_NUM_PARTITIONS = 1;
-    private static final short DEFAULT_REPLICATION_FACTOR = 3;
-
     private final String producerNode;
     private final String bootstrapServers;
     private final int targetMessagesPerSec;

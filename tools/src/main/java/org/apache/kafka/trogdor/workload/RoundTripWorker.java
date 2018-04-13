@@ -244,7 +244,7 @@ public class RoundTripWorker implements TaskWorker {
                     }
                     TopicPartition partition = iter.next();
                     // we explicitly specify generator position based on message index
-                    ProducerRecord<byte[], byte[]> record = new ProducerRecord(partition.topic(),
+                    ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(partition.topic(),
                         partition.partition(), KEY_GENERATOR.generate(messageIndex),
                         spec.valueGenerator().generate(messageIndex));
                     producer.send(record, new Callback() {
@@ -309,11 +309,9 @@ public class RoundTripWorker implements TaskWorker {
     }
 
     class ConsumerRunnable implements Runnable {
-        private final HashSet<TopicPartition> partitions;
         private final Properties props;
 
         ConsumerRunnable(HashSet<TopicPartition> partitions) {
-            this.partitions = partitions;
             this.props = new Properties();
             props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, spec.bootstrapServers());
             props.put(ConsumerConfig.CLIENT_ID_CONFIG, "consumer." + id);
