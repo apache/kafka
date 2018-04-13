@@ -32,7 +32,6 @@ import org.junit.Rule;
 import org.junit.Test;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
@@ -49,14 +48,13 @@ public class KStreamKTableJoinTest {
     final private Serde<String> stringSerde = Serdes.String();
     @Rule
     public final KStreamTestDriver driver = new KStreamTestDriver();
-    private File stateDir = null;
     private MockProcessorSupplier<Integer, String> processor;
     private final int[] expectedKeys = {0, 1, 2, 3};
     private StreamsBuilder builder;
 
     @Before
-    public void setUp() throws IOException {
-        stateDir = TestUtils.tempDirectory("kafka-test");
+    public void setUp() {
+        final File stateDir = TestUtils.tempDirectory("kafka-test");
 
         builder = new StreamsBuilder();
 
@@ -86,8 +84,8 @@ public class KStreamKTableJoinTest {
         }
     }
 
-    private void pushNullValueToTable(final int messageCount) {
-        for (int i = 0; i < messageCount; i++) {
+    private void pushNullValueToTable() {
+        for (int i = 0; i < 2; i++) {
             driver.process(tableTopic, expectedKeys[i], null);
         }
     }
@@ -174,7 +172,7 @@ public class KStreamKTableJoinTest {
 
         // push two items with null to the table as deletes. this should not produce any item.
 
-        pushNullValueToTable(2);
+        pushNullValueToTable();
         processor.checkAndClearProcessResult();
 
         // push all four items to the primary stream. this should produce two items.

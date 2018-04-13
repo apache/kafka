@@ -73,31 +73,34 @@ public class GlobalKTableJoinsTest {
 
     @Test
     public void shouldLeftJoinWithStream() {
-        stream.leftJoin(global, keyValueMapper, MockValueJoiner.TOSTRING_JOINER)
-                .foreach(action);
+        stream
+            .leftJoin(global, keyValueMapper, MockValueJoiner.TOSTRING_JOINER)
+            .foreach(action);
 
         final Map<String, String> expected = new HashMap<>();
         expected.put("1", "a+A");
         expected.put("2", "b+B");
         expected.put("3", "c+null");
 
-        verifyJoin(expected, streamTopic);
+        verifyJoin(expected);
 
     }
 
     @Test
     public void shouldInnerJoinWithStream() {
-        stream.join(global, keyValueMapper,  MockValueJoiner.TOSTRING_JOINER)
-                .foreach(action);
+        stream
+            .join(global, keyValueMapper, MockValueJoiner.TOSTRING_JOINER)
+            .foreach(action);
 
         final Map<String, String> expected = new HashMap<>();
         expected.put("1", "a+A");
         expected.put("2", "b+B");
 
-        verifyJoin(expected, streamTopic);
+        verifyJoin(expected);
     }
 
-    private void verifyJoin(final Map<String, String> expected, final String joinInput) {
+    private void verifyJoin(final Map<String, String> expected) {
+        final String joinInput = streamTopic;
         driver.setUp(builder, stateDir);
         driver.setTime(0L);
         // write some data to the global table
