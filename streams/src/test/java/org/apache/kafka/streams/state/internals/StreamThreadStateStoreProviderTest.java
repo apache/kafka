@@ -205,18 +205,15 @@ public class StreamThreadStateStoreProviderTest {
 
     private void configureRestoreConsumer(final MockClientSupplier clientSupplier,
                                           final String topic) {
-        clientSupplier.restoreConsumer
-            .updatePartitions(topic,
-                Arrays.asList(
-                    new PartitionInfo(topic, 0, null, null, null),
-                    new PartitionInfo(topic, 1, null, null, null)
-                )
-            );
+        final List<PartitionInfo> partitions = Arrays.asList(
+            new PartitionInfo(topic, 0, null, null, null),
+            new PartitionInfo(topic, 1, null, null, null)
+        );
+        clientSupplier.restoreConsumer.updatePartitions(topic, partitions);
         final TopicPartition tp1 = new TopicPartition(topic, 0);
         final TopicPartition tp2 = new TopicPartition(topic, 1);
 
-        clientSupplier.restoreConsumer
-            .assign(Arrays.asList(tp1, tp2));
+        clientSupplier.restoreConsumer.assign(Arrays.asList(tp1, tp2));
 
         final Map<TopicPartition, Long> offsets = new HashMap<>();
         offsets.put(tp1, 0L);
