@@ -49,6 +49,7 @@ import scala.collection.JavaConverters._
 import java.lang.{Long => JLong}
 
 import kafka.zk.KafkaZkClient
+import org.scalatest.Assertions.intercept
 
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
@@ -817,6 +818,22 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(DeleteRecordsRequest.HIGH_WATERMARK)).asJava)
     result.all().get()
     assertNull(consumer.offsetsForTimes(Map(topicPartition -> JLong.valueOf(0L)).asJava).get(topicPartition))
+
+    client.close()
+  }
+
+  @Test
+  def testDescribeConfigsForTopic(): Unit = {
+    createTopic(topic, numPartitions = 2, replicationFactor = serverCount)
+    client = AdminClient.create(createConfig)
+
+    val existingTopic = new ConfigResource(ConfigResource.Type.TOPIC, topic)
+    client.describeConfigs(Collections.singletonList(existingTopic)).values.get(existingTopic).get()
+
+    val nonExistentTopic = new ConfigResource(ConfigResource.Type.TOPIC, "unknown")
+    val describeResult = client.describeConfigs(Collections.singletonList(nonExistentTopic))
+
+    assertTrue(intercept[ExecutionException](describeResult.values.get(nonExistentTopic).get).getCause.isInstanceOf[UnknownTopicOrPartitionException])
 
     client.close()
   }
