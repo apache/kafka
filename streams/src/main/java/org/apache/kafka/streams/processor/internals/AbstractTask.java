@@ -76,7 +76,7 @@ public abstract class AbstractTask implements Task {
         this.eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
         this.stateDirectory = stateDirectory;
 
-        this.logPrefix = String.format("%s [%s] ", isStandby ? "standby-task" : "task", id());
+        this.logPrefix = String.format("%s [%s] ", isStandby ? "standby-task" : "task", id);
         this.logContext = new LogContext(logPrefix);
         this.log = logContext.logger(getClass());
 
@@ -97,7 +97,7 @@ public abstract class AbstractTask implements Task {
     }
 
     @Override
-    public final TaskId id() {
+    public TaskId id() {
         return id;
     }
 

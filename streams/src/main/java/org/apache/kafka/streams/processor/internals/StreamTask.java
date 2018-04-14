@@ -75,8 +75,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         final Sensor taskCommitTimeSensor;
 
 
-        TaskMetrics(final StreamsMetrics metrics) {
-            final String name = id().toString();
+        TaskMetrics(final TaskId id, final StreamsMetrics metrics) {
+            final String name = id.toString();
             this.metrics = (StreamsMetricsImpl) metrics;
             taskCommitTimeSensor = metrics.addLatencyAndThroughputSensor("task", name, "commit", Sensor.RecordingLevel.DEBUG);
         }
@@ -116,7 +116,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
         this.time = time;
         this.producer = producer;
-        this.metrics = new TaskMetrics(metrics);
+        this.metrics = new TaskMetrics(id, metrics);
 
         final ProductionExceptionHandler productionExceptionHandler = config.defaultProductionExceptionHandler();
 
