@@ -17,7 +17,9 @@
 package org.apache.kafka.streams.tests;
 
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.StreamsConfig;
 
+import java.io.IOException;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -30,17 +32,26 @@ public class StreamsSmokeTest {
      *
      * @param args
      */
-    public static void main(final String[] args) throws Exception {
-        final String kafka = args[0];
-        final String propFileName = args.length > 1 ? args[1] : null;
-        final String command = args.length > 2 ? args[2] : null;
+    public static void main(final String[] args) throws InterruptedException, IOException {
+        if (args.length < 2) {
+            System.err.println("StreamsSmokeTest are expecting two parameters: propFile, command; but only see " + args.length + " parameter");
+            System.exit(1);
+        }
+
+        final String propFileName = args[0];
+        final String command = args[1];
         final boolean disableAutoTerminate = args.length > 3;
 
         final Properties streamsProperties = Utils.loadProps(propFileName);
+        final String kafka = streamsProperties.getProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG);
+
+        if (kafka == null) {
+            System.err.println("No bootstrap kafka servers specified in " + StreamsConfig.BOOTSTRAP_SERVERS_CONFIG);
+            System.exit(1);
+        }
 
         System.out.println("StreamsTest instance started (StreamsSmokeTest)");
         System.out.println("command=" + command);
-        System.out.println("kafka=" + kafka);
         System.out.println("props=" + streamsProperties);
         System.out.println("disableAutoTerminate=" + disableAutoTerminate);
 
@@ -61,7 +72,7 @@ public class StreamsSmokeTest {
                 break;
             case "process":
                 // this starts a KafkaStreams client
-                final SmokeTestClient client = new SmokeTestClient(streamsProperties, kafka);
+                final SmokeTestClient client = new SmokeTestClient(streamsProperties);
                 client.start();
                 break;
             case "close-deadlock-test":

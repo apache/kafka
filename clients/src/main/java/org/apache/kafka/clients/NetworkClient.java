@@ -832,6 +832,7 @@ public class NetworkClient implements KafkaClient {
             long waitForMetadataFetch = this.metadataFetchInProgress ? requestTimeoutMs : 0;
 
             long metadataTimeout = Math.max(timeToNextMetadataUpdate, waitForMetadataFetch);
+
             if (metadataTimeout > 0) {
                 return metadataTimeout;
             }

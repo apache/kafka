@@ -73,6 +73,7 @@ public class MockClient implements KafkaClient {
 
     }
 
+    private int correlation;
     private final Time time;
     private final Metadata metadata;
     private Set<String> unavailableTopics;
@@ -464,7 +465,7 @@ public class MockClient implements KafkaClient {
     public ClientRequest newClientRequest(String nodeId, AbstractRequest.Builder<?> requestBuilder, long createdTimeMs,
                                           boolean expectResponse, RequestCompletionHandler callback) {
         totalRequestCount.incrementAndGet();
-        return new ClientRequest(nodeId, requestBuilder, 0, "mockClientId", createdTimeMs,
+        return new ClientRequest(nodeId, requestBuilder, correlation++, "mockClientId", createdTimeMs,
                 expectResponse, callback);
     }
 

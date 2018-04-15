@@ -96,14 +96,15 @@ public class SmokeTestDriver extends SmokeTestUtil {
         };
 
         final Properties props = new Properties();
+        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
         props.put(StreamsConfig.STATE_DIR_CONFIG, createDir(stateDir, "1").getAbsolutePath());
-        SmokeTestClient streams1 = new SmokeTestClient(props, kafka);
+        SmokeTestClient streams1 = new SmokeTestClient(props);
         props.put(StreamsConfig.STATE_DIR_CONFIG, createDir(stateDir, "2").getAbsolutePath());
-        SmokeTestClient streams2 = new SmokeTestClient(props, kafka);
+        SmokeTestClient streams2 = new SmokeTestClient(props);
         props.put(StreamsConfig.STATE_DIR_CONFIG, createDir(stateDir, "3").getAbsolutePath());
-        SmokeTestClient streams3 = new SmokeTestClient(props, kafka);
+        SmokeTestClient streams3 = new SmokeTestClient(props);
         props.put(StreamsConfig.STATE_DIR_CONFIG, createDir(stateDir, "4").getAbsolutePath());
-        SmokeTestClient streams4 = new SmokeTestClient(props, kafka);
+        SmokeTestClient streams4 = new SmokeTestClient(props);
 
         System.out.println("starting the driver");
         driver.start();
