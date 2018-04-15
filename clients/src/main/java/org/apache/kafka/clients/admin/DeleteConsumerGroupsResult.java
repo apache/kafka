@@ -29,13 +29,24 @@ import java.util.Map;
  */
 @InterfaceStability.Evolving
 public class DeleteConsumerGroupsResult {
-    final KafkaFuture<Map<String, KafkaFuture<Void>>> futures;
+    private final Map<String, KafkaFuture<Void>> futures;
 
-    DeleteConsumerGroupsResult(KafkaFuture<Map<String, KafkaFuture<Void>>> futures) {
+    DeleteConsumerGroupsResult(final Map<String, KafkaFuture<Void>> futures) {
         this.futures = futures;
     }
 
-    public KafkaFuture<Map<String, KafkaFuture<Void>>> deletedGroups() {
+    /**
+     * Return a map from group id to futures which can be used to check the status of
+     * individual deletions.
+     */
+    public Map<String, KafkaFuture<Void>> deletedGroups() {
         return futures;
+    }
+
+    /**
+     * Return a future which succeeds only if all the consumer group deletions succeed.
+     */
+    public KafkaFuture<Void> all() {
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0]));
     }
 }

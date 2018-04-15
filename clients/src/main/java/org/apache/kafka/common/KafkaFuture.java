@@ -106,15 +106,6 @@ public abstract class KafkaFuture<T> implements Future<T> {
         return allOfFuture;
     }
 
-    public KafkaFuture<T> combine(KafkaFuture<?>... futures) {
-        AllOfAdapter<Object> allOfWaiter = new AllOfAdapter<>(futures.length, this);
-        for (KafkaFuture<?> future : futures) {
-            future.addWaiter(allOfWaiter);
-        }
-
-        return this;
-    }
-
     /**
      * Returns a new KafkaFuture that, when this future completes normally, is executed with this
      * futures's result as the argument to the supplied function.
