@@ -149,31 +149,6 @@ public class KafkaFutureTest {
         }
     }
 
-    private static class ThrowThread<T> extends Thread {
-
-        private final KafkaFutureImpl<T> future;
-        private final T value;
-        Throwable testException = null;
-
-        ThrowThread(KafkaFutureImpl<T> future, T value) {
-            this.future = future;
-            this.value = value;
-        }
-
-        @Override
-        public void run() {
-            try {
-                try {
-                    Thread.sleep(0, 200);
-                } catch (InterruptedException e) {
-                }
-                future.completeExceptionally(new Exception());
-            } catch (Throwable testException) {
-                this.testException = testException;
-            }
-        }
-    }
-
     private static class WaiterThread<T> extends Thread {
 
         private final KafkaFutureImpl<T> future;
