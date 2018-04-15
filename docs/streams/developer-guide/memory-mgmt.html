@@ -55,9 +55,9 @@
       <p>For such <code class="docutils literal"><span class="pre">KTable</span></code> instances, the record cache is used for:</p>
       <ul class="simple">
         <li>Internal caching and compacting of output records before they are written by the underlying stateful
-          <a class="reference internal" href="../concepts.html#streams-concepts-processor"><span class="std std-ref">processor node</span></a> to its internal state stores.</li>
+          <a class="reference internal" href="../core-concepts#streams_processor_node"><span class="std std-ref">processor node</span></a> to its internal state stores.</li>
         <li>Internal caching and compacting of output records before they are forwarded from the underlying stateful
-          <a class="reference internal" href="../concepts.html#streams-concepts-processor"><span class="std std-ref">processor node</span></a> to any of its downstream processor nodes.</li>
+          <a class="reference internal" href="../core-concepts#streams_processor_node"><span class="std std-ref">processor node</span></a> to any of its downstream processor nodes.</li>
       </ul>
       <p>Use the following example to understand the behaviors with and without record caching. In this example, the input is a
         <code class="docutils literal"><span class="pre">KStream&lt;String,</span> <span class="pre">Integer&gt;</span></code> with the records <code class="docutils literal"><span class="pre">&lt;K,V&gt;:</span> <span class="pre">&lt;A,</span> <span class="pre">1&gt;,</span> <span class="pre">&lt;D,</span> <span class="pre">5&gt;,</span> <span class="pre">&lt;A,</span> <span class="pre">20&gt;,</span> <span class="pre">&lt;A,</span> <span class="pre">300&gt;</span></code>. The focus in this example is
