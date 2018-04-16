@@ -28,7 +28,7 @@ import java.util.Objects;
 
 public class EpochEndOffset {
     public static final long UNDEFINED_EPOCH_OFFSET = NO_PARTITION_LEADER_EPOCH;
-    public static final int UNDEFINED_EPOCH = -1;
+    public static final int UNDEFINED_EPOCH = NO_PARTITION_LEADER_EPOCH;
 
     private Errors error;
     private int leaderEpoch;  // introduced in V1
