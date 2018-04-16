@@ -867,6 +867,15 @@ public class KafkaAdminClientTest {
 
             env.kafkaClient().prepareResponse(new FindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
+            env.kafkaClient().prepareResponse(
+                new ListGroupsResponse(
+                    Errors.NONE,
+                    Arrays.asList(
+                        new ListGroupsResponse.Group("group-1", ConsumerProtocol.PROTOCOL_TYPE),
+                        new ListGroupsResponse.Group("group-connect-1", "connector")
+                    )));
+
+
             final Map<String, Errors> response = new HashMap<>();
             response.put("group-0", Errors.NONE);
             env.kafkaClient().prepareResponse(new DeleteGroupsResponse(response));
