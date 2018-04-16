@@ -23,16 +23,20 @@ import org.apache.kafka.trogdor.rest.CreateTaskResponse;
 import org.apache.kafka.trogdor.rest.Empty;
 import org.apache.kafka.trogdor.rest.StopTaskRequest;
 import org.apache.kafka.trogdor.rest.StopTaskResponse;
+import org.apache.kafka.trogdor.rest.TasksRequest;
 import org.apache.kafka.trogdor.rest.TasksResponse;
 
 import javax.servlet.ServletContext;
 import javax.ws.rs.Consumes;
+import javax.ws.rs.DefaultValue;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
 import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
+import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 
@@ -69,8 +73,12 @@ public class CoordinatorRestResource {
 
     @GET
     @Path("/tasks")
-    public TasksResponse tasks() throws Throwable {
-        return coordinator().tasks();
+    public TasksResponse tasks(@QueryParam("taskId") List<String> taskId,
+            @DefaultValue("0") @QueryParam("firstStartMs") int firstStartMs,
+            @DefaultValue("0") @QueryParam("lastStartMs") int lastStartMs,
+            @DefaultValue("0") @QueryParam("firstEndMs") int firstEndMs,
+            @DefaultValue("0") @QueryParam("lastEndMs") int lastEndMs) throws Throwable {
+        return coordinator().tasks(new TasksRequest(taskId, firstStartMs, lastStartMs, firstEndMs, lastEndMs));
     }
 
     @PUT

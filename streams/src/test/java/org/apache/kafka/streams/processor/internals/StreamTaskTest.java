@@ -783,6 +783,14 @@ public class StreamTaskTest {
     }
 
     @Test
+    public void shouldNotThrowOnCloseIfTaskWasNotInitializedWithEosEnabled() {
+        task = createStatelessTask(true);
+
+        assertTrue(!producer.transactionInFlight());
+        task.close(false, false);
+    }
+
+    @Test
     public void shouldNotInitOrBeginTransactionOnCreateIfEosDisabled() {
         task = createStatelessTask(false);
 

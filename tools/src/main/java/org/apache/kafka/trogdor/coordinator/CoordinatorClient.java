@@ -33,9 +33,12 @@ import org.apache.kafka.trogdor.rest.JsonRestServer;
 import org.apache.kafka.trogdor.rest.JsonRestServer.HttpResponse;
 import org.apache.kafka.trogdor.rest.StopTaskRequest;
 import org.apache.kafka.trogdor.rest.StopTaskResponse;
+import org.apache.kafka.trogdor.rest.TasksRequest;
 import org.apache.kafka.trogdor.rest.TasksResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import javax.ws.rs.core.UriBuilder;
 
 import static net.sourceforge.argparse4j.impl.Arguments.store;
 import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
@@ -127,9 +130,15 @@ public class CoordinatorClient {
         return resp.body();
     }
 
-    public TasksResponse tasks() throws Exception {
+    public TasksResponse tasks(TasksRequest request) throws Exception {
+        UriBuilder uriBuilder = UriBuilder.fromPath(url("/coordinator/tasks"));
+        uriBuilder.queryParam("taskId", request.taskIds().toArray(new String[0]));
+        uriBuilder.queryParam("firstStartMs", request.firstStartMs());
+        uriBuilder.queryParam("lastStartMs", request.lastStartMs());
+        uriBuilder.queryParam("firstEndMs", request.firstEndMs());
+        uriBuilder.queryParam("lastEndMs", request.lastEndMs());
         HttpResponse<TasksResponse> resp =
-            JsonRestServer.<TasksResponse>httpRequest(log, url("/coordinator/tasks"), "GET",
+            JsonRestServer.<TasksResponse>httpRequest(log, uriBuilder.build().toString(), "GET",
                 null, new TypeReference<TasksResponse>() { }, maxTries);
         return resp.body();
     }
@@ -204,7 +213,8 @@ public class CoordinatorClient {
                 JsonUtil.toPrettyJsonString(client.status()));
         } else if (res.getBoolean("show_tasks")) {
             System.out.println("Got coordinator tasks: " +
-                JsonUtil.toPrettyJsonString(client.tasks()));
+                JsonUtil.toPrettyJsonString(client.tasks(
+                    new TasksRequest(null, 0, 0, 0, 0))));
         } else if (res.getString("create_task") != null) {
             client.createTask(JsonUtil.JSON_SERDE.readValue(res.getString("create_task"),
                 CreateTaskRequest.class));

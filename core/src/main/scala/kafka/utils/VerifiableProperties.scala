@@ -122,7 +122,7 @@ class VerifiableProperties(val props: Properties) extends Logging {
     require(v >= range._1 && v <= range._2, name + " has value " + v + " which is not in the range " + range + ".")
     v
   }
-  
+
   /**
    * Get a required argument as a double
    * @param name The property name
@@ -130,7 +130,7 @@ class VerifiableProperties(val props: Properties) extends Logging {
    * @throws IllegalArgumentException If the given property is not present
    */
   def getDouble(name: String): Double = getString(name).toDouble
-  
+
   /**
    * Get an optional argument as a double
    * @param name The property name
@@ -141,7 +141,7 @@ class VerifiableProperties(val props: Properties) extends Logging {
       getDouble(name)
     else
       default
-  } 
+  }
 
   /**
    * Read a boolean value from the properties instance
@@ -158,7 +158,7 @@ class VerifiableProperties(val props: Properties) extends Logging {
       v.toBoolean
     }
   }
-  
+
   def getBoolean(name: String) = getString(name).toBoolean
 
   /**
@@ -178,7 +178,7 @@ class VerifiableProperties(val props: Properties) extends Logging {
     require(containsKey(name), "Missing required property '" + name + "'")
     getProperty(name)
   }
-  
+
   /**
    * Get a Map[String, String] from a property list in the form k1:v2, k2:v2, ...
    */

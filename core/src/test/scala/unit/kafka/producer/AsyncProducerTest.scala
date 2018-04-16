@@ -404,8 +404,11 @@ class AsyncProducerTest {
       Map((TopicAndPartition("topic1", 0), ProducerResponseStatus(Errors.NONE, 0L))))
     val mockSyncProducer = EasyMock.createMock(classOf[SyncProducer])
     // don't care about config mock
-    val mockConfig = EasyMock.createNiceMock(classOf[SyncProducerConfig])
-    EasyMock.expect(mockSyncProducer.config).andReturn(mockConfig).anyTimes()
+    val myProps = new Properties()
+    myProps.put("host", "localhost")
+    myProps.put("port", "9092")
+    val myConfig = new SyncProducerConfig(myProps)
+    EasyMock.expect(mockSyncProducer.config).andReturn(myConfig).anyTimes()
     EasyMock.expect(mockSyncProducer.send(request1)).andThrow(new RuntimeException) // simulate SocketTimeoutException
     EasyMock.expect(mockSyncProducer.send(request2)).andReturn(response1)
     EasyMock.expect(mockSyncProducer.send(request3)).andReturn(response2)
