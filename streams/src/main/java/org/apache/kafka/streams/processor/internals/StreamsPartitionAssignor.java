@@ -159,7 +159,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         }
     }
 
-    protected static final Comparator<TopicPartition> PARTITION_COMPARATOR = new Comparator<TopicPartition>() {
+    private static final Comparator<TopicPartition> PARTITION_COMPARATOR = new Comparator<TopicPartition>() {
         @Override
         public int compare(final TopicPartition p1,
                            final TopicPartition p2) {
@@ -173,13 +173,13 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         }
     };
 
-    protected String userEndPoint;
+    private String userEndPoint;
     private int numStandbyReplicas;
 
-    protected TaskManager taskManager;
+    private TaskManager taskManager;
     private PartitionGrouper partitionGrouper;
 
-    protected int usedSubscriptionMetadataVersion = SubscriptionInfo.LATEST_SUPPORTED_VERSION;
+    private int userMetadataVersion = SubscriptionInfo.LATEST_SUPPORTED_VERSION;
 
     private InternalTopicManager internalTopicManager;
     private CopartitionedTopicsValidator copartitionedTopicsValidator;
@@ -204,7 +204,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
             switch (upgradeFrom) {
                 case StreamsConfig.UPGRADE_FROM_0100:
                     log.info("Downgrading metadata version from {} to 1 for upgrade from 0.10.0.x.", SubscriptionInfo.LATEST_SUPPORTED_VERSION);
-                    usedSubscriptionMetadataVersion = 1;
+                    userMetadataVersion = 1;
                     break;
                 case StreamsConfig.UPGRADE_FROM_0101:
                 case StreamsConfig.UPGRADE_FROM_0102:
@@ -212,7 +212,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                 case StreamsConfig.UPGRADE_FROM_10:
                 case StreamsConfig.UPGRADE_FROM_11:
                     log.info("Downgrading metadata version from {} to 2 for upgrade from " + upgradeFrom + ".x.", SubscriptionInfo.LATEST_SUPPORTED_VERSION);
-                    usedSubscriptionMetadataVersion = 2;
+                    userMetadataVersion = 2;
                     break;
                 default:
                     throw new IllegalArgumentException("Unknown configuration value for parameter 'upgrade.from': " + upgradeFrom);
@@ -277,7 +277,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         final Set<TaskId> standbyTasks = taskManager.cachedTasksIds();
         standbyTasks.removeAll(previousActiveTasks);
         final SubscriptionInfo data = new SubscriptionInfo(
-            usedSubscriptionMetadataVersion,
+            userMetadataVersion,
             taskManager.processId(),
             previousActiveTasks,
             standbyTasks,
@@ -315,7 +315,6 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         final Map<UUID, ClientMetadata> clientsMetadata = new HashMap<>();
 
         int minUserMetadataVersion = SubscriptionInfo.LATEST_SUPPORTED_VERSION;
-        int futureMetadataVersion = -1;
         for (final Map.Entry<String, Subscription> entry : subscriptions.entrySet()) {
             final String consumerId = entry.getKey();
             final Subscription subscription = entry.getValue();
@@ -323,8 +322,8 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
             final SubscriptionInfo info = SubscriptionInfo.decode(subscription.userData());
             final int usedVersion = info.version();
             if (usedVersion > SubscriptionInfo.LATEST_SUPPORTED_VERSION) {
-                futureMetadataVersion = usedVersion;
-                continue;
+                throw new IllegalStateException("Unknown metadata version: " + usedVersion
+                    + "; latest supported version: " + SubscriptionInfo.LATEST_SUPPORTED_VERSION);
             }
             if (usedVersion < minUserMetadataVersion) {
                 minUserMetadataVersion = usedVersion;
@@ -340,24 +339,6 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
 
             // add the consumer to the client
             clientMetadata.addConsumer(consumerId, info);
-        }
-
-        if (futureMetadataVersion != -1) {
-            if (minUserMetadataVersion >= 3) {
-                log.info("Received a future (version probing) subscription (version: {}). Sending empty assignment back (with supported version {}).",
-                    futureMetadataVersion,
-                    SubscriptionInfo.LATEST_SUPPORTED_VERSION);
-                return emptyAssignment(subscriptions);
-            } else {
-                throw new IllegalStateException("Received a future (version probing) subscription (version: " + futureMetadataVersion
-                    + ") and an incompatible pre Kafka 1.2 subscription (version: " + minUserMetadataVersion + ") at the same time.");
-            }
-        }
-
-        if (minUserMetadataVersion < SubscriptionInfo.LATEST_SUPPORTED_VERSION) {
-            log.info("Downgrading metadata to version {}. Latest supported version is {}.",
-                minUserMetadataVersion,
-                SubscriptionInfo.LATEST_SUPPORTED_VERSION);
         }
 
         log.debug("Constructed client metadata {} from the member subscriptions.", clientsMetadata);
@@ -647,19 +628,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         Collections.sort(partitions, PARTITION_COMPARATOR);
 
         final AssignmentInfo info = AssignmentInfo.decode(assignment.userData());
-        final int receivedAssignmentMetadataVersion = info.version();
-
-        if (usedSubscriptionMetadataVersion > receivedAssignmentMetadataVersion) {
-            if (receivedAssignmentMetadataVersion >= 3) {
-                log.info("Sent a version {} subscription and got version {} assignment back (successful version probing). " +
-                         "Downgrading subscription metadata to received version and trigger new rebalance.",
-                    usedSubscriptionMetadataVersion,
-                    receivedAssignmentMetadataVersion);
-                usedSubscriptionMetadataVersion = receivedAssignmentMetadataVersion;
-                taskManager.versionProbingFlag = true;
-                return;
-            }
-        }
+        final int usedVersion = info.version();
 
         // version 1 field
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
@@ -667,7 +636,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         final Map<TopicPartition, PartitionInfo> topicToPartitionInfo = new HashMap<>();
         final Map<HostInfo, Set<TopicPartition>> partitionsByHost;
 
-        switch (receivedAssignmentMetadataVersion) {
+        switch (usedVersion) {
             case 1:
                 processVersionOneAssignment(info, partitions, activeTasks);
                 partitionsByHost = Collections.emptyMap();
@@ -677,21 +646,11 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                 partitionsByHost = info.partitionsByHost();
                 break;
             case 3:
-                final int latestSupportedVersionGroupLeader = info.latestSupportedVersion();
-                if (latestSupportedVersionGroupLeader > usedSubscriptionMetadataVersion) {
-                    final int newSubscriptionMetadataVersion = Math.min(latestSupportedVersionGroupLeader, SubscriptionInfo.LATEST_SUPPORTED_VERSION);
-                    log.info("Sent a version {} subscription and group leader's latest supported version is {}. " +
-                        "Upgrading subscription metadata version to {} for next rebalance.",
-                        usedSubscriptionMetadataVersion,
-                        latestSupportedVersionGroupLeader,
-                        newSubscriptionMetadataVersion);
-                    usedSubscriptionMetadataVersion = newSubscriptionMetadataVersion;
-                }
                 processVersionThreeAssignment(info, partitions, activeTasks, topicToPartitionInfo);
                 partitionsByHost = info.partitionsByHost();
                 break;
             default:
-                throw new IllegalStateException("Unknown metadata version: " + receivedAssignmentMetadataVersion
+                throw new IllegalStateException("Unknown metadata version: " + usedVersion
                     + "; latest supported version: " + AssignmentInfo.LATEST_SUPPORTED_VERSION);
         }
 
@@ -726,17 +685,6 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         }
     }
 
-    private Map<String, Assignment> emptyAssignment(final Map<String, Subscription> subscriptions) {
-        final Map<String, Assignment> emptyAssignment = new HashMap<>();
-        for (final String client : subscriptions.keySet()) {
-            emptyAssignment.put(client, new Assignment(
-                Collections.<TopicPartition>emptyList(),
-                new AssignmentInfo().encode()
-            ));
-        }
-        return emptyAssignment;
-    }
-
     private void processVersionTwoAssignment(final AssignmentInfo info,
                                              final List<TopicPartition> partitions,
                                              final Map<TaskId, Set<TopicPartition>> activeTasks,
@@ -759,14 +707,6 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                                                final Map<TaskId, Set<TopicPartition>> activeTasks,
                                                final Map<TopicPartition, PartitionInfo> topicToPartitionInfo) {
         processVersionTwoAssignment(info, partitions, activeTasks, topicToPartitionInfo);
-    }
-
-    // for test
-    protected void processLatestVersionAssignment(final AssignmentInfo info,
-                                                  final List<TopicPartition> partitions,
-                                                  final Map<TaskId, Set<TopicPartition>> activeTasks,
-                                                  final Map<TopicPartition, PartitionInfo> topicToPartitionInfo) {
-        processVersionThreeAssignment(info, partitions, activeTasks, topicToPartitionInfo);
     }
 
     /**

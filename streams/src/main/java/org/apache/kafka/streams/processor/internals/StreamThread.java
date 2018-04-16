@@ -748,24 +748,17 @@ public class StreamThread extends Thread {
         while (isRunning()) {
             try {
                 recordsProcessedBeforeCommit = runOnce(recordsProcessedBeforeCommit);
-                if (taskManager.versionProbingFlag) {
-                    taskManager.versionProbingFlag = false;
-                    enforceRebalance();
-                }
             } catch (final TaskMigratedException ignoreAndRejoinGroup) {
                 log.warn("Detected task {} that got migrated to another thread. " +
                     "This implies that this thread missed a rebalance and dropped out of the consumer group. " +
                     "Will try to rejoin the consumer group. Below is the detailed description of the task:\n{}",
                         ignoreAndRejoinGroup.migratedTask().id(), ignoreAndRejoinGroup.migratedTask().toString(">"));
 
-                enforceRebalance();
+                // re-subscribe to enforce a rebalance in the next poll call
+                consumer.unsubscribe();
+                consumer.subscribe(builder.sourceTopicPattern(), rebalanceListener);
             }
         }
-    }
-
-    private void enforceRebalance() {
-        consumer.unsubscribe();
-        consumer.subscribe(builder.sourceTopicPattern(), rebalanceListener);
     }
 
     /**
@@ -807,9 +800,6 @@ public class StreamThread extends Thread {
         if (records != null && !records.isEmpty() && taskManager.hasActiveRunningTasks()) {
             streamsMetrics.pollTimeSensor.record(computeLatency(), timerStartedMs);
             addRecordsToTasks(records);
-            if (taskManager.versionProbingFlag) {
-                return 0;
-            }
             final long totalProcessed = processAndMaybeCommit(recordsProcessedBeforeCommit);
             if (totalProcessed > 0) {
                 final long processLatency = computeLatency();

@@ -35,12 +35,12 @@ public class SubscriptionInfo {
     public static final int LATEST_SUPPORTED_VERSION = 3;
     public static final int UNKNOWN = -1;
 
-    protected final int usedVersion;
-    protected final int latestSupportedVersion;
-    protected UUID processId;
-    protected Set<TaskId> prevTasks;
-    protected Set<TaskId> standbyTasks;
-    protected String userEndPoint;
+    private final int usedVersion;
+    private final int latestSupportedVersion;
+    private UUID processId;
+    private Set<TaskId> prevTasks;
+    private Set<TaskId> standbyTasks;
+    private String userEndPoint;
 
     // used for decoding; don't apply version checks
     private SubscriptionInfo(final int version,
@@ -207,30 +207,12 @@ public class SubscriptionInfo {
 
         final ByteBuffer buf = ByteBuffer.allocate(getVersionThreeByteLength(endPointBytes));
 
-        buf.putInt(3); // version
-        buf.putInt(3); // version
-        encodeLatestVersion(buf, endPointBytes);
-
-        return buf;
-    }
-
-    private void encodeLatestVersion(final ByteBuffer buf,
-                                     final byte[] endPointBytes) {
+        buf.putInt(3); // used version
+        buf.putInt(3); // supported version
         encodeClientUUID(buf);
         encodeTasks(buf, prevTasks);
         encodeTasks(buf, standbyTasks);
         encodeUserEndPoint(buf, endPointBytes);
-    }
-
-    // for testing
-    public ByteBuffer encodeFutureVersion(int futureVersion) {
-        final byte[] endPointBytes = prepareUserEndPoint();
-
-        final ByteBuffer buf = ByteBuffer.allocate(getVersionThreeByteLength(endPointBytes));
-
-        buf.putInt(futureVersion); // version
-        buf.putInt(futureVersion); // version
-        encodeLatestVersion(buf, endPointBytes);
 
         return buf;
     }
@@ -336,13 +318,6 @@ public class SubscriptionInfo {
         decodeUserEndPoint(subscriptionInfo, data);
     }
 
-    // for testing only
-    public static void decodeLatestVersionData(final SubscriptionInfo subscriptionInfo,
-                                        final ByteBuffer data) {
-        decodeVersionThreeData(subscriptionInfo, data);
-    }
-
-    @Override
     public int hashCode() {
         final int hashCode = usedVersion ^ latestSupportedVersion ^ processId.hashCode() ^ prevTasks.hashCode() ^ standbyTasks.hashCode();
         if (userEndPoint == null) {

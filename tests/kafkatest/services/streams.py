@@ -428,8 +428,6 @@ class StreamsUpgradeTestJobRunnerService(StreamsTestBaseService):
         properties = {STATE_DIR: self.PERSISTENT_ROOT}
         if self.UPGRADE_FROM is not None:
             properties['upgrade.from'] = self.UPGRADE_FROM
-        if self.UPGRADE_TO == "future_version":
-            properties['test.future.metadata'] = "any_value"
 
         cfg = KafkaConfig(**properties)
         return cfg.render()

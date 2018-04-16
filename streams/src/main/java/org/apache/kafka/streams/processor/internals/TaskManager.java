@@ -42,7 +42,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static java.util.Collections.singleton;
 
-public class TaskManager {
+class TaskManager {
     // initialize the task list
     // activeTasks needs to be concurrent as it can be accessed
     // by QueryableState
@@ -64,7 +64,6 @@ public class TaskManager {
     private Cluster cluster;
     private Map<TaskId, Set<TopicPartition>> assignedActiveTasks;
     private Map<TaskId, Set<TopicPartition>> assignedStandbyTasks;
-    public boolean versionProbingFlag = false;
 
     private Consumer<byte[], byte[]> consumer;
 
@@ -96,9 +95,6 @@ public class TaskManager {
     }
 
     void createTasks(final Collection<TopicPartition> assignment) {
-        if (versionProbingFlag) {
-            return;
-        }
         if (consumer == null) {
             throw new IllegalStateException(logPrefix + "consumer has not been initialized while adding stream tasks. This should not happen.");
         }
@@ -191,14 +187,14 @@ public class TaskManager {
         return standby.allAssignedTaskIds();
     }
 
-    public Set<TaskId> prevActiveTaskIds() {
+    Set<TaskId> prevActiveTaskIds() {
         return active.previousTaskIds();
     }
 
     /**
      * Returns ids of tasks whose states are kept on the local storage.
      */
-    public Set<TaskId> cachedTasksIds() {
+    Set<TaskId> cachedTasksIds() {
         // A client could contain some inactive tasks whose states are still kept on the local storage in the following scenarios:
         // 1) the client is actively maintaining standby tasks by maintaining their states from the change log.
         // 2) the client has just got some tasks migrated out of itself to other clients while these task states
@@ -225,7 +221,7 @@ public class TaskManager {
         return tasks;
     }
 
-    public UUID processId() {
+    UUID processId() {
         return processId;
     }
 
@@ -316,10 +312,6 @@ public class TaskManager {
      * @throws TaskMigratedException if the task producer got fenced or consumer discovered changelog offset changes (EOS only)
      */
     boolean updateNewAndRestoringTasks() {
-        if (versionProbingFlag) {
-            return false;
-        }
-
         active.initializeNewTasks();
         standby.initializeNewTasks();
 
@@ -364,21 +356,21 @@ public class TaskManager {
         }
     }
 
-    public void setClusterMetadata(final Cluster cluster) {
+    void setClusterMetadata(final Cluster cluster) {
         this.cluster = cluster;
     }
 
-    public void setPartitionsByHostState(final Map<HostInfo, Set<TopicPartition>> partitionsByHostState) {
+    void setPartitionsByHostState(final Map<HostInfo, Set<TopicPartition>> partitionsByHostState) {
         this.streamsMetadataState.onChange(partitionsByHostState, cluster);
     }
 
-    public void setAssignmentMetadata(final Map<TaskId, Set<TopicPartition>> activeTasks,
+    void setAssignmentMetadata(final Map<TaskId, Set<TopicPartition>> activeTasks,
                                final Map<TaskId, Set<TopicPartition>> standbyTasks) {
         this.assignedActiveTasks = activeTasks;
         this.assignedStandbyTasks = standbyTasks;
     }
 
-    public void updateSubscriptionsFromAssignment(List<TopicPartition> partitions) {
+    void updateSubscriptionsFromAssignment(List<TopicPartition> partitions) {
         if (builder().sourceTopicPattern() != null) {
             final Set<String> assignedTopics = new HashSet<>();
             for (final TopicPartition topicPartition : partitions) {
@@ -393,7 +385,7 @@ public class TaskManager {
         }
     }
 
-    public void updateSubscriptionsFromMetadata(Set<String> topics) {
+    void updateSubscriptionsFromMetadata(Set<String> topics) {
         if (builder().sourceTopicPattern() != null) {
             final Collection<String> existingTopics = builder().subscriptionUpdates().getUpdates();
             if (!existingTopics.equals(topics)) {

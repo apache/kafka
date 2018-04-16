@@ -64,7 +64,7 @@ Option                                  Description
 """
 
 
-class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService):
+class oConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService):
     # Root directory for persistent output
     PERSISTENT_ROOT = "/mnt/console_consumer"
     STDOUT_CAPTURE = os.path.join(PERSISTENT_ROOT, "console_consumer.stdout")
