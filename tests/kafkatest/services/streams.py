@@ -306,7 +306,6 @@ class StreamsSmokeTestDriverService(StreamsSmokeTestBaseService):
 
     def start_cmd(self, node):
         args = self.args.copy()
-        args['kafka'] = self.kafka.bootstrap_servers()
         args['config_file'] = self.CONFIG_FILE
         args['stdout'] = self.STDOUT_FILE
         args['stderr'] = self.STDERR_FILE
@@ -317,7 +316,7 @@ class StreamsSmokeTestDriverService(StreamsSmokeTestBaseService):
 
         cmd = "( export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%(log4j)s\"; " \
               "INCLUDE_TEST_JARS=true %(kafka_run_class)s %(streams_class_name)s " \
-              " %(kafka)s %(config_file)s %(user_test_args1)s %(disable_auto_terminate)s" \
+              " %(config_file)s %(user_test_args1)s %(disable_auto_terminate)s" \
               " & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % args
 
         return cmd
