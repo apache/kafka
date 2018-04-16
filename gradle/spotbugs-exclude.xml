@@ -198,6 +198,12 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
+        <!-- Suppress a warning about intentional mutable static field. -->
+        <Class name="org.apache.kafka.common.memory.GarbageCollectedMemoryPool"/>
+        <Bug pattern="MS_SHOULD_BE_FINAL"/>
+    </Match>
+
+    <Match>
         <!-- Suppress a spurious warning about locks not being released on all paths.
              This happens because there is an 'if' statement that checks if we have the lock before
              releasing it. -->

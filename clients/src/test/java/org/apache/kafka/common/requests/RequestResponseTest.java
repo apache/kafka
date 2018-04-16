@@ -448,8 +448,9 @@ public class RequestResponseTest {
 
         Struct deserializedStruct = ApiKeys.PRODUCE.parseResponse(version, buffer);
 
+        // No MemoryPool used hence null Closeable
         ProduceResponse v5FromBytes = (ProduceResponse) AbstractResponse.parseResponse(ApiKeys.PRODUCE,
-                deserializedStruct);
+                deserializedStruct, null);
 
         assertEquals(1, v5FromBytes.responses().size());
         assertTrue(v5FromBytes.responses().containsKey(tp0));
@@ -520,7 +521,9 @@ public class RequestResponseTest {
                 6, FetchResponse.INVALID_LOG_START_OFFSET, Collections.emptyList(), records));
 
         FetchResponse<MemoryRecords> response = new FetchResponse<>(Errors.NONE, responseData, 10, INVALID_SESSION_ID);
-        FetchResponse deserialized = FetchResponse.parse(toBuffer(response.toStruct((short) 4)), (short) 4);
+        FetchResponse deserialized = FetchResponse.parse(
+                ApiKeys.FETCH.responseSchema((short) 4).read(toBuffer(response.toStruct((short) 4))), null);
+
         assertEquals(responseData, deserialized.responseData());
     }
 

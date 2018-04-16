@@ -18,6 +18,8 @@ package org.apache.kafka.common.network;
 
 import java.nio.channels.SelectionKey;
 import javax.net.ssl.SSLEngine;
+
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.memory.SimpleMemoryPool;
 import org.apache.kafka.common.metrics.Metrics;
@@ -70,7 +72,8 @@ public class SslSelectorTest extends SelectorTest {
         this.channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false);
         this.channelBuilder.configure(sslClientConfigs);
         this.metrics = new Metrics();
-        this.selector = new Selector(5000, metrics, time, "MetricGroup", channelBuilder, new LogContext());
+        this.selector = new Selector(5000L, metrics, time, "MetricGroup", channelBuilder, MemoryPool.NONE, new LogContext());
+        this.defaultNode = new Node(0, "localhost", server.port);
     }
 
     @After
@@ -95,8 +98,8 @@ public class SslSelectorTest extends SelectorTest {
 
         this.channelBuilder = new TestSslChannelBuilder(Mode.CLIENT);
         this.channelBuilder.configure(sslClientConfigs);
-        this.selector = new Selector(5000, metrics, time, "MetricGroup", channelBuilder, new LogContext());
-        connect(node, new InetSocketAddress("localhost", server.port));
+        this.selector = new Selector(5000L, metrics, time, "MetricGroup", channelBuilder, MemoryPool.NONE, new LogContext());
+        connect(defaultNode);
         selector.send(createSend(node, request));
 
         waitForBytesBuffered(selector, node);
@@ -134,18 +137,18 @@ public class SslSelectorTest extends SelectorTest {
             throws Exception {
         this.selector.close();
 
-        String node1 = "1";
-        String node2 = "2";
+        Node node1 = new Node(1, "localhost", server.port);
+        Node node2 = new Node(2, "localhost", server.port);
         final AtomicInteger node1Polls = new AtomicInteger();
 
         this.channelBuilder = new TestSslChannelBuilder(Mode.CLIENT);
         this.channelBuilder.configure(sslClientConfigs);
-        this.selector = new Selector(5000, metrics, time, "MetricGroup", channelBuilder, new LogContext()) {
+        this.selector = new Selector(5000L, metrics, time, "MetricGroup", channelBuilder, MemoryPool.NONE, new LogContext()) {
             @Override
             void pollSelectionKeys(Set<SelectionKey> selectionKeys, boolean isImmediatelyConnected, long currentTimeNanos) {
                 for (SelectionKey key : selectionKeys) {
                     KafkaChannel channel = (KafkaChannel) key.attachment();
-                    if (channel != null && channel.id().equals(node1))
+                    if (channel != null && channel.id().equals(node1.idString()))
                         node1Polls.incrementAndGet();
                 }
                 super.pollSelectionKeys(selectionKeys, isImmediatelyConnected, currentTimeNanos);
@@ -155,25 +158,25 @@ public class SslSelectorTest extends SelectorTest {
         // Get node1 into bytes buffered state and then disable read on the socket.
         // Truncate the read buffers to ensure that there is buffered data, but not enough to make progress.
         int largeRequestSize = 100 * 1024;
-        connect(node1, new InetSocketAddress("localhost", server.port));
-        selector.send(createSend(node1,  TestUtils.randomString(largeRequestSize)));
-        waitForBytesBuffered(selector, node1);
-        TestSslChannelBuilder.TestSslTransportLayer.transportLayers.get(node1).truncateReadBuffer();
-        disableRead.accept(selector.channel(node1).selectionKey());
+        connect(node1);
+        selector.send(createSend(node1.idString(), TestUtils.randomString(largeRequestSize)));
+        waitForBytesBuffered(selector, node1.idString());
+        TestSslChannelBuilder.TestSslTransportLayer.transportLayers.get(node1.idString()).truncateReadBuffer();
+        disableRead.accept(selector.channel(node1.idString()).selectionKey());
 
         // Clear poll count and count the polls from now on
         node1Polls.set(0);
 
         // Process sends and receives on node2. Test verifies that we don't process node1
         // unnecessarily on each of these polls.
-        connect(node2, new InetSocketAddress("localhost", server.port));
+        connect(node2);
         int received = 0;
         String request = TestUtils.randomString(10);
-        selector.send(createSend(node2, request));
+        selector.send(createSend(node2.idString(), request));
         while (received < 100) {
             received += selector.completedReceives().size();
             if (!selector.completedSends().isEmpty()) {
-                selector.send(createSend(node2, request));
+                selector.send(createSend(node2.idString(), request));
             }
             selector.poll(5);
         }
@@ -181,8 +184,8 @@ public class SslSelectorTest extends SelectorTest {
         // Verify that pollSelectionKeys was invoked once to process buffered data
         // but not again since there isn't sufficient data to process.
         assertEquals(1, node1Polls.get());
-        selector.close(node1);
-        selector.close(node2);
+        selector.close(node1.idString());
+        selector.close(node2.idString());
         verifySelectorEmpty();
     }
 
@@ -191,27 +194,27 @@ public class SslSelectorTest extends SelectorTest {
      */
     @Test
     public void testRenegotiationFails() throws Exception {
-        String node = "0";
         // create connections
-        InetSocketAddress addr = new InetSocketAddress("localhost", server.port);
+        Node node = new Node(0, "localhost", server.port);
+        InetSocketAddress addr = new InetSocketAddress(node.host(), node.port());
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
 
         // send echo requests and receive responses
-        while (!selector.isChannelReady(node)) {
+        while (!selector.isChannelReady(node.idString())) {
             selector.poll(1000L);
         }
-        selector.send(createSend(node, node + "-" + 0));
+        selector.send(createSend(node.idString(), node + "-" + 0));
         selector.poll(0L);
         server.renegotiate();
-        selector.send(createSend(node, node + "-" + 1));
-        long expiryTime = System.currentTimeMillis() + 2000;
+        selector.send(createSend(node.idString(), node + "-" + 1));
+        long expiryTime = System.currentTimeMillis() + 2000L;
 
         List<String> disconnected = new ArrayList<>();
-        while (!disconnected.contains(node) && System.currentTimeMillis() < expiryTime) {
-            selector.poll(10);
+        while (!disconnected.contains(node.idString()) && System.currentTimeMillis() < expiryTime) {
+            selector.poll(10L);
             disconnected.addAll(selector.disconnected().keySet());
         }
-        assertTrue("Renegotiation should cause disconnection", disconnected.contains(node));
+        assertTrue("Renegotiation should cause disconnection", disconnected.contains(node.idString()));
 
     }
 
@@ -219,13 +222,13 @@ public class SslSelectorTest extends SelectorTest {
     public void testMuteOnOOM() throws Exception {
         //clean up default selector, replace it with one that uses a finite mem pool
         selector.close();
-        MemoryPool pool = new SimpleMemoryPool(900, 900, false, null);
+        MemoryPool pool = SimpleMemoryPool.create(900L, 900, null);
         //the initial channel builder is for clients, we need a server one
         File trustStoreFile = File.createTempFile("truststore", ".jks");
         Map<String, Object> sslServerConfigs = TestSslUtils.createSslConfig(false, true, Mode.SERVER, trustStoreFile, "server");
         channelBuilder = new SslChannelBuilder(Mode.SERVER, null, false);
         channelBuilder.configure(sslServerConfigs);
-        selector = new Selector(NetworkReceive.UNLIMITED, 5000, metrics, time, "MetricGroup",
+        selector = new Selector(NetworkReceive.UNLIMITED, 5000L, metrics, time, "MetricGroup",
                 new HashMap<String, String>(), true, false, channelBuilder, pool, new LogContext());
 
         try (ServerSocketChannel ss = ServerSocketChannel.open()) {
@@ -247,12 +250,12 @@ public class SslSelectorTest extends SelectorTest {
 
             boolean handshaked = false;
             NetworkReceive firstReceive = null;
-            long deadline = System.currentTimeMillis() + 5000;
+            long deadline = System.currentTimeMillis() + 5000L;
             //keep calling poll until:
             //1. both senders have completed the handshakes (so server selector has tried reading both payloads)
             //2. a single payload is actually read out completely (the other is too big to fit)
             while (System.currentTimeMillis() < deadline) {
-                selector.poll(10);
+                selector.poll(10L);
 
                 List<NetworkReceive> completed = selector.completedReceives();
                 if (firstReceive == null) {
@@ -260,7 +263,7 @@ public class SslSelectorTest extends SelectorTest {
                         assertEquals("expecting a single request", 1, completed.size());
                         firstReceive = completed.get(0);
                         assertTrue(selector.isMadeReadProgressLastPoll());
-                        assertEquals(0, pool.availableMemory());
+                        assertEquals(0L, pool.availableMemory());
                     }
                 } else {
                     assertTrue("only expecting single request", completed.isEmpty());
@@ -273,23 +276,23 @@ public class SslSelectorTest extends SelectorTest {
             }
             assertTrue("could not initiate connections within timeout", handshaked);
 
-            selector.poll(10);
+            selector.poll(10L);
             assertTrue(selector.completedReceives().isEmpty());
-            assertEquals(0, pool.availableMemory());
+            assertEquals(0L, pool.availableMemory());
             assertNotNull("First receive not complete", firstReceive);
             assertTrue("Selector not out of memory", selector.isOutOfMemory());
 
             firstReceive.close();
-            assertEquals(900, pool.availableMemory()); //memory has been released back to pool
+            assertEquals(900L, pool.availableMemory()); //memory has been released back to pool
 
             List<NetworkReceive> completed = Collections.emptyList();
-            deadline = System.currentTimeMillis() + 5000;
+            deadline = System.currentTimeMillis() + 5000L;
             while (System.currentTimeMillis() < deadline && completed.isEmpty()) {
-                selector.poll(1000);
+                selector.poll(1000L);
                 completed = selector.completedReceives();
             }
             assertEquals("could not read remaining request within timeout", 1, completed.size());
-            assertEquals(0, pool.availableMemory());
+            assertEquals(0L, pool.availableMemory());
             assertFalse(selector.isOutOfMemory());
         }
     }
@@ -299,8 +302,9 @@ public class SslSelectorTest extends SelectorTest {
      * implementation requires the channel to be ready before send is invoked (unlike plaintext
      * where send can be invoked straight after connect)
      */
-    protected void connect(String node, InetSocketAddress serverAddr) throws IOException {
-        blockingConnect(node, serverAddr);
+    @Override
+    protected void connect(Node node) throws IOException {
+        blockingConnect(node);
     }
 
     private SslSender createSender(InetSocketAddress serverAddress, byte[] payload) {

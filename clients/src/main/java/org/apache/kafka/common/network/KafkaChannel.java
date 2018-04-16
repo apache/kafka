@@ -121,6 +121,7 @@ public class KafkaChannel {
     private long networkThreadTimeNanos;
     private final int maxReceiveSize;
     private final MemoryPool memoryPool;
+    private final boolean privileged;
     private NetworkReceive receive;
     private Send send;
     // Track connection and mute state of channels to enable outstanding requests on channels to be
@@ -133,7 +134,7 @@ public class KafkaChannel {
     private boolean midWrite;
     private long lastReauthenticationStartNanos;
 
-    public KafkaChannel(String id, TransportLayer transportLayer, Supplier<Authenticator> authenticatorCreator, int maxReceiveSize, MemoryPool memoryPool) {
+    public KafkaChannel(String id, TransportLayer transportLayer, Supplier<Authenticator> authenticatorCreator, int maxReceiveSize, MemoryPool memoryPool, boolean privileged) {
         this.id = id;
         this.transportLayer = transportLayer;
         this.authenticatorCreator = authenticatorCreator;
@@ -144,6 +145,7 @@ public class KafkaChannel {
         this.disconnected = false;
         this.muteState = ChannelMuteState.NOT_MUTED;
         this.state = ChannelState.NOT_CONNECTED;
+        this.privileged = privileged;
     }
 
     public void close() throws IOException {
@@ -379,7 +381,7 @@ public class KafkaChannel {
         NetworkReceive result = null;
 
         if (receive == null) {
-            receive = new NetworkReceive(maxReceiveSize, id, memoryPool);
+            receive = new NetworkReceive(maxReceiveSize, id, memoryPool, privileged);
         }
 
         receive(receive);

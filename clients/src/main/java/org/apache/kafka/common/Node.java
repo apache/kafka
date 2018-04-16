@@ -28,20 +28,60 @@ public class Node {
     private final String host;
     private final int port;
     private final String rack;
+    private final boolean privileged;
 
     // Cache hashCode as it is called in performance sensitive parts of the code (e.g. RecordAccumulator.ready)
     private Integer hash;
 
+    /**
+     * Creates a new Node representing a Kafka broker
+     * @param id Identifier of the Node
+     * @param host Hostname used to connect
+     * @param port Port used to connect
+     */
     public Node(int id, String host, int port) {
-        this(id, host, port, null);
+        this(id, host, port, null, false);
     }
 
+    /**
+     * Creates a new Node representing a Kafka broker
+     * @param id Identifier of the Node
+     * @param host Hostname used to connect
+     * @param port Port used to connect
+     * @param rack Rack name
+     */
     public Node(int id, String host, int port, String rack) {
+        this(id, host, port, rack, false);
+    }
+
+    /**
+     * Creates a new Node representing a Kafka broker
+     * @param id Identifier of the Node
+     * @param host Hostname used to connect
+     * @param port Port used to connect
+     * @param privileged If true, messages from this node will be allocated directly on the heap when the MemoryPool 
+     * is full
+     */
+    public Node(int id, String host, int port, boolean privileged) {
+        this(id, host, port, null, privileged);
+    }
+
+    /**
+     * Creates a new Node representing a Kafka broker
+     * @param id Identifier of the Node
+     * @param host Hostname used to connect
+     * @param port Port used to connect
+     * @param rack Rack name
+     * @param privileged If true, messages from this node will be allocated directly on the heap when the MemoryPool 
+     * is full
+     */
+    public Node(int id, String host, int port, String rack, boolean privileged) {
         this.id = id;
-        this.idString = Integer.toString(id);
+        this.idString = Integer.toString(id) + (privileged ? "-privileged" : "");
         this.host = host;
         this.port = port;
         this.rack = rack;
+        this.privileged = privileged;
     }
 
     public static Node noNode() {
@@ -100,6 +140,13 @@ public class Node {
         return rack;
     }
 
+    /**
+     * True if this node is privileged
+     */
+    public boolean privileged() {
+        return privileged;
+    }
+
     @Override
     public int hashCode() {
         Integer h = this.hash;
@@ -108,6 +155,7 @@ public class Node {
             result = 31 * result + id;
             result = 31 * result + port;
             result = 31 * result + ((rack == null) ? 0 : rack.hashCode());
+            result = 31 * result + (privileged ? 1231 : 1237);
             this.hash = result;
             return result;
         } else {
@@ -123,9 +171,10 @@ public class Node {
             return false;
         Node other = (Node) obj;
         return (host == null ? other.host == null : host.equals(other.host)) &&
-            id == other.id &&
-            port == other.port &&
-            (rack == null ? other.rack == null : rack.equals(other.rack));
+                id == other.id &&
+                port == other.port &&
+                (rack == null ? other.rack == null : rack.equals(other.rack)) &&
+                privileged == other.privileged;
     }
 
     @Override

@@ -34,9 +34,10 @@ public interface ChannelBuilder extends AutoCloseable, Configurable {
      * @param  key SelectionKey
      * @param  maxReceiveSize max size of a single receive buffer to allocate
      * @param  memoryPool memory pool from which to allocate buffers, or null for none
+     * @param  privileged True if the channel should be privileged
      * @return KafkaChannel
      */
-    KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize, MemoryPool memoryPool) throws KafkaException;
+    KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize, MemoryPool memoryPool, boolean privileged) throws KafkaException;
 
     /**
      * Closes ChannelBuilder

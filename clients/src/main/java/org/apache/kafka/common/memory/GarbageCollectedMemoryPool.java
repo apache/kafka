@@ -24,14 +24,19 @@ import java.lang.ref.WeakReference;
 import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 
 /**
  * An extension of SimpleMemoryPool that tracks allocated buffers and logs an error when they "leak"
  * (when they are garbage-collected without having been release()ed).
- * THIS IMPLEMENTATION IS A DEVELOPMENT/DEBUGGING AID AND IS NOT MEANT PRO PRODUCTION USE.
+ * THIS IMPLEMENTATION IS A DEVELOPMENT/DEBUGGING AID AND IS NOT MEANT FOR PRODUCTION USE.
  */
 public class GarbageCollectedMemoryPool extends SimpleMemoryPool implements AutoCloseable {
+
+    public static final AtomicInteger ERRORS = new AtomicInteger(0);
+
+    public static boolean useInTest = false;
 
     private final ReferenceQueue<ByteBuffer> garbageCollectedBuffers = new ReferenceQueue<>();
     //serves 2 purposes - 1st it maintains the ref objects reachable (which is a requirement for them
@@ -63,6 +68,11 @@ public class GarbageCollectedMemoryPool extends SimpleMemoryPool implements Auto
 
     @Override
     protected void bufferToBeReleased(ByteBuffer justReleased) {
+        // clear the buffer to introduce data corruption if there was an attempt to read after close
+        justReleased.clear();
+        justReleased.put(new byte[justReleased.capacity()]);
+        justReleased.clear();
+
         BufferReference ref = new BufferReference(justReleased); //used ro lookup only
         BufferMetadata metadata = buffersInFlight.remove(ref);
         if (metadata == null)
@@ -104,6 +114,7 @@ public class GarbageCollectedMemoryPool extends SimpleMemoryPool implements Auto
 
                     availableMemory.addAndGet(metadata.sizeBytes);
                     log.error("Reclaimed buffer of size {} and identity {} that was not properly release()ed. This is a bug.", metadata.sizeBytes, ref.hashCode);
+                    ERRORS.incrementAndGet();
                 } catch (InterruptedException e) {
                     log.debug("interrupted", e);
                     //ignore, we're a daemon thread

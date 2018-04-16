@@ -36,6 +36,8 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable.Buffer
 import kafka.server.QuotaType
 import kafka.server.KafkaServer
+import org.apache.kafka.common.memory.GarbageCollectedMemoryPool
+import java.time.Duration
 
 /* We have some tests in this class instead of `BaseConsumerTest` in order to keep the build time under control. */
 class PlaintextConsumerTest extends BaseConsumerTest {
@@ -1600,6 +1602,38 @@ class PlaintextConsumerTest extends BaseConsumerTest {
         assertNull("Metric should not hanve been created " + metricName, broker.metrics.metric(metricName))
     }
     servers.foreach(assertNoExemptRequestMetric(_))
+  }
+
+  @Test
+  def testConsumeMessagesWithMemoryPool() {
+    GarbageCollectedMemoryPool.useInTest = true
+    try {
+      val initialGCErrors = GarbageCollectedMemoryPool.ERRORS.get()
+
+      val numRecords = 50
+      val producer = createProducer()
+      val consumerConfigOverrides = new Properties()
+      consumerConfigOverrides.put(ConsumerConfig.FETCH_MAX_BYTES_CONFIG, "500");
+      consumerConfigOverrides.put(ConsumerConfig.BUFFER_MEMORY_CONFIG, "10000");
+      val consumer = createConsumer(configOverrides = consumerConfigOverrides)
+      consumer.subscribe(Collections.singleton(topic))
+
+      sendRecords(producer, numRecords, tp)
+      sendRecords(producer, numRecords, tp2)
+      val records = consumeRecords(consumer, numRecords*2)
+      consumer.poll(Duration.ofMillis(50)) // to test empty fetch responses
+  
+      for (i <- 0 until numRecords*2) {
+        assertTrue(records(i).key().startsWith("key ") && records(i).value().startsWith("value "))
+      }
+      Thread.sleep(1000);
+      System.gc();
+      Thread.sleep(1000);
+
+      assertEquals(initialGCErrors, GarbageCollectedMemoryPool.ERRORS.get())
+    } finally {
+      GarbageCollectedMemoryPool.useInTest = false
+    }
   }
 
   def runMultiConsumerSessionTimeoutTest(closeConsumer: Boolean): Unit = {

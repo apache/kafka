@@ -119,7 +119,7 @@ public class NioEchoServer extends Thread {
         if (channelBuilder == null)
             channelBuilder = ChannelBuilders.serverChannelBuilder(listenerName, false, securityProtocol, config, credentialCache, tokenCache, time);
         this.metrics = new Metrics();
-        this.selector = new Selector(10000, failedAuthenticationDelayMs, metrics, time, "MetricGroup", channelBuilder, new LogContext());
+        this.selector = new Selector(NetworkReceive.UNLIMITED, 10000, failedAuthenticationDelayMs, metrics, time, "MetricGroup", Collections.<String, String>emptyMap(), true, channelBuilder, new LogContext());
         acceptorThread = new AcceptorThread();
         this.time = time;
     }
@@ -200,7 +200,7 @@ public class NioEchoServer extends Thread {
         try {
             acceptorThread.start();
             while (serverSocketChannel.isOpen()) {
-                selector.poll(100);
+                selector.poll(100L);
                 synchronized (newChannels) {
                     for (SocketChannel socketChannel : newChannels) {
                         String id = id(socketChannel);
@@ -315,7 +315,7 @@ public class NioEchoServer extends Thread {
                 java.nio.channels.Selector acceptSelector = java.nio.channels.Selector.open();
                 serverSocketChannel.register(acceptSelector, SelectionKey.OP_ACCEPT);
                 while (serverSocketChannel.isOpen()) {
-                    if (acceptSelector.select(1000) > 0) {
+                    if (acceptSelector.select(1000L) > 0) {
                         Iterator<SelectionKey> it = acceptSelector.selectedKeys().iterator();
                         while (it.hasNext()) {
                             SelectionKey key = it.next();

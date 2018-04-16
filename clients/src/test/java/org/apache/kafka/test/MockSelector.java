@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.test;
 
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.network.ChannelState;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.network.NetworkSend;
@@ -51,8 +52,8 @@ public class MockSelector implements Selectable {
     }
 
     @Override
-    public void connect(String id, InetSocketAddress address, int sendBufferSize, int receiveBufferSize) throws IOException {
-        this.connected.add(id);
+    public void connect(Node node, InetSocketAddress address, int sendBufferSize, int receiveBufferSize) throws IOException {
+        this.connected.add(node.idString());
     }
 
     @Override

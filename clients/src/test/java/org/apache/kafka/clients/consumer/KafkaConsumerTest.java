@@ -33,6 +33,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidTopicException;
@@ -557,8 +558,7 @@ public class KafkaConsumerTest {
                 OffsetResetStrategy.NONE, true);
         consumer.assign(singletonList(tp0));
 
-        client.prepareResponseFrom(new FindCoordinatorResponse(Errors.NONE, node), node);
-        Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+        Node coordinator = prepareLookupCoordinator(client, node);
 
         // lookup committed offset and find nothing
         client.prepareResponseFrom(offsetResponse(Collections.singletonMap(tp0, -1L), Errors.NONE), coordinator);
@@ -580,8 +580,7 @@ public class KafkaConsumerTest {
                 OffsetResetStrategy.NONE, true);
         consumer.assign(singletonList(tp0));
 
-        client.prepareResponseFrom(new FindCoordinatorResponse(Errors.NONE, node), node);
-        Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+        Node coordinator = prepareLookupCoordinator(client, node);
 
         client.prepareResponseFrom(offsetResponse(Collections.singletonMap(tp0, 539L), Errors.NONE), coordinator);
         consumer.poll(Duration.ZERO);
@@ -604,8 +603,7 @@ public class KafkaConsumerTest {
                 OffsetResetStrategy.LATEST, true);
         consumer.assign(singletonList(tp0));
 
-        client.prepareResponseFrom(new FindCoordinatorResponse(Errors.NONE, node), node);
-        Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+        Node coordinator = prepareLookupCoordinator(client, node);
 
         client.prepareResponseFrom(offsetResponse(Collections.singletonMap(tp0, -1L), Errors.NONE), coordinator);
         client.prepareResponse(listOffsetsResponse(Collections.singletonMap(tp0, 50L)));
@@ -632,9 +630,7 @@ public class KafkaConsumerTest {
         KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, true);
         consumer.assign(singletonList(tp0));
 
-        // lookup coordinator
-        client.prepareResponseFrom(new FindCoordinatorResponse(Errors.NONE, node), node);
-        Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+        Node coordinator = prepareLookupCoordinator(client, node);
 
         // fetch offset for one topic
         client.prepareResponseFrom(offsetResponse(Collections.singletonMap(tp0, offset1), Errors.NONE), coordinator);
@@ -1061,9 +1057,7 @@ public class KafkaConsumerTest {
 
         KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, true);
 
-        // lookup coordinator
-        client.prepareResponseFrom(new FindCoordinatorResponse(Errors.NONE, node), node);
-        Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+        Node coordinator = prepareLookupCoordinator(client, node);
 
         // manual assignment
         consumer.assign(singleton(tp0));
@@ -1116,9 +1110,7 @@ public class KafkaConsumerTest {
 
         KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, false);
 
-        // lookup coordinator
-        client.prepareResponseFrom(new FindCoordinatorResponse(Errors.NONE, node), node);
-        Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+        Node coordinator = prepareLookupCoordinator(client, node);
 
         // manual assignment
         consumer.assign(singleton(tp0));
@@ -1169,9 +1161,7 @@ public class KafkaConsumerTest {
 
         KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, true);
 
-        // lookup coordinator
-        client.prepareResponseFrom(new FindCoordinatorResponse(Errors.NONE, node), node);
-        Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+        Node coordinator = prepareLookupCoordinator(client, node);
 
         // manual assignment
         Set<TopicPartition> partitions = Utils.mkSet(tp0, tp1);
@@ -1206,6 +1196,12 @@ public class KafkaConsumerTest {
         client.requests().clear();
         consumer.unsubscribe();
         consumer.close();
+    }
+
+    private Node prepareLookupCoordinator(MockClient client, Node node) {
+        Node coordinator = new Node(node.id(), node.host(), node.port(), true);
+        client.prepareResponseFrom(new FindCoordinatorResponse(Errors.NONE, coordinator), node);
+        return coordinator;
     }
 
     @Test(expected = IllegalStateException.class)
@@ -1275,12 +1271,12 @@ public class KafkaConsumerTest {
     public void testMetricConfigRecordingLevel() {
         Properties props = new Properties();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
-        try (KafkaConsumer consumer = new KafkaConsumer<>(props, new ByteArrayDeserializer(), new ByteArrayDeserializer())) {
+        try (KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(props, new ByteArrayDeserializer(), new ByteArrayDeserializer())) {
             assertEquals(Sensor.RecordingLevel.INFO, consumer.metrics.config().recordLevel());
         }
 
         props.put(ConsumerConfig.METRICS_RECORDING_LEVEL_CONFIG, "DEBUG");
-        try (KafkaConsumer consumer = new KafkaConsumer<>(props, new ByteArrayDeserializer(), new ByteArrayDeserializer())) {
+        try (KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(props, new ByteArrayDeserializer(), new ByteArrayDeserializer())) {
             assertEquals(Sensor.RecordingLevel.DEBUG, consumer.metrics.config().recordLevel());
         }
     }
@@ -1298,9 +1294,7 @@ public class KafkaConsumerTest {
 
         KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, false);
         consumer.subscribe(singleton(topic), getConsumerRebalanceListener(consumer));
-        client.prepareResponseFrom(new FindCoordinatorResponse(Errors.NONE, node), node);
-        Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
-
+        Node coordinator = prepareLookupCoordinator(client, node);
 
         client.prepareResponseFrom(joinGroupFollowerResponse(assignor, 1, "memberId", "leaderId", Errors.NONE), coordinator);
         client.prepareResponseFrom(syncGroupResponse(singletonList(tp0), Errors.NONE), coordinator);
@@ -1331,7 +1325,7 @@ public class KafkaConsumerTest {
         client.prepareResponseFrom(syncGroupResponse(singletonList(tp0), Errors.NONE), coordinator, true);
 
         // should try and find the new coordinator
-        client.prepareResponseFrom(new FindCoordinatorResponse(Errors.NONE, node), node);
+        client.prepareResponseFrom(new FindCoordinatorResponse(Errors.NONE, coordinator), node);
 
         // rejoin group
         client.prepareResponseFrom(joinGroupFollowerResponse(assignor, 1, "memberId", "leaderId", Errors.NONE), coordinator);
@@ -1349,6 +1343,27 @@ public class KafkaConsumerTest {
         final ConsumerRecords<String, String> records = consumer.poll(Duration.ZERO);
         assertFalse(records.isEmpty());
         consumer.close(0, TimeUnit.MILLISECONDS);
+    }
+
+    @Test(expected = ConfigException.class)
+    public void testBufferMemoryNotPositive() {
+        Properties props = new Properties();
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+        props.put(ConsumerConfig.BUFFER_MEMORY_CONFIG, 0L);
+        try (KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(props, new ByteArrayDeserializer(), new ByteArrayDeserializer())) {
+            fail("should have thrown an exception");
+        }
+    }
+
+    @Test(expected = KafkaException.class)
+    public void testMaxPartitionLargerThanBufferMemory() {
+        Properties props = new Properties();
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+        props.put(ConsumerConfig.BUFFER_MEMORY_CONFIG, 1L);
+        props.put(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, 2);
+        try (KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(props, new ByteArrayDeserializer(), new ByteArrayDeserializer())) {
+            fail("should have thrown an exception");
+        }
     }
 
     private void consumerCloseTest(final long closeTimeoutMs,
@@ -1525,9 +1540,7 @@ public class KafkaConsumerTest {
 
     private Node prepareRebalance(MockClient client, Node node, final Set<String> subscribedTopics, PartitionAssignor assignor, List<TopicPartition> partitions, Node coordinator) {
         if (coordinator == null) {
-            // lookup coordinator
-            client.prepareResponseFrom(new FindCoordinatorResponse(Errors.NONE, node), node);
-            coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+            coordinator = prepareLookupCoordinator(client, node);
         }
 
         // join group
@@ -1548,9 +1561,7 @@ public class KafkaConsumerTest {
 
     private Node prepareRebalance(MockClient client, Node node, PartitionAssignor assignor, List<TopicPartition> partitions, Node coordinator) {
         if (coordinator == null) {
-            // lookup coordinator
-            client.prepareResponseFrom(new FindCoordinatorResponse(Errors.NONE, node), node);
-            coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+            coordinator = prepareLookupCoordinator(client, node);
         }
 
         // join group

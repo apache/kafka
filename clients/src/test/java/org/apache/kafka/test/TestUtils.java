@@ -244,8 +244,8 @@ public class TestUtils {
     }
 
     public static Properties producerConfig(final String bootstrapServers,
-                                            final Class keySerializer,
-                                            final Class valueSerializer,
+                                            final Class<?> keySerializer,
+                                            final Class<?> valueSerializer,
                                             final Properties additional) {
         final Properties properties = new Properties();
         properties.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
@@ -257,14 +257,14 @@ public class TestUtils {
         return properties;
     }
 
-    public static Properties producerConfig(final String bootstrapServers, final Class keySerializer, final Class valueSerializer) {
+    public static Properties producerConfig(final String bootstrapServers, final Class<?> keySerializer, final Class<?> valueSerializer) {
         return producerConfig(bootstrapServers, keySerializer, valueSerializer, new Properties());
     }
 
     public static Properties consumerConfig(final String bootstrapServers,
                                             final String groupId,
-                                            final Class keyDeserializer,
-                                            final Class valueDeserializer,
+                                            final Class<?> keyDeserializer,
+                                            final Class<?> valueDeserializer,
                                             final Properties additional) {
 
         final Properties consumerConfig = new Properties();
@@ -279,8 +279,8 @@ public class TestUtils {
 
     public static Properties consumerConfig(final String bootstrapServers,
                                             final String groupId,
-                                            final Class keyDeserializer,
-                                            final Class valueDeserializer) {
+                                            final Class<?> keyDeserializer,
+                                            final Class<?> valueDeserializer) {
         return consumerConfig(bootstrapServers,
             groupId,
             keyDeserializer,
@@ -291,7 +291,7 @@ public class TestUtils {
     /**
      * returns consumer config with random UUID for the Group ID
      */
-    public static Properties consumerConfig(final String bootstrapServers, final Class keyDeserializer, final Class valueDeserializer) {
+    public static Properties consumerConfig(final String bootstrapServers, final Class<?> keyDeserializer, final Class<?> valueDeserializer) {
         return consumerConfig(bootstrapServers,
             UUID.randomUUID().toString(),
             keyDeserializer,

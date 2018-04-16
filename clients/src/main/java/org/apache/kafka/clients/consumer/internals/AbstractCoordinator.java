@@ -52,11 +52,13 @@ import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
 import java.io.Closeable;
 import java.nio.ByteBuffer;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -504,52 +506,56 @@ public abstract class AbstractCoordinator implements Closeable {
     private class JoinGroupResponseHandler extends CoordinatorResponseHandler<JoinGroupResponse, ByteBuffer> {
         @Override
         public void handle(JoinGroupResponse joinResponse, RequestFuture<ByteBuffer> future) {
-            Errors error = joinResponse.error();
-            if (error == Errors.NONE) {
-                log.debug("Received successful JoinGroup response: {}", joinResponse);
-                sensors.joinLatency.record(response.requestLatencyMs());
+            try {
+                Errors error = joinResponse.error();
+                if (error == Errors.NONE) {
+                    log.debug("Received successful JoinGroup response: {}", joinResponse);
+                    sensors.joinLatency.record(response.requestLatencyMs());
 
-                synchronized (AbstractCoordinator.this) {
-                    if (state != MemberState.REBALANCING) {
-                        // if the consumer was woken up before a rebalance completes, we may have already left
-                        // the group. In this case, we do not want to continue with the sync group.
-                        future.raise(new UnjoinedGroupException());
-                    } else {
-                        AbstractCoordinator.this.generation = new Generation(joinResponse.generationId(),
-                                joinResponse.memberId(), joinResponse.groupProtocol());
-                        if (joinResponse.isLeader()) {
-                            onJoinLeader(joinResponse).chain(future);
+                    synchronized (AbstractCoordinator.this) {
+                        if (state != MemberState.REBALANCING) {
+                            // if the consumer was woken up before a rebalance completes, we may have already left
+                            // the group. In this case, we do not want to continue with the sync group.
+                            future.raise(new UnjoinedGroupException());
                         } else {
-                            onJoinFollower().chain(future);
+                            AbstractCoordinator.this.generation = new Generation(joinResponse.generationId(),
+                                    joinResponse.memberId(), joinResponse.groupProtocol());
+                            if (joinResponse.isLeader()) {
+                                onJoinLeader(joinResponse).chain(future);
+                            } else {
+                                onJoinFollower().chain(future);
+                            }
                         }
                     }
+                } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS) {
+                    log.debug("Attempt to join group rejected since coordinator {} is loading the group.", coordinator());
+                    // backoff and retry
+                    future.raise(error);
+                } else if (error == Errors.UNKNOWN_MEMBER_ID) {
+                    // reset the member id and retry immediately
+                    resetGeneration();
+                    log.debug("Attempt to join group failed due to unknown member id.");
+                    future.raise(Errors.UNKNOWN_MEMBER_ID);
+                } else if (error == Errors.COORDINATOR_NOT_AVAILABLE
+                        || error == Errors.NOT_COORDINATOR) {
+                    // re-discover the coordinator and retry with backoff
+                    markCoordinatorUnknown();
+                    log.debug("Attempt to join group failed due to obsolete coordinator information: {}", error.message());
+                    future.raise(error);
+                } else if (error == Errors.INCONSISTENT_GROUP_PROTOCOL
+                        || error == Errors.INVALID_SESSION_TIMEOUT
+                        || error == Errors.INVALID_GROUP_ID) {
+                    // log the error and re-throw the exception
+                    log.error("Attempt to join group failed due to fatal error: {}", error.message());
+                    future.raise(error);
+                } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
+                    future.raise(new GroupAuthorizationException(groupId));
+                } else {
+                    // unexpected error, throw the exception
+                    future.raise(new KafkaException("Unexpected error in join group response: " + error.message()));
                 }
-            } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS) {
-                log.debug("Attempt to join group rejected since coordinator {} is loading the group.", coordinator());
-                // backoff and retry
-                future.raise(error);
-            } else if (error == Errors.UNKNOWN_MEMBER_ID) {
-                // reset the member id and retry immediately
-                resetGeneration();
-                log.debug("Attempt to join group failed due to unknown member id.");
-                future.raise(Errors.UNKNOWN_MEMBER_ID);
-            } else if (error == Errors.COORDINATOR_NOT_AVAILABLE
-                    || error == Errors.NOT_COORDINATOR) {
-                // re-discover the coordinator and retry with backoff
-                markCoordinatorUnknown();
-                log.debug("Attempt to join group failed due to obsolete coordinator information: {}", error.message());
-                future.raise(error);
-            } else if (error == Errors.INCONSISTENT_GROUP_PROTOCOL
-                    || error == Errors.INVALID_SESSION_TIMEOUT
-                    || error == Errors.INVALID_GROUP_ID) {
-                // log the error and re-throw the exception
-                log.error("Attempt to join group failed due to fatal error: {}", error.message());
-                future.raise(error);
-            } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
-                future.raise(new GroupAuthorizationException(groupId));
-            } else {
-                // unexpected error, throw the exception
-                future.raise(new KafkaException("Unexpected error in join group response: " + error.message()));
+            } finally {
+                joinResponse.close();
             }
         }
     }
@@ -565,9 +571,13 @@ public abstract class AbstractCoordinator implements Closeable {
 
     private RequestFuture<ByteBuffer> onJoinLeader(JoinGroupResponse joinResponse) {
         try {
+            Map<String, ByteBuffer> clone = new HashMap<>(joinResponse.members().size());
+            for (Map.Entry<String, ByteBuffer> entry : joinResponse.members().entrySet()) {
+                clone.put(entry.getKey(), ByteBuffer.wrap(Utils.toArray(entry.getValue())));
+            }
             // perform the leader synchronization and send back the assignment for the group
             Map<String, ByteBuffer> groupAssignment = performAssignment(joinResponse.leaderId(), joinResponse.groupProtocol(),
-                    joinResponse.members());
+                    clone);
 
             SyncGroupRequest.Builder requestBuilder =
                     new SyncGroupRequest.Builder(groupId, generation.generationId, generation.memberId, groupAssignment);
@@ -592,7 +602,8 @@ public abstract class AbstractCoordinator implements Closeable {
             Errors error = syncResponse.error();
             if (error == Errors.NONE) {
                 sensors.syncLatency.record(response.requestLatencyMs());
-                future.complete(syncResponse.memberAssignment());
+                ByteBuffer clone = ByteBuffer.wrap(Utils.toArray(syncResponse.memberAssignment()));
+                future.complete(clone);
             } else {
                 requestRejoin();
 
@@ -615,6 +626,7 @@ public abstract class AbstractCoordinator implements Closeable {
                     future.raise(new KafkaException("Unexpected error from SyncGroup: " + error.message()));
                 }
             }
+            syncResponse.close();
         }
     }
 
@@ -643,14 +655,9 @@ public abstract class AbstractCoordinator implements Closeable {
             Errors error = findCoordinatorResponse.error();
             if (error == Errors.NONE) {
                 synchronized (AbstractCoordinator.this) {
-                    // use MAX_VALUE - node.id as the coordinator id to allow separate connections
-                    // for the coordinator in the underlying network client layer
-                    int coordinatorConnectionId = Integer.MAX_VALUE - findCoordinatorResponse.node().id();
-
-                    AbstractCoordinator.this.coordinator = new Node(
-                            coordinatorConnectionId,
-                            findCoordinatorResponse.node().host(),
-                            findCoordinatorResponse.node().port());
+                    Node node = findCoordinatorResponse.node();
+                    // The coordinator is a privileged node
+                    AbstractCoordinator.this.coordinator = new Node(node.id(), node.host(), node.port(), true);
                     log.info("Discovered group coordinator {}", coordinator);
                     client.tryConnect(coordinator);
                     heartbeat.resetSessionTimeout();

@@ -131,7 +131,7 @@ public class ConsumerConfig extends AbstractConfig {
             "Records are fetched in batches by the consumer, and if the first record batch in the first non-empty partition of the fetch is larger than " +
             "this value, the record batch will still be returned to ensure that the consumer can make progress. As such, this is not a absolute maximum. " +
             "The maximum record batch size accepted by the broker is defined via <code>message.max.bytes</code> (broker config) or " +
-            "<code>max.message.bytes</code> (topic config). Note that the consumer performs multiple fetches in parallel.";
+            "<code>max.message.bytes</code> (topic config). Note that the consumer performs multiple fetches in parallel. It should be lower than <code>buffer.memory</code>.";
     public static final int DEFAULT_FETCH_MAX_BYTES = 50 * 1024 * 1024;
 
     /**
@@ -262,6 +262,12 @@ public class ConsumerConfig extends AbstractConfig {
 
     public static final String DEFAULT_ISOLATION_LEVEL = IsolationLevel.READ_UNCOMMITTED.toString().toLowerCase(Locale.ROOT);
 
+    /** <code>buffer.memory</code> */
+    public static final String BUFFER_MEMORY_CONFIG = "buffer.memory";
+    public static final String BUFFER_MEMORY_DOC = "The total bytes of memory the consumer can use to buffer records received from the server while waiting to be processed (decompressed and deserialized)." +
+           " This setting slightly differs from the total memory the consumer will use because some additional memory will be used for decompression (if compression is enabled), deserialization as" +
+           " well as for maintaining in-flight requests. Note that this setting must be at least as big as <code>max.fetch.bytes</code>.";
+
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
                                         Type.LIST,
@@ -320,7 +326,7 @@ public class ConsumerConfig extends AbstractConfig {
                                         Type.INT,
                                         DEFAULT_MAX_PARTITION_FETCH_BYTES,
                                         atLeast(0),
-                                        Importance.HIGH,
+                                        Importance.LOW,
                                         MAX_PARTITION_FETCH_BYTES_DOC)
                                 .define(SEND_BUFFER_CONFIG,
                                         Type.INT,
@@ -464,6 +470,12 @@ public class ConsumerConfig extends AbstractConfig {
                                         in(IsolationLevel.READ_COMMITTED.toString().toLowerCase(Locale.ROOT), IsolationLevel.READ_UNCOMMITTED.toString().toLowerCase(Locale.ROOT)),
                                         Importance.MEDIUM,
                                         ISOLATION_LEVEL_DOC)
+                                .define(BUFFER_MEMORY_CONFIG,
+                                        Type.LONG,
+                                        Long.MAX_VALUE,
+                                        atLeast(1),
+                                        Importance.HIGH,
+                                        BUFFER_MEMORY_DOC)
                                 // security support
                                 .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
                                         Type.STRING,

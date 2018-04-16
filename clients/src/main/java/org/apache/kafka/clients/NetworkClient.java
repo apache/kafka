@@ -27,8 +27,8 @@ import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.CommonFields;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
@@ -640,7 +640,8 @@ public class NetworkClient implements KafkaClient {
 
     public static AbstractResponse parseResponse(ByteBuffer responseBuffer, RequestHeader requestHeader) {
         Struct responseStruct = parseStructMaybeUpdateThrottleTimeMetrics(responseBuffer, requestHeader, null, 0);
-        return AbstractResponse.parseResponse(requestHeader.apiKey(), responseStruct);
+        // Sasl authentication does not use a MemoryPool, hence null Closeable
+        return AbstractResponse.parseResponse(requestHeader.apiKey(), responseStruct, null);
     }
 
     private static Struct parseStructMaybeUpdateThrottleTimeMetrics(ByteBuffer responseBuffer, RequestHeader requestHeader,
@@ -775,7 +776,7 @@ public class NetworkClient implements KafkaClient {
                     req.header.apiKey(), req.header.correlationId(), responseStruct);
             }
             // If the received response includes a throttle delay, throttle the connection.
-            AbstractResponse body = AbstractResponse.parseResponse(req.header.apiKey(), responseStruct);
+            AbstractResponse body = AbstractResponse.parseResponse(req.header.apiKey(), responseStruct, receive);
             maybeThrottle(body, req.header.apiVersion(), req.destination, now);
             if (req.isInternalRequest && body instanceof MetadataResponse)
                 metadataUpdater.handleCompletedMetadataResponse(req.header, now, (MetadataResponse) body);
@@ -783,6 +784,10 @@ public class NetworkClient implements KafkaClient {
                 handleApiVersionsResponse(responses, req, now, (ApiVersionsResponse) body);
             else
                 responses.add(req.completed(body, now));
+
+            if (!req.header.apiKey().responseRequiresDelayedAllocation) {
+                receive.close();
+            }
         }
     }
 
@@ -876,10 +881,10 @@ public class NetworkClient implements KafkaClient {
             this.connectionStates.connecting(nodeConnectionId, now, node.host(), clientDnsLookup);
             InetAddress address = this.connectionStates.currentAddress(nodeConnectionId);
             log.debug("Initiating connection to node {} using address {}", node, address);
-            selector.connect(nodeConnectionId,
-                    new InetSocketAddress(address, node.port()),
-                    this.socketSendBuffer,
-                    this.socketReceiveBuffer);
+            selector.connect(node,
+                            new InetSocketAddress(address, node.port()),
+                            this.socketSendBuffer,
+                            this.socketReceiveBuffer);
         } catch (IOException e) {
             /* attempt failed, we'll try again after the backoff */
             connectionStates.disconnected(nodeConnectionId, now);

@@ -65,6 +65,7 @@ import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -443,7 +444,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         Sensor throttleTimeSensor = Sender.throttleTimeSensor(metricsRegistry.senderMetrics);
         KafkaClient client = kafkaClient != null ? kafkaClient : new NetworkClient(
                 new Selector(producerConfig.getLong(ProducerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG),
-                        this.metrics, time, "producer", channelBuilder, logContext),
+                        this.metrics, time, "producer", channelBuilder, MemoryPool.NONE, logContext),
                 metadata,
                 clientId,
                 maxInflightRequests,

@@ -40,6 +40,7 @@ import org.apache.kafka.common.{Cluster, Node, TopicPartition}
 
 import scala.collection.JavaConverters._
 import scala.util.{Failure, Success, Try}
+import org.apache.kafka.common.memory.MemoryPool
 
 /**
   * A Scala administrative client for Kafka which supports managing and inspecting topics, brokers,
@@ -449,6 +450,7 @@ object AdminClient {
       time,
       "admin",
       channelBuilder,
+      MemoryPool.NONE,
       new LogContext(String.format("[Producer clientId=%s] ", clientId)))
 
     val networkClient = new NetworkClient(

@@ -36,14 +36,19 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.memory.MemoryPool;
+import org.apache.kafka.common.memory.SimpleMemoryPool;
+import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.requests.IsolationLevel;
@@ -722,31 +727,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             Sensor throttleTimeSensor = Fetcher.throttleTimeSensor(metrics, metricsRegistry.fetcherMetrics);
 
             int heartbeatIntervalMs = config.getInt(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG);
+            long memoryPoolSize = config.getLong(ConsumerConfig.BUFFER_MEMORY_CONFIG);
+            int maxFetchBytes = config.getInt(ConsumerConfig.FETCH_MAX_BYTES_CONFIG);
+            MemoryPool memoryPool = createMemoryPool(metrics, metricGrpPrefix, memoryPoolSize, maxFetchBytes);
 
-            NetworkClient netClient = new NetworkClient(
-                    new Selector(config.getLong(ConsumerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG), metrics, time, metricGrpPrefix, channelBuilder, logContext),
-                    this.metadata,
-                    clientId,
-                    100, // a fixed large enough value will suffice for max in-flight requests
-                    config.getLong(ConsumerConfig.RECONNECT_BACKOFF_MS_CONFIG),
-                    config.getLong(ConsumerConfig.RECONNECT_BACKOFF_MAX_MS_CONFIG),
-                    config.getInt(ConsumerConfig.SEND_BUFFER_CONFIG),
-                    config.getInt(ConsumerConfig.RECEIVE_BUFFER_CONFIG),
-                    config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG),
-                    ClientDnsLookup.forConfig(config.getString(ConsumerConfig.CLIENT_DNS_LOOKUP_CONFIG)),
-                    time,
-                    true,
-                    new ApiVersions(),
-                    throttleTimeSensor,
-                    logContext);
-            this.client = new ConsumerNetworkClient(
-                    logContext,
-                    netClient,
-                    metadata,
-                    time,
-                    retryBackoffMs,
-                    config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG),
-                    heartbeatIntervalMs); //Will avoid blocking an extended period of time to prevent heartbeat thread starvation
+            this.client = newClient(config, clientId, logContext, metricGrpPrefix, channelBuilder, throttleTimeSensor,
+                    heartbeatIntervalMs, memoryPool);
             OffsetResetStrategy offsetResetStrategy = OffsetResetStrategy.valueOf(config.getString(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG).toUpperCase(Locale.ROOT));
             this.subscriptions = new SubscriptionState(offsetResetStrategy);
             this.assignors = config.getConfiguredInstances(
@@ -777,7 +763,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     logContext,
                     this.client,
                     config.getInt(ConsumerConfig.FETCH_MIN_BYTES_CONFIG),
-                    config.getInt(ConsumerConfig.FETCH_MAX_BYTES_CONFIG),
+                    maxFetchBytes,
                     config.getInt(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG),
                     config.getInt(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG),
                     config.getInt(ConsumerConfig.MAX_POLL_RECORDS_CONFIG),
@@ -804,6 +790,34 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             // now propagate the exception
             throw new KafkaException("Failed to construct kafka consumer", t);
         }
+    }
+
+    private ConsumerNetworkClient newClient(ConsumerConfig config, String clientId, LogContext logContext, String metricGrpPrefix,
+            ChannelBuilder channelBuilder, Sensor throttleTimeSensor, int heartbeatIntervalMs, MemoryPool memoryPool) {
+        NetworkClient netClient = new NetworkClient(
+                new Selector(config.getLong(ConsumerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG), metrics, time, metricGrpPrefix, channelBuilder, memoryPool, logContext),
+                this.metadata,
+                clientId,
+                100, // a fixed large enough value will suffice for max in-flight requests
+                config.getLong(ConsumerConfig.RECONNECT_BACKOFF_MS_CONFIG),
+                config.getLong(ConsumerConfig.RECONNECT_BACKOFF_MAX_MS_CONFIG),
+                config.getInt(ConsumerConfig.SEND_BUFFER_CONFIG),
+                config.getInt(ConsumerConfig.RECEIVE_BUFFER_CONFIG),
+                config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG),
+                ClientDnsLookup.forConfig(config.getString(ConsumerConfig.CLIENT_DNS_LOOKUP_CONFIG)),
+                time,
+                true,
+                new ApiVersions(),
+                throttleTimeSensor,
+                logContext);
+        return new ConsumerNetworkClient(
+                logContext,
+                netClient,
+                metadata,
+                time,
+                retryBackoffMs,
+                config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG),
+                heartbeatIntervalMs); //Will avoid blocking an extended period of time to prevent heartbeat thread starvation
     }
 
     // visible for testing
@@ -2219,5 +2233,40 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     // Visible for testing
     String getClientId() {
         return clientId;
+    }
+
+    private MemoryPool createMemoryPool(Metrics metrics, String metricGrpPrefix, long memoryPoolSize, int maxFetchBytes) {
+        if (memoryPoolSize <= 0L || memoryPoolSize <= maxFetchBytes) {
+            throw new ConfigException(ConsumerConfig.BUFFER_MEMORY_CONFIG + " must be positive and greater than " + ConsumerConfig.FETCH_MAX_BYTES_CONFIG);
+        }
+
+        String metricGrpName = metricGrpPrefix + "-metrics";
+        Sensor memoryPoolSensor = metrics.sensor("MemoryPoolUtilization");
+        MetricName memoryPoolDepletedPercentMetricName = metrics.metricName("memory-pool-avg-depleted-percent", metricGrpName, "The percentage of time when the MemoryPool is full");
+        MetricName memoryPoolDepletedTimeMetricName = metrics.metricName("memory-pool-depleted-time-total", metricGrpName, "The amount of time when the MemoryPool is full");
+        memoryPoolSensor.add(new Meter(TimeUnit.MILLISECONDS, memoryPoolDepletedPercentMetricName, memoryPoolDepletedTimeMetricName));
+
+        int maxAllocation = (memoryPoolSize > Integer.MAX_VALUE) ? Integer.MAX_VALUE : (int) memoryPoolSize;
+        final MemoryPool memoryPool = SimpleMemoryPool.create(memoryPoolSize, maxAllocation, memoryPoolSensor);
+
+        Gauge<Long> freeMemory = new Gauge<Long>() {
+            @Override
+            public Long value(MetricConfig config, long now) {
+                return memoryPool.availableMemory();
+            }
+        };
+        metrics.addMetric(metrics.metricName("memory-pool-free",
+                metricGrpName,
+                "The amount of free memory in the MemoryPool"), freeMemory);
+        Gauge<Long> usedMemory = new Gauge<Long>() {
+            @Override
+            public Long value(MetricConfig config, long now) {
+                return memoryPool.size() - memoryPool.availableMemory();
+            }
+        };
+        metrics.addMetric(metrics.metricName("memory-pool-used",
+                metricGrpName,
+                "The amount of used memory in the MemoryPool"), usedMemory);
+        return memoryPool;
     }
 }

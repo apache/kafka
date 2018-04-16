@@ -43,6 +43,7 @@ import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{Node, TopicPartition}
 
 import scala.collection.JavaConverters._
+import org.apache.kafka.common.memory.MemoryPool
 
 /**
  * For verifying the consistency among replicas.
@@ -459,7 +460,9 @@ private class ReplicaFetcherBlockingSend(sourceNode: Node,
       "replica-fetcher",
       Map("broker-id" -> sourceNode.id.toString, "fetcher-id" -> fetcherId.toString).asJava,
       false,
+      false,
       channelBuilder,
+      MemoryPool.NONE,
       new LogContext
     )
     new NetworkClient(

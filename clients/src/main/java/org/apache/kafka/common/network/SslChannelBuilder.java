@@ -95,12 +95,12 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
     }
 
     @Override
-    public KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize, MemoryPool memoryPool) throws KafkaException {
+    public KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize, MemoryPool memoryPool, boolean privileged) throws KafkaException {
         try {
             SslTransportLayer transportLayer = buildTransportLayer(sslFactory, id, key, peerHost(key));
             Supplier<Authenticator> authenticatorCreator = () -> new SslAuthenticator(configs, transportLayer, listenerName, sslPrincipalMapper);
             return new KafkaChannel(id, transportLayer, authenticatorCreator, maxReceiveSize,
-                    memoryPool != null ? memoryPool : MemoryPool.NONE);
+                    memoryPool != null ? memoryPool : MemoryPool.NONE, privileged);
         } catch (Exception e) {
             log.info("Failed to create channel due to ", e);
             throw new KafkaException(e);

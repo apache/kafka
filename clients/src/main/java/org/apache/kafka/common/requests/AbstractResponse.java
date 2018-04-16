@@ -22,13 +22,16 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
+import java.io.Closeable;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-public abstract class AbstractResponse extends AbstractRequestResponse {
+public abstract class AbstractResponse extends AbstractRequestResponse implements Closeable {
     public static final int DEFAULT_THROTTLE_TIME = 0;
+    protected Closeable closeable = null;
 
     protected Send toSend(String destination, ResponseHeader header, short apiVersion) {
         return new NetworkSend(destination, serialize(apiVersion, header));
@@ -68,12 +71,15 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
 
     protected abstract Struct toStruct(short version);
 
-    public static AbstractResponse parseResponse(ApiKeys apiKey, Struct struct) {
+    /*
+     * Responses that require a delayed allocation need a reference to their closeable NetworkReceive.
+     */
+    public static AbstractResponse parseResponse(ApiKeys apiKey, Struct struct, Closeable closeable) {
         switch (apiKey) {
             case PRODUCE:
                 return new ProduceResponse(struct);
             case FETCH:
-                return FetchResponse.parse(struct);
+                return FetchResponse.parse(struct, closeable);
             case LIST_OFFSETS:
                 return new ListOffsetResponse(struct);
             case METADATA:
@@ -85,13 +91,13 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
             case FIND_COORDINATOR:
                 return new FindCoordinatorResponse(struct);
             case JOIN_GROUP:
-                return new JoinGroupResponse(struct);
+                return new JoinGroupResponse(struct, closeable);
             case HEARTBEAT:
                 return new HeartbeatResponse(struct);
             case LEAVE_GROUP:
                 return new LeaveGroupResponse(struct);
             case SYNC_GROUP:
-                return new SyncGroupResponse(struct);
+                return new SyncGroupResponse(struct, closeable);
             case STOP_REPLICA:
                 return new StopReplicaResponse(struct);
             case CONTROLLED_SHUTDOWN:
@@ -177,5 +183,15 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
 
     public String toString(short version) {
         return toStruct(version).toString();
+    }
+
+    public void close() {
+        if (closeable != null) {
+            try {
+                closeable.close();
+            } catch (IOException e) {
+                // NetworkReceive objects don't throw IOException
+            }
+        }
     }
 }

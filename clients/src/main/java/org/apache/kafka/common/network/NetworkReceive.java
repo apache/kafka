@@ -40,8 +40,10 @@ public class NetworkReceive implements Receive {
     private final MemoryPool memoryPool;
     private int requestedBufferSize = -1;
     private ByteBuffer buffer;
+    private boolean privileged = false;
+    private boolean inMemoryPool = false;
 
-
+    // for testing
     public NetworkReceive(String source, ByteBuffer buffer) {
         this.source = source;
         this.buffer = buffer;
@@ -50,32 +52,17 @@ public class NetworkReceive implements Receive {
         this.memoryPool = MemoryPool.NONE;
     }
 
-    public NetworkReceive(String source) {
-        this.source = source;
-        this.size = ByteBuffer.allocate(4);
-        this.buffer = null;
-        this.maxSize = UNLIMITED;
-        this.memoryPool = MemoryPool.NONE;
-    }
-
     public NetworkReceive(int maxSize, String source) {
-        this.source = source;
-        this.size = ByteBuffer.allocate(4);
-        this.buffer = null;
-        this.maxSize = maxSize;
-        this.memoryPool = MemoryPool.NONE;
+        this(maxSize, source, MemoryPool.NONE, false);
     }
 
-    public NetworkReceive(int maxSize, String source, MemoryPool memoryPool) {
+    public NetworkReceive(int maxSize, String source, MemoryPool memoryPool, boolean privileged) {
         this.source = source;
         this.size = ByteBuffer.allocate(4);
         this.buffer = null;
         this.maxSize = maxSize;
         this.memoryPool = memoryPool;
-    }
-
-    public NetworkReceive() {
-        this(UNKNOWN_SOURCE);
+        this.privileged = privileged;
     }
 
     @Override
@@ -108,10 +95,18 @@ public class NetworkReceive implements Receive {
                 }
             }
         }
-        if (buffer == null && requestedBufferSize != -1) { //we know the size we want but havent been able to allocate it yet
+        if (buffer == null && requestedBufferSize != -1) { //we know the size we want but haven't been able to allocate it yet
             buffer = memoryPool.tryAllocate(requestedBufferSize);
-            if (buffer == null)
-                log.trace("Broker low on memory - could not allocate buffer of size {} for source {}", requestedBufferSize, source);
+            if (buffer != null) {
+                inMemoryPool = true;
+            } else {
+                // If the pool is full but the channel is privileged, we allocate directly on the heap
+                if (privileged) {
+                    buffer = ByteBuffer.allocate(requestedBufferSize);
+                } else {
+                    log.trace("Memory Pool low on memory - could not allocate buffer of size {} for source {}", requestedBufferSize, source);
+                }
+            }
         }
         if (buffer != null) {
             int bytesRead = channel.read(buffer);
@@ -133,11 +128,10 @@ public class NetworkReceive implements Receive {
         return buffer != null;
     }
 
-
     @Override
-    public void close() throws IOException {
+    public void close() {
         if (buffer != null && buffer != EMPTY_BUFFER) {
-            memoryPool.release(buffer);
+            if (inMemoryPool) memoryPool.release(buffer);
             buffer = null;
         }
     }

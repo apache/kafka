@@ -415,16 +415,16 @@ class RequestQuotaTest extends BaseRequestTest {
   private def responseThrottleTime(apiKey: ApiKeys, response: Struct): Int = {
     apiKey match {
       case ApiKeys.PRODUCE => new ProduceResponse(response).throttleTimeMs
-      case ApiKeys.FETCH => FetchResponse.parse(response).throttleTimeMs
+      case ApiKeys.FETCH => FetchResponse.parse(response, null).throttleTimeMs
       case ApiKeys.LIST_OFFSETS => new ListOffsetResponse(response).throttleTimeMs
       case ApiKeys.METADATA => new MetadataResponse(response).throttleTimeMs
       case ApiKeys.OFFSET_COMMIT => new OffsetCommitResponse(response).throttleTimeMs
       case ApiKeys.OFFSET_FETCH => new OffsetFetchResponse(response).throttleTimeMs
       case ApiKeys.FIND_COORDINATOR => new FindCoordinatorResponse(response).throttleTimeMs
-      case ApiKeys.JOIN_GROUP => new JoinGroupResponse(response).throttleTimeMs
+      case ApiKeys.JOIN_GROUP => new JoinGroupResponse(response, null).throttleTimeMs
       case ApiKeys.HEARTBEAT => new HeartbeatResponse(response).throttleTimeMs
       case ApiKeys.LEAVE_GROUP => new LeaveGroupResponse(response).throttleTimeMs
-      case ApiKeys.SYNC_GROUP => new SyncGroupResponse(response).throttleTimeMs
+      case ApiKeys.SYNC_GROUP => new SyncGroupResponse(response, null).throttleTimeMs
       case ApiKeys.DESCRIBE_GROUPS => new DescribeGroupsResponse(response).throttleTimeMs
       case ApiKeys.LIST_GROUPS => new ListGroupsResponse(response).throttleTimeMs
       case ApiKeys.API_VERSIONS => new ApiVersionsResponse(response).throttleTimeMs

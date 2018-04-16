@@ -60,13 +60,11 @@ class ReplicaFetcherBlockingSend(sourceBroker: BrokerEndPoint,
       brokerConfig.saslInterBrokerHandshakeRequestEnable
     )
     val selector = new Selector(
-      NetworkReceive.UNLIMITED,
       brokerConfig.connectionsMaxIdleMs,
       metrics,
       time,
       "replica-fetcher",
       Map("broker-id" -> sourceBroker.id.toString, "fetcher-id" -> fetcherId.toString).asJava,
-      false,
       channelBuilder,
       logContext
     )

@@ -29,6 +29,7 @@ import org.apache.kafka.common.record.BaseRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MultiRecordsSend;
 
+import java.io.Closeable;
 import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -200,6 +201,8 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
     private final int sessionId;
     private final LinkedHashMap<TopicPartition, PartitionData<T>> responseData;
 
+    private transient int closeCount;
+
     public static final class AbortedTransaction {
         public final long producerId;
         public final long firstOffset;
@@ -313,9 +316,10 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
         this.responseData = responseData;
         this.throttleTimeMs = throttleTimeMs;
         this.sessionId = sessionId;
+        this.closeCount = responseData.size();
     }
 
-    public static FetchResponse<MemoryRecords> parse(Struct struct) {
+    public static FetchResponse<MemoryRecords> parse(Struct struct, Closeable closeable) {
         LinkedHashMap<TopicPartition, PartitionData<MemoryRecords>> responseData = new LinkedHashMap<>();
         for (Object topicResponseObj : struct.getArray(RESPONSES_KEY_NAME)) {
             Struct topicResponse = (Struct) topicResponseObj;
@@ -353,8 +357,10 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
                 responseData.put(new TopicPartition(topic, partition), partitionData);
             }
         }
-        return new FetchResponse<>(Errors.forCode(struct.getOrElse(ERROR_CODE, (short) 0)), responseData,
+        FetchResponse<MemoryRecords> response = new FetchResponse<>(Errors.forCode(struct.getOrElse(ERROR_CODE, (short) 0)), responseData,
                 struct.getOrElse(THROTTLE_TIME_MS, DEFAULT_THROTTLE_TIME), struct.getOrElse(SESSION_ID, INVALID_SESSION_ID));
+        response.closeable = closeable;
+        return response;
     }
 
     @Override
@@ -404,8 +410,9 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
         return errorCounts;
     }
 
+    // Used by tests
     public static FetchResponse<MemoryRecords> parse(ByteBuffer buffer, short version) {
-        return parse(ApiKeys.FETCH.responseSchema(version).read(buffer));
+        return parse(ApiKeys.FETCH.responseSchema(version).read(buffer), null);
     }
 
     private static void addResponseData(Struct struct, int throttleTimeMs, String dest, Queue<Send> sends) {
@@ -540,5 +547,17 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
     @Override
     public boolean shouldClientThrottle(short version) {
         return version >= 8;
+    }
+
+    /*
+     * The buffer underlying a FetchResponse is sliced into many CompletedFetch objects.
+     * Only when all the CompletedFetches are closed, then the original buffer can be released.
+     */
+    @Override
+    public void close() {
+        closeCount--;
+        if (closeCount <= 0) {
+            super.close();
+        }
     }
 }

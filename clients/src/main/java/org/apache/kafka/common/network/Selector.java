@@ -18,6 +18,7 @@ package org.apache.kafka.common.network;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.metrics.Metrics;
@@ -140,6 +141,7 @@ public class Selector implements Selectable, AutoCloseable {
      * @param metricTags Additional tags to add to metrics registered by Selector
      * @param metricsPerConnection Whether or not to enable per-connection metrics
      * @param channelBuilder Channel builder for every new connection
+     * @param memoryPool The memory pool used for buffer allocations
      * @param logContext Context for logging with additional info
      */
     public Selector(int maxReceiveSize,
@@ -212,25 +214,24 @@ public class Selector implements Selectable, AutoCloseable {
         this(maxReceiveSize, connectionMaxIdleMs, failedAuthenticationDelayMs, metrics, time, metricGrpPrefix, metricTags, metricsPerConnection, false, channelBuilder, MemoryPool.NONE, logContext);
     }
 
-
-    public Selector(int maxReceiveSize,
-            long connectionMaxIdleMs,
-            Metrics metrics,
-            Time time,
-            String metricGrpPrefix,
+    public Selector(long connectionMaxIdleMS, 
+            Metrics metrics, 
+            Time time, 
+            String metricGrpPrefix, 
             Map<String, String> metricTags,
-            boolean metricsPerConnection,
-            ChannelBuilder channelBuilder,
+            ChannelBuilder channelBuilder, 
             LogContext logContext) {
-        this(maxReceiveSize, connectionMaxIdleMs, NO_FAILED_AUTHENTICATION_DELAY, metrics, time, metricGrpPrefix, metricTags, metricsPerConnection, channelBuilder, logContext);
+        this(NetworkReceive.UNLIMITED, connectionMaxIdleMS, NO_FAILED_AUTHENTICATION_DELAY, metrics, time, metricGrpPrefix, metricTags, true, false, channelBuilder, MemoryPool.NONE, logContext);
     }
 
-    public Selector(long connectionMaxIdleMS, Metrics metrics, Time time, String metricGrpPrefix, ChannelBuilder channelBuilder, LogContext logContext) {
-        this(NetworkReceive.UNLIMITED, connectionMaxIdleMS, metrics, time, metricGrpPrefix, Collections.emptyMap(), true, channelBuilder, logContext);
-    }
-
-    public Selector(long connectionMaxIdleMS, int failedAuthenticationDelayMs, Metrics metrics, Time time, String metricGrpPrefix, ChannelBuilder channelBuilder, LogContext logContext) {
-        this(NetworkReceive.UNLIMITED, connectionMaxIdleMS, failedAuthenticationDelayMs, metrics, time, metricGrpPrefix, Collections.<String, String>emptyMap(), true, channelBuilder, logContext);
+    public Selector(long connectionMaxIdleMS, 
+            Metrics metrics, 
+            Time time, 
+            String metricGrpPrefix, 
+            ChannelBuilder channelBuilder, 
+            MemoryPool memoryPool, 
+            LogContext logContext) {
+        this(NetworkReceive.UNLIMITED, connectionMaxIdleMS, NO_FAILED_AUTHENTICATION_DELAY, metrics, time, metricGrpPrefix, Collections.<String, String>emptyMap(), true, false, channelBuilder, memoryPool, logContext);
     }
 
     /**
@@ -239,7 +240,7 @@ public class Selector implements Selectable, AutoCloseable {
      * <p>
      * Note that this call only initiates the connection, which will be completed on a future {@link #poll(long)}
      * call. Check {@link #connected()} to see which (if any) connections have completed after a given poll call.
-     * @param id The id for the new connection
+     * @param node The node to connect to
      * @param address The address to connect to
      * @param sendBufferSize The send buffer for the new connection
      * @param receiveBufferSize The receive buffer for the new connection
@@ -247,17 +248,17 @@ public class Selector implements Selectable, AutoCloseable {
      * @throws IOException if DNS resolution fails on the hostname or if the broker is down
      */
     @Override
-    public void connect(String id, InetSocketAddress address, int sendBufferSize, int receiveBufferSize) throws IOException {
-        ensureNotRegistered(id);
+    public void connect(Node node, InetSocketAddress address, int sendBufferSize, int receiveBufferSize) throws IOException {
+        ensureNotRegistered(node.idString());
         SocketChannel socketChannel = SocketChannel.open();
         try {
             configureSocketChannel(socketChannel, sendBufferSize, receiveBufferSize);
             boolean connected = doConnect(socketChannel, address);
-            SelectionKey key = registerChannel(id, socketChannel, SelectionKey.OP_CONNECT);
+            SelectionKey key = registerChannel(node.idString(), socketChannel, SelectionKey.OP_CONNECT, node.privileged());
 
             if (connected) {
                 // OP_CONNECT won't trigger for immediately connected channels
-                log.debug("Immediately connected to node {}", id);
+                log.debug("Immediately connected to node {}", node.idString());
                 immediatelyConnectedKeys.add(key);
                 key.interestOps(0);
             }
@@ -305,7 +306,7 @@ public class Selector implements Selectable, AutoCloseable {
      */
     public void register(String id, SocketChannel socketChannel) throws IOException {
         ensureNotRegistered(id);
-        registerChannel(id, socketChannel, SelectionKey.OP_READ);
+        registerChannel(id, socketChannel, SelectionKey.OP_READ, false);
         this.sensors.connectionCreated.record();
     }
 
@@ -316,18 +317,18 @@ public class Selector implements Selectable, AutoCloseable {
             throw new IllegalStateException("There is already a connection for id " + id + " that is still being closed");
     }
 
-    private SelectionKey registerChannel(String id, SocketChannel socketChannel, int interestedOps) throws IOException {
+    private SelectionKey registerChannel(String id, SocketChannel socketChannel, int interestedOps, boolean privileged) throws IOException {
         SelectionKey key = socketChannel.register(nioSelector, interestedOps);
-        KafkaChannel channel = buildAndAttachKafkaChannel(socketChannel, id, key);
+        KafkaChannel channel = buildAndAttachKafkaChannel(socketChannel, id, key, privileged);
         this.channels.put(id, channel);
         if (idleExpiryManager != null)
             idleExpiryManager.update(channel.id(), time.nanoseconds());
         return key;
     }
 
-    private KafkaChannel buildAndAttachKafkaChannel(SocketChannel socketChannel, String id, SelectionKey key) throws IOException {
+    private KafkaChannel buildAndAttachKafkaChannel(SocketChannel socketChannel, String id, SelectionKey key, boolean privileged) throws IOException {
         try {
-            KafkaChannel channel = channelBuilder.buildChannel(id, key, maxReceiveSize, memoryPool);
+            KafkaChannel channel = channelBuilder.buildChannel(id, key, maxReceiveSize, memoryPool, privileged);
             key.attach(channel);
             return channel;
         } catch (Exception e) {
@@ -438,7 +439,7 @@ public class Selector implements Selectable, AutoCloseable {
 
         if (!memoryPool.isOutOfMemory() && outOfMemory) {
             //we have recovered from memory pressure. unmute any channel not explicitly muted for other reasons
-            log.trace("Broker no longer low on memory - unmuting incoming sockets");
+            log.trace("Memory Pool no longer low on memory - unmuting channel");
             for (KafkaChannel channel : channels.values()) {
                 if (channel.isInMutableState() && !explicitlyMutedChannels.contains(channel)) {
                     channel.maybeUnmute();

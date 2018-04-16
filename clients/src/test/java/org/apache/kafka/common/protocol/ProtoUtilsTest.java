@@ -21,16 +21,44 @@ import org.junit.Test;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import java.util.EnumSet;
+
 public class ProtoUtilsTest {
     @Test
-    public void testDelayedAllocationSchemaDetection() throws Exception {
-        //verifies that schemas known to retain a reference to the underlying byte buffer are correctly detected.
+    public void testRequestDelayedAllocationSchemaDetection() throws Exception {
+        //verifies that request schemas known to retain a reference to the underlying byte buffer are correctly detected.
+        EnumSet<ApiKeys> requestRequiresDelayedAllocation = EnumSet.of(
+                ApiKeys.PRODUCE,
+                ApiKeys.JOIN_GROUP,
+                ApiKeys.SYNC_GROUP,
+                ApiKeys.SASL_AUTHENTICATE,
+                ApiKeys.EXPIRE_DELEGATION_TOKEN,
+                ApiKeys.RENEW_DELEGATION_TOKEN);
         for (ApiKeys key : ApiKeys.values()) {
-            if (key == ApiKeys.PRODUCE || key == ApiKeys.JOIN_GROUP || key == ApiKeys.SYNC_GROUP || key == ApiKeys.SASL_AUTHENTICATE
-                || key == ApiKeys.EXPIRE_DELEGATION_TOKEN || key == ApiKeys.RENEW_DELEGATION_TOKEN) {
-                assertTrue(key + " should require delayed allocation", key.requiresDelayedAllocation);
+            if (requestRequiresDelayedAllocation.contains(key)) {
+                assertTrue(key + " should require delayed allocation", key.requestRequiresDelayedAllocation);
             } else {
-                assertFalse(key + " should not require delayed allocation", key.requiresDelayedAllocation);
+                assertFalse(key + " should not require delayed allocation", key.requestRequiresDelayedAllocation);
+            }
+        }
+    }
+
+    @Test
+    public void testResponseDelayedAllocationSchemaDetection() throws Exception {
+        //verifies that response schemas known to retain a reference to the underlying byte buffer are correctly detected.
+        EnumSet<ApiKeys> responseRequiresDelayedAllocation = EnumSet.of(
+                ApiKeys.FETCH,
+                ApiKeys.JOIN_GROUP,
+                ApiKeys.SYNC_GROUP,
+                ApiKeys.DESCRIBE_GROUPS,
+                ApiKeys.SASL_AUTHENTICATE,
+                ApiKeys.CREATE_DELEGATION_TOKEN,
+                ApiKeys.DESCRIBE_DELEGATION_TOKEN);
+        for (ApiKeys key : ApiKeys.values()) {
+            if (responseRequiresDelayedAllocation.contains(key)) {
+                assertTrue(key + " should require delayed allocation", key.responseRequiresDelayedAllocation);
+            } else {
+                assertFalse(key + " should not require delayed allocation", key.responseRequiresDelayedAllocation);
             }
         }
     }
