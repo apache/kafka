@@ -18,6 +18,8 @@ package org.apache.kafka.common.metrics;
 
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.CompoundStat.NamedMeasurable;
+import org.apache.kafka.common.metrics.stats.Rate;
+import org.apache.kafka.common.metrics.stats.SampledStat;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 
@@ -229,7 +231,7 @@ public final class Sensor {
             return false;
 
         this.stats.add(Utils.notNull(stat));
-        Object lock = new Object();
+        Object lock = metricLock(stat);
         for (NamedMeasurable m : stat.stats()) {
             final KafkaMetric metric = new KafkaMetric(lock, m.name(), m.stat(), config == null ? this.config : config, time);
             if (!metrics.containsKey(metric.metricName())) {
@@ -265,7 +267,7 @@ public final class Sensor {
             return true;
         } else {
             final KafkaMetric metric = new KafkaMetric(
-                new Object(),
+                metricLock(stat),
                 Utils.notNull(metricName),
                 Utils.notNull(stat),
                 config == null ? this.config : config,
@@ -288,5 +290,19 @@ public final class Sensor {
 
     synchronized List<KafkaMetric> metrics() {
         return Collections.unmodifiableList(new LinkedList<>(this.metrics.values()));
+    }
+
+    private Object metricLock(Stat stat) {
+        boolean requiresSensorLockForAccess = stat instanceof SampledStat || stat instanceof Rate;
+        if (stat instanceof CompoundStat) {
+            for (NamedMeasurable namedStat : ((CompoundStat) stat).stats()) {
+                Measurable measurable = namedStat.stat();
+                if (measurable instanceof SampledStat || measurable instanceof Rate) {
+                    requiresSensorLockForAccess = true;
+                    break;
+                }
+            }
+        }
+        return requiresSensorLockForAccess ? this : new Object();
     }
 }

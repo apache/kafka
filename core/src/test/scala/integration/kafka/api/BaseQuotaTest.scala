@@ -160,26 +160,7 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
 }
 
 object QuotaTestClients {
-  // This method may be invoked when metrics are being updated. Reading metricValue
-  // during an update may cause ConcurrentModificationException or NullPointerException.
-  // Retry a few times with a very small delay. We want to allow reading throttle metrics
-  // without waiting for request to complete to avoid waiting for potentially large
-  // throttle times.
-  def metricValue(metric: Metric): Double = {
-    val maxRetries = 10
-    (1 to maxRetries).foreach { i =>
-      try {
-        return metric.metricValue().asInstanceOf[Double]
-      } catch {
-        case e: Exception =>
-          if (i == maxRetries)
-            throw e
-          else
-            Thread.sleep(1)
-      }
-    }
-    throw new IllegalStateException("Should not get here")
-  }
+  def metricValue(metric: Metric): Double = metric.metricValue().asInstanceOf[Double]
 }
 
 abstract class QuotaTestClients(topic: String,
