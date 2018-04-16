@@ -27,14 +27,15 @@ import org.apache.kafka.trogdor.common.Node;
 import org.apache.kafka.trogdor.common.Platform;
 import org.apache.kafka.trogdor.rest.CoordinatorStatusResponse;
 import org.apache.kafka.trogdor.rest.CreateTaskRequest;
-import org.apache.kafka.trogdor.rest.CreateTaskResponse;
+import org.apache.kafka.trogdor.rest.DestroyTaskRequest;
 import org.apache.kafka.trogdor.rest.JsonRestServer;
 import org.apache.kafka.trogdor.rest.StopTaskRequest;
-import org.apache.kafka.trogdor.rest.StopTaskResponse;
 import org.apache.kafka.trogdor.rest.TasksRequest;
 import org.apache.kafka.trogdor.rest.TasksResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.concurrent.ThreadLocalRandom;
 
 import static net.sourceforge.argparse4j.impl.Arguments.store;
 
@@ -72,9 +73,9 @@ public final class Coordinator {
      * @param resource      The AgentRestResoure to use.
      */
     public Coordinator(Platform platform, Scheduler scheduler, JsonRestServer restServer,
-                       CoordinatorRestResource resource) {
+                       CoordinatorRestResource resource, long firstWorkerId) {
         this.startTimeMs = scheduler.time().milliseconds();
-        this.taskManager = new TaskManager(platform, scheduler);
+        this.taskManager = new TaskManager(platform, scheduler, firstWorkerId);
         this.restServer = restServer;
         resource.setCoordinator(this);
     }
@@ -87,12 +88,16 @@ public final class Coordinator {
         return new CoordinatorStatusResponse(startTimeMs);
     }
 
-    public CreateTaskResponse createTask(CreateTaskRequest request) throws Exception {
-        return new CreateTaskResponse(taskManager.createTask(request.id(), request.spec()));
+    public void createTask(CreateTaskRequest request) throws Throwable {
+        taskManager.createTask(request.id(), request.spec());
     }
 
-    public StopTaskResponse stopTask(StopTaskRequest request) throws Exception {
-        return new StopTaskResponse(taskManager.stopTask(request.id()));
+    public void stopTask(StopTaskRequest request) throws Throwable {
+        taskManager.stopTask(request.id());
+    }
+
+    public void destroyTask(DestroyTaskRequest request) throws Throwable {
+        taskManager.destroyTask(request.id());
     }
 
     public TasksResponse tasks(TasksRequest request) throws Exception {
@@ -149,7 +154,7 @@ public final class Coordinator {
         CoordinatorRestResource resource = new CoordinatorRestResource();
         log.info("Starting coordinator process.");
         final Coordinator coordinator = new Coordinator(platform, Scheduler.SYSTEM,
-            restServer, resource);
+            restServer, resource, ThreadLocalRandom.current().nextLong(0, Long.MAX_VALUE / 2));
         restServer.start(resource);
         Runtime.getRuntime().addShutdownHook(new Thread() {
             @Override

@@ -17,23 +17,17 @@
 
 package org.apache.kafka.trogdor.rest;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import org.apache.kafka.trogdor.task.TaskSpec;
-
 /**
- * A response from the Trogdor coordinator about creating a task.
+ * Indicates that a given request got an HTTP error 409: CONFLICT.
  */
-public class CreateTaskResponse extends Message {
-    private final TaskSpec spec;
+public class RequestConflictException extends RuntimeException {
+    private static final long serialVersionUID = 1L;
 
-    @JsonCreator
-    public CreateTaskResponse(@JsonProperty("spec") TaskSpec spec) {
-        this.spec = spec;
+    public RequestConflictException(String message) {
+        super(message);
     }
 
-    @JsonProperty
-    public TaskSpec spec() {
-        return spec;
+    public RequestConflictException() {
+        super();
     }
 }
