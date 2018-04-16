@@ -19,8 +19,8 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
 
-import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -47,7 +47,7 @@ public class Config {
      * Configuration entries for a resource.
      */
     public Collection<ConfigEntry> entries() {
-        return new ArrayList<>(entries.values());
+        return Collections.unmodifiableCollection(entries.values());
     }
 
     /**

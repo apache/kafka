@@ -63,11 +63,6 @@ public class ConfigTest {
     }
 
     @Test
-    public void shouldReturnComparableEntities() {
-        assertThat(new Config(config.entries()).entries(), is(equalTo(config.entries())));
-    }
-
-    @Test
     public void shouldImplementEqualsProperly() {
         final Collection<ConfigEntry> entries = new ArrayList<>();
         entries.add(E1);
