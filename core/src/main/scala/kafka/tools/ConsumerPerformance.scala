@@ -187,7 +187,8 @@ object ConsumerPerformance extends LazyLogging {
         }
       }
       if (messagesRead < count)
-        println(s"Exiting before consuming all messages: polling-loop-timeout ($timeout ms) exceeded. Check --polling-loop-timeout option")
+        println(s"WARNING: Exiting before consuming the expected number of messages: timeout ($timeout ms) exceeded. " +
+          s"Probably too much time spent on processing a polled list of records. Be sure to increase the --timeout option")
     }
 
     totalMessagesRead.set(messagesRead)
@@ -304,11 +305,11 @@ object ConsumerPerformance extends LazyLogging {
     val printMetricsOpt = parser.accepts("print-metrics", "Print out the metrics. This only applies to new consumer.")
     val showDetailedStatsOpt = parser.accepts("show-detailed-stats", "If set, stats are reported for each reporting " +
       "interval as configured by reporting-interval")
-    val pollLoopTimeoutOpt = parser.accepts("polling-loop-timeout", "Consumer polling loop timeout.")
+    val pollLoopTimeoutOpt = parser.accepts("timeout", "Consumer polling loop timeout.")
       .withOptionalArg()
       .describedAs("count")
       .ofType(classOf[Long])
-      .defaultsTo(60000)
+      .defaultsTo(10000)
 
     val options = parser.parse(args: _*)
 
