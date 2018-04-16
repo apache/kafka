@@ -372,7 +372,6 @@ class StreamsBrokerDownResilienceService(StreamsTestBaseService):
 
     def start_cmd(self, node):
         args = self.args.copy()
-        args['kafka'] = self.kafka.bootstrap_servers(validate=False)
         args['config_file'] = self.CONFIG_FILE
         args['stdout'] = self.STDOUT_FILE
         args['stderr'] = self.STDERR_FILE
