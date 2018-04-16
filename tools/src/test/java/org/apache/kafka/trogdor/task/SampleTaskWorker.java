@@ -17,6 +17,7 @@
 
 package org.apache.kafka.trogdor.task;
 
+import com.fasterxml.jackson.databind.node.TextNode;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.trogdor.common.Platform;
 import org.apache.kafka.trogdor.common.ThreadUtils;
@@ -26,12 +27,12 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
 
 public class SampleTaskWorker implements TaskWorker {
     private final SampleTaskSpec spec;
     private final ScheduledExecutorService executor;
     private Future<Void> future;
+    private WorkerStatusTracker status;
 
     SampleTaskWorker(SampleTaskSpec spec) {
         this.spec = spec;
@@ -41,17 +42,24 @@ public class SampleTaskWorker implements TaskWorker {
     }
 
     @Override
-    public synchronized void start(Platform platform, AtomicReference<String> status,
+    public synchronized void start(Platform platform, WorkerStatusTracker status,
                       final KafkaFutureImpl<String> haltFuture) throws Exception {
         if (this.future != null)
             return;
+        this.status = status;
+        this.status.update(new TextNode("active"));
+
+        Long exitMs = spec.nodeToExitMs().get(platform.curNode().name());
+        if (exitMs == null) {
+            exitMs = Long.MAX_VALUE;
+        }
         this.future = platform.scheduler().schedule(executor, new Callable<Void>() {
             @Override
             public Void call() throws Exception {
                 haltFuture.complete(spec.error());
                 return null;
             }
-        }, spec.exitMs());
+        }, exitMs);
     }
 
     @Override
@@ -59,5 +67,6 @@ public class SampleTaskWorker implements TaskWorker {
         this.future.cancel(false);
         this.executor.shutdown();
         this.executor.awaitTermination(1, TimeUnit.DAYS);
+        this.status.update(new TextNode("halted"));
     }
 };

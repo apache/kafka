@@ -18,10 +18,9 @@ package kafka.api
 
 import java.util
 
-import kafka.admin.AdminClient
 import kafka.server.KafkaConfig
 import kafka.utils.{JaasTestUtils, TestUtils, ZkUtils}
-import org.apache.kafka.clients.admin.AdminClientConfig
+import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig}
 import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.scram.internal.ScramMechanism
@@ -83,9 +82,8 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
     val clientLoginContext = jaasClientLoginModule(kafkaClientSaslMechanism)
     config.put(SaslConfigs.SASL_JAAS_CONFIG, clientLoginContext)
 
-    val adminClient = AdminClient.create(config.asScala.toMap)
-    val (error, token)  = adminClient.createToken(List())
-
+    val adminClient = AdminClient.create(config)
+    val token = adminClient.createDelegationToken().delegationToken().get()
     //wait for token to reach all the brokers
     TestUtils.waitUntilTrue(() => servers.forall(server => !server.tokenCache.tokens().isEmpty),
       "Timed out waiting for token to propagate to all servers")

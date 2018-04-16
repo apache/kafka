@@ -88,9 +88,9 @@ public class RenewDelegationTokenRequest extends AbstractRequest {
         private final ByteBuffer hmac;
         private final long renewTimePeriod;
 
-        public Builder(ByteBuffer hmac, long renewTimePeriod) {
+        public Builder(byte[] hmac, long renewTimePeriod) {
             super(ApiKeys.RENEW_DELEGATION_TOKEN);
-            this.hmac = hmac;
+            this.hmac = ByteBuffer.wrap(hmac);
             this.renewTimePeriod = renewTimePeriod;
         }
 

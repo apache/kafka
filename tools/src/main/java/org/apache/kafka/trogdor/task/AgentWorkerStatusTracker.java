@@ -15,25 +15,29 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.trogdor.rest;
+package org.apache.kafka.trogdor.task;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import org.apache.kafka.trogdor.task.TaskSpec;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.NullNode;
 
 /**
- * A response from the Trogdor coordinator about stopping a task.
+ * Tracks the status of a Trogdor worker.
  */
-public class StopTaskResponse extends Message {
-    private final TaskSpec spec;
+public class AgentWorkerStatusTracker implements WorkerStatusTracker {
+    private JsonNode status = NullNode.instance;
 
-    @JsonCreator
-    public StopTaskResponse(@JsonProperty("spec") TaskSpec spec) {
-        this.spec = spec;
+    @Override
+    public void update(JsonNode newStatus) {
+        JsonNode status = newStatus.deepCopy();
+        synchronized (this) {
+            this.status = status;
+        }
     }
 
-    @JsonProperty
-    public TaskSpec spec() {
-        return spec;
+    /**
+     * Retrieves the status.
+     */
+    public synchronized JsonNode get() {
+        return status;
     }
 }

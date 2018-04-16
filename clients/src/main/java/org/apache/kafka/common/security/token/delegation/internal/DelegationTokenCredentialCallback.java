@@ -14,26 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.common.security.token.delegation.internal;
 
-package org.apache.kafka.trogdor.rest;
+import org.apache.kafka.common.security.scram.ScramCredentialCallback;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import org.apache.kafka.trogdor.task.TaskSpec;
+public class DelegationTokenCredentialCallback extends ScramCredentialCallback {
+    private String tokenOwner;
 
-/**
- * A response from the Trogdor agent about creating a worker.
- */
-public class CreateWorkerResponse extends Message {
-    private final TaskSpec spec;
-
-    @JsonCreator
-    public CreateWorkerResponse(@JsonProperty("spec") TaskSpec spec) {
-        this.spec = spec;
+    public void tokenOwner(String tokenOwner) {
+        this.tokenOwner = tokenOwner;
     }
 
-    @JsonProperty
-    public TaskSpec spec() {
-        return spec;
+    public String tokenOwner() {
+        return tokenOwner;
     }
 }

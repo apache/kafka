@@ -45,17 +45,24 @@ public class StreamsBrokerDownResilienceTest {
     private static final String SINK_TOPIC = "streamsResilienceSink";
 
     public static void main(String[] args) throws IOException {
+        if (args.length < 2) {
+            System.err.println("StreamsBrokerDownResilienceTest are expecting two parameters: propFile, additionalConfigs; but only see " + args.length + " parameter");
+            System.exit(1);
+        }
 
         System.out.println("StreamsTest instance started");
 
-        final String kafka = args.length > 0 ? args[0] : "localhost:9092";
-        final String propFileName = args.length > 1 ? args[1] : null;
-        final String additionalConfigs = args.length > 2 ? args[2] : null;
-
-        final Serde<String> stringSerde = Serdes.String();
+        final String propFileName = args[0];
+        final String additionalConfigs = args[1];
 
         final Properties streamsProperties = Utils.loadProps(propFileName);
-        streamsProperties.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
+        final String kafka = streamsProperties.getProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG);
+
+        if (kafka == null) {
+            System.err.println("No bootstrap kafka servers specified in " + StreamsConfig.BOOTSTRAP_SERVERS_CONFIG);
+            System.exit(1);
+        }
+
         streamsProperties.put(StreamsConfig.APPLICATION_ID_CONFIG, "kafka-streams-resilience");
         streamsProperties.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsProperties.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
@@ -79,7 +86,10 @@ public class StreamsBrokerDownResilienceTest {
 
             System.exit(1);
         }
+
         final StreamsBuilder builder = new StreamsBuilder();
+        final Serde<String> stringSerde = Serdes.String();
+
         builder.stream(Collections.singletonList(SOURCE_TOPIC_1), Consumed.with(stringSerde, stringSerde))
             .peek(new ForeachAction<String, String>() {
                 int messagesProcessed = 0;

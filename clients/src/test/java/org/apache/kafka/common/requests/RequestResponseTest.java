@@ -1223,7 +1223,7 @@ public class RequestResponseTest {
     }
 
     private RenewDelegationTokenRequest createRenewTokenRequest() {
-        return new RenewDelegationTokenRequest.Builder(ByteBuffer.wrap("test".getBytes()), System.currentTimeMillis()).build();
+        return new RenewDelegationTokenRequest.Builder("test".getBytes(), System.currentTimeMillis()).build();
     }
 
     private RenewDelegationTokenResponse createRenewTokenResponse() {
@@ -1231,7 +1231,7 @@ public class RequestResponseTest {
     }
 
     private ExpireDelegationTokenRequest createExpireTokenRequest() {
-        return new ExpireDelegationTokenRequest.Builder(ByteBuffer.wrap("test".getBytes()), System.currentTimeMillis()).build();
+        return new ExpireDelegationTokenRequest.Builder("test".getBytes(), System.currentTimeMillis()).build();
     }
 
     private ExpireDelegationTokenResponse createExpireTokenResponse() {

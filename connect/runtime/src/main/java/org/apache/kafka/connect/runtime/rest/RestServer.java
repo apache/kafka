@@ -62,6 +62,7 @@ import java.util.regex.Pattern;
 public class RestServer {
     private static final Logger log = LoggerFactory.getLogger(RestServer.class);
 
+    private static final Pattern LISTENER_PATTERN = Pattern.compile("^(.*)://\\[?([0-9a-zA-Z\\-%._:]*)\\]?:(-?[0-9]+)");
     private static final long GRACEFUL_SHUTDOWN_TIMEOUT_MS = 60 * 1000;
 
     private static final String PROTOCOL_HTTP = "http";
@@ -118,8 +119,7 @@ public class RestServer {
      * Creates Jetty connector according to configuration
      */
     public Connector createConnector(String listener) {
-        Pattern listenerPattern = Pattern.compile("^(.*)://\\[?([0-9a-zA-Z\\-%._:]*)\\]?:(-?[0-9]+)");
-        Matcher listenerMatcher = listenerPattern.matcher(listener);
+        Matcher listenerMatcher = LISTENER_PATTERN.matcher(listener);
 
         if (!listenerMatcher.matches())
             throw new ConfigException("Listener doesn't have the right format (protocol://hostname:port).");
