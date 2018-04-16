@@ -27,12 +27,11 @@ import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.trogdor.common.JsonUtil;
 import org.apache.kafka.trogdor.rest.CoordinatorStatusResponse;
 import org.apache.kafka.trogdor.rest.CreateTaskRequest;
-import org.apache.kafka.trogdor.rest.CreateTaskResponse;
+import org.apache.kafka.trogdor.rest.DestroyTaskRequest;
 import org.apache.kafka.trogdor.rest.Empty;
 import org.apache.kafka.trogdor.rest.JsonRestServer;
 import org.apache.kafka.trogdor.rest.JsonRestServer.HttpResponse;
 import org.apache.kafka.trogdor.rest.StopTaskRequest;
-import org.apache.kafka.trogdor.rest.StopTaskResponse;
 import org.apache.kafka.trogdor.rest.TasksRequest;
 import org.apache.kafka.trogdor.rest.TasksResponse;
 import org.slf4j.Logger;
@@ -116,36 +115,45 @@ public class CoordinatorClient {
         return resp.body();
     }
 
-    public CreateTaskResponse createTask(CreateTaskRequest request) throws Exception {
-        HttpResponse<CreateTaskResponse> resp =
-            JsonRestServer.<CreateTaskResponse>httpRequest(log, url("/coordinator/task/create"), "POST",
-                request, new TypeReference<CreateTaskResponse>() { }, maxTries);
-        return resp.body();
+    public void createTask(CreateTaskRequest request) throws Exception {
+        HttpResponse<Empty> resp =
+            JsonRestServer.httpRequest(log, url("/coordinator/task/create"), "POST",
+                request, new TypeReference<Empty>() { }, maxTries);
+        resp.body();
     }
 
-    public StopTaskResponse stopTask(StopTaskRequest request) throws Exception {
-        HttpResponse<StopTaskResponse> resp =
-            JsonRestServer.<StopTaskResponse>httpRequest(log, url("/coordinator/task/stop"), "PUT",
-                request, new TypeReference<StopTaskResponse>() { }, maxTries);
-        return resp.body();
+    public void stopTask(StopTaskRequest request) throws Exception {
+        HttpResponse<Empty> resp =
+            JsonRestServer.httpRequest(log, url("/coordinator/task/stop"), "PUT",
+                request, new TypeReference<Empty>() { }, maxTries);
+        resp.body();
+    }
+
+    public void destroyTask(DestroyTaskRequest request) throws Exception {
+        UriBuilder uriBuilder = UriBuilder.fromPath(url("/coordinator/tasks"));
+        uriBuilder.queryParam("taskId", request.id());
+        HttpResponse<Empty> resp =
+            JsonRestServer.httpRequest(log, uriBuilder.build().toString(), "DELETE",
+                null, new TypeReference<Empty>() { }, maxTries);
+        resp.body();
     }
 
     public TasksResponse tasks(TasksRequest request) throws Exception {
         UriBuilder uriBuilder = UriBuilder.fromPath(url("/coordinator/tasks"));
-        uriBuilder.queryParam("taskId", request.taskIds().toArray(new String[0]));
+        uriBuilder.queryParam("taskId", (Object[]) request.taskIds().toArray(new String[0]));
         uriBuilder.queryParam("firstStartMs", request.firstStartMs());
         uriBuilder.queryParam("lastStartMs", request.lastStartMs());
         uriBuilder.queryParam("firstEndMs", request.firstEndMs());
         uriBuilder.queryParam("lastEndMs", request.lastEndMs());
         HttpResponse<TasksResponse> resp =
-            JsonRestServer.<TasksResponse>httpRequest(log, uriBuilder.build().toString(), "GET",
+            JsonRestServer.httpRequest(log, uriBuilder.build().toString(), "GET",
                 null, new TypeReference<TasksResponse>() { }, maxTries);
         return resp.body();
     }
 
     public void shutdown() throws Exception {
         HttpResponse<Empty> resp =
-            JsonRestServer.<Empty>httpRequest(log, url("/coordinator/shutdown"), "PUT",
+            JsonRestServer.httpRequest(log, url("/coordinator/shutdown"), "PUT",
                 null, new TypeReference<Empty>() { }, maxTries);
         resp.body();
     }
@@ -185,6 +193,12 @@ public class CoordinatorClient {
             .dest("stop_task")
             .metavar("TASK_ID")
             .help("Stop a task.");
+        actions.addArgument("--destroy-task")
+            .action(store())
+            .type(String.class)
+            .dest("destroy_task")
+            .metavar("TASK_ID")
+            .help("Destroy a task.");
         actions.addArgument("--shutdown")
             .action(storeTrue())
             .type(Boolean.class)
@@ -216,15 +230,21 @@ public class CoordinatorClient {
                 JsonUtil.toPrettyJsonString(client.tasks(
                     new TasksRequest(null, 0, 0, 0, 0))));
         } else if (res.getString("create_task") != null) {
-            client.createTask(JsonUtil.JSON_SERDE.readValue(res.getString("create_task"),
-                CreateTaskRequest.class));
-            System.out.println("Created task.");
+            CreateTaskRequest req = JsonUtil.JSON_SERDE.
+                readValue(res.getString("create_task"), CreateTaskRequest.class);
+            client.createTask(req);
+            System.out.printf("Sent CreateTaskRequest for task %s.", req.id());
         } else if (res.getString("stop_task") != null) {
-            client.stopTask(new StopTaskRequest(res.getString("stop_task")));
-            System.out.println("Created task.");
+            String taskId = res.getString("stop_task");
+            client.stopTask(new StopTaskRequest(taskId));
+            System.out.printf("Sent StopTaskRequest for task %s.%n", taskId);
+        } else if (res.getString("destroy_task") != null) {
+            String taskId = res.getString("destroy_task");
+            client.destroyTask(new DestroyTaskRequest(taskId));
+            System.out.printf("Sent DestroyTaskRequest for task %s.%n", taskId);
         } else if (res.getBoolean("shutdown")) {
             client.shutdown();
-            System.out.println("Sent shutdown request.");
+            System.out.println("Sent ShutdownRequest.");
         } else {
             System.out.println("You must choose an action. Type --help for help.");
             Exit.exit(1);
