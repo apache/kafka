@@ -630,7 +630,7 @@ private[kafka] class Processor(val id: Int,
       case e @ (_: IllegalStateException | _: IOException) =>
         // The exception is not re-thrown and any completed sends/receives/connections/disconnections
         // from this poll will be processed.
-        error(s"Processor $id poll failed due to illegal state or IO exception")
+        error(s"Processor $id poll failed", e)
     }
   }
 
