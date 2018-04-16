@@ -76,7 +76,16 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
   private var stoppedProcessingRequests = false
 
   /**
-   * Start the socket server
+   * Start the socket server. Acceptors for all the listeners are started. Processors
+   * are started if `startupProcessors` is true. If not, processors are only started when
+   * [[kafka.network.SocketServer#startProcessors()]] is invoked. Delayed starting of processors
+   * is used to delay processing client connections until server is fully initialized, e.g.
+   * to ensure that all credentials have been loaded before authentications are performed.
+   * Acceptors are always started during `startup` so that the bound port is known when this
+   * method completes even when ephemeral ports are used. Incoming connections on this server
+   * are processed when processors start up and invoke [[org.apache.kafka.common.network.Selector#poll]].
+   *
+   * @param startupProcessors Flag indicating whether `Processor`s must be started.
    */
   def startup(startupProcessors: Boolean = true) {
     this.synchronized {
@@ -113,9 +122,14 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
     info("Started " + acceptors.size + " acceptor threads")
   }
 
+  /**
+   * Starts processors of all the acceptors of this server if they have not already been started.
+   * This method is used for delayed starting of processors if [[kafka.network.SocketServer#startup]]
+   * was invoked with `startupProcessors=false`.
+   */
   def startProcessors(): Unit = synchronized {
     acceptors.values.asScala.foreach { _.startProcessors() }
-    info("Started processors for " + acceptors.size + " acceptors")
+    info(s"Started processors for ${acceptors.size} acceptors")
   }
 
   private def endpoints = config.listeners.map(l => l.listenerName -> l).toMap
