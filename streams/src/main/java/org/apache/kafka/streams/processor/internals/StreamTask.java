@@ -70,7 +70,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     private final Time time;
     private final TaskMetrics metrics;
 
-    protected class TaskMetrics {
+    protected static class TaskMetrics {
         final StreamsMetricsImpl metrics;
         final Sensor taskCommitTimeSensor;
 
