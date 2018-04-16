@@ -63,7 +63,7 @@
     <ul>
         <li>A <b>stream</b> is the most important abstraction provided by Kafka Streams: it represents an unbounded, continuously updating data set. A stream is an ordered, replayable, and fault-tolerant sequence of immutable data records, where a <b>data record</b> is defined as a key-value pair.</li>
         <li>A <b>stream processing application</b> is any program that makes use of the Kafka Streams library. It defines its computational logic through one or more <b>processor topologies</b>, where a processor topology is a graph of stream processors (nodes) that are connected by streams (edges).</li>
-        <li>A <b><a href="#streams_processor_node">stream processor</a></b> is a node in the processor topology; it represents a processing step to transform data in streams by receiving one input record at a time from its upstream processors in the topology, applying its operation to it, and may subsequently produce one or more output records to its downstream processors. </li>
+        <li>A <b><a id="streams_processor_node" href="#streams_processor_node">stream processor</a></b> is a node in the processor topology; it represents a processing step to transform data in streams by receiving one input record at a time from its upstream processors in the topology, applying its operation to it, and may subsequently produce one or more output records to its downstream processors. </li>
     </ul>
 
     There are two special processors in the topology:
@@ -78,14 +78,14 @@
     <img class="centered" src="/{{version}}/images/streams-architecture-topology.jpg" style="width:400px">
 
     <p>
-        Kafka Streams offers two ways to define the stream processing topology: the <a href="/{{version}}/documentation/streams/developer-guide#streams_dsl"><b>Kafka Streams DSL</b></a> provides
-        the most common data transformation operations such as <code>map</code>, <code>filter</code>, <code>join</code> and <code>aggregations</code> out of the box; the lower-level <a href="/{{version}}/documentation/streams/developer-guide#streams_processor"><b>Processor API</b></a> allows
+        Kafka Streams offers two ways to define the stream processing topology: the <a href="/{{version}}/documentation/streams/developer-guide/dsl-api.html"><b>Kafka Streams DSL</b></a> provides
+        the most common data transformation operations such as <code>map</code>, <code>filter</code>, <code>join</code> and <code>aggregations</code> out of the box; the lower-level <a href="/{{version}}/documentation/streams/developer-guide/processor-api.html"><b>Processor API</b></a> allows
         developers define and connect custom processors as well as to interact with <a href="#streams_state">state stores</a>.
     </p>
 
     <p>
         A processor topology is merely a logical abstraction for your stream processing code.
-        At runtime, the logical topology is instantiated and replicated inside the application for parallel processing (see <a href="#streams_architecture_tasks"><b>Stream Partitions and Tasks</b></a> for details).
+        At runtime, the logical topology is instantiated and replicated inside the application for parallel processing (see <a href="/{{version}}/documentation/streams/architecture#streams_architecture_tasks"><b>Stream Partitions and Tasks</b></a> for details).
     </p>
 
     <h3><a id="streams_time" href="#streams_time">Time</a></h3>
