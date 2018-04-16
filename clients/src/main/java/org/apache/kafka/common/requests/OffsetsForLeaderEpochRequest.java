@@ -50,8 +50,11 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
     private static final Schema OFFSET_FOR_LEADER_EPOCH_REQUEST_V0 = new Schema(
             new Field(TOPICS_KEY_NAME, new ArrayOf(OFFSET_FOR_LEADER_EPOCH_REQUEST_TOPIC_V0), "An array of topics to get epochs for"));
 
+    /* v2 request is the same as v1. Per-partition leader epoch has been added to response */
+    private static final Schema OFFSET_FOR_LEADER_EPOCH_REQUEST_V1 = OFFSET_FOR_LEADER_EPOCH_REQUEST_V0;
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{OFFSET_FOR_LEADER_EPOCH_REQUEST_V0};
+        return new Schema[]{OFFSET_FOR_LEADER_EPOCH_REQUEST_V0, OFFSET_FOR_LEADER_EPOCH_REQUEST_V1};
     }
 
     private Map<TopicPartition, Integer> epochsByPartition;
@@ -150,7 +153,8 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
         Errors error = Errors.forException(e);
         Map<TopicPartition, EpochEndOffset> errorResponse = new HashMap<>();
         for (TopicPartition tp : epochsByPartition.keySet()) {
-            errorResponse.put(tp, new EpochEndOffset(error, EpochEndOffset.UNDEFINED_EPOCH_OFFSET));
+            errorResponse.put(tp, new EpochEndOffset(
+                error, EpochEndOffset.UNDEFINED_EPOCH, EpochEndOffset.UNDEFINED_EPOCH_OFFSET));
         }
         return new OffsetsForLeaderEpochResponse(errorResponse);
     }

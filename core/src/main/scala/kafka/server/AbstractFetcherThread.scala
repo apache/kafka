@@ -76,7 +76,7 @@ abstract class AbstractFetcherThread(name: String,
 
   protected def fetchEpochsFromLeader(partitions: Map[TopicPartition, Int]): Map[TopicPartition, EpochEndOffset]
 
-  protected def maybeTruncate(fetchedEpochs: Map[TopicPartition, EpochEndOffset]): ResultWithPartitions[Map[TopicPartition, Long]]
+  protected def maybeTruncate(fetchedEpochs: Map[TopicPartition, EpochEndOffset]): ResultWithPartitions[Map[TopicPartition, OffsetTruncationState]]
 
   protected def buildFetchRequest(partitionMap: Seq[(TopicPartition, PartitionFetchState)]): ResultWithPartitions[REQ]
 
@@ -276,11 +276,11 @@ abstract class AbstractFetcherThread(name: String,
     *
     * @param fetchOffsets the partitions to mark truncation complete
     */
-  private def markTruncationCompleteAndUpdateFetchOffset(fetchOffsets: Map[TopicPartition, Long]) {
+  private def markTruncationCompleteAndUpdateFetchOffset(fetchOffsets: Map[TopicPartition, OffsetTruncationState]) {
     val newStates: Map[TopicPartition, PartitionFetchState] = partitionStates.partitionStates.asScala
       .map { state =>
         val maybeTruncationComplete = fetchOffsets.get(state.topicPartition()) match {
-          case Some(offset) => PartitionFetchState(offset, state.value.delay, truncatingLog = false)
+          case Some(offsetTruncationState) => PartitionFetchState(offsetTruncationState.offset, state.value.delay, truncatingLog = !offsetTruncationState.truncationCompleted)
           case None => state.value()
         }
         (state.topicPartition(), maybeTruncationComplete)
@@ -445,4 +445,11 @@ case class PartitionFetchState(fetchOffset: Long, delay: DelayedItem, truncating
   def isDelayed: Boolean = delay.getDelay(TimeUnit.MILLISECONDS) > 0
 
   override def toString = "offset:%d-isReadyForFetch:%b-isTruncatingLog:%b".format(fetchOffset, isReadyForFetch, truncatingLog)
+}
+
+case class OffsetTruncationState(offset: Long, truncationCompleted: Boolean) {
+
+  def this (offset: Long) = this(offset, true)
+
+  override def toString = "offset:%d-truncationCompleted:%b".format(offset, truncationCompleted)
 }

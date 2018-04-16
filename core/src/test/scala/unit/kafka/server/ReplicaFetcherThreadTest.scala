@@ -64,8 +64,8 @@ class ReplicaFetcherThreadTest {
     val result = thread.fetchEpochsFromLeader(Map(t1p0 -> 0, t1p1 -> 0))
 
     val expected = Map(
-      t1p0 -> new EpochEndOffset(Errors.NONE, UNDEFINED_EPOCH_OFFSET),
-      t1p1 -> new EpochEndOffset(Errors.NONE, UNDEFINED_EPOCH_OFFSET)
+      t1p0 -> new EpochEndOffset(Errors.NONE, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET),
+      t1p1 -> new EpochEndOffset(Errors.NONE, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
     )
 
     assertEquals("results from leader epoch request should have undefined offset", expected, result)
@@ -95,8 +95,8 @@ class ReplicaFetcherThreadTest {
     val result = thread.fetchEpochsFromLeader(Map(t1p0 -> 0, t1p1 -> 0))
 
     val expected = Map(
-      t1p0 -> new EpochEndOffset(Errors.UNKNOWN_SERVER_ERROR, UNDEFINED_EPOCH_OFFSET),
-      t1p1 -> new EpochEndOffset(Errors.UNKNOWN_SERVER_ERROR, UNDEFINED_EPOCH_OFFSET)
+      t1p0 -> new EpochEndOffset(Errors.UNKNOWN_SERVER_ERROR, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET),
+      t1p1 -> new EpochEndOffset(Errors.UNKNOWN_SERVER_ERROR, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
     )
 
     assertEquals("results from leader epoch request should have undefined offset", expected, result)
@@ -104,7 +104,7 @@ class ReplicaFetcherThreadTest {
   }
 
   @Test
-  def shouldFetchLeaderEpochOnFirstFetchOnly(): Unit = {
+  def shouldFetchLeaderEpochOnFirstFetchOnlyIfLeaderEpochKnownToBoth(): Unit = {
     val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:1234"))
 
     //Setup all dependencies
@@ -120,6 +120,7 @@ class ReplicaFetcherThreadTest {
     expect(replica.epochs).andReturn(Some(leaderEpochs)).anyTimes()
     expect(replica.logEndOffset).andReturn(new LogOffsetMetadata(0)).anyTimes()
     expect(leaderEpochs.latestEpoch).andReturn(5)
+    expect(leaderEpochs.endOffsetFor(5)).andReturn((5, 0)).anyTimes()
     expect(replicaManager.logManager).andReturn(logManager).anyTimes()
     expect(replicaManager.replicaAlterLogDirsManager).andReturn(replicaAlterLogDirsManager).anyTimes()
     stub(replica, partition, replicaManager)
@@ -131,7 +132,7 @@ class ReplicaFetcherThreadTest {
     replay(leaderEpochs, replicaManager, logManager, quota, replica)
 
     //Define the offsets for the OffsetsForLeaderEpochResponse
-    val offsets = Map(t1p0 -> new EpochEndOffset(1), t1p1 -> new EpochEndOffset(1)).asJava
+    val offsets = Map(t1p0 -> new EpochEndOffset(5, 1), t1p1 -> new EpochEndOffset(5, 1)).asJava
 
     //Create the fetcher thread
     val endPoint = new BrokerEndPoint(0, "localhost", 1000)
@@ -181,6 +182,7 @@ class ReplicaFetcherThreadTest {
     expect(replica.epochs).andReturn(Some(leaderEpochs)).anyTimes()
     expect(replica.logEndOffset).andReturn(new LogOffsetMetadata(initialLEO)).anyTimes()
     expect(leaderEpochs.latestEpoch).andReturn(5).anyTimes()
+    expect(leaderEpochs.endOffsetFor(5)).andReturn((5, initialLEO)).anyTimes()
     expect(replicaManager.logManager).andReturn(logManager).anyTimes()
     expect(replicaManager.replicaAlterLogDirsManager).andReturn(replicaAlterLogDirsManager).anyTimes()
     stub(replica, partition, replicaManager)
@@ -188,7 +190,7 @@ class ReplicaFetcherThreadTest {
     replay(leaderEpochs, replicaManager, logManager, quota, replica, partition)
 
     //Define the offsets for the OffsetsForLeaderEpochResponse, these are used for truncation
-    val offsetsReply = Map(t1p0 -> new EpochEndOffset(156), t2p1 -> new EpochEndOffset(172)).asJava
+    val offsetsReply = Map(t1p0 -> new EpochEndOffset(5, 156), t2p1 -> new EpochEndOffset(5, 172)).asJava
 
     //Create the thread
     val endPoint = new BrokerEndPoint(0, "localhost", 1000)
@@ -202,6 +204,72 @@ class ReplicaFetcherThreadTest {
     //We should have truncated to the offsets in the response
     assertTrue(truncateToCapture.getValues.asScala.contains(156))
     assertTrue(truncateToCapture.getValues.asScala.contains(172))
+  }
+
+  @Test
+  def shouldFetchLeaderEpochSecondTimeIfLeaderRepliesWithEpochNotKnownToFollower(): Unit = {
+
+    // Create a capture to track what partitions/offsets are truncated
+    val truncateToCapture: Capture[Long] = newCapture(CaptureType.ALL)
+
+    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:1234"))
+
+    // Setup all dependencies
+    val quota = createNiceMock(classOf[ReplicationQuotaManager])
+    val leaderEpochs = createNiceMock(classOf[LeaderEpochCache])
+    val logManager = createMock(classOf[LogManager])
+    val replicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
+    val replica = createNiceMock(classOf[Replica])
+    val partition = createMock(classOf[Partition])
+    val replicaManager = createMock(classOf[ReplicaManager])
+
+    val initialLEO = 200
+
+    // Stubs
+    expect(partition.truncateTo(capture(truncateToCapture), anyBoolean())).anyTimes()
+    expect(replica.epochs).andReturn(Some(leaderEpochs)).anyTimes()
+    expect(replica.logEndOffset).andReturn(new LogOffsetMetadata(initialLEO)).anyTimes()
+    expect(leaderEpochs.latestEpoch).andReturn(5)
+    expect(leaderEpochs.endOffsetFor(4)).andReturn((3, 120)).anyTimes()
+    expect(leaderEpochs.endOffsetFor(3)).andReturn((3, 120)).anyTimes()
+    expect(replicaManager.logManager).andReturn(logManager).anyTimes()
+    expect(replicaManager.replicaAlterLogDirsManager).andReturn(replicaAlterLogDirsManager).anyTimes()
+    stub(replica, partition, replicaManager)
+
+    replay(leaderEpochs, replicaManager, logManager, quota, replica, partition)
+
+    // Define the offsets for the OffsetsForLeaderEpochResponse
+    val offsets = Map(t1p0 -> new EpochEndOffset(4, 155), t1p1 -> new EpochEndOffset(4, 143)).asJava
+
+    // Create the fetcher thread
+    val endPoint = new BrokerEndPoint(0, "localhost", 1000)
+    val mockNetwork = new ReplicaFetcherMockBlockingSend(offsets, endPoint, new SystemTime())
+    val thread = new ReplicaFetcherThread("bob", 0, endPoint, config, replicaManager, new Metrics(), new SystemTime(), quota, Some(mockNetwork))
+    thread.addPartitions(Map(t1p0 -> 0, t1p1 -> 0))
+
+    // Loop 1 -- both topic partitions will need to fetch another leader epoch
+    thread.doWork()
+    assertEquals(1, mockNetwork.epochFetchCount)
+    assertEquals(0, mockNetwork.fetchCount)
+
+    // Loop 2 should do the second fetch for both topic partitions because the leader replied with
+    // epoch 4 while follower knows only about epoch 3
+    val nextOffsets = Map(t1p0 -> new EpochEndOffset(3, 101), t1p1 -> new EpochEndOffset(3, 102)).asJava
+    mockNetwork.setOffsetsForNextResponse(nextOffsets)
+    thread.doWork()
+    assertEquals(2, mockNetwork.epochFetchCount)
+    assertEquals(1, mockNetwork.fetchCount)
+
+    //Loop 3 we should not fetch epochs
+    thread.doWork()
+    assertEquals(2, mockNetwork.epochFetchCount)
+    assertEquals(2, mockNetwork.fetchCount)
+
+
+    //We should have truncated to the offsets in the second response
+    assertTrue("Capture trancate to values " + truncateToCapture.getValues,
+               truncateToCapture.getValues.asScala.contains(101))
+    assertTrue(truncateToCapture.getValues.asScala.contains(102))
   }
 
   @Test
@@ -234,7 +302,7 @@ class ReplicaFetcherThreadTest {
     replay(leaderEpochs, replicaManager, logManager, quota, replica, partition)
 
     //Define the offsets for the OffsetsForLeaderEpochResponse, these are used for truncation
-    val offsetsReply = Map(t1p0 -> new EpochEndOffset(EpochEndOffset.UNDEFINED_EPOCH_OFFSET)).asJava
+    val offsetsReply = Map(t1p0 -> new EpochEndOffset(EpochEndOffset.UNDEFINED_EPOCH, EpochEndOffset.UNDEFINED_EPOCH_OFFSET)).asJava
 
     //Create the thread
     val endPoint = new BrokerEndPoint(0, "localhost", 1000)
@@ -274,6 +342,8 @@ class ReplicaFetcherThreadTest {
     expect(replica.epochs).andReturn(Some(leaderEpochs)).anyTimes()
     expect(replica.logEndOffset).andReturn(new LogOffsetMetadata(initialLeo)).anyTimes()
     expect(leaderEpochs.latestEpoch).andReturn(5)
+    // this is for the last reply with EpochEndOffset(5, 156)
+    expect(leaderEpochs.endOffsetFor(5)).andReturn((5, initialLeo)).anyTimes()
     expect(replicaManager.logManager).andReturn(logManager).anyTimes()
     expect(replicaManager.replicaAlterLogDirsManager).andReturn(replicaAlterLogDirsManager).anyTimes()
     stub(replica, partition, replicaManager)
@@ -281,8 +351,8 @@ class ReplicaFetcherThreadTest {
 
     //Define the offsets for the OffsetsForLeaderEpochResponse, these are used for truncation
     val offsetsReply = mutable.Map(
-      t1p0 -> new EpochEndOffset(NOT_LEADER_FOR_PARTITION, EpochEndOffset.UNDEFINED_EPOCH_OFFSET),
-      t1p1 -> new EpochEndOffset(UNKNOWN_SERVER_ERROR, EpochEndOffset.UNDEFINED_EPOCH_OFFSET)
+      t1p0 -> new EpochEndOffset(NOT_LEADER_FOR_PARTITION, EpochEndOffset.UNDEFINED_EPOCH, EpochEndOffset.UNDEFINED_EPOCH_OFFSET),
+      t1p1 -> new EpochEndOffset(UNKNOWN_SERVER_ERROR, EpochEndOffset.UNDEFINED_EPOCH, EpochEndOffset.UNDEFINED_EPOCH_OFFSET)
     ).asJava
 
     //Create the thread
@@ -300,7 +370,7 @@ class ReplicaFetcherThreadTest {
     assertEquals(0, truncated.getValues.size())
 
     //New leader elected and replies
-    offsetsReply.put(t1p0, new EpochEndOffset(156))
+    offsetsReply.put(t1p0, new EpochEndOffset(5, 156))
 
     thread.doWork()
 
@@ -325,6 +395,7 @@ class ReplicaFetcherThreadTest {
     expect(replica.epochs).andReturn(Some(leaderEpochs)).anyTimes()
     expect(replica.logEndOffset).andReturn(new LogOffsetMetadata(0)).anyTimes()
     expect(leaderEpochs.latestEpoch).andReturn(5)
+    expect(leaderEpochs.endOffsetFor(5)).andReturn((5, 0)).anyTimes()
     expect(replicaManager.logManager).andReturn(logManager).anyTimes()
     expect(replicaManager.replicaAlterLogDirsManager).andReturn(replicaAlterLogDirsManager).anyTimes()
     stub(replica, partition, replicaManager)
@@ -333,7 +404,7 @@ class ReplicaFetcherThreadTest {
 
     //Define the offsets for the OffsetsForLeaderEpochResponse
     val offsetsReply = Map(
-      t1p0 -> new EpochEndOffset(1), t1p1 -> new EpochEndOffset(1)
+      t1p0 -> new EpochEndOffset(5, 1), t1p1 -> new EpochEndOffset(5, 1)
     ).asJava
 
     //Create the fetcher thread
@@ -374,6 +445,7 @@ class ReplicaFetcherThreadTest {
     expect(replica.epochs).andReturn(Some(leaderEpochs)).anyTimes()
     expect(replica.logEndOffset).andReturn(new LogOffsetMetadata(initialLEO)).anyTimes()
     expect(leaderEpochs.latestEpoch).andReturn(5)
+    expect(leaderEpochs.endOffsetFor(5)).andReturn((5, initialLEO)).anyTimes()
     expect(replicaManager.logManager).andReturn(logManager).anyTimes()
     expect(replicaManager.replicaAlterLogDirsManager).andReturn(replicaAlterLogDirsManager).anyTimes()
     stub(replica, partition, replicaManager)
@@ -382,7 +454,7 @@ class ReplicaFetcherThreadTest {
 
     //Define the offsets for the OffsetsForLeaderEpochResponse
     val offsetsReply = Map(
-      t1p0 -> new EpochEndOffset(52), t1p1 -> new EpochEndOffset(49)
+      t1p0 -> new EpochEndOffset(5, 52), t1p1 -> new EpochEndOffset(5, 49)
     ).asJava
 
     //Create the fetcher thread

@@ -647,15 +647,18 @@ class Partition(val topic: String,
 
   /**
     * @param leaderEpoch Requested leader epoch
-    * @return The last offset of messages published under this leader epoch.
+    * @return The last offset of messages published under this leader epoch, or if the the
+   *         requested leader epoch is unknown, the last offset of the largest epoch less than
+   *         requested epoch
     */
   def lastOffsetForLeaderEpoch(leaderEpoch: Int): EpochEndOffset = {
     inReadLock(leaderIsrUpdateLock) {
       leaderReplicaIfLocal match {
         case Some(leaderReplica) =>
-          new EpochEndOffset(NONE, leaderReplica.epochs.get.endOffsetFor(leaderEpoch))
+          val epochAndOffset = leaderReplica.epochs.get.endOffsetFor(leaderEpoch)
+          new EpochEndOffset(NONE, epochAndOffset._1, epochAndOffset._2)
         case None =>
-          new EpochEndOffset(NOT_LEADER_FOR_PARTITION, UNDEFINED_EPOCH_OFFSET)
+          new EpochEndOffset(NOT_LEADER_FOR_PARTITION, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
       }
     }
   }

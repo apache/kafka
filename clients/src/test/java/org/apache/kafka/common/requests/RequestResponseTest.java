@@ -1026,9 +1026,9 @@ public class RequestResponseTest {
     private OffsetsForLeaderEpochResponse createLeaderEpochResponse() {
         Map<TopicPartition, EpochEndOffset> epochs = new HashMap<>();
 
-        epochs.put(new TopicPartition("topic1", 0), new EpochEndOffset(Errors.NONE, 0));
-        epochs.put(new TopicPartition("topic1", 1), new EpochEndOffset(Errors.NONE, 1));
-        epochs.put(new TopicPartition("topic2", 2), new EpochEndOffset(Errors.NONE, 2));
+        epochs.put(new TopicPartition("topic1", 0), new EpochEndOffset(Errors.NONE, 1, 0));
+        epochs.put(new TopicPartition("topic1", 1), new EpochEndOffset(Errors.NONE, 1, 1));
+        epochs.put(new TopicPartition("topic2", 2), new EpochEndOffset(Errors.NONE, 1, 2));
 
         return new OffsetsForLeaderEpochResponse(epochs);
     }

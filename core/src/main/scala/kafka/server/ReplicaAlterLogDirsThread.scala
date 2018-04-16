@@ -21,7 +21,7 @@ import java.nio.ByteBuffer
 import java.util
 
 import AbstractFetcherThread.ResultWithPartitions
-import kafka.cluster.BrokerEndPoint
+import kafka.cluster.{Replica, BrokerEndPoint}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.requests.EpochEndOffset._
 import org.apache.kafka.common.requests.{EpochEndOffset, FetchResponse, FetchRequest => JFetchRequest}
@@ -36,7 +36,7 @@ import org.apache.kafka.common.record.{FileRecords, MemoryRecords}
 
 import scala.collection.JavaConverters._
 import scala.collection.{Map, Seq, Set, mutable}
-
+import scala.math._
 
 class ReplicaAlterLogDirsThread(name: String,
                                 sourceBroker: BrokerEndPoint,
@@ -164,18 +164,28 @@ class ReplicaAlterLogDirsThread(name: String,
   def fetchEpochsFromLeader(partitions: Map[TopicPartition, Int]): Map[TopicPartition, EpochEndOffset] = {
     partitions.map { case (tp, epoch) =>
       try {
-        tp -> new EpochEndOffset(Errors.NONE, replicaMgr.getReplicaOrException(tp).epochs.get.endOffsetFor(epoch))
+        val epochAndOffset = replicaMgr.getReplicaOrException(tp).epochs.get.endOffsetFor(epoch)
+        tp -> new EpochEndOffset(Errors.NONE, epochAndOffset._1, epochAndOffset._2)
       } catch {
         case t: Throwable =>
           warn(s"Error when getting EpochEndOffset for $tp", t)
-          tp -> new EpochEndOffset(Errors.forException(t), UNDEFINED_EPOCH_OFFSET)
+          tp -> new EpochEndOffset(Errors.forException(t), UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
       }
     }
   }
 
-  def maybeTruncate(fetchedEpochs: Map[TopicPartition, EpochEndOffset]): ResultWithPartitions[Map[TopicPartition, Long]] = {
-    val fetchOffsets = scala.collection.mutable.HashMap.empty[TopicPartition, Long]
+  def maybeTruncate(fetchedEpochs: Map[TopicPartition, EpochEndOffset]): ResultWithPartitions[Map[TopicPartition, OffsetTruncationState]] = {
+    val fetchOffsets = scala.collection.mutable.HashMap.empty[TopicPartition, OffsetTruncationState]
     val partitionsWithError = mutable.Set[TopicPartition]()
+
+    def finalFetchLeaderEpochOffset(offsetToTruncateTo: Long, futureReplica: Replica): OffsetTruncationState = {
+      val fetchOffset =
+        if (offsetToTruncateTo >= futureReplica.logEndOffset.messageOffset)
+          futureReplica.logEndOffset.messageOffset
+        else
+          offsetToTruncateTo
+      OffsetTruncationState(fetchOffset, truncationCompleted = true)
+    }
 
     fetchedEpochs.foreach { case (topicPartition, epochOffset) =>
       try {
@@ -186,16 +196,32 @@ class ReplicaAlterLogDirsThread(name: String,
           info(s"Retrying leaderEpoch request for partition $topicPartition as the current replica reported an error: ${epochOffset.error}")
           partitionsWithError += topicPartition
         } else {
-          val fetchOffset =
-            if (epochOffset.endOffset == UNDEFINED_EPOCH_OFFSET)
-              partitionStates.stateValue(topicPartition).fetchOffset
-            else if (epochOffset.endOffset >= futureReplica.logEndOffset.messageOffset)
-              futureReplica.logEndOffset.messageOffset
-            else
-              epochOffset.endOffset
+          val offsetTruncationState =
+            if (epochOffset.endOffset == UNDEFINED_EPOCH_OFFSET) {
+              OffsetTruncationState(partitionStates.stateValue(topicPartition).fetchOffset, truncationCompleted = true)
+            } else if (epochOffset.leaderEpoch == UNDEFINED_EPOCH) {
+              // this may happen if the leader used version 0 of OffsetForLeaderEpoch request/response
+              finalFetchLeaderEpochOffset(epochOffset.endOffset, futureReplica)
+            } else {
+              // get (leader epoch, end offset) pair that corresponds to the largest leader epoch
+              // less than or equal to the requested epoch.
+              val epochAndOffset = futureReplica.epochs.get.endOffsetFor(epochOffset.leaderEpoch)
+              if (epochAndOffset._2 == UNDEFINED_EPOCH_OFFSET) {
+                // This can happen if replica was not tracking offsets at that point (before the
+                // upgrade, or if this broker is new).
+                finalFetchLeaderEpochOffset(epochOffset.endOffset, futureReplica)
+              } else if (epochAndOffset._1 != epochOffset.leaderEpoch) {
+                // the replica does not know about the epoch that leader replied with
+                val intermediateOffsetToTruncateTo = min(epochAndOffset._2, futureReplica.logEndOffset.messageOffset)
+                OffsetTruncationState(intermediateOffsetToTruncateTo, truncationCompleted = false)
+              } else {
+                val offsetToTruncateTo = min(epochAndOffset._2, epochOffset.endOffset)
+                finalFetchLeaderEpochOffset(offsetToTruncateTo, futureReplica)
+              }
+            }
 
-          partition.truncateTo(fetchOffset, isFuture = true)
-          fetchOffsets.put(topicPartition, fetchOffset)
+          partition.truncateTo(offsetTruncationState.offset, isFuture = true)
+          fetchOffsets.put(topicPartition, offsetTruncationState)
         }
       } catch {
         case e: KafkaStorageException =>

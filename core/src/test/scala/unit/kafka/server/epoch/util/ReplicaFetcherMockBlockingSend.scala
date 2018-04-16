@@ -28,15 +28,25 @@ import org.apache.kafka.common.utils.{SystemTime, Time}
 
 /**
   * Stub network client used for testing the ReplicaFetcher, wraps the MockClient used for consumer testing
+  *
+  * The common case is that there is only one OFFSET_FOR_LEADER_EPOCH request/response. So, the
+  * response to OFFSET_FOR_LEADER_EPOCH is 'offsets' map. If the test needs to set another round of
+  * OFFSET_FOR_LEADER_EPOCH with different offsets in response, it should update offsets using
+  * setOffsetsForNextResponse
   */
 class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, EpochEndOffset], destination: BrokerEndPoint, time: Time) extends BlockingSend {
   private val client = new MockClient(new SystemTime)
   var fetchCount = 0
   var epochFetchCount = 0
   var callback: Option[() => Unit] = None
+  var updatedOffsetsOpt: Option[java.util.Map[TopicPartition, EpochEndOffset]] = None
 
   def setEpochRequestCallback(postEpochFunction: () => Unit){
     callback = Some(postEpochFunction)
+  }
+
+  def setOffsetsForNextResponse(newOffsets: java.util.Map[TopicPartition, EpochEndOffset]): Unit = {
+    updatedOffsetsOpt = Some(newOffsets)
   }
 
   override def sendRequest(requestBuilder: Builder[_ <: AbstractRequest]): ClientResponse = {
@@ -50,7 +60,11 @@ class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, Epoc
       case ApiKeys.OFFSET_FOR_LEADER_EPOCH =>
         callback.foreach(_.apply())
         epochFetchCount += 1
-        new OffsetsForLeaderEpochResponse(offsets)
+        val offsetsForResponse = updatedOffsetsOpt match {
+          case Some(updatedOffsets) => updatedOffsets
+          case None => offsets
+        }
+        new OffsetsForLeaderEpochResponse(offsetsForResponse)
 
       case ApiKeys.FETCH =>
         fetchCount += 1
