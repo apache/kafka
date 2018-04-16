@@ -540,7 +540,7 @@ class DefaultMessageFormatter extends MessageFormatter {
     }
     // Note that `toString` will be called on the instance returned by `Deserializer.deserialize`
     if (props.containsKey("value.deserializer")) {
-      valueDeserializer = Some(Class.forName(props.getProperty("value.deserializer.")).newInstance().asInstanceOf[Deserializer[_]])
+      valueDeserializer = Some(Class.forName(props.getProperty("value.deserializer")).newInstance().asInstanceOf[Deserializer[_]])
       valueDeserializer.get.configure(JavaConversions.propertiesAsScalaMap(stripWithPrefix("value.deserializer.", props)).asJava, false)
     }
   }
