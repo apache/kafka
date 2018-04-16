@@ -24,7 +24,6 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.Time;
@@ -40,6 +39,8 @@ import org.slf4j.LoggerFactory;
 import org.apache.kafka.trogdor.task.TaskWorker;
 
 import java.util.Collection;
+import java.util.HashSet;
+import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
@@ -84,19 +85,14 @@ public class ConsumeBenchWorker implements TaskWorker {
         @Override
         public void run() {
             try {
-                // find topics to consume from based on provided topic regular expression
-                if (spec.topicRegex() == null) {
-                    throw new ConfigException(
-                        "Must provide topic name or regular expression to match existing topics.");
+                HashSet<TopicPartition> partitions = new HashSet<>();
+                for (Map.Entry<String, PartitionsSpec> entry : spec.activeTopics().materialize().entrySet()) {
+                    for (Integer partitionNumber : entry.getValue().partitionNumbers()) {
+                        partitions.add(new TopicPartition(entry.getKey(), partitionNumber));
+                    }
                 }
-                Collection<TopicPartition> topicPartitions =
-                    WorkerUtils.getMatchingTopicPartitions(
-                        log, spec.bootstrapServers(),
-                        spec.commonClientConf(), spec.adminClientConf(),
-                        spec.topicRegex(), spec.startPartition(), spec.endPartition());
-                log.info("Will consume from {}", topicPartitions);
-
-                executor.submit(new ConsumeMessages(topicPartitions));
+                log.info("Will consume from {}", partitions);
+                executor.submit(new ConsumeMessages(partitions));
             } catch (Throwable e) {
                 WorkerUtils.abort(log, "Prepare", e, doneFuture);
             }

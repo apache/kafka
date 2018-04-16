@@ -32,11 +32,6 @@ import java.util.Set;
  * The specification for a benchmark that produces messages to a set of topics.
  */
 public class ProduceBenchSpec extends TaskSpec {
-
-    private static final String DEFAULT_TOPIC_PREFIX = "produceBenchTopic";
-    private static final int DEFAULT_NUM_PARTITIONS = 1;
-    private static final short DEFAULT_REPLICATION_FACTOR = 3;
-
     private final String producerNode;
     private final String bootstrapServers;
     private final int targetMessagesPerSec;
@@ -46,11 +41,8 @@ public class ProduceBenchSpec extends TaskSpec {
     private final Map<String, String> producerConf;
     private final Map<String, String> adminClientConf;
     private final Map<String, String> commonClientConf;
-    private final int totalTopics;
-    private final int activeTopics;
-    private final String topicPrefix;
-    private final int numPartitions;
-    private final short replicationFactor;
+    private final TopicsSpec activeTopics;
+    private final TopicsSpec inactiveTopics;
 
     @JsonCreator
     public ProduceBenchSpec(@JsonProperty("startMs") long startMs,
@@ -64,11 +56,8 @@ public class ProduceBenchSpec extends TaskSpec {
                          @JsonProperty("producerConf") Map<String, String> producerConf,
                          @JsonProperty("commonClientConf") Map<String, String> commonClientConf,
                          @JsonProperty("adminClientConf") Map<String, String> adminClientConf,
-                         @JsonProperty("totalTopics") int totalTopics,
-                         @JsonProperty("activeTopics") int activeTopics,
-                         @JsonProperty("topicPrefix") String topicPrefix,
-                         @JsonProperty("partitionsPerTopic") int partitionsPerTopic,
-                         @JsonProperty("replicationFactor") short replicationFactor) {
+                         @JsonProperty("activeTopics") TopicsSpec activeTopics,
+                         @JsonProperty("inactiveTopics") TopicsSpec inactiveTopics) {
         super(startMs, durationMs);
         this.producerNode = (producerNode == null) ? "" : producerNode;
         this.bootstrapServers = (bootstrapServers == null) ? "" : bootstrapServers;
@@ -81,13 +70,10 @@ public class ProduceBenchSpec extends TaskSpec {
         this.producerConf = configOrEmptyMap(producerConf);
         this.commonClientConf = configOrEmptyMap(commonClientConf);
         this.adminClientConf = configOrEmptyMap(adminClientConf);
-        this.totalTopics = totalTopics;
-        this.activeTopics = activeTopics;
-        this.topicPrefix = (topicPrefix == null) ? DEFAULT_TOPIC_PREFIX : topicPrefix;
-        this.numPartitions = (partitionsPerTopic == 0)
-                             ? DEFAULT_NUM_PARTITIONS : partitionsPerTopic;
-        this.replicationFactor = (replicationFactor == 0)
-                                 ? DEFAULT_REPLICATION_FACTOR : replicationFactor;
+        this.activeTopics = (activeTopics == null) ?
+            TopicsSpec.EMPTY : activeTopics.immutableCopy();
+        this.inactiveTopics = (inactiveTopics == null) ?
+            TopicsSpec.EMPTY : inactiveTopics.immutableCopy();
     }
 
     @JsonProperty
@@ -136,28 +122,13 @@ public class ProduceBenchSpec extends TaskSpec {
     }
 
     @JsonProperty
-    public int totalTopics() {
-        return totalTopics;
-    }
-
-    @JsonProperty
-    public int activeTopics() {
+    public TopicsSpec activeTopics() {
         return activeTopics;
     }
 
     @JsonProperty
-    public String topicPrefix() {
-        return topicPrefix;
-    }
-
-    @JsonProperty
-    public int numPartitions() {
-        return numPartitions;
-    }
-
-    @JsonProperty
-    public short replicationFactor() {
-        return replicationFactor;
+    public TopicsSpec inactiveTopics() {
+        return inactiveTopics;
     }
 
     @Override
