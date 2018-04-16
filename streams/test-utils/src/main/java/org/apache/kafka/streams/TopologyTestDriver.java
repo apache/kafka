@@ -117,7 +117,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * ConsumerRecordFactory factory = new ConsumerRecordFactory(strSerializer, strSerializer);
  * driver.pipeInput(factory.create("input-topic","key1", "value1"));
  * </pre>
- * <p>
+ *
  * When {@code #pipeInput()} is called, the driver passes the input message through to the appropriate source that
  * consumes the named topic, and will invoke the processor(s) downstream of the source.
  * If your topology's processors forward messages to sinks, your test can then consume these output messages to verify
@@ -131,7 +131,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * ProducerRecord<String, String> record2 = driver.readOutput("output-topic-1", strDeserializer, strDeserializer);
  * ProducerRecord<String, String> record3 = driver.readOutput("output-topic-2", strDeserializer, strDeserializer);
  * }</pre>
- * <p>
+ *
  * Again, our example topology generates messages with string keys and values, so we supply our string deserializer
  * instance for use on both the keys and values. Your test logic can then verify whether these output records are
  * correct.
@@ -236,16 +236,13 @@ public class TopologyTestDriver {
             streamsMetrics);
         final StateRestoreListener stateRestoreListener = new StateRestoreListener() {
             @Override
-            public void onRestoreStart(final TopicPartition topicPartition, final String storeName, final long startingOffset, final long endingOffset) {
-            }
+            public void onRestoreStart(final TopicPartition topicPartition, final String storeName, final long startingOffset, final long endingOffset) {}
 
             @Override
-            public void onBatchRestored(final TopicPartition topicPartition, final String storeName, final long batchEndOffset, final long numRestored) {
-            }
+            public void onBatchRestored(final TopicPartition topicPartition, final String storeName, final long batchEndOffset, final long numRestored) {}
 
             @Override
-            public void onRestoreEnd(final TopicPartition topicPartition, final String storeName, final long totalRestored) {
-            }
+            public void onRestoreEnd(final TopicPartition topicPartition, final String storeName, final long totalRestored) {}
         };
 
         for (final InternalTopologyBuilder.TopicsInfo topicsInfo : internalTopologyBuilder.topicGroups().values()) {
@@ -618,12 +615,10 @@ public class TopologyTestDriver {
     private MockConsumer<byte[], byte[]> createRestoreConsumer(final Map<String, String> storeToChangelogTopic) {
         final MockConsumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.LATEST) {
             @Override
-            public synchronized void seekToEnd(final Collection<TopicPartition> partitions) {
-            }
+            public synchronized void seekToEnd(final Collection<TopicPartition> partitions) {}
 
             @Override
-            public synchronized void seekToBeginning(final Collection<TopicPartition> partitions) {
-            }
+            public synchronized void seekToBeginning(final Collection<TopicPartition> partitions) {}
 
             @Override
             public synchronized long position(final TopicPartition partition) {

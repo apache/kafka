@@ -138,7 +138,10 @@ public class GlobalStateTaskTest {
                                   final byte[] key,
                                   final byte[] recordValue,
                                   final boolean failExpected) {
-        final ConsumerRecord<byte[], byte[]> record = new ConsumerRecord<>(topic2, 1, 1, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, key, recordValue);
+        final ConsumerRecord<byte[], byte[]> record = new ConsumerRecord<>(
+            topic2, 1, 1, 0L, TimestampType.CREATE_TIME,
+            0L, 0, 0, key, recordValue
+        );
         globalStateTask.initialize();
         try {
             globalStateTask.update(record);

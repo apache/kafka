@@ -121,8 +121,11 @@ public class StreamsMetricsImpl implements StreamsMetrics {
      * @throws IllegalArgumentException if tags is not constructed in key-value pairs
      */
     @Override
-    public Sensor addLatencyAndThroughputSensor(final String scopeName, final String entityName, final String operationName,
-                                                final Sensor.RecordingLevel recordingLevel, final String... tags) {
+    public Sensor addLatencyAndThroughputSensor(final String scopeName,
+                                                final String entityName,
+                                                final String operationName,
+                                                final Sensor.RecordingLevel recordingLevel,
+                                                final String... tags) {
         final Map<String, String> tagMap = constructTags(scopeName, entityName, tags);
         final Map<String, String> allTagMap = constructTags(scopeName, "all", tags);
 

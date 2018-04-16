@@ -84,10 +84,12 @@ public class GlobalStreamThread extends Thread {
      *                | Dead (3)    |
      *                +-------------+
      * </pre>
-     * <p>
+     *
      * Note the following:
-     * - Any state can go to PENDING_SHUTDOWN. That is because streams can be closed at any time.
-     * - State PENDING_SHUTDOWN may want to transit itself. In this case we will forbid the transition but will not treat as an error.
+     * <ul>
+     *     <li>Any state can go to PENDING_SHUTDOWN. That is because streams can be closed at any time.</li>
+     *     <li>State PENDING_SHUTDOWN may want to transit itself. In this case we will forbid the transition but will not treat as an error.</li>
+     * </ul>
      */
     public enum State implements ThreadStateTransitionValidator {
         CREATED(1, 2), RUNNING(2), PENDING_SHUTDOWN(3), DEAD;

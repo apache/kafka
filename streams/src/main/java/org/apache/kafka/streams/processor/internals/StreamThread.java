@@ -107,15 +107,21 @@ public class StreamThread extends Thread {
      *                | Dead (5)    |
      *                +-------------+
      * </pre>
-     * <p>
+     *
      * Note the following:
-     * - Any state can go to PENDING_SHUTDOWN. That is because streams can be closed at any time.
-     * - State PENDING_SHUTDOWN may want to transit to some other states other than DEAD, in the corner case when
-     * the shutdown is triggered while the thread is still in the rebalance loop.
-     * In this case we will forbid the transition but will not treat as an error.
-     * - State PARTITIONS_REVOKED may want transit to itself indefinitely, in the corner case when
-     * the coordinator repeatedly fails in-between revoking partitions and assigning new partitions.
-     * In this case we will forbid the transition but will not treat as an error.
+     * <ul>
+     *     <li>Any state can go to PENDING_SHUTDOWN. That is because streams can be closed at any time.</li>
+     *     <li>
+     *         State PENDING_SHUTDOWN may want to transit to some other states other than DEAD,
+     *         in the corner case when the shutdown is triggered while the thread is still in the rebalance loop.
+     *         In this case we will forbid the transition but will not treat as an error.
+     *     </li>
+     *     <li>
+     *         State PARTITIONS_REVOKED may want transit to itself indefinitely, in the corner case when
+     *         the coordinator repeatedly fails in-between revoking partitions and assigning new partitions.
+     *         In this case we will forbid the transition but will not treat as an error.
+     *     </li>
+     * </ul>
      */
     public enum State implements ThreadStateTransitionValidator {
         CREATED(1, 4), RUNNING(2, 4), PARTITIONS_REVOKED(3, 4), PARTITIONS_ASSIGNED(1, 2, 4), PENDING_SHUTDOWN(5), DEAD;
@@ -258,7 +264,11 @@ public class StreamThread extends Thread {
                 }
                 taskManager.createTasks(assignment);
             } catch (final Throwable t) {
-                log.error("Error caught during partition assignment, will abort the current process and re-throw at the end of rebalance: {}", t);
+                log.error(
+                    "Error caught during partition assignment, " +
+                        "will abort the current process and re-throw at the end of rebalance: {}",
+                    t
+                );
                 streamThread.setRebalanceException(t);
             } finally {
                 log.info("partition assignment took {} ms.\n" +
@@ -288,7 +298,11 @@ public class StreamThread extends Thread {
                     // suspend active tasks
                     taskManager.suspendTasksAndState();
                 } catch (final Throwable t) {
-                    log.error("Error caught during partition revocation, will abort the current process and re-throw at the end of rebalance: {}", t);
+                    log.error(
+                        "Error caught during partition revocation, " +
+                            "will abort the current process and re-throw at the end of rebalance: {}",
+                        t
+                    );
                     streamThread.setRebalanceException(t);
                 } finally {
                     streamThread.clearStandbyRecords();
@@ -343,7 +357,8 @@ public class StreamThread extends Thread {
             return stateDirectory;
         }
 
-        Collection<T> createTasks(final Consumer<byte[], byte[]> consumer, final Map<TaskId, Set<TopicPartition>> tasksToBeCreated) {
+        Collection<T> createTasks(final Consumer<byte[], byte[]> consumer,
+                                  final Map<TaskId, Set<TopicPartition>> tasksToBeCreated) {
             final List<T> createdTasks = new ArrayList<>();
             for (final Map.Entry<TaskId, Set<TopicPartition>> newTaskAndPartitions : tasksToBeCreated.entrySet()) {
                 final TaskId taskId = newTaskAndPartitions.getKey();
@@ -360,8 +375,7 @@ public class StreamThread extends Thread {
 
         abstract T createTask(final Consumer<byte[], byte[]> consumer, final TaskId id, final Set<TopicPartition> partitions);
 
-        public void close() {
-        }
+        public void close() {}
     }
 
     static class TaskCreator extends AbstractTaskCreator<StreamTask> {
@@ -398,7 +412,9 @@ public class StreamThread extends Thread {
         }
 
         @Override
-        StreamTask createTask(final Consumer<byte[], byte[]> consumer, final TaskId taskId, final Set<TopicPartition> partitions) {
+        StreamTask createTask(final Consumer<byte[], byte[]> consumer,
+                              final TaskId taskId,
+                              final Set<TopicPartition> partitions) {
             taskCreatedSensor.record();
 
             return new StreamTask(
@@ -479,7 +495,11 @@ public class StreamThread extends Thread {
                     streamsMetrics,
                     stateDirectory);
             } else {
-                log.trace("Skipped standby task {} with assigned partitions {} since it does not have any state stores to materialize", taskId, partitions);
+                log.trace(
+                    "Skipped standby task {} with assigned partitions {} " +
+                        "since it does not have any state stores to materialize",
+                    taskId, partitions
+                );
                 return null;
             }
         }
@@ -531,9 +551,22 @@ public class StreamThread extends Thread {
 
         }
 
-        private Meter createMeter(final Metrics metrics, final SampledStat stat, final String baseName, final String descriptiveName) {
-            final MetricName rateMetricName = metrics.metricName(baseName + "-rate", groupName, String.format("The average per-second number of %s", descriptiveName), tags);
-            final MetricName totalMetricName = metrics.metricName(baseName + "-total", groupName, String.format("The total number of %s", descriptiveName), tags);
+        private Meter createMeter(final Metrics metrics,
+                                  final SampledStat stat,
+                                  final String baseName,
+                                  final String descriptiveName) {
+            final MetricName rateMetricName = metrics.metricName(
+                baseName + "-rate",
+                groupName,
+                String.format("The average per-second number of %s", descriptiveName),
+                tags
+            );
+            final MetricName totalMetricName = metrics.metricName(
+                baseName + "-total",
+                groupName,
+                String.format("The total number of %s", descriptiveName),
+                tags
+            );
             return new Meter(stat, rateMetricName, totalMetricName);
         }
 

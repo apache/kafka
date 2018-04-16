@@ -910,17 +910,14 @@ public class StreamThreadTest {
                     }
 
                     @Override
-                    public void process(final Object key, final Object value) {
-                    }
+                    public void process(final Object key, final Object value) {}
 
                     @SuppressWarnings("deprecation")
                     @Override
-                    public void punctuate(final long timestamp) {
-                    }
+                    public void punctuate(final long timestamp) {}
 
                     @Override
-                    public void close() {
-                    }
+                    public void close() {}
                 };
             }
         };
@@ -1175,7 +1172,8 @@ public class StreamThreadTest {
         assertEquals(6.0, metrics.metric(skippedTotalMetric).metricValue());
     }
 
-    private void assertThreadMetadataHasEmptyTasksWithState(final ThreadMetadata metadata, final StreamThread.State state) {
+    private void assertThreadMetadataHasEmptyTasksWithState(final ThreadMetadata metadata,
+                                                            final StreamThread.State state) {
         assertEquals(state.name(), metadata.threadState());
         assertTrue(metadata.activeTasks().isEmpty());
         assertTrue(metadata.standbyTasks().isEmpty());

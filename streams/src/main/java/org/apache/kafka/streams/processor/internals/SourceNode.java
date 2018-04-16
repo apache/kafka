@@ -36,7 +36,11 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
     private ExtendedDeserializer<V> valDeserializer;
     private final TimestampExtractor timestampExtractor;
 
-    public SourceNode(final String name, final List<String> topics, final TimestampExtractor timestampExtractor, final Deserializer<K> keyDeserializer, final Deserializer<V> valDeserializer) {
+    public SourceNode(final String name,
+                      final List<String> topics,
+                      final TimestampExtractor timestampExtractor,
+                      final Deserializer<K> keyDeserializer,
+                      final Deserializer<V> valDeserializer) {
         super(name);
         this.topics = topics;
         this.timestampExtractor = timestampExtractor;
@@ -44,7 +48,10 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
         this.valDeserializer = ensureExtended(valDeserializer);
     }
 
-    public SourceNode(final String name, final List<String> topics, final Deserializer<K> keyDeserializer, final Deserializer<V> valDeserializer) {
+    public SourceNode(final String name,
+                      final List<String> topics,
+                      final Deserializer<K> keyDeserializer,
+                      final Deserializer<V> valDeserializer) {
         this(name, topics, null, keyDeserializer, valDeserializer);
     }
 

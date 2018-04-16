@@ -193,12 +193,24 @@ public class ProcessorNode<K, V> {
             this.metrics = (StreamsMetricsImpl) metrics;
 
             // these are all latency metrics
-            this.nodeProcessTimeSensor = metrics.addLatencyAndThroughputSensor(scope, name, "process", Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
-            this.nodePunctuateTimeSensor = metrics.addLatencyAndThroughputSensor(scope, name, "punctuate", Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
-            this.nodeCreationSensor = metrics.addLatencyAndThroughputSensor(scope, name, "create", Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
-            this.nodeDestructionSensor = metrics.addLatencyAndThroughputSensor(scope, name, "destroy", Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
-            this.sourceNodeForwardSensor = metrics.addThroughputSensor(scope, name, "forward", Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
-            this.sourceNodeSkippedDueToDeserializationError = metrics.addThroughputSensor(scope, name, "skippedDueToDeserializationError", Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
+            this.nodeProcessTimeSensor = metrics.addLatencyAndThroughputSensor(
+                scope, name, "process", Sensor.RecordingLevel.DEBUG, tagKey, tagValue
+            );
+            this.nodePunctuateTimeSensor = metrics.addLatencyAndThroughputSensor(
+                scope, name, "punctuate", Sensor.RecordingLevel.DEBUG, tagKey, tagValue
+            );
+            this.nodeCreationSensor = metrics.addLatencyAndThroughputSensor(
+                scope, name, "create", Sensor.RecordingLevel.DEBUG, tagKey, tagValue
+            );
+            this.nodeDestructionSensor = metrics.addLatencyAndThroughputSensor(
+                scope, name, "destroy", Sensor.RecordingLevel.DEBUG, tagKey, tagValue
+            );
+            this.sourceNodeForwardSensor = metrics.addThroughputSensor(
+                scope, name, "forward", Sensor.RecordingLevel.DEBUG, tagKey, tagValue
+            );
+            this.sourceNodeSkippedDueToDeserializationError = metrics.addThroughputSensor(
+                scope, name, "skippedDueToDeserializationError", Sensor.RecordingLevel.DEBUG, tagKey, tagValue
+            );
         }
 
         private void removeAllSensors() {

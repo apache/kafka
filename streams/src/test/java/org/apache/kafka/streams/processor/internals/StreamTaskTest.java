@@ -22,6 +22,7 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
@@ -57,7 +58,6 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -231,22 +231,23 @@ public class StreamTaskTest {
     public void testMetrics() {
         task = createStatelessTask(createConfig(false));
 
-        final String name = task.id().toString();
-        final Map<String, String> metricTags = new LinkedHashMap<>();
-        metricTags.put("task-id", name);
-        final String operation = "commit";
+        assertNotNull(metrics.getSensor("commit"));
+        assertNotNull(getMetric("%s-latency-avg", "The average latency of %s operation.", task.id().toString()));
+        assertNotNull(getMetric("%s-latency-max", "The max latency of %s operation.", task.id().toString()));
+        assertNotNull(getMetric("%s-rate", "The average number of occurrence of %s operation per second.", task.id().toString()));
 
-        final String groupName = "stream-task-metrics";
+        assertNotNull(getMetric("%s-latency-avg", "The average latency of %s operation.", "all"));
+        assertNotNull(getMetric("%s-latency-max", "The max latency of %s operation.", "all"));
+        assertNotNull(getMetric("%s-rate", "The average number of occurrence of %s operation per second.", "all"));
+    }
 
-        assertNotNull(metrics.getSensor(operation));
-        assertNotNull(metrics.metrics().get(metrics.metricName(operation + "-latency-avg", groupName, "The average latency of " + operation + " operation.", metricTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName(operation + "-latency-max", groupName, "The max latency of " + operation + " operation.", metricTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName(operation + "-rate", groupName, "The average number of occurrence of " + operation + " operation per second.", metricTags)));
-
-        metricTags.put("task-id", "all");
-        assertNotNull(metrics.metrics().get(metrics.metricName(operation + "-latency-avg", groupName, "The average latency of " + operation + " operation.", metricTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName(operation + "-latency-max", groupName, "The max latency of " + operation + " operation.", metricTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName(operation + "-rate", groupName, "The average number of occurrence of " + operation + " operation per second.", metricTags)));
+    private KafkaMetric getMetric(final String nameFormat, final String descriptionFormat, final String taskId) {
+        return metrics.metrics().get(metrics.metricName(
+            String.format(nameFormat, "commit"),
+            "stream-task-metrics",
+            String.format(descriptionFormat, "commit"),
+            mkMap(mkEntry("task-id", taskId))
+        ));
     }
 
     @SuppressWarnings("unchecked")

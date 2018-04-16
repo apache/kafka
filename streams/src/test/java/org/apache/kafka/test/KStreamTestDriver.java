@@ -308,11 +308,9 @@ public class KStreamTestDriver extends ExternalResource {
         }
 
         @Override
-        public void flush() {
-        }
+        public void flush() {}
 
         @Override
-        public void close() {
-        }
+        public void close() {}
     }
 }

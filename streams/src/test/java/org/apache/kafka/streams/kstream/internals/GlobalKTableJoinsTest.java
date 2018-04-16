@@ -100,16 +100,15 @@ public class GlobalKTableJoinsTest {
     }
 
     private void verifyJoin(final Map<String, String> expected) {
-        final String joinInput = streamTopic;
         driver.setUp(builder, stateDir);
         driver.setTime(0L);
         // write some data to the global table
         driver.process(globalTopic, "a", "A");
         driver.process(globalTopic, "b", "B");
         //write some data to the stream
-        driver.process(joinInput, "1", "a");
-        driver.process(joinInput, "2", "b");
-        driver.process(joinInput, "3", "c");
+        driver.process(streamTopic, "1", "a");
+        driver.process(streamTopic, "2", "b");
+        driver.process(streamTopic, "3", "c");
         driver.flushState();
 
         assertEquals(expected, results);

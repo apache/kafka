@@ -189,11 +189,10 @@ public class StreamThreadStateStoreProviderTest {
             stateDirectory,
             null,
             new MockTime(),
-            clientSupplier.getProducer(new HashMap<String, Object>())) {
-
+            clientSupplier.getProducer(new HashMap<String, Object>())
+        ) {
             @Override
-            protected void updateOffsetLimits() {
-            }
+            protected void updateOffsetLimits() {}
         };
     }
 

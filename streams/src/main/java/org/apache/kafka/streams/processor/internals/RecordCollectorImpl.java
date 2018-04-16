@@ -123,7 +123,16 @@ public class RecordCollectorImpl implements RecordCollector {
         }
         log.error(errorLogMessage, key, value, timestamp, topic, exception.toString());
         sendException = new StreamsException(
-            String.format(errorMessage, logPrefix, "an error caught", key, value, timestamp, topic, exception.toString()),
+            String.format(
+                errorMessage,
+                logPrefix,
+                "an error caught",
+                key,
+                value,
+                timestamp,
+                topic,
+                exception.toString()
+            ),
             exception);
     }
 
@@ -189,7 +198,16 @@ public class RecordCollectorImpl implements RecordCollector {
             throw new StreamsException(String.format("%sFailed to send record to topic %s due to timeout.", logPrefix, topic));
         } catch (final Exception uncaughtException) {
             throw new StreamsException(
-                String.format(EXCEPTION_MESSAGE, logPrefix, "an error caught", key, value, timestamp, topic, uncaughtException.toString()),
+                String.format(
+                    EXCEPTION_MESSAGE,
+                    logPrefix,
+                    "an error caught",
+                    key,
+                    value,
+                    timestamp,
+                    topic,
+                    uncaughtException.toString()
+                ),
                 uncaughtException);
         }
     }

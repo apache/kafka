@@ -112,7 +112,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * <pre>
  * driver.process("input-topic", "key1", "value1", strSerializer, strSerializer);
  * </pre>
- * <p>
+ *
  * Immediately, the driver will pass the input message through to the appropriate source that consumes the named topic,
  * and will invoke the processor(s) downstream of the source. If your topology's processors forward messages to sinks,
  * your test can then consume these output messages to verify they match the expected outcome. For example, if our topology
@@ -124,7 +124,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * ProducerRecord<String, String> record2 = driver.readOutput("output-topic-1", strDeserializer, strDeserializer);
  * ProducerRecord<String, String> record3 = driver.readOutput("output-topic-2", strDeserializer, strDeserializer);
  * </pre>
- * <p>
+ *
  * Again, our example topology generates messages with string keys and values, so we supply our string deserializer instance
  * for use on both the keys and values. Your test logic can then verify whether these output records are correct.
  * <p>
@@ -448,12 +448,10 @@ public class ProcessorTopologyTestDriver {
     private MockConsumer<byte[], byte[]> createRestoreConsumer(final Map<String, String> storeToChangelogTopic) {
         final MockConsumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.LATEST) {
             @Override
-            public synchronized void seekToEnd(final Collection<TopicPartition> partitions) {
-            }
+            public synchronized void seekToEnd(final Collection<TopicPartition> partitions) {}
 
             @Override
-            public synchronized void seekToBeginning(final Collection<TopicPartition> partitions) {
-            }
+            public synchronized void seekToBeginning(final Collection<TopicPartition> partitions) {}
 
             @Override
             public synchronized long position(final TopicPartition partition) {
@@ -477,12 +475,10 @@ public class ProcessorTopologyTestDriver {
     private MockConsumer<byte[], byte[]> createGlobalConsumer() {
         return new MockConsumer<byte[], byte[]>(OffsetResetStrategy.LATEST) {
             @Override
-            public synchronized void seekToEnd(final Collection<TopicPartition> partitions) {
-            }
+            public synchronized void seekToEnd(final Collection<TopicPartition> partitions) {}
 
             @Override
-            public synchronized void seekToBeginning(final Collection<TopicPartition> partitions) {
-            }
+            public synchronized void seekToBeginning(final Collection<TopicPartition> partitions) {}
 
             @Override
             public synchronized long position(final TopicPartition partition) {
