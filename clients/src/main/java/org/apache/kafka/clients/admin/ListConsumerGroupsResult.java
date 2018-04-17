@@ -23,7 +23,6 @@ import org.apache.kafka.common.internals.KafkaFutureImpl;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 
 /**
  * The result of the {@link AdminClient#listConsumerGroups()} call.
@@ -40,31 +39,26 @@ public class ListConsumerGroupsResult {
         this.all = new KafkaFutureImpl<>();
         this.valid = new KafkaFutureImpl<>();
         this.errors = new KafkaFutureImpl<>();
-        future.whenComplete(new KafkaFuture.BiConsumer<Collection<Object>, Throwable>() {
+        future.thenApply(new KafkaFuture.BaseFunction<Collection<Object>, Void>() {
             @Override
-            public void accept(Collection<Object> objects, Throwable throwable) {
-                if (throwable != null) {
-                    valid.complete(new ArrayList<ConsumerGroupListing>());
-                    errors.complete(Collections.singletonList(throwable));
-                    all.completeExceptionally(throwable);
-                } else {
-                    ArrayList<Throwable> curErrors = new ArrayList<>();
-                    ArrayList<ConsumerGroupListing> curValid = new ArrayList<>();
-                    for (Object object : objects) {
-                        if (object instanceof Throwable) {
-                            curErrors.add((Throwable) object);
-                        } else {
-                            curValid.add((ConsumerGroupListing) object);
-                        }
-                    }
-                    if (!curErrors.isEmpty()) {
-                        all.completeExceptionally(curErrors.get(0));
+            public Void apply(Collection<Object> results) {
+                ArrayList<Throwable> curErrors = new ArrayList<>();
+                ArrayList<ConsumerGroupListing> curValid = new ArrayList<>();
+                for (Object resultObject : results) {
+                    if (resultObject instanceof Throwable) {
+                        curErrors.add((Throwable) resultObject);
                     } else {
-                        all.complete(curValid);
+                        curValid.add((ConsumerGroupListing) resultObject);
                     }
-                    valid.complete(curValid);
-                    errors.complete(curErrors);
                 }
+                if (!curErrors.isEmpty()) {
+                    all.completeExceptionally(curErrors.get(0));
+                } else {
+                    all.complete(curValid);
+                }
+                valid.complete(curValid);
+                errors.complete(curErrors);
+                return null;
             }
         });
     }
