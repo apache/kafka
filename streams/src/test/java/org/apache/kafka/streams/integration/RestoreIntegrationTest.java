@@ -314,7 +314,7 @@ public class RestoreIntegrationTest {
 
         final Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
         for (TopicPartition partition : partitions) {
-            final long position = consumer.position(partition);
+            final long position = consumer.position(partition, 2000L, TimeUnit.MILLISECONDS);
             offsets.put(partition, new OffsetAndMetadata(position + 1));
         }
 

@@ -45,12 +45,15 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 /**
  * This class is responsible for the initialization, restoration, closing, flushing etc
  * of Global State Stores. There is only ever 1 instance of this class per Application Instance.
  */
 public class GlobalStateManagerImpl extends AbstractStateManager implements GlobalStateManager {
+    private static final long DEFAULT_WAIT_TIME = 20000L;
+
     private final Logger log;
     private final ProcessorTopology topology;
     private final Consumer<byte[], byte[]> globalConsumer;
@@ -248,7 +251,7 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
                 globalConsumer.seekToBeginning(Collections.singletonList(topicPartition));
             }
 
-            long offset = globalConsumer.position(topicPartition);
+            long offset = globalConsumer.position(topicPartition, DEFAULT_WAIT_TIME, TimeUnit.MILLISECONDS);
             final Long highWatermark = highWatermarks.get(topicPartition);
             BatchingStateRestoreCallback
                 stateRestoreAdapter =
@@ -268,7 +271,7 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
                         if (record.key() != null) {
                             restoreRecords.add(KeyValue.pair(record.key(), record.value()));
                         }
-                        offset = globalConsumer.position(topicPartition);
+                        offset = globalConsumer.position(topicPartition, DEFAULT_WAIT_TIME, TimeUnit.MILLISECONDS);
                     }
                     stateRestoreAdapter.restoreAll(restoreRecords);
                     stateRestoreListener.onBatchRestored(topicPartition, storeName, offset, restoreRecords.size());

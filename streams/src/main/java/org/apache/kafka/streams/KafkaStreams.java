@@ -125,12 +125,14 @@ public class KafkaStreams {
 
     private static final String JMX_PREFIX = "kafka.streams";
     private static final int DEFAULT_CLOSE_TIMEOUT = 0;
+    private static final int DEFAULT_BLOCKING_TIME = 20000;
 
     // processId is expected to be unique across JVMs and to be used
     // in userData of the subscription request to allow assignor be aware
     // of the co-location of stream thread's consumers. It is for internal
     // usage only and should not be exposed to users at all.
     private final Time time;
+    private final long maxCommitMs;
     private final Logger log;
     private final UUID processId;
     private final String clientId;
@@ -526,7 +528,7 @@ public class KafkaStreams {
      */
     public KafkaStreams(final Topology topology,
                         final Properties props) {
-        this(topology.internalTopologyBuilder, new StreamsConfig(props), new DefaultKafkaClientSupplier());
+        this(topology.internalTopologyBuilder, new StreamsConfig(props), new DefaultKafkaClientSupplier(), DEFAULT_BLOCKING_TIME);
     }
 
     /**
@@ -544,7 +546,7 @@ public class KafkaStreams {
     public KafkaStreams(final Topology topology,
                         final Properties props,
                         final KafkaClientSupplier clientSupplier) {
-        this(topology.internalTopologyBuilder, new StreamsConfig(props), clientSupplier, Time.SYSTEM);
+        this(topology.internalTopologyBuilder, new StreamsConfig(props), clientSupplier, Time.SYSTEM, 20000L);
     }
 
     /**
@@ -559,9 +561,10 @@ public class KafkaStreams {
      * @throws StreamsException if any fatal error occurs
      */
     public KafkaStreams(final Topology topology,
+                        final StreamsConfig config,
                         final Properties props,
                         final Time time) {
-        this(topology.internalTopologyBuilder, new StreamsConfig(props), new DefaultKafkaClientSupplier(), time);
+        this(topology.internalTopologyBuilder, config, new DefaultKafkaClientSupplier(), DEFAULT_BLOCKING_TIME);
     }
 
     /**
@@ -581,7 +584,7 @@ public class KafkaStreams {
                         final Properties props,
                         final KafkaClientSupplier clientSupplier,
                         final Time time) {
-        this(topology.internalTopologyBuilder, new StreamsConfig(props), clientSupplier, time);
+        this(topology.internalTopologyBuilder, new StreamsConfig(props), clientSupplier, time, DEFAULT_BLOCKING_TIME);
     }
 
     /**
@@ -590,7 +593,7 @@ public class KafkaStreams {
     @Deprecated
     public KafkaStreams(final org.apache.kafka.streams.processor.TopologyBuilder builder,
                         final Properties props) {
-        this(builder.internalTopologyBuilder, new StreamsConfig(props), new DefaultKafkaClientSupplier());
+        this(builder.internalTopologyBuilder, new StreamsConfig(props), new DefaultKafkaClientSupplier(), DEFAULT_BLOCKING_TIME);
     }
 
     /**
@@ -599,7 +602,7 @@ public class KafkaStreams {
     @Deprecated
     public KafkaStreams(final org.apache.kafka.streams.processor.TopologyBuilder builder,
                         final StreamsConfig config) {
-        this(builder.internalTopologyBuilder, config, new DefaultKafkaClientSupplier());
+        this(builder.internalTopologyBuilder, config, new DefaultKafkaClientSupplier(), DEFAULT_BLOCKING_TIME);
     }
 
     /**
@@ -609,7 +612,7 @@ public class KafkaStreams {
     public KafkaStreams(final org.apache.kafka.streams.processor.TopologyBuilder builder,
                         final StreamsConfig config,
                         final KafkaClientSupplier clientSupplier) {
-        this(builder.internalTopologyBuilder, config, clientSupplier);
+        this(builder.internalTopologyBuilder, config, clientSupplier, DEFAULT_BLOCKING_TIME);
     }
 
     /**
@@ -618,7 +621,7 @@ public class KafkaStreams {
     @Deprecated
     public KafkaStreams(final Topology topology,
                         final StreamsConfig config) {
-        this(topology.internalTopologyBuilder, config, new DefaultKafkaClientSupplier());
+        this(topology.internalTopologyBuilder, config, new DefaultKafkaClientSupplier(), DEFAULT_BLOCKING_TIME);
     }
 
     /**
@@ -628,7 +631,7 @@ public class KafkaStreams {
     public KafkaStreams(final Topology topology,
                         final StreamsConfig config,
                         final KafkaClientSupplier clientSupplier) {
-        this(topology.internalTopologyBuilder, config, clientSupplier);
+        this(topology.internalTopologyBuilder, config, clientSupplier, DEFAULT_BLOCKING_TIME);
     }
 
     /**
@@ -637,22 +640,25 @@ public class KafkaStreams {
     @Deprecated
     public KafkaStreams(final Topology topology,
                         final StreamsConfig config,
-                        final Time time) {
-        this(topology.internalTopologyBuilder, config, new DefaultKafkaClientSupplier(), time);
-    }
-
-    private KafkaStreams(final InternalTopologyBuilder internalTopologyBuilder,
-                         final StreamsConfig config,
-                         final KafkaClientSupplier clientSupplier) throws StreamsException {
-        this(internalTopologyBuilder, config, clientSupplier, Time.SYSTEM);
+                        final long maxCommitMs) {
+        this(topology.internalTopologyBuilder, config, new DefaultKafkaClientSupplier(), maxCommitMs);
     }
 
     private KafkaStreams(final InternalTopologyBuilder internalTopologyBuilder,
                          final StreamsConfig config,
                          final KafkaClientSupplier clientSupplier,
-                         final Time time) throws StreamsException {
+                         final long maxCommitMs) throws StreamsException {
+        this(internalTopologyBuilder, config, clientSupplier, Time.SYSTEM, maxCommitMs);
+    }
+
+    private KafkaStreams(final InternalTopologyBuilder internalTopologyBuilder,
+                         final StreamsConfig config,
+                         final KafkaClientSupplier clientSupplier,
+                         final Time time,
+                         final long maxCommitMs) throws StreamsException {
         this.config = config;
         this.time = time;
+        this.maxCommitMs = maxCommitMs;
 
         // The application ID is a required config and hence should always have value
         processId = UUID.randomUUID();
@@ -731,6 +737,7 @@ public class KafkaStreams {
                                              clientId,
                                              metrics,
                                              time,
+                                             DEFAULT_BLOCKING_TIME,
                                              streamsMetadataState,
                                              cacheSizePerThread,
                                              stateDirectory,

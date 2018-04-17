@@ -527,7 +527,7 @@ public class KafkaConsumerTest {
         client.prepareResponseFrom(offsetResponse(Collections.singletonMap(tp0, 539L), Errors.NONE), coordinator);
         consumer.poll(0);
 
-        assertEquals(539L, consumer.position(tp0));
+        assertEquals(539L, consumer.position(tp0, consumer.requestTimeoutMs(), TimeUnit.MILLISECONDS));
     }
 
     @Test
@@ -1039,7 +1039,7 @@ public class KafkaConsumerTest {
 
         ConsumerRecords<String, String> records = consumer.poll(5);
         assertEquals(1, records.count());
-        assertEquals(11L, consumer.position(tp0));
+        assertEquals(11L, consumer.position(tp0, consumer.requestTimeoutMs(), TimeUnit.MILLISECONDS));
 
         // mock the offset commit response for to be revoked partitions
         AtomicBoolean commitReceived = prepareOffsetCommitResponse(client, coordinator, tp0, 11);
@@ -1160,8 +1160,8 @@ public class KafkaConsumerTest {
         offsetResponse.put(tp0, 3L);
         offsetResponse.put(tp1, 3L);
         client.prepareResponse(listOffsetsResponse(offsetResponse));
-        assertEquals(3L, consumer.position(tp0));
-        assertEquals(3L, consumer.position(tp1));
+        assertEquals(3L, consumer.position(tp0, consumer.requestTimeoutMs(), TimeUnit.MILLISECONDS));
+        assertEquals(3L, consumer.position(tp1, consumer.requestTimeoutMs(), TimeUnit.MILLISECONDS));
 
         client.requests().clear();
         consumer.unsubscribe();

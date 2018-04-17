@@ -245,6 +245,11 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
+    public void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets, long timeout, TimeUnit timeunit) {
+        commitSync(offsets);
+    }
+
+    @Override
     public synchronized void seek(TopicPartition partition, long offset) {
         ensureNotClosed();
         subscriptions.seek(partition, offset);
@@ -260,6 +265,11 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
+    public OffsetAndMetadata committed(TopicPartition partition, long timeout, TimeUnit timeunit) {
+        return committed(partition);
+    }
+
+    @Override
     public synchronized long position(TopicPartition partition) {
         ensureNotClosed();
         if (!this.subscriptions.isAssigned(partition))
@@ -270,6 +280,11 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
             offset = this.subscriptions.position(partition);
         }
         return offset;
+    }
+
+    @Override
+    public synchronized long position(TopicPartition partition, long timeout, TimeUnit timeunit) {
+        return position(partition);
     }
 
     @Override

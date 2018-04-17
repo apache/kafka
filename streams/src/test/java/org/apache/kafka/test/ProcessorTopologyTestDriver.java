@@ -242,7 +242,8 @@ public class ProcessorTopologyTestDriver {
                                   new StoreChangelogReader(
                                       createRestoreConsumer(topology.storeToChangelogTopic()),
                                       new MockStateRestoreListener(),
-                                      new LogContext("topology-test-driver ")),
+                                      new LogContext("topology-test-driver "),
+                                      20000L),
                                   config,
                                   streamsMetrics, stateDirectory,
                                   cache,
