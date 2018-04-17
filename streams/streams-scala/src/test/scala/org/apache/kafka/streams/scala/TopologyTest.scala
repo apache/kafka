@@ -22,8 +22,8 @@ package org.apache.kafka.streams.scala
 import java.util.Properties
 import java.util.regex.Pattern
 
-import org.junit.Assert._
 import org.scalatest.junit.JUnitSuite
+import org.junit.Assert._
 import org.junit._
 
 import org.apache.kafka.streams.scala.kstream._
@@ -48,7 +48,7 @@ class TopologyTest extends JUnitSuite with LazyLogging {
 
   val pattern = Pattern.compile("\\W+", Pattern.UNICODE_CHARACTER_CLASS)
 
-  @Test def shouldBuildIdenticalTopologyInJavaNScala_1() = {
+  @Test def shouldBuildIdenticalTopologyInJavaNScalaSimple() = {
 
     // build the Scala topology
     def getTopologyScala(): TopologyDescription = {
@@ -83,7 +83,7 @@ class TopologyTest extends JUnitSuite with LazyLogging {
     assertEquals(getTopologyScala(), getTopologyJava())
   }
 
-  @Test def shouldBuildIdenticalTopologyInJavaNScala_2() = {
+  @Test def shouldBuildIdenticalTopologyInJavaNScalaAggregate() = {
 
     // build the Scala topology
     def getTopologyScala(): TopologyDescription = {
@@ -129,7 +129,7 @@ class TopologyTest extends JUnitSuite with LazyLogging {
     assertEquals(getTopologyScala(), getTopologyJava())
   }
 
-  @Test def shouldBuildIdenticalTopologyInJavaNScala_3() = {
+  @Test def shouldBuildIdenticalTopologyInJavaNScalaJoin() = {
 
     // build the Scala topology
     def getTopologyScala(): TopologyDescription = {

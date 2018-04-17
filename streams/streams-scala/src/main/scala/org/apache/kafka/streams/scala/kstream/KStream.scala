@@ -262,7 +262,8 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * Transform each record of the input stream into zero or more records in the output stream (both key and value type
    * can be altered arbitrarily).
    * A `Transformer` (provided by the given `TransformerSupplier`) is applied to each input record and
-   * computes zero or more output records.
+   * computes zero or more output records. In order to assign a state, the state must be created and registered 
+   * beforehand via stores added via `addStateStore` or `addGlobalStore` before they can be connected to the `Transformer` 
    *
    * @param transformerSupplier a instance of `TransformerSupplier` that generates a `Transformer`
    * @param stateStoreNames     the names of the state stores used by the processor
@@ -302,6 +303,8 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * Transform the value of each input record into a new value (with possible new type) of the output record.
    * A `ValueTransformer` (provided by the given `ValueTransformerSupplier`) is applied to each input
    * record value and computes a new value for it.
+   * In order to assign a state, the state must be created and registered 
+   * beforehand via stores added via `addStateStore` or `addGlobalStore` before they can be connected to the `Transformer` 
    *
    * @param valueTransformerSupplier a instance of `ValueTransformerSupplier` that generates a `ValueTransformer`
    * @param stateStoreNames          the names of the state stores used by the processor
@@ -317,6 +320,8 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * Transform the value of each input record into a new value (with possible new type) of the output record.
    * A `ValueTransformer` (provided by the given `ValueTransformerSupplier`) is applied to each input
    * record value and computes a new value for it.
+   * In order to assign a state, the state must be created and registered 
+   * beforehand via stores added via `addStateStore` or `addGlobalStore` before they can be connected to the `Transformer` 
    *
    * @param valueTransformerSupplier a instance of `ValueTransformerWithKeySupplier` that generates a `ValueTransformerWithKey`
    * @param stateStoreNames          the names of the state stores used by the processor
@@ -331,6 +336,8 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
   /**
    * Process all records in this stream, one record at a time, by applying a `Processor` (provided by the given
    * `processorSupplier`).
+   * In order to assign a state, the state must be created and registered 
+   * beforehand via stores added via `addStateStore` or `addGlobalStore` before they can be connected to the `Transformer` 
    *
    * @param processorSupplier a function that generates a [[org.apache.kafka.stream.Processor]]
    * @param stateStoreNames   the names of the state store used by the processor
@@ -548,6 +555,10 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
 
   /**
    * Merge this stream and the given stream into one larger stream.
+   * <p>
+   * There is no ordering guarantee between records from this `KStream` and records from the provided `KStream` 
+   * in the merged stream. Relative order is preserved within each input stream though (ie, records within 
+   * one input stream are processed in order).
    *
    * @param stream a stream which is to be merged into this stream
    * @return a merged stream containing all records from this and the provided [[KStream]]

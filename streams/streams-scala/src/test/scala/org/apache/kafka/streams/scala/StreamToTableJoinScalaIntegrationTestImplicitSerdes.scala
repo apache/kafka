@@ -18,8 +18,8 @@ package org.apache.kafka.streams.scala
 
 import java.util.Properties
 
-import org.junit.Assert._
 import org.scalatest.junit.JUnitSuite
+import org.junit.Assert._
 import org.junit.rules.TemporaryFolder
 import org.junit._
 

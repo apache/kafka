@@ -22,8 +22,8 @@ package org.apache.kafka.streams.scala
 import java.util.Properties
 import java.util.regex.Pattern
 
-import org.junit.Assert._
 import org.scalatest.junit.JUnitSuite
+import org.junit.Assert._
 import org.junit._
 import org.junit.rules.TemporaryFolder
 

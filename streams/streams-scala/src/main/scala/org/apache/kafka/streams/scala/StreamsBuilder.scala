@@ -128,7 +128,8 @@ class StreamsBuilder(inner: StreamsBuilderJ = new StreamsBuilderJ) {
     inner.table[K, V](topic, consumed, materialized)
 
   /**
-   * Create a `GlobalKTable` from the specified topic.
+   * Create a `GlobalKTable` from the specified topic. The serializers from the implicit `Consumed`
+   * instance will be used. Input records with `null` key will be dropped.
    *
    * @param topic the topic name
    * @return a `GlobalKTable` for the specified topic
@@ -138,7 +139,9 @@ class StreamsBuilder(inner: StreamsBuilderJ = new StreamsBuilderJ) {
     inner.globalTable(topic, consumed)
 
   /**
-   * Create a `GlobalKTable` from the specified topic.
+   * Create a `GlobalKTable` from the specified topic. The resulting `GlobalKTable` will be materialized 
+   * in a local `KeyValueStore` configured with the provided instance of `Materialized`. The serializers 
+   * from the implicit `Consumed` instance will be used.
    *
    * @param topic the topic name
    * @param materialized  the instance of `Materialized` used to materialize a state store
@@ -150,7 +153,8 @@ class StreamsBuilder(inner: StreamsBuilderJ = new StreamsBuilderJ) {
     inner.globalTable(topic, consumed, materialized)
 
   /**
-   * Adds a state store to the underlying `Topology`.
+   * Adds a state store to the underlying `Topology`. The store must still be "connected" to a `Processor`, 
+   * `Transformer`, or `ValueTransformer` before it can be used.
    *
    * @param builder the builder used to obtain this state store `StateStore` instance
    * @return the underlying Java abstraction `StreamsBuilder` after adding the `StateStore`
@@ -160,7 +164,9 @@ class StreamsBuilder(inner: StreamsBuilderJ = new StreamsBuilderJ) {
   def addStateStore(builder: StoreBuilder[_ <: StateStore]): StreamsBuilderJ = inner.addStateStore(builder)
 
   /**
-   * Adds a global `StateStore` to the topology.
+   * Adds a global `StateStore` to the topology. Global stores should not be added to `Processor, `Transformer`, 
+   * or `ValueTransformer` (in contrast to regular stores).
+   *
    * @see `org.apache.kafka.streams.StreamsBuilder#addGlobalStore`
    */ 
   def addGlobalStore(storeBuilder: StoreBuilder[_ <: StateStore],

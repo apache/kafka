@@ -58,7 +58,6 @@ object ImplicitConversions {
 
   implicit def tuple2ToKeyValue[K, V](tuple: (K, V)): KeyValue[K, V] = new KeyValue(tuple._1, tuple._2)
 
-  //scalastyle:on null
   // we would also like to allow users implicit serdes
   // and these implicits will convert them to `Serialized`, `Produced` or `Consumed`
 
