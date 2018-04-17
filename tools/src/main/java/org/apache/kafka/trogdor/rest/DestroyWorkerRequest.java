@@ -19,21 +19,20 @@ package org.apache.kafka.trogdor.rest;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import org.apache.kafka.trogdor.task.TaskSpec;
 
 /**
- * A response from the Trogdor agent about creating a worker.
+ * A request to the Trogdor agent to delete all memory of a task.
  */
-public class CreateWorkerResponse extends Message {
-    private final TaskSpec spec;
+public class DestroyWorkerRequest extends Message {
+    private final long workerId;
 
     @JsonCreator
-    public CreateWorkerResponse(@JsonProperty("spec") TaskSpec spec) {
-        this.spec = spec;
+    public DestroyWorkerRequest(@JsonProperty("workerId") long workerId) {
+        this.workerId = workerId;
     }
 
     @JsonProperty
-    public TaskSpec spec() {
-        return spec;
+    public long workerId() {
+        return workerId;
     }
 }

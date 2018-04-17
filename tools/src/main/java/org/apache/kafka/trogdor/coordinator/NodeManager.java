@@ -79,13 +79,16 @@ public final class NodeManager {
     private static final long HEARTBEAT_DELAY_MS = 1000L;
 
     class ManagedWorker {
-        private final String id;
+        private final long workerId;
+        private final String taskId;
         private final TaskSpec spec;
         private boolean shouldRun;
         private WorkerState state;
 
-        ManagedWorker(String id, TaskSpec spec, boolean shouldRun, WorkerState state) {
-            this.id = id;
+        ManagedWorker(long workerId, String taskId, TaskSpec spec,
+                      boolean shouldRun, WorkerState state) {
+            this.workerId = workerId;
+            this.taskId = taskId;
             this.spec = spec;
             this.shouldRun = shouldRun;
             this.state = state;
@@ -93,18 +96,23 @@ public final class NodeManager {
 
         void tryCreate() {
             try {
-                client.createWorker(new CreateWorkerRequest(id, spec));
+                client.createWorker(new CreateWorkerRequest(workerId, taskId, spec));
             } catch (Throwable e) {
-                log.error("{}: error creating worker {}.", node.name(), id, e);
+                log.error("{}: error creating worker {}.", node.name(), this, e);
             }
         }
 
         void tryStop() {
             try {
-                client.stopWorker(new StopWorkerRequest(id));
+                client.stopWorker(new StopWorkerRequest(workerId));
             } catch (Throwable e) {
-                log.error("{}: error stopping worker {}.", node.name(), id, e);
+                log.error("{}: error stopping worker {}.", node.name(), this, e);
             }
+        }
+
+        @Override
+        public String toString() {
+            return String.format("%s_%d", taskId, workerId);
         }
     }
 
@@ -126,7 +134,7 @@ public final class NodeManager {
     /**
      * Maps task IDs to worker structures.
      */
-    private final Map<String, ManagedWorker> workers;
+    private final Map<Long, ManagedWorker> workers;
 
     /**
      * An executor service which manages the thread dedicated to this node.
@@ -196,24 +204,25 @@ public final class NodeManager {
                 }
                 // Identify workers which we think should be running, but which do not appear
                 // in the agent's response.  We need to send startWorker requests for these.
-                for (Map.Entry<String, ManagedWorker> entry : workers.entrySet()) {
-                    String id = entry.getKey();
-                    if (!agentStatus.workers().containsKey(id)) {
+                for (Map.Entry<Long, ManagedWorker> entry : workers.entrySet()) {
+                    Long workerId = entry.getKey();
+                    if (!agentStatus.workers().containsKey(workerId)) {
                         ManagedWorker worker = entry.getValue();
                         if (worker.shouldRun) {
                             worker.tryCreate();
                         }
                     }
                 }
-                for (Map.Entry<String, WorkerState> entry : agentStatus.workers().entrySet()) {
-                    String id = entry.getKey();
+                for (Map.Entry<Long, WorkerState> entry : agentStatus.workers().entrySet()) {
+                    long workerId = entry.getKey();
                     WorkerState state = entry.getValue();
-                    ManagedWorker worker = workers.get(id);
+                    ManagedWorker worker = workers.get(workerId);
                     if (worker == null) {
                         // Identify tasks which are running, but which we don't know about.
                         // Add these to the NodeManager as tasks that should not be running.
-                        log.warn("{}: scheduling unknown worker {} for stopping.", node.name(), id);
-                        workers.put(id, new ManagedWorker(id, state.spec(), false, state));
+                        log.warn("{}: scheduling unknown worker with ID {} for stopping.", node.name(), workerId);
+                        workers.put(workerId, new ManagedWorker(workerId, state.taskId(),
+                            state.spec(), false, state));
                     } else {
                         // Handle workers which need to be stopped.
                         if (state instanceof WorkerStarting || state instanceof WorkerRunning) {
@@ -227,7 +236,7 @@ public final class NodeManager {
                         } else {
                             log.info("{}: worker state changed from {} to {}", node.name(), worker.state, state);
                             worker.state = state;
-                            taskManager.updateWorkerState(node.name(), worker.id, state);
+                            taskManager.updateWorkerState(node.name(), worker.workerId, state);
                         }
                     }
                 }
@@ -240,34 +249,39 @@ public final class NodeManager {
     /**
      * Create a new worker.
      *
-     * @param id                    The new worker id.
+     * @param workerId              The new worker id.
+     * @param taskId                The new task id.
      * @param spec                  The task specification to use with the new worker.
      */
-    public void createWorker(String id, TaskSpec spec) {
-        executor.submit(new CreateWorker(id, spec));
+    public void createWorker(long workerId, String taskId, TaskSpec spec) {
+        executor.submit(new CreateWorker(workerId, taskId, spec));
     }
 
     /**
      * Starts a worker.
      */
     class CreateWorker implements Callable<Void> {
-        private final String id;
+        private final long workerId;
+        private final String taskId;
         private final TaskSpec spec;
 
-        CreateWorker(String id, TaskSpec spec) {
-            this.id = id;
+        CreateWorker(long workerId, String taskId, TaskSpec spec) {
+            this.workerId = workerId;
+            this.taskId = taskId;
             this.spec = spec;
         }
 
         @Override
         public Void call() throws Exception {
-            ManagedWorker worker = workers.get(id);
+            ManagedWorker worker = workers.get(workerId);
             if (worker != null) {
-                log.error("{}: there is already a worker for task {}.", node.name(), id);
+                log.error("{}: there is already a worker {} with ID {}.",
+                    node.name(), worker, workerId);
                 return null;
             }
-            log.info("{}: scheduling worker {} to start.", node.name(), id);
-            workers.put(id, new ManagedWorker(id, spec, true, new WorkerReceiving(spec)));
+            worker = new ManagedWorker(workerId, taskId, spec, true, new WorkerReceiving(taskId, spec));
+            log.info("{}: scheduling worker {} to start.", node.name(), worker);
+            workers.put(workerId, worker);
             rescheduleNextHeartbeat(0);
             return null;
         }
@@ -276,36 +290,67 @@ public final class NodeManager {
     /**
      * Stop a worker.
      *
-     * @param id                    The id of the worker to stop.
+     * @param workerId              The id of the worker to stop.
      */
-    public void stopWorker(String id) {
-        executor.submit(new StopWorker(id));
+    public void stopWorker(long workerId) {
+        executor.submit(new StopWorker(workerId));
     }
 
     /**
      * Stops a worker.
      */
     class StopWorker implements Callable<Void> {
-        private final String id;
+        private final long workerId;
 
-        StopWorker(String id) {
-            this.id = id;
+        StopWorker(long workerId) {
+            this.workerId = workerId;
         }
 
         @Override
         public Void call() throws Exception {
-            ManagedWorker worker = workers.get(id);
+            ManagedWorker worker = workers.get(workerId);
             if (worker == null) {
-                log.error("{}: can't stop non-existent worker {}.", node.name(), id);
+                log.error("{}: unable to locate worker to stop with ID {}.", node.name(), workerId);
                 return null;
             }
             if (!worker.shouldRun) {
-                log.error("{}: The worker for task {} is already scheduled to stop.",
-                    node.name(), id);
+                log.error("{}: Worker {} is already scheduled to stop.",
+                    node.name(), worker);
                 return null;
             }
-            log.info("{}: scheduling worker {} on {} to stop.", node.name(), id);
+            log.info("{}: scheduling worker {} to stop.", node.name(), worker);
             worker.shouldRun = false;
+            rescheduleNextHeartbeat(0);
+            return null;
+        }
+    }
+
+    /**
+     * Destroy a worker.
+     *
+     * @param workerId              The id of the worker to destroy.
+     */
+    public void destroyWorker(long workerId) {
+        executor.submit(new DestroyWorker(workerId));
+    }
+
+    /**
+     * Destroys a worker.
+     */
+    class DestroyWorker implements Callable<Void> {
+        private final long workerId;
+
+        DestroyWorker(long workerId) {
+            this.workerId = workerId;
+        }
+
+        @Override
+        public Void call() throws Exception {
+            ManagedWorker worker = workers.remove(workerId);
+            if (worker == null) {
+                log.error("{}: unable to locate worker to destroy with ID {}.", node.name(), workerId);
+                return null;
+            }
             rescheduleNextHeartbeat(0);
             return null;
         }

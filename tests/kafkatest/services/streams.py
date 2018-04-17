@@ -16,6 +16,8 @@
 import os.path
 import signal
 
+import streams_property
+
 from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
@@ -23,7 +25,6 @@ from kafkatest.services.monitor.jmx import JmxMixin
 from kafkatest.services.kafka import KafkaConfig
 from kafkatest.version import LATEST_0_10_0, LATEST_0_10_1
 
-STATE_DIR = "state.dir"
 
 class StreamsTestBaseService(KafkaPathResolverMixin, JmxMixin, Service):
     """Base class for Streams Test services providing some common settings and functionality"""
@@ -168,14 +169,14 @@ class StreamsTestBaseService(KafkaPathResolverMixin, JmxMixin, Service):
             "collect_default": True},
     }
 
-    def __init__(self, test_context, kafka, streams_class_name, user_test_args, user_test_args1=None, user_test_args2=None, user_test_args3=None):
+    def __init__(self, test_context, kafka, streams_class_name, user_test_args1, user_test_args2=None, user_test_args3=None, user_test_args4=None):
         Service.__init__(self, test_context, num_nodes=1)
         self.kafka = kafka
         self.args = {'streams_class_name': streams_class_name,
-                     'user_test_args': user_test_args,
                      'user_test_args1': user_test_args1,
                      'user_test_args2': user_test_args2,
-                     'user_test_args3': user_test_args3}
+                     'user_test_args3': user_test_args3,
+                     'user_test_args4': user_test_args4}
         self.log_level = "DEBUG"
 
     @property
@@ -236,7 +237,6 @@ class StreamsTestBaseService(KafkaPathResolverMixin, JmxMixin, Service):
 
     def start_cmd(self, node):
         args = self.args.copy()
-        args['kafka'] = self.kafka.bootstrap_servers()
         args['config_file'] = self.CONFIG_FILE
         args['stdout'] = self.STDOUT_FILE
         args['stderr'] = self.STDERR_FILE
@@ -246,15 +246,15 @@ class StreamsTestBaseService(KafkaPathResolverMixin, JmxMixin, Service):
 
         cmd = "( export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%(log4j)s\"; " \
               "INCLUDE_TEST_JARS=true %(kafka_run_class)s %(streams_class_name)s " \
-              " %(kafka)s %(config_file)s %(user_test_args)s %(user_test_args1)s %(user_test_args2)s" \
-              " %(user_test_args3)s & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % args
+              " %(config_file)s %(user_test_args1)s %(user_test_args2)s %(user_test_args3)s" \
+              " %(user_test_args4)s & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % args
 
         self.logger.info("Executing streams cmd: " + cmd)
 
         return cmd
 
     def prop_file(self):
-        cfg = KafkaConfig(**{STATE_DIR: self.PERSISTENT_ROOT})
+        cfg = KafkaConfig(**{streams_property.STATE_DIR: self.PERSISTENT_ROOT, streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers()})
         return cfg.render()
 
     def start_node(self, node):
@@ -374,7 +374,6 @@ class StreamsBrokerDownResilienceService(StreamsTestBaseService):
 
     def start_cmd(self, node):
         args = self.args.copy()
-        args['kafka'] = self.kafka.bootstrap_servers(validate=False)
         args['config_file'] = self.CONFIG_FILE
         args['stdout'] = self.STDOUT_FILE
         args['stderr'] = self.STDERR_FILE
@@ -384,8 +383,8 @@ class StreamsBrokerDownResilienceService(StreamsTestBaseService):
 
         cmd = "( export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%(log4j)s\"; " \
               "INCLUDE_TEST_JARS=true %(kafka_run_class)s %(streams_class_name)s " \
-              " %(kafka)s %(config_file)s %(user_test_args)s %(user_test_args1)s %(user_test_args2)s" \
-              " %(user_test_args3)s & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % args
+              " %(config_file)s %(user_test_args1)s %(user_test_args2)s %(user_test_args3)s" \
+              " %(user_test_args4)s & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % args
 
         self.logger.info("Executing: " + cmd)
 

@@ -41,10 +41,7 @@ public class ConsumeBenchSpec extends TaskSpec {
     private final Map<String, String> consumerConf;
     private final Map<String, String> adminClientConf;
     private final Map<String, String> commonClientConf;
-    private final String topicRegex;
-    private final int startPartition;
-    private final int endPartition;
-
+    private final TopicsSpec activeTopics;
 
     @JsonCreator
     public ConsumeBenchSpec(@JsonProperty("startMs") long startMs,
@@ -56,9 +53,7 @@ public class ConsumeBenchSpec extends TaskSpec {
                             @JsonProperty("consumerConf") Map<String, String> consumerConf,
                             @JsonProperty("commonClientConf") Map<String, String> commonClientConf,
                             @JsonProperty("adminClientConf") Map<String, String> adminClientConf,
-                            @JsonProperty("topicRegex") String topicRegex,
-                            @JsonProperty("startPartition") int startPartition,
-                            @JsonProperty("endPartition") int endPartition) {
+                            @JsonProperty("activeTopics") TopicsSpec activeTopics) {
         super(startMs, durationMs);
         this.consumerNode = (consumerNode == null) ? "" : consumerNode;
         this.bootstrapServers = (bootstrapServers == null) ? "" : bootstrapServers;
@@ -67,9 +62,7 @@ public class ConsumeBenchSpec extends TaskSpec {
         this.consumerConf = configOrEmptyMap(consumerConf);
         this.commonClientConf = configOrEmptyMap(commonClientConf);
         this.adminClientConf = configOrEmptyMap(adminClientConf);
-        this.topicRegex = topicRegex;
-        this.startPartition = startPartition;
-        this.endPartition = endPartition;
+        this.activeTopics = activeTopics == null ? TopicsSpec.EMPTY : activeTopics.immutableCopy();
     }
 
     @JsonProperty
@@ -108,18 +101,8 @@ public class ConsumeBenchSpec extends TaskSpec {
     }
 
     @JsonProperty
-    public String topicRegex() {
-        return topicRegex;
-    }
-
-    @JsonProperty
-    public int startPartition() {
-        return startPartition;
-    }
-
-    @JsonProperty
-    public int endPartition() {
-        return endPartition;
+    public TopicsSpec activeTopics() {
+        return activeTopics;
     }
 
     @Override

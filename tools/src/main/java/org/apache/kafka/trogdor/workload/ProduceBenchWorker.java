@@ -26,7 +26,7 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.utils.Time;
@@ -40,6 +40,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.Callable;
@@ -66,16 +68,6 @@ public class ProduceBenchWorker implements TaskWorker {
 
     private KafkaFutureImpl<String> doneFuture;
 
-    /**
-     * Generate a topic name based on a topic number.
-     *
-     * @param topicIndex        The topic number.
-     * @return                  The topic name.
-     */
-    public String topicIndexToName(int topicIndex) {
-        return String.format("%s%05d", spec.topicPrefix(), topicIndex);
-    }
-
     public ProduceBenchWorker(String id, ProduceBenchSpec spec) {
         this.id = id;
         this.spec = spec;
@@ -88,7 +80,9 @@ public class ProduceBenchWorker implements TaskWorker {
             throw new IllegalStateException("ProducerBenchWorker is already running.");
         }
         log.info("{}: Activating ProduceBenchWorker with {}", id, spec);
-        this.executor = Executors.newScheduledThreadPool(1,
+        // Create an executor with 2 threads.  We need the second thread so
+        // that the StatusUpdater can run in parallel with SendRecords.
+        this.executor = Executors.newScheduledThreadPool(2,
             ThreadUtils.createThreadFactory("ProduceBenchWorkerThread%d", false));
         this.status = status;
         this.doneFuture = doneFuture;
@@ -99,25 +93,31 @@ public class ProduceBenchWorker implements TaskWorker {
         @Override
         public void run() {
             try {
-                if (spec.activeTopics() == 0) {
-                    throw new ConfigException("Can't have activeTopics == 0.");
-                }
-                if (spec.totalTopics() < spec.activeTopics()) {
-                    throw new ConfigException(String.format(
-                        "activeTopics was %d, but totalTopics was only %d.  activeTopics must " +
-                            "be less than or equal to totalTopics.", spec.activeTopics(), spec.totalTopics()));
-                }
                 Map<String, NewTopic> newTopics = new HashMap<>();
-                for (int i = 0; i < spec.totalTopics(); i++) {
-                    String name = topicIndexToName(i);
-                    newTopics.put(name, new NewTopic(name, spec.numPartitions(),
-                                                     spec.replicationFactor()));
+                HashSet<TopicPartition> active = new HashSet<>();
+                for (Map.Entry<String, PartitionsSpec> entry :
+                        spec.activeTopics().materialize().entrySet()) {
+                    String topicName = entry.getKey();
+                    PartitionsSpec partSpec = entry.getValue();
+                    newTopics.put(topicName, partSpec.newTopic(topicName));
+                    for (Integer partitionNumber : partSpec.partitionNumbers()) {
+                        active.add(new TopicPartition(topicName, partitionNumber));
+                    }
                 }
-                status.update(new TextNode("Creating " + spec.totalTopics() + " topic(s)"));
+                if (active.isEmpty()) {
+                    throw new RuntimeException("You must specify at least one active topic.");
+                }
+                for (Map.Entry<String, PartitionsSpec> entry :
+                        spec.inactiveTopics().materialize().entrySet()) {
+                    String topicName = entry.getKey();
+                    PartitionsSpec partSpec = entry.getValue();
+                    newTopics.put(topicName, partSpec.newTopic(topicName));
+                }
+                status.update(new TextNode("Creating " + newTopics.keySet().size() + " topic(s)"));
                 WorkerUtils.createTopics(log, spec.bootstrapServers(), spec.commonClientConf(),
                                          spec.adminClientConf(), newTopics, false);
-                status.update(new TextNode("Created " + spec.totalTopics() + " topic(s)"));
-                executor.submit(new SendRecords());
+                status.update(new TextNode("Created " + newTopics.keySet().size() + " topic(s)"));
+                executor.submit(new SendRecords(active));
             } catch (Throwable e) {
                 WorkerUtils.abort(log, "Prepare", e, doneFuture);
             }
@@ -167,6 +167,8 @@ public class ProduceBenchWorker implements TaskWorker {
     }
 
     public class SendRecords implements Callable<Void> {
+        private final HashSet<TopicPartition> activePartitions;
+
         private final Histogram histogram;
 
         private final Future<?> statusUpdaterFuture;
@@ -179,7 +181,8 @@ public class ProduceBenchWorker implements TaskWorker {
 
         private final Throttle throttle;
 
-        SendRecords() {
+        SendRecords(HashSet<TopicPartition> activePartitions) {
+            this.activePartitions = activePartitions;
             this.histogram = new Histogram(5000);
             int perPeriod = WorkerUtils.perSecToPerPeriod(spec.targetMessagesPerSec(), THROTTLE_PERIOD_MS);
             this.statusUpdaterFuture = executor.scheduleWithFixedDelay(
@@ -201,13 +204,16 @@ public class ProduceBenchWorker implements TaskWorker {
             try {
                 Future<RecordMetadata> future = null;
                 try {
+                    Iterator<TopicPartition> iter = activePartitions.iterator();
                     for (int m = 0; m < spec.maxMessages(); m++) {
-                        for (int i = 0; i < spec.activeTopics(); i++) {
-                            ProducerRecord<byte[], byte[]> record = new ProducerRecord<byte[], byte[]>(
-                                topicIndexToName(i), 0, keys.next(), values.next());
-                            future = producer.send(record,
-                                new SendRecordsCallback(this, Time.SYSTEM.milliseconds()));
+                        if (!iter.hasNext()) {
+                            iter = activePartitions.iterator();
                         }
+                        TopicPartition partition = iter.next();
+                        ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(
+                            partition.topic(), partition.partition(), keys.next(), values.next());
+                        future = producer.send(record,
+                            new SendRecordsCallback(this, Time.SYSTEM.milliseconds()));
                         throttle.increment();
                     }
                 } finally {
