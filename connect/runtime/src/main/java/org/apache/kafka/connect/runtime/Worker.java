@@ -455,6 +455,15 @@ public class Worker {
                     internalKeyConverter, internalValueConverter);
             OffsetStorageWriter offsetWriter = new OffsetStorageWriter(offsetBackingStore, id.connector(),
                     internalKeyConverter, internalValueConverter);
+            
+            // Why do you use only producerProps
+            // Could we merge producerProps and connectorConfig (producer's config properties)?
+            // Use-case: have different sasl.jaas.config function of Connector "instances"
+            // So different credentials (to bridge with ACLs)
+            // KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps);
+            // must define how to merge producerProps + connConfig
+            // KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(mergedProducerProps);
+            
             KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps);
             return new WorkerSourceTask(id, (SourceTask) task, statusListener, initialState, keyConverter, valueConverter,
                     headerConverter, transformationChain, producer, offsetReader, offsetWriter, config, metrics, loader, time);
