@@ -18,8 +18,6 @@ package org.apache.kafka.common.metrics;
 
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.CompoundStat.NamedMeasurable;
-import org.apache.kafka.common.metrics.stats.Rate;
-import org.apache.kafka.common.metrics.stats.SampledStat;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 
@@ -292,17 +290,11 @@ public final class Sensor {
         return Collections.unmodifiableList(new LinkedList<>(this.metrics.values()));
     }
 
+    /**
+     * KafkaMetrics of sensors which use SampledStat should be synchronized on the Sensor object
+     * to allow concurrent reads and updates. For simplicity, all sensors are synchronized on Sensor.
+     */
     private Object metricLock(Stat stat) {
-        boolean requiresSensorLockForAccess = stat instanceof SampledStat || stat instanceof Rate;
-        if (stat instanceof CompoundStat) {
-            for (NamedMeasurable namedStat : ((CompoundStat) stat).stats()) {
-                Measurable measurable = namedStat.stat();
-                if (measurable instanceof SampledStat || measurable instanceof Rate) {
-                    requiresSensorLockForAccess = true;
-                    break;
-                }
-            }
-        }
-        return requiresSensorLockForAccess ? this : new Object();
+        return this;
     }
 }
