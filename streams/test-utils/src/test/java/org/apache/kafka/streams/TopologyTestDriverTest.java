@@ -910,7 +910,7 @@ public class TopologyTestDriverTest {
             Consumed.with(Serdes.String(), Serdes.String()),
             Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("globalStore"));
         try (final TopologyTestDriver testDriver = new TopologyTestDriver(builder.build(), config)) {
-            final KeyValueStore<String,String> globalStore = testDriver.getKeyValueStore("globalStore");
+            final KeyValueStore<String, String> globalStore = testDriver.getKeyValueStore("globalStore");
             Assert.assertNotNull(globalStore);
             Assert.assertNotNull(testDriver.getAllStateStores().get("globalStore"));
             final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
