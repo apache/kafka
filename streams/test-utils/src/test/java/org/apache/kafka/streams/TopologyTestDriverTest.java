@@ -987,7 +987,7 @@ public class TopologyTestDriverTest {
             String str =
                     String.format(
                             "Invalid topology: Topology add source of type String for topic: %s cannot contain regex pattern for " +
-                                    "consumer topic: %s and hence it cannot commit the message.",
+                                    "input record topic: %s and hence cannot process the message.",
                             pattern2Source1,
                             SOURCE_TOPIC_1);
             assertEquals(str, exception.getMessage());

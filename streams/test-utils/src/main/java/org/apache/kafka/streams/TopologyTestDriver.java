@@ -363,12 +363,12 @@ public class TopologyTestDriver {
         }
     }
 
-    private void validateSourceTopicNameRegexPattern(String consumerTopic) {
+    private void validateSourceTopicNameRegexPattern(final String inputRecordTopic) {
         for (final String sourceTopicName : internalTopologyBuilder.getSourceTopicNames()) {
-            if (!sourceTopicName.equals(consumerTopic) && Pattern.compile(sourceTopicName).matcher(consumerTopic).matches()) {
+            if (!sourceTopicName.equals(inputRecordTopic) && Pattern.compile(sourceTopicName).matcher(inputRecordTopic).matches()) {
                 throw new TopologyException("Topology add source of type String for topic: " + sourceTopicName +
-                        " cannot contain regex pattern for consumer topic: " + consumerTopic +
-                        " and hence it cannot commit the message.");
+                        " cannot contain regex pattern for input record topic: " + inputRecordTopic +
+                        " and hence cannot process the message.");
             }
         }
     }
