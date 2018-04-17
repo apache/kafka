@@ -18,9 +18,9 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
-import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -75,8 +75,9 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
         public void process(final K key, final V value) {
             // if the key is null, we do not need proceed aggregating the record
             // the record with the table
-            if (key == null)
+            if (key == null) {
                 return;
+            }
 
             // first get the matching windows
             final long timestamp = context().timestamp();
@@ -128,8 +129,8 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
         @SuppressWarnings("unchecked")
         @Override
         public T get(final Windowed<K> windowedKey) {
-            K key = windowedKey.key();
-            W window = (W) windowedKey.window();
+            final K key = windowedKey.key();
+            final W window = (W) windowedKey.window();
 
             return windowStore.fetch(key, window.start());
         }

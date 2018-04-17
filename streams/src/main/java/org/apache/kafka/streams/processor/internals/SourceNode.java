@@ -36,7 +36,11 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
     private ExtendedDeserializer<V> valDeserializer;
     private final TimestampExtractor timestampExtractor;
 
-    public SourceNode(String name, List<String> topics, TimestampExtractor timestampExtractor, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer) {
+    public SourceNode(final String name,
+                      final List<String> topics,
+                      final TimestampExtractor timestampExtractor,
+                      final Deserializer<K> keyDeserializer,
+                      final Deserializer<V> valDeserializer) {
         super(name);
         this.topics = topics;
         this.timestampExtractor = timestampExtractor;
@@ -44,21 +48,24 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
         this.valDeserializer = ensureExtended(valDeserializer);
     }
 
-    public SourceNode(String name, List<String> topics, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer) {
+    public SourceNode(final String name,
+                      final List<String> topics,
+                      final Deserializer<K> keyDeserializer,
+                      final Deserializer<V> valDeserializer) {
         this(name, topics, null, keyDeserializer, valDeserializer);
     }
 
-    K deserializeKey(String topic, Headers headers, byte[] data) {
+    K deserializeKey(final String topic, final Headers headers, final byte[] data) {
         return keyDeserializer.deserialize(topic, headers, data);
     }
 
-    V deserializeValue(String topic, Headers headers, byte[] data) {
+    V deserializeValue(final String topic, final Headers headers, final byte[] data) {
         return valDeserializer.deserialize(topic, headers, data);
     }
 
     @SuppressWarnings("unchecked")
     @Override
-    public void init(ProcessorContext context) {
+    public void init(final ProcessorContext context) {
         super.init(context);
         this.context = context;
 
@@ -78,7 +85,7 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
     @Override
     public void process(final K key, final V value) {
         context.forward(key, value);
-        nodeMetrics.sourceNodeForwardSensor.record();
+        sourceNodeForwardSensor().record();
     }
 
     /**
@@ -92,10 +99,10 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
     /**
      * @return a string representation of this node starting with the given indent, useful for debugging.
      */
-    public String toString(String indent) {
+    public String toString(final String indent) {
         final StringBuilder sb = new StringBuilder(super.toString(indent));
         sb.append(indent).append("\ttopics:\t\t[");
-        for (String topic : topics) {
+        for (final String topic : topics) {
             sb.append(topic);
             sb.append(", ");
         }

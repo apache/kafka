@@ -29,7 +29,7 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, K, V,
 
     private boolean sendOldValues = false;
 
-    public KStreamReduce(String storeName, Reducer<V> reducer) {
+    KStreamReduce(final String storeName, final Reducer<V> reducer) {
         this.storeName = storeName;
         this.reducer = reducer;
     }
@@ -51,7 +51,7 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, K, V,
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(ProcessorContext context) {
+        public void init(final ProcessorContext context) {
             super.init(context);
 
             store = (KeyValueStore<K, V>) context.getStateStore(storeName);
@@ -60,13 +60,13 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, K, V,
 
 
         @Override
-        public void process(K key, V value) {
+        public void process(final K key, final V value) {
             // If the key or value is null we don't need to proceed
             if (key == null || value == null) {
                 return;
             }
 
-            V oldAgg = store.get(key);
+            final V oldAgg = store.get(key);
             V newAgg = oldAgg;
 
             // try to add the new value
@@ -75,7 +75,7 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, K, V,
             } else {
                 newAgg = reducer.apply(newAgg, value);
             }
-            
+
             // update the store with the new value
             store.put(key, newAgg);
             tupleForwarder.maybeForward(key, newAgg, oldAgg);
@@ -104,12 +104,12 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, K, V,
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(ProcessorContext context) {
+        public void init(final ProcessorContext context) {
             store = (KeyValueStore<K, V>) context.getStateStore(storeName);
         }
 
         @Override
-        public V get(K key) {
+        public V get(final K key) {
             return store.get(key);
         }
     }

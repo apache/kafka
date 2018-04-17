@@ -73,40 +73,42 @@ public class GlobalKTableJoinsTest {
 
     @Test
     public void shouldLeftJoinWithStream() {
-        stream.leftJoin(global, keyValueMapper, MockValueJoiner.TOSTRING_JOINER)
-                .foreach(action);
+        stream
+            .leftJoin(global, keyValueMapper, MockValueJoiner.TOSTRING_JOINER)
+            .foreach(action);
 
         final Map<String, String> expected = new HashMap<>();
         expected.put("1", "a+A");
         expected.put("2", "b+B");
         expected.put("3", "c+null");
 
-        verifyJoin(expected, streamTopic);
+        verifyJoin(expected);
 
     }
 
     @Test
     public void shouldInnerJoinWithStream() {
-        stream.join(global, keyValueMapper,  MockValueJoiner.TOSTRING_JOINER)
-                .foreach(action);
+        stream
+            .join(global, keyValueMapper, MockValueJoiner.TOSTRING_JOINER)
+            .foreach(action);
 
         final Map<String, String> expected = new HashMap<>();
         expected.put("1", "a+A");
         expected.put("2", "b+B");
 
-        verifyJoin(expected, streamTopic);
+        verifyJoin(expected);
     }
 
-    private void verifyJoin(final Map<String, String> expected, final String joinInput) {
+    private void verifyJoin(final Map<String, String> expected) {
         driver.setUp(builder, stateDir);
         driver.setTime(0L);
         // write some data to the global table
         driver.process(globalTopic, "a", "A");
         driver.process(globalTopic, "b", "B");
         //write some data to the stream
-        driver.process(joinInput, "1", "a");
-        driver.process(joinInput, "2", "b");
-        driver.process(joinInput, "3", "c");
+        driver.process(streamTopic, "1", "a");
+        driver.process(streamTopic, "2", "b");
+        driver.process(streamTopic, "3", "c");
         driver.flushState();
 
         assertEquals(expected, results);

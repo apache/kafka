@@ -70,8 +70,9 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
         public void process(final K key, final V value) {
             // if the key is null, we do not need proceed aggregating
             // the record with the table
-            if (key == null)
+            if (key == null) {
                 return;
+            }
 
             // first get the matching windows
             final long timestamp = context().timestamp();
@@ -81,7 +82,7 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
             for (final Map.Entry<Long, W> entry : matchedWindows.entrySet()) {
                 final V oldAgg = windowStore.fetch(key, entry.getKey());
 
-                V newAgg;
+                final V newAgg;
                 if (oldAgg == null) {
                     newAgg = value;
                 } else {
@@ -124,8 +125,8 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
         @SuppressWarnings("unchecked")
         @Override
         public V get(final Windowed<K> windowedKey) {
-            K key = windowedKey.key();
-            W window = (W) windowedKey.window();
+            final K key = windowedKey.key();
+            final W window = (W) windowedKey.window();
 
             return windowStore.fetch(key, window.start());
         }

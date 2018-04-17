@@ -35,10 +35,17 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.fail;
 
 public class SinkNodeTest {
-    private final Serializer anySerializer = Serdes.Bytes().serializer();
-    private final StateSerdes anyStateSerde = StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class);
-    private final InternalMockProcessorContext context = new InternalMockProcessorContext(anyStateSerde,
-        new RecordCollectorImpl(new MockProducer<byte[], byte[]>(true, anySerializer, anySerializer), null, new LogContext("sinknode-test "), new DefaultProductionExceptionHandler()));
+    private final Serializer<byte[]> anySerializer = Serdes.ByteArray().serializer();
+    private final StateSerdes<Bytes, Bytes> anyStateSerde = StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class);
+    private final InternalMockProcessorContext context = new InternalMockProcessorContext(
+        anyStateSerde,
+        new RecordCollectorImpl(
+            new MockProducer<>(true, anySerializer, anySerializer),
+            null,
+            new LogContext("sinknode-test "),
+            new DefaultProductionExceptionHandler()
+        )
+    );
     private final SinkNode sink = new SinkNode<>("anyNodeName", "any-output-topic", anySerializer, anySerializer, null);
 
     @Before

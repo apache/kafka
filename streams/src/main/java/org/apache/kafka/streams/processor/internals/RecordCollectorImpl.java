@@ -23,14 +23,14 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.OffsetMetadataTooLarge;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.RetriableException;
-import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.serialization.Serializer;
@@ -95,11 +95,11 @@ public class RecordCollectorImpl implements RecordCollector {
     }
 
     private boolean productionExceptionIsFatal(final Exception exception) {
-        boolean securityException = exception instanceof AuthenticationException ||
+        final boolean securityException = exception instanceof AuthenticationException ||
             exception instanceof AuthorizationException ||
             exception instanceof SecurityDisabledException;
 
-        boolean communicationException = exception instanceof InvalidTopicException ||
+        final boolean communicationException = exception instanceof InvalidTopicException ||
             exception instanceof UnknownServerException ||
             exception instanceof SerializationException ||
             exception instanceof OffsetMetadataTooLarge ||
@@ -123,31 +123,32 @@ public class RecordCollectorImpl implements RecordCollector {
         }
         log.error(errorLogMessage, key, value, timestamp, topic, exception.toString());
         sendException = new StreamsException(
-            String.format(errorMessage,
-                          logPrefix,
-                          "an error caught",
-                          key,
-                          value,
-                          timestamp,
-                          topic,
-                          exception.toString()),
+            String.format(
+                errorMessage,
+                logPrefix,
+                "an error caught",
+                key,
+                value,
+                timestamp,
+                topic,
+                exception.toString()
+            ),
             exception);
     }
 
     @Override
-    public <K, V> void  send(final String topic,
-                             final K key,
-                             final V value,
-                             final Integer partition,
-                             final Long timestamp,
-                             final Serializer<K> keySerializer,
-                             final Serializer<V> valueSerializer) {
+    public <K, V> void send(final String topic,
+                            final K key,
+                            final V value,
+                            final Integer partition,
+                            final Long timestamp,
+                            final Serializer<K> keySerializer,
+                            final Serializer<V> valueSerializer) {
         checkForException();
         final byte[] keyBytes = keySerializer.serialize(topic, key);
         final byte[] valBytes = valueSerializer.serialize(topic, value);
 
-        final ProducerRecord<byte[], byte[]> serializedRecord =
-                new ProducerRecord<>(topic, partition, timestamp, keyBytes, valBytes);
+        final ProducerRecord<byte[], byte[]> serializedRecord = new ProducerRecord<>(topic, partition, timestamp, keyBytes, valBytes);
 
         try {
             producer.send(serializedRecord, new Callback() {
@@ -165,14 +166,17 @@ public class RecordCollectorImpl implements RecordCollector {
                             if (exception instanceof ProducerFencedException) {
                                 log.warn(LOG_MESSAGE, key, value, timestamp, topic, exception.toString());
                                 sendException = new ProducerFencedException(
-                                    String.format(EXCEPTION_MESSAGE,
-                                                  logPrefix,
-                                                  "producer got fenced",
-                                                  key,
-                                                  value,
-                                                  timestamp,
-                                                  topic,
-                                                  exception.toString()));
+                                    String.format(
+                                        EXCEPTION_MESSAGE,
+                                        logPrefix,
+                                        "producer got fenced",
+                                        key,
+                                        value,
+                                        timestamp,
+                                        topic,
+                                        exception.toString()
+                                    )
+                                );
                             } else {
                                 if (productionExceptionIsFatal(exception)) {
                                     recordSendError(key, value, timestamp, topic, exception);
@@ -194,19 +198,21 @@ public class RecordCollectorImpl implements RecordCollector {
             throw new StreamsException(String.format("%sFailed to send record to topic %s due to timeout.", logPrefix, topic));
         } catch (final Exception uncaughtException) {
             throw new StreamsException(
-                String.format(EXCEPTION_MESSAGE,
-                              logPrefix,
-                              "an error caught",
-                              key,
-                              value,
-                              timestamp,
-                              topic,
-                              uncaughtException.toString()),
+                String.format(
+                    EXCEPTION_MESSAGE,
+                    logPrefix,
+                    "an error caught",
+                    key,
+                    value,
+                    timestamp,
+                    topic,
+                    uncaughtException.toString()
+                ),
                 uncaughtException);
         }
     }
 
-    private void checkForException()  {
+    private void checkForException() {
         if (sendException != null) {
             throw sendException;
         }
