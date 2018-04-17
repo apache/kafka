@@ -58,4 +58,21 @@ public class CertStores {
     public Map<String, Object> getUntrustingConfig() {
         return sslConfig;
     }
+
+    public Map<String, Object> keyStoreProps() {
+        Map<String, Object> props = new HashMap<>();
+        props.put(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, sslConfig.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG));
+        props.put(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, sslConfig.get(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG));
+        props.put(SslConfigs.SSL_KEY_PASSWORD_CONFIG, sslConfig.get(SslConfigs.SSL_KEY_PASSWORD_CONFIG));
+        props.put(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG, sslConfig.get(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG));
+        return props;
+    }
+
+    public Map<String, Object> trustStoreProps() {
+        Map<String, Object> props = new HashMap<>();
+        props.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, sslConfig.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
+        props.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, sslConfig.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG));
+        props.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, sslConfig.get(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG));
+        return props;
+    }
 }
