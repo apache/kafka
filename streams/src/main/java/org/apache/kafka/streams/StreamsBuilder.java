@@ -515,6 +515,7 @@ public class StreamsBuilder {
      * @return the {@link Topology} that represents the specified processing logic
      */
     public synchronized Topology build() {
+        internalStreamsBuilder.buildAndOptimize();
         return topology;
     }
 }

@@ -82,6 +82,7 @@ public class KStreamKStreamLeftJoinTest {
                                   Joined.with(intSerde, stringSerde, stringSerde));
         joined.process(processor);
 
+        builder.build();
         final Collection<Set<String>> copartitionGroups = StreamsBuilderTest.getCopartitionedGroups(builder);
 
         assertEquals(1, copartitionGroups.size());
@@ -173,6 +174,7 @@ public class KStreamKStreamLeftJoinTest {
                                   Joined.with(intSerde, stringSerde, stringSerde));
         joined.process(processor);
 
+        builder.build();
         final Collection<Set<String>> copartitionGroups = StreamsBuilderTest.getCopartitionedGroups(builder);
 
         assertEquals(1, copartitionGroups.size());

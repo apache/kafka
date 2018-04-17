@@ -765,6 +765,7 @@ public class StreamsPartitionAssignorTest {
                 }
             });
 
+        builder.build();
         final UUID uuid = UUID.randomUUID();
         final String client = "client1";
 
@@ -959,6 +960,7 @@ public class StreamsPartitionAssignorTest {
                 JoinWindows.of(0)
             );
 
+        builder.build();
         final UUID uuid = UUID.randomUUID();
         final String client = "client1";
 
@@ -1027,6 +1029,7 @@ public class StreamsPartitionAssignorTest {
         internalTopologyBuilder.setApplicationId(applicationId);
 
         builder.stream("topic1").groupByKey().count();
+        builder.build();
 
         final UUID uuid = UUID.randomUUID();
         mockTaskManager(

@@ -31,26 +31,34 @@ import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 
+import static org.apache.kafka.streams.kstream.internals.StreamsTopologyGraphImpl.TOPOLOGY_ROOT;
+import static org.apache.kafka.streams.kstream.internals.TopologyNodeType.GLOBAL_KTABLE;
+import static org.apache.kafka.streams.kstream.internals.TopologyNodeType.KTABLE;
+import static org.apache.kafka.streams.kstream.internals.TopologyNodeType.SOURCE;
+
+@SuppressWarnings("unchecked")
 public class InternalStreamsBuilder implements InternalNameProvider {
 
     final InternalTopologyBuilder internalTopologyBuilder;
+
+    private final StreamsTopologyGraph topologyGraph;
+    private boolean topologyNeedsBuilding = true;
 
     private final AtomicInteger index = new AtomicInteger(0);
 
     public InternalStreamsBuilder(final InternalTopologyBuilder internalTopologyBuilder) {
         this.internalTopologyBuilder = internalTopologyBuilder;
+        this.topologyGraph = new StreamsTopologyGraphImpl();
     }
 
     public <K, V> KStream<K, V> stream(final Collection<String> topics,
                                        final ConsumedInternal<K, V> consumed) {
         final String name = newProcessorName(KStreamImpl.SOURCE_NAME);
 
-        internalTopologyBuilder.addSource(consumed.offsetResetPolicy(),
-                                          name,
-                                          consumed.timestampExtractor(),
-                                          consumed.keyDeserializer(),
-                                          consumed.valueDeserializer(),
-                                          topics.toArray(new String[topics.size()]));
+        final ProcessDetails processDetails = ProcessDetails.builder().withConsumed(consumed).withSourceTopics(topics).build();
+        final StreamsGraphNode node = new StreamsGraphNode(name, SOURCE, false, processDetails, TOPOLOGY_ROOT);
+
+        topologyGraph.addNode(node);
 
         return new KStreamImpl<>(this, name, Collections.singleton(name), false);
     }
@@ -58,17 +66,14 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     public <K, V> KStream<K, V> stream(final Pattern topicPattern, final ConsumedInternal<K, V> consumed) {
         final String name = newProcessorName(KStreamImpl.SOURCE_NAME);
 
-        internalTopologyBuilder.addSource(consumed.offsetResetPolicy(),
-                                          name,
-                                          consumed.timestampExtractor(),
-                                          consumed.keyDeserializer(),
-                                          consumed.valueDeserializer(),
-                                          topicPattern);
+        final ProcessDetails processDetails = ProcessDetails.builder().withSourcePattern(topicPattern).withConsumed(consumed).build();
+        final StreamsGraphNode node = new StreamsGraphNode(name, SOURCE, false, processDetails, TOPOLOGY_ROOT);
+        topologyGraph.addNode(node);
 
         return new KStreamImpl<>(this, name, Collections.singleton(name), false);
     }
 
-    @SuppressWarnings("deprecation")
+    @SuppressWarnings({"deprecation", "unchecked"})
     public <K, V> KTable<K, V> table(final String topic,
                                      final ConsumedInternal<K, V> consumed,
                                      final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier) {
@@ -76,15 +81,21 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         final String source = newProcessorName(KStreamImpl.SOURCE_NAME);
         final String name = newProcessorName(KTableImpl.SOURCE_NAME);
 
+        final ProcessDetails.Builder processDetailsBuilder = ProcessDetails.builder();
+
         final KTable<K, V> kTable = createKTable(consumed,
-                                                 topic,
                                                  storeSupplier.name(),
                                                  true,
                                                  source,
-                                                 name);
+                                                 name,
+                                                 processDetailsBuilder);
 
-        internalTopologyBuilder.addStateStore(storeSupplier, name);
-        internalTopologyBuilder.connectSourceStoreAndTopic(storeSupplier.name(), topic);
+        processDetailsBuilder.withSourceTopics(Collections.singleton(topic))
+            .withStoreSupplier(storeSupplier)
+            .withSourceName(source)
+            .withConsumed(consumed);
+        final StreamsGraphNode graphNode = new StreamsGraphNode(name, KTABLE, false, processDetailsBuilder.build(), TOPOLOGY_ROOT);
+        topologyGraph.addNode(graphNode);
 
         return kTable;
     }
@@ -94,39 +105,40 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                      final ConsumedInternal<K, V> consumed,
                                      final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
         final StoreBuilder<KeyValueStore<K, V>> storeBuilder = new KeyValueStoreMaterializer<>(materialized)
-                .materialize();
+            .materialize();
 
         final String source = newProcessorName(KStreamImpl.SOURCE_NAME);
         final String name = newProcessorName(KTableImpl.SOURCE_NAME);
+
+        final ProcessDetails.Builder processDetailsBuilder = ProcessDetails.builder();
+
         final KTable<K, V> kTable = createKTable(consumed,
-                                                 topic,
                                                  storeBuilder.name(),
                                                  materialized.isQueryable(),
                                                  source,
-                                                 name);
+                                                 name,
+                                                 processDetailsBuilder);
 
-        internalTopologyBuilder.addStateStore(storeBuilder, name);
-        internalTopologyBuilder.connectSourceStoreAndTopic(storeBuilder.name(), topic);
+        processDetailsBuilder.withSourceTopics(Collections.singleton(topic))
+            .withStoreBuilder(storeBuilder)
+            .withSourceName(source)
+            .withConsumed(consumed);
+        final StreamsGraphNode graphNode = new StreamsGraphNode(name, KTABLE, false, processDetailsBuilder.build(), TOPOLOGY_ROOT);
+        topologyGraph.addNode(graphNode);
 
         return kTable;
     }
 
 
     private <K, V> KTable<K, V> createKTable(final ConsumedInternal<K, V> consumed,
-                                             final String topic,
                                              final String storeName,
                                              final boolean isQueryable,
                                              final String source,
-                                             final String name) {
+                                             final String name,
+                                             final ProcessDetails.Builder processDetailsBuilder) {
         final ProcessorSupplier<K, V> processorSupplier = new KTableSource<>(storeName);
 
-        internalTopologyBuilder.addSource(consumed.offsetResetPolicy(),
-                                          source,
-                                          consumed.timestampExtractor(),
-                                          consumed.keyDeserializer(),
-                                          consumed.valueDeserializer(),
-                                          topic);
-        internalTopologyBuilder.addProcessor(name, processorSupplier, source);
+        processDetailsBuilder.withProcessorSupplier(processorSupplier);
 
         return new KTableImpl<>(this, name, processorSupplier,
                                 consumed.keySerde(), consumed.valueSerde(), Collections.singleton(source), storeName, isQueryable);
@@ -145,15 +157,16 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         final String processorName = newProcessorName(KTableImpl.SOURCE_NAME);
         final KTableSource<K, V> tableSource = new KTableSource<>(storeBuilder.name());
 
+        final ProcessDetails processDetails = ProcessDetails.builder().withConsumed(consumed)
+            .withStoreBuilder(storeBuilder)
+            .withKTableSource(tableSource)
+            .withConnectProcessorName(processorName)
+            .withSourceTopics(Collections.singleton(topic)).build();
 
-        internalTopologyBuilder.addGlobalStore(storeBuilder,
-                                               sourceName,
-                                               consumed.timestampExtractor(),
-                                               consumed.keyDeserializer(),
-                                               consumed.valueDeserializer(),
-                                               topic,
-                                               processorName,
-                                               tableSource);
+        final StreamsGraphNode streamsGraphNode = new StreamsGraphNode(sourceName, GLOBAL_KTABLE, false, processDetails, TOPOLOGY_ROOT);
+
+        topologyGraph.addNode(streamsGraphNode);
+
         return new GlobalKTableImpl<>(new KTableSourceValueGetterSupplier<K, V>(storeBuilder.name()), materialized.isQueryable());
     }
 
@@ -188,7 +201,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                                processorName,
                                                stateUpdateSupplier);
     }
-    
+
     public synchronized void addGlobalStore(final StoreBuilder<KeyValueStore> storeBuilder,
                                             final String topic,
                                             final ConsumedInternal consumed,
@@ -203,5 +216,21 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                        consumed,
                        processorName,
                        stateUpdateSupplier);
+    }
+
+    public void addNode(StreamsGraphNode graphNode) {
+        topologyGraph.addNode(graphNode);
+    }
+
+    public void buildAndOptimize() {
+        if (topologyNeedsBuilding) {
+            TopologyOptimizer topologyOptimizer = new TopologyOptimizerImpl();
+            topologyOptimizer.optimize(topologyGraph, internalTopologyBuilder);
+            topologyNeedsBuilding = false;
+        }
+    }
+
+    public StreamsTopologyGraph getTopologyGraph() {
+        return topologyGraph;
     }
 }

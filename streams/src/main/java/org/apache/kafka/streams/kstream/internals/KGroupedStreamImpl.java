@@ -489,7 +489,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
 
     }
 
-    @SuppressWarnings("deprecation")
+    @SuppressWarnings({"deprecation", "unchecked"})
     private <T> KTable<K, T> doAggregate(
             final KStreamAggProcessorSupplier<K, ?, V, T> aggregateSupplier,
             final String functionName,
@@ -499,8 +499,17 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
 
         final String sourceName = repartitionIfRequired(storeSupplier.name());
 
-        builder.internalTopologyBuilder.addProcessor(aggFunctionName, aggregateSupplier, sourceName);
-        builder.internalTopologyBuilder.addStateStore(storeSupplier, aggFunctionName);
+        final ProcessDetails processDetails = ProcessDetails.builder().withProcessorSupplier(aggregateSupplier)
+            .withStoreSupplier(storeSupplier)
+            .withConnectProcessorName(sourceName).build();
+        final StreamsGraphNode streamsGraphNode = new StreamsGraphNode(aggFunctionName,
+                                                                 TopologyNodeType.AGGREGATE,
+                                                                 false,
+                                                                 processDetails,
+                                                                 null);
+
+        builder.addNode(streamsGraphNode);
+
 
         return new KTableImpl<>(
             builder,

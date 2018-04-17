@@ -77,8 +77,8 @@ public class AbstractStreamTest {
         final int[] expectedKeys = new int[]{1, 2, 3, 4, 5, 6, 7};
         final MockProcessorSupplier<Integer, String> processor = new MockProcessorSupplier<>();
         final String topicName = "topic";
-
-        ExtendedKStream<Integer, String> stream = new ExtendedKStream<>(builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String())));
+        KStream<Integer, String> baseStream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String()));
+        ExtendedKStream<Integer, String> stream = new ExtendedKStream<>(baseStream);
 
         stream.randomFilter().process(processor);
 
@@ -98,7 +98,12 @@ public class AbstractStreamTest {
 
         KStream<K, V> randomFilter() {
             String name = builder.newProcessorName("RANDOM-FILTER-");
-            builder.internalTopologyBuilder.addProcessor(name, new ExtendedKStreamDummy(), this.name);
+            StreamsGraphNode graphNode = new StreamsGraphNode(name,
+                                                              TopologyNodeType.PROCESSOR,
+                                                              false,
+                                                              ProcessDetails.builder().withProcessorSupplier(new ExtendedKStreamDummy()).build(),
+                                                              this.name);
+            builder.addNode(graphNode);
             return new KStreamImpl<>(builder, name, sourceNodes, false);
         }
     }

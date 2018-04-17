@@ -28,7 +28,6 @@ import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.Joined;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Predicate;
@@ -163,6 +162,7 @@ public class KStreamImplTest {
         stream4.to("topic-5");
 
         streams2[1].through("topic-6").process(new MockProcessorSupplier<String, Integer>());
+        builder.build();
 
         assertEquals(2 + // sources
             2 + // stream1
@@ -187,6 +187,7 @@ public class KStreamImplTest {
         stream1.to("topic-5");
         stream2.through("topic-6");
 
+        builder.build();
         ProcessorTopology processorTopology = StreamsBuilderTest.internalTopologyBuilder(builder).setApplicationId("X").build(null);
         assertThat(processorTopology.source("topic-6").getTimestampExtractor(), instanceOf(FailOnInvalidTimestamp.class));
         assertEquals(processorTopology.source("topic-4").getTimestampExtractor(), null);
@@ -225,29 +226,29 @@ public class KStreamImplTest {
     @Test
     // TODO: this test should be refactored when we removed KStreamBuilder so that the created Topology contains internal topics as well
     public void shouldUseRecordMetadataTimestampExtractorWhenInternalRepartitioningTopicCreated() {
-        final KStreamBuilder builder = new KStreamBuilder();
-        KStream<String, String> kStream = builder.stream(stringSerde, stringSerde, "topic-1");
+        final StreamsBuilder builder = new StreamsBuilder();
+        KStream<String, String> kStream = builder.stream("topic-1", Consumed.with(stringSerde, stringSerde));
         ValueJoiner<String, String, String> valueJoiner = MockValueJoiner.instance(":");
         long windowSize = TimeUnit.MILLISECONDS.convert(1, TimeUnit.DAYS);
         final KStream<String, String> stream = kStream
-                        .map(new KeyValueMapper<String, String, KeyValue<? extends String, ? extends String>>() {
-                            @Override
-                            public KeyValue<? extends String, ? extends String> apply(String key, String value) {
-                                return KeyValue.pair(value, value);
-                            }
-                        });
+            .map(new KeyValueMapper<String, String, KeyValue<? extends String, ? extends String>>() {
+                @Override
+                public KeyValue<? extends String, ? extends String> apply(String key, String value) {
+                    return KeyValue.pair(value, value);
+                }
+            });
         stream.join(kStream,
                     valueJoiner,
                     JoinWindows.of(windowSize).until(3 * windowSize),
                     Joined.with(Serdes.String(),
                                 Serdes.String(),
                                 Serdes.String()))
-                .to(Serdes.String(), Serdes.String(), "output-topic");
+            .to(Serdes.String(), Serdes.String(), "output-topic");
 
-        ProcessorTopology processorTopology = builder.setApplicationId("X").build(null);
+        ProcessorTopology processorTopology = StreamsBuilderTest.internalTopologyBuilder(builder).setApplicationId("X").build(null);
         SourceNode originalSourceNode = processorTopology.source("topic-1");
 
-        for (SourceNode sourceNode: processorTopology.sources()) {
+        for (SourceNode sourceNode : processorTopology.sources()) {
             if (sourceNode.name().equals(originalSourceNode.name())) {
                 assertEquals(sourceNode.getTimestampExtractor(), null);
             } else {
@@ -490,6 +491,7 @@ public class KStreamImplTest {
     
     @Test
     public void shouldMergeTwoStreams() {
+        builder = new StreamsBuilder();
         final String topic1 = "topic-1";
         final String topic2 = "topic-2";
 
@@ -513,6 +515,7 @@ public class KStreamImplTest {
     
     @Test
     public void shouldMergeMultipleStreams() {
+        builder = new StreamsBuilder();
         final String topic1 = "topic-1";
         final String topic2 = "topic-2";
         final String topic3 = "topic-3";

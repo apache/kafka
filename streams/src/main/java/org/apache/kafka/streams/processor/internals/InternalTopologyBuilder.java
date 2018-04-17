@@ -1880,4 +1880,5 @@ public class InternalTopologyBuilder {
         subscriptionUpdates.updateTopics(topics);
         updateSubscriptions(subscriptionUpdates, logPrefix);
     }
+
 }

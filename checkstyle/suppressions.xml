@@ -51,13 +51,13 @@
               files="(Utils|Topic|KafkaLZ4BlockOutputStream|AclData).java"/>
 
     <suppress checks="CyclomaticComplexity"
-              files="(ConsumerCoordinator|Fetcher|Sender|KafkaProducer|BufferPool|ConfigDef|RecordAccumulator|KerberosLogin|AbstractRequest|AbstractResponse|Selector|SslFactory|SslTransportLayer|SaslClientAuthenticator|SaslClientCallbackHandler).java"/>
+              files="(ConsumerCoordinator|Fetcher|Sender|KafkaProducer|BufferPool|ConfigDef|RecordAccumulator|KerberosLogin|AbstractRequest|AbstractResponse|Selector|SslFactory|SslTransportLayer|SaslClientAuthenticator|SaslClientCallbackHandler|TopologyOptimizerImpl|StreamsTopologyGraphImpl|JoinGraphNode).java"/>
 
     <suppress checks="JavaNCSS"
               files="AbstractRequest.java|KerberosLogin.java|WorkerSinkTaskTest.java|TransactionManagerTest.java"/>
 
     <suppress checks="NPathComplexity"
-              files="(BufferPool|MetricName|Node|ConfigDef|SslTransportLayer|MetadataResponse|KerberosLogin|Selector|Sender|Serdes|Agent|Values|PluginUtils|MiniTrogdorCluster).java"/>
+              files="(BufferPool|MetricName|Node|ConfigDef|SslTransportLayer|MetadataResponse|KerberosLogin|Selector|Sender|Serdes|Agent|Values|PluginUtils|MiniTrogdorCluster|TopologyOptimizerImpl|StreamsTopologyGraphImpl).java"/>
 
     <!-- clients tests -->
     <suppress checks="ClassDataAbstractionCoupling"
@@ -77,10 +77,12 @@
               files="DistributedHerder(|Test).java"/>
 
     <suppress checks="MethodLength"
-              files="(KafkaConfigBackingStore|RequestResponseTest|WorkerSinkTaskTest).java"/>
+              files="(KafkaConfigBackingStore|RequestResponseTest|WorkerSinkTaskTest|InternalTopologyBuilderOptimizerImpl).java"/>
 
     <suppress checks="ParameterNumber"
-              files="WorkerSourceTask.java"/>
+              files="WorkerSourceTask.java|ProcessDetails.java"/>
+    <suppress checks="ParameterNumber"
+              files="JoinGraphNode"/>
     <suppress checks="ParameterNumber"
               files="WorkerCoordinator.java"/>
     <suppress checks="ParameterNumber"
@@ -93,7 +95,7 @@
               files="JsonConverter.java"/>
 
     <suppress checks="CyclomaticComplexity"
-              files="ConnectRecord.java"/>
+              files="ConnectRecord.java|TopologyOptimizerImpl.java"/>
     <suppress checks="CyclomaticComplexity"
               files="JsonConverter.java"/>
     <suppress checks="CyclomaticComplexity"
@@ -106,7 +108,7 @@
               files="(Values|ConnectHeader|ConnectHeaders).java"/>
 
     <suppress checks="JavaNCSS"
-              files="KafkaConfigBackingStore.java"/>
+              files="KafkaConfigBackingStore.java|InternalTopologyBuilderOptimizerImpl"/>
     <suppress checks="JavaNCSS"
               files="Values.java"/>
 
