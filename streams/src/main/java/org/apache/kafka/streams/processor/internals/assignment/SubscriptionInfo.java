@@ -208,7 +208,7 @@ public class SubscriptionInfo {
         final ByteBuffer buf = ByteBuffer.allocate(getVersionThreeByteLength(endPointBytes));
 
         buf.putInt(3); // used version
-        buf.putInt(3); // supported version
+        buf.putInt(LATEST_SUPPORTED_VERSION); // supported version
         encodeClientUUID(buf);
         encodeTasks(buf, prevTasks);
         encodeTasks(buf, standbyTasks);

@@ -36,7 +36,7 @@ public class SubscriptionInfoTest {
         new TaskId(1, 1),
         new TaskId(2, 0)));
 
-    private final static String IGNORED_USER_ENDPOINT = "IGNORED_USER_ENDPOINT";
+    private final static String IGNORED_USER_ENDPOINT = "ignoredUserEndpoint:80";
 
     @Test
     public void shouldUseLatestSupportedVersionByDefault() {

@@ -197,7 +197,7 @@ public class AssignmentInfo {
     }
 
     private void encodeVersionThree(final DataOutputStream out) throws IOException {
-        out.writeInt(usedVersion);
+        out.writeInt(3);
         out.writeInt(LATEST_SUPPORTED_VERSION);
         encodeActiveAndStandbyTaskAssignment(out);
         encodePartitionsByHost(out);

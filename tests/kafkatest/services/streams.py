@@ -421,9 +421,6 @@ class StreamsUpgradeTestJobRunnerService(StreamsTestBaseService):
     def set_upgrade_from(self, upgrade_from):
         self.UPGRADE_FROM = upgrade_from
 
-    def set_upgrade_to(self, upgrade_to):
-        self.UPGRADE_TO = upgrade_to
-
     def prop_file(self):
         properties = {STATE_DIR: self.PERSISTENT_ROOT}
         if self.UPGRADE_FROM is not None:
