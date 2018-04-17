@@ -60,12 +60,6 @@ public class SmokeTestUtil {
                             System.out.println("processed " + numRecordsProcessed + " records from topic=" + topic);
                         }
                     }
-
-                    @Override
-                    public void punctuate(final long timestamp) {}
-
-                    @Override
-                    public void close() {}
                 };
             }
         };
