@@ -51,6 +51,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -626,6 +627,65 @@ public final class Utils {
     @SafeVarargs
     public static <T> List<T> mkList(T... elems) {
         return Arrays.asList(elems);
+    }
+
+    /**
+     * Creates a map entry (for use with {@link Utils#mkMap(java.util.Map.Entry[])})
+     *
+     * @param k   The key
+     * @param v   The value
+     * @param <K> The key type
+     * @param <V> The value type
+     * @return An entry
+     */
+    public static <K, V> Map.Entry<K, V> mkEntry(final K k, final V v) {
+        return new Map.Entry<K, V>() {
+            @Override
+            public K getKey() {
+                return k;
+            }
+
+            @Override
+            public V getValue() {
+                return v;
+            }
+
+            @Override
+            public V setValue(final V value) {
+                throw new UnsupportedOperationException();
+            }
+        };
+    }
+
+    /**
+     * Creates a map from a sequence of entries
+     *
+     * @param entries The entries to map
+     * @param <K>     The key type
+     * @param <V>     The value type
+     * @return A map
+     */
+    @SafeVarargs
+    public static <K, V> Map<K, V> mkMap(final Map.Entry<K, V>... entries) {
+        final LinkedHashMap<K, V> result = new LinkedHashMap<>();
+        for (final Map.Entry<K, V> entry : entries) {
+            result.put(entry.getKey(), entry.getValue());
+        }
+        return result;
+    }
+
+    /**
+     * Creates a {@link Properties} from a map
+     *
+     * @param properties A map of properties to add
+     * @return The properties object
+     */
+    public static Properties mkProperties(final Map<String, String> properties) {
+        final Properties result = new Properties();
+        for (final Map.Entry<String, String> entry : properties.entrySet()) {
+            result.setProperty(entry.getKey(), entry.getValue());
+        }
+        return result;
     }
 
     /**

@@ -41,31 +41,31 @@ public class StoreChangeLoggerTest {
     private final Map<Integer, String> logged = new HashMap<>();
 
     private final InternalMockProcessorContext context = new InternalMockProcessorContext(StateSerdes.withBuiltinTypes(topic, Integer.class, String.class),
-            new RecordCollectorImpl(null, "StoreChangeLoggerTest", new LogContext("StoreChangeLoggerTest "), new DefaultProductionExceptionHandler()) {
-                @Override
-                public <K1, V1> void send(final String topic,
-                                          final K1 key,
-                                          final V1 value,
-                                          final Headers headers,
-                                          final Integer partition,
-                                          final Long timestamp,
-                                          final Serializer<K1> keySerializer,
-                                          final Serializer<V1> valueSerializer) {
-                    logged.put((Integer) key, (String) value);
-                }
-
-                @Override
-                public <K1, V1> void send(final String topic,
-                                          final K1 key,
-                                          final V1 value,
-                                          final Headers headers,
-                                          final Long timestamp,
-                                          final Serializer<K1> keySerializer,
-                                          final Serializer<V1> valueSerializer,
-                                          final StreamPartitioner<? super K1, ? super V1> partitioner) {
-                    throw new UnsupportedOperationException();
-                }
+        new RecordCollectorImpl(null, "StoreChangeLoggerTest", new LogContext("StoreChangeLoggerTest "), new DefaultProductionExceptionHandler()) {
+            @Override
+            public <K1, V1> void send(final String topic,
+                                      final K1 key,
+                                      final V1 value,
+                                      final Headers headers,
+                                      final Integer partition,
+                                      final Long timestamp,
+                                      final Serializer<K1> keySerializer,
+                                      final Serializer<V1> valueSerializer) {
+                logged.put((Integer) key, (String) value);
             }
+
+            @Override
+            public <K1, V1> void send(final String topic,
+                                      final K1 key,
+                                      final V1 value,
+                                      final Headers headers,
+                                      final Long timestamp,
+                                      final Serializer<K1> keySerializer,
+                                      final Serializer<V1> valueSerializer,
+                                      final StreamPartitioner<? super K1, ? super V1> partitioner) {
+                throw new UnsupportedOperationException();
+            }
+        }
     );
 
     private final StoreChangeLogger<Integer, String> changeLogger = new StoreChangeLogger<>(topic, context, StateSerdes.withBuiltinTypes(topic, Integer.class, String.class));

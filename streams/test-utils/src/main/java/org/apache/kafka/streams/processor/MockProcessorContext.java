@@ -32,6 +32,7 @@ import org.apache.kafka.streams.processor.internals.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
 
 import java.io.File;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -46,7 +47,7 @@ import java.util.Properties;
  * tests that serve as example usage.
  * <p>
  * Note that this class does not take any automated actions (such as firing scheduled punctuators).
- * It simply captures any data it witnessess.
+ * It simply captures any data it witnesses.
  * If you require more automated tests, we recommend wrapping your {@link Processor} in a minimal source-processor-sink
  * {@link Topology} and using the {@link TopologyTestDriver}.
  */
@@ -98,8 +99,9 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
             return punctuator;
         }
 
+        @SuppressWarnings("WeakerAccess")
         public void cancel() {
-            this.cancelled = true;
+            cancelled = true;
         }
 
         public boolean cancelled() {
@@ -124,7 +126,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         /**
          * The child this data was forwarded to.
          *
-         * @return The child name, or {@code null} if it was broadcasted.
+         * @return The child name, or {@code null} if it was broadcast.
          */
         public String childName() {
             return childName;
@@ -149,7 +151,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         }
     }
 
-    // contructors ================================================
+    // constructors ================================================
 
     /**
      * Create a {@link MockProcessorContext} with dummy {@code config} and {@code taskId} and {@code null} {@code stateDir}.
@@ -194,7 +196,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         this.taskId = taskId;
         this.config = streamsConfig;
         this.stateDir = stateDir;
-        this.metrics = new StreamsMetricsImpl(new Metrics(), "mock-processor-context", new HashMap<String, String>());
+        this.metrics = new StreamsMetricsImpl(new Metrics(), "mock-processor-context", Collections.<String, String>emptyMap());
     }
 
     @Override
@@ -393,15 +395,15 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         return capturedPunctuators;
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public <K, V> void forward(final K key, final V value) {
-        //noinspection unchecked
         capturedForwards.add(new CapturedForward(To.all(), new KeyValue(key, value)));
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public <K, V> void forward(final K key, final V value, final To to) {
-        //noinspection unchecked
         capturedForwards.add(new CapturedForward(to, new KeyValue(key, value)));
     }
 

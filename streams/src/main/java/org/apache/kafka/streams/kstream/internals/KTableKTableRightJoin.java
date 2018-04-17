@@ -24,7 +24,9 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 class KTableKTableRightJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R, V1, V2> {
 
 
-    KTableKTableRightJoin(KTableImpl<K, ?, V1> table1, KTableImpl<K, ?, V2> table2, ValueJoiner<? super V1, ? super V2, ? extends R> joiner) {
+    KTableKTableRightJoin(final KTableImpl<K, ?, V1> table1,
+                          final KTableImpl<K, ?, V2> table2,
+                          final ValueJoiner<? super V1, ? super V2, ? extends R> joiner) {
         super(table1, table2, joiner);
     }
 
@@ -40,7 +42,8 @@ class KTableKTableRightJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R,
 
     private class KTableKTableRightJoinValueGetterSupplier extends KTableKTableAbstractJoinValueGetterSupplier<K, R, V1, V2> {
 
-        KTableKTableRightJoinValueGetterSupplier(KTableValueGetterSupplier<K, V1> valueGetterSupplier1, KTableValueGetterSupplier<K, V2> valueGetterSupplier2) {
+        KTableKTableRightJoinValueGetterSupplier(final KTableValueGetterSupplier<K, V1> valueGetterSupplier1,
+                                                 final KTableValueGetterSupplier<K, V2> valueGetterSupplier2) {
             super(valueGetterSupplier1, valueGetterSupplier2);
         }
 
@@ -53,12 +56,12 @@ class KTableKTableRightJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R,
 
         private final KTableValueGetter<K, V2> valueGetter;
 
-        KTableKTableRightJoinProcessor(KTableValueGetter<K, V2> valueGetter) {
+        KTableKTableRightJoinProcessor(final KTableValueGetter<K, V2> valueGetter) {
             this.valueGetter = valueGetter;
         }
 
         @Override
-        public void init(ProcessorContext context) {
+        public void init(final ProcessorContext context) {
             super.init(context);
             valueGetter.init(context);
         }
@@ -94,23 +97,24 @@ class KTableKTableRightJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R,
         private final KTableValueGetter<K, V1> valueGetter1;
         private final KTableValueGetter<K, V2> valueGetter2;
 
-        KTableKTableRightJoinValueGetter(KTableValueGetter<K, V1> valueGetter1, KTableValueGetter<K, V2> valueGetter2) {
+        KTableKTableRightJoinValueGetter(final KTableValueGetter<K, V1> valueGetter1,
+                                         final KTableValueGetter<K, V2> valueGetter2) {
             this.valueGetter1 = valueGetter1;
             this.valueGetter2 = valueGetter2;
         }
 
         @Override
-        public void init(ProcessorContext context) {
+        public void init(final ProcessorContext context) {
             valueGetter1.init(context);
             valueGetter2.init(context);
         }
 
         @Override
-        public R get(K key) {
-            V2 value2 = valueGetter2.get(key);
+        public R get(final K key) {
+            final V2 value2 = valueGetter2.get(key);
 
             if (value2 != null) {
-                V1 value1 = valueGetter1.get(key);
+                final V1 value1 = valueGetter1.get(key);
                 return joiner.apply(value1, value2);
             } else {
                 return null;

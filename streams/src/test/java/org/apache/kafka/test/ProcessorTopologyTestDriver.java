@@ -32,7 +32,6 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.InternalTopologyAccessor;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.Topology;
@@ -158,25 +157,15 @@ public class ProcessorTopologyTestDriver {
     private GlobalStateUpdateTask globalStateTask;
 
     /**
-     * Create a new test diver instance
-     * @param config the stream configuration for the topology
-     * @param topology the {@link Topology} whose {@link InternalTopologyBuilder} will
-     *                        be use to create the topology instance.
-     */
-    public ProcessorTopologyTestDriver(final StreamsConfig config,
-                                       final Topology topology) {
-        this(config, InternalTopologyAccessor.getInternalTopologyBuilder(topology));
-    }
-
-    /**
      * Create a new test driver instance.
-     * @param config the stream configuration for the topology
+     *
+     * @param config  the stream configuration for the topology
      * @param builder the topology builder that will be used to create the topology instance
      */
     public ProcessorTopologyTestDriver(final StreamsConfig config,
                                        final InternalTopologyBuilder builder) {
         topology = builder.setApplicationId(APPLICATION_ID).build(null);
-        final ProcessorTopology globalTopology  = builder.buildGlobalStateTopology();
+        final ProcessorTopology globalTopology = builder.buildGlobalStateTopology();
 
         // Set up the consumer and producer ...
         final Consumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
@@ -218,36 +207,42 @@ public class ProcessorTopologyTestDriver {
                 globalPartitionsByTopic.put(topicName, partition);
                 offsetsByTopicPartition.put(partition, new AtomicLong());
             }
-            final GlobalStateManagerImpl stateManager = new GlobalStateManagerImpl(new LogContext("mock "),
-                                                                                   globalTopology,
-                                                                                   globalConsumer,
-                                                                                   stateDirectory,
-                                                                                   stateRestoreListener,
-                                                                                   config);
+            final GlobalStateManagerImpl stateManager = new GlobalStateManagerImpl(
+                new LogContext("mock "),
+                globalTopology,
+                globalConsumer,
+                stateDirectory,
+                stateRestoreListener,
+                config);
             final GlobalProcessorContextImpl globalProcessorContext = new GlobalProcessorContextImpl(config, stateManager, streamsMetrics, cache);
             stateManager.setGlobalProcessorContext(globalProcessorContext);
-            globalStateTask = new GlobalStateUpdateTask(globalTopology,
-                                                        globalProcessorContext,
-                                                        stateManager,
-                                                        new LogAndContinueExceptionHandler(),
-                                                        new LogContext());
+            globalStateTask = new GlobalStateUpdateTask(
+                globalTopology,
+                globalProcessorContext,
+                stateManager,
+                new LogAndContinueExceptionHandler(),
+                new LogContext());
             globalStateTask.initialize();
         }
 
         if (!partitionsByTopic.isEmpty()) {
-            task = new StreamTask(TASK_ID,
-                                  partitionsByTopic.values(),
-                                  topology,
-                                  consumer,
-                                  new StoreChangelogReader(
-                                      createRestoreConsumer(topology.storeToChangelogTopic()),
-                                      new MockStateRestoreListener(),
-                                      new LogContext("topology-test-driver ")),
-                                  config,
-                                  streamsMetrics, stateDirectory,
-                                  cache,
-                                  new MockTime(),
-                                  producer);
+            task = new StreamTask(
+                TASK_ID,
+                partitionsByTopic.values(),
+                topology,
+                consumer,
+                new StoreChangelogReader(
+                    createRestoreConsumer(topology.storeToChangelogTopic()),
+                    new MockStateRestoreListener(),
+                    new LogContext("topology-test-driver ")
+                ),
+                config,
+                streamsMetrics,
+                stateDirectory,
+                cache,
+                new MockTime(),
+                producer
+            );
             task.initializeStateStores();
             task.initializeTopology();
         }
@@ -257,8 +252,8 @@ public class ProcessorTopologyTestDriver {
      * Send an input message with the given key, value and timestamp on the specified topic to the topology, and then commit the messages.
      *
      * @param topicName the name of the topic on which the message is to be sent
-     * @param key the raw message key
-     * @param value the raw message value
+     * @param key       the raw message key
+     * @param value     the raw message value
      * @param timestamp the raw message timestamp
      */
     public void process(final String topicName,
@@ -307,8 +302,8 @@ public class ProcessorTopologyTestDriver {
      * Send an input message with the given key and value on the specified topic to the topology.
      *
      * @param topicName the name of the topic on which the message is to be sent
-     * @param key the raw message key
-     * @param value the raw message value
+     * @param key       the raw message key
+     * @param value     the raw message value
      */
     public void process(final String topicName,
                         final byte[] key,
@@ -319,10 +314,10 @@ public class ProcessorTopologyTestDriver {
     /**
      * Send an input message with the given key and value on the specified topic to the topology.
      *
-     * @param topicName the name of the topic on which the message is to be sent
-     * @param key the raw message key
-     * @param value the raw message value
-     * @param keySerializer the serializer for the key
+     * @param topicName       the name of the topic on which the message is to be sent
+     * @param key             the raw message key
+     * @param value           the raw message value
+     * @param keySerializer   the serializer for the key
      * @param valueSerializer the serializer for the value
      */
     public <K, V> void process(final String topicName,
@@ -336,12 +331,12 @@ public class ProcessorTopologyTestDriver {
     /**
      * Send an input message with the given key and value and timestamp on the specified topic to the topology.
      *
-     * @param topicName the name of the topic on which the message is to be sent
-     * @param key the raw message key
-     * @param value the raw message value
-     * @param keySerializer the serializer for the key
+     * @param topicName       the name of the topic on which the message is to be sent
+     * @param key             the raw message key
+     * @param value           the raw message value
+     * @param keySerializer   the serializer for the key
      * @param valueSerializer the serializer for the value
-     * @param timestamp the raw message timestamp
+     * @param timestamp       the raw message timestamp
      */
     public <K, V> void process(final String topicName,
                                final K key,
@@ -371,8 +366,8 @@ public class ProcessorTopologyTestDriver {
      * Read the next record from the given topic. These records were output by the topology during the previous calls to
      * {@link #process(String, byte[], byte[])}.
      *
-     * @param topic the name of the topic
-     * @param keyDeserializer the deserializer for the key type
+     * @param topic             the name of the topic
+     * @param keyDeserializer   the deserializer for the key type
      * @param valueDeserializer the deserializer for the value type
      * @return the next record on that topic, or null if there is no record available
      */
@@ -464,7 +459,7 @@ public class ProcessorTopologyTestDriver {
             }
         };
         // For each store ...
-        for (final Map.Entry<String, String> storeAndTopic: storeToChangelogTopic.entrySet()) {
+        for (final Map.Entry<String, String> storeAndTopic : storeToChangelogTopic.entrySet()) {
             final String topicName = storeAndTopic.getValue();
             // Set up the restore-state topic ...
             // consumer.subscribe(new TopicPartition(topicName, 1));

@@ -56,22 +56,17 @@ public class RecordDeserializerTest {
         assertEquals(TimestampType.CREATE_TIME, record.timestampType());
     }
 
-    static class TheSourceNode extends SourceNode {
+    static class TheSourceNode extends SourceNode<Object, Object> {
         private final boolean keyThrowsException;
         private final boolean valueThrowsException;
         private final Object key;
         private final Object value;
 
-        TheSourceNode(final boolean keyThrowsException, final boolean valueThrowsException) {
-            this(keyThrowsException, valueThrowsException, null, null);
-        }
-
-        @SuppressWarnings("unchecked")
         TheSourceNode(final boolean keyThrowsException,
                       final boolean valueThrowsException,
                       final Object key,
                       final Object value) {
-            super("", Collections.EMPTY_LIST, null, null);
+            super("", Collections.<String>emptyList(), null, null);
             this.keyThrowsException = keyThrowsException;
             this.valueThrowsException = valueThrowsException;
             this.key = key;

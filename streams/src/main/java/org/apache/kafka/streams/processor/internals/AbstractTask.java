@@ -76,7 +76,7 @@ public abstract class AbstractTask implements Task {
         this.eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
         this.stateDirectory = stateDirectory;
 
-        this.logPrefix = String.format("%s [%s] ", isStandby ? "standby-task" : "task", id());
+        this.logPrefix = String.format("%s [%s] ", isStandby ? "standby-task" : "task", id);
         this.logContext = new LogContext(logPrefix);
         this.log = logContext.logger(getClass());
 
@@ -129,6 +129,7 @@ public abstract class AbstractTask implements Task {
     /**
      * Produces a string representation containing useful information about a StreamTask.
      * This is useful in debugging scenarios.
+     *
      * @return A string representation of the StreamTask instance.
      */
     @Override
@@ -139,6 +140,7 @@ public abstract class AbstractTask implements Task {
     /**
      * Produces a string representation containing useful information about a StreamTask starting with the given indent.
      * This is useful in debugging scenarios.
+     *
      * @return A string representation of the StreamTask instance.
      */
     public String toString(final String indent) {
@@ -197,9 +199,9 @@ public abstract class AbstractTask implements Task {
     }
 
     /**
-     * @throws StreamsException if the store's change log does not contain the partition
-     *
      * Package-private for testing only
+     *
+     * @throws StreamsException If the store's change log does not contain the partition
      */
     void registerStateStores() {
         if (topology.stateStores().isEmpty()) {
@@ -208,12 +210,12 @@ public abstract class AbstractTask implements Task {
 
         try {
             if (!stateDirectory.lock(id)) {
-                throw new LockException(String.format("%sFailed to lock the state directory for task %s",
-                                                      logPrefix, id));
+                throw new LockException(String.format("%sFailed to lock the state directory for task %s", logPrefix, id));
             }
-        } catch (IOException e) {
-            throw new StreamsException(String.format("%sFatal error while trying to lock the state directory for task %s",
-                                                     logPrefix, id));
+        } catch (final IOException e) {
+            throw new StreamsException(
+                String.format("%sFatal error while trying to lock the state directory for task %s",
+                logPrefix, id));
         }
         log.trace("Initializing state stores");
 
@@ -232,8 +234,8 @@ public abstract class AbstractTask implements Task {
     }
 
     /**
-     * @throws ProcessorStateException if there is an error while closing the state manager
      * @param writeCheckpoint boolean indicating if a checkpoint file should be written
+     * @throws ProcessorStateException if there is an error while closing the state manager
      */
     // visible for testing
     void closeStateManager(final boolean writeCheckpoint) throws ProcessorStateException {
@@ -246,7 +248,7 @@ public abstract class AbstractTask implements Task {
         } finally {
             try {
                 stateDirectory.unlock(id);
-            } catch (IOException e) {
+            } catch (final IOException e) {
                 if (exception == null) {
                     exception = new ProcessorStateException(String.format("%sFailed to release state dir lock", logPrefix), e);
                 }
