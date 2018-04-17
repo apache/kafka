@@ -23,6 +23,7 @@ from kafkatest.services.kafka import KafkaConfig
 from kafkatest.services.monitor.jmx import JmxMixin
 from kafkatest.version import LATEST_0_10_0, LATEST_0_10_1
 
+STATE_DIR = "state.dir"
 
 class StreamsTestBaseService(KafkaPathResolverMixin, JmxMixin, Service):
     """Base class for Streams Test services providing some common settings and functionality"""
