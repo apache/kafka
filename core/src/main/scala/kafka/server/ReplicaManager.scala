@@ -426,15 +426,15 @@ class ReplicaManager(val config: KafkaConfig,
   def getPartitionAndLeaderReplicaIfLocal(topicPartition: TopicPartition): (Partition, Replica) =  {
     val partitionOpt = getPartition(topicPartition)
     partitionOpt match {
-      case None if metadataCache.contains(topicPartition.topic) =>
+      case None if metadataCache.contains(topicPartition) =>
         // The topic exists, but this broker is no longer a replica of it, so we return NOT_LEADER which
         // forces clients to refresh metadata to find the new location. This can happen, for example,
         // during a partition reassignment if a produce request from the client is sent to a broker after
         // the local replica has been deleted.
-        throw new NotLeaderForPartitionException(s"Broker $localBrokerId is not the leader of $topicPartition")
+        throw new NotLeaderForPartitionException(s"Broker $localBrokerId is not a replica of $topicPartition")
 
       case None =>
-        throw new UnknownTopicOrPartitionException(s"Partition $topicPartition doesn't exist on $localBrokerId")
+        throw new UnknownTopicOrPartitionException(s"Partition $topicPartition doesn't exist")
 
       case Some(partition) =>
         if (partition eq ReplicaManager.OfflinePartition)
