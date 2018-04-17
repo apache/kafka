@@ -224,7 +224,7 @@ public final class Sensor {
      */
     public synchronized void add(CompoundStat stat, MetricConfig config) {
         this.stats.add(Utils.notNull(stat));
-        Object lock = new Object();
+        Object lock = metricLock(stat);
         for (NamedMeasurable m : stat.stats()) {
             KafkaMetric metric = new KafkaMetric(lock, m.name(), m.stat(), config == null ? this.config : config, time);
             this.registry.registerMetric(metric);
@@ -248,7 +248,7 @@ public final class Sensor {
      * @param config A special configuration for this metric. If null use the sensor default configuration.
      */
     public synchronized void add(MetricName metricName, MeasurableStat stat, MetricConfig config) {
-        KafkaMetric metric = new KafkaMetric(new Object(),
+        KafkaMetric metric = new KafkaMetric(metricLock(stat),
                                              Utils.notNull(metricName),
                                              Utils.notNull(stat),
                                              config == null ? this.config : config,
@@ -268,5 +268,13 @@ public final class Sensor {
 
     synchronized List<KafkaMetric> metrics() {
         return Collections.unmodifiableList(this.metrics);
+    }
+
+    /**
+     * KafkaMetrics of sensors which use SampledStat should be synchronized on the Sensor object
+     * to allow concurrent reads and updates. For simplicity, all sensors are synchronized on Sensor.
+     */
+    private Object metricLock(Stat stat) {
+        return this;
     }
 }

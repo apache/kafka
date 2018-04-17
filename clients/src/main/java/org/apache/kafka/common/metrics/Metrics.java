@@ -487,7 +487,8 @@ public class Metrics implements Closeable {
 
     /**
      * Add a metric to monitor an object that implements MetricValueProvider. This metric won't be associated with any
-     * sensor. This is a way to expose existing values as metrics.
+     * sensor. This is a way to expose existing values as metrics. User is expected to add any additional
+     * synchronization to update and access metric values, if required.
      *
      * @param metricName The name of the metric
      * @param metricValueProvider The metric value provider associated with this metric
@@ -503,7 +504,8 @@ public class Metrics implements Closeable {
 
     /**
      * Add a metric to monitor an object that implements MetricValueProvider. This metric won't be associated with any
-     * sensor. This is a way to expose existing values as metrics.
+     * sensor. This is a way to expose existing values as metrics. User is expected to add any additional
+     * synchronization to update and access metric values, if required.
      *
      * @param metricName The name of the metric
      * @param metricValueProvider The metric value provider associated with this metric
