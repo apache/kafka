@@ -775,6 +775,14 @@ class DynamicListenerConfig(server: KafkaServer) extends BrokerReconfigurable wi
     }
     if (!newAdvertisedListeners.contains(newConfig.interBrokerListenerName))
       throw new ConfigException(s"Advertised listener must be specified for inter-broker listener ${newConfig.interBrokerListenerName}")
+
+    val endPoints = newConfig.advertisedListeners.map(e => s"${e.host}:${e.port}")
+    server.zkClient.getAllBrokersInCluster.filter(_.id != newConfig.brokerId).foreach(broker => {
+      val commonEndPoints = broker.endPoints.map(e => s"${e.host}:${e.port}").intersect(endPoints)
+      if (!commonEndPoints.isEmpty)
+        throw new ConfigException(s"Configured end points: ${endPoints.mkString(",")} in listeners are already registered" +
+          s" in broker ${broker.id}")
+    })
   }
 
   def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {

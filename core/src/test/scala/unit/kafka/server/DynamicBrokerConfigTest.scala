@@ -288,8 +288,12 @@ class DynamicBrokerConfigTest extends JUnitSuite {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 9092)
     val oldConfig =  KafkaConfig.fromProps(props)
     val kafkaServer = EasyMock.createMock(classOf[kafka.server.KafkaServer])
+    val zkClient = EasyMock.createMock(classOf[kafka.zk.KafkaZkClient])
     EasyMock.expect(kafkaServer.config).andReturn(oldConfig).anyTimes()
+    EasyMock.expect(zkClient.getAllBrokersInCluster).andReturn(Seq()).anyTimes()
+    EasyMock.expect(kafkaServer.zkClient).andReturn(zkClient).anyTimes()
     EasyMock.replay(kafkaServer)
+    EasyMock.replay(zkClient)
 
     props.put(KafkaConfig.ListenersProp, "PLAINTEXT://hostname:9092,SASL_PLAINTEXT://hostname:9093")
     val newConfig = KafkaConfig(props)
