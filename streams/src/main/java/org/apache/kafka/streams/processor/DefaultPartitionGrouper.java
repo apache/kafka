@@ -83,7 +83,8 @@ public class DefaultPartitionGrouper implements PartitionGrouper {
 
             if (partitions.isEmpty()) {
 
-                log.warn("Skipping assigning topic {} to tasks since its metadata is not available yet"
+                log.warn("Skipping creating tasks for the topic group {} since topic {}'s metadata is not available yet;"
+                         + " no tasks for this topic group will be assigned to any client.\n"
                          + " Make sure all supplied topics in the topology are created before starting"
                          + " as this could lead to unexpected results", topic);
                 return StreamsPartitionAssignor.NOT_AVAILABLE;

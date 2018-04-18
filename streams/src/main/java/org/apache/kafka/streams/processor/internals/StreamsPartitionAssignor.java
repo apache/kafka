@@ -472,8 +472,9 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                     if (!allAssignedPartitions.contains(partition)) {
                         log.warn("Partition {} is not assigned to any tasks: {}"
                                  + " Possible causes of a partition not getting assigned"
-                                 + " is that a topic defined in the topology has not been"
-                                 + " created when starting your streams application", partition, partitionsForTask);
+                                 + " is that another topic defined in the topology has not been"
+                                 + " created when starting your streams application,"
+                                 + " resulting in no tasks created for this topology at all.", partition, partitionsForTask);
                     }
                 }
             } else {
