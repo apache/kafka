@@ -16,15 +16,13 @@
  */
 package org.apache.kafka.streams.integration;
 
-import kafka.admin.AdminClient;
-import kafka.tools.StreamsResetter;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.KafkaAdminClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
@@ -64,6 +62,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
+
+import kafka.admin.AdminClient;
+import kafka.tools.StreamsResetter;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -106,10 +107,19 @@ public abstract class AbstractResetIntegrationTest {
             kafkaAdminClient = (KafkaAdminClient) org.apache.kafka.clients.admin.AdminClient.create(commonClientConfig);
         }
 
+        try {
+            setCurrentTime();
+        } catch (IllegalArgumentException e) {
+            System.err.println("New time less than previous time, will re-try setting time once");
+            setCurrentTime();
+        }
+    }
+
+    private void setCurrentTime() {
+        mockTime = cluster.time;
         // we align time to seconds to get clean window boundaries and thus ensure the same result for each run
         // otherwise, input records could fall into different windows for different runs depending on the initial mock time
         final long alignedTime = (System.currentTimeMillis() / 1000 + 1) * 1000;
-        mockTime = cluster.time;
         mockTime.setCurrentTimeMs(alignedTime);
     }
 
