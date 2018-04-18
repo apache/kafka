@@ -432,7 +432,7 @@ public class SimpleBenchmark {
         final StreamsBuilder builder = new StreamsBuilder();
         final StoreBuilder<KeyValueStore<Integer, byte[]>> storeBuilder
                 = Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("store"), INTEGER_SERDE, BYTE_SERDE);
-        builder.addStateStore(storeBuilder);
+        builder.addStateStore(storeBuilder.withCachingEnabled());
 
         final KStream<Integer, byte[]> source = builder.stream(topic);
 
@@ -480,7 +480,7 @@ public class SimpleBenchmark {
                 AGGREGATE_WINDOW_SIZE,
                 false),
                 INTEGER_SERDE, BYTE_SERDE);
-        builder.addStateStore(storeBuilder);
+        builder.addStateStore(storeBuilder.withCachingEnabled());
 
         final KStream<Integer, byte[]> source = builder.stream(topic);
 
