@@ -25,6 +25,8 @@ import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
 
+import org.rocksdb.NativeComparatorWrapper;
+
 import java.nio.ByteBuffer;
 import java.util.List;
 
@@ -229,5 +231,15 @@ public class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
                 return retOnKey;
             }
         }
+    }
+
+    public static class NativeWindowKeyBytesComparatorWrapper extends NativeComparatorWrapper {
+
+        @Override
+        protected long initializeNative(final long... nativeParameterHandles) {
+            return newComparator();
+        }
+
+        private native long newComparator();
     }
 }

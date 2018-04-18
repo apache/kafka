@@ -26,6 +26,8 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
+import org.rocksdb.NativeComparatorWrapper;
+
 import java.nio.ByteBuffer;
 import java.util.List;
 
@@ -171,5 +173,15 @@ public class SessionKeySchema implements SegmentedBytesStore.KeySchema {
                 return retOnKey;
             }
         }
+    }
+
+    public static class NativeSessionKeyBytesComparatorWrapper extends NativeComparatorWrapper {
+
+        @Override
+        protected long initializeNative(final long... nativeParameterHandles) {
+            return newComparator();
+        }
+
+        private native long newComparator();
     }
 }
