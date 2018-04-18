@@ -20,8 +20,8 @@ package kafka.network
 import java.io._
 import java.net._
 import java.nio.ByteBuffer
+import java.util.{HashMap, Properties, Random}
 import java.nio.channels.SocketChannel
-import java.util.{HashMap, Random}
 import javax.net.ssl._
 
 import com.yammer.metrics.core.{Gauge, Meter}
@@ -38,7 +38,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.{AbstractRequest, ProduceRequest, RequestHeader}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
-import org.apache.kafka.common.security.scram.ScramMechanism
+import org.apache.kafka.common.security.scram.internal.ScramMechanism
 import org.apache.kafka.common.utils.{LogContext, MockTime, Time}
 import org.apache.log4j.Level
 import org.junit.Assert._
@@ -134,8 +134,8 @@ class SocketServerTest extends JUnitSuite {
     channel.sendResponse(new RequestChannel.Response(request, Some(send), SendAction, Some(request.header.toString)))
   }
 
-  def connect(s: SocketServer = server, protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT) = {
-    val socket = new Socket("localhost", s.boundPort(ListenerName.forSecurityProtocol(protocol)))
+  def connect(s: SocketServer = server, protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT, localAddr: InetAddress = null) = {
+    val socket = new Socket("localhost", s.boundPort(ListenerName.forSecurityProtocol(protocol)), localAddr, 0)
     sockets += socket
     socket
   }
@@ -444,6 +444,43 @@ class SocketServerTest extends JUnitSuite {
   }
 
   @Test
+  def testZeroMaxConnectionsPerIp() {
+    val newProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
+    newProps.setProperty(KafkaConfig.MaxConnectionsPerIpProp, "0")
+    newProps.setProperty(KafkaConfig.MaxConnectionsPerIpOverridesProp, "%s:%s".format("127.0.0.1", "5"))
+    val server = new SocketServer(KafkaConfig.fromProps(newProps), new Metrics(), Time.SYSTEM, credentialProvider)
+    try {
+      server.startup()
+      // make the maximum allowable number of connections
+      val conns = (0 until 5).map(_ => connect(server))
+      // now try one more (should fail)
+      val conn = connect(server)
+      conn.setSoTimeout(3000)
+      assertEquals(-1, conn.getInputStream.read())
+      conn.close()
+
+      // it should succeed after closing one connection
+      val address = conns.head.getInetAddress
+      conns.head.close()
+      TestUtils.waitUntilTrue(() => server.connectionCount(address) < conns.length,
+        "Failed to decrement connection count after close")
+      val conn2 = connect(server)
+      val serializedBytes = producerRequestBytes()
+      sendRequest(conn2, serializedBytes)
+      val request = server.requestChannel.receiveRequest(2000)
+      assertNotNull(request)
+
+      // now try to connect from the external facing interface, which should fail
+      val conn3 = connect(s = server, localAddr = InetAddress.getLocalHost)
+      conn3.setSoTimeout(3000)
+      assertEquals(-1, conn3.getInputStream.read())
+      conn3.close()
+    } finally {
+      shutdownServerAndMetrics(server)
+    }
+  }
+
+  @Test
   def testMaxConnectionsPerIpOverrides() {
     val overrideNum = server.config.maxConnectionsPerIp + 1
     val overrideProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
@@ -651,10 +688,14 @@ class SocketServerTest extends JUnitSuite {
   @Test
   def testRequestMetricsAfterStop(): Unit = {
     server.stopProcessingRequests()
-
-    server.requestChannel.metrics(ApiKeys.PRODUCE.name).requestRate.mark()
+    val version = ApiKeys.PRODUCE.latestVersion
+    val version2 = (version - 1).toShort
+    for (_ <- 0 to 1) server.requestChannel.metrics(ApiKeys.PRODUCE.name).requestRate(version).mark()
+    server.requestChannel.metrics(ApiKeys.PRODUCE.name).requestRate(version2).mark()
+    assertEquals(2, server.requestChannel.metrics(ApiKeys.PRODUCE.name).requestRate(version).count())
     server.requestChannel.updateErrorMetrics(ApiKeys.PRODUCE, Map(Errors.NONE -> 1))
-    val nonZeroMeters = Map("kafka.network:type=RequestMetrics,name=RequestsPerSec,request=Produce" -> 1,
+    val nonZeroMeters = Map(s"kafka.network:type=RequestMetrics,name=RequestsPerSec,request=Produce,version=$version" -> 2,
+        s"kafka.network:type=RequestMetrics,name=RequestsPerSec,request=Produce,version=$version2" -> 1,
         "kafka.network:type=RequestMetrics,name=ErrorsPerSec,request=Produce,error=NONE" -> 1)
 
     def requestMetricMeters = YammerMetrics

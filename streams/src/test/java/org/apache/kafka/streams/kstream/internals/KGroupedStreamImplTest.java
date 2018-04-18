@@ -220,7 +220,7 @@ public class KGroupedStreamImplTest {
     @Test
     public void shouldAggregateSessionWindows() {
         final Map<Windowed<String>, Integer> results = new HashMap<>();
-        KTable<Windowed<String>, Integer> table = groupedStream.aggregate(new Initializer<Integer>() {
+        final KTable<Windowed<String>, Integer> table = groupedStream.aggregate(new Initializer<Integer>() {
             @Override
             public Integer apply() {
                 return 0;
@@ -251,7 +251,7 @@ public class KGroupedStreamImplTest {
     @Test
     public void shouldAggregateSessionWindowsWithInternalStoreName() {
         final Map<Windowed<String>, Integer> results = new HashMap<>();
-        KTable<Windowed<String>, Integer> table = groupedStream.aggregate(new Initializer<Integer>() {
+        final KTable<Windowed<String>, Integer> table = groupedStream.aggregate(new Initializer<Integer>() {
             @Override
             public Integer apply() {
                 return 0;
@@ -301,7 +301,7 @@ public class KGroupedStreamImplTest {
     @Test
     public void shouldCountSessionWindows() {
         final Map<Windowed<String>, Long> results = new HashMap<>();
-        KTable<Windowed<String>, Long> table = groupedStream.count(SessionWindows.with(30), "session-store");
+        final KTable<Windowed<String>, Long> table = groupedStream.count(SessionWindows.with(30), "session-store");
         table.toStream().foreach(new ForeachAction<Windowed<String>, Long>() {
             @Override
             public void apply(final Windowed<String> key, final Long value) {
@@ -316,7 +316,7 @@ public class KGroupedStreamImplTest {
     @Test
     public void shouldCountSessionWindowsWithInternalStoreName() {
         final Map<Windowed<String>, Long> results = new HashMap<>();
-        KTable<Windowed<String>, Long> table = groupedStream.count(SessionWindows.with(30));
+        final KTable<Windowed<String>, Long> table = groupedStream.count(SessionWindows.with(30));
         table.toStream().foreach(new ForeachAction<Windowed<String>, Long>() {
             @Override
             public void apply(final Windowed<String> key, final Long value) {
@@ -351,14 +351,16 @@ public class KGroupedStreamImplTest {
     @Test
     public void shouldReduceSessionWindows() {
         final Map<Windowed<String>, String> results = new HashMap<>();
-        KTable<Windowed<String>, String> table = groupedStream.reduce(
-                new Reducer<String>() {
-                    @Override
-                    public String apply(final String value1, final String value2) {
-                        return value1 + ":" + value2;
-                    }
-                }, SessionWindows.with(30),
-                "session-store");
+        final KTable<Windowed<String>, String> table = groupedStream.reduce(
+            new Reducer<String>() {
+                @Override
+                public String apply(final String value1, final String value2) {
+                    return value1 + ":" + value2;
+                }
+            },
+            SessionWindows.with(30),
+            "session-store"
+        );
         table.toStream().foreach(new ForeachAction<Windowed<String>, String>() {
             @Override
             public void apply(final Windowed<String> key, final String value) {
@@ -373,13 +375,15 @@ public class KGroupedStreamImplTest {
     @Test
     public void shouldReduceSessionWindowsWithInternalStoreName() {
         final Map<Windowed<String>, String> results = new HashMap<>();
-        KTable<Windowed<String>, String> table = groupedStream.reduce(
-                new Reducer<String>() {
-                    @Override
-                    public String apply(final String value1, final String value2) {
-                        return value1 + ":" + value2;
-                    }
-                }, SessionWindows.with(30));
+        final KTable<Windowed<String>, String> table = groupedStream.reduce(
+            new Reducer<String>() {
+                @Override
+                public String apply(final String value1, final String value2) {
+                    return value1 + ":" + value2;
+                }
+            },
+            SessionWindows.with(30)
+        );
         table.toStream().foreach(new ForeachAction<Windowed<String>, String>() {
             @Override
             public void apply(final Windowed<String> key, final String value) {
@@ -445,12 +449,13 @@ public class KGroupedStreamImplTest {
     @SuppressWarnings("deprecation")
     @Test(expected = NullPointerException.class)
     public void shouldNotAcceptNullSessionMergerWhenAggregatingSessionWindows() {
-        groupedStream.aggregate(MockInitializer.STRING_INIT,
-                MockAggregator.TOSTRING_ADDER,
-                null,
-                SessionWindows.with(10),
-                Serdes.String(),
-                "storeName");
+        groupedStream.aggregate(
+            MockInitializer.STRING_INIT,
+            MockAggregator.TOSTRING_ADDER,
+            null,
+            SessionWindows.with(10),
+            Serdes.String(),
+            "storeName");
     }
 
     @SuppressWarnings("deprecation")
@@ -539,15 +544,14 @@ public class KGroupedStreamImplTest {
         groupedStream.count((Materialized) null);
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldCountAndMaterializeResults() {
-        groupedStream.count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("count")
-                                    .withKeySerde(Serdes.String()));
+        groupedStream.count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("count").withKeySerde(Serdes.String()));
 
         processData();
 
-        final KeyValueStore<String, Long> count = (KeyValueStore<String, Long>) driver.allStateStores().get("count");
+        @SuppressWarnings("unchecked") final KeyValueStore<String, Long> count =
+            (KeyValueStore<String, Long>) driver.allStateStores().get("count");
 
         assertThat(count.get("1"), equalTo(3L));
         assertThat(count.get("2"), equalTo(1L));
@@ -555,14 +559,14 @@ public class KGroupedStreamImplTest {
     }
 
 
-
     @SuppressWarnings("unchecked")
     @Test
     public void shouldReduceAndMaterializeResults() {
-        groupedStream.reduce(MockReducer.STRING_ADDER,
-                             Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("reduce")
-                                    .withKeySerde(Serdes.String())
-                                    .withValueSerde(Serdes.String()));
+        groupedStream.reduce(
+            MockReducer.STRING_ADDER,
+            Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("reduce")
+                .withKeySerde(Serdes.String())
+                .withValueSerde(Serdes.String()));
 
         processData();
 
@@ -576,11 +580,12 @@ public class KGroupedStreamImplTest {
     @SuppressWarnings("unchecked")
     @Test
     public void shouldAggregateAndMaterializeResults() {
-        groupedStream.aggregate(MockInitializer.STRING_INIT,
-                                MockAggregator.TOSTRING_ADDER,
-                                Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("aggregate")
-                                        .withKeySerde(Serdes.String())
-                                        .withValueSerde(Serdes.String()));
+        groupedStream.aggregate(
+            MockInitializer.STRING_INIT,
+            MockAggregator.TOSTRING_ADDER,
+            Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("aggregate")
+                .withKeySerde(Serdes.String())
+                .withValueSerde(Serdes.String()));
 
         processData();
 
@@ -595,15 +600,16 @@ public class KGroupedStreamImplTest {
     @Test
     public void shouldAggregateWithDefaultSerdes() {
         final Map<String, String> results = new HashMap<>();
-        groupedStream.aggregate(MockInitializer.STRING_INIT,
-                                MockAggregator.TOSTRING_ADDER)
-                .toStream()
-                .foreach(new ForeachAction<String, String>() {
-                    @Override
-                    public void apply(final String key, final String value) {
-                        results.put(key, value);
-                    }
-                });
+        groupedStream.aggregate(
+            MockInitializer.STRING_INIT,
+            MockAggregator.TOSTRING_ADDER)
+            .toStream()
+            .foreach(new ForeachAction<String, String>() {
+                @Override
+                public void apply(final String key, final String value) {
+                    results.put(key, value);
+                }
+            });
 
         processData();
 
@@ -637,13 +643,13 @@ public class KGroupedStreamImplTest {
         driver.process(TOPIC, "2", "B");
         driver.process(TOPIC, "2", "B");
         assertThat(results, equalTo(Arrays.asList(
-                KeyValue.pair(new Windowed<>("1", new TimeWindow(0, 500)), 1L),
-                KeyValue.pair(new Windowed<>("2", new TimeWindow(0, 500)), 1L),
-                KeyValue.pair(new Windowed<>("3", new TimeWindow(0, 500)), 1L),
-                KeyValue.pair(new Windowed<>("1", new TimeWindow(500, 1000)), 1L),
-                KeyValue.pair(new Windowed<>("1", new TimeWindow(500, 1000)), 2L),
-                KeyValue.pair(new Windowed<>("2", new TimeWindow(500, 1000)), 1L),
-                KeyValue.pair(new Windowed<>("2", new TimeWindow(500, 1000)), 2L)
+            KeyValue.pair(new Windowed<>("1", new TimeWindow(0, 500)), 1L),
+            KeyValue.pair(new Windowed<>("2", new TimeWindow(0, 500)), 1L),
+            KeyValue.pair(new Windowed<>("3", new TimeWindow(0, 500)), 1L),
+            KeyValue.pair(new Windowed<>("1", new TimeWindow(500, 1000)), 1L),
+            KeyValue.pair(new Windowed<>("1", new TimeWindow(500, 1000)), 2L),
+            KeyValue.pair(new Windowed<>("2", new TimeWindow(500, 1000)), 1L),
+            KeyValue.pair(new Windowed<>("2", new TimeWindow(500, 1000)), 2L)
         )));
     }
 
@@ -652,15 +658,15 @@ public class KGroupedStreamImplTest {
     public void shouldCountWindowed() {
         final List<KeyValue<Windowed<String>, Long>> results = new ArrayList<>();
         groupedStream.count(
-                TimeWindows.of(500L),
-                "aggregate-by-key-windowed")
-                .toStream()
-                .foreach(new ForeachAction<Windowed<String>, Long>() {
-                    @Override
-                    public void apply(final Windowed<String> key, final Long value) {
-                        results.add(KeyValue.pair(key, value));
-                    }
-                });
+            TimeWindows.of(500L),
+            "aggregate-by-key-windowed")
+            .toStream()
+            .foreach(new ForeachAction<Windowed<String>, Long>() {
+                @Override
+                public void apply(final Windowed<String> key, final Long value) {
+                    results.add(KeyValue.pair(key, value));
+                }
+            });
 
         doCountWindowed(results);
     }
@@ -670,14 +676,14 @@ public class KGroupedStreamImplTest {
     public void shouldCountWindowedWithInternalStoreName() {
         final List<KeyValue<Windowed<String>, Long>> results = new ArrayList<>();
         groupedStream.count(
-                TimeWindows.of(500L))
-                .toStream()
-                .foreach(new ForeachAction<Windowed<String>, Long>() {
-                    @Override
-                    public void apply(final Windowed<String> key, final Long value) {
-                        results.add(KeyValue.pair(key, value));
-                    }
-                });
+            TimeWindows.of(500L))
+            .toStream()
+            .foreach(new ForeachAction<Windowed<String>, Long>() {
+                @Override
+                public void apply(final Windowed<String> key, final Long value) {
+                    results.add(KeyValue.pair(key, value));
+                }
+            });
 
         doCountWindowed(results);
     }

@@ -41,7 +41,6 @@ allprojects {
   }
   
   apply plugin: 'idea'
-  apply plugin: "jacoco"
   apply plugin: 'org.owasp.dependencycheck'
   apply plugin: 'com.github.ben-manes.versions'
 
@@ -384,6 +383,7 @@ subprojects {
 
   // Ignore core since its a scala project
   if (it.path != ':core') {
+    apply plugin: "jacoco"
 
     jacoco {
       toolVersion = "0.8.1"
@@ -591,8 +591,7 @@ project(':core') {
     scoverage libs.scoveragePlugin
     scoverage libs.scoverageRuntime
   }
-
-  jacocoTestReport.enabled = false
+  
   scoverage {
     reportDir = file("${rootProject.buildDir}/scoverage")
     highlighting = false
@@ -859,6 +858,7 @@ project(':clients') {
     include "**/org/apache/kafka/common/config/*"
     include "**/org/apache/kafka/common/security/auth/*"
     include "**/org/apache/kafka/server/policy/*"
+    include "**/org/apache/kafka/common/security/token/delegation/*"
   }
 }
 
@@ -920,10 +920,11 @@ project(':streams') {
     compile libs.slf4jApi
     compile libs.rocksDBJni
 
+    // testCompileOnly prevents streams from exporting a dependency on test-utils, which would cause a dependency cycle
+    testCompileOnly project(':streams:test-utils')
     testCompile project(':clients').sourceSets.test.output
     testCompile project(':core')
     testCompile project(':core').sourceSets.test.output
-    testCompile project(':streams:test-utils').sourceSets.main.output
     testCompile libs.junit
     testCompile libs.easymock
     testCompile libs.bcpkix
@@ -968,12 +969,11 @@ project(':streams:test-utils') {
   archivesBaseName = "kafka-streams-test-utils"
 
   dependencies {
-    compile project(':streams').sourceSets.main.output
+    compile project(':streams')
     compile project(':clients')
 
     testCompile project(':clients').sourceSets.test.output
     testCompile libs.junit
-    testCompile libs.rocksDBJni
 
     testRuntime libs.slf4jlog4j
   }
@@ -1005,8 +1005,8 @@ project(':streams:examples') {
     compile project(':connect:json')  // this dependency should be removed after we unify data API
     compile libs.slf4jlog4j
 
-    testCompile project(':clients').sourceSets.test.output // for org.apache.kafka.test.IntegrationTest
     testCompile project(':streams:test-utils')
+    testCompile project(':clients').sourceSets.test.output // for org.apache.kafka.test.IntegrationTest
     testCompile libs.junit
   }
 
@@ -1024,6 +1024,78 @@ project(':streams:examples') {
 
   jar {
     dependsOn 'copyDependantLibs'
+  }
+}
+
+project(':streams:upgrade-system-tests-0100') {
+  archivesBaseName = "kafka-streams-upgrade-system-tests-0100"
+
+  dependencies {
+    testCompile libs.kafkaStreams_0100
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
+project(':streams:upgrade-system-tests-0101') {
+  archivesBaseName = "kafka-streams-upgrade-system-tests-0101"
+
+  dependencies {
+    testCompile libs.kafkaStreams_0101
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
+project(':streams:upgrade-system-tests-0102') {
+  archivesBaseName = "kafka-streams-upgrade-system-tests-0102"
+
+  dependencies {
+    testCompile libs.kafkaStreams_0102
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
+project(':streams:upgrade-system-tests-0110') {
+  archivesBaseName = "kafka-streams-upgrade-system-tests-0110"
+
+  dependencies {
+    testCompile libs.kafkaStreams_0110
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
+project(':streams:upgrade-system-tests-10') {
+  archivesBaseName = "kafka-streams-upgrade-system-tests-10"
+
+  dependencies {
+    testCompile libs.kafkaStreams_10
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
+project(':streams:upgrade-system-tests-11') {
+  archivesBaseName = "kafka-streams-upgrade-system-tests-11"
+
+  dependencies {
+    testCompile libs.kafkaStreams_11
+  }
+
+  systemTestLibs {
+    dependsOn testJar
   }
 }
 

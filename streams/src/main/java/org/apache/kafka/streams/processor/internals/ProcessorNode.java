@@ -39,19 +39,19 @@ public class ProcessorNode<K, V> {
 
     private final String name;
     private final Processor<K, V> processor;
-    NodeMetrics nodeMetrics;
-    private Time time;
+    private NodeMetrics nodeMetrics;
+    private final Time time;
 
     private K key;
     private V value;
-    private Runnable processDelegate = new Runnable() {
+    private final Runnable processDelegate = new Runnable() {
         @Override
         public void run() {
             processor.process(key, value);
         }
     };
     private ProcessorContext context;
-    private Runnable initDelegate = new Runnable() {
+    private final Runnable initDelegate = new Runnable() {
         @Override
         public void run() {
             if (processor != null) {
@@ -59,7 +59,7 @@ public class ProcessorNode<K, V> {
             }
         }
     };
-    private Runnable closeDelegate = new Runnable() {
+    private final Runnable closeDelegate = new Runnable() {
         @Override
         public void run() {
             if (processor != null) {
@@ -70,12 +70,12 @@ public class ProcessorNode<K, V> {
 
     public final Set<String> stateStores;
 
-    public ProcessorNode(String name) {
+    public ProcessorNode(final String name) {
         this(name, null, null);
     }
 
 
-    public ProcessorNode(String name, Processor<K, V> processor, Set<String> stateStores) {
+    public ProcessorNode(final String name, final Processor<K, V> processor, final Set<String> stateStores) {
         this.name = name;
         this.processor = processor;
         this.children = new ArrayList<>();
@@ -97,21 +97,21 @@ public class ProcessorNode<K, V> {
         return children;
     }
 
-    public final ProcessorNode getChild(final String childName) {
+    final ProcessorNode getChild(final String childName) {
         return childByName.get(childName);
     }
 
-    public void addChild(ProcessorNode<?, ?> child) {
+    public void addChild(final ProcessorNode<?, ?> child) {
         children.add(child);
         childByName.put(child.name, child);
     }
 
-    public void init(ProcessorContext context) {
+    public void init(final ProcessorContext context) {
         this.context = context;
         try {
             nodeMetrics = new NodeMetrics(context.metrics(), name, context);
             nodeMetrics.metrics.measureLatencyNs(time, initDelegate, nodeMetrics.nodeCreationSensor);
-        } catch (Exception e) {
+        } catch (final Exception e) {
             throw new StreamsException(String.format("failed to initialize processor %s", name), e);
         }
     }
@@ -120,7 +120,7 @@ public class ProcessorNode<K, V> {
         try {
             nodeMetrics.metrics.measureLatencyNs(time, closeDelegate, nodeMetrics.nodeDestructionSensor);
             nodeMetrics.removeAllSensors();
-        } catch (Exception e) {
+        } catch (final Exception e) {
             throw new StreamsException(String.format("failed to close processor %s", name), e);
         }
     }
@@ -134,7 +134,7 @@ public class ProcessorNode<K, V> {
     }
 
     public void punctuate(final long timestamp, final Punctuator punctuator) {
-        Runnable punctuateDelegate = new Runnable() {
+        final Runnable punctuateDelegate = new Runnable() {
             @Override
             public void run() {
                 punctuator.punctuate(timestamp);
@@ -154,11 +154,11 @@ public class ProcessorNode<K, V> {
     /**
      * @return a string representation of this node starting with the given indent, useful for debugging.
      */
-    public String toString(String indent) {
+    public String toString(final String indent) {
         final StringBuilder sb = new StringBuilder(indent + name + ":\n");
         if (stateStores != null && !stateStores.isEmpty()) {
             sb.append(indent).append("\tstates:\t\t[");
-            for (String store : stateStores) {
+            for (final String store : stateStores) {
                 sb.append(store);
                 sb.append(", ");
             }
@@ -168,39 +168,52 @@ public class ProcessorNode<K, V> {
         return sb.toString();
     }
 
-    protected static final class NodeMetrics  {
-        final StreamsMetricsImpl metrics;
+    Sensor sourceNodeForwardSensor() {
+        return nodeMetrics.sourceNodeForwardSensor;
+    }
 
-        final Sensor nodeProcessTimeSensor;
-        final Sensor nodePunctuateTimeSensor;
-        final Sensor sourceNodeForwardSensor;
-        final Sensor sourceNodeSkippedDueToDeserializationError;
-        final Sensor nodeCreationSensor;
-        final Sensor nodeDestructionSensor;
+    Sensor sourceNodeSkippedDueToDeserializationErrorSensor() {
+        return nodeMetrics.sourceNodeSkippedDueToDeserializationError;
+    }
 
+    private static final class NodeMetrics {
+        private final StreamsMetricsImpl metrics;
 
-        public NodeMetrics(final StreamsMetrics metrics, final String name, final ProcessorContext context) {
+        private final Sensor nodeProcessTimeSensor;
+        private final Sensor nodePunctuateTimeSensor;
+        private final Sensor sourceNodeForwardSensor;
+        private final Sensor sourceNodeSkippedDueToDeserializationError;
+        private final Sensor nodeCreationSensor;
+        private final Sensor nodeDestructionSensor;
+
+        private NodeMetrics(final StreamsMetrics metrics, final String name, final ProcessorContext context) {
             final String scope = "processor-node";
             final String tagKey = "task-id";
             final String tagValue = context.taskId().toString();
             this.metrics = (StreamsMetricsImpl) metrics;
 
             // these are all latency metrics
-            this.nodeProcessTimeSensor = metrics.addLatencyAndThroughputSensor(scope, name, "process",
-                    Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
-            this.nodePunctuateTimeSensor = metrics.addLatencyAndThroughputSensor(scope, name, "punctuate",
-                    Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
-            this.nodeCreationSensor = metrics.addLatencyAndThroughputSensor(scope, name, "create",
-                    Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
-            this.nodeDestructionSensor = metrics.addLatencyAndThroughputSensor(scope, name, "destroy",
-                    Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
-            this.sourceNodeForwardSensor = metrics.addThroughputSensor(scope, name, "forward",
-                    Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
-            this.sourceNodeSkippedDueToDeserializationError = metrics.addThroughputSensor(scope, name, "skippedDueToDeserializationError",
-                    Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
+            this.nodeProcessTimeSensor = metrics.addLatencyAndThroughputSensor(
+                scope, name, "process", Sensor.RecordingLevel.DEBUG, tagKey, tagValue
+            );
+            this.nodePunctuateTimeSensor = metrics.addLatencyAndThroughputSensor(
+                scope, name, "punctuate", Sensor.RecordingLevel.DEBUG, tagKey, tagValue
+            );
+            this.nodeCreationSensor = metrics.addLatencyAndThroughputSensor(
+                scope, name, "create", Sensor.RecordingLevel.DEBUG, tagKey, tagValue
+            );
+            this.nodeDestructionSensor = metrics.addLatencyAndThroughputSensor(
+                scope, name, "destroy", Sensor.RecordingLevel.DEBUG, tagKey, tagValue
+            );
+            this.sourceNodeForwardSensor = metrics.addThroughputSensor(
+                scope, name, "forward", Sensor.RecordingLevel.DEBUG, tagKey, tagValue
+            );
+            this.sourceNodeSkippedDueToDeserializationError = metrics.addThroughputSensor(
+                scope, name, "skippedDueToDeserializationError", Sensor.RecordingLevel.DEBUG, tagKey, tagValue
+            );
         }
 
-        public void removeAllSensors() {
+        private void removeAllSensors() {
             metrics.removeSensor(nodeProcessTimeSensor);
             metrics.removeSensor(nodePunctuateTimeSensor);
             metrics.removeSensor(sourceNodeForwardSensor);

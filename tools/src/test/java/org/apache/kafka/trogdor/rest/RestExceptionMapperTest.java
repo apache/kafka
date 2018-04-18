@@ -24,6 +24,8 @@ import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.exc.InvalidTypeIdException;
 import javax.ws.rs.NotFoundException;
 import javax.ws.rs.core.Response;
+
+import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.junit.Test;
 
@@ -68,6 +70,13 @@ public class RestExceptionMapperTest {
     }
 
     @Test
+    public void testToResponseInvalidRequestException() {
+        RestExceptionMapper mapper = new RestExceptionMapper();
+        Response resp = mapper.toResponse(new InvalidRequestException("invalid request"));
+        assertEquals(resp.getStatus(), Response.Status.BAD_REQUEST.getStatusCode());
+    }
+
+    @Test
     public void testToResponseUnknownException() {
         RestExceptionMapper mapper = new RestExceptionMapper();
         Response resp = mapper.toResponse(new Exception("Unkown exception"));
@@ -84,7 +93,7 @@ public class RestExceptionMapperTest {
         RestExceptionMapper.toException(Response.Status.NOT_IMPLEMENTED.getStatusCode(), "Not Implemented");
     }
 
-    @Test(expected = SerializationException.class)
+    @Test(expected = InvalidRequestException.class)
     public void testToExceptionSerializationException() throws Exception {
         RestExceptionMapper.toException(Response.Status.BAD_REQUEST.getStatusCode(), "Bad Request");
     }

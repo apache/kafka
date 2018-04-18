@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.tests;
 
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.StreamsConfig;
 
 import java.io.IOException;
 import java.util.Properties;
@@ -28,11 +29,21 @@ public class StreamsEosTest {
      *  command := "run" | "process" | "verify"
      */
     public static void main(final String[] args) throws IOException {
-        final String kafka = args[0];
-        final String propFileName = args.length > 1 ? args[1] : null;
-        final String command = args.length > 2 ? args[2] : null;
+        if (args.length < 2) {
+            System.err.println("StreamsEosTest are expecting two parameters: propFile, command; but only see " + args.length + " parameter");
+            System.exit(1);
+        }
+
+        final String propFileName = args[0];
+        final String command = args[1];
 
         final Properties streamsProperties = Utils.loadProps(propFileName);
+        final String kafka = streamsProperties.getProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG);
+
+        if (kafka == null) {
+            System.err.println("No bootstrap kafka servers specified in " + StreamsConfig.BOOTSTRAP_SERVERS_CONFIG);
+            System.exit(1);
+        }
 
         System.out.println("StreamsTest instance started");
         System.out.println("kafka=" + kafka);
@@ -49,10 +60,10 @@ public class StreamsEosTest {
                 EosTestDriver.generate(kafka);
                 break;
             case "process":
-                new EosTestClient(kafka, streamsProperties, false).start();
+                new EosTestClient(streamsProperties, false).start();
                 break;
             case "process-complex":
-                new EosTestClient(kafka, streamsProperties, true).start();
+                new EosTestClient(streamsProperties, true).start();
                 break;
             case "verify":
                 EosTestDriver.verify(kafka, false);

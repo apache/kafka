@@ -31,7 +31,9 @@ class KTableKTableInnerJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R,
         }
     };
 
-    KTableKTableInnerJoin(KTableImpl<K, ?, V1> table1, KTableImpl<K, ?, V2> table2, ValueJoiner<? super V1, ? super V2, ? extends R> joiner) {
+    KTableKTableInnerJoin(final KTableImpl<K, ?, V1> table1,
+                          final KTableImpl<K, ?, V2> table2,
+                          final ValueJoiner<? super V1, ? super V2, ? extends R> joiner) {
         super(table1, table2, joiner);
     }
 
@@ -47,7 +49,8 @@ class KTableKTableInnerJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R,
 
     private class KTableKTableInnerJoinValueGetterSupplier extends KTableKTableAbstractJoinValueGetterSupplier<K, R, V1, V2> {
 
-        KTableKTableInnerJoinValueGetterSupplier(KTableValueGetterSupplier<K, V1> valueGetterSupplier1, KTableValueGetterSupplier<K, V2> valueGetterSupplier2) {
+        KTableKTableInnerJoinValueGetterSupplier(final KTableValueGetterSupplier<K, V1> valueGetterSupplier1,
+                                                 final KTableValueGetterSupplier<K, V2> valueGetterSupplier2) {
             super(valueGetterSupplier1, valueGetterSupplier2);
         }
 
@@ -60,12 +63,12 @@ class KTableKTableInnerJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R,
 
         private final KTableValueGetter<K, V2> valueGetter;
 
-        KTableKTableJoinProcessor(KTableValueGetter<K, V2> valueGetter) {
+        KTableKTableJoinProcessor(final KTableValueGetter<K, V2> valueGetter) {
             this.valueGetter = valueGetter;
         }
 
         @Override
-        public void init(ProcessorContext context) {
+        public void init(final ProcessorContext context) {
             super.init(context);
             valueGetter.init(context);
         }
@@ -119,7 +122,7 @@ class KTableKTableInnerJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R,
             final V1 value1 = valueGetter1.get(key);
 
             if (value1 != null) {
-                V2 value2 = valueGetter2.get(keyValueMapper.apply(key, value1));
+                final V2 value2 = valueGetter2.get(keyValueMapper.apply(key, value1));
 
                 if (value2 != null) {
                     return joiner.apply(value1, value2);

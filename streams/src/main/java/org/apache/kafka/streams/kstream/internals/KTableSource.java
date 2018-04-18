@@ -28,7 +28,7 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
 
     private boolean sendOldValues = false;
 
-    public KTableSource(String storeName) {
+    public KTableSource(final String storeName) {
         this.storeName = storeName;
     }
 
@@ -48,18 +48,19 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(ProcessorContext context) {
+        public void init(final ProcessorContext context) {
             super.init(context);
             store = (KeyValueStore<K, V>) context.getStateStore(storeName);
             tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context, sendOldValues), sendOldValues);
         }
 
         @Override
-        public void process(K key, V value) {
+        public void process(final K key, final V value) {
             // if the key is null, then ignore the record
-            if (key == null)
+            if (key == null) {
                 return;
-            V oldValue = store.get(key);
+            }
+            final V oldValue = store.get(key);
             store.put(key, value);
             tupleForwarder.maybeForward(key, value, oldValue);
         }
