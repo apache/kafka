@@ -225,8 +225,11 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         metadataCache = new MetadataCache(config.brokerId)
         credentialProvider = new CredentialProvider(config.saslEnabledMechanisms)
 
+        // Create and start the socket server acceptor threads so that the bound port is known.
+        // Delay starting processors until the end of the initialization sequence to ensure
+        // that credentials have been loaded before processing authentications.
         socketServer = new SocketServer(config, metrics, time, credentialProvider)
-        socketServer.startup()
+        socketServer.startup(startupProcessors = false)
 
         /* start replica manager */
         replicaManager = createReplicaManager(isShuttingDown)
@@ -289,6 +292,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         // Now that the broker id is successfully registered via KafkaHealthcheck, checkpoint it
         checkpointBrokerId(config.brokerId)
 
+        socketServer.startProcessors()
         brokerState.newState(RunningAsBroker)
         shutdownLatch = new CountDownLatch(1)
         startupComplete.set(true)
