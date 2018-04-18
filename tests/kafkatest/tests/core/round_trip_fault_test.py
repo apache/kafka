@@ -33,12 +33,13 @@ class RoundTripFaultTest(Test):
         self.workload_service = RoundTripWorkloadService(test_context, self.kafka)
         self.trogdor = TrogdorService(context=self.test_context,
                                       client_services=[self.zk, self.kafka, self.workload_service])
+        active_topics={"round_trip_topic":{"partitionAssignments":{"0": [0,1,2]}}}
         self.round_trip_spec = RoundTripWorkloadSpec(0, TaskSpec.MAX_DURATION_MS,
                                      self.workload_service.client_node,
                                      self.workload_service.bootstrap_servers,
                                      target_messages_per_sec=10000,
-                                     partition_assignments={0: [0,1,2]},
-                                     max_messages=100000)
+                                     max_messages=100000,
+                                     active_topics=active_topics)
 
     def setUp(self):
         self.zk.start()

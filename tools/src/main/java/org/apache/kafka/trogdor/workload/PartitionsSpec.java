@@ -23,9 +23,11 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.trogdor.rest.Message;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 
 /**
  * Describes some partitions.
@@ -44,8 +46,16 @@ public class PartitionsSpec extends Message {
             @JsonProperty("partitionAssignments") Map<Integer, List<Integer>> partitionAssignments) {
         this.numPartitions = numPartitions;
         this.replicationFactor = replicationFactor;
-        this.partitionAssignments = partitionAssignments == null ?
-            new HashMap<Integer, List<Integer>>() : partitionAssignments;
+        HashMap<Integer, List<Integer>> partMap = new HashMap<>();
+        if (partitionAssignments != null) {
+            for (Entry<Integer, List<Integer>> entry : partitionAssignments.entrySet()) {
+                int partition = entry.getKey() == null ? 0 : entry.getKey();
+                List<Integer> assignments = entry.getValue() == null ?
+                    Collections.<Integer>emptyList() : new ArrayList<Integer>(entry.getValue());
+                partMap.put(partition, assignments);
+            }
+        }
+        this.partitionAssignments = Collections.unmodifiableMap(partMap);
     }
 
     @JsonProperty
@@ -72,7 +82,7 @@ public class PartitionsSpec extends Message {
     }
 
     @JsonProperty
-    public Map<Integer, List<Integer>> partitionAssignmentsap() {
+    public Map<Integer, List<Integer>> partitionAssignments() {
         return partitionAssignments;
     }
 
