@@ -700,7 +700,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       }
     }
 
-    verifyListener(SecurityProtocol.SSL, None)
+    verifyListener(SecurityProtocol.SSL, None, "add-ssl-listener-group2")
     createAdminClient(SecurityProtocol.SSL, SecureInternal)
     verifyRemoveListener("SSL", SecurityProtocol.SSL, Seq.empty)
   }
@@ -759,9 +759,11 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     }), "Listener not created")
 
     if (saslMechanisms.nonEmpty)
-      saslMechanisms.foreach(mechanism => verifyListener(securityProtocol, Some(mechanism)))
+      saslMechanisms.foreach { mechanism =>
+        verifyListener(securityProtocol, Some(mechanism), s"add-listener-group-$securityProtocol-$mechanism")
+      }
     else
-      verifyListener(securityProtocol, None)
+      verifyListener(securityProtocol, None, s"add-listener-group-$securityProtocol")
 
     val brokerConfigs = describeConfig(adminClients.head).entries.asScala
     props.asScala.foreach { case (name, value) =>
@@ -779,7 +781,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     val producer1 = createProducer(listenerName, securityProtocol, saslMechanism, retries = 1000)
     val consumer1 = createConsumer(listenerName, securityProtocol, saslMechanism,
       s"remove-listener-group-$securityProtocol")
-    verifyProduceConsume(producer1, consumer1, numRecords = 10, topic, mayReceiveDuplicates = true)
+    verifyProduceConsume(producer1, consumer1, numRecords = 10, topic)
     // send another message to check consumer later
     producer1.send(new ProducerRecord(topic, "key", "value")).get(100, TimeUnit.MILLISECONDS)
 
@@ -818,13 +820,14 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     verifyTimeout(consumerFuture)
   }
 
-  private def verifyListener(securityProtocol: SecurityProtocol, saslMechanism: Option[String]): Unit = {
+  // Verify listener with a new producer and consumer using that listener. Unique group id must be provided
+  // when a test invokes this multiple times to ensure there are no committed offsets for the group.
+  private def verifyListener(securityProtocol: SecurityProtocol, saslMechanism: Option[String], groupId: String): Unit = {
     val mechanism = saslMechanism.getOrElse("")
     val retries = 1000 // since it may take time for metadata to be updated on all brokers
     val producer = createProducer(securityProtocol.name, securityProtocol, mechanism, retries)
-    val consumer = createConsumer(securityProtocol.name, securityProtocol, mechanism,
-      s"add-listener-group-$securityProtocol-$mechanism")
-    verifyProduceConsume(producer, consumer, numRecords = 10, topic, mayReceiveDuplicates = true)
+    val consumer = createConsumer(securityProtocol.name, securityProtocol, mechanism, groupId)
+    verifyProduceConsume(producer, consumer, numRecords = 10, topic)
   }
 
   private def fetchBrokerConfigsFromZooKeeper(server: KafkaServer): Properties = {
@@ -945,8 +948,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
   private def verifyProduceConsume(producer: KafkaProducer[String, String],
                                    consumer: KafkaConsumer[String, String],
                                    numRecords: Int,
-                                   topic: String,
-                                   mayReceiveDuplicates: Boolean = false): Unit = {
+                                   topic: String): Unit = {
     val producerRecords = (1 to numRecords).map(i => new ProducerRecord(topic, s"key$i", s"value$i"))
     producerRecords.map(producer.send).map(_.get(10, TimeUnit.SECONDS))
     var received = 0
@@ -954,8 +956,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       received += consumer.poll(50).count
       received >= numRecords
     }, s"Consumed $received records until timeout instead of the expected $numRecords records")
-    if (!mayReceiveDuplicates)
-      assertEquals(numRecords, received)
+    assertEquals(numRecords, received)
   }
 
   private def verifyAuthenticationFailure(producer: KafkaProducer[_, _]): Unit = {
