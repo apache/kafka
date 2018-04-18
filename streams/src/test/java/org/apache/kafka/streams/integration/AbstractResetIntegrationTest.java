@@ -107,20 +107,25 @@ public abstract class AbstractResetIntegrationTest {
             kafkaAdminClient = (KafkaAdminClient) org.apache.kafka.clients.admin.AdminClient.create(commonClientConfig);
         }
 
-        try {
-            setCurrentTime();
-        } catch (IllegalArgumentException e) {
-            System.err.println("New time less than previous time, will re-try setting time once");
-            setCurrentTime();
+        boolean timeSet = false;
+        while (!timeSet) {
+            timeSet = setCurrentTime();
         }
     }
 
-    private void setCurrentTime() {
-        mockTime = cluster.time;
-        // we align time to seconds to get clean window boundaries and thus ensure the same result for each run
-        // otherwise, input records could fall into different windows for different runs depending on the initial mock time
-        final long alignedTime = (System.currentTimeMillis() / 1000 + 1) * 1000;
-        mockTime.setCurrentTimeMs(alignedTime);
+    private boolean setCurrentTime() {
+        boolean currentTimeSet = false;
+        try {
+            mockTime = cluster.time;
+            // we align time to seconds to get clean window boundaries and thus ensure the same result for each run
+            // otherwise, input records could fall into different windows for different runs depending on the initial mock time
+            final long alignedTime = (System.currentTimeMillis() / 1000 + 1) * 1000;
+            mockTime.setCurrentTimeMs(alignedTime);
+            currentTimeSet = true;
+        } catch (IllegalArgumentException e) {
+            // don't care will retry until set
+        }
+        return currentTimeSet;
     }
 
     private void prepareConfigs() {
