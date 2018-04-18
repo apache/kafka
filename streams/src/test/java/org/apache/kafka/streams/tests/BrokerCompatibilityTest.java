@@ -48,14 +48,24 @@ public class BrokerCompatibilityTest {
     private static final String SINK_TOPIC = "brokerCompatibilitySinkTopic";
 
     public static void main(final String[] args) throws IOException {
+        if (args.length < 2) {
+            System.err.println("BrokerCompatibilityTest are expecting two parameters: propFile, eosEnabled; but only see " + args.length + " parameter");
+            System.exit(1);
+        }
+
         System.out.println("StreamsTest instance started");
 
-        final String kafka = args.length > 0 ? args[0] : "localhost:9092";
-        final String propFileName = args.length > 1 ? args[1] : null;
-        final boolean eosEnabled = args.length > 2 ? Boolean.parseBoolean(args[2]) : false;
+        final String propFileName = args[0];
+        final boolean eosEnabled = Boolean.parseBoolean(args[1]);
 
         final Properties streamsProperties = Utils.loadProps(propFileName);
-        streamsProperties.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
+        final String kafka = streamsProperties.getProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG);
+
+        if (kafka == null) {
+            System.err.println("No bootstrap kafka servers specified in " + StreamsConfig.BOOTSTRAP_SERVERS_CONFIG);
+            System.exit(1);
+        }
+
         streamsProperties.put(StreamsConfig.APPLICATION_ID_CONFIG, "kafka-streams-system-test-broker-compatibility");
         streamsProperties.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsProperties.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());

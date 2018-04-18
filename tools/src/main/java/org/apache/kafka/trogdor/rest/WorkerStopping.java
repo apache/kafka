@@ -39,10 +39,11 @@ public class WorkerStopping extends WorkerState {
     private final JsonNode status;
 
     @JsonCreator
-    public WorkerStopping(@JsonProperty("spec") TaskSpec spec,
+    public WorkerStopping(@JsonProperty("taskId") String taskId,
+            @JsonProperty("spec") TaskSpec spec,
             @JsonProperty("startedMs") long startedMs,
             @JsonProperty("status") JsonNode status) {
-        super(spec);
+        super(taskId, spec);
         this.startedMs = startedMs;
         this.status = status == null ? NullNode.instance : status;
     }

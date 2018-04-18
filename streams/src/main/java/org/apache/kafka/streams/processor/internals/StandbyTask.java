@@ -166,7 +166,7 @@ public class StandbyTask extends AbstractTask {
         return stateMgr.updateStandbyStates(partition, records);
     }
 
-    public Map<TopicPartition, Long> checkpointedOffsets() {
+    Map<TopicPartition, Long> checkpointedOffsets() {
         return checkpointedOffsets;
     }
 

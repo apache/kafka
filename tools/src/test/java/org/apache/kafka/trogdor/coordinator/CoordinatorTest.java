@@ -35,6 +35,8 @@ import org.apache.kafka.trogdor.common.MiniTrogdorCluster;
 import org.apache.kafka.trogdor.fault.NetworkPartitionFaultSpec;
 import org.apache.kafka.trogdor.rest.CoordinatorStatusResponse;
 import org.apache.kafka.trogdor.rest.CreateTaskRequest;
+import org.apache.kafka.trogdor.rest.DestroyTaskRequest;
+import org.apache.kafka.trogdor.rest.RequestConflictException;
 import org.apache.kafka.trogdor.rest.StopTaskRequest;
 import org.apache.kafka.trogdor.rest.TaskDone;
 import org.apache.kafka.trogdor.rest.TaskPending;
@@ -57,8 +59,9 @@ import java.util.HashMap;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.fail;
 
 public class CoordinatorTest {
     private static final Logger log = LoggerFactory.getLogger(CoordinatorTest.class);
@@ -96,11 +99,25 @@ public class CoordinatorTest {
                     build()).
                 waitFor(cluster.coordinatorClient());
 
+            // Re-creating a task with the same arguments is not an error.
+            cluster.coordinatorClient().createTask(
+                new CreateTaskRequest("foo", fooSpec));
+
+            // Re-creating a task with different arguments gives a RequestConflictException.
+            try {
+                NoOpTaskSpec barSpec = new NoOpTaskSpec(1000, 2000);
+                cluster.coordinatorClient().createTask(
+                    new CreateTaskRequest("foo", barSpec));
+                fail("Expected to get an exception when re-creating a task with a " +
+                    "different task spec.");
+            } catch (RequestConflictException exception) {
+            }
+
             time.sleep(2);
             new ExpectedTasks().
                 addTask(new ExpectedTaskBuilder("foo").
                     taskState(new TaskRunning(fooSpec, 2, new TextNode("active"))).
-                    workerState(new WorkerRunning(fooSpec, 2, new TextNode("active"))).
+                    workerState(new WorkerRunning("foo", fooSpec, 2, new TextNode("active"))).
                     build()).
                 waitFor(cluster.coordinatorClient()).
                 waitFor(cluster.agentClient("node02"));
@@ -149,7 +166,7 @@ public class CoordinatorTest {
             new ExpectedTasks().
                 addTask(new ExpectedTaskBuilder("foo").
                     taskState(new TaskRunning(fooSpec, 11, status1)).
-                    workerState(new WorkerRunning(fooSpec, 11,  new TextNode("active"))).
+                    workerState(new WorkerRunning("foo", fooSpec, 11,  new TextNode("active"))).
                     build()).
                 waitFor(coordinatorClient).
                 waitFor(agentClient1).
@@ -163,7 +180,7 @@ public class CoordinatorTest {
                 addTask(new ExpectedTaskBuilder("foo").
                     taskState(new TaskDone(fooSpec, 11, 13,
                         "", false, status2)).
-                    workerState(new WorkerDone(fooSpec, 11, 13, new TextNode("done"), "")).
+                    workerState(new WorkerDone("foo", fooSpec, 11, 13, new TextNode("done"), "")).
                     build()).
                 waitFor(coordinatorClient).
                 waitFor(agentClient1).
@@ -206,7 +223,7 @@ public class CoordinatorTest {
             new ExpectedTasks().
                 addTask(new ExpectedTaskBuilder("foo").
                     taskState(new TaskRunning(fooSpec, 11, status1)).
-                    workerState(new WorkerRunning(fooSpec, 11, new TextNode("active"))).
+                    workerState(new WorkerRunning("foo", fooSpec, 11, new TextNode("active"))).
                     build()).
                 waitFor(coordinatorClient).
                 waitFor(agentClient1).
@@ -221,8 +238,65 @@ public class CoordinatorTest {
                 addTask(new ExpectedTaskBuilder("foo").
                     taskState(new TaskDone(fooSpec, 11, 12, "",
                         true, status2)).
-                    workerState(new WorkerDone(fooSpec, 11, 12, new TextNode("done"), "")).
+                    workerState(new WorkerDone("foo", fooSpec, 11, 12, new TextNode("done"), "")).
                     build()).
+                waitFor(coordinatorClient).
+                waitFor(agentClient1).
+                waitFor(agentClient2);
+
+            coordinatorClient.destroyTask(new DestroyTaskRequest("foo"));
+            new ExpectedTasks().
+                waitFor(coordinatorClient).
+                waitFor(agentClient1).
+                waitFor(agentClient2);
+        }
+    }
+
+    @Test
+    public void testTaskDestruction() throws Exception {
+        MockTime time = new MockTime(0, 0, 0);
+        Scheduler scheduler = new MockScheduler(time);
+        try (MiniTrogdorCluster cluster = new MiniTrogdorCluster.Builder().
+            addCoordinator("node01").
+            addAgent("node01").
+            addAgent("node02").
+            scheduler(scheduler).
+            build()) {
+            CoordinatorClient coordinatorClient = cluster.coordinatorClient();
+            AgentClient agentClient1 = cluster.agentClient("node01");
+            AgentClient agentClient2 = cluster.agentClient("node02");
+
+            new ExpectedTasks().
+                waitFor(coordinatorClient).
+                waitFor(agentClient1).
+                waitFor(agentClient2);
+
+            NoOpTaskSpec fooSpec = new NoOpTaskSpec(2, 2);
+            coordinatorClient.destroyTask(new DestroyTaskRequest("foo"));
+            coordinatorClient.createTask(new CreateTaskRequest("foo", fooSpec));
+            NoOpTaskSpec barSpec = new NoOpTaskSpec(20, 20);
+            coordinatorClient.createTask(new CreateTaskRequest("bar", barSpec));
+            coordinatorClient.destroyTask(new DestroyTaskRequest("bar"));
+            new ExpectedTasks().
+                addTask(new ExpectedTaskBuilder("foo").taskState(new TaskPending(fooSpec)).build()).
+                waitFor(coordinatorClient).
+                waitFor(agentClient1).
+                waitFor(agentClient2);
+            time.sleep(10);
+
+            ObjectNode status1 = new ObjectNode(JsonNodeFactory.instance);
+            status1.set("node01", new TextNode("active"));
+            status1.set("node02", new TextNode("active"));
+            new ExpectedTasks().
+                addTask(new ExpectedTaskBuilder("foo").
+                    taskState(new TaskRunning(fooSpec, 10, status1)).
+                    build()).
+                waitFor(coordinatorClient).
+                waitFor(agentClient1).
+                waitFor(agentClient2);
+
+            coordinatorClient.destroyTask(new DestroyTaskRequest("foo"));
+            new ExpectedTasks().
                 waitFor(coordinatorClient).
                 waitFor(agentClient1).
                 waitFor(agentClient2);
@@ -397,7 +471,7 @@ public class CoordinatorTest {
             new ExpectedTasks().
                 addTask(new ExpectedTaskBuilder("foo").
                     taskState(new TaskRunning(fooSpec, 2, new TextNode("active"))).
-                    workerState(new WorkerRunning(fooSpec, 2, new TextNode("active"))).
+                    workerState(new WorkerRunning("foo", fooSpec, 2, new TextNode("active"))).
                     build()).
                 addTask(new ExpectedTaskBuilder("bar").
                     taskState(new TaskPending(barSpec)).
@@ -448,7 +522,7 @@ public class CoordinatorTest {
             new ExpectedTasks().
                 addTask(new ExpectedTaskBuilder("foo").
                     taskState(new TaskRunning(fooSpec, 2, status1)).
-                    workerState(new WorkerRunning(fooSpec, 2, new TextNode("active"))).
+                    workerState(new WorkerRunning("foo", fooSpec, 2, new TextNode("active"))).
                     build()).
                 waitFor(coordinatorClient).
                 waitFor(cluster.agentClient("node02")).
@@ -461,14 +535,14 @@ public class CoordinatorTest {
             new ExpectedTasks().
                 addTask(new ExpectedTaskBuilder("foo").
                     taskState(new TaskRunning(fooSpec, 2, status2)).
-                    workerState(new WorkerRunning(fooSpec, 2, new TextNode("active"))).
+                    workerState(new WorkerRunning("foo", fooSpec, 2, new TextNode("active"))).
                     build()).
                 waitFor(coordinatorClient).
                 waitFor(cluster.agentClient("node03"));
             new ExpectedTasks().
                 addTask(new ExpectedTaskBuilder("foo").
                     taskState(new TaskRunning(fooSpec, 2, status2)).
-                    workerState(new WorkerDone(fooSpec, 2, 12, new TextNode("halted"), "")).
+                    workerState(new WorkerDone("foo", fooSpec, 2, 12, new TextNode("halted"), "")).
                     build()).
                 waitFor(cluster.agentClient("node02"));
 

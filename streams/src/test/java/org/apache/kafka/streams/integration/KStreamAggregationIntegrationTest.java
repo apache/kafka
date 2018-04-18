@@ -781,7 +781,7 @@ public class KStreamAggregationIntegrationTest {
                 "--property", "key.deserializer=" + keyDeserializer.getClass().getName(),
                 "--property", "value.deserializer=" + valueDeserializer.getClass().getName(),
                 "--property", "key.separator=" + keySeparator,
-                "--" + StreamsConfig.DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS, Serdes.serdeFrom(innerClass).getClass().getName()
+                "--property", "key.deserializer." + StreamsConfig.DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS + "=" + Serdes.serdeFrom(innerClass).getClass().getName()
             };
 
             ConsoleConsumer.messageCount_$eq(0); //reset the message count

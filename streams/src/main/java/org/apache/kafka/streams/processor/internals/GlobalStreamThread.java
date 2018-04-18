@@ -86,11 +86,10 @@ public class GlobalStreamThread extends Thread {
      * </pre>
      *
      * Note the following:
-     * - Any state can go to PENDING_SHUTDOWN.
-     *   That is because streams can be closed at any time.
-     * - State PENDING_SHUTDOWN may want to transit itself.
-     *   In this case we will forbid the transition but will not treat as an error.
-     *
+     * <ul>
+     *     <li>Any state can go to PENDING_SHUTDOWN. That is because streams can be closed at any time.</li>
+     *     <li>State PENDING_SHUTDOWN may want to transit itself. In this case we will forbid the transition but will not treat as an error.</li>
+     * </ul>
      */
     public enum State implements ThreadStateTransitionValidator {
         CREATED(1, 2), RUNNING(2), PENDING_SHUTDOWN(3), DEAD;
@@ -107,7 +106,7 @@ public class GlobalStreamThread extends Thread {
 
         @Override
         public boolean isValidTransition(final ThreadStateTransitionValidator newState) {
-            State tmpState = (State) newState;
+            final State tmpState = (State) newState;
             return validTransitions.contains(tmpState.ordinal());
         }
     }
@@ -136,20 +135,21 @@ public class GlobalStreamThread extends Thread {
 
     /**
      * Sets the state
+     *
      * @param newState New state
      */
-    private boolean setState(final State newState) {
+    private void setState(final State newState) {
         final State oldState = state;
 
         synchronized (stateLock) {
             if (state == State.PENDING_SHUTDOWN && newState == State.PENDING_SHUTDOWN) {
                 // when the state is already in PENDING_SHUTDOWN, its transition to itself
                 // will be refused but we do not throw exception here
-                return false;
+                return;
             } else if (state == State.DEAD) {
                 // when the state is already in NOT_RUNNING, all its transitions
                 // will be refused but we do not throw exception here
-                return false;
+                return;
             } else if (!state.isValidTransition(newState)) {
                 log.error("Unexpected state transition from {} to {}", oldState, newState);
                 throw new StreamsException(logPrefix + "Unexpected state transition from " + oldState + " to " + newState);
@@ -163,8 +163,6 @@ public class GlobalStreamThread extends Thread {
         if (stateListener != null) {
             stateListener.onChange(this, state, oldState);
         }
-
-        return true;
     }
 
     public boolean stillRunning() {
@@ -194,7 +192,6 @@ public class GlobalStreamThread extends Thread {
         this.log = logContext.logger(getClass());
         this.cache = new ThreadCache(logContext, cacheSizeBytes, streamsMetrics);
         this.stateRestoreListener = stateRestoreListener;
-
     }
 
     static class StateConsumer {
@@ -223,12 +220,12 @@ public class GlobalStreamThread extends Thread {
 
         /**
          * @throws IllegalStateException If store gets registered after initialized is already finished
-         * @throws StreamsException if the store's change log does not contain the partition
+         * @throws StreamsException      if the store's change log does not contain the partition
          */
         void initialize() {
             final Map<TopicPartition, Long> partitionOffsets = stateMaintainer.initialize();
             globalConsumer.assign(partitionOffsets.keySet());
-            for (Map.Entry<TopicPartition, Long> entry : partitionOffsets.entrySet()) {
+            for (final Map.Entry<TopicPartition, Long> entry : partitionOffsets.entrySet()) {
                 globalConsumer.seek(entry.getKey(), entry.getValue());
             }
             lastFlush = time.milliseconds();
@@ -237,7 +234,7 @@ public class GlobalStreamThread extends Thread {
         void pollAndUpdate() {
             try {
                 final ConsumerRecords<byte[], byte[]> received = globalConsumer.poll(pollMs);
-                for (ConsumerRecord<byte[], byte[]> record : received) {
+                for (final ConsumerRecord<byte[], byte[]> record : received) {
                     stateMaintainer.update(record);
                 }
                 final long now = time.milliseconds();
@@ -309,12 +306,13 @@ public class GlobalStreamThread extends Thread {
 
     private StateConsumer initialize() {
         try {
-            final GlobalStateManager stateMgr = new GlobalStateManagerImpl(logContext,
-                                                                           topology,
-                                                                           globalConsumer,
-                                                                           stateDirectory,
-                                                                           stateRestoreListener,
-                                                                           config);
+            final GlobalStateManager stateMgr = new GlobalStateManagerImpl(
+                logContext,
+                topology,
+                globalConsumer,
+                stateDirectory,
+                stateRestoreListener,
+                config);
 
             final GlobalProcessorContextImpl globalProcessorContext = new GlobalProcessorContextImpl(
                 config,
@@ -323,17 +321,19 @@ public class GlobalStreamThread extends Thread {
                 cache);
             stateMgr.setGlobalProcessorContext(globalProcessorContext);
 
-            final StateConsumer stateConsumer
-                    = new StateConsumer(this.logContext,
-                                        globalConsumer,
-                                        new GlobalStateUpdateTask(topology,
-                                                                  globalProcessorContext,
-                                                                  stateMgr,
-                                                                  config.defaultDeserializationExceptionHandler(),
-                                                                  logContext),
-                                        time,
-                                        config.getLong(StreamsConfig.POLL_MS_CONFIG),
-                                        config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG));
+            final StateConsumer stateConsumer = new StateConsumer(
+                logContext,
+                globalConsumer,
+                new GlobalStateUpdateTask(
+                    topology,
+                    globalProcessorContext,
+                    stateMgr,
+                    config.defaultDeserializationExceptionHandler(),
+                    logContext
+                ),
+                time,
+                config.getLong(StreamsConfig.POLL_MS_CONFIG),
+                config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG));
             stateConsumer.initialize();
 
             return stateConsumer;

@@ -15,5 +15,6 @@
 
 include 'core', 'examples', 'clients', 'tools', 'streams', 'streams:test-utils', 'streams:examples',
         'streams:upgrade-system-tests-0100', 'streams:upgrade-system-tests-0101', 'streams:upgrade-system-tests-0102',
-        'streams:upgrade-system-tests-0110', 'streams:upgrade-system-tests-10', 'log4j-appender',
-        'connect:api', 'connect:transforms', 'connect:runtime', 'connect:json', 'connect:file', 'jmh-benchmarks'
+        'streams:upgrade-system-tests-0110', 'streams:upgrade-system-tests-10', 'streams:upgrade-system-tests-11',
+        'log4j-appender', 'connect:api', 'connect:transforms', 'connect:runtime', 'connect:json', 'connect:file',
+        'jmh-benchmarks'

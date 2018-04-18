@@ -25,7 +25,9 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.StreamsConfig;
 
+import java.io.IOException;
 import java.util.Map;
 import java.util.Properties;
 
@@ -39,11 +41,24 @@ public class StreamsRepeatingIntegerKeyProducer {
     private static volatile boolean keepProducing = true;
     private volatile static int messageCounter = 0;
 
-    public static void main(String[] args) {
+    public static void main(final String[] args) throws IOException {
+        if (args.length < 2) {
+            System.err.println("StreamsStandByReplicaTest are expecting two parameters: propFile, additionalConfigs; but only see " + args.length + " parameter");
+            System.exit(1);
+        }
+
         System.out.println("StreamsTest instance started");
 
-        final String kafka = args.length > 0 ? args[0] : "localhost:9092";
-        final String configString = args.length > 2 ? args[2] : null;
+        final String propFileName = args[0];
+        final String configString = args[1];
+
+        final Properties streamsProperties = Utils.loadProps(propFileName);
+        final String kafka = streamsProperties.getProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG);
+
+        if (kafka == null) {
+            System.err.println("No bootstrap kafka servers specified in " + StreamsConfig.BOOTSTRAP_SERVERS_CONFIG);
+            System.exit(1);
+        }
 
         final Map<String, String> configs = SystemTestUtil.parseConfigs(configString);
         System.out.println("Using provided configs " + configs);

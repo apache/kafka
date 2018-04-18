@@ -30,13 +30,11 @@ import org.apache.kafka.streams.StreamsMetrics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
-import java.util.List;
-import java.util.ArrayList;
-import java.util.Arrays;
 
 public class StreamsMetricsImpl implements StreamsMetrics {
     private static final Logger log = LoggerFactory.getLogger(StreamsMetricsImpl.class);
@@ -44,9 +42,9 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     final Metrics metrics;
     final String groupName;
     final Map<String, String> tags;
-    final Map<Sensor, Sensor> parentSensors;
+    private final Map<Sensor, Sensor> parentSensors;
 
-    public StreamsMetricsImpl(Metrics metrics, String groupName,  Map<String, String> tags) {
+    public StreamsMetricsImpl(final Metrics metrics, final String groupName, final Map<String, String> tags) {
         Objects.requireNonNull(metrics, "Metrics cannot be null");
 
         this.metrics = metrics;
@@ -60,12 +58,12 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     }
 
     @Override
-    public Sensor addSensor(String name, Sensor.RecordingLevel recordingLevel) {
+    public Sensor addSensor(final String name, final Sensor.RecordingLevel recordingLevel) {
         return metrics.sensor(name, recordingLevel);
     }
 
     @Override
-    public Sensor addSensor(String name, Sensor.RecordingLevel recordingLevel, Sensor... parents) {
+    public Sensor addSensor(final String name, final Sensor.RecordingLevel recordingLevel, final Sensor... parents) {
         return metrics.sensor(name, recordingLevel, parents);
     }
 
@@ -75,21 +73,21 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     }
 
     @Override
-    public void recordLatency(Sensor sensor, long startNs, long endNs) {
+    public void recordLatency(final Sensor sensor, final long startNs, final long endNs) {
         sensor.record(endNs - startNs);
     }
 
     @Override
-    public void recordThroughput(Sensor sensor, long value) {
+    public void recordThroughput(final Sensor sensor, final long value) {
         sensor.record(value);
     }
 
 
-    private String groupNameFromScope(String scopeName) {
+    private String groupNameFromScope(final String scopeName) {
         return "stream-" + scopeName + "-metrics";
     }
 
-    private String sensorName(String operationName, String entityName) {
+    private String sensorName(final String operationName, final String entityName) {
         if (entityName == null) {
             return operationName;
         } else {
@@ -97,12 +95,13 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         }
     }
 
-    public Map<String, String> tagMap(String... tags) {
+    public Map<String, String> tagMap(final String... tags) {
         // extract the additional tags if there are any
-        Map<String, String> tagMap = new HashMap<>(this.tags);
+        final Map<String, String> tagMap = new HashMap<>(this.tags);
         if (tags != null) {
-            if ((tags.length % 2) != 0)
+            if ((tags.length % 2) != 0) {
                 throw new IllegalArgumentException("Tags needs to be specified in key-value pairs");
+            }
 
             for (int i = 0; i < tags.length; i += 2)
                 tagMap.put(tags[i], tags[i + 1]);
@@ -112,27 +111,30 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
 
     private Map<String, String> constructTags(final String scopeName, final String entityName, final String... tags) {
-        List<String> updatedTagList = new ArrayList<>(Arrays.asList(tags));
-        updatedTagList.add(scopeName + "-id");
-        updatedTagList.add(entityName);
-        return tagMap(updatedTagList.toArray(new String[updatedTagList.size()]));
+        final String[] updatedTags = Arrays.copyOf(tags, tags.length + 2);
+        updatedTags[tags.length] = scopeName + "-id";
+        updatedTags[tags.length + 1] = entityName;
+        return tagMap(updatedTags);
     }
 
     /**
      * @throws IllegalArgumentException if tags is not constructed in key-value pairs
      */
     @Override
-    public Sensor addLatencyAndThroughputSensor(String scopeName, String entityName, String operationName,
-                                                Sensor.RecordingLevel recordingLevel, String... tags) {
+    public Sensor addLatencyAndThroughputSensor(final String scopeName,
+                                                final String entityName,
+                                                final String operationName,
+                                                final Sensor.RecordingLevel recordingLevel,
+                                                final String... tags) {
         final Map<String, String> tagMap = constructTags(scopeName, entityName, tags);
         final Map<String, String> allTagMap = constructTags(scopeName, "all", tags);
 
         // first add the global operation metrics if not yet, with the global tags only
-        Sensor parent = metrics.sensor(sensorName(operationName, null), recordingLevel);
+        final Sensor parent = metrics.sensor(sensorName(operationName, null), recordingLevel);
         addLatencyAndThroughputMetrics(scopeName, parent, operationName, allTagMap);
 
         // add the operation metrics with additional tags
-        Sensor sensor = metrics.sensor(sensorName(operationName, entityName), recordingLevel, parent);
+        final Sensor sensor = metrics.sensor(sensorName(operationName, entityName), recordingLevel, parent);
         addLatencyAndThroughputMetrics(scopeName, sensor, operationName, tagMap);
 
         parentSensors.put(sensor, parent);
@@ -144,16 +146,20 @@ public class StreamsMetricsImpl implements StreamsMetrics {
      * @throws IllegalArgumentException if tags is not constructed in key-value pairs
      */
     @Override
-    public Sensor addThroughputSensor(String scopeName, String entityName, String operationName, Sensor.RecordingLevel recordingLevel, String... tags) {
+    public Sensor addThroughputSensor(final String scopeName,
+                                      final String entityName,
+                                      final String operationName,
+                                      final Sensor.RecordingLevel recordingLevel,
+                                      final String... tags) {
         final Map<String, String> tagMap = constructTags(scopeName, entityName, tags);
         final Map<String, String> allTagMap = constructTags(scopeName, "all", tags);
 
         // first add the global operation metrics if not yet, with the global tags only
-        Sensor parent = metrics.sensor(sensorName(operationName, null), recordingLevel);
+        final Sensor parent = metrics.sensor(sensorName(operationName, null), recordingLevel);
         addThroughputMetrics(scopeName, parent, operationName, allTagMap);
 
         // add the operation metrics with additional tags
-        Sensor sensor = metrics.sensor(sensorName(operationName, entityName), recordingLevel, parent);
+        final Sensor sensor = metrics.sensor(sensorName(operationName, entityName), recordingLevel, parent);
         addThroughputMetrics(scopeName, sensor, operationName, tagMap);
 
         parentSensors.put(sensor, parent);
@@ -161,8 +167,10 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         return sensor;
     }
 
-    private void addLatencyAndThroughputMetrics(String scopeName, Sensor sensor, String opName, Map<String, String> tags) {
-
+    private void addLatencyAndThroughputMetrics(final String scopeName,
+                                                final Sensor sensor,
+                                                final String opName,
+                                                final Map<String, String> tags) {
         maybeAddMetric(sensor, metrics.metricName(opName + "-latency-avg", groupNameFromScope(scopeName),
             "The average latency of " + opName + " operation.", tags), new Avg());
         maybeAddMetric(sensor, metrics.metricName(opName + "-latency-max", groupNameFromScope(scopeName),
@@ -170,11 +178,14 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         addThroughputMetrics(scopeName, sensor, opName, tags);
     }
 
-    private void addThroughputMetrics(String scopeName, Sensor sensor, String opName, Map<String, String> tags) {
-        MetricName rateMetricName = metrics.metricName(opName + "-rate", groupNameFromScope(scopeName),
+    private void addThroughputMetrics(final String scopeName,
+                                      final Sensor sensor,
+                                      final String opName,
+                                      final Map<String, String> tags) {
+        final MetricName rateMetricName = metrics.metricName(opName + "-rate", groupNameFromScope(scopeName),
             "The average number of occurrence of " + opName + " operation per second.", tags);
-        MetricName totalMetricName = metrics.metricName(opName + "-total", groupNameFromScope(scopeName),
-                "The total number of occurrence of " + opName + " operations.", tags);
+        final MetricName totalMetricName = metrics.metricName(opName + "-total", groupNameFromScope(scopeName),
+            "The total number of occurrence of " + opName + " operations.", tags);
         if (!metrics.metrics().containsKey(rateMetricName) && !metrics.metrics().containsKey(totalMetricName)) {
             sensor.add(new Meter(new Count(), rateMetricName, totalMetricName));
         } else {
@@ -182,12 +193,16 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         }
     }
 
-    public void maybeAddMetric(Sensor sensor, MetricName name, MeasurableStat stat) {
-        if (!metrics.metrics().containsKey(name)) {
-            sensor.add(name, stat);
-        } else {
-            log.trace("Trying to add metric twice: {}", name);
-        }
+    /**
+     * Register a metric on the sensor if it isn't already there.
+     *
+     * @param sensor The sensor on which to register the metric
+     * @param name   The name of the metric
+     * @param stat   The metric to track
+     * @throws IllegalArgumentException if the same metric name is already in use elsewhere in the metrics
+     */
+    public void maybeAddMetric(final Sensor sensor, final MetricName name, final MeasurableStat stat) {
+        sensor.add(name, stat);
     }
 
     /**
@@ -196,11 +211,12 @@ public class StreamsMetricsImpl implements StreamsMetrics {
      * action.run()
      * endTs = time.nanoseconds()
      * sensor.record(endTs - startTs)
-     * @param time      Time object.
-     * @param action    Action to run.
-     * @param sensor    Sensor to record value.
+     *
+     * @param time   Time object.
+     * @param action Action to run.
+     * @param sensor Sensor to record value.
      */
-    public void measureLatencyNs(final Time time, final Runnable action, final Sensor sensor) {
+    void measureLatencyNs(final Time time, final Runnable action, final Sensor sensor) {
         long startNs = -1;
         if (sensor.shouldRecord()) {
             startNs = time.nanoseconds();
@@ -215,7 +231,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
      * Deletes a sensor and its parents, if any
      */
     @Override
-    public void removeSensor(Sensor sensor) {
+    public void removeSensor(final Sensor sensor) {
         Objects.requireNonNull(sensor, "Sensor is null");
         metrics.removeSensor(sensor.name());
 
@@ -225,5 +241,4 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         }
 
     }
-
 }

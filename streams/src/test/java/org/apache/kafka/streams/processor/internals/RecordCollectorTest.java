@@ -49,13 +49,13 @@ public class RecordCollectorTest {
     private final LogContext logContext = new LogContext("test ");
 
     private final List<PartitionInfo> infos = Arrays.asList(
-            new PartitionInfo("topic1", 0, Node.noNode(), new Node[0], new Node[0]),
-            new PartitionInfo("topic1", 1, Node.noNode(), new Node[0], new Node[0]),
-            new PartitionInfo("topic1", 2, Node.noNode(), new Node[0], new Node[0])
+        new PartitionInfo("topic1", 0, Node.noNode(), new Node[0], new Node[0]),
+        new PartitionInfo("topic1", 1, Node.noNode(), new Node[0], new Node[0]),
+        new PartitionInfo("topic1", 2, Node.noNode(), new Node[0], new Node[0])
     );
 
     private final Cluster cluster = new Cluster("cluster", Collections.singletonList(Node.noNode()), infos,
-            Collections.<String>emptySet(), Collections.<String>emptySet());
+        Collections.<String>emptySet(), Collections.<String>emptySet());
 
 
     private final ByteArraySerializer byteArraySerializer = new ByteArraySerializer();
@@ -72,8 +72,10 @@ public class RecordCollectorTest {
     public void testSpecificPartition() {
 
         final RecordCollectorImpl collector = new RecordCollectorImpl(
-                new MockProducer<>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer),
-                "RecordCollectorTest-TestSpecificPartition", new LogContext("RecordCollectorTest-TestSpecificPartition "), new DefaultProductionExceptionHandler());
+            new MockProducer<>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer),
+            "RecordCollectorTest-TestSpecificPartition",
+            new LogContext("RecordCollectorTest-TestSpecificPartition "),
+            new DefaultProductionExceptionHandler());
 
         collector.send("topic1", "999", "0", 0, null, stringSerializer, stringSerializer);
         collector.send("topic1", "999", "0", 0, null, stringSerializer, stringSerializer);
@@ -104,8 +106,10 @@ public class RecordCollectorTest {
     public void testStreamPartitioner() {
 
         final RecordCollectorImpl collector = new RecordCollectorImpl(
-                new MockProducer<>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer),
-                "RecordCollectorTest-TestStreamPartitioner", new LogContext("RecordCollectorTest-TestStreamPartitioner "), new DefaultProductionExceptionHandler());
+            new MockProducer<>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer),
+            "RecordCollectorTest-TestStreamPartitioner",
+            new LogContext("RecordCollectorTest-TestStreamPartitioner "),
+            new DefaultProductionExceptionHandler());
 
         collector.send("topic1", "3", "0", null, stringSerializer, stringSerializer, streamPartitioner);
         collector.send("topic1", "9", "0", null, stringSerializer, stringSerializer, streamPartitioner);
@@ -130,15 +134,15 @@ public class RecordCollectorTest {
     @Test(expected = StreamsException.class)
     public void shouldThrowStreamsExceptionOnAnyExceptionButProducerFencedException() {
         final RecordCollector collector = new RecordCollectorImpl(
-                new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
-                    @Override
-                    public synchronized Future<RecordMetadata> send(final ProducerRecord record, final Callback callback) {
-                        throw new KafkaException();
-                    }
-                },
-                "test",
-                logContext,
-                new DefaultProductionExceptionHandler());
+            new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
+                @Override
+                public synchronized Future<RecordMetadata> send(final ProducerRecord record, final Callback callback) {
+                    throw new KafkaException();
+                }
+            },
+            "test",
+            logContext,
+            new DefaultProductionExceptionHandler());
 
         collector.send("topic1", "3", "0", null, stringSerializer, stringSerializer, streamPartitioner);
     }
@@ -147,16 +151,16 @@ public class RecordCollectorTest {
     @Test
     public void shouldThrowStreamsExceptionOnSubsequentCallIfASendFailsWithDefaultExceptionHandler() {
         final RecordCollector collector = new RecordCollectorImpl(
-                new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
-                    @Override
-                    public synchronized Future<RecordMetadata> send(final ProducerRecord record, final Callback callback) {
-                        callback.onCompletion(null, new Exception());
-                        return null;
-                    }
-                },
-                "test",
-                logContext,
-                new DefaultProductionExceptionHandler());
+            new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
+                @Override
+                public synchronized Future<RecordMetadata> send(final ProducerRecord record, final Callback callback) {
+                    callback.onCompletion(null, new Exception());
+                    return null;
+                }
+            },
+            "test",
+            logContext,
+            new DefaultProductionExceptionHandler());
         collector.send("topic1", "3", "0", null, stringSerializer, stringSerializer, streamPartitioner);
 
         try {
@@ -169,16 +173,16 @@ public class RecordCollectorTest {
     @Test
     public void shouldNotThrowStreamsExceptionOnSubsequentCallIfASendFailsWithContinueExceptionHandler() {
         final RecordCollector collector = new RecordCollectorImpl(
-                new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
-                    @Override
-                    public synchronized Future<RecordMetadata> send(final ProducerRecord record, final Callback callback) {
-                        callback.onCompletion(null, new Exception());
-                        return null;
-                    }
-                },
-                "test",
-                logContext,
-                new AlwaysContinueProductionExceptionHandler());
+            new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
+                @Override
+                public synchronized Future<RecordMetadata> send(final ProducerRecord record, final Callback callback) {
+                    callback.onCompletion(null, new Exception());
+                    return null;
+                }
+            },
+            "test",
+            logContext,
+            new AlwaysContinueProductionExceptionHandler());
         collector.send("topic1", "3", "0", null, stringSerializer, stringSerializer, streamPartitioner);
 
         collector.send("topic1", "3", "0", null, stringSerializer, stringSerializer, streamPartitioner);
@@ -188,16 +192,16 @@ public class RecordCollectorTest {
     @Test
     public void shouldThrowStreamsExceptionOnFlushIfASendFailedWithDefaultExceptionHandler() {
         final RecordCollector collector = new RecordCollectorImpl(
-                new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
-                    @Override
-                    public synchronized Future<RecordMetadata> send(final ProducerRecord record, final Callback callback) {
-                        callback.onCompletion(null, new Exception());
-                        return null;
-                    }
-                },
-                "test",
-                logContext,
-                new DefaultProductionExceptionHandler());
+            new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
+                @Override
+                public synchronized Future<RecordMetadata> send(final ProducerRecord record, final Callback callback) {
+                    callback.onCompletion(null, new Exception());
+                    return null;
+                }
+            },
+            "test",
+            logContext,
+            new DefaultProductionExceptionHandler());
         collector.send("topic1", "3", "0", null, stringSerializer, stringSerializer, streamPartitioner);
 
         try {
@@ -210,16 +214,16 @@ public class RecordCollectorTest {
     @Test
     public void shouldNotThrowStreamsExceptionOnFlushIfASendFailedWithContinueExceptionHandler() {
         final RecordCollector collector = new RecordCollectorImpl(
-                new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
-                    @Override
-                    public synchronized Future<RecordMetadata> send(final ProducerRecord record, final Callback callback) {
-                        callback.onCompletion(null, new Exception());
-                        return null;
-                    }
-                },
-                "test",
-                logContext,
-                new AlwaysContinueProductionExceptionHandler());
+            new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
+                @Override
+                public synchronized Future<RecordMetadata> send(final ProducerRecord record, final Callback callback) {
+                    callback.onCompletion(null, new Exception());
+                    return null;
+                }
+            },
+            "test",
+            logContext,
+            new AlwaysContinueProductionExceptionHandler());
         collector.send("topic1", "3", "0", null, stringSerializer, stringSerializer, streamPartitioner);
 
         collector.flush();
@@ -229,16 +233,16 @@ public class RecordCollectorTest {
     @Test
     public void shouldThrowStreamsExceptionOnCloseIfASendFailedWithDefaultExceptionHandler() {
         final RecordCollector collector = new RecordCollectorImpl(
-                new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
-                    @Override
-                    public synchronized Future<RecordMetadata> send(final ProducerRecord record, final Callback callback) {
-                        callback.onCompletion(null, new Exception());
-                        return null;
-                    }
-                },
-                "test",
-                logContext,
-                new DefaultProductionExceptionHandler());
+            new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
+                @Override
+                public synchronized Future<RecordMetadata> send(final ProducerRecord record, final Callback callback) {
+                    callback.onCompletion(null, new Exception());
+                    return null;
+                }
+            },
+            "test",
+            logContext,
+            new DefaultProductionExceptionHandler());
         collector.send("topic1", "3", "0", null, stringSerializer, stringSerializer, streamPartitioner);
 
         try {
@@ -251,16 +255,16 @@ public class RecordCollectorTest {
     @Test
     public void shouldNotThrowStreamsExceptionOnCloseIfASendFailedWithContinueExceptionHandler() {
         final RecordCollector collector = new RecordCollectorImpl(
-                new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
-                    @Override
-                    public synchronized Future<RecordMetadata> send(final ProducerRecord record, final Callback callback) {
-                        callback.onCompletion(null, new Exception());
-                        return null;
-                    }
-                },
-                "test",
-                logContext,
-                new AlwaysContinueProductionExceptionHandler());
+            new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
+                @Override
+                public synchronized Future<RecordMetadata> send(final ProducerRecord record, final Callback callback) {
+                    callback.onCompletion(null, new Exception());
+                    return null;
+                }
+            },
+            "test",
+            logContext,
+            new AlwaysContinueProductionExceptionHandler());
         collector.send("topic1", "3", "0", null, stringSerializer, stringSerializer, streamPartitioner);
 
         collector.close();

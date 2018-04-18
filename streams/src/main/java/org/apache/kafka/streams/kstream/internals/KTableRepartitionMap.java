@@ -25,7 +25,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 
 /**
  * KTable repartition map functions are not exposed to public APIs, but only used for keyed aggregations.
- *
+ * <p>
  * Given the input, it can output at most two records (one mapped from old value and one mapped from new value).
  */
 public class KTableRepartitionMap<K, V, K1, V1> implements KTableProcessorSupplier<K, V, KeyValue<K1, V1>> {
@@ -75,14 +75,15 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableProcessorSuppli
          * @throws StreamsException if key is null
          */
         @Override
-        public void process(K key, Change<V> change) {
+        public void process(final K key, final Change<V> change) {
             // the original key should never be null
-            if (key == null)
+            if (key == null) {
                 throw new StreamsException("Record key for the grouping KTable should not be null.");
+            }
 
             // if the value is null, we do not need to forward its selected key-value further
-            KeyValue<? extends K1, ? extends V1> newPair = change.newValue == null ? null : mapper.apply(key, change.newValue);
-            KeyValue<? extends K1, ? extends V1> oldPair = change.oldValue == null ? null : mapper.apply(key, change.oldValue);
+            final KeyValue<? extends K1, ? extends V1> newPair = change.newValue == null ? null : mapper.apply(key, change.newValue);
+            final KeyValue<? extends K1, ? extends V1> oldPair = change.oldValue == null ? null : mapper.apply(key, change.oldValue);
 
             // if the selected repartition key or value is null, skip
             // forward oldPair first, to be consistent with reduce and aggregate
@@ -93,7 +94,7 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableProcessorSuppli
             if (newPair != null && newPair.key != null && newPair.value != null) {
                 context().forward(newPair.key, new Change<>(newPair.value, null));
             }
-            
+
         }
     }
 

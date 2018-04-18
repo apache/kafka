@@ -28,8 +28,9 @@ import org.apache.kafka.trogdor.task.TaskSpec;
  */
 public final class WorkerStarting extends WorkerState {
     @JsonCreator
-    public WorkerStarting(@JsonProperty("spec") TaskSpec spec) {
-        super(spec);
+    public WorkerStarting(@JsonProperty("taskId") String taskId,
+            @JsonProperty("spec") TaskSpec spec) {
+        super(taskId, spec);
     }
 
     @Override

@@ -101,7 +101,7 @@ public class KTableKTableInnerJoinTest {
 
         // push all four items to the primary stream. this should produce two items.
 
-        for (int expectedKey : expectedKeys) {
+        for (final int expectedKey : expectedKeys) {
             driver.process(topic1, expectedKey, "XX" + expectedKey);
         }
         driver.flushState();
@@ -110,7 +110,7 @@ public class KTableKTableInnerJoinTest {
         checkJoinedValues(getter, kv(0, "XX0+Y0"), kv(1, "XX1+Y1"));
 
         // push all items to the other stream. this should produce four items.
-        for (int expectedKey : expectedKeys) {
+        for (final int expectedKey : expectedKeys) {
             driver.process(topic2, expectedKey, "YY" + expectedKey);
         }
         driver.flushState();
@@ -120,7 +120,7 @@ public class KTableKTableInnerJoinTest {
 
         // push all four items to the primary stream. this should produce four items.
 
-        for (int expectedKey : expectedKeys) {
+        for (final int expectedKey : expectedKeys) {
             driver.process(topic1, expectedKey, "X" + expectedKey);
         }
         driver.flushState();
@@ -140,7 +140,7 @@ public class KTableKTableInnerJoinTest {
 
         // push all four items to the primary stream. this should produce two items.
 
-        for (int expectedKey : expectedKeys) {
+        for (final int expectedKey : expectedKeys) {
             driver.process(topic1, expectedKey, "XX" + expectedKey);
         }
         driver.flushState();
@@ -172,7 +172,6 @@ public class KTableKTableInnerJoinTest {
 
         doTestJoin(builder, expectedKeys, processor, joined);
     }
-
 
     @Test
     public void testQueryableJoin() {
@@ -235,7 +234,7 @@ public class KTableKTableInnerJoinTest {
 
         // push all four items to the primary stream. this should produce two items.
 
-        for (int expectedKey : expectedKeys) {
+        for (final int expectedKey : expectedKeys) {
             driver.process(topic1, expectedKey, "XX" + expectedKey);
         }
         driver.flushState();
@@ -243,7 +242,7 @@ public class KTableKTableInnerJoinTest {
         proc.checkAndClearProcessResult("0:(XX0+Y0<-null)", "1:(XX1+Y1<-null)");
 
         // push all items to the other stream. this should produce four items.
-        for (int expectedKey : expectedKeys) {
+        for (final int expectedKey : expectedKeys) {
             driver.process(topic2, expectedKey, "YY" + expectedKey);
         }
         driver.flushState();
@@ -251,7 +250,7 @@ public class KTableKTableInnerJoinTest {
 
         // push all four items to the primary stream. this should produce four items.
 
-        for (int expectedKey : expectedKeys) {
+        for (final int expectedKey : expectedKeys) {
             driver.process(topic1, expectedKey, "X" + expectedKey);
         }
         driver.flushState();
@@ -267,7 +266,7 @@ public class KTableKTableInnerJoinTest {
 
         // push all four items to the primary stream. this should produce two items.
 
-        for (int expectedKey : expectedKeys) {
+        for (final int expectedKey : expectedKeys) {
             driver.process(topic1, expectedKey, "XX" + expectedKey);
         }
         driver.flushState();
@@ -338,13 +337,14 @@ public class KTableKTableInnerJoinTest {
 
     }
 
-    private KeyValue<Integer, String> kv(Integer key, String value) {
+    private KeyValue<Integer, String> kv(final Integer key, final String value) {
         return new KeyValue<>(key, value);
     }
 
-    private void checkJoinedValues(KTableValueGetter<Integer, String> getter, KeyValue<Integer, String>... expected) {
-        for (KeyValue<Integer, String> kv : expected) {
-            String value = getter.get(kv.key);
+    @SafeVarargs
+    private final void checkJoinedValues(final KTableValueGetter<Integer, String> getter, final KeyValue<Integer, String>... expected) {
+        for (final KeyValue<Integer, String> kv : expected) {
+            final String value = getter.get(kv.key);
             if (kv.value == null) {
                 assertNull(value);
             } else {
