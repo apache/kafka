@@ -23,8 +23,16 @@ from kafkatest.version import LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATES
 import random
 import time
 
+# broker 0.10.0 is not compatible with newer Kafka Streams versions
 broker_upgrade_versions = [str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1), str(DEV_BRANCH)]
-simple_upgrade_versions_metadata_version_2 = [str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(DEV_VERSION)]
+
+metadata_1_versions = [str(LATEST_0_10_0)]
+metadata_2_versions = [str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1)]
+# we can add the following versions to `backward_compatible_metadata_2_versions` after the corresponding
+# bug-fix release 0.10.1.2, 0.10.2.2, 0.11.0.3, 1.0.2, and 1.1.1 are available:
+# str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1)
+backward_compatible_metadata_2_versions = []
+metadata_3_versions = [str(DEV_VERSION)]
 
 class StreamsUpgradeTest(Test):
     """
@@ -39,6 +47,7 @@ class StreamsUpgradeTest(Test):
             'echo' : { 'partitions': 5 },
             'data' : { 'partitions': 5 },
         }
+        self.leader = None
 
     def perform_broker_upgrade(self, to_version):
         self.logger.info("First pass bounce - rolling broker upgrade")
@@ -114,7 +123,7 @@ class StreamsUpgradeTest(Test):
         node.account.ssh("grep ALL-RECORDS-DELIVERED %s" % self.driver.STDOUT_FILE, allow_fail=False)
         self.processor1.node.account.ssh_capture("grep SMOKE-TEST-CLIENT-CLOSED %s" % self.processor1.STDOUT_FILE, allow_fail=False)
 
-    @matrix(from_version=simple_upgrade_versions_metadata_version_2, to_version=simple_upgrade_versions_metadata_version_2)
+    @matrix(from_version=metadata_2_versions, to_version=metadata_2_versions)
     def test_simple_upgrade_downgrade(self, from_version, to_version):
         """
         Starts 3 KafkaStreams instances with <old_version>, and upgrades one-by-one to <new_version>
@@ -165,15 +174,12 @@ class StreamsUpgradeTest(Test):
 
         self.driver.stop()
 
-    #@parametrize(new_version=str(LATEST_0_10_1)) we cannot run this test until Kafka 0.10.1.2 is released
-    #@parametrize(new_version=str(LATEST_0_10_2)) we cannot run this test until Kafka 0.10.2.2 is released
-    #@parametrize(new_version=str(LATEST_0_11_0)) we cannot run this test until Kafka 0.11.0.3 is released
-    #@parametrize(new_version=str(LATEST_1_0)) we cannot run this test until Kafka 1.0.2 is released
-    #@parametrize(new_version=str(LATEST_1_1)) we cannot run this test until Kafka 1.1.1 is released
-    @parametrize(new_version=str(DEV_VERSION))
-    def test_metadata_upgrade(self, new_version):
+    #@matrix(from_version=metadata_1_versions, to_version=backward_compatible_metadata_2_versions)
+    @matrix(from_version=metadata_1_versions, to_version=metadata_3_versions)
+    @matrix(from_version=metadata_2_versions, to_version=metadata_3_versions)
+    def test_metadata_upgrade(self, from_version, to_version):
         """
-        Starts 3 KafkaStreams instances with version 0.10.0, and upgrades one-by-one to <new_version>
+        Starts 3 KafkaStreams instances with version <from_version> and upgrades one-by-one to <to_version>
         """
 
         self.zk = ZookeeperService(self.test_context, num_nodes=1)
@@ -189,7 +195,7 @@ class StreamsUpgradeTest(Test):
         self.processor3 = StreamsUpgradeTestJobRunnerService(self.test_context, self.kafka)
 
         self.driver.start()
-        self.start_all_nodes_with(str(LATEST_0_10_0))
+        self.start_all_nodes_with(from_version)
 
         self.processors = [self.processor1, self.processor2, self.processor3]
 
@@ -200,13 +206,13 @@ class StreamsUpgradeTest(Test):
         random.shuffle(self.processors)
         for p in self.processors:
             p.CLEAN_NODE_ENABLED = False
-            self.do_rolling_bounce(p, "0.10.0", new_version, counter)
+            self.do_rolling_bounce(p, from_version[:-2], to_version, counter)
             counter = counter + 1
 
         # second rolling bounce
         random.shuffle(self.processors)
         for p in self.processors:
-            self.do_rolling_bounce(p, None, new_version, counter)
+            self.do_rolling_bounce(p, None, to_version, counter)
             counter = counter + 1
 
         # shutdown
