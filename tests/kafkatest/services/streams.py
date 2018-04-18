@@ -412,6 +412,7 @@ class StreamsUpgradeTestJobRunnerService(StreamsTestBaseService):
                                                                  "org.apache.kafka.streams.tests.StreamsUpgradeTest",
                                                                  "")
         self.UPGRADE_FROM = None
+        self.UPGRADE_TO = None
 
     def set_version(self, kafka_streams_version):
         self.KAFKA_STREAMS_VERSION = kafka_streams_version

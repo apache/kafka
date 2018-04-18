@@ -199,10 +199,24 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         final LogContext logContext = new LogContext(logPrefix);
         log = logContext.logger(getClass());
 
-        final String upgradeMode = (String) configs.get(StreamsConfig.UPGRADE_FROM_CONFIG);
-        if (StreamsConfig.UPGRADE_FROM_0100.equals(upgradeMode)) {
-            log.info("Downgrading metadata version from 2 to 1 for upgrade from 0.10.0.x.");
-            userMetadataVersion = 1;
+        final String upgradeFrom = streamsConfig.getString(StreamsConfig.UPGRADE_FROM_CONFIG);
+        if (upgradeFrom != null) {
+            switch (upgradeFrom) {
+                case StreamsConfig.UPGRADE_FROM_0100:
+                    log.info("Downgrading metadata version from {} to 1 for upgrade from 0.10.0.x.", SubscriptionInfo.LATEST_SUPPORTED_VERSION);
+                    userMetadataVersion = 1;
+                    break;
+                case StreamsConfig.UPGRADE_FROM_0101:
+                case StreamsConfig.UPGRADE_FROM_0102:
+                case StreamsConfig.UPGRADE_FROM_0110:
+                case StreamsConfig.UPGRADE_FROM_10:
+                case StreamsConfig.UPGRADE_FROM_11:
+                    log.info("Downgrading metadata version from {} to 2 for upgrade from " + upgradeFrom + ".x.", SubscriptionInfo.LATEST_SUPPORTED_VERSION);
+                    userMetadataVersion = 2;
+                    break;
+                default:
+                    throw new IllegalArgumentException("Unknown configuration value for parameter 'upgrade.from': " + upgradeFrom);
+            }
         }
 
         final Object o = configs.get(StreamsConfig.InternalConfig.TASK_MANAGER_FOR_PARTITION_ASSIGNOR);
@@ -512,7 +526,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
 
         // construct the global partition assignment per host map
         final Map<HostInfo, Set<TopicPartition>> partitionsByHostState = new HashMap<>();
-        if (minUserMetadataVersion == 2) {
+        if (minUserMetadataVersion == 2 || minUserMetadataVersion == 3) {
             for (final Map.Entry<UUID, ClientMetadata> entry : clientsMetadata.entrySet()) {
                 final HostInfo hostInfo = entry.getValue().hostInfo;
 
@@ -631,6 +645,10 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                 processVersionTwoAssignment(info, partitions, activeTasks, topicToPartitionInfo);
                 partitionsByHost = info.partitionsByHost();
                 break;
+            case 3:
+                processVersionThreeAssignment(info, partitions, activeTasks, topicToPartitionInfo);
+                partitionsByHost = info.partitionsByHost();
+                break;
             default:
                 throw new IllegalStateException("Unknown metadata version: " + usedVersion
                     + "; latest supported version: " + AssignmentInfo.LATEST_SUPPORTED_VERSION);
@@ -682,6 +700,13 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                     new PartitionInfo(topicPartition.topic(), topicPartition.partition(), null, new Node[0], new Node[0]));
             }
         }
+    }
+
+    private void processVersionThreeAssignment(final AssignmentInfo info,
+                                               final List<TopicPartition> partitions,
+                                               final Map<TaskId, Set<TopicPartition>> activeTasks,
+                                               final Map<TopicPartition, PartitionInfo> topicToPartitionInfo) {
+        processVersionTwoAssignment(info, partitions, activeTasks, topicToPartitionInfo);
     }
 
     /**
@@ -818,4 +843,5 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
     void setInternalTopicManager(final InternalTopicManager internalTopicManager) {
         this.internalTopicManager = internalTopicManager;
     }
+
 }
