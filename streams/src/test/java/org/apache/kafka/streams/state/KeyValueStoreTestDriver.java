@@ -53,7 +53,7 @@ import java.util.Set;
  * all entries written to the Kafka topic by the store during {@link KeyValueStore#flush()} are captured for testing purposes.
  * This class simplifies testing of various {@link KeyValueStore} instances, especially those that use
  * {@link org.apache.kafka.streams.state.internals.MeteredKeyValueStore} to monitor and write its entries to the Kafka topic.
- * <p>
+ *
  * <h2>Basic usage</h2>
  * This component can be used to help test a {@link KeyValueStore}'s ability to read and write entries.
  *
@@ -94,7 +94,7 @@ import java.util.Set;
  * assertEquals(true, driver.flushedEntryRemoved(5));
  * </pre>
  *
- * <p>
+ *
  * <h2>Restoring a store</h2>
  * This component can be used to test whether a {@link KeyValueStore} implementation properly
  * {@link ProcessorContext#register(StateStore, boolean, StateRestoreCallback) registers itself} with the {@link ProcessorContext}, so that
@@ -141,10 +141,10 @@ public class KeyValueStoreTestDriver<K, V> {
      * {@code Long.class}, and {@code byte[].class}). This can be used when store is created to rely upon the
      * ProcessorContext's default key and value serializers and deserializers.
      *
-     * @param keyClass the class for the keys; must be one of {@code String.class}, {@code Integer.class},
-     *            {@code Long.class}, or {@code byte[].class}
+     * @param keyClass   the class for the keys; must be one of {@code String.class}, {@code Integer.class},
+     *                   {@code Long.class}, or {@code byte[].class}
      * @param valueClass the class for the values; must be one of {@code String.class}, {@code Integer.class},
-     *            {@code Long.class}, or {@code byte[].class}
+     *                   {@code Long.class}, or {@code byte[].class}
      * @return the test driver; never null
      */
     public static <K, V> KeyValueStoreTestDriver<K, V> create(final Class<K> keyClass, final Class<V> valueClass) {
@@ -158,9 +158,9 @@ public class KeyValueStoreTestDriver<K, V> {
      * deserializers. This can be used when store is created to rely upon the ProcessorContext's default key and value serializers
      * and deserializers.
      *
-     * @param keySerializer the key serializer for the {@link ProcessorContext}; may not be null
-     * @param keyDeserializer the key deserializer for the {@link ProcessorContext}; may not be null
-     * @param valueSerializer the value serializer for the {@link ProcessorContext}; may not be null
+     * @param keySerializer     the key serializer for the {@link ProcessorContext}; may not be null
+     * @param keyDeserializer   the key deserializer for the {@link ProcessorContext}; may not be null
+     * @param valueSerializer   the value serializer for the {@link ProcessorContext}; may not be null
      * @param valueDeserializer the value deserializer for the {@link ProcessorContext}; may not be null
      * @return the test driver; never null
      */
@@ -195,7 +195,7 @@ public class KeyValueStoreTestDriver<K, V> {
                                       final Long timestamp,
                                       final Serializer<K1> keySerializer,
                                       final Serializer<V1> valueSerializer) {
-            // for byte arrays we need to wrap it for comparison
+                // for byte arrays we need to wrap it for comparison
 
                 final K keyTest = serdes.keyFrom(keySerializer.serialize(topic, key));
                 final V valueTest = serdes.valueFrom(valueSerializer.serialize(topic, value));
@@ -215,7 +215,8 @@ public class KeyValueStoreTestDriver<K, V> {
             }
         };
 
-        File stateDir = TestUtils.tempDirectory();
+        final File stateDir = TestUtils.tempDirectory();
+        //noinspection ResultOfMethodCallIgnored
         stateDir.mkdirs();
         stateSerdes = serdes;
 
@@ -294,7 +295,7 @@ public class KeyValueStoreTestDriver<K, V> {
      * assertEquals(3, driver.sizeOf(store));
      * </pre>
      *
-     * @param key the key for the entry
+     * @param key   the key for the entry
      * @param value the value for the entry
      * @see #checkForRestoredEntries(KeyValueStore)
      */
@@ -346,7 +347,7 @@ public class KeyValueStoreTestDriver<K, V> {
      */
     public int sizeOf(final KeyValueStore<K, V> store) {
         int size = 0;
-        try (KeyValueIterator<K, V> iterator = store.all()) {
+        try (final KeyValueIterator<K, V> iterator = store.all()) {
             while (iterator.hasNext()) {
                 iterator.next();
                 ++size;
@@ -360,7 +361,7 @@ public class KeyValueStoreTestDriver<K, V> {
      *
      * @param key the key
      * @return the value that was flushed with the key, or {@code null} if no such key was flushed or if the entry with this
-     *         key was removed upon flush
+     * key was removed upon flush
      */
     public V flushedEntryStored(final K key) {
         return flushedEntries.get(key);
@@ -371,7 +372,7 @@ public class KeyValueStoreTestDriver<K, V> {
      *
      * @param key the key
      * @return {@code true} if the entry with the given key was removed when flushed, or {@code false} if the entry was not
-     *         removed when last flushed
+     * removed when last flushed
      */
     public boolean flushedEntryRemoved(final K key) {
         return flushedRemovals.contains(key);

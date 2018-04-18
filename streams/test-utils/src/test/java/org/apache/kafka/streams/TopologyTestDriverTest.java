@@ -27,6 +27,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.SystemTime;
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
@@ -584,6 +585,10 @@ public class TopologyTestDriverTest {
     public void shouldPopulateGlobalStore() {
         testDriver = new TopologyTestDriver(setupGlobalStoreTopology(SOURCE_TOPIC_1), config);
 
+        final KeyValueStore<byte[], byte[]> globalStore = testDriver.getKeyValueStore(SOURCE_TOPIC_1 + "-globalStore");
+        Assert.assertNotNull(globalStore);
+        Assert.assertNotNull(testDriver.getAllStateStores().get(SOURCE_TOPIC_1 + "-globalStore"));
+
         testDriver.pipeInput(consumerRecord1);
 
         final List<Record> processedRecords = mockProcessors.get(0).processedRecords;
@@ -895,6 +900,23 @@ public class TopologyTestDriverTest {
                 "Closing the prior test driver should have cleaned up this store and value.",
                 testDriver.getKeyValueStore("storeProcessorStore").get("a")
             );
+        }
+    }
+    
+    @Test
+    public void shouldFeedStoreFromGlobalKTable() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.globalTable("topic",  
+            Consumed.with(Serdes.String(), Serdes.String()),
+            Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("globalStore"));
+        try (final TopologyTestDriver testDriver = new TopologyTestDriver(builder.build(), config)) {
+            final KeyValueStore<String, String> globalStore = testDriver.getKeyValueStore("globalStore");
+            Assert.assertNotNull(globalStore);
+            Assert.assertNotNull(testDriver.getAllStateStores().get("globalStore"));
+            final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
+            testDriver.pipeInput(recordFactory.create("topic", "k1", "value1"));
+            // we expect to have both in the global store, the one from pipeInput and the one from the producer
+            Assert.assertEquals("value1", globalStore.get("k1"));
         }
     }
 }

@@ -22,6 +22,7 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
@@ -57,13 +58,14 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static java.util.Collections.singletonList;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -88,7 +90,7 @@ public class StreamTaskTest {
     private final MockSourceNode<Integer, Integer> source2 = new MockSourceNode<>(new String[]{topic2}, intDeserializer, intDeserializer);
     private final MockSourceNode<Integer, Integer> source3 = new MockSourceNode<Integer, Integer>(new String[]{topic2}, intDeserializer, intDeserializer) {
         @Override
-        public void process(Integer key, Integer value) {
+        public void process(final Integer key, final Integer value) {
             throw new RuntimeException("KABOOM!");
         }
 
@@ -106,13 +108,8 @@ public class StreamTaskTest {
     private final Long offset = 543L;
 
     private final ProcessorTopology topology = ProcessorTopology.withSources(
-            Utils.<ProcessorNode>mkList(source1, source2, processorStreamTime, processorSystemTime),
-            new HashMap<String, SourceNode>() {
-                {
-                    put(topic1, source1);
-                    put(topic2, source2);
-                }
-            }
+        Utils.<ProcessorNode>mkList(source1, source2, processorStreamTime, processorSystemTime),
+        mkMap(mkEntry(topic1, (SourceNode) source1), mkEntry(topic2, (SourceNode) source2))
     );
 
     private final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
@@ -131,41 +128,39 @@ public class StreamTaskTest {
     private final StreamsMetrics streamsMetrics = new MockStreamsMetrics(metrics);
     private final TaskId taskId00 = new TaskId(0, 0);
     private final MockTime time = new MockTime();
-    private File baseDir = TestUtils.tempDirectory();
+    private final File baseDir = TestUtils.tempDirectory();
     private StateDirectory stateDirectory;
-    private StreamsConfig config;
-    private StreamsConfig eosConfig;
     private StreamTask task;
     private long punctuatedAt;
 
-    private Punctuator punctuator = new Punctuator() {
+    private final Punctuator punctuator = new Punctuator() {
         @Override
-        public void punctuate(long timestamp) {
+        public void punctuate(final long timestamp) {
             punctuatedAt = timestamp;
         }
     };
 
-    private StreamsConfig createConfig(final boolean enableEoS) throws IOException {
-        return new StreamsConfig(new Properties() {
-            {
-                setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "stream-task-test");
-                setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171");
-                setProperty(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, "3");
-                setProperty(StreamsConfig.STATE_DIR_CONFIG, baseDir.getCanonicalPath());
-                setProperty(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class.getName());
-                if (enableEoS) {
-                    setProperty(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
-                }
-            }
-        });
+    private StreamsConfig createConfig(final boolean enableEoS) {
+        final String canonicalPath;
+        try {
+            canonicalPath = baseDir.getCanonicalPath();
+        } catch (final IOException e) {
+            throw new RuntimeException(e);
+        }
+        return new StreamsConfig(mkProperties(mkMap(
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "stream-task-test"),
+            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171"),
+            mkEntry(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, "3"),
+            mkEntry(StreamsConfig.STATE_DIR_CONFIG, canonicalPath),
+            mkEntry(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class.getName()),
+            mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, enableEoS ? StreamsConfig.EXACTLY_ONCE : StreamsConfig.AT_LEAST_ONCE)
+        )));
     }
 
     @Before
-    public void setup() throws IOException {
+    public void setup() {
         consumer.assign(Arrays.asList(partition1, partition2));
-        config = createConfig(false);
-        eosConfig = createConfig(true);
-        stateDirectory = new StateDirectory(config, new MockTime());
+        stateDirectory = new StateDirectory(createConfig(false), new MockTime());
     }
 
     @After
@@ -174,7 +169,7 @@ public class StreamTaskTest {
             if (task != null) {
                 try {
                     task.close(true, false);
-                } catch (Exception e) {
+                } catch (final Exception e) {
                     // swallow
                 }
             }
@@ -186,18 +181,18 @@ public class StreamTaskTest {
     @SuppressWarnings("unchecked")
     @Test
     public void testProcessOrder() {
-        task = createStatelessTask(false);
+        task = createStatelessTask(createConfig(false));
 
-        task.addRecords(partition1, records(
-                new ConsumerRecord<>(partition1.topic(), partition1.partition(), 10, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
-                new ConsumerRecord<>(partition1.topic(), partition1.partition(), 20, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
-                new ConsumerRecord<>(partition1.topic(), partition1.partition(), 30, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)
+        task.addRecords(partition1, Arrays.asList(
+            getConsumerRecord(partition1, 10),
+            getConsumerRecord(partition1, 20),
+            getConsumerRecord(partition1, 30)
         ));
 
-        task.addRecords(partition2, records(
-                new ConsumerRecord<>(partition2.topic(), partition2.partition(), 25, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
-                new ConsumerRecord<>(partition2.topic(), partition2.partition(), 35, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
-                new ConsumerRecord<>(partition2.topic(), partition2.partition(), 45, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)
+        task.addRecords(partition2, Arrays.asList(
+            getConsumerRecord(partition2, 25),
+            getConsumerRecord(partition2, 35),
+            getConsumerRecord(partition2, 45)
         ));
 
         assertTrue(task.process());
@@ -232,48 +227,44 @@ public class StreamTaskTest {
     }
 
 
-    private void testSpecificMetrics(final String operation, final String groupName, final Map<String, String> tags) {
-        assertNotNull(metrics.metrics().get(metrics.metricName(operation + "-latency-avg", groupName,
-                "The average latency of " + operation + " operation.", tags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName(operation + "-latency-max", groupName,
-                "The max latency of " + operation + " operation.", tags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName(operation + "-rate", groupName,
-                "The average number of occurrence of " + operation + " operation per second.", tags)));
-    }
-
-
     @Test
     public void testMetrics() {
-        task = createStatelessTask(false);
+        task = createStatelessTask(createConfig(false));
 
-        final String name = task.id().toString();
-        final Map<String, String> metricTags = new LinkedHashMap<>();
-        metricTags.put("task-id", name);
-        final String operation = "commit";
+        assertNotNull(metrics.getSensor("commit"));
+        assertNotNull(getMetric("%s-latency-avg", "The average latency of %s operation.", task.id().toString()));
+        assertNotNull(getMetric("%s-latency-max", "The max latency of %s operation.", task.id().toString()));
+        assertNotNull(getMetric("%s-rate", "The average number of occurrence of %s operation per second.", task.id().toString()));
 
-        final String groupName = "stream-task-metrics";
+        assertNotNull(getMetric("%s-latency-avg", "The average latency of %s operation.", "all"));
+        assertNotNull(getMetric("%s-latency-max", "The max latency of %s operation.", "all"));
+        assertNotNull(getMetric("%s-rate", "The average number of occurrence of %s operation per second.", "all"));
+    }
 
-        assertNotNull(metrics.getSensor(operation));
-        testSpecificMetrics(operation, groupName, metricTags);
-        metricTags.put("task-id", "all");
-        testSpecificMetrics(operation, groupName, metricTags);
+    private KafkaMetric getMetric(final String nameFormat, final String descriptionFormat, final String taskId) {
+        return metrics.metrics().get(metrics.metricName(
+            String.format(nameFormat, "commit"),
+            "stream-task-metrics",
+            String.format(descriptionFormat, "commit"),
+            mkMap(mkEntry("task-id", taskId))
+        ));
     }
 
     @SuppressWarnings("unchecked")
     @Test
     public void testPauseResume() {
-        task = createStatelessTask(false);
+        task = createStatelessTask(createConfig(false));
 
-        task.addRecords(partition1, records(
-                new ConsumerRecord<>(partition1.topic(), partition1.partition(), 10, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
-                new ConsumerRecord<>(partition1.topic(), partition1.partition(), 20, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)
+        task.addRecords(partition1, Arrays.asList(
+            getConsumerRecord(partition1, 10),
+            getConsumerRecord(partition1, 20)
         ));
 
-        task.addRecords(partition2, records(
-                new ConsumerRecord<>(partition2.topic(), partition2.partition(), 35, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
-                new ConsumerRecord<>(partition2.topic(), partition2.partition(), 45, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
-                new ConsumerRecord<>(partition2.topic(), partition2.partition(), 55, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
-                new ConsumerRecord<>(partition2.topic(), partition2.partition(), 65, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)
+        task.addRecords(partition2, Arrays.asList(
+            getConsumerRecord(partition2, 35),
+            getConsumerRecord(partition2, 45),
+            getConsumerRecord(partition2, 55),
+            getConsumerRecord(partition2, 65)
         ));
 
         assertTrue(task.process());
@@ -283,10 +274,10 @@ public class StreamTaskTest {
         assertEquals(1, consumer.paused().size());
         assertTrue(consumer.paused().contains(partition2));
 
-        task.addRecords(partition1, records(
-                new ConsumerRecord<>(partition1.topic(), partition1.partition(), 30, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
-                new ConsumerRecord<>(partition1.topic(), partition1.partition(), 40, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
-                new ConsumerRecord<>(partition1.topic(), partition1.partition(), 50, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)
+        task.addRecords(partition1, Arrays.asList(
+            getConsumerRecord(partition1, 30),
+            getConsumerRecord(partition1, 40),
+            getConsumerRecord(partition1, 50)
         ));
 
         assertEquals(2, consumer.paused().size());
@@ -317,23 +308,23 @@ public class StreamTaskTest {
     @SuppressWarnings("unchecked")
     @Test
     public void testMaybePunctuateStreamTime() {
-        task = createStatelessTask(false);
+        task = createStatelessTask(createConfig(false));
         task.initializeStateStores();
         task.initializeTopology();
 
-        task.addRecords(partition1, records(
-                new ConsumerRecord<>(partition1.topic(), partition1.partition(), 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
-                new ConsumerRecord<>(partition1.topic(), partition1.partition(), 20, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
-                new ConsumerRecord<>(partition1.topic(), partition1.partition(), 32, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
-                new ConsumerRecord<>(partition1.topic(), partition1.partition(), 40, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
-                new ConsumerRecord<>(partition1.topic(), partition1.partition(), 60, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)
+        task.addRecords(partition1, Arrays.asList(
+            getConsumerRecord(partition1, 0),
+            getConsumerRecord(partition1, 20),
+            getConsumerRecord(partition1, 32),
+            getConsumerRecord(partition1, 40),
+            getConsumerRecord(partition1, 60)
         ));
 
-        task.addRecords(partition2, records(
-                new ConsumerRecord<>(partition2.topic(), partition2.partition(), 25, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
-                new ConsumerRecord<>(partition2.topic(), partition2.partition(), 35, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
-                new ConsumerRecord<>(partition2.topic(), partition2.partition(), 45, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
-                new ConsumerRecord<>(partition2.topic(), partition2.partition(), 61, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)
+        task.addRecords(partition2, Arrays.asList(
+            getConsumerRecord(partition2, 25),
+            getConsumerRecord(partition2, 35),
+            getConsumerRecord(partition2, 45),
+            getConsumerRecord(partition2, 61)
         ));
 
         assertTrue(task.maybePunctuateStreamTime());
@@ -408,22 +399,22 @@ public class StreamTaskTest {
     @SuppressWarnings("unchecked")
     @Test
     public void shouldPunctuateOnceStreamTimeAfterGap() {
-        task = createStatelessTask(false);
+        task = createStatelessTask(createConfig(false));
         task.initializeStateStores();
         task.initializeTopology();
 
-        task.addRecords(partition1, records(
-                new ConsumerRecord<>(partition1.topic(), partition1.partition(), 20, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
-                new ConsumerRecord<>(partition1.topic(), partition1.partition(), 142, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
-                new ConsumerRecord<>(partition1.topic(), partition1.partition(), 155, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
-                new ConsumerRecord<>(partition1.topic(), partition1.partition(), 160, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)
+        task.addRecords(partition1, Arrays.asList(
+            getConsumerRecord(partition1, 20),
+            getConsumerRecord(partition1, 142),
+            getConsumerRecord(partition1, 155),
+            getConsumerRecord(partition1, 160)
         ));
 
-        task.addRecords(partition2, records(
-                new ConsumerRecord<>(partition2.topic(), partition2.partition(), 25, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
-                new ConsumerRecord<>(partition2.topic(), partition2.partition(), 145, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
-                new ConsumerRecord<>(partition2.topic(), partition2.partition(), 159, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
-                new ConsumerRecord<>(partition2.topic(), partition2.partition(), 161, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)
+        task.addRecords(partition2, Arrays.asList(
+            getConsumerRecord(partition2, 25),
+            getConsumerRecord(partition2, 145),
+            getConsumerRecord(partition2, 159),
+            getConsumerRecord(partition2, 161)
         ));
 
         assertTrue(task.maybePunctuateStreamTime()); // punctuate at 20
@@ -494,20 +485,20 @@ public class StreamTaskTest {
     @SuppressWarnings("unchecked")
     @Test
     public void testCancelPunctuateStreamTime() {
-        task = createStatelessTask(false);
+        task = createStatelessTask(createConfig(false));
         task.initializeStateStores();
         task.initializeTopology();
 
-        task.addRecords(partition1, records(
-                new ConsumerRecord<>(partition1.topic(), partition1.partition(), 20, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
-                new ConsumerRecord<>(partition1.topic(), partition1.partition(), 30, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
-                new ConsumerRecord<>(partition1.topic(), partition1.partition(), 40, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)
+        task.addRecords(partition1, Arrays.asList(
+            getConsumerRecord(partition1, 20),
+            getConsumerRecord(partition1, 30),
+            getConsumerRecord(partition1, 40)
         ));
 
-        task.addRecords(partition2, records(
-                new ConsumerRecord<>(partition2.topic(), partition2.partition(), 25, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
-                new ConsumerRecord<>(partition2.topic(), partition2.partition(), 35, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
-                new ConsumerRecord<>(partition2.topic(), partition2.partition(), 45, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)
+        task.addRecords(partition2, Arrays.asList(
+            getConsumerRecord(partition2, 25),
+            getConsumerRecord(partition2, 35),
+            getConsumerRecord(partition2, 45)
         ));
 
         assertTrue(task.maybePunctuateStreamTime());
@@ -527,10 +518,10 @@ public class StreamTaskTest {
 
     @Test
     public void shouldPunctuateSystemTimeWhenIntervalElapsed() {
-        task = createStatelessTask(false);
+        task = createStatelessTask(createConfig(false));
         task.initializeStateStores();
         task.initializeTopology();
-        long now = time.milliseconds();
+        final long now = time.milliseconds();
         time.sleep(10);
         assertTrue(task.maybePunctuateSystemTime());
         time.sleep(10);
@@ -547,7 +538,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldNotPunctuateSystemTimeWhenIntervalNotElapsed() {
-        task = createStatelessTask(false);
+        task = createStatelessTask(createConfig(false));
         task.initializeStateStores();
         task.initializeTopology();
         assertFalse(task.maybePunctuateSystemTime());
@@ -558,10 +549,10 @@ public class StreamTaskTest {
 
     @Test
     public void shouldPunctuateOnceSystemTimeAfterGap() {
-        task = createStatelessTask(false);
+        task = createStatelessTask(createConfig(false));
         task.initializeStateStores();
         task.initializeTopology();
-        long now = time.milliseconds();
+        final long now = time.milliseconds();
         time.sleep(100);
         assertTrue(task.maybePunctuateSystemTime());
         assertFalse(task.maybePunctuateSystemTime());
@@ -584,10 +575,10 @@ public class StreamTaskTest {
 
     @Test
     public void testCancelPunctuateSystemTime() {
-        task = createStatelessTask(false);
+        task = createStatelessTask(createConfig(false));
         task.initializeStateStores();
         task.initializeTopology();
-        long now = time.milliseconds();
+        final long now = time.milliseconds();
         time.sleep(10);
         assertTrue(task.maybePunctuateSystemTime());
         processorSystemTime.supplier.scheduleCancellable.cancel();
@@ -601,8 +592,7 @@ public class StreamTaskTest {
         task = createTaskThatThrowsException();
         task.initializeStateStores();
         task.initializeTopology();
-        task.addRecords(partition2, Collections.singletonList(
-                new ConsumerRecord<>(partition2.topic(), partition2.partition(), 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)));
+        task.addRecords(partition2, singletonList(getConsumerRecord(partition2, 0)));
 
         try {
             task.process();
@@ -614,14 +604,14 @@ public class StreamTaskTest {
 
     @Test
     public void shouldWrapKafkaExceptionsWithStreamsExceptionAndAddContextWhenPunctuatingStreamTime() {
-        task = createStatelessTask(false);
+        task = createStatelessTask(createConfig(false));
         task.initializeStateStores();
         task.initializeTopology();
 
         try {
             task.punctuate(processorStreamTime, 1, PunctuationType.STREAM_TIME, new Punctuator() {
                 @Override
-                public void punctuate(long timestamp) {
+                public void punctuate(final long timestamp) {
                     throw new KafkaException("KABOOM!");
                 }
             });
@@ -635,14 +625,14 @@ public class StreamTaskTest {
 
     @Test
     public void shouldWrapKafkaExceptionsWithStreamsExceptionAndAddContextWhenPunctuatingWallClockTimeTime() {
-        task = createStatelessTask(false);
+        task = createStatelessTask(createConfig(false));
         task.initializeStateStores();
         task.initializeTopology();
 
         try {
             task.punctuate(processorSystemTime, 1, PunctuationType.WALL_CLOCK_TIME, new Punctuator() {
                 @Override
-                public void punctuate(long timestamp) {
+                public void punctuate(final long timestamp) {
                     throw new KafkaException("KABOOM!");
                 }
             });
@@ -659,7 +649,7 @@ public class StreamTaskTest {
         final AtomicBoolean flushed = new AtomicBoolean(false);
         final StreamsMetrics streamsMetrics = new MockStreamsMetrics(new Metrics());
         final StreamTask streamTask = new StreamTask(taskId00, partitions, topology, consumer,
-            changelogReader, config, streamsMetrics, stateDirectory, null, time, producer) {
+            changelogReader, createConfig(false), streamsMetrics, stateDirectory, null, time, producer) {
 
             @Override
             RecordCollector createRecordCollector(final LogContext logContext,
@@ -678,31 +668,34 @@ public class StreamTaskTest {
 
     @Test
     public void shouldCheckpointOffsetsOnCommit() throws IOException {
-        task = createStatefulTask(false, true);
+        task = createStatefulTask(createConfig(false), true);
         task.initializeStateStores();
         task.initializeTopology();
         task.commit();
-        final OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(stateDirectory.directoryForTask(taskId00),
-                                                                          ProcessorStateManager.CHECKPOINT_FILE_NAME));
+        final OffsetCheckpoint checkpoint = new OffsetCheckpoint(
+            new File(stateDirectory.directoryForTask(taskId00), ProcessorStateManager.CHECKPOINT_FILE_NAME)
+        );
 
         assertThat(checkpoint.read(), equalTo(Collections.singletonMap(changelogPartition, offset)));
     }
 
     @Test
     public void shouldNotCheckpointOffsetsOnCommitIfEosIsEnabled() {
-        task = createStatefulTask(true, true);
+        task = createStatefulTask(createConfig(true), true);
         task.initializeStateStores();
         task.initializeTopology();
         task.commit();
-        final File checkpointFile = new File(stateDirectory.directoryForTask(taskId00),
-                                             ProcessorStateManager.CHECKPOINT_FILE_NAME);
+        final File checkpointFile = new File(
+            stateDirectory.directoryForTask(taskId00),
+            ProcessorStateManager.CHECKPOINT_FILE_NAME
+        );
 
         assertFalse(checkpointFile.exists());
     }
 
     @Test
     public void shouldThrowIllegalStateExceptionIfCurrentNodeIsNotNullWhenPunctuateCalled() {
-        task = createStatelessTask(false);
+        task = createStatelessTask(createConfig(false));
         task.initializeStateStores();
         task.initializeTopology();
         task.processorContext.setCurrentNode(processorStreamTime);
@@ -716,7 +709,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldCallPunctuateOnPassedInProcessorNode() {
-        task = createStatelessTask(false);
+        task = createStatelessTask(createConfig(false));
         task.initializeStateStores();
         task.initializeTopology();
         task.punctuate(processorStreamTime, 5, PunctuationType.STREAM_TIME, punctuator);
@@ -726,8 +719,8 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldSetProcessorNodeOnContextBackToNullAfterSuccesfullPunctuate() {
-        task = createStatelessTask(false);
+    public void shouldSetProcessorNodeOnContextBackToNullAfterSuccessfulPunctuate() {
+        task = createStatelessTask(createConfig(false));
         task.initializeStateStores();
         task.initializeTopology();
         task.punctuate(processorStreamTime, 5, PunctuationType.STREAM_TIME, punctuator);
@@ -736,10 +729,10 @@ public class StreamTaskTest {
 
     @Test(expected = IllegalStateException.class)
     public void shouldThrowIllegalStateExceptionOnScheduleIfCurrentNodeIsNull() {
-        task = createStatelessTask(false);
+        task = createStatelessTask(createConfig(false));
         task.schedule(1, PunctuationType.STREAM_TIME, new Punctuator() {
             @Override
-            public void punctuate(long timestamp) {
+            public void punctuate(final long timestamp) {
                 // no-op
             }
         });
@@ -747,11 +740,11 @@ public class StreamTaskTest {
 
     @Test
     public void shouldNotThrowExceptionOnScheduleIfCurrentNodeIsNotNull() {
-        task = createStatelessTask(false);
+        task = createStatelessTask(createConfig(false));
         task.processorContext.setCurrentNode(processorStreamTime);
         task.schedule(1, PunctuationType.STREAM_TIME, new Punctuator() {
             @Override
-            public void punctuate(long timestamp) {
+            public void punctuate(final long timestamp) {
                 // no-op
             }
         });
@@ -775,7 +768,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldInitAndBeginTransactionOnCreateIfEosEnabled() {
-        task = createStatelessTask(true);
+        task = createStatelessTask(createConfig(true));
         task.initializeTopology();
 
         assertTrue(producer.transactionInitialized());
@@ -784,7 +777,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldNotThrowOnCloseIfTaskWasNotInitializedWithEosEnabled() {
-        task = createStatelessTask(true);
+        task = createStatelessTask(createConfig(true));
 
         assertTrue(!producer.transactionInFlight());
         task.close(false, false);
@@ -792,7 +785,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldNotInitOrBeginTransactionOnCreateIfEosDisabled() {
-        task = createStatelessTask(false);
+        task = createStatelessTask(createConfig(false));
 
         assertFalse(producer.transactionInitialized());
         assertFalse(producer.transactionInFlight());
@@ -800,11 +793,10 @@ public class StreamTaskTest {
 
     @Test
     public void shouldSendOffsetsAndCommitTransactionButNotStartNewTransactionOnSuspendIfEosEnabled() {
-        task = createStatelessTask(true);
+        task = createStatelessTask(createConfig(true));
         task.initializeTopology();
 
-        task.addRecords(partition1, Collections.singletonList(
-            new ConsumerRecord<>(partition1.topic(), partition1.partition(), 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)));
+        task.addRecords(partition1, singletonList(getConsumerRecord(partition1, 0)));
         task.process();
 
         task.suspend();
@@ -815,7 +807,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldCommitTransactionOnSuspendEvenIfTransactionIsEmptyIfEosEnabled() {
-        task = createStatelessTask(true);
+        task = createStatelessTask(createConfig(true));
         task.initializeTopology();
         task.suspend();
 
@@ -825,9 +817,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldNotSendOffsetsAndCommitTransactionNorStartNewTransactionOnSuspendIfEosDisabled() {
-        task = createStatelessTask(false);
-        task.addRecords(partition1, Collections.singletonList(
-            new ConsumerRecord<>(partition1.topic(), partition1.partition(), 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)));
+        task = createStatelessTask(createConfig(false));
+        task.addRecords(partition1, singletonList(getConsumerRecord(partition1, 0)));
         task.process();
         task.suspend();
 
@@ -838,11 +829,10 @@ public class StreamTaskTest {
 
     @Test
     public void shouldStartNewTransactionOnResumeIfEosEnabled() {
-        task = createStatelessTask(true);
+        task = createStatelessTask(createConfig(true));
         task.initializeTopology();
 
-        task.addRecords(partition1, Collections.singletonList(
-            new ConsumerRecord<>(partition1.topic(), partition1.partition(), 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)));
+        task.addRecords(partition1, singletonList(getConsumerRecord(partition1, 0)));
         task.process();
         task.suspend();
 
@@ -853,10 +843,9 @@ public class StreamTaskTest {
 
     @Test
     public void shouldNotStartNewTransactionOnResumeIfEosDisabled() {
-        task = createStatelessTask(false);
+        task = createStatelessTask(createConfig(false));
 
-        task.addRecords(partition1, Collections.singletonList(
-            new ConsumerRecord<>(partition1.topic(), partition1.partition(), 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)));
+        task.addRecords(partition1, singletonList(getConsumerRecord(partition1, 0)));
         task.process();
         task.suspend();
 
@@ -866,11 +855,10 @@ public class StreamTaskTest {
 
     @Test
     public void shouldStartNewTransactionOnCommitIfEosEnabled() {
-        task = createStatelessTask(true);
+        task = createStatelessTask(createConfig(true));
         task.initializeTopology();
 
-        task.addRecords(partition1, Collections.singletonList(
-            new ConsumerRecord<>(partition1.topic(), partition1.partition(), 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)));
+        task.addRecords(partition1, singletonList(getConsumerRecord(partition1, 0)));
         task.process();
 
         task.commit();
@@ -879,10 +867,9 @@ public class StreamTaskTest {
 
     @Test
     public void shouldNotStartNewTransactionOnCommitIfEosDisabled() {
-        task = createStatelessTask(false);
+        task = createStatelessTask(createConfig(false));
 
-        task.addRecords(partition1, Collections.singletonList(
-            new ConsumerRecord<>(partition1.topic(), partition1.partition(), 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)));
+        task.addRecords(partition1, singletonList(getConsumerRecord(partition1, 0)));
         task.process();
 
         task.commit();
@@ -891,7 +878,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldAbortTransactionOnDirtyClosedIfEosEnabled() {
-        task = createStatelessTask(true);
+        task = createStatelessTask(createConfig(true));
         task.initializeTopology();
         task.close(false, false);
         task = null;
@@ -901,7 +888,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldNotAbortTransactionOnZombieClosedIfEosEnabled() {
-        task = createStatelessTask(true);
+        task = createStatelessTask(createConfig(true));
         task.close(false, true);
         task = null;
 
@@ -910,7 +897,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldNotAbortTransactionOnDirtyClosedIfEosDisabled() {
-        task = createStatelessTask(false);
+        task = createStatelessTask(createConfig(false));
         task.close(false, false);
         task = null;
 
@@ -919,7 +906,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldCloseProducerOnCloseWhenEosEnabled() {
-        task = createStatelessTask(true);
+        task = createStatelessTask(createConfig(true));
         task.close(true, false);
         task = null;
 
@@ -935,7 +922,7 @@ public class StreamTaskTest {
         try {
             task.commit();
             fail("should have thrown an exception");
-        } catch (Exception e) {
+        } catch (final Exception e) {
             // all good
         }
     }
@@ -949,21 +936,21 @@ public class StreamTaskTest {
         try {
             task.suspend();
             fail("should have thrown an exception");
-        } catch (Exception e) {
+        } catch (final Exception e) {
             // all good
         }
     }
 
     @Test
     public void shouldCloseStateManagerIfFailureOnTaskClose() {
-        task = createStatefulTaskThatThrowsExceptionOnClose(true, false);
+        task = createStatefulTaskThatThrowsExceptionOnClose();
         task.initializeStateStores();
         task.initializeTopology();
 
         try {
             task.close(true, false);
             fail("should have thrown an exception");
-        } catch (Exception e) {
+        } catch (final Exception e) {
             // all good
         }
 
@@ -976,21 +963,21 @@ public class StreamTaskTest {
         final StreamTask task = createTaskThatThrowsException();
         try {
             task.close(false, false);
-        } catch (Exception e) {
-            fail("should have not closed unitialized topology");
+        } catch (final Exception e) {
+            fail("should have not closed non-initialized topology");
         }
     }
 
     @Test
     public void shouldBeInitializedIfChangelogPartitionsIsEmpty() {
-        final StreamTask task = createStatefulTask(false, false);
+        final StreamTask task = createStatefulTask(createConfig(false), false);
 
         assertTrue(task.initializeStateStores());
     }
 
     @Test
     public void shouldNotBeInitializedIfChangelogPartitionsIsNonEmpty() {
-        final StreamTask task = createStatefulTask(false, true);
+        final StreamTask task = createStatefulTask(createConfig(false), true);
 
         assertFalse(task.initializeStateStores());
     }
@@ -998,79 +985,91 @@ public class StreamTaskTest {
     @Test
     public void shouldReturnOffsetsForRepartitionTopicsForPurging() {
         final TopicPartition repartition = new TopicPartition("repartition", 1);
+
         final ProcessorTopology topology = ProcessorTopology.withRepartitionTopics(
-                Utils.<ProcessorNode>mkList(source1, source2),
-                new HashMap<String, SourceNode>() {
-                    {
-                        put(topic1, source1);
-                        put(repartition.topic(), source2);
-                    }
-                },
-                Collections.singleton(repartition.topic())
+            Utils.<ProcessorNode>mkList(source1, source2),
+            mkMap(mkEntry(topic1, (SourceNode) source1), mkEntry(repartition.topic(), (SourceNode) source2)),
+            Collections.singleton(repartition.topic())
         );
         consumer.assign(Arrays.asList(partition1, repartition));
 
-        task = new StreamTask(taskId00, Utils.mkSet(partition1, repartition), topology, consumer, changelogReader, config,
-                streamsMetrics, stateDirectory, null, time, producer);
+        task = new StreamTask(
+            taskId00,
+            Utils.mkSet(partition1, repartition),
+            topology,
+            consumer,
+            changelogReader,
+            createConfig(false),
+            streamsMetrics,
+            stateDirectory,
+            null,
+            time,
+            producer
+        );
         task.initializeStateStores();
         task.initializeTopology();
 
-        task.addRecords(partition1, Collections.singletonList(
-                new ConsumerRecord<>(partition1.topic(), partition1.partition(), 5L, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)));
-        task.addRecords(repartition, Collections.singletonList(
-                new ConsumerRecord<>(repartition.topic(), repartition.partition(), 10L, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)));
+        task.addRecords(partition1, singletonList(getConsumerRecord(partition1, 5L)));
+        task.addRecords(repartition, singletonList(getConsumerRecord(repartition, 10L)));
 
         assertTrue(task.process());
         assertTrue(task.process());
 
         task.commit();
 
-        Map<TopicPartition, Long> map = task.purgableOffsets();
+        final Map<TopicPartition, Long> map = task.purgableOffsets();
 
         assertThat(map, equalTo(Collections.singletonMap(repartition, 11L)));
     }
 
-    private StreamTask createStatefulTask(final boolean eosEnabled, final boolean logged) {
+    private StreamTask createStatefulTask(final StreamsConfig config, final boolean logged) {
         final ProcessorTopology topology = ProcessorTopology.with(
-                Utils.<ProcessorNode>mkList(source1, source2),
-                new HashMap<String, SourceNode>() {
-                    {
-                        put(topic1, source1);
-                        put(topic2, source2);
-                    }
-                },
-                Collections.singletonList(stateStore),
-                logged ? Collections.singletonMap(storeName, storeName + "-changelog") : Collections.<String, String>emptyMap());
+            Utils.<ProcessorNode>mkList(source1, source2),
+            mkMap(mkEntry(topic1, (SourceNode) source1), mkEntry(topic2, (SourceNode) source2)),
+            singletonList(stateStore),
+            logged ? Collections.singletonMap(storeName, storeName + "-changelog") : Collections.<String, String>emptyMap());
 
-        return new StreamTask(taskId00, partitions, topology, consumer, changelogReader, eosEnabled ? eosConfig : config,
-                streamsMetrics, stateDirectory, null, time, producer);
+        return new StreamTask(
+            taskId00,
+            partitions,
+            topology,
+            consumer,
+            changelogReader,
+            config,
+            streamsMetrics,
+            stateDirectory,
+            null,
+            time,
+            producer
+        );
     }
 
-    private StreamTask createStatefulTaskThatThrowsExceptionOnClose(final boolean eosEnabled, final boolean logged) {
+    private StreamTask createStatefulTaskThatThrowsExceptionOnClose() {
         final ProcessorTopology topology = ProcessorTopology.with(
-                Utils.<ProcessorNode>mkList(source1, source3),
-                new HashMap<String, SourceNode>() {
-                    {
-                        put(topic1, source1);
-                        put(topic2, source3);
-                    }
-                },
-                Collections.singletonList(stateStore),
-                logged ? Collections.singletonMap(storeName, changelogPartition.topic()) : Collections.<String, String>emptyMap());
+            Utils.<ProcessorNode>mkList(source1, source3),
+            mkMap(mkEntry(topic1, (SourceNode) source1), mkEntry(topic2, (SourceNode) source3)),
+            singletonList(stateStore),
+            Collections.<String, String>emptyMap());
 
-        return new StreamTask(taskId00, partitions, topology, consumer, changelogReader, eosEnabled ? eosConfig : config,
-                streamsMetrics, stateDirectory, null, time, producer);
+        return new StreamTask(
+            taskId00,
+            partitions,
+            topology,
+            consumer,
+            changelogReader,
+            createConfig(true),
+            streamsMetrics,
+            stateDirectory,
+            null,
+            time,
+            producer
+        );
     }
 
-    private StreamTask createStatelessTask(final boolean eosEnabled) {
+    private StreamTask createStatelessTask(final StreamsConfig streamsConfig) {
         final ProcessorTopology topology = ProcessorTopology.withSources(
-                Utils.<ProcessorNode>mkList(source1, source2, processorStreamTime, processorSystemTime),
-                new HashMap<String, SourceNode>() {
-                    {
-                        put(topic1, source1);
-                        put(topic2, source2);
-                    }
-                }
+            Utils.<ProcessorNode>mkList(source1, source2, processorStreamTime, processorSystemTime),
+            mkMap(mkEntry(topic1, (SourceNode) source1), mkEntry(topic2, (SourceNode) source2))
         );
 
         source1.addChild(processorStreamTime);
@@ -1078,20 +1077,26 @@ public class StreamTaskTest {
         source1.addChild(processorSystemTime);
         source2.addChild(processorSystemTime);
 
-        return new StreamTask(taskId00, partitions, topology, consumer, changelogReader, eosEnabled ? eosConfig : config,
-                streamsMetrics, stateDirectory, null, time, producer);
+        return new StreamTask(
+            taskId00,
+            partitions,
+            topology,
+            consumer,
+            changelogReader,
+            streamsConfig,
+            streamsMetrics,
+            stateDirectory,
+            null,
+            time,
+            producer
+        );
     }
 
     // this task will throw exception when processing (on partition2), flushing, suspending and closing
     private StreamTask createTaskThatThrowsException() {
         final ProcessorTopology topology = ProcessorTopology.withSources(
-                Utils.<ProcessorNode>mkList(source1, source3, processorStreamTime, processorSystemTime),
-                new HashMap<String, SourceNode>() {
-                    {
-                        put(topic1, source1);
-                        put(topic2, source3);
-                    }
-                }
+            Utils.<ProcessorNode>mkList(source1, source3, processorStreamTime, processorSystemTime),
+            mkMap(mkEntry(topic1, (SourceNode) source1), mkEntry(topic2, (SourceNode) source3))
         );
 
         source1.addChild(processorStreamTime);
@@ -1099,9 +1104,19 @@ public class StreamTaskTest {
         source1.addChild(processorSystemTime);
         source3.addChild(processorSystemTime);
 
-        return new StreamTask(taskId00, partitions, topology, consumer, changelogReader, config,
-            streamsMetrics, stateDirectory, null, time, producer) {
-
+        return new StreamTask(
+            taskId00,
+            partitions,
+            topology,
+            consumer,
+            changelogReader,
+            createConfig(false),
+            streamsMetrics,
+            stateDirectory,
+            null,
+            time,
+            producer
+        ) {
             @Override
             protected void flushState() {
                 throw new RuntimeException("KABOOM!");
@@ -1109,8 +1124,19 @@ public class StreamTaskTest {
         };
     }
 
-    private Iterable<ConsumerRecord<byte[], byte[]>> records(final ConsumerRecord<byte[], byte[]>... recs) {
-        return Arrays.asList(recs);
+    private ConsumerRecord<byte[], byte[]> getConsumerRecord(final TopicPartition topicPartition, final long offset) {
+        return new ConsumerRecord<>(
+            topicPartition.topic(),
+            topicPartition.partition(),
+            offset,
+            0L,
+            TimestampType.CREATE_TIME,
+            0L,
+            0,
+            0,
+            recordKey,
+            recordValue
+        );
     }
 
 }

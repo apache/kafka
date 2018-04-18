@@ -229,7 +229,7 @@ public final class Sensor {
             return false;
 
         this.stats.add(Utils.notNull(stat));
-        Object lock = new Object();
+        Object lock = metricLock(stat);
         for (NamedMeasurable m : stat.stats()) {
             final KafkaMetric metric = new KafkaMetric(lock, m.name(), m.stat(), config == null ? this.config : config, time);
             if (!metrics.containsKey(metric.metricName())) {
@@ -265,7 +265,7 @@ public final class Sensor {
             return true;
         } else {
             final KafkaMetric metric = new KafkaMetric(
-                new Object(),
+                metricLock(stat),
                 Utils.notNull(metricName),
                 Utils.notNull(stat),
                 config == null ? this.config : config,
@@ -288,5 +288,13 @@ public final class Sensor {
 
     synchronized List<KafkaMetric> metrics() {
         return Collections.unmodifiableList(new LinkedList<>(this.metrics.values()));
+    }
+
+    /**
+     * KafkaMetrics of sensors which use SampledStat should be synchronized on the Sensor object
+     * to allow concurrent reads and updates. For simplicity, all sensors are synchronized on Sensor.
+     */
+    private Object metricLock(Stat stat) {
+        return this;
     }
 }

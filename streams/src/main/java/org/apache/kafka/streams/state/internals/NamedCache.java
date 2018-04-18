@@ -44,11 +44,11 @@ class NamedCache {
     private final String name;
     private final TreeMap<Bytes, LRUNode> cache;
     private final Set<Bytes> dirtyKeys = new LinkedHashSet<>();
+    private final NamedCacheMetrics namedCacheMetrics;
 
     private LRUNode tail;
     private LRUNode head;
     private long currentSizeBytes;
-    private NamedCacheMetrics namedCacheMetrics;
     private ThreadCache.DirtyEntryFlushListener listener;
 
     // internal stats
@@ -82,7 +82,7 @@ class NamedCache {
 
     NamedCache(final String name, final StreamsMetrics metrics, final Bytes.ByteArrayComparator comparator) {
         this.name = name;
-        this.namedCacheMetrics = new NamedCacheMetrics(metrics);
+        this.namedCacheMetrics = new NamedCacheMetrics(metrics, name);
         this.cache = new TreeMap<>(new WrappedBytesComparator(comparator));
     }
 
@@ -132,7 +132,7 @@ class NamedCache {
 
         if (log.isTraceEnabled()) {
             log.trace("Named cache {} stats on flush: #hits={}, #misses={}, #overwrites={}, #flushes={}",
-                      name, hits(), misses(), overwrites(), flushes());
+                name, hits(), misses(), overwrites(), flushes());
         }
 
         if (listener == null) {
@@ -143,7 +143,7 @@ class NamedCache {
             return;
         }
 
-        final List<ThreadCache.DirtyEntry> entries  = new ArrayList<>();
+        final List<ThreadCache.DirtyEntry> entries = new ArrayList<>();
         final List<Bytes> deleted = new ArrayList<>();
 
         // evicted already been removed from the cache so add it to the list of
@@ -153,7 +153,7 @@ class NamedCache {
             dirtyKeys.remove(evicted.key);
         }
 
-        for (Bytes key : dirtyKeys) {
+        for (final Bytes key : dirtyKeys) {
             final LRUNode node = getInternal(key);
             if (node == null) {
                 throw new IllegalStateException("Key = " + key + " found in dirty key set, but entry is null");
@@ -167,17 +167,19 @@ class NamedCache {
         // clear dirtyKeys before the listener is applied as it may be re-entrant.
         dirtyKeys.clear();
         listener.apply(entries);
-        for (Bytes key : deleted) {
+        for (final Bytes key : deleted) {
             delete(key);
         }
     }
 
     synchronized void put(final Bytes key, final LRUCacheEntry value) {
         if (!value.isDirty() && dirtyKeys.contains(key)) {
-            throw new IllegalStateException(String.format("Attempting to put a clean entry for key [%s] " +
-                                                                  "into NamedCache [%s] when it already contains " +
-                                                                  "a dirty entry for the same key",
-                                                          key, name));
+            throw new IllegalStateException(
+                String.format(
+                    "Attempting to put a clean entry for key [%s] into NamedCache [%s] when it already contains a dirty entry for the same key",
+                    key, name
+                )
+            );
         }
         LRUNode node = cache.get(key);
         if (node != null) {
@@ -217,13 +219,13 @@ class NamedCache {
         return node;
     }
 
-    private void updateLRU(LRUNode node) {
+    private void updateLRU(final LRUNode node) {
         remove(node);
 
         putHead(node);
     }
 
-    private void remove(LRUNode node) {
+    private void remove(final LRUNode node) {
         if (node.previous != null) {
             node.previous.next = node.next;
         } else {
@@ -236,7 +238,7 @@ class NamedCache {
         }
     }
 
-    private void putHead(LRUNode node) {
+    private void putHead(final LRUNode node) {
         node.next = head;
         node.previous = null;
         if (head != null) {
@@ -270,7 +272,7 @@ class NamedCache {
     }
 
     synchronized void putAll(final List<KeyValue<byte[], LRUCacheEntry>> entries) {
-        for (KeyValue<byte[], LRUCacheEntry> entry : entries) {
+        for (final KeyValue<byte[], LRUCacheEntry> entry : entries) {
             put(Bytes.wrap(entry.key), entry.value);
         }
     }
@@ -298,8 +300,7 @@ class NamedCache {
     }
 
     private Iterator<Bytes> keySetIterator(final Set<Bytes> keySet) {
-        final TreeSet<Bytes> copy = new TreeSet<>(keySet);
-        return copy.iterator();
+        return new TreeSet<>(keySet).iterator();
     }
 
     synchronized Iterator<Bytes> allKeys() {
@@ -360,11 +361,11 @@ class NamedCache {
         }
 
         long size() {
-            return  key.get().length +
-                    8 + // entry
-                    8 + // previous
-                    8 + // next
-                    entry.size();
+            return key.get().length +
+                8 + // entry
+                8 + // previous
+                8 + // next
+                entry.size();
         }
 
         LRUNode next() {
@@ -375,19 +376,19 @@ class NamedCache {
             return previous;
         }
 
-        private void update(LRUCacheEntry entry) {
+        private void update(final LRUCacheEntry entry) {
             this.entry = entry;
         }
     }
 
-    class NamedCacheMetrics  {
-        final StreamsMetricsImpl metrics;
-        final String groupName;
-        final Map<String, String> metricTags;
-        final Map<String, String> allMetricTags;
-        final Sensor hitRatioSensor;
+    private static class NamedCacheMetrics {
+        private final StreamsMetricsImpl metrics;
+        private final String groupName;
+        private final Map<String, String> metricTags;
+        private final Map<String, String> allMetricTags;
+        private final Sensor hitRatioSensor;
 
-        public NamedCacheMetrics(StreamsMetrics metrics) {
+        private NamedCacheMetrics(final StreamsMetrics metrics, final String name) {
             final String scope = "record-cache";
             final String opName = "hitRatio";
             final String tagKey = scope + "-id";
@@ -395,18 +396,18 @@ class NamedCache {
             this.groupName = "stream-" + scope + "-metrics";
             this.metrics = (StreamsMetricsImpl) metrics;
             this.allMetricTags = ((StreamsMetricsImpl) metrics).tagMap(tagKey, "all",
-                    "task-id", ThreadCache.taskIDfromCacheName(name));
+                "task-id", ThreadCache.taskIDfromCacheName(name));
             this.metricTags = ((StreamsMetricsImpl) metrics).tagMap(tagKey, tagValue,
-                    "task-id", ThreadCache.taskIDfromCacheName(name));
+                "task-id", ThreadCache.taskIDfromCacheName(name));
 
             // add parent
-            Sensor parent = this.metrics.registry().sensor(opName, Sensor.RecordingLevel.DEBUG);
+            final Sensor parent = this.metrics.registry().sensor(opName, Sensor.RecordingLevel.DEBUG);
             ((StreamsMetricsImpl) metrics).maybeAddMetric(parent, this.metrics.registry().metricName(opName + "-avg", groupName,
-                    "The average cache hit ratio.", allMetricTags), new Avg());
+                "The average cache hit ratio.", allMetricTags), new Avg());
             ((StreamsMetricsImpl) metrics).maybeAddMetric(parent, this.metrics.registry().metricName(opName + "-min", groupName,
-                    "The minimum cache hit ratio.", allMetricTags), new Min());
+                "The minimum cache hit ratio.", allMetricTags), new Min());
             ((StreamsMetricsImpl) metrics).maybeAddMetric(parent, this.metrics.registry().metricName(opName + "-max", groupName,
-                    "The maximum cache hit ratio.", allMetricTags), new Max());
+                "The maximum cache hit ratio.", allMetricTags), new Max());
 
             // add child
             hitRatioSensor = this.metrics.registry().sensor(opName, Sensor.RecordingLevel.DEBUG, parent);
@@ -419,7 +420,7 @@ class NamedCache {
 
         }
 
-        public void removeAllSensors() {
+        private void removeAllSensors() {
             metrics.removeSensor(hitRatioSensor);
         }
     }

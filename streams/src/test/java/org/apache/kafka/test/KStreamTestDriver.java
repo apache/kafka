@@ -45,7 +45,7 @@ import java.util.Set;
 
 public class KStreamTestDriver extends ExternalResource {
 
-    private static final long DEFAULT_CACHE_SIZE_BYTES = 1 * 1024 * 1024L;
+    private static final long DEFAULT_CACHE_SIZE_BYTES = 1024 * 1024L;
 
     private ProcessorTopology topology;
     private InternalMockProcessorContext context;
@@ -231,7 +231,7 @@ public class KStreamTestDriver extends ExternalResource {
 
         final List<ProcessorNode> nodes = topology.processors();
 
-        for (final ProcessorNode node: nodes) {
+        for (final ProcessorNode node : nodes) {
             names.add(node.name());
         }
 
@@ -241,7 +241,7 @@ public class KStreamTestDriver extends ExternalResource {
     public ProcessorNode processor(final String name) {
         final List<ProcessorNode> nodes = topology.processors();
 
-        for (final ProcessorNode node: nodes) {
+        for (final ProcessorNode node : nodes) {
             if (node.name().equals(name)) {
                 return node;
             }
