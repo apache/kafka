@@ -454,12 +454,6 @@ public class SimpleBenchmark {
                         store.get(key);
                         store.put(key, value);
                     }
-
-                    @Override
-                    public void punctuate(final long timestamp) {}
-
-                    @Override
-                    public void close() {}
                 };
             }
         }, "store");
@@ -494,6 +488,7 @@ public class SimpleBenchmark {
                     @SuppressWarnings("unchecked")
                     @Override
                     public void init(final ProcessorContext context) {
+                        super.init(context);
                         store = (WindowStore<Integer, byte[]>) context.getStateStore("store");
                     }
 
