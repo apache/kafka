@@ -163,18 +163,7 @@ Kafka request. SASL/GSSAPI authentication is performed starting with this packet
 <h5><a id="protocol_types" href="#protocol_types">Protocol Primitive Types</a></h5>
 
 <p>The protocol is built out of the following primitive types.</p>
-
-<p><b>Fixed Width Primitives</b><p>
-
-<p>int8, int16, int32, int64 - Signed integers with the given precision (in bits) stored in big endian order.</p>
-
-<p><b>Variable Length Primitives</b><p>
-
-<p>bytes, string - These types consist of a signed integer giving a length N followed by N bytes of content. A length of -1 indicates null. string uses an int16 for its size, and bytes uses an int32.</p>
-
-<p><b>Arrays</b><p>
-
-<p>This is a notation for handling repeated structures. These will always be encoded as an int32 size containing the length N followed by N repetitions of the structure which can itself be made up of other primitive types. In the BNF grammars below we will show an array of a structure foo as [foo].</p>
+<!--#include virtual="generated/protocol_types.html" -->
 
 <h5><a id="protocol_grammar" href="#protocol_grammar">Notes on reading the request format grammars</a></h5>
 

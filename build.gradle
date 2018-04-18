@@ -633,6 +633,13 @@ project(':core') {
     standardOutput = new File(generatedDocsDir, "protocol_errors.html").newOutputStream()
   }
 
+  task genProtocolTypesDocs(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    main = 'org.apache.kafka.common.protocol.types.Type'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "protocol_types.html").newOutputStream()
+  }
+
   task genProtocolApiKeyDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     main = 'org.apache.kafka.common.protocol.ApiKeys'
@@ -696,7 +703,7 @@ project(':core') {
     standardOutput = new File(generatedDocsDir, "producer_metrics.html").newOutputStream()
   }
 
-  task siteDocsTar(dependsOn: ['genProtocolErrorDocs', 'genProtocolApiKeyDocs', 'genProtocolMessageDocs',
+  task siteDocsTar(dependsOn: ['genProtocolErrorDocs', 'genProtocolTypesDocs', 'genProtocolApiKeyDocs', 'genProtocolMessageDocs',
                                'genAdminClientConfigDocs', 'genProducerConfigDocs', 'genConsumerConfigDocs',
                                'genKafkaConfigDocs', 'genTopicConfigDocs',
                                ':connect:runtime:genConnectConfigDocs', ':connect:runtime:genConnectTransformationDocs',
