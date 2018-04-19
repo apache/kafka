@@ -957,20 +957,20 @@ public class TopologyTestDriverTest {
         assertEquals(1, processedRecords1.size());
         assertEquals(0, processedRecords2.size());
 
-        Record record = processedRecords1.get(0);
-        Record expectedResult = new Record(consumerRecord1);
-        expectedResult.offset = 0L;
-        assertThat(record, equalTo(expectedResult));
+        final Record record1 = processedRecords1.get(0);
+        final Record expectedResult1 = new Record(consumerRecord1);
+        expectedResult1.offset = 0L;
+        assertThat(record1, equalTo(expectedResult1));
 
         testDriver.pipeInput(consumerRecord2);
 
         assertEquals(1, processedRecords1.size());
         assertEquals(1, processedRecords2.size());
 
-        record = processedRecords2.get(0);
-        expectedResult = new Record(consumerRecord2);
-        expectedResult.offset = 0L;
-        assertThat(record, equalTo(expectedResult));
+        final Record record2 = processedRecords2.get(0);
+        final Record expectedResult2 = new Record(consumerRecord2);
+        expectedResult2.offset = 0L;
+        assertThat(record2, equalTo(expectedResult2));
     }
 
     @Test
