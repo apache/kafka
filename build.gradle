@@ -79,6 +79,7 @@ allprojects {
 
 ext {
   gradleVersion = "4.5.1"
+  minJavaVersion = "7"
   buildVersionFileName = "kafka-version.properties"
 
   maxPermSizeArgs = []
@@ -143,8 +144,8 @@ subprojects {
   if (!JavaVersion.current().isJava9Compatible())
     apply plugin: 'findbugs'
 
-  sourceCompatibility = 1.7
-  targetCompatibility = 1.7
+  sourceCompatibility = minJavaVersion
+  targetCompatibility = minJavaVersion
 
   compileJava {
     options.encoding = 'UTF-8'
@@ -156,7 +157,7 @@ subprojects {
     // set --source and --target via `sourceCompatibility` and `targetCompatibility`. If/when Gradle supports `--release`
     // natively (https://github.com/gradle/gradle/issues/2510), we should switch to that.
     if (JavaVersion.current().isJava9Compatible())
-      options.compilerArgs << "--release" << "7"
+      options.compilerArgs << "--release" << minJavaVersion
   }
 
   uploadArchives {
@@ -341,7 +342,7 @@ subprojects {
       "-Xlint:private-shadow",
       "-Xlint:stars-align",
       "-Xlint:type-parameter-shadow",
-      "-Xlint:unsound-match",
+      "-Xlint:unsound-match"
     ]
 
     if (versions.baseScala != '2.11') {
@@ -350,6 +351,10 @@ subprojects {
         "-Xlint:unused"
       ]
     }
+
+    // Scalac's `-release` is only available from Scala 2.12 and it requires Java 9 or higher
+    if (JavaVersion.current().isJava9Compatible() && versions.baseScala != '2.11')
+      scalaCompileOptions.additionalParameters += ["-release", minJavaVersion]
 
     configure(scalaCompileOptions.forkOptions) {
       memoryMaximumSize = '1g'
