@@ -42,13 +42,16 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.WindowStore;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -186,6 +189,9 @@ public class SimpleBenchmark {
                 break;
             case "streamprocesswithstatestore":
                 processStreamWithStateStore(SOURCE_TOPIC_ONE);
+                break;
+            case "streamprocesswithwindowstore":
+                processStreamWithWindowStore(SOURCE_TOPIC_ONE);
                 break;
             case "streamtablejoin":
                 streamTableJoin(SOURCE_TOPIC_ONE, SOURCE_TOPIC_TWO);
@@ -426,7 +432,7 @@ public class SimpleBenchmark {
         final StreamsBuilder builder = new StreamsBuilder();
         final StoreBuilder<KeyValueStore<Integer, byte[]>> storeBuilder
                 = Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("store"), INTEGER_SERDE, BYTE_SERDE);
-        builder.addStateStore(storeBuilder);
+        builder.addStateStore(storeBuilder.withCachingEnabled());
 
         final KStream<Integer, byte[]> source = builder.stream(topic);
 
@@ -445,6 +451,56 @@ public class SimpleBenchmark {
 
                     @Override
                     public void process(final Integer key, final byte[] value) {
+                        store.get(key);
+                        store.put(key, value);
+                    }
+                };
+            }
+        }, "store");
+
+        final KafkaStreams streams = createKafkaStreamsWithExceptionHandler(builder, props);
+        runGenericBenchmark(streams, "Streams Stateful Performance [records/latency/rec-sec/MB-sec joined]: ", latch);
+    }
+
+    private void processStreamWithWindowStore(final String topic) {
+        final CountDownLatch latch = new CountDownLatch(1);
+
+        setStreamProperties("simple-benchmark-streams-with-store");
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        final StoreBuilder<WindowStore<Integer, byte[]>> storeBuilder
+                = Stores.windowStoreBuilder(Stores.persistentWindowStore("store",
+                AGGREGATE_WINDOW_SIZE * 3,
+                3,
+                AGGREGATE_WINDOW_SIZE,
+                false),
+                INTEGER_SERDE, BYTE_SERDE);
+        builder.addStateStore(storeBuilder.withCachingEnabled());
+
+        final KStream<Integer, byte[]> source = builder.stream(topic);
+
+        source.peek(new CountDownAction(latch)).process(new ProcessorSupplier<Integer, byte[]>() {
+            @Override
+            public Processor<Integer, byte[]> get() {
+                return new AbstractProcessor<Integer, byte[]>() {
+                    WindowStore<Integer, byte[]> store;
+
+                    @SuppressWarnings("unchecked")
+                    @Override
+                    public void init(final ProcessorContext context) {
+                        super.init(context);
+                        store = (WindowStore<Integer, byte[]>) context.getStateStore("store");
+                    }
+
+                    @Override
+                    public void process(final Integer key, final byte[] value) {
+                        final long timestamp = context().timestamp();
+                        final KeyValueIterator<Windowed<Integer>, byte[]> iter = store.fetch(key - 10, key + 10, timestamp - 1000L, timestamp + 1000L);
+                        while (iter.hasNext()) {
+                            iter.next();
+                        }
+                        iter.close();
+
                         store.put(key, value);
                     }
                 };
