@@ -8,4 +8,12 @@ Apache Kafka
         
     quickstart
     uses
-    documentation/index
+    introduction
+    api
+    configuration
+    design
+    implementation
+    ops
+    security
+    connect
+    streams/index
