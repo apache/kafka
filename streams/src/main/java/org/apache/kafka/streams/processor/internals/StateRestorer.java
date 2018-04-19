@@ -100,7 +100,7 @@ public class StateRestorer {
     }
 
     boolean hasCompleted(final long recordOffset, final long endOffset) {
-        return endOffset == 0 || recordOffset >= readTo(endOffset);
+        return endOffset == 0 || recordOffset >= lesser(endOffset);
     }
 
     Long restoredOffset() {
@@ -115,7 +115,7 @@ public class StateRestorer {
         return offsetLimit;
     }
 
-    private Long readTo(final long endOffset) {
+    private Long lesser(final long endOffset) {
         return endOffset < offsetLimit ? endOffset : offsetLimit;
     }
 
