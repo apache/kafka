@@ -3202,22 +3202,23 @@ t=5 (blue), which lead to a merge of sessions and an extension of a session, res
               <li><code class="docutils literal"><span class="pre">org.apache.kafka.streams.scala.DefaultSerdes</span></code>: Module that brings into scope the implicit values of all primitive SerDes.</li>
               <li><code class="docutils literal"><span class="pre">org.apache.kafka.streams.scala.ScalaSerde</span></code>: Base abstraction that can be used to implement custom SerDes in a type safe way.</li>
             </ul>
-            <p>The library is cross-built with Scala 2.11 and 2.12.  To include it your maven <code>pom.xml</code> add the following:</p>
+            <p>The library is cross-built with Scala 2.11 and 2.12.  To reference the library compiled against Scala 2.11 include the following in your maven <code>pom.xml</code> add the following:</p>
             <pre class="brush: xml;">
               &lt;dependency&gt;
                 &lt;groupId&gt;org.apache.kafka&lt;/groupId&gt;
-                &lt;artifactId&gt;kafka-streams&lt;/artifactId&gt;
+                &lt;artifactId&gt;kafka-streams-scala_2.11&lt;/artifactId&gt;
                 &lt;version&gt;{{fullDotVersion}}&lt;/version&gt;
               &lt;/dependency&gt;
             </pre>
-            <p>If using SBT then you can add a reference to the library using the following:</p>
+            <p>To use the library compiled against Scala 2.12 replace the <code class="docutils literal"><span class="pre">artifactId</span></code> with <code class="docutils literal"><span class="pre">kafka-streams-scala_2.12</span></code>.</p>
+            <p>When using SBT then you can reference the correct library using the following:</p>
             <pre class="brush: scala;">
               libraryDependencies += "org.apache.kafka" %% "kafka-streams-scala" % "{{fullDotVersion}}"
             </pre>
             <div class="section" id="scala-dsl-sample-usage">
               <span id="streams-developer-guide-dsl-sample-usage"></span><h3><a class="toc-backref" href="#id28">Sample Usage</a><a class="headerlink" href="#scala-dsl-sample-usage" title="Permalink to this headline"></a></h3>
-              <p>The library works by wrapping the original Java abstractions of Kafka Streams within a Scala wrapper object and then using implicit conversions between them. All the Scala abstractions are named identically as the corresponding Java abstraction, but they reside in a different package of the library e.g. the Scala class <code class="docutils literal"><span class="pre">org.apache.kafka.streams.scala.StreamsBuilder</span></code> is a wrapper around <code class="docutils literal"><span class="pre">org.apache.kafka.streams.StreamBuilder</span></code>, <code class="docutils literal"><span class="pre">org.apache.kafka.streams.scala.kstream.KStream</span></code> is a wrapper around <code class="docutils literal"><span class="pre">org.apache.kafka.streams.kstream.KStream</span></code>, and so on.</p>
-              <p>Here's an example of the classic Word Count program that uses the Scala <code class="docutils literal"><span class="pre">StreamBuilder</span></code> that builds an instance of <code class="docutils literal"><span class="pre">KStream</span></code> which is a wrapper around Java <code class="docutils literal"><span class="pre">KStream</span></code>. Then we reify to a table and get a <code class="docutils literal"><span class="pre">KTable</span></code>, which, again is a wrapper around Java <code class="docutils literal"><span class="pre">KTable</span></code>.</p>
+              <p>The library works by wrapping the original Java abstractions of Kafka Streams within a Scala wrapper object and then using implicit conversions between them. All the Scala abstractions are named identically as the corresponding Java abstraction, but they reside in a different package of the library e.g. the Scala class <code class="docutils literal"><span class="pre">org.apache.kafka.streams.scala.StreamsBuilder</span></code> is a wrapper around <code class="docutils literal"><span class="pre">org.apache.kafka.streams.StreamsBuilder</span></code>, <code class="docutils literal"><span class="pre">org.apache.kafka.streams.scala.kstream.KStream</span></code> is a wrapper around <code class="docutils literal"><span class="pre">org.apache.kafka.streams.kstream.KStream</span></code>, and so on.</p>
+              <p>Here's an example of the classic WordCount program that uses the Scala <code class="docutils literal"><span class="pre">StreamsBuilder</span></code> that builds an instance of <code class="docutils literal"><span class="pre">KStream</span></code> which is a wrapper around Java <code class="docutils literal"><span class="pre">KStream</span></code>. Then we reify to a table and get a <code class="docutils literal"><span class="pre">KTable</span></code>, which, again is a wrapper around Java <code class="docutils literal"><span class="pre">KTable</span></code>.</p>
               <p>The net result is that the following code is structured just like using the Java API, but with Scala and with far fewer type annotations compared to using the Java API directly from Scala. The difference in type annotation usage is more obvious when given an example.  Below is an example WordCount implementation that will be used to demonstrate the differences between the Scala and Java API.</p>
               <pre class="brush: scala;">
 import java.util.Properties

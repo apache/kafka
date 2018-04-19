@@ -81,7 +81,7 @@
               <tr class="row-even"><td><code class="docutils literal"><span class="pre">org.apache.kafka</span></code></td>
                   <td><code class="docutils literal"><span class="pre">kafka-streams-scala</span></code></td>
                   <td><code class="docutils literal"><span class="pre">{{fullDotVersion}}</span></code></td>
-                  <td>(Optional) Scala DSL API library to write Scala Kafka Streams applications.</td>
+                  <td>(Optional) Kafka Streams DSL for Scala library to write Scala Kafka Streams applications.  When not using SBT you will need to suffix the artifact ID with the correct version of Scala your application is using (<code class="docutils literal"><span class="pre">_2.11</code></span>, <code class="docutils literal"><span class="pre">_2.12</code></span>)</td>
               </tr>
               </tbody>
           </table>
@@ -101,10 +101,10 @@
     <artifactId>kafka-clients</artifactId>
     <version>{{fullDotVersion}}</version>
 </dependency>
-<!-- Optionally include Kafka Streams DSL for Scala -->
+<!-- Optionally include Kafka Streams DSL for Scala for Scala 2.11 -->
 <dependency>
     <groupId>org.apache.kafka</groupId>
-    <artifactId>kafka-streams-scala</artifactId>
+    <artifactId>kafka-streams-scala_2.11</artifactId>
     <version>{{fullDotVersion}}</version>
 </dependency>
           </pre>
