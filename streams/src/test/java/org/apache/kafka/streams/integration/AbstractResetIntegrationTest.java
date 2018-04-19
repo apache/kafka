@@ -122,7 +122,7 @@ public abstract class AbstractResetIntegrationTest {
             final long alignedTime = (System.currentTimeMillis() / 1000 + 1) * 1000;
             mockTime.setCurrentTimeMs(alignedTime);
             currentTimeSet = true;
-        } catch (IllegalArgumentException e) {
+        } catch (final IllegalArgumentException e) {
             // don't care will retry until set
         }
         return currentTimeSet;
