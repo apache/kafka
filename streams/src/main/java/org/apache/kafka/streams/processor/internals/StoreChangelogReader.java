@@ -81,9 +81,17 @@ public class StoreChangelogReader implements ChangelogReader {
 
         final Set<TopicPartition> restoringPartitions = new HashSet<>(needsRestoring.keySet());
         try {
-            final ConsumerRecords<byte[], byte[]> allRecords = restoreConsumer.poll(10);
+            final Set<ConsumerRecords<byte[], byte[]>> allRecords = new HashSet<>();
+            while (true) {
+                final ConsumerRecords<byte[], byte[]> records = restoreConsumer.poll(10);
+                if (records.count() == 0) {
+                    break;
+                }
+                allRecords.add(records);
+            }
+            final ConsumerRecords<byte[], byte[]> mergedRecords = mergeRecords(allRecords);
             for (final TopicPartition partition : restoringPartitions) {
-                restorePartition(allRecords, partition, active.restoringTaskFor(partition));
+                restorePartition(mergedRecords, partition, active.restoringTaskFor(partition));
             }
         } catch (final InvalidOffsetException recoverableException) {
             log.warn("Restoring StreamTasks failed. Deleting StreamTasks stores to recreate from scratch.", recoverableException);
@@ -101,6 +109,17 @@ public class StoreChangelogReader implements ChangelogReader {
         }
 
         return completed();
+    }
+
+    private ConsumerRecords<byte[], byte[]> mergeRecords(Set<ConsumerRecords<byte[], byte[]>> allRecords) {
+        final Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> mergedRecords = new HashMap<>();
+        for (ConsumerRecords<byte[], byte[]> records : allRecords) {
+            for (TopicPartition partition : records.partitions()) {
+                mergedRecords.put(partition, records.records(partition));
+            }
+        }
+        final ConsumerRecords<byte[], byte[]> result = new ConsumerRecords<>(mergedRecords);
+        return result;
     }
 
     private void initialize() {
