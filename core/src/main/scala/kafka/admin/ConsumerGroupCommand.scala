@@ -87,8 +87,7 @@ object ConsumerGroupCommand extends Logging {
       }
     } catch {
       case e: Throwable =>
-        printError(s"Executing consumer group command failed (${e.getMessage}) ${System.lineSeparator()}" +
-          s"${if (e.getCause != null) e.getCause}", Some(e))
+        printError(s"Executing consumer group command failed due to ${e.getMessage}", Some(e))
     } finally {
       consumerGroupService.close()
     }
@@ -96,9 +95,13 @@ object ConsumerGroupCommand extends Logging {
 
   val MISSING_COLUMN_VALUE = "-"
 
-  def printError(msg: String, e: Option[Throwable] = None): Unit = {
+  def printError(msg: String, t: Option[Throwable] = None): Unit = {
     println(s"Error: $msg")
-    e.foreach(error("Exception in consumer group command", _))
+    t.foreach(e => {
+      val errorMessage = "Exception in consumer group command"
+      error(errorMessage, e)
+      System.err.println(errorMessage + System.lineSeparator() + Utils.stackTrace(e))
+    })
   }
 
   def convertTimestamp(timeString: String): java.lang.Long = {
