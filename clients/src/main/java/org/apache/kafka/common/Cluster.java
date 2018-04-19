@@ -274,7 +274,7 @@ public final class Cluster {
 
     @Override
     public String toString() {
-        return "Cluster(id = " + clusterResource.clusterId() + ", nodes = " + this.nodes + ", partitions = " + this.partitionsByTopicPartition.values() + ")";
+        return "Cluster(id = " + clusterResource.clusterId() + ", nodes = " + this.nodes + ", partitions = " + this.partitionsByTopicPartition.values() + ", controller = " + controller + ")";
     }
 
 }
