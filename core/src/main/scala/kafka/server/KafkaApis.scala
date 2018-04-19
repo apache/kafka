@@ -347,6 +347,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         //   - If v1 and no explicit commit timestamp is provided we use default expiration timestamp.
         //   - If v1 and explicit commit timestamp is provided we calculate retention from that explicit commit timestamp
         //   - If v2 we use the default expiration timestamp
+        //   - For v3 and beyond there is no per partition expiration timestamp, so this field is no longer in effect
         val currentTimestamp = time.milliseconds
         val defaultExpireTimestamp = offsetRetention + currentTimestamp
         val partitionData = authorizedTopicRequestInfo.mapValues { partitionData =>
@@ -355,7 +356,9 @@ class KafkaApis(val requestChannel: RequestChannel,
             offsetMetadata = OffsetMetadata(partitionData.offset, metadata),
             commitTimestamp = currentTimestamp,
             expireTimestamp = {
-              if (partitionData.timestamp == OffsetCommitRequest.DEFAULT_TIMESTAMP)
+              if (header.apiVersion >= 3)
+                OffsetCommitRequest.DEFAULT_EXPIRATION_TIMESTAMP
+              else  if (partitionData.timestamp == OffsetCommitRequest.DEFAULT_TIMESTAMP)
                 defaultExpireTimestamp
               else
                 offsetRetention + partitionData.timestamp

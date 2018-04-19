@@ -16,13 +16,17 @@
  */
 package kafka.coordinator.group
 
+import java.nio.ByteBuffer
 import java.util.UUID
 import java.util.concurrent.locks.ReentrantLock
 
 import kafka.common.OffsetAndMetadata
 import kafka.utils.{CoreUtils, Logging, nonthreadsafe}
+import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.requests.OffsetCommitRequest
 
+import scala.collection.JavaConverters._
 import scala.collection.{Seq, immutable, mutable}
 
 private[group] sealed trait GroupState
@@ -119,11 +123,24 @@ private object GroupMetadata {
                 protocol: String,
                 leaderId: String,
                 members: Iterable[MemberMetadata]): GroupMetadata = {
+    loadGroup(groupId, initialState, generationId, protocolType, protocol, leaderId,
+      OffsetCommitRequest.DEFAULT_EXPIRATION_TIMESTAMP, members)
+  }
+
+  def loadGroup(groupId: String,
+                initialState: GroupState,
+                generationId: Int,
+                protocolType: String,
+                protocol: String,
+                leaderId: String,
+                currentStateTimestamp: Long,
+                members: Iterable[MemberMetadata]): GroupMetadata = {
     val group = new GroupMetadata(groupId, initialState)
     group.generationId = generationId
     group.protocolType = if (protocolType == null || protocolType.isEmpty) None else Some(protocolType)
     group.protocol = Option(protocol)
     group.leaderId = Option(leaderId)
+    group.currentStateTimestamp = currentStateTimestamp
     members.foreach(group.add)
     group
   }
@@ -171,6 +188,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   private[group] val lock = new ReentrantLock
 
   private var state: GroupState = initialState
+  var currentStateTimestamp = System.currentTimeMillis()
   var protocolType: Option[String] = None
   var generationId = 0
   private var leaderId: Option[String] = None
@@ -240,6 +258,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   def transitionTo(groupState: GroupState) {
     assertValidTransition(groupState)
     state = groupState
+    currentStateTimestamp = System.currentTimeMillis()
   }
 
   def selectProtocol: String = {
@@ -434,18 +453,61 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     }.toMap
   }
 
-  def removeExpiredOffsets(startMs: Long) : Map[TopicPartition, OffsetAndMetadata] = {
-    val expiredOffsets = offsets
-      .filter {
-        case (topicPartition, commitRecordMetadataAndOffset) =>
-          commitRecordMetadataAndOffset.offsetAndMetadata.expireTimestamp < startMs && !pendingOffsetCommits.contains(topicPartition)
-      }
-      .map {
-        case (topicPartition, commitRecordOffsetAndMetadata) =>
-          (topicPartition, commitRecordOffsetAndMetadata.offsetAndMetadata)
-      }
+  def removeExpiredOffsets(currentTimestamp: Long, offsetRetentionMs: Long) : Map[TopicPartition, OffsetAndMetadata] = {
+    val expiredOffsets: Map[TopicPartition, CommitRecordMetadataAndOffset] = protocolType match {
+      case Some(protocol) if is(Empty) =>
+        // no consumer exists in the group =>
+        // if retention period has passed since group became Empty, expire all offsets with no pending offset commit
+        offsets.filter { case (topicPartition, commitRecordMetadataAndOffset) =>
+            !pendingOffsetCommits.contains(topicPartition) && {
+              commitRecordMetadataAndOffset.offsetAndMetadata.expireTimestamp match {
+                case OffsetCommitRequest.DEFAULT_EXPIRATION_TIMESTAMP =>
+                  // current version with no per partition retention
+                  currentTimestamp - currentStateTimestamp >= offsetRetentionMs
+                case expireTimestamp =>
+                  // older versions with explicit expire_timestamp field => old expiration semantics is used
+                  currentTimestamp >= expireTimestamp
+              }
+            }
+        }.toMap
+
+      case Some(protocol) =>
+        // there are active consumers in the group =>
+        // expire offsets of partitions the group is no longer subscribed to, assuming retention period
+        // has passed since their last commit
+        val subscribedTopics = allMemberMetadata.flatMap { memberMetadata =>
+          memberMetadata.supportedProtocols.flatMap { supportedProtocol =>
+            ConsumerProtocol.deserializeSubscription(ByteBuffer.wrap(supportedProtocol._2)).topics().asScala.toSet
+          }
+        }.toSet
+
+        offsets.filter { case (topicPartition, commitRecordMetadataAndOffset) =>
+          !subscribedTopics.contains(topicPartition.topic()) &&
+            !pendingOffsetCommits.contains(topicPartition) &&
+            currentTimestamp - commitRecordMetadataAndOffset.offsetAndMetadata.commitTimestamp >= offsetRetentionMs }.toMap
+
+      case None =>
+        // protocolType is None => standalone (simple) consumer, that uses Kafka for offset storage only
+        // expire offsets that retention period has passed since their last commit
+        offsets.filter { case (topicPartition, commitRecordMetadataAndOffset) =>
+          commitRecordMetadataAndOffset.offsetAndMetadata.expireTimestamp match {
+            case OffsetCommitRequest.DEFAULT_EXPIRATION_TIMESTAMP =>
+              // current version with no per partition retention
+              currentTimestamp - commitRecordMetadataAndOffset.offsetAndMetadata.commitTimestamp >= offsetRetentionMs
+            case expireTimestamp =>
+              // older versions with explicit expire_timestamp field => old expiration semantics is used
+              currentTimestamp >= expireTimestamp
+          }
+        }.toMap
+    }
+
+    System.out.println(s"${System.currentTimeMillis()} - Expired offsets from group '$groupId': ${expiredOffsets.keySet}")
+
     offsets --= expiredOffsets.keySet
-    expiredOffsets.toMap
+    expiredOffsets.map {
+      case (topicPartition, commitRecordOffsetAndMetadata) =>
+        (topicPartition, commitRecordOffsetAndMetadata.offsetAndMetadata)
+    }
   }
 
   def allOffsets = offsets.map { case (topicPartition, commitRecordMetadataAndOffset) =>

@@ -111,15 +111,22 @@ public class OffsetCommitRequest extends AbstractRequest {
      */
     private static final Schema OFFSET_COMMIT_REQUEST_V4 = OFFSET_COMMIT_REQUEST_V3;
 
+    private static final Schema OFFSET_COMMIT_REQUEST_V5 = new Schema(
+            GROUP_ID,
+            GENERATION_ID,
+            MEMBER_ID,
+            new Field(TOPICS_KEY_NAME, new ArrayOf(OFFSET_COMMIT_REQUEST_TOPIC_V2), "Topics to commit offsets."));
+
     public static Schema[] schemaVersions() {
         return new Schema[] {OFFSET_COMMIT_REQUEST_V0, OFFSET_COMMIT_REQUEST_V1, OFFSET_COMMIT_REQUEST_V2,
-            OFFSET_COMMIT_REQUEST_V3, OFFSET_COMMIT_REQUEST_V4};
+            OFFSET_COMMIT_REQUEST_V3, OFFSET_COMMIT_REQUEST_V4, OFFSET_COMMIT_REQUEST_V5};
     }
 
     // default values for the current version
     public static final int DEFAULT_GENERATION_ID = -1;
     public static final String DEFAULT_MEMBER_ID = "";
     public static final long DEFAULT_RETENTION_TIME = -1L;
+    public static final long DEFAULT_EXPIRATION_TIMESTAMP = -1;
 
     // default values for old versions,
     // will be removed after these versions are deprecated
@@ -199,7 +206,8 @@ public class OffsetCommitRequest extends AbstractRequest {
                 case 2:
                 case 3:
                 case 4:
-                    long retentionTime = version == 1 ? DEFAULT_RETENTION_TIME : this.retentionTime;
+                case 5:
+                    long retentionTime = version == 1 || version == 5 ? DEFAULT_RETENTION_TIME : this.retentionTime;
                     return new OffsetCommitRequest(groupId, generationId, memberId, retentionTime, offsetData, version);
                 default:
                     throw new UnsupportedVersionException("Unsupported version " + version);
@@ -316,6 +324,7 @@ public class OffsetCommitRequest extends AbstractRequest {
                 return new OffsetCommitResponse(responseData);
             case 3:
             case 4:
+            case 5:
                 return new OffsetCommitResponse(throttleTimeMs, responseData);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
