@@ -28,6 +28,7 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
@@ -55,6 +56,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.ExecutionException;
 
 @Category({IntegrationTest.class})
 public class GlobalKTableIntegrationTest {
@@ -110,6 +112,7 @@ public class GlobalKTableIntegrationTest {
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         streamsConfiguration.put(IntegrationTestUtils.INTERNAL_LEAVE_GROUP_ON_CLOSE, true);
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
+        streamsConfiguration.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, "exactly_once");
         globalTable = builder.globalTable(globalTableTopic, Consumed.with(Serdes.Long(), Serdes.String()),
                                           Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as(globalStore)
                                                   .withKeySerde(Serdes.Long())
@@ -233,6 +236,7 @@ public class GlobalKTableIntegrationTest {
     @Test
     public void shouldRestoreTransactionalMessages() throws Exception {
         produceInitialGlobalTableValues(true);
+
         startStreams();
 
         final Map<Long, String> expected = new HashMap<>();
@@ -261,6 +265,12 @@ public class GlobalKTableIntegrationTest {
         }, 30000L, "waiting for initial values");
         System.out.println("no failed test");
     }
+    
+    @Test(timeout = 10000)
+    public void shouldRestoreAbortedMessages() throws ExecutionException, InterruptedException {
+        produceAbortedMessages();
+        startStreams();        
+    }
 
     private void createTopics() throws InterruptedException {
         streamTopic = "stream-" + testNo;
@@ -268,9 +278,10 @@ public class GlobalKTableIntegrationTest {
         CLUSTER.createTopics(streamTopic);
         CLUSTER.createTopic(globalTableTopic, 2, 1);
     }
-
+    
     private void startStreams() {
-        kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
+        Topology toplogy = builder.build();
+        kafkaStreams = new KafkaStreams(toplogy, streamsConfiguration);
         kafkaStreams.start();
     }
 
@@ -291,6 +302,25 @@ public class GlobalKTableIntegrationTest {
                 mockTime);
     }
 
+    private void produceAbortedMessages() throws ExecutionException, InterruptedException {
+        Properties properties = new Properties();
+        properties.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "someid");
+        properties.put(ProducerConfig.RETRIES_CONFIG, 1);
+        IntegrationTestUtils.produceAbortedKeyValuesSynchronouslyWithTimestamp(
+                globalTableTopic, Arrays.asList(
+                        new KeyValue<>(1L, "A"),
+                        new KeyValue<>(2L, "B"),
+                        new KeyValue<>(3L, "C"),
+                        new KeyValue<>(4L, "D")
+                        ), 
+                TestUtils.producerConfig(
+                                CLUSTER.bootstrapServers(),
+                                LongSerializer.class,
+                                StringSerializer.class,
+                                properties),
+                mockTime.milliseconds());
+    }
+
     private void produceInitialGlobalTableValues() throws Exception {
         produceInitialGlobalTableValues(false);
     }
@@ -307,7 +337,8 @@ public class GlobalKTableIntegrationTest {
                         new KeyValue<>(1L, "A"),
                         new KeyValue<>(2L, "B"),
                         new KeyValue<>(3L, "C"),
-                        new KeyValue<>(4L, "D")),
+                        new KeyValue<>(4L, "D")
+                        ),
                 TestUtils.producerConfig(
                         CLUSTER.bootstrapServers(),
                         LongSerializer.class,
