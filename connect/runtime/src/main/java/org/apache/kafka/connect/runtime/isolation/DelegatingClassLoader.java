@@ -49,34 +49,36 @@ import java.util.List;
 import java.util.Map;
 import java.util.ServiceLoader;
 import java.util.Set;
-import java.util.SortedMap;
 import java.util.SortedSet;
-import java.util.TreeMap;
-import java.util.TreeSet;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ConcurrentNavigableMap;
+import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.ConcurrentSkipListSet;
 
 public class DelegatingClassLoader extends URLClassLoader {
     private static final Logger log = LoggerFactory.getLogger(DelegatingClassLoader.class);
     private static final String CLASSPATH_NAME = "classpath";
 
-    private final Map<String, SortedMap<PluginDesc<?>, ClassLoader>> pluginLoaders;
+    private final ConcurrentMap<String, ConcurrentNavigableMap<PluginDesc<?>, ClassLoader>> pluginLoaders;
     private final Map<String, String> aliases;
     private final SortedSet<PluginDesc<Connector>> connectors;
     private final SortedSet<PluginDesc<Converter>> converters;
     private final SortedSet<PluginDesc<HeaderConverter>> headerConverters;
     private final SortedSet<PluginDesc<Transformation>> transformations;
     private final List<String> pluginPaths;
-    private final Map<Path, PluginClassLoader> activePaths;
+    private final ConcurrentMap<Path, PluginClassLoader> activePaths;
 
     public DelegatingClassLoader(List<String> pluginPaths, ClassLoader parent) {
         super(new URL[0], parent);
         this.pluginPaths = pluginPaths;
-        this.pluginLoaders = new HashMap<>();
+        this.pluginLoaders = new ConcurrentHashMap<>();
         this.aliases = new HashMap<>();
-        this.activePaths = new HashMap<>();
-        this.connectors = new TreeSet<>();
-        this.converters = new TreeSet<>();
-        this.headerConverters = new TreeSet<>();
-        this.transformations = new TreeSet<>();
+        this.activePaths = new ConcurrentHashMap<>();
+        this.connectors = new ConcurrentSkipListSet<>();
+        this.converters = new ConcurrentSkipListSet<>();
+        this.headerConverters = new ConcurrentSkipListSet<>();
+        this.transformations = new ConcurrentSkipListSet<>();
     }
 
     public DelegatingClassLoader(List<String> pluginPaths) {
@@ -105,10 +107,8 @@ public class DelegatingClassLoader extends URLClassLoader {
 
     public ClassLoader connectorLoader(String connectorClassOrAlias) {
         log.debug("Getting plugin class loader for connector: '{}'", connectorClassOrAlias);
-        String fullName = aliases.containsKey(connectorClassOrAlias)
-                          ? aliases.get(connectorClassOrAlias)
-                          : connectorClassOrAlias;
-        SortedMap<PluginDesc<?>, ClassLoader> inner = pluginLoaders.get(fullName);
+        String fullName = getFullName(connectorClassOrAlias);
+        ConcurrentNavigableMap<PluginDesc<?>, ClassLoader> inner = pluginLoaders.get(fullName);
         if (inner == null) {
             log.error(
                     "Plugin class loader for connector: '{}' was not found. Returning: {}",
@@ -117,7 +117,7 @@ public class DelegatingClassLoader extends URLClassLoader {
             );
             return this;
         }
-        return inner.get(inner.lastKey());
+        return inner.lastEntry().getValue();
     }
 
     private static PluginClassLoader newPluginClassLoader(
@@ -138,24 +138,53 @@ public class DelegatingClassLoader extends URLClassLoader {
     private <T> void addPlugins(Collection<PluginDesc<T>> plugins, ClassLoader loader) {
         for (PluginDesc<T> plugin : plugins) {
             String pluginClassName = plugin.className();
-            SortedMap<PluginDesc<?>, ClassLoader> inner = pluginLoaders.get(pluginClassName);
-            if (inner == null) {
-                inner = new TreeMap<>();
-                pluginLoaders.put(pluginClassName, inner);
+            // TODO: Once migration to Java 8 is complete, use a Supplier<TreeMap> to avoid
+            // unnecessarily creating a new map here each time this method is called; right now we
+            // need to create one in order to use the atomic ConcurrentMap.putIfAbsent(...) method
+            ConcurrentNavigableMap<PluginDesc<?>, ClassLoader> inner = new ConcurrentSkipListMap<>();
+            ConcurrentNavigableMap<PluginDesc<?>, ClassLoader> priorInner =
+                pluginLoaders.putIfAbsent(pluginClassName, inner);
+            if (priorInner == null) {
                 // TODO: once versioning is enabled this line should be moved outside this if branch
                 log.info("Added plugin '{}'", pluginClassName);
+            } else {
+                inner = priorInner;
             }
             inner.put(plugin, loader);
         }
     }
 
     protected void initLoaders() {
+        List<Path> pluginPathDirectories = new ArrayList<>();
         for (String configPath : pluginPaths) {
             initPluginLoader(configPath);
+            Path pluginPath = Paths.get(configPath);
+            if (Files.isDirectory(pluginPath)) {
+                pluginPathDirectories.add(pluginPath);
+            }
         }
         // Finally add parent/system loader.
         initPluginLoader(CLASSPATH_NAME);
-        addAllAliases();
+        updateAliases();
+        if (!pluginPathDirectories.isEmpty()) {
+            registerFileSystemWatcher(pluginPathDirectories);
+        }
+    }
+
+    private void registerFileSystemWatcher(Iterable<Path> directories) {
+        PluginPathDirectoryListener pluginPathDirectoryListener;
+        try {
+            pluginPathDirectoryListener = new PluginPathDirectoryListener(new PluginReceiver(), directories);
+        } catch (IOException e) {
+            log.warn(
+                "Unable to initialize file system watch service; plugins will not be loaded dynamically",
+                e
+            );
+            return;
+        }
+        Thread pluginDirectoryListenerThread = new Thread(pluginPathDirectoryListener);
+        pluginDirectoryListenerThread.setDaemon(true);
+        pluginDirectoryListenerThread.start();
     }
 
     private void initPluginLoader(String path) {
@@ -229,7 +258,6 @@ public class DelegatingClassLoader extends URLClassLoader {
             addPlugins(plugins.transformations(), loader);
             transformations.addAll(plugins.transformations());
         }
-
         loadJdbcDrivers(loader);
     }
 
@@ -318,10 +346,10 @@ public class DelegatingClassLoader extends URLClassLoader {
             return super.loadClass(name, resolve);
         }
 
-        String fullName = aliases.containsKey(name) ? aliases.get(name) : name;
-        SortedMap<PluginDesc<?>, ClassLoader> inner = pluginLoaders.get(fullName);
+        String fullName = getFullName(name);
+        ConcurrentNavigableMap<PluginDesc<?>, ClassLoader> inner = pluginLoaders.get(fullName);
         if (inner != null) {
-            ClassLoader pluginLoader = inner.get(inner.lastKey());
+            ClassLoader pluginLoader = inner.lastEntry().getValue();
             log.trace("Retrieving loaded class '{}' from '{}'", fullName, pluginLoader);
             return pluginLoader instanceof PluginClassLoader
                    ? ((PluginClassLoader) pluginLoader).loadClass(fullName, resolve)
@@ -331,25 +359,47 @@ public class DelegatingClassLoader extends URLClassLoader {
         return super.loadClass(fullName, resolve);
     }
 
-    private void addAllAliases() {
-        addAliases(connectors);
-        addAliases(converters);
-        addAliases(headerConverters);
-        addAliases(transformations);
+    private String getFullName(String name) {
+        String aliasLookup;
+        synchronized (aliases) {
+            aliasLookup = aliases.get(name);
+        }
+        return aliasLookup != null ? aliasLookup : name;
     }
 
-    private <S> void addAliases(Collection<PluginDesc<S>> plugins) {
+    // Could iterate over existing aliases and detect conflict with newly-added aliases, but simply
+    // recalculating new aliases from scratch is easier to implement and probably won't create a
+    // performance bottleneck
+    private void updateAliases() {
+        Map<String, String> newAliases = getAllAliases();
+        synchronized (aliases) {
+            aliases.clear();
+            aliases.putAll(newAliases);
+        }
+    }
+
+    private Map<String, String> getAllAliases() {
+        Map<String, String> result = new HashMap<>();
+        result.putAll(getAliases(connectors));
+        result.putAll(getAliases(converters));
+        result.putAll(getAliases(headerConverters));
+        result.putAll(getAliases(transformations));
+        return result;
+    }
+
+    private <S> Map<String, String> getAliases(Collection<PluginDesc<S>> plugins) {
+        Map<String, String> result = new HashMap<>();
         for (PluginDesc<S> plugin : plugins) {
             if (PluginUtils.isAliasUnique(plugin, plugins)) {
                 String simple = PluginUtils.simpleName(plugin);
                 String pruned = PluginUtils.prunedName(plugin);
-                aliases.put(simple, plugin.className());
+                result.put(simple, plugin.className());
                 if (simple.equals(pruned)) {
-                    log.info("Added alias '{}' to plugin '{}'", simple, plugin.className());
+                    log.info("Adding alias '{}' to plugin '{}'", simple, plugin.className());
                 } else {
-                    aliases.put(pruned, plugin.className());
+                    result.put(pruned, plugin.className());
                     log.info(
-                            "Added aliases '{}' and '{}' to plugin '{}'",
+                            "Adding aliases '{}' and '{}' to plugin '{}'",
                             simple,
                             pruned,
                             plugin.className()
@@ -357,6 +407,7 @@ public class DelegatingClassLoader extends URLClassLoader {
                 }
             }
         }
+        return result;
     }
 
     private static class InternalReflections extends Reflections {
@@ -377,6 +428,39 @@ public class DelegatingClassLoader extends URLClassLoader {
                     log.warn("could not create Vfs.Dir from url. ignoring the exception and continuing", e);
                 }
             }
+        }
+    }
+
+    private class PluginReceiver implements PluginPathDirectoryListener.PluginReceiver {
+        @Override
+        public void onCreate(Path pluginLocation) {
+            try {
+                log.info("Entry {} on plugin path created; adding its plugins", pluginLocation);
+                registerPlugin(pluginLocation);
+                updateAliases();
+            } catch (IOException e) {
+                log.error(
+                    "Could not get listing for newly-discovered plugin path: {}. Ignoring.",
+                    pluginLocation,
+                    e
+                );
+            } catch (InstantiationException | IllegalAccessException e) {
+                log.error(
+                    "Could not instantiate newly-discovered plugins in: {}. Ignoring: {}",
+                    pluginLocation,
+                    e
+                );
+            }
+        }
+
+        @Override
+        public void onDelete(Path pluginLocation) {
+            // On some operating systems, plugins will actually be available even after the
+            // directory containing their class files has been deleted.
+            log.warn(
+                "Entry {} on plugin path removed; plugins contained contained in it may no longer be accessible",
+                pluginLocation
+            );
         }
     }
 }

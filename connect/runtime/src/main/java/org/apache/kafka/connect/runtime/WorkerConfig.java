@@ -246,7 +246,7 @@ public class WorkerConfig extends AbstractConfig {
 
     public static List<String> pluginLocations(Map<String, String> props) {
         String locationList = props.get(WorkerConfig.PLUGIN_PATH_CONFIG);
-        return locationList == null
+        return locationList == null || locationList.trim().isEmpty()
                          ? new ArrayList<String>()
                          : Arrays.asList(locationList.trim().split("\\s*,\\s*", -1));
     }

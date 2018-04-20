@@ -39,7 +39,6 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -50,7 +49,6 @@ public class ConnectorPluginsResource {
 
     private static final String ALIAS_SUFFIX = "Connector";
     private final Herder herder;
-    private final List<ConnectorPluginInfo> connectorPlugins;
 
     private static final List<Class<? extends Connector>> CONNECTOR_EXCLUDES = Arrays.asList(
             VerifiableSourceConnector.class, VerifiableSinkConnector.class,
@@ -60,7 +58,6 @@ public class ConnectorPluginsResource {
 
     public ConnectorPluginsResource(Herder herder) {
         this.herder = herder;
-        this.connectorPlugins = new ArrayList<>();
     }
 
     @PUT
@@ -84,20 +81,16 @@ public class ConnectorPluginsResource {
     @GET
     @Path("/")
     public List<ConnectorPluginInfo> listConnectorPlugins() {
-        return getConnectorPlugins();
-    }
-
-    // TODO: improve once plugins are allowed to be added/removed during runtime.
-    private synchronized List<ConnectorPluginInfo> getConnectorPlugins() {
-        if (connectorPlugins.isEmpty()) {
-            for (PluginDesc<Connector> plugin : herder.plugins().connectors()) {
-                if (!CONNECTOR_EXCLUDES.contains(plugin.pluginClass())) {
-                    connectorPlugins.add(new ConnectorPluginInfo(plugin));
-                }
+        List<ConnectorPluginInfo> connectorPlugins = new ArrayList<>();
+        // Plugins may be added/removed after startup, so always fetch the most up-to-date list
+        // This resource shouldn't be called too often, so performance probably isn't a huge concern
+        // anyways.
+        for (PluginDesc<Connector> plugin : herder.plugins().connectors()) {
+            if (!CONNECTOR_EXCLUDES.contains(plugin.pluginClass())) {
+                connectorPlugins.add(new ConnectorPluginInfo(plugin));
             }
         }
-
-        return Collections.unmodifiableList(connectorPlugins);
+        return connectorPlugins;
     }
 
     private String normalizedPluginName(String pluginName) {
