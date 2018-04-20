@@ -48,17 +48,6 @@ public interface Processor<K, V> {
     void process(K key, V value);
 
     /**
-     * Perform any periodic operations, if this processor {@link ProcessorContext#schedule(long) schedule itself} with the context
-     * during {@link #init(ProcessorContext) initialization}.
-     *
-     * @deprecated Please use {@link Punctuator} functional interface instead.
-     * 
-     * @param timestamp the stream time when this method is being called
-     */
-    @Deprecated
-    void punctuate(long timestamp);
-
-    /**
      * Close this processor and clean up any resources. Be aware that {@link #close()} is called after an internal cleanup.
      * Thus, it is not possible to write anything to Kafka as underlying clients are already closed.
      * <p>

@@ -640,10 +640,6 @@ public class TopologyBuilderTest {
                 }
 
                 @Override
-                public void punctuate(long timestamp) {
-                }
-
-                @Override
                 public void close() {
                 }
             };

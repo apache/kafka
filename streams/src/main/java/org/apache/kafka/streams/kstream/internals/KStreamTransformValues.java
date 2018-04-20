@@ -177,14 +177,6 @@ public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V> 
             context.forward(key, valueTransformer.transform(key, value));
         }
 
-        @SuppressWarnings("deprecation")
-        @Override
-        public void punctuate(long timestamp) {
-            if (valueTransformer.punctuate(timestamp) != null) {
-                throw new StreamsException("ValueTransformer#punctuate must return null.");
-            }
-        }
-
         @Override
         public void close() {
             valueTransformer.close();

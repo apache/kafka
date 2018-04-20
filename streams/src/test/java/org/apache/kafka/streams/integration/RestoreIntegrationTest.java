@@ -106,12 +106,11 @@ public class RestoreIntegrationTest {
     }
 
     @After
-    public void shutdown() throws IOException {
+    public void shutdown() {
         if (kafkaStreams != null) {
             kafkaStreams.close(30, TimeUnit.SECONDS);
         }
     }
-
 
     @Test
     public void shouldRestoreState() throws ExecutionException, InterruptedException {
@@ -273,11 +272,6 @@ public class RestoreIntegrationTest {
                 store.put(key, value);
                 processorLatch.countDown();
             }
-        }
-
-        @Override
-        public void punctuate(final long timestamp) {
-
         }
 
         @Override

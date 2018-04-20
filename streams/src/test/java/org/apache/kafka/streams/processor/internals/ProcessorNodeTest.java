@@ -61,11 +61,6 @@ public class ProcessorNodeTest {
         }
 
         @Override
-        public void punctuate(final long timestamp) {
-            throw new RuntimeException();
-        }
-
-        @Override
         public void close() {
             throw new RuntimeException();
         }
@@ -79,11 +74,6 @@ public class ProcessorNodeTest {
 
         @Override
         public void process(final Object key, final Object value) {
-
-        }
-
-        @Override
-        public void punctuate(final long timestamp) {
 
         }
 

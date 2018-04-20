@@ -912,10 +912,6 @@ public class StreamThreadTest {
                     @Override
                     public void process(final Object key, final Object value) {}
 
-                    @SuppressWarnings("deprecation")
-                    @Override
-                    public void punctuate(final long timestamp) {}
-
                     @Override
                     public void close() {}
                 };

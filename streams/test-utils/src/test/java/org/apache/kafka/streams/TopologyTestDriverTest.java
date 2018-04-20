@@ -208,10 +208,6 @@ public class TopologyTestDriverTest {
             context.forward(key, value);
         }
 
-        @SuppressWarnings("deprecation")
-        @Override
-        public void punctuate(long timestamp) {} // deprecated
-
         @Override
         public void close() {
             closed = true;
@@ -840,9 +836,6 @@ public class TopologyTestDriverTest {
         }
 
         @Override
-        public void punctuate(final long timestamp) {}
-
-        @Override
         public void close() {}
     }
 
@@ -868,9 +861,6 @@ public class TopologyTestDriverTest {
                         public void process(final String key, final Long value) {
                             store.put(key, value);
                         }
-
-                        @Override
-                        public void punctuate(final long timestamp) {}
 
                         @Override
                         public void close() {}
