@@ -66,9 +66,14 @@ class PluginPathDirectoryListener implements Runnable {
         // Have to track which entries in the plugin path directory are directories; after a
         // file/directory is deleted, it's impossible to determine whether or not it used to be a
         // directory.
-        for (File file : pluginPathDirectory.toFile().listFiles()) {
-            if (file.isDirectory()) {
-                pluginDirectories.add(file.toPath().toAbsolutePath());
+        File[] files = pluginPathDirectory.toFile().listFiles();
+        // Should always be true, given the check at the beginning of the method. Still, check for
+        // null here just to be safe.
+        if (files != null) {
+            for (File file : files) {
+                if (file.isDirectory()) {
+                    pluginDirectories.add(file.toPath().toAbsolutePath());
+                }
             }
         }
     }
