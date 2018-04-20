@@ -44,9 +44,11 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     private final Map<Sensor, Sensor> parentSensors;
     private final Deque<String> ownedSensors = new LinkedList<>();
     private final Sensor skippedRecordsSensor;
+    private final String threadName;
 
     public StreamsMetricsImpl(final Metrics metrics, final String threadName) {
         Objects.requireNonNull(metrics, "Metrics cannot be null");
+        this.threadName = threadName;
 
         this.metrics = metrics;
         this.tags = StreamsMetricsConventions.threadLevelTags(threadName, Collections.<String, String>emptyMap());
@@ -60,6 +62,10 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
     public final Metrics registry() {
         return metrics;
+    }
+
+    public String threadName() {
+        return threadName;
     }
 
     protected final Map<String, String> tags() {

@@ -36,4 +36,11 @@ public final class StreamsMetricsConventions {
             return newTags;
         }
     }
+
+    public static String cacheLevelSensorName(final String threadName,
+                                              final String taskName,
+                                              final String cacheName,
+                                              final String sensorName) {
+        return threadName + "." + taskName + "." + cacheName + "." + sensorName;
+    }
 }
