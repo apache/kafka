@@ -847,7 +847,7 @@ public class StreamPartitionAssignorTest {
         configurePartitionAssignor(Collections.singletonMap(StreamsConfig.APPLICATION_SERVER_CONFIG, (Object) userEndPoint));
         final PartitionAssignor.Subscription subscription = partitionAssignor.subscription(Utils.mkSet("input"));
         final SubscriptionInfo subscriptionInfo = SubscriptionInfo.decode(subscription.userData());
-        assertEquals("localhost:8080", subscriptionInfo.userEndPoint());
+        assertEquals("localhost:8080", subscriptionInfo.userEndPoint);
     }
 
     @Test

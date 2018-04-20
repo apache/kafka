@@ -29,7 +29,6 @@ public class ClientState {
     private final Set<TaskId> prevAssignedTasks;
 
     private int capacity;
-    private int numberOfStateStores;
 
 
     public ClientState() {
@@ -38,7 +37,6 @@ public class ClientState {
 
     ClientState(final int capacity) {
         this(new HashSet<TaskId>(), new HashSet<TaskId>(), new HashSet<TaskId>(), new HashSet<TaskId>(), new HashSet<TaskId>(), capacity);
-        this.numberOfStateStores = 0;
     }
 
     private ClientState(Set<TaskId> activeTasks, Set<TaskId> standbyTasks, Set<TaskId> assignedTasks, Set<TaskId> prevActiveTasks, Set<TaskId> prevAssignedTasks, int capacity) {
@@ -62,7 +60,6 @@ public class ClientState {
             standbyTasks.add(taskId);
         }
 
-        numberOfStateStores += taskId.numberOfStateStores();
         assignedTasks.add(taskId);
     }
 
@@ -119,8 +116,8 @@ public class ClientState {
             throw new IllegalStateException("Capacity of other ClientState must be greater than 0");
         }
 
-        final double otherLoad =  ((double) other.assignedTaskCount() + (double) 0.5 * numberOfStateStores) / other.capacity;
-        final double thisLoad =  ((double) assignedTaskCount() + (double) 0.5 * numberOfStateStores) / capacity;
+        final double otherLoad = (double) other.assignedTaskCount() / other.capacity;
+        final double thisLoad = (double) assignedTaskCount() / capacity;
 
         if (thisLoad < otherLoad)
             return true;

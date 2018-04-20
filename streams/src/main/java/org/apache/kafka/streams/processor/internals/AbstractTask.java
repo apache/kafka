@@ -68,7 +68,6 @@ public abstract class AbstractTask implements Task {
                  final StateDirectory stateDirectory,
                  final StreamsConfig config) {
         this.id = id;
-        this.id.setNumberOfStateStores(topology.stateStores().size());
         this.applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         this.partitions = new HashSet<>(partitions);
         this.topology = topology;

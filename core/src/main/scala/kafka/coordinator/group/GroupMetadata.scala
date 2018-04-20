@@ -421,10 +421,9 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   def hasPendingOffsetCommitsFromProducer(producerId: Long) =
     pendingTransactionalOffsetCommits.contains(producerId)
 
-  def removeAllOffsets(): immutable.Map[TopicPartition, OffsetAndMetadata] = removeOffsets(offsets.keySet.toSeq)
-
   def removeOffsets(topicPartitions: Seq[TopicPartition]): immutable.Map[TopicPartition, OffsetAndMetadata] = {
     topicPartitions.flatMap { topicPartition =>
+
       pendingOffsetCommits.remove(topicPartition)
       pendingTransactionalOffsetCommits.foreach { case (_, pendingOffsets) =>
         pendingOffsets.remove(topicPartition)

@@ -32,13 +32,10 @@ public class TaskId implements Comparable<TaskId> {
     public final int topicGroupId;
     /** The ID of the partition. */
     public final int partition;
-    /** The number of State Stores in the task. */
-    private int numberOfStateStores;
 
     public TaskId(int topicGroupId, int partition) {
         this.topicGroupId = topicGroupId;
         this.partition = partition;
-        this.setNumberOfStateStores(0);
     }
 
     public String toString() {
@@ -77,20 +74,13 @@ public class TaskId implements Comparable<TaskId> {
         return new TaskId(in.readInt(), in.readInt());
     }
 
-    public void writeTo(ByteBuffer buf, final int version) {
+    public void writeTo(ByteBuffer buf) {
         buf.putInt(topicGroupId);
         buf.putInt(partition);
-        if (version == 2) {
-            buf.putInt(numberOfStateStores);
-        }
     }
 
-    public static TaskId readFrom(ByteBuffer buf, final int version) {
-        final TaskId result = new TaskId(buf.getInt(), buf.getInt());
-        if (version == 2) {
-            result.setNumberOfStateStores(buf.getInt());
-        }
-        return result;
+    public static TaskId readFrom(ByteBuffer buf) {
+        return new TaskId(buf.getInt(), buf.getInt());
     }
 
     @Override
@@ -120,13 +110,5 @@ public class TaskId implements Comparable<TaskId> {
                     (this.partition < other.partition ? -1 :
                         (this.partition > other.partition ? 1 :
                             0)));
-    }
-
-    public int numberOfStateStores() {
-        return numberOfStateStores;
-    }
-
-    public void setNumberOfStateStores(int numberOfStateStores) {
-        this.numberOfStateStores = numberOfStateStores;
     }
 }

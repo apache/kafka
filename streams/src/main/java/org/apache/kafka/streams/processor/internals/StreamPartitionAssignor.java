@@ -121,8 +121,8 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
         void addConsumer(final String consumerMemberId, final SubscriptionInfo info) {
             consumers.add(consumerMemberId);
-            state.addPreviousActiveTasks(info.prevTasks());
-            state.addPreviousStandbyTasks(info.standbyTasks());
+            state.addPreviousActiveTasks(info.prevTasks);
+            state.addPreviousStandbyTasks(info.standbyTasks);
             state.incrementCapacity();
         }
 
@@ -288,11 +288,11 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             SubscriptionInfo info = SubscriptionInfo.decode(subscription.userData());
 
             // create the new client metadata if necessary
-            ClientMetadata clientMetadata = clientsMetadata.get(info.processId());
+            ClientMetadata clientMetadata = clientsMetadata.get(info.processId);
 
             if (clientMetadata == null) {
-                clientMetadata = new ClientMetadata(info.userEndPoint());
-                clientsMetadata.put(info.processId(), clientMetadata);
+                clientMetadata = new ClientMetadata(info.userEndPoint);
+                clientsMetadata.put(info.processId, clientMetadata);
             }
 
             // add the consumer to the client
