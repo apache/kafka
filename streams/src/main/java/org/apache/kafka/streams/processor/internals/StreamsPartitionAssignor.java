@@ -51,6 +51,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
@@ -182,6 +183,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
 
     private TaskManager taskManager;
     private PartitionGrouper partitionGrouper;
+    private AtomicBoolean versionProbingFlag;
 
     protected int usedSubscriptionMetadataVersion = SubscriptionInfo.LATEST_SUPPORTED_VERSION;
 
@@ -245,6 +247,21 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         }
 
         taskManager = (TaskManager) o;
+
+        final Object o2 = configs.get(StreamsConfig.InternalConfig.VERSION_PROBING_FLAG);
+        if (o2 == null) {
+            final KafkaException fatalException = new KafkaException("VersionProbingFlag is not specified");
+            log.error(fatalException.getMessage(), fatalException);
+            throw fatalException;
+        }
+
+        if (!(o2 instanceof AtomicBoolean)) {
+            final KafkaException fatalException = new KafkaException(String.format("%s is not an instance of %s", o2.getClass().getName(), AtomicBoolean.class.getName()));
+            log.error(fatalException.getMessage(), fatalException);
+            throw fatalException;
+        }
+
+        versionProbingFlag = (AtomicBoolean) o2;
 
         numStandbyReplicas = streamsConfig.getInt(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG);
 
@@ -673,7 +690,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                 usedSubscriptionMetadataVersion,
                 receivedAssignmentMetadataVersion);
             usedSubscriptionMetadataVersion = receivedAssignmentMetadataVersion;
-            taskManager.versionProbingFlag = true;
+            versionProbingFlag.set(true);
             return;
         }
 

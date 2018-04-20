@@ -64,7 +64,6 @@ public class TaskManager {
     private Cluster cluster;
     private Map<TaskId, Set<TopicPartition>> assignedActiveTasks;
     private Map<TaskId, Set<TopicPartition>> assignedStandbyTasks;
-    boolean versionProbingFlag = false;
 
     private Consumer<byte[], byte[]> consumer;
 
@@ -96,9 +95,6 @@ public class TaskManager {
     }
 
     void createTasks(final Collection<TopicPartition> assignment) {
-        if (versionProbingFlag) {
-            return;
-        }
         if (consumer == null) {
             throw new IllegalStateException(logPrefix + "consumer has not been initialized while adding stream tasks. This should not happen.");
         }
@@ -316,10 +312,6 @@ public class TaskManager {
      * @throws TaskMigratedException if the task producer got fenced or consumer discovered changelog offset changes (EOS only)
      */
     boolean updateNewAndRestoringTasks() {
-        if (versionProbingFlag) {
-            return false;
-        }
-
         active.initializeNewTasks();
         standby.initializeNewTasks();
 
