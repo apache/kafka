@@ -64,7 +64,7 @@ public class TaskManager {
     private Cluster cluster;
     private Map<TaskId, Set<TopicPartition>> assignedActiveTasks;
     private Map<TaskId, Set<TopicPartition>> assignedStandbyTasks;
-    public boolean versionProbingFlag = false;
+    boolean versionProbingFlag = false;
 
     private Consumer<byte[], byte[]> consumer;
 
