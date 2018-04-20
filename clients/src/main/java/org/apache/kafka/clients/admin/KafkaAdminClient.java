@@ -2309,6 +2309,10 @@ public class KafkaAdminClient extends AdminClient {
             }
         }
 
+        final long startMill = time.milliseconds();
+        final long totalTimeoutMs = calcDeadlineMs(startMill, options.timeoutMs);
+        Map<String, Node> coordinators = new ConsumerGroupCoordinatorNodeProvider(totalTimeoutMs, groupIds).provide();
+
         // TODO: KAFKA-6788, we should consider grouping the request per coordinator and send one request with a list of
         // all consumer groups this coordinator host
         for (final Map.Entry<String, KafkaFutureImpl<ConsumerGroupDescription>> entry : futures.entrySet()) {
@@ -2321,7 +2325,7 @@ public class KafkaAdminClient extends AdminClient {
             final long nowDescribeConsumerGroups = time.milliseconds();
             final long deadline = calcDeadlineMs(nowDescribeConsumerGroups, options.timeoutMs());
 
-            Node coordinator = new ConsumerGroupCoordinatorNodeProvider(deadline, Collections.singleton(groupId)).provide().get(groupId);
+            Node coordinator = coordinators.get(groupId);
             int nodeId = coordinator == null ? -1 : coordinator.id(); // leave null-handling to the next NodeProvider
 
             runnable.call(new Call("describeConsumerGroups", deadline, new ConstantNodeIdProvider(nodeId)) {
@@ -2567,6 +2571,10 @@ public class KafkaAdminClient extends AdminClient {
             }
         }
 
+        final long startMill = time.milliseconds();
+        final long totalTimeoutMs = calcDeadlineMs(startMill, options.timeoutMs);
+        Map<String, Node> coordinators = new ConsumerGroupCoordinatorNodeProvider(totalTimeoutMs, groupIds).provide();
+
         // TODO: KAFKA-6788, we should consider grouping the request per coordinator and send one request with a list of
         // all consumer groups this coordinator host
         for (final String groupId : groupIds) {
@@ -2577,7 +2585,7 @@ public class KafkaAdminClient extends AdminClient {
             final long nowDeleteConsumerGroups = time.milliseconds();
             final long deadline = calcDeadlineMs(nowDeleteConsumerGroups, options.timeoutMs());
 
-            Node coordinator = new ConsumerGroupCoordinatorNodeProvider(deadline, Collections.singleton(groupId)).provide().get(groupId);
+            Node coordinator = coordinators.get(groupId);
             int nodeId = coordinator == null ? -1 : coordinator.id(); // leave null-handling to the next NodeProvider
 
             runnable.call(new Call("deleteConsumerGroups", deadline, new ConstantNodeIdProvider(nodeId)) {
