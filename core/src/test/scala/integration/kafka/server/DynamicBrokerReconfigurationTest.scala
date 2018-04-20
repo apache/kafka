@@ -40,7 +40,7 @@ import kafka.zk.{ConfigEntityChangeNotificationZNode, ZooKeeperTestHarness}
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.ConfigEntry.{ConfigSource, ConfigSynonym}
 import org.apache.kafka.clients.admin._
-import org.apache.kafka.clients.consumer.{ConsumerRecord, ConsumerRecords, KafkaConsumer}
+import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord, ConsumerRecords, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.{ClusterResource, ClusterResourceListener, Reconfigurable, TopicPartition}
 import org.apache.kafka.common.config.{ConfigException, ConfigResource, SslConfigs}
@@ -820,8 +820,6 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     verifyTimeout(consumerFuture)
   }
 
-  // Verify listener with a new producer and consumer using that listener. Unique group id must be provided
-  // when a test invokes this multiple times to ensure there are no committed offsets for the group.
   private def verifyListener(securityProtocol: SecurityProtocol, saslMechanism: Option[String], groupId: String): Unit = {
     val mechanism = saslMechanism.getOrElse("")
     val retries = 1000 // since it may take time for metadata to be updated on all brokers
@@ -920,12 +918,14 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
   private def createConsumer(listenerName: String, securityProtocol: SecurityProtocol,
                              saslMechanism: String, group: String): KafkaConsumer[String, String] = {
     val bootstrapServers =  TestUtils.bootstrapServers(servers, new ListenerName(listenerName))
+    val consumerProps = clientProps(securityProtocol, saslMechanism)
+    consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
     val consumer = TestUtils.createNewConsumer(bootstrapServers, group,
       autoOffsetReset = "latest",
       securityProtocol = securityProtocol,
       keyDeserializer = new StringDeserializer,
       valueDeserializer = new StringDeserializer,
-      props = Some(clientProps(securityProtocol, saslMechanism)))
+      props = Some(consumerProps))
     consumer.subscribe(Collections.singleton(topic))
     awaitInitialPositions(consumer)
     consumers += consumer
