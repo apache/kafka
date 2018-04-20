@@ -53,6 +53,7 @@ import org.junit.Test;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
@@ -541,5 +542,50 @@ public class KStreamImplTest {
 
         assertEquals(Utils.mkList("A:aa", "B:bb", "C:cc", "D:dd", "E:ee", "F:ff", "G:gg", "H:hh"),
                      processorSupplier.processed);
+    }
+
+    @Test
+    public void shouldProcessFromSourceThatMatchPattern() {
+        final KStream<String, String> pattern2Source = builder.stream(Pattern.compile("topic-\\d"));
+
+        final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
+        pattern2Source.process(processorSupplier);
+
+        driver.setUp(builder);
+        driver.setTime(0L);
+
+        driver.process("topic-3", "A", "aa");
+        driver.process("topic-4", "B", "bb");
+        driver.process("topic-5", "C", "cc");
+        driver.process("topic-6", "D", "dd");
+        driver.process("topic-7", "E", "ee");
+
+        assertEquals(Utils.mkList("A:aa", "B:bb", "C:cc", "D:dd", "E:ee"),
+                processorSupplier.processed);
+    }
+
+    @Test
+    public void shouldProcessFromSourcesThatMatchMultiplePattern() {
+        final String topic3 = "topic-without-pattern";
+
+        final KStream<String, String> pattern2Source1 = builder.stream(Pattern.compile("topic-\\d"));
+        final KStream<String, String> pattern2Source2 = builder.stream(Pattern.compile("topic-[A-Z]"));
+        final KStream<String, String> source3 = builder.stream(topic3);
+        final KStream<String, String> merged = pattern2Source1.merge(pattern2Source2).merge(source3);
+
+        final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
+        merged.process(processorSupplier);
+
+        driver.setUp(builder);
+        driver.setTime(0L);
+
+        driver.process("topic-3", "A", "aa");
+        driver.process("topic-4", "B", "bb");
+        driver.process("topic-A", "C", "cc");
+        driver.process("topic-Z", "D", "dd");
+        driver.process(topic3, "E", "ee");
+
+        assertEquals(Utils.mkList("A:aa", "B:bb", "C:cc", "D:dd", "E:ee"),
+                processorSupplier.processed);
     }
 }

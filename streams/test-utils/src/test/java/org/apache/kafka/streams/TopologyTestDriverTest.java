@@ -28,6 +28,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
@@ -54,6 +55,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.junit.Assert.assertEquals;
@@ -902,11 +904,11 @@ public class TopologyTestDriverTest {
             );
         }
     }
-    
+
     @Test
     public void shouldFeedStoreFromGlobalKTable() {
         final StreamsBuilder builder = new StreamsBuilder();
-        builder.globalTable("topic",  
+        builder.globalTable("topic",
             Consumed.with(Serdes.String(), Serdes.String()),
             Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("globalStore"));
         try (final TopologyTestDriver testDriver = new TopologyTestDriver(builder.build(), config)) {
@@ -917,6 +919,100 @@ public class TopologyTestDriverTest {
             testDriver.pipeInput(recordFactory.create("topic", "k1", "value1"));
             // we expect to have both in the global store, the one from pipeInput and the one from the producer
             Assert.assertEquals("value1", globalStore.get("k1"));
+        }
+    }
+
+    private Topology setupMultipleSourcesPatternTopology(final Pattern... sourceTopicPatternNames) {
+        final Topology topology = new Topology();
+
+        final String[] processorNames = new String[sourceTopicPatternNames.length];
+        int i = 0;
+        for (final Pattern sourceTopicPatternName : sourceTopicPatternNames) {
+            final String sourceName = sourceTopicPatternName + "-source";
+            final String processorName = sourceTopicPatternName + "-processor";
+            topology.addSource(sourceName, sourceTopicPatternName);
+            processorNames[i++] = processorName;
+            topology.addProcessor(processorName, new MockProcessorSupplier(), sourceName);
+        }
+        topology.addSink("sink-topic", SINK_TOPIC_1, processorNames);
+        return topology;
+    }
+
+    @Test
+    public void shouldProcessFromSourcesThatMatchMultiplePattern() {
+
+        final  Pattern pattern2Source1 = Pattern.compile("source-topic-\\d");
+        final  Pattern pattern2Source2 = Pattern.compile("source-topic-[A-Z]");
+        final  String consumerTopic2 = "source-topic-Z";
+
+        final ConsumerRecord<byte[], byte[]> consumerRecord2 = consumerRecordFactory.create(consumerTopic2, key2, value2, timestamp2);
+
+        testDriver = new TopologyTestDriver(setupMultipleSourcesPatternTopology(pattern2Source1, pattern2Source2), config);
+
+        final List<Record> processedRecords1 = mockProcessors.get(0).processedRecords;
+        final List<Record> processedRecords2 = mockProcessors.get(1).processedRecords;
+
+        testDriver.pipeInput(consumerRecord1);
+
+        assertEquals(1, processedRecords1.size());
+        assertEquals(0, processedRecords2.size());
+
+        final Record record1 = processedRecords1.get(0);
+        final Record expectedResult1 = new Record(consumerRecord1);
+        expectedResult1.offset = 0L;
+        assertThat(record1, equalTo(expectedResult1));
+
+        testDriver.pipeInput(consumerRecord2);
+
+        assertEquals(1, processedRecords1.size());
+        assertEquals(1, processedRecords2.size());
+
+        final Record record2 = processedRecords2.get(0);
+        final Record expectedResult2 = new Record(consumerRecord2);
+        expectedResult2.offset = 0L;
+        assertThat(record2, equalTo(expectedResult2));
+    }
+
+    @Test
+    public void shouldProcessFromSourceThatMatchPattern() {
+        final String sourceName = "source";
+        final Pattern pattern2Source1 = Pattern.compile("source-topic-\\d");
+
+        final Topology topology = new Topology();
+
+        topology.addSource(sourceName, pattern2Source1);
+        topology.addSink("sink", SINK_TOPIC_1, sourceName);
+
+        testDriver = new TopologyTestDriver(topology, config);
+        testDriver.pipeInput(consumerRecord1);
+
+        final ProducerRecord outputRecord = testDriver.readOutput(SINK_TOPIC_1);
+        assertEquals(key1, outputRecord.key());
+        assertEquals(value1, outputRecord.value());
+        assertEquals(SINK_TOPIC_1, outputRecord.topic());
+    }
+
+    @Test
+    public void shouldThrowPatternNotValidForTopicNameException() {
+        final String sourceName = "source";
+        final String pattern2Source1 = "source-topic-\\d";
+
+        final Topology topology = new Topology();
+
+        topology.addSource(sourceName, pattern2Source1);
+        topology.addSink("sink", SINK_TOPIC_1, sourceName);
+
+        testDriver = new TopologyTestDriver(topology, config);
+        try {
+            testDriver.pipeInput(consumerRecord1);
+        } catch (final TopologyException exception) {
+            String str =
+                    String.format(
+                            "Invalid topology: Topology add source of type String for topic: %s cannot contain regex pattern for " +
+                                    "input record topic: %s and hence cannot process the message.",
+                            pattern2Source1,
+                            SOURCE_TOPIC_1);
+            assertEquals(str, exception.getMessage());
         }
     }
 }
