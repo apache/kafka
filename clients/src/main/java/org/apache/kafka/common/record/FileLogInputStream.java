@@ -71,7 +71,8 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
 
         // V0 has the smallest overhead, stricter checking is done later
         if (size < LegacyRecord.RECORD_OVERHEAD_V0)
-            throw new CorruptRecordException(String.format("Record size is smaller than minimum record overhead (%d).", LegacyRecord.RECORD_OVERHEAD_V0));
+            throw new CorruptRecordException(String.format("Found record size %d smaller than minimum record overhead (%d) in file %s.",
+                    size, LegacyRecord.RECORD_OVERHEAD_V0, channel));
 
         if (position + LOG_OVERHEAD + size > end)
             return null;
