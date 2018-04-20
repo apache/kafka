@@ -321,22 +321,20 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      */
     // visible for testing
     void commit(final boolean startNewTransaction) {
+        final long startNs = time.nanoseconds();
         log.debug("Committing");
-        taskMetrics.metrics.measureLatencyNs(
-            time,
-            new Runnable() {
-                @Override
-                public void run() {
-                    flushState();
-                    if (!eosEnabled) {
-                        stateMgr.checkpoint(recordCollectorOffsets());
-                    }
-                    commitOffsets(startNewTransaction);
-                }
-            },
-            taskMetrics.taskCommitTimeSensor);
+
+        flushState();
+
+        if (!eosEnabled) {
+            stateMgr.checkpoint(recordCollectorOffsets());
+        }
+
+        commitOffsets(startNewTransaction);
 
         commitRequested = false;
+
+        taskMetrics.taskCommitTimeSensor.record(time.nanoseconds() - startNs);
     }
 
     @Override

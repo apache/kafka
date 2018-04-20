@@ -220,28 +220,6 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     }
 
     /**
-     * Helper function. Measure the latency of an action. This is equivalent to
-     * startTs = time.nanoseconds()
-     * action.run()
-     * endTs = time.nanoseconds()
-     * sensor.record(endTs - startTs)
-     *
-     * @param time   Time object.
-     * @param action Action to run.
-     * @param sensor Sensor to record value.
-     */
-    public void measureLatencyNs(final Time time, final Runnable action, final Sensor sensor) {
-        long startNs = -1;
-        if (sensor.shouldRecord()) {
-            startNs = time.nanoseconds();
-        }
-        action.run();
-        if (startNs != -1) {
-            recordLatency(sensor, startNs, time.nanoseconds());
-        }
-    }
-
-    /**
      * Deletes a sensor and its parents, if any
      */
     @Override
