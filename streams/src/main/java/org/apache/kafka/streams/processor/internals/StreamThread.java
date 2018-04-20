@@ -751,6 +751,7 @@ public class StreamThread extends Thread {
             try {
                 recordsProcessedBeforeCommit = runOnce(recordsProcessedBeforeCommit);
                 if (taskManager.versionProbingFlag) {
+                    log.info("Version probing detected. Triggering new rebalance.");
                     taskManager.versionProbingFlag = false;
                     enforceRebalance();
                 }
@@ -809,9 +810,6 @@ public class StreamThread extends Thread {
         if (records != null && !records.isEmpty() && taskManager.hasActiveRunningTasks()) {
             streamsMetrics.pollTimeSensor.record(computeLatency(), timerStartedMs);
             addRecordsToTasks(records);
-            if (taskManager.versionProbingFlag) {
-                return 0;
-            }
             final long totalProcessed = processAndMaybeCommit(recordsProcessedBeforeCommit);
             if (totalProcessed > 0) {
                 final long processLatency = computeLatency();

@@ -59,6 +59,10 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
 
     private final static int UNKNOWN = -1;
     public final static int NOT_AVAILABLE = -2;
+    private final static int VERSION_ONE = 1;
+    private final static int VERSION_TWO = 2;
+    private final static int VERSION_THREE = 3;
+    private final static int EARLIEST_PROBEABLE_VERSION = VERSION_THREE;
 
     private Logger log;
     private String logPrefix;
@@ -173,16 +177,24 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         }
     };
 
-    protected String userEndPoint;
+    private String userEndPoint;
     private int numStandbyReplicas;
 
-    protected TaskManager taskManager;
+    private TaskManager taskManager;
     private PartitionGrouper partitionGrouper;
 
     protected int usedSubscriptionMetadataVersion = SubscriptionInfo.LATEST_SUPPORTED_VERSION;
 
     private InternalTopicManager internalTopicManager;
     private CopartitionedTopicsValidator copartitionedTopicsValidator;
+
+    protected String userEndPoint() {
+        return userEndPoint;
+    }
+
+    protected TaskManager taskManger() {
+        return taskManager;
+    }
 
     /**
      * We need to have the PartitionAssignor and its StreamThread to be mutually accessible
@@ -204,7 +216,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
             switch (upgradeFrom) {
                 case StreamsConfig.UPGRADE_FROM_0100:
                     log.info("Downgrading metadata version from {} to 1 for upgrade from 0.10.0.x.", SubscriptionInfo.LATEST_SUPPORTED_VERSION);
-                    usedSubscriptionMetadataVersion = 1;
+                    usedSubscriptionMetadataVersion = VERSION_ONE;
                     break;
                 case StreamsConfig.UPGRADE_FROM_0101:
                 case StreamsConfig.UPGRADE_FROM_0102:
@@ -212,7 +224,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                 case StreamsConfig.UPGRADE_FROM_10:
                 case StreamsConfig.UPGRADE_FROM_11:
                     log.info("Downgrading metadata version from {} to 2 for upgrade from " + upgradeFrom + ".x.", SubscriptionInfo.LATEST_SUPPORTED_VERSION);
-                    usedSubscriptionMetadataVersion = 2;
+                    usedSubscriptionMetadataVersion = VERSION_TWO;
                     break;
                 default:
                     throw new IllegalArgumentException("Unknown configuration value for parameter 'upgrade.from': " + upgradeFrom);
@@ -315,7 +327,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         final Map<UUID, ClientMetadata> clientsMetadata = new HashMap<>();
 
         int minUserMetadataVersion = SubscriptionInfo.LATEST_SUPPORTED_VERSION;
-        int futureMetadataVersion = -1;
+        int futureMetadataVersion = UNKNOWN;
         for (final Map.Entry<String, Subscription> entry : subscriptions.entrySet()) {
             final String consumerId = entry.getKey();
             final Subscription subscription = entry.getValue();
@@ -342,8 +354,8 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
             clientMetadata.addConsumer(consumerId, info);
         }
 
-        if (futureMetadataVersion != -1) {
-            if (minUserMetadataVersion >= 3) {
+        if (futureMetadataVersion != UNKNOWN) {
+            if (minUserMetadataVersion >= EARLIEST_PROBEABLE_VERSION) {
                 log.info("Received a future (version probing) subscription (version: {}). Sending empty assignment back (with supported version {}).",
                     futureMetadataVersion,
                     SubscriptionInfo.LATEST_SUPPORTED_VERSION);
@@ -653,16 +665,16 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         final AssignmentInfo info = AssignmentInfo.decode(assignment.userData());
         final int receivedAssignmentMetadataVersion = info.version();
 
-        if (usedSubscriptionMetadataVersion > receivedAssignmentMetadataVersion) {
-            if (receivedAssignmentMetadataVersion >= 3) {
-                log.info("Sent a version {} subscription and got version {} assignment back (successful version probing). " +
-                         "Downgrading subscription metadata to received version and trigger new rebalance.",
-                    usedSubscriptionMetadataVersion,
-                    receivedAssignmentMetadataVersion);
-                usedSubscriptionMetadataVersion = receivedAssignmentMetadataVersion;
-                taskManager.versionProbingFlag = true;
-                return;
-            }
+        if (usedSubscriptionMetadataVersion > receivedAssignmentMetadataVersion
+            && receivedAssignmentMetadataVersion >= EARLIEST_PROBEABLE_VERSION) {
+
+            log.info("Sent a version {} subscription and got version {} assignment back (successful version probing). " +
+                     "Downgrading subscription metadata to received version and trigger new rebalance.",
+                usedSubscriptionMetadataVersion,
+                receivedAssignmentMetadataVersion);
+            usedSubscriptionMetadataVersion = receivedAssignmentMetadataVersion;
+            taskManager.versionProbingFlag = true;
+            return;
         }
 
         // version 1 field
@@ -672,15 +684,15 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         final Map<HostInfo, Set<TopicPartition>> partitionsByHost;
 
         switch (receivedAssignmentMetadataVersion) {
-            case 1:
+            case VERSION_ONE:
                 processVersionOneAssignment(info, partitions, activeTasks);
                 partitionsByHost = Collections.emptyMap();
                 break;
-            case 2:
+            case VERSION_TWO:
                 processVersionTwoAssignment(info, partitions, activeTasks, topicToPartitionInfo);
                 partitionsByHost = info.partitionsByHost();
                 break;
-            case 3:
+            case VERSION_THREE:
                 final int latestSupportedVersionGroupLeader = info.latestSupportedVersion();
                 if (latestSupportedVersionGroupLeader > usedSubscriptionMetadataVersion) {
                     final int newSubscriptionMetadataVersion = Math.min(latestSupportedVersionGroupLeader, SubscriptionInfo.LATEST_SUPPORTED_VERSION);

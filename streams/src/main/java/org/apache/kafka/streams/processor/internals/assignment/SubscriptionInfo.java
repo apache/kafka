@@ -33,14 +33,14 @@ public class SubscriptionInfo {
     private static final Logger log = LoggerFactory.getLogger(SubscriptionInfo.class);
 
     public static final int LATEST_SUPPORTED_VERSION = 3;
-    public static final int UNKNOWN = -1;
+    static final int UNKNOWN = -1;
 
-    protected final int usedVersion;
-    protected final int latestSupportedVersion;
-    protected UUID processId;
-    protected Set<TaskId> prevTasks;
-    protected Set<TaskId> standbyTasks;
-    protected String userEndPoint;
+    private final int usedVersion;
+    private final int latestSupportedVersion;
+    private UUID processId;
+    private Set<TaskId> prevTasks;
+    private Set<TaskId> standbyTasks;
+    private String userEndPoint;
 
     // used for decoding; don't apply version checks
     private SubscriptionInfo(final int version,
@@ -151,20 +151,20 @@ public class SubscriptionInfo {
                4 + standbyTasks.size() * 8; // length + standby tasks
     }
 
-    private void encodeClientUUID(final ByteBuffer buf) {
+    protected void encodeClientUUID(final ByteBuffer buf) {
         buf.putLong(processId.getMostSignificantBits());
         buf.putLong(processId.getLeastSignificantBits());
     }
 
-    private void encodeTasks(final ByteBuffer buf,
-                             final Collection<TaskId> taskIds) {
+    protected void encodeTasks(final ByteBuffer buf,
+                               final Collection<TaskId> taskIds) {
         buf.putInt(taskIds.size());
         for (TaskId id : taskIds) {
             id.writeTo(buf);
         }
     }
 
-    private byte[] prepareUserEndPoint() {
+    protected byte[] prepareUserEndPoint() {
         if (userEndPoint == null) {
             return new byte[0];
         } else {
@@ -194,8 +194,8 @@ public class SubscriptionInfo {
                4 + endPointBytes.length; // length + userEndPoint
     }
 
-    private void encodeUserEndPoint(final ByteBuffer buf,
-                                    final byte[] endPointBytes) {
+    protected void encodeUserEndPoint(final ByteBuffer buf,
+                                      final byte[] endPointBytes) {
         if (endPointBytes != null) {
             buf.putInt(endPointBytes.length);
             buf.put(endPointBytes);
@@ -217,29 +217,13 @@ public class SubscriptionInfo {
         return buf;
     }
 
-    private int getVersionThreeByteLength(final byte[] endPointBytes) {
+    protected int getVersionThreeByteLength(final byte[] endPointBytes) {
         return 4 + // used version
                4 + // latest supported version version
                16 + // client ID
                4 + prevTasks.size() * 8 + // length + prev tasks
                4 + standbyTasks.size() * 8 + // length + standby tasks
                4 + endPointBytes.length; // length + userEndPoint
-    }
-
-    // for testing
-    protected ByteBuffer encodeFutureVersion() {
-        final byte[] endPointBytes = prepareUserEndPoint();
-
-        final ByteBuffer buf = ByteBuffer.allocate(getVersionThreeByteLength(endPointBytes));
-
-        buf.putInt(LATEST_SUPPORTED_VERSION + 1); // used version
-        buf.putInt(LATEST_SUPPORTED_VERSION + 1); // supported version
-        encodeClientUUID(buf);
-        encodeTasks(buf, prevTasks);
-        encodeTasks(buf, standbyTasks);
-        encodeUserEndPoint(buf, endPointBytes);
-
-        return buf;
     }
 
     /**

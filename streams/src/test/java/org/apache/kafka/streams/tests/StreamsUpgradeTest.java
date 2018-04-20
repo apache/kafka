@@ -34,6 +34,7 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
+import org.apache.kafka.streams.processor.internals.TaskManager;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
 import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
 import org.apache.kafka.streams.state.HostInfo;
@@ -57,7 +58,7 @@ public class StreamsUpgradeTest {
     @SuppressWarnings("unchecked")
     public static void main(final String[] args) throws Exception {
         if (args.length < 1) {
-            System.err.println("StreamsUpgradeTest requires one argument (, properties-file) but no provided: ");
+            System.err.println("StreamsUpgradeTest requires one argument (properties-file) but no provided: ");
         }
         final String propFileName = args.length > 0 ? args[0] : null;
 
@@ -120,6 +121,7 @@ public class StreamsUpgradeTest {
             // 2. Task ids of previously running tasks
             // 3. Task ids of valid local states on the client's state directory.
 
+            final TaskManager taskManager = taskManger();
             final Set<TaskId> previousActiveTasks = taskManager.prevActiveTaskIds();
             final Set<TaskId> standbyTasks = taskManager.cachedTasksIds();
             standbyTasks.removeAll(previousActiveTasks);
@@ -129,7 +131,7 @@ public class StreamsUpgradeTest {
                 taskManager.processId(),
                 previousActiveTasks,
                 standbyTasks,
-                this.userEndPoint);
+                userEndPoint());
 
             taskManager.updateSubscriptionsFromMetadata(topics);
 
@@ -165,6 +167,7 @@ public class StreamsUpgradeTest {
             processLatestVersionAssignment(info, partitions, activeTasks, topicToPartitionInfo);
             partitionsByHost = info.partitionsByHost();
 
+            final TaskManager taskManager = taskManger();
             taskManager.setClusterMetadata(Cluster.empty().withPartitions(topicToPartitionInfo));
             taskManager.setPartitionsByHostState(partitionsByHost);
             taskManager.setAssignmentMetadata(activeTasks, info.standbyTasks());
@@ -201,14 +204,30 @@ public class StreamsUpgradeTest {
         }
 
         public ByteBuffer encode() {
-            if (usedVersion <= SubscriptionInfo.LATEST_SUPPORTED_VERSION) {
+            if (version() <= SubscriptionInfo.LATEST_SUPPORTED_VERSION) {
                 return super.encode();
             }
 
-            final ByteBuffer buf = super.encodeFutureVersion();
+            final ByteBuffer buf = encodeFutureVersion();
             buf.rewind();
             return buf;
         }
+
+        private ByteBuffer encodeFutureVersion() {
+            final byte[] endPointBytes = prepareUserEndPoint();
+
+            final ByteBuffer buf = ByteBuffer.allocate(getVersionThreeByteLength(endPointBytes));
+
+            buf.putInt(LATEST_SUPPORTED_VERSION + 1); // used version
+            buf.putInt(LATEST_SUPPORTED_VERSION + 1); // supported version
+            encodeClientUUID(buf);
+            encodeTasks(buf, prevTasks());
+            encodeTasks(buf, standbyTasks());
+            encodeUserEndPoint(buf, endPointBytes);
+
+            return buf;
+        }
+
     }
 
     private static class FutureAssignmentInfo extends AssignmentInfo {
