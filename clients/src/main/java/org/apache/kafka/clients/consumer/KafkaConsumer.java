@@ -1651,6 +1651,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * consumers, the end offset is the last stable offset (LSO). The end offset only advances when transactions
      * are completed. Finally, if the partition has never been written to, the end offset is 0.
      *
+     * <p>
+     * This method does not change the current consumer position of the partitions.
+     *
      * @see #seekToEnd(Collection)
      *
      * @param partitions the partitions to get the end offsets.
