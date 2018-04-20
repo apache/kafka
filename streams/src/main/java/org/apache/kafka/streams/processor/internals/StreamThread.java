@@ -57,6 +57,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.Stack;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -511,6 +512,8 @@ public class StreamThread extends Thread {
         private final Sensor taskCreatedSensor;
         private final Sensor tasksClosedSensor;
 
+        private final Stack<String> ownedSensors = new Stack<>();
+
         StreamsMetricsThreadImpl(final Metrics metrics, final String threadName) {
             super(metrics, threadName);
             final String groupName = "stream-metrics";
@@ -520,42 +523,47 @@ public class StreamThread extends Thread {
             commitTimeSensor.add(metrics.metricName("commit-latency-max", groupName, "The maximum commit time in ms", tags()), new Max());
             commitTimeSensor.add(metrics.metricName("commit-rate", groupName, "The average per-second number of commit calls", tags()), new Rate(TimeUnit.SECONDS, new Count()));
             commitTimeSensor.add(metrics.metricName("commit-total", groupName, "The total number of commit calls", tags()), new Count());
+            ownedSensors.push(commitTimeSensor.name());
 
             pollTimeSensor = metrics.sensor(threadLevelSensorName(threadName, "poll-latency"), Sensor.RecordingLevel.INFO);
             pollTimeSensor.add(metrics.metricName("poll-latency-avg", groupName, "The average poll time in ms", tags()), new Avg());
             pollTimeSensor.add(metrics.metricName("poll-latency-max", groupName, "The maximum poll time in ms", tags()), new Max());
             pollTimeSensor.add(metrics.metricName("poll-rate", groupName, "The average per-second number of record-poll calls", tags()), new Rate(TimeUnit.SECONDS, new Count()));
             pollTimeSensor.add(metrics.metricName("poll-total", groupName, "The total number of record-poll calls", tags()), new Count());
+            ownedSensors.push(pollTimeSensor.name());
 
             processTimeSensor = metrics.sensor(threadLevelSensorName(threadName, "process-latency"), Sensor.RecordingLevel.INFO);
             processTimeSensor.add(metrics.metricName("process-latency-avg", groupName, "The average process time in ms", tags()), new Avg());
             processTimeSensor.add(metrics.metricName("process-latency-max", groupName, "The maximum process time in ms", tags()), new Max());
             processTimeSensor.add(metrics.metricName("process-rate", groupName, "The average per-second number of process calls", tags()), new Rate(TimeUnit.SECONDS, new Count()));
             processTimeSensor.add(metrics.metricName("process-total", groupName, "The total number of process calls", tags()), new Count());
+            ownedSensors.push(processTimeSensor.name());
 
             punctuateTimeSensor = metrics.sensor(threadLevelSensorName(threadName, "punctuate-latency"), Sensor.RecordingLevel.INFO);
             punctuateTimeSensor.add(metrics.metricName("punctuate-latency-avg", groupName, "The average punctuate time in ms", tags()), new Avg());
             punctuateTimeSensor.add(metrics.metricName("punctuate-latency-max", groupName, "The maximum punctuate time in ms", tags()), new Max());
             punctuateTimeSensor.add(metrics.metricName("punctuate-rate", groupName, "The average per-second number of punctuate calls", tags()), new Rate(TimeUnit.SECONDS, new Count()));
             punctuateTimeSensor.add(metrics.metricName("punctuate-total", groupName, "The total number of punctuate calls", tags()), new Count());
+            ownedSensors.push(punctuateTimeSensor.name());
 
             taskCreatedSensor = metrics.sensor(threadLevelSensorName(threadName, "task-created"), Sensor.RecordingLevel.INFO);
             taskCreatedSensor.add(metrics.metricName("task-created-rate", "stream-metrics", "The average per-second number of newly created tasks", tags()), new Rate(TimeUnit.SECONDS, new Count()));
             taskCreatedSensor.add(metrics.metricName("task-created-total", "stream-metrics", "The total number of newly created tasks", tags()), new Total());
+            ownedSensors.push(taskCreatedSensor.name());
 
             tasksClosedSensor = metrics.sensor(threadLevelSensorName(threadName, "task-closed"), Sensor.RecordingLevel.INFO);
             tasksClosedSensor.add(metrics.metricName("task-closed-rate", groupName, "The average per-second number of closed tasks", tags()), new Rate(TimeUnit.SECONDS, new Count()));
             tasksClosedSensor.add(metrics.metricName("task-closed-total", groupName, "The total number of closed tasks", tags()), new Total());
+            ownedSensors.push(tasksClosedSensor.name());
         }
 
-        void removeAllSensors() {
-            removeSensor(commitTimeSensor);
-            removeSensor(pollTimeSensor);
-            removeSensor(processTimeSensor);
-            removeSensor(punctuateTimeSensor);
-            removeSensor(taskCreatedSensor);
-            removeSensor(tasksClosedSensor);
-            removeSensor(skippedRecordsSensor());
+        public void removeOwnedSensors() {
+            synchronized (ownedSensors) {
+                super.removeOwnedSensors();
+                while (!ownedSensors.empty()) {
+                    registry().removeSensor(ownedSensors.pop());
+                }
+            }
         }
     }
 
@@ -1160,7 +1168,7 @@ public class StreamThread extends Thread {
         } catch (final Throwable e) {
             log.error("Failed to close restore consumer due to the following error:", e);
         }
-        streamsMetrics.removeAllSensors();
+        streamsMetrics.removeOwnedSensors();
 
         setState(State.DEAD);
         log.info("Shutdown complete");

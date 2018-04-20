@@ -297,6 +297,9 @@ public class GlobalStreamThread extends Thread {
             } catch (final IOException e) {
                 log.error("Failed to close state maintainer due to the following error:", e);
             }
+
+            streamsMetrics.removeOwnedSensors();
+
             setState(DEAD);
 
             log.info("Shutdown complete");

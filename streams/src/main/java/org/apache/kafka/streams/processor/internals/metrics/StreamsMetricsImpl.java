@@ -25,7 +25,6 @@ import org.apache.kafka.common.metrics.stats.Count;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.Total;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsMetrics;
 
 import java.util.Arrays;
@@ -33,6 +32,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Stack;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsConventions.threadLevelSensorName;
@@ -41,6 +41,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     private final Metrics metrics;
     private final Map<String, String> tags;
     private final Map<Sensor, Sensor> parentSensors;
+    private final Stack<String> ownedSensors = new Stack<>();
     private final Sensor skippedRecordsSensor;
 
     public StreamsMetricsImpl(final Metrics metrics, final String threadName) {
@@ -53,6 +54,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         skippedRecordsSensor = metrics.sensor(threadLevelSensorName(threadName, "skipped-records"), Sensor.RecordingLevel.INFO);
         skippedRecordsSensor.add(metrics.metricName("skipped-records-rate", "stream-metrics", "The average per-second number of skipped records", tags), new Rate(TimeUnit.SECONDS, new Count()));
         skippedRecordsSensor.add(metrics.metricName("skipped-records-total", "stream-metrics", "The total number of skipped records", tags), new Total());
+        ownedSensors.push(skippedRecordsSensor.name());
     }
 
     public final Metrics registry() {
@@ -231,6 +233,13 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         if (parent != null) {
             metrics.removeSensor(parent.name());
         }
+    }
 
+    public void removeOwnedSensors() {
+        synchronized (ownedSensors) {
+            while (!ownedSensors.empty()) {
+                metrics.removeSensor(ownedSensors.pop());
+            }
+        }
     }
 }
