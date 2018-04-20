@@ -43,6 +43,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 public class KStreamTestDriver extends ExternalResource {
 
@@ -185,9 +186,15 @@ public class KStreamTestDriver extends ExternalResource {
 
     private ProcessorNode sourceNodeByTopicName(final String topicName) {
         ProcessorNode topicNode = topology.source(topicName);
-
-        if (topicNode == null && globalTopology != null) {
-            topicNode = globalTopology.source(topicName);
+        if (topicNode == null) {
+            for (final String sourceTopic : topology.sourceTopics()) {
+                if (Pattern.compile(sourceTopic).matcher(topicName).matches()) {
+                    return topology.source(sourceTopic);
+                }
+            }
+            if (globalTopology != null) {
+                topicNode = globalTopology.source(topicName);
+            }
         }
 
         return topicNode;
