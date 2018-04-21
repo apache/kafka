@@ -97,8 +97,14 @@ public class StoreChangelogReader implements ChangelogReader {
                 final long pos = processNext(mergedRecords.records(partition), restorer, endOffset);
                 restorer.setRestoredOffset(pos);
                 if (restorer.hasCompleted(pos, endOffset)) {
-                    if (pos != endOffset) {
+                    if (pos > endOffset) {
                         throw new TaskMigratedException(task, partition, endOffset, pos);
+                    }
+                    if (restorer.offsetLimit() == Long.MAX_VALUE) {
+                        final Long updatedEndOffset = restoreConsumer.endOffsets(Collections.singletonList(partition)).get(partition);
+                        if (!restorer.hasCompleted(pos, updatedEndOffset)) {
+                            throw new TaskMigratedException(task, partition, updatedEndOffset, pos);
+                        }
                     }
                     log.debug("Completed restoring state from changelog {} with {} records ranging from offset {} to {}",
                             partition,
