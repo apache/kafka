@@ -37,8 +37,8 @@ public class ProcessorNode<K, V> {
     private final List<ProcessorNode<?, ?>> children;
     private final Map<String, ProcessorNode<?, ?>> childByName;
 
-    protected final Processor<K, V> processor;
     private NodeMetrics nodeMetrics;
+    private final Processor<K, V> processor;
     private final String name;
     private final Time time;
 
