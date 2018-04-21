@@ -22,10 +22,10 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Predicate;
+import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.ValueMapperWithKey;
@@ -55,8 +55,10 @@ import static org.junit.Assert.assertTrue;
 
 public class KTableImplTest {
 
-    final private Serde<String> stringSerde = Serdes.String();
+    private final Serde<String> stringSerde = Serdes.String();
     private final Consumed<String, String> consumed = Consumed.with(stringSerde, stringSerde);
+    private final Produced<String, String> produced = Produced.with(stringSerde, stringSerde);
+
     @Rule
     public final KStreamTestDriver driver = new KStreamTestDriver();
     private File stateDir = null;
@@ -76,7 +78,6 @@ public class KTableImplTest {
 
         String topic1 = "topic1";
         String topic2 = "topic2";
-        String storeName2 = "storeName2";
 
         KTable<String, String> table1 = builder.table(topic1, consumed);
 
@@ -103,7 +104,8 @@ public class KTableImplTest {
         MockProcessorSupplier<String, Integer> proc3 = new MockProcessorSupplier<>();
         table3.toStream().process(proc3);
 
-        KTable<String, String> table4 = table1.through(stringSerde, stringSerde, topic2, storeName2);
+        table1.toStream().to(topic2, produced);
+        KTable<String, String> table4 = builder.table(topic2, consumed);
 
         MockProcessorSupplier<String, String> proc4 = new MockProcessorSupplier<>();
         table4.toStream().process(proc4);
@@ -132,7 +134,6 @@ public class KTableImplTest {
 
         String topic1 = "topic1";
         String topic2 = "topic2";
-        String storeName2 = "storeName2";
 
         KTableImpl<String, String, String> table1 =
                 (KTableImpl<String, String, String>) builder.table(topic1, consumed);
@@ -150,8 +151,9 @@ public class KTableImplTest {
                         return (value % 2) == 0;
                     }
                 });
-        KTableImpl<String, String, String> table4 = (KTableImpl<String, String, String>)
-                table1.through(stringSerde, stringSerde, topic2, storeName2);
+
+        table1.toStream().to(topic2, produced);
+        KTableImpl<String, String, String> table4 = (KTableImpl<String, String, String>) builder.table(topic2, consumed);
 
         KTableValueGetterSupplier<String, String> getterSupplier1 = table1.valueGetterSupplier();
         KTableValueGetterSupplier<String, Integer> getterSupplier2 = table2.valueGetterSupplier();
@@ -378,11 +380,6 @@ public class KTableImplTest {
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullTopicOnTo() {
-        table.to(null);
-    }
-
-    @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullPredicateOnFilter() {
         table.filter(null);
     }
@@ -400,34 +397,6 @@ public class KTableImplTest {
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullMapperOnMapValueWithKey() {
         table.mapValues((ValueMapperWithKey) null);
-    }
-
-    @SuppressWarnings("deprecation")
-    @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullFilePathOnWriteAsText() {
-        table.writeAsText(null);
-    }
-
-    @SuppressWarnings("deprecation")
-    @Test(expected = TopologyException.class)
-    public void shouldNotAllowEmptyFilePathOnWriteAsText() {
-        table.writeAsText("\t  \t");
-    }
-
-    @SuppressWarnings("deprecation")
-    @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullActionOnForEach() {
-        table.foreach(null);
-    }
-
-    @Test(expected = NullPointerException.class)
-    public void shouldAllowNullTopicInThrough() {
-        table.through((String) null, "store");
-    }
-
-    @Test
-    public void shouldAllowNullStoreInThrough() {
-        table.through("topic", (String) null);
     }
 
     @Test(expected = NullPointerException.class)

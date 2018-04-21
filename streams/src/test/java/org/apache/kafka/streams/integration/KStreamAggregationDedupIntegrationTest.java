@@ -126,9 +126,9 @@ public class KStreamAggregationDedupIntegrationTest {
     @Test
     public void shouldReduce() throws Exception {
         produceMessages(System.currentTimeMillis());
-        groupedStream
-            .reduce(reducer, "reduce-by-key")
-            .to(Serdes.String(), Serdes.String(), outputTopic);
+        groupedStream.reduce(reducer, "reduce-by-key")
+                .toStream()
+                .to(Serdes.String(), Serdes.String(), outputTopic);
 
         startStreams();
 
