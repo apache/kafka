@@ -32,6 +32,7 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.ForeachAction;
+import org.apache.kafka.streams.kstream.Joined;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
@@ -321,7 +322,7 @@ public class YahooBenchmark {
                 public String apply(ProjectedEvent value1, CampaignAd value2) {
                     return value2.campaignID;
                 }
-            }, Serdes.String(), Serdes.serdeFrom(projectedEventSerializer, projectedEventDeserializer));
+            }, Joined.<String, ProjectedEvent, CampaignAd>with(Serdes.String(), Serdes.serdeFrom(projectedEventSerializer, projectedEventDeserializer), null));
 
 
         // key by campaign rather than by ad as original

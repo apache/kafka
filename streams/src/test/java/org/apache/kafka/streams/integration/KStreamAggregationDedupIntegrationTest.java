@@ -34,6 +34,7 @@ import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.TimeWindows;
@@ -180,7 +181,7 @@ public class KStreamAggregationDedupIntegrationTest {
                     return windowedKey.key() + "@" + windowedKey.window().start();
                 }
             })
-            .to(Serdes.String(), Serdes.String(), outputTopic);
+            .to(outputTopic, Produced.with(Serdes.String(), Serdes.String()));
 
         startStreams();
 
@@ -232,7 +233,7 @@ public class KStreamAggregationDedupIntegrationTest {
                 public String apply(final Windowed<Integer> windowedKey, final Long value) {
                     return windowedKey.key() + "@" + windowedKey.window().start();
                 }
-            }).to(Serdes.String(), Serdes.Long(), outputTopic);
+            }).to(outputTopic, Produced.with(Serdes.String(), Serdes.Long()));
 
         startStreams();
 

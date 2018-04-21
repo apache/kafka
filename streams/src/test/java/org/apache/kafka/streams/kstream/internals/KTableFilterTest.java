@@ -115,7 +115,7 @@ public class KTableFilterTest {
             public boolean test(String key, Integer value) {
                 return (value % 2) == 0;
             }
-        }, "anyStoreNameFilter");
+        });
         KTable<String, Integer> table3 = table1.filterNot(new Predicate<String, Integer>() {
             @Override
             public boolean test(String key, Integer value) {

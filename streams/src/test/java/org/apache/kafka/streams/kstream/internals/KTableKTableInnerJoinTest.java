@@ -18,11 +18,14 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsBuilderTest;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
@@ -44,12 +47,14 @@ import static org.junit.Assert.assertTrue;
 
 public class KTableKTableInnerJoinTest {
 
-    final private String topic1 = "topic1";
-    final private String topic2 = "topic2";
+    private final String topic1 = "topic1";
+    private final String topic2 = "topic2";
 
-    final private Serde<Integer> intSerde = Serdes.Integer();
-    final private Serde<String> stringSerde = Serdes.String();
+    private final Serde<Integer> intSerde = Serdes.Integer();
+    private final Serde<String> stringSerde = Serdes.String();
     private final Consumed<Integer, String> consumed = Consumed.with(intSerde, stringSerde);
+    private final Materialized<Integer, String, KeyValueStore<Bytes, byte[]>> materialized = Materialized.with(intSerde, stringSerde);
+
     private File stateDir = null;
     @Rule
     public final KStreamTestDriver driver = new KStreamTestDriver();
@@ -181,16 +186,16 @@ public class KTableKTableInnerJoinTest {
 
         final KTable<Integer, String> table1;
         final KTable<Integer, String> table2;
-        final KTable<Integer, String> joined;
+        final KTable<Integer, String> table3;
         final MockProcessorSupplier<Integer, String> processor;
 
         processor = new MockProcessorSupplier<>();
         table1 = builder.table(topic1, consumed);
         table2 = builder.table(topic2, consumed);
-        joined = table1.join(table2, MockValueJoiner.TOSTRING_JOINER, Serdes.String(), "anyQueryableName");
-        joined.toStream().process(processor);
+        table3 = table1.join(table2, MockValueJoiner.TOSTRING_JOINER, materialized);
+        table3.toStream().process(processor);
 
-        doTestJoin(builder, expectedKeys, processor, joined);
+        doTestJoin(builder, expectedKeys, processor, table3);
     }
 
     private void doTestSendingOldValues(final StreamsBuilder builder,
@@ -302,16 +307,16 @@ public class KTableKTableInnerJoinTest {
 
         final KTable<Integer, String> table1;
         final KTable<Integer, String> table2;
-        final KTable<Integer, String> joined;
+        final KTable<Integer, String> table3;
         final MockProcessorSupplier<Integer, String> proc;
 
         table1 = builder.table(topic1, consumed);
         table2 = builder.table(topic2, consumed);
-        joined = table1.join(table2, MockValueJoiner.TOSTRING_JOINER, Serdes.String(), "anyQueryableName");
+        table3 = table1.join(table2, MockValueJoiner.TOSTRING_JOINER, materialized);
         proc = new MockProcessorSupplier<>();
-        builder.build().addProcessor("proc", proc, ((KTableImpl<?, ?, ?>) joined).name);
+        builder.build().addProcessor("proc", proc, ((KTableImpl<?, ?, ?>) table3).name);
 
-        doTestSendingOldValues(builder, expectedKeys, table1, table2, proc, joined, false);
+        doTestSendingOldValues(builder, expectedKeys, table1, table2, proc, table3, false);
 
     }
 

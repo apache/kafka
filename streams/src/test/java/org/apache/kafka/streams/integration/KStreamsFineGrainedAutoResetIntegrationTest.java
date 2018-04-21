@@ -37,6 +37,7 @@ import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
+import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestCondition;
@@ -193,9 +194,9 @@ public class KStreamsFineGrainedAutoResetIntegrationTest {
         final KStream<String, String> pattern2Stream = builder.stream(Pattern.compile("topic-[A-D]" + topicSuffix), Consumed.<String, String>with(Topology.AutoOffsetReset.LATEST));
         final KStream<String, String> namedTopicsStream = builder.stream(Arrays.asList(topicY, topicZ));
 
-        pattern1Stream.to(stringSerde, stringSerde, outputTopic);
-        pattern2Stream.to(stringSerde, stringSerde, outputTopic);
-        namedTopicsStream.to(stringSerde, stringSerde, outputTopic);
+        pattern1Stream.to(outputTopic, Produced.with(stringSerde, stringSerde));
+        pattern2Stream.to(outputTopic, Produced.with(stringSerde, stringSerde));
+        namedTopicsStream.to(outputTopic, Produced.with(stringSerde, stringSerde));
 
         final Properties producerConfig = TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, StringSerializer.class);
 
@@ -289,7 +290,7 @@ public class KStreamsFineGrainedAutoResetIntegrationTest {
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, String> exceptionStream = builder.stream(NOOP);
 
-        exceptionStream.to(stringSerde, stringSerde, DEFAULT_OUTPUT_TOPIC);
+        exceptionStream.to(DEFAULT_OUTPUT_TOPIC, Produced.with(stringSerde, stringSerde));
 
         KafkaStreams streams = new KafkaStreams(builder.build(), localConfig);
 

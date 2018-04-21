@@ -243,7 +243,7 @@ public class KStreamImplTest {
                     Joined.with(Serdes.String(),
                                 Serdes.String(),
                                 Serdes.String()))
-                .to(Serdes.String(), Serdes.String(), "output-topic");
+                .to("output-topic", Produced.with(Serdes.String(), Serdes.String()));
 
         ProcessorTopology processorTopology = builder.setApplicationId("X").build(null);
         SourceNode originalSourceNode = processorTopology.source("topic-1");
@@ -262,7 +262,7 @@ public class KStreamImplTest {
         final StreamsBuilder builder = new StreamsBuilder();
         final Consumed<String, String> consumed = Consumed.with(stringSerde, stringSerde);
         final KStream<String, String> inputStream = builder.stream(Collections.singleton("input"), consumed);
-        inputStream.to(stringSerde, null, "output");
+        inputStream.to("output", Produced.with(stringSerde, stringSerde));
     }
 
     @Test(expected = NullPointerException.class)
@@ -293,16 +293,6 @@ public class KStreamImplTest {
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullMapperOnMapValuesWithKey() {
         testStream.mapValues((ValueMapperWithKey) null);
-    }
-
-    @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullFilePathOnWriteAsText() {
-        testStream.writeAsText(null);
-    }
-
-    @Test(expected = TopologyException.class)
-    public void shouldNotAllowEmptyFilePathOnWriteAsText() {
-        testStream.writeAsText("\t    \t");
     }
 
     @Test(expected = NullPointerException.class)
