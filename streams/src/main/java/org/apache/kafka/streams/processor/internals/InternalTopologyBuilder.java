@@ -1880,4 +1880,8 @@ public class InternalTopologyBuilder {
         subscriptionUpdates.updateTopics(topics);
         updateSubscriptions(subscriptionUpdates, logPrefix);
     }
+
+    public synchronized Set<String> getSourceTopicNames() {
+        return sourceTopicNames;
+    }
 }

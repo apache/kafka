@@ -34,6 +34,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
+import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
@@ -75,6 +76,7 @@ import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.regex.Pattern;
 
 /**
  * This class makes it easier to write tests to verify the behavior of topologies created with {@link Topology} or
@@ -328,7 +330,10 @@ public class TopologyTestDriver implements Closeable {
     public void pipeInput(final ConsumerRecord<byte[], byte[]> consumerRecord) {
         final String topicName = consumerRecord.topic();
 
-        final TopicPartition topicPartition = partitionsByTopic.get(topicName);
+        if (!internalTopologyBuilder.getSourceTopicNames().isEmpty()) {
+            validateSourceTopicNameRegexPattern(consumerRecord.topic());
+        }
+        final TopicPartition topicPartition = getTopicPartition(topicName);
         if (topicPartition != null) {
             final long offset = offsetsByTopicPartition.get(topicPartition).incrementAndGet() - 1;
             task.addRecords(topicPartition, Collections.singleton(new ConsumerRecord<>(
@@ -369,6 +374,28 @@ public class TopologyTestDriver implements Closeable {
                 consumerRecord.value()));
             globalStateTask.flushState();
         }
+    }
+
+    private void validateSourceTopicNameRegexPattern(final String inputRecordTopic) {
+        for (final String sourceTopicName : internalTopologyBuilder.getSourceTopicNames()) {
+            if (!sourceTopicName.equals(inputRecordTopic) && Pattern.compile(sourceTopicName).matcher(inputRecordTopic).matches()) {
+                throw new TopologyException("Topology add source of type String for topic: " + sourceTopicName +
+                        " cannot contain regex pattern for input record topic: " + inputRecordTopic +
+                        " and hence cannot process the message.");
+            }
+        }
+    }
+
+    private TopicPartition getTopicPartition(final String topicName) {
+        final TopicPartition topicPartition = partitionsByTopic.get(topicName);
+        if (topicPartition == null) {
+            for (final Map.Entry<String, TopicPartition> entry : partitionsByTopic.entrySet()) {
+                if (Pattern.compile(entry.getKey()).matcher(topicName).matches()) {
+                    return entry.getValue();
+                }
+            }
+        }
+        return topicPartition;
     }
 
     private void captureOutputRecords() {

@@ -40,7 +40,7 @@ import kafka.zk.{ConfigEntityChangeNotificationZNode, ZooKeeperTestHarness}
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.ConfigEntry.{ConfigSource, ConfigSynonym}
 import org.apache.kafka.clients.admin._
-import org.apache.kafka.clients.consumer.{ConsumerRecord, ConsumerRecords, KafkaConsumer}
+import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord, ConsumerRecords, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.{ClusterResource, ClusterResourceListener, Reconfigurable, TopicPartition}
 import org.apache.kafka.common.config.{ConfigException, ConfigResource, SslConfigs}
@@ -700,7 +700,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       }
     }
 
-    verifyListener(SecurityProtocol.SSL, None)
+    verifyListener(SecurityProtocol.SSL, None, "add-ssl-listener-group2")
     createAdminClient(SecurityProtocol.SSL, SecureInternal)
     verifyRemoveListener("SSL", SecurityProtocol.SSL, Seq.empty)
   }
@@ -759,9 +759,11 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     }), "Listener not created")
 
     if (saslMechanisms.nonEmpty)
-      saslMechanisms.foreach(mechanism => verifyListener(securityProtocol, Some(mechanism)))
+      saslMechanisms.foreach { mechanism =>
+        verifyListener(securityProtocol, Some(mechanism), s"add-listener-group-$securityProtocol-$mechanism")
+      }
     else
-      verifyListener(securityProtocol, None)
+      verifyListener(securityProtocol, None, s"add-listener-group-$securityProtocol")
 
     val brokerConfigs = describeConfig(adminClients.head).entries.asScala
     props.asScala.foreach { case (name, value) =>
@@ -818,12 +820,11 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     verifyTimeout(consumerFuture)
   }
 
-  private def verifyListener(securityProtocol: SecurityProtocol, saslMechanism: Option[String]): Unit = {
+  private def verifyListener(securityProtocol: SecurityProtocol, saslMechanism: Option[String], groupId: String): Unit = {
     val mechanism = saslMechanism.getOrElse("")
     val retries = 1000 // since it may take time for metadata to be updated on all brokers
     val producer = createProducer(securityProtocol.name, securityProtocol, mechanism, retries)
-    val consumer = createConsumer(securityProtocol.name, securityProtocol, mechanism,
-      s"add-listener-group-$securityProtocol-$mechanism")
+    val consumer = createConsumer(securityProtocol.name, securityProtocol, mechanism, groupId)
     verifyProduceConsume(producer, consumer, numRecords = 10, topic)
   }
 
@@ -917,12 +918,14 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
   private def createConsumer(listenerName: String, securityProtocol: SecurityProtocol,
                              saslMechanism: String, group: String): KafkaConsumer[String, String] = {
     val bootstrapServers =  TestUtils.bootstrapServers(servers, new ListenerName(listenerName))
+    val consumerProps = clientProps(securityProtocol, saslMechanism)
+    consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
     val consumer = TestUtils.createNewConsumer(bootstrapServers, group,
       autoOffsetReset = "latest",
       securityProtocol = securityProtocol,
       keyDeserializer = new StringDeserializer,
       valueDeserializer = new StringDeserializer,
-      props = Some(clientProps(securityProtocol, saslMechanism)))
+      props = Some(consumerProps))
     consumer.subscribe(Collections.singleton(topic))
     awaitInitialPositions(consumer)
     consumers += consumer
