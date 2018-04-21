@@ -25,10 +25,10 @@ import kafka.message.CompressionCodec
 import kafka.serializer._
 import java.util.concurrent.{CountDownLatch, Executors}
 import java.util.concurrent.atomic.AtomicLong
-import java.util._
 import java.text.SimpleDateFormat
 import java.math.BigInteger
 import java.nio.charset.StandardCharsets
+import java.util.{Properties, Random}
 
 import org.apache.kafka.common.utils.Utils
 
@@ -70,7 +70,11 @@ object ProducerPerformance extends Logging {
   }
 
   class ProducerPerfConfig(args: Array[String]) extends PerfConfig(args) {
-    val brokerListOpt = parser.accepts("broker-list", "REQUIRED: broker info the list of broker host and port for bootstrap.")
+    val bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED: The list of bootstrap server host and port")
+      .withRequiredArg()
+      .describedAs("hostname:port,..,hostname:port")
+      .ofType(classOf[String])
+    val brokerListOpt = parser.accepts("broker-list", "DEPRECATED (use bootstrap-server instead): broker info the list of broker host and port for bootstrap.")
       .withRequiredArg
       .describedAs("hostname:port,..,hostname:port")
       .ofType(classOf[String])
@@ -141,7 +145,17 @@ object ProducerPerformance extends Logging {
       .defaultsTo(0)
 
     val options = parser.parse(args: _*)
-    CommandLineUtils.checkRequiredArgs(parser, options, topicsOpt, brokerListOpt, numMessagesOpt)
+
+    if (options.has(brokerListOpt) && options.has(bootstrapServerOpt))
+      CommandLineUtils.printUsageAndDie(parser, s"Option $brokerListOpt is not valid with $bootstrapServerOpt.")
+    else if (options.has(brokerListOpt)) {
+      CommandLineUtils.checkRequiredArgs(parser, options, topicsOpt, brokerListOpt, numMessagesOpt)
+    } else {
+      CommandLineUtils.checkRequiredArgs(parser, options, topicsOpt, bootstrapServerOpt, numMessagesOpt)
+    }
+    val bootstrapServer = List(bootstrapServerOpt, brokerListOpt).flatMap(x => Option(options.valueOf(x))).head
+    ToolsUtils.validatePortOrDie(parser, bootstrapServer)
+
 
     val topicsStr = options.valueOf(topicsOpt)
     val topics = topicsStr.split(",")
@@ -149,8 +163,6 @@ object ProducerPerformance extends Logging {
     val reportingInterval = options.valueOf(reportingIntervalOpt).intValue
     val dateFormat = new SimpleDateFormat(options.valueOf(dateFormatOpt))
     val hideHeader = options.has(hideHeaderOpt)
-    val brokerList = options.valueOf(brokerListOpt)
-    ToolsUtils.validatePortOrDie(parser,brokerList)
     val messageSize = options.valueOf(messageSizeOpt).intValue
     var isFixedSize = !options.has(varyMessageSizeOpt)
     var isSync = options.has(syncOpt)
@@ -205,7 +217,7 @@ object ProducerPerformance extends Logging {
       if (config.useNewProducer) {
         import org.apache.kafka.clients.producer.ProducerConfig
         props ++= config.producerProps
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, config.brokerList)
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapServer)
         props.put(ProducerConfig.SEND_BUFFER_CONFIG, (64 * 1024).toString)
         props.put(ProducerConfig.CLIENT_ID_CONFIG, "producer-performance")
         props.put(ProducerConfig.ACKS_CONFIG, config.producerRequestRequiredAcks.toString)
@@ -217,7 +229,7 @@ object ProducerPerformance extends Logging {
         new NewShinyProducer(props)
       } else {
         props ++= config.producerProps
-        props.put("metadata.broker.list", config.brokerList)
+        props.put("metadata.broker.list", config.bootstrapServer)
         props.put("compression.codec", config.compressionCodec.codec.toString)
         props.put("send.buffer.bytes", (64 * 1024).toString)
         if (!config.isSync) {

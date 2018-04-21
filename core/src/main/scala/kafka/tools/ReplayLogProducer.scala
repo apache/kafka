@@ -68,7 +68,11 @@ object ReplayLogProducer extends Logging {
       .describedAs("zookeeper url")
       .ofType(classOf[String])
       .defaultsTo("127.0.0.1:2181")
-    val brokerListOpt = parser.accepts("broker-list", "REQUIRED: the broker list must be specified.")
+    val brokerListOpt = parser.accepts("broker-list", "Deprecated use bootstrap-server instead. REQUIRED: the broker list must be specified.")
+      .withRequiredArg
+      .describedAs("hostname:port")
+      .ofType(classOf[String])
+    val bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED: the bootstrap server list must be specified.")
       .withRequiredArg
       .describedAs("hostname:port")
       .ofType(classOf[String])
@@ -103,12 +107,18 @@ object ReplayLogProducer extends Logging {
     val syncOpt = parser.accepts("sync", "If set message send requests to the brokers are synchronously, one at a time as they arrive.")
 
     val options = parser.parse(args : _*)
-    
-    CommandLineUtils.checkRequiredArgs(parser, options, brokerListOpt, inputTopicOpt)
+
+    if (options.has(bootstrapServerOpt) && options.has(brokerListOpt))
+      CommandLineUtils.printUsageAndDie(parser, s"Option $bootstrapServerOpt is not valid with $brokerListOpt.")
+    else if (options.has(brokerListOpt)) {
+      CommandLineUtils.checkRequiredArgs(parser, options, brokerListOpt, inputTopicOpt)
+    } else {
+      CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt, inputTopicOpt)
+    }
+    val bootstrapServer = List(bootstrapServerOpt, brokerListOpt).flatMap(x => Option(options.valueOf(x))).head
+    ToolsUtils.validatePortOrDie(parser, bootstrapServer)
 
     val zkConnect = options.valueOf(zkConnectOpt)
-    val brokerList = options.valueOf(brokerListOpt)
-    ToolsUtils.validatePortOrDie(parser,brokerList)
     val numMessages = options.valueOf(numMessagesOpt).intValue
     val numThreads = options.valueOf(numThreadsOpt).intValue
     val inputTopic = options.valueOf(inputTopicOpt)
@@ -116,7 +126,7 @@ object ReplayLogProducer extends Logging {
     val reportingInterval = options.valueOf(reportingIntervalOpt).intValue
     val isSync = options.has(syncOpt)
     val producerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(propertyOpt).asScala)
-    producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServer)
     producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
     producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
   }

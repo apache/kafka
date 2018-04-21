@@ -40,6 +40,7 @@ import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.Namespace;
+import net.sourceforge.argparse4j.inf.MutuallyExclusiveGroup;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Exit;
 
@@ -104,6 +105,20 @@ public class VerifiableProducer {
                 .newArgumentParser("verifiable-producer")
                 .defaultHelp(true)
                 .description("This tool produces increasing integers to the specified topic and prints JSON metadata to stdout on each \"send\" request, making externally visible which messages have been acked and which have not.");
+        parser.usage("verifiable-producer [-h] --bootstrap-server HOST1:PORT1[,HOST2:PORT2[...]] | --broker-list HOST1:PORT1[,HOST2:PORT2[...]] --topic TOPIC [--max-messages MAX-MESSAGES] " +
+                "\n                           [--throughput THROUGHPUT] [--acks ACKS] [--producer.config CONFIG_FILE] [--value-prefix VALUE-PREFIX]");
+        MutuallyExclusiveGroup group = parser.addMutuallyExclusiveGroup().required(true);
+        group.addArgument("--bootstrap-server")
+                .action(store()).type(String.class)
+                .metavar("HOST1:PORT1[,HOST2:PORT2[...]]")
+                .dest("bootstrapServer")
+                .help("Comma-separated list of bootstrap servers in the form HOST1:PORT1,HOST2:PORT2,...");
+        group.addArgument("--broker-list")
+                .action(store())
+                .type(String.class)
+                .metavar("HOST1:PORT1[,HOST2:PORT2[...]]")
+                .dest("bootstrapServer")
+                .help("DEPRECATED use --bootstrap-server instead. Comma-separated list of Kafka brokers in the form HOST1:PORT1,HOST2:PORT2,...");
 
         parser.addArgument("--topic")
                 .action(store())
@@ -111,14 +126,6 @@ public class VerifiableProducer {
                 .type(String.class)
                 .metavar("TOPIC")
                 .help("Produce messages to this topic.");
-
-        parser.addArgument("--broker-list")
-                .action(store())
-                .required(true)
-                .type(String.class)
-                .metavar("HOST1:PORT1[,HOST2:PORT2[...]]")
-                .dest("brokerList")
-                .help("Comma-separated list of Kafka brokers in the form HOST1:PORT1,HOST2:PORT2,...");
 
         parser.addArgument("--max-messages")
                 .action(store())
@@ -205,7 +212,7 @@ public class VerifiableProducer {
             createTime = null;
 
         Properties producerProps = new Properties();
-        producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, res.getString("brokerList"));
+        producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, res.getString("bootstrapServer"));
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
                 "org.apache.kafka.common.serialization.StringSerializer");
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,

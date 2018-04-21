@@ -82,7 +82,7 @@ object ConsoleProducer {
   def getOldProducerProps(config: ProducerConfig): Properties = {
     val props = producerProps(config)
 
-    props.put("metadata.broker.list", config.brokerList)
+    props.put("metadata.broker.list", config.bootstrapServer)
     props.put("compression.codec", config.compressionCodec)
     props.put("producer.type", if(config.sync) "sync" else "async")
     props.put("batch.num.messages", config.batchSize.toString)
@@ -114,7 +114,7 @@ object ConsoleProducer {
   def getNewProducerProps(config: ProducerConfig): Properties = {
     val props = producerProps(config)
 
-    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, config.brokerList)
+    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapServer)
     props.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, config.compressionCodec)
     props.put(ProducerConfig.SEND_BUFFER_CONFIG, config.socketBuffer.toString)
     props.put(ProducerConfig.RETRY_BACKOFF_MS_CONFIG, config.retryBackoffMs.toString)
@@ -139,9 +139,13 @@ object ConsoleProducer {
       .withRequiredArg
       .describedAs("topic")
       .ofType(classOf[String])
-    val brokerListOpt = parser.accepts("broker-list", "REQUIRED: The broker list string in the form HOST1:PORT1,HOST2:PORT2.")
+    val brokerListOpt = parser.accepts("broker-list", "DEPRECATED (use bootstrap-server instead): The broker list string in the form HOST1:PORT1,HOST2:PORT2.")
       .withRequiredArg
       .describedAs("broker-list")
+      .ofType(classOf[String])
+    val bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED: The bootstrap server list string in the form HOST1:PORT1,HOST2:PORT2.")
+      .withRequiredArg
+      .describedAs("bootstrap-server")
       .ofType(classOf[String])
     val syncOpt = parser.accepts("sync", "If set message send requests to the brokers are synchronously, one at a time as they arrive.")
     val compressionCodecOpt = parser.accepts("compression-codec", "The compression codec: either 'none', 'gzip', 'snappy', or 'lz4'." +
@@ -253,12 +257,20 @@ object ConsoleProducer {
     val options = parser.parse(args : _*)
     if(args.length == 0)
       CommandLineUtils.printUsageAndDie(parser, "Read data from standard input and publish it to Kafka.")
-    CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, brokerListOpt)
 
     val useOldProducer = options.has(useOldProducerOpt)
+
+    if (options.has(bootstrapServerOpt) && options.has(brokerListOpt))
+      CommandLineUtils.printUsageAndDie(parser, s"Option $bootstrapServerOpt is not valid with $brokerListOpt.")
+    else if (options.has(brokerListOpt)) {
+      CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, brokerListOpt)
+    } else {
+      CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, bootstrapServerOpt)
+    }
+    val bootstrapServer = List(bootstrapServerOpt, brokerListOpt).flatMap(x => Option(options.valueOf(x))).head
+    ToolsUtils.validatePortOrDie(parser, bootstrapServer)
+
     val topic = options.valueOf(topicOpt)
-    val brokerList = options.valueOf(brokerListOpt)
-    ToolsUtils.validatePortOrDie(parser,brokerList)
     val sync = options.has(syncOpt)
     val compressionCodecOptionValue = options.valueOf(compressionCodecOpt)
     val compressionCodec = if (options.has(compressionCodecOpt))

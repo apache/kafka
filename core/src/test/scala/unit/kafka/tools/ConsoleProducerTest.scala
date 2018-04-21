@@ -20,29 +20,60 @@ package kafka.tools
 import kafka.producer.ProducerConfig
 import ConsoleProducer.LineMessageReader
 import org.apache.kafka.clients.producer.KafkaProducer
-import org.junit.{Assert, Test}
+import org.apache.kafka.common.utils.Exit
+import org.apache.kafka.common.utils.Exit.Procedure
+import org.junit.Assert.{assertEquals, assertFalse, assertTrue, fail}
+import org.junit.Test
 
 class ConsoleProducerTest {
 
-  val validArgs: Array[String] = Array(
-    "--broker-list",
-    "localhost:1001,localhost:1002",
-    "--topic",
-    "t3",
-    "--property",
-    "parse.key=true",
-    "--property",
-    "key.separator=#"
-  )
+  @Test
+  def shouldParseValidOldProducerConfig() {
+    //Given
+    val args: Array[String] = Array(
+      "--broker-list", "localhost:1001,localhost:1002",
+      "--topic", "test",
+      "--old-producer")
 
-  val invalidArgs: Array[String] = Array(
-    "--t", // not a valid argument
-    "t3"
-  )
+    //When
+    val config = new ConsoleProducer.ProducerConfig(args)
+
+    //Then
+    assertTrue(config.useOldProducer)
+    assertEquals("localhost:1001,localhost:1002", config.bootstrapServer)
+    assertEquals("test", config.topic)
+  }
+
+  @Test
+  def shouldParseValidNewProducerConfig() {
+    //Given
+    val args: Array[String] = Array(
+      "--bootstrap-server", "localhost:1001",
+      "--topic", "test")
+
+    //When
+    val config = new ConsoleProducer.ProducerConfig(args)
+
+    //Then
+    assertFalse(config.useOldProducer)
+    assertEquals("localhost:1001", config.bootstrapServer)
+    assertEquals("test", config.topic)
+  }
 
   @Test
   def testValidConfigsNewProducer() {
-    val config = new ConsoleProducer.ProducerConfig(validArgs)
+    val args: Array[String] = Array(
+      "--bootstrap-server",
+      "localhost:1001,localhost:1002",
+      "--topic",
+      "t3",
+      "--property",
+      "parse.key=true",
+      "--property",
+      "key.separator=#"
+    )
+
+    val config = new ConsoleProducer.ProducerConfig(args)
     // New ProducerConfig constructor is package private, so we can't call it directly
     // Creating new Producer to validate instead
     val producer = new KafkaProducer(ConsoleProducer.getNewProducerProps(config))
@@ -52,27 +83,67 @@ class ConsoleProducerTest {
   @Test
   @deprecated("This test has been deprecated and it will be removed in a future release.", "0.10.0.0")
   def testValidConfigsOldProducer() {
-    val config = new ConsoleProducer.ProducerConfig(validArgs)
+    val args: Array[String] = Array(
+      "--broker-list",
+      "localhost:1001,localhost:1002",
+      "--topic",
+      "t3",
+      "--property",
+      "parse.key=true",
+      "--property",
+      "key.separator=#",
+      "--old-producer"
+    )
+
+    val config = new ConsoleProducer.ProducerConfig(args)
     new ProducerConfig(ConsoleProducer.getOldProducerProps(config))
   }
 
-  @Test
+  @Test(expected = classOf[joptsimple.OptionException])
   def testInvalidConfigs() {
-    try {
-      new ConsoleProducer.ProducerConfig(invalidArgs)
-      Assert.fail("Should have thrown an UnrecognizedOptionException")
-    } catch {
-      case _: joptsimple.OptionException => // expected exception
-    }
+    val invalidArgs: Array[String] = Array(
+      "--t", // not a valid argument
+      "t3"
+    )
+    new ConsoleProducer.ProducerConfig(invalidArgs)
   }
 
   @Test
   def testParseKeyProp(): Unit = {
-    val config = new ConsoleProducer.ProducerConfig(validArgs)
+    val args: Array[String] = Array(
+      "--bootstrap-server",
+      "localhost:1001,localhost:1002",
+      "--topic",
+      "t3",
+      "--property",
+      "parse.key=true",
+      "--property",
+      "key.separator=#"
+    )
+
+    val config = new ConsoleProducer.ProducerConfig(args)
     val reader = Class.forName(config.readerClass).newInstance().asInstanceOf[LineMessageReader]
     reader.init(System.in,ConsoleProducer.getReaderProps(config))
     assert(reader.keySeparator == "#")
     assert(reader.parseKey)
+  }
+
+  @Test
+  def testBrokerListAndBootstrapServerOptionMissing(): Unit = {
+    try {
+      val args: Array[String] = Array(
+        "--topic",
+        "producerTest"
+      )
+      Exit.setExitProcedure(new Procedure {
+        override def execute(statusCode: Int, message: String) =
+          throw new IllegalArgumentException("Test exception")
+      })
+      new ConsoleProducer.ProducerConfig(args)
+      fail()
+    } catch {
+      case ex: Exception => assert(ex.getMessage == "Test exception")
+    }
   }
 
 }
