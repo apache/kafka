@@ -338,7 +338,6 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
 
     @Override
     public void register(final StateStore store,
-                         final boolean loggingEnabledIsDeprecatedAndIgnored,
                          final StateRestoreCallback stateRestoreCallbackIsIgnoredInMock) {
         stateStores.put(store.name(), store);
     }
