@@ -21,6 +21,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Predicate;
@@ -57,10 +58,9 @@ public class KTableFilterTest {
                               final KTable<String, Integer> table2,
                               final KTable<String, Integer> table3,
                               final String topic) {
-        MockProcessorSupplier<String, Integer> proc2 = new MockProcessorSupplier<>();
-        MockProcessorSupplier<String, Integer> proc3 = new MockProcessorSupplier<>();
-        table2.toStream().process(proc2);
-        table3.toStream().process(proc3);
+        MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
+        table2.toStream().process(supplier);
+        table3.toStream().process(supplier);
 
         driver.setUp(builder, stateDir, Serdes.String(), Serdes.Integer());
 
@@ -73,8 +73,8 @@ public class KTableFilterTest {
         driver.process(topic, "B", null);
         driver.flushState();
 
-        proc2.checkAndClearProcessResult("A:null", "B:2", "C:null", "D:4", "A:null", "B:null");
-        proc3.checkAndClearProcessResult("A:1", "B:null", "C:3", "D:null", "A:null", "B:null");
+        supplier.processors.get(0).checkAndClearProcessResult("A:null", "B:2", "C:null", "D:4", "A:null", "B:null");
+        supplier.processors.get(1).checkAndClearProcessResult("A:1", "B:null", "C:3", "D:null", "A:null", "B:null");
     }
 
     @Test
@@ -269,11 +269,10 @@ public class KTableFilterTest {
                                           final KTableImpl<String, Integer, Integer> table1,
                                           final KTableImpl<String, Integer, Integer> table2,
                                           final String topic1) {
-        MockProcessorSupplier<String, Integer> proc1 = new MockProcessorSupplier<>();
-        MockProcessorSupplier<String, Integer> proc2 = new MockProcessorSupplier<>();
+        MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
 
-        builder.build().addProcessor("proc1", proc1, table1.name);
-        builder.build().addProcessor("proc2", proc2, table2.name);
+        builder.build().addProcessor("proc1", supplier, table1.name);
+        builder.build().addProcessor("proc2", supplier, table2.name);
 
         driver.setUp(builder, stateDir, Serdes.String(), Serdes.Integer());
 
@@ -282,25 +281,25 @@ public class KTableFilterTest {
         driver.process(topic1, "C", 1);
         driver.flushState();
 
-        proc1.checkAndClearProcessResult("A:(1<-null)", "B:(1<-null)", "C:(1<-null)");
-        proc2.checkAndClearProcessResult("A:(null<-null)", "B:(null<-null)", "C:(null<-null)");
+        supplier.processors.get(0).checkAndClearProcessResult("A:(1<-null)", "B:(1<-null)", "C:(1<-null)");
+        supplier.processors.get(1).checkAndClearProcessResult("A:(null<-null)", "B:(null<-null)", "C:(null<-null)");
 
         driver.process(topic1, "A", 2);
         driver.process(topic1, "B", 2);
         driver.flushState();
-        proc1.checkAndClearProcessResult("A:(2<-null)", "B:(2<-null)");
-        proc2.checkAndClearProcessResult("A:(2<-null)", "B:(2<-null)");
+        supplier.processors.get(0).checkAndClearProcessResult("A:(2<-null)", "B:(2<-null)");
+        supplier.processors.get(1).checkAndClearProcessResult("A:(2<-null)", "B:(2<-null)");
 
         driver.process(topic1, "A", 3);
         driver.flushState();
-        proc1.checkAndClearProcessResult("A:(3<-null)");
-        proc2.checkAndClearProcessResult("A:(null<-null)");
+        supplier.processors.get(0).checkAndClearProcessResult("A:(3<-null)");
+        supplier.processors.get(1).checkAndClearProcessResult("A:(null<-null)");
 
         driver.process(topic1, "A", null);
         driver.process(topic1, "B", null);
         driver.flushState();
-        proc1.checkAndClearProcessResult("A:(null<-null)", "B:(null<-null)");
-        proc2.checkAndClearProcessResult("A:(null<-null)", "B:(null<-null)");
+        supplier.processors.get(0).checkAndClearProcessResult("A:(null<-null)", "B:(null<-null)");
+        supplier.processors.get(1).checkAndClearProcessResult("A:(null<-null)", "B:(null<-null)");
     }
 
 
@@ -348,11 +347,11 @@ public class KTableFilterTest {
                                        final String topic1) {
         table2.enableSendingOldValues();
 
-        MockProcessorSupplier<String, Integer> proc1 = new MockProcessorSupplier<>();
-        MockProcessorSupplier<String, Integer> proc2 = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
+        final Topology topology = builder.build();
 
-        builder.build().addProcessor("proc1", proc1, table1.name);
-        builder.build().addProcessor("proc2", proc2, table2.name);
+        topology.addProcessor("proc1", supplier, table1.name);
+        topology.addProcessor("proc2", supplier, table2.name);
 
         driver.setUp(builder, stateDir, Serdes.String(), Serdes.Integer());
 
@@ -361,25 +360,25 @@ public class KTableFilterTest {
         driver.process(topic1, "C", 1);
         driver.flushState();
 
-        proc1.checkAndClearProcessResult("A:(1<-null)", "B:(1<-null)", "C:(1<-null)");
-        proc2.checkEmptyAndClearProcessResult();
+        supplier.processors.get(0).checkAndClearProcessResult("A:(1<-null)", "B:(1<-null)", "C:(1<-null)");
+        supplier.processors.get(1).checkEmptyAndClearProcessResult();
 
         driver.process(topic1, "A", 2);
         driver.process(topic1, "B", 2);
         driver.flushState();
-        proc1.checkAndClearProcessResult("A:(2<-1)", "B:(2<-1)");
-        proc2.checkAndClearProcessResult("A:(2<-null)", "B:(2<-null)");
+        supplier.processors.get(0).checkAndClearProcessResult("A:(2<-1)", "B:(2<-1)");
+        supplier.processors.get(1).checkAndClearProcessResult("A:(2<-null)", "B:(2<-null)");
 
         driver.process(topic1, "A", 3);
         driver.flushState();
-        proc1.checkAndClearProcessResult("A:(3<-2)");
-        proc2.checkAndClearProcessResult("A:(null<-2)");
+        supplier.processors.get(0).checkAndClearProcessResult("A:(3<-2)");
+        supplier.processors.get(1).checkAndClearProcessResult("A:(null<-2)");
 
         driver.process(topic1, "A", null);
         driver.process(topic1, "B", null);
         driver.flushState();
-        proc1.checkAndClearProcessResult("A:(null<-3)", "B:(null<-2)");
-        proc2.checkAndClearProcessResult("B:(null<-2)");
+        supplier.processors.get(0).checkAndClearProcessResult("A:(null<-3)", "B:(null<-2)");
+        supplier.processors.get(1).checkAndClearProcessResult("B:(null<-2)");
     }
 
     @Test
@@ -424,11 +423,11 @@ public class KTableFilterTest {
                                                  final KTableImpl<String, String, String> table1,
                                                  final KTableImpl<String, String, String> table2,
                                                  final String topic1) {
-        MockProcessorSupplier<String, String> proc1 = new MockProcessorSupplier<>();
-        MockProcessorSupplier<String, String> proc2 = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<String, String> supplier = new MockProcessorSupplier<>();
+        final Topology topology = builder.build();
 
-        builder.build().addProcessor("proc1", proc1, table1.name);
-        builder.build().addProcessor("proc2", proc2, table2.name);
+        topology.addProcessor("proc1", supplier, table1.name);
+        topology.addProcessor("proc2", supplier, table2.name);
 
         driver.setUp(builder, stateDir, stringSerde, stringSerde);
 
@@ -436,8 +435,8 @@ public class KTableFilterTest {
         driver.process(topic1, "B", "reject");
         driver.process(topic1, "C", "reject");
         driver.flushState();
-        proc1.checkAndClearProcessResult("A:(reject<-null)", "B:(reject<-null)", "C:(reject<-null)");
-        proc2.checkEmptyAndClearProcessResult();
+        supplier.processors.get(0).checkAndClearProcessResult("A:(reject<-null)", "B:(reject<-null)", "C:(reject<-null)");
+        supplier.processors.get(1).checkEmptyAndClearProcessResult();
     }
 
     @Test

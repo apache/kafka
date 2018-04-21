@@ -185,10 +185,6 @@ public class TopologyTestDriverTest {
         private boolean closed = false;
         private final List<Record> processedRecords = new ArrayList<>();
 
-        MockProcessor() {
-            this(Collections.<Punctuation>emptySet());
-        }
-
         MockProcessor(final Collection<Punctuation> punctuations) {
             this.punctuations = punctuations;
         }

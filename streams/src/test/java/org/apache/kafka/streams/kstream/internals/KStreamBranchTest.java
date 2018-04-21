@@ -26,8 +26,6 @@ import org.apache.kafka.test.MockProcessorSupplier;
 import org.junit.Rule;
 import org.junit.Test;
 
-import java.lang.reflect.Array;
-
 import static org.junit.Assert.assertEquals;
 
 public class KStreamBranchTest {
@@ -65,17 +63,15 @@ public class KStreamBranchTest {
 
         KStream<Integer, String> stream;
         KStream<Integer, String>[] branches;
-        MockProcessorSupplier<Integer, String>[] processors;
 
         stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String()));
         branches = stream.branch(isEven, isMultipleOfThree, isOdd);
 
         assertEquals(3, branches.length);
 
-        processors = (MockProcessorSupplier<Integer, String>[]) Array.newInstance(MockProcessorSupplier.class, branches.length);
+        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
         for (int i = 0; i < branches.length; i++) {
-            processors[i] = new MockProcessorSupplier<>();
-            branches[i].process(processors[i]);
+            branches[i].process(supplier);
         }
 
         driver.setUp(builder);
@@ -83,9 +79,10 @@ public class KStreamBranchTest {
             driver.process(topicName, expectedKey, "V" + expectedKey);
         }
 
-        assertEquals(3, processors[0].processed.size());
-        assertEquals(1, processors[1].processed.size());
-        assertEquals(2, processors[2].processed.size());
+        assertEquals(3, supplier.processors.size());
+        assertEquals(3, supplier.processors.get(0).processed.size());
+        assertEquals(1, supplier.processors.get(1).processed.size());
+        assertEquals(2, supplier.processors.get(2).processed.size());
     }
 
     @Test

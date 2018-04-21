@@ -57,23 +57,23 @@ public class KStreamFlatMapTest {
         final int[] expectedKeys = {0, 1, 2, 3};
 
         KStream<Integer, String> stream;
-        MockProcessorSupplier<String, String> processor;
+        MockProcessorSupplier<String, String> supplier;
 
-        processor = new MockProcessorSupplier<>();
+        supplier = new MockProcessorSupplier<>();
         stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String()));
-        stream.flatMap(mapper).process(processor);
+        stream.flatMap(mapper).process(supplier);
 
         driver.setUp(builder);
         for (int expectedKey : expectedKeys) {
             driver.process(topicName, expectedKey, "V" + expectedKey);
         }
 
-        assertEquals(6, processor.processed.size());
+        assertEquals(6, supplier.getTheProcessor().processed.size());
 
         String[] expected = {"10:V1", "20:V2", "21:V2", "30:V3", "31:V3", "32:V3"};
 
         for (int i = 0; i < expected.length; i++) {
-            assertEquals(expected[i], processor.processed.get(i));
+            assertEquals(expected[i], supplier.getTheProcessor().processed.get(i));
         }
     }
 }

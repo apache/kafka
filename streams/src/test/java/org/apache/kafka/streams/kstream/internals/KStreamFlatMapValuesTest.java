@@ -56,8 +56,8 @@ public class KStreamFlatMapValuesTest {
         final int[] expectedKeys = {0, 1, 2, 3};
 
         final KStream<Integer, Integer> stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.Integer()));
-        final MockProcessorSupplier<Integer, String> processor = new MockProcessorSupplier<>();
-        stream.flatMapValues(mapper).process(processor);
+        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
+        stream.flatMapValues(mapper).process(supplier);
 
         driver.setUp(builder);
         for (final int expectedKey : expectedKeys) {
@@ -66,7 +66,7 @@ public class KStreamFlatMapValuesTest {
 
         String[] expected = {"0:v0", "0:V0", "1:v1", "1:V1", "2:v2", "2:V2", "3:v3", "3:V3"};
 
-        assertArrayEquals(expected, processor.processed.toArray());
+        assertArrayEquals(expected, supplier.getTheProcessor().processed.toArray());
     }
 
 
@@ -88,9 +88,9 @@ public class KStreamFlatMapValuesTest {
         final int[] expectedKeys = {0, 1, 2, 3};
 
         final KStream<Integer, Integer> stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.Integer()));
-        final MockProcessorSupplier<Integer, String> processor = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
 
-        stream.flatMapValues(mapper).process(processor);
+        stream.flatMapValues(mapper).process(supplier);
 
         driver.setUp(builder);
         for (final int expectedKey : expectedKeys) {
@@ -99,6 +99,6 @@ public class KStreamFlatMapValuesTest {
 
         String[] expected = {"0:v0", "0:k0", "1:v1", "1:k1", "2:v2", "2:k2", "3:v3", "3:k3"};
 
-        assertArrayEquals(expected, processor.processed.toArray());
+        assertArrayEquals(expected, supplier.getTheProcessor().processed.toArray());
     }
 }

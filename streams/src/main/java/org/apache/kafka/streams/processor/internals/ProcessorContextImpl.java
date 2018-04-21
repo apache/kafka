@@ -152,15 +152,4 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         return task.schedule(interval, type, callback);
     }
 
-    @Override
-    @Deprecated
-    public void schedule(final long interval) {
-        schedule(interval, PunctuationType.STREAM_TIME, new Punctuator() {
-            @Override
-            public void punctuate(final long timestamp) {
-                currentNode().processor().punctuate(timestamp);
-            }
-        });
-    }
-
 }

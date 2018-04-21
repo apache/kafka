@@ -27,6 +27,7 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.TestUtils;
@@ -70,9 +71,7 @@ public class KStreamKStreamLeftJoinTest {
         final KStream<Integer, String> stream1;
         final KStream<Integer, String> stream2;
         final KStream<Integer, String> joined;
-        final MockProcessorSupplier<Integer, String> processor;
-
-        processor = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
         stream1 = builder.stream(topic1, consumed);
         stream2 = builder.stream(topic2, consumed);
 
@@ -80,7 +79,7 @@ public class KStreamKStreamLeftJoinTest {
                                   MockValueJoiner.TOSTRING_JOINER,
                                   JoinWindows.of(100),
                                   Joined.with(intSerde, stringSerde, stringSerde));
-        joined.process(processor);
+        joined.process(supplier);
 
         final Collection<Set<String>> copartitionGroups = StreamsBuilderTest.getCopartitionedGroups(builder);
 
@@ -89,6 +88,8 @@ public class KStreamKStreamLeftJoinTest {
 
         driver.setUp(builder, stateDir, Serdes.Integer(), Serdes.String());
         driver.setTime(0L);
+
+        final MockProcessor<Integer, String> processor = supplier.getTheProcessor();
 
         // push two items to the primary stream. the other window is empty
         // w1 {}
@@ -161,9 +162,7 @@ public class KStreamKStreamLeftJoinTest {
         final KStream<Integer, String> stream1;
         final KStream<Integer, String> stream2;
         final KStream<Integer, String> joined;
-        final MockProcessorSupplier<Integer, String> processor;
-
-        processor = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
         stream1 = builder.stream(topic1, consumed);
         stream2 = builder.stream(topic2, consumed);
 
@@ -171,7 +170,7 @@ public class KStreamKStreamLeftJoinTest {
                                   MockValueJoiner.TOSTRING_JOINER,
                                   JoinWindows.of(100),
                                   Joined.with(intSerde, stringSerde, stringSerde));
-        joined.process(processor);
+        joined.process(supplier);
 
         final Collection<Set<String>> copartitionGroups = StreamsBuilderTest.getCopartitionedGroups(builder);
 
@@ -179,6 +178,8 @@ public class KStreamKStreamLeftJoinTest {
         assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
 
         driver.setUp(builder, stateDir);
+
+        final MockProcessor<Integer, String> processor = supplier.getTheProcessor();
 
         // push two items to the primary stream. the other window is empty. this should produce two items
         // w1 = {}

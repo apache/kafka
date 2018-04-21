@@ -64,12 +64,15 @@ import static org.junit.Assert.fail;
 
 public class KStreamImplTest {
 
-    final private Serde<String> stringSerde = Serdes.String();
-    final private Serde<Integer> intSerde = Serdes.Integer();
+    private final Serde<String> stringSerde = Serdes.String();
+    private final Serde<Integer> intSerde = Serdes.Integer();
+    private final Consumed<String, String> consumed = Consumed.with(stringSerde, stringSerde);
     private final Consumed<String, String> stringConsumed = Consumed.with(Serdes.String(), Serdes.String());
+
+    private final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
+
     private KStream<String, String> testStream;
     private StreamsBuilder builder;
-    private final Consumed<String, String> consumed = Consumed.with(stringSerde, stringSerde);
 
     @Rule
     public final KStreamTestDriver driver = new KStreamTestDriver();
@@ -201,12 +204,11 @@ public class KStreamImplTest {
         final StreamsBuilder builder = new StreamsBuilder();
         final String input = "topic";
         final KStream<String, String> stream = builder.stream(input, consumed);
-        final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
         stream.through("through-topic", Produced.with(stringSerde, stringSerde)).process(processorSupplier);
 
         driver.setUp(builder);
         driver.process(input, "a", "b");
-        assertThat(processorSupplier.processed, equalTo(Collections.singletonList("a:b")));
+        assertThat(processorSupplier.getTheProcessor().processed, equalTo(Collections.singletonList("a:b")));
     }
 
     @Test
@@ -214,13 +216,12 @@ public class KStreamImplTest {
         final StreamsBuilder builder = new StreamsBuilder();
         final String input = "topic";
         final KStream<String, String> stream = builder.stream(input, consumed);
-        final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
         stream.to("to-topic", Produced.with(stringSerde, stringSerde));
         builder.stream("to-topic", consumed).process(processorSupplier);
 
         driver.setUp(builder);
         driver.process(input, "e", "f");
-        assertThat(processorSupplier.processed, equalTo(Collections.singletonList("e:f")));
+        assertThat(processorSupplier.getTheProcessor().processed, equalTo(Collections.singletonList("e:f")));
     }
 
     @Test
@@ -498,7 +499,6 @@ public class KStreamImplTest {
         final KStream<String, String> source2 = builder.stream(topic2);
         final KStream<String, String> merged = source1.merge(source2);
 
-        final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
         merged.process(processorSupplier);
 
         driver.setUp(builder);
@@ -509,7 +509,7 @@ public class KStreamImplTest {
         driver.process(topic2, "C", "cc");
         driver.process(topic1, "D", "dd");
 
-        assertEquals(Utils.mkList("A:aa", "B:bb", "C:cc", "D:dd"), processorSupplier.processed);
+        assertEquals(Utils.mkList("A:aa", "B:bb", "C:cc", "D:dd"), processorSupplier.getTheProcessor().processed);
     }
     
     @Test
@@ -525,7 +525,6 @@ public class KStreamImplTest {
         final KStream<String, String> source4 = builder.stream(topic4);
         final KStream<String, String> merged = source1.merge(source2).merge(source3).merge(source4);
 
-        final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
         merged.process(processorSupplier);
 
         driver.setUp(builder);
@@ -541,14 +540,13 @@ public class KStreamImplTest {
         driver.process(topic1, "H", "hh");
 
         assertEquals(Utils.mkList("A:aa", "B:bb", "C:cc", "D:dd", "E:ee", "F:ff", "G:gg", "H:hh"),
-                     processorSupplier.processed);
+                     processorSupplier.getTheProcessor().processed);
     }
 
     @Test
     public void shouldProcessFromSourceThatMatchPattern() {
         final KStream<String, String> pattern2Source = builder.stream(Pattern.compile("topic-\\d"));
 
-        final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
         pattern2Source.process(processorSupplier);
 
         driver.setUp(builder);
@@ -561,7 +559,7 @@ public class KStreamImplTest {
         driver.process("topic-7", "E", "ee");
 
         assertEquals(Utils.mkList("A:aa", "B:bb", "C:cc", "D:dd", "E:ee"),
-                processorSupplier.processed);
+                processorSupplier.getTheProcessor().processed);
     }
 
     @Test
@@ -573,7 +571,6 @@ public class KStreamImplTest {
         final KStream<String, String> source3 = builder.stream(topic3);
         final KStream<String, String> merged = pattern2Source1.merge(pattern2Source2).merge(source3);
 
-        final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
         merged.process(processorSupplier);
 
         driver.setUp(builder);
@@ -586,6 +583,6 @@ public class KStreamImplTest {
         driver.process(topic3, "E", "ee");
 
         assertEquals(Utils.mkList("A:aa", "B:bb", "C:cc", "D:dd", "E:ee"),
-                processorSupplier.processed);
+                processorSupplier.getTheProcessor().processed);
     }
 }

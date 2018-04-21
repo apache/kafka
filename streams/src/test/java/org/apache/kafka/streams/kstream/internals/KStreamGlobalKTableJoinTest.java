@@ -25,6 +25,7 @@ import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.test.KStreamTestDriver;
+import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.TestUtils;
@@ -46,10 +47,12 @@ public class KStreamGlobalKTableJoinTest {
 
     final private Serde<Integer> intSerde = Serdes.Integer();
     final private Serde<String> stringSerde = Serdes.String();
+
     @Rule
     public final KStreamTestDriver driver = new KStreamTestDriver();
+
     private File stateDir = null;
-    private MockProcessorSupplier<Integer, String> processor;
+    private MockProcessor<Integer, String> processor;
     private final int[] expectedKeys = {0, 1, 2, 3};
     private StreamsBuilder builder;
 
@@ -62,7 +65,7 @@ public class KStreamGlobalKTableJoinTest {
         final GlobalKTable<String, String> table; // value of stream optionally contains key of table
         final KeyValueMapper<Integer, String, String> keyMapper;
 
-        processor = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
         final Consumed<Integer, String> streamConsumed = Consumed.with(intSerde, stringSerde);
         final Consumed<String, String> tableConsumed = Consumed.with(stringSerde, stringSerde);
         stream = builder.stream(streamTopic, streamConsumed);
@@ -76,10 +79,12 @@ public class KStreamGlobalKTableJoinTest {
                 return tokens.length > 1 ? tokens[1] : null;
             }
         };
-        stream.join(table, keyMapper, MockValueJoiner.TOSTRING_JOINER).process(processor);
+        stream.join(table, keyMapper, MockValueJoiner.TOSTRING_JOINER).process(supplier);
 
         driver.setUp(builder, stateDir);
         driver.setTime(0L);
+
+        processor = supplier.getTheProcessor();
     }
 
     private void pushToStream(final int messageCount, final String valuePrefix, final boolean includeForeignKey) {

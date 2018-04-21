@@ -183,7 +183,7 @@ public class StreamsBuilderTest {
         driver.process("topic-source", "A", "aa");
 
         // no exception was thrown
-        assertEquals(Utils.mkList("A:aa"), processorSupplier.processed);
+        assertEquals(Utils.mkList("A:aa"), processorSupplier.getTheProcessor().processed);
     }
 
     @Test
@@ -202,8 +202,8 @@ public class StreamsBuilderTest {
 
         driver.process("topic-source", "A", "aa");
 
-        assertEquals(Utils.mkList("A:aa"), sourceProcessorSupplier.processed);
-        assertEquals(Utils.mkList("A:aa"), throughProcessorSupplier.processed);
+        assertEquals(Utils.mkList("A:aa"), sourceProcessorSupplier.getTheProcessor().processed);
+        assertEquals(Utils.mkList("A:aa"), throughProcessorSupplier.getTheProcessor().processed);
     }
     
     @Test
@@ -226,7 +226,7 @@ public class StreamsBuilderTest {
         driver.process(topic2, "C", "cc");
         driver.process(topic1, "D", "dd");
 
-        assertEquals(Utils.mkList("A:aa", "B:bb", "C:cc", "D:dd"), processorSupplier.processed);
+        assertEquals(Utils.mkList("A:aa", "B:bb", "C:cc", "D:dd"), processorSupplier.getTheProcessor().processed);
     }
 
     @Test

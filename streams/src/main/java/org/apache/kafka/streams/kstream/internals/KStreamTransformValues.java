@@ -106,12 +106,6 @@ public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V> 
                         return context.schedule(interval, type, callback);
                     }
 
-                    @SuppressWarnings("deprecation")
-                    @Override
-                    public void schedule(final long interval) {
-                        context.schedule(interval);
-                    }
-
                     @Override
                     public <K, V> void forward(final K key, final V value) {
                         throw new StreamsException("ProcessorContext#forward() must not be called within TransformValues.");

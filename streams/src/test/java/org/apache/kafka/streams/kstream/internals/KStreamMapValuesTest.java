@@ -36,6 +36,9 @@ public class KStreamMapValuesTest {
 
     final private Serde<Integer> intSerde = Serdes.Integer();
     final private Serde<String> stringSerde = Serdes.String();
+    final private MockProcessorSupplier<Integer, Integer> supplier = new MockProcessorSupplier<>();
+
+
     @Rule
     public final KStreamTestDriver driver = new KStreamTestDriver();
 
@@ -54,9 +57,8 @@ public class KStreamMapValuesTest {
         final int[] expectedKeys = {1, 10, 100, 1000};
 
         KStream<Integer, String> stream;
-        MockProcessorSupplier<Integer, Integer> processor = new MockProcessorSupplier<>();
         stream = builder.stream(topicName, Consumed.with(intSerde, stringSerde));
-        stream.mapValues(mapper).process(processor);
+        stream.mapValues(mapper).process(supplier);
 
         driver.setUp(builder);
         for (int expectedKey : expectedKeys) {
@@ -64,7 +66,7 @@ public class KStreamMapValuesTest {
         }
         String[] expected = {"1:1", "10:2", "100:3", "1000:4"};
 
-        assertArrayEquals(expected, processor.processed.toArray());
+        assertArrayEquals(expected, supplier.getTheProcessor().processed.toArray());
     }
 
     @Test
@@ -82,9 +84,8 @@ public class KStreamMapValuesTest {
         final int[] expectedKeys = {1, 10, 100, 1000};
 
         KStream<Integer, String> stream;
-        MockProcessorSupplier<Integer, Integer> processor = new MockProcessorSupplier<>();
         stream = builder.stream(topicName, Consumed.with(intSerde, stringSerde));
-        stream.mapValues(mapper).process(processor);
+        stream.mapValues(mapper).process(supplier);
 
         driver.setUp(builder);
         for (int expectedKey : expectedKeys) {
@@ -92,7 +93,7 @@ public class KStreamMapValuesTest {
         }
         String[] expected = {"1:2", "10:12", "100:103", "1000:1004"};
 
-        assertArrayEquals(expected, processor.processed.toArray());
+        assertArrayEquals(expected, supplier.getTheProcessor().processed.toArray());
     }
 
 }
