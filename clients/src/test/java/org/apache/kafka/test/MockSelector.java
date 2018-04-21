@@ -124,11 +124,12 @@ public class MockSelector implements Selectable {
 
     private void completeSend(Send send) throws IOException {
         // Consume the send so that we will be able to send more requests to the destination
-        ByteBufferChannel discardChannel = new ByteBufferChannel(send.size());
-        while (!send.completed()) {
-            send.writeTo(discardChannel);
+        try (ByteBufferChannel discardChannel = new ByteBufferChannel(send.size())) {
+            while (!send.completed()) {
+                send.writeTo(discardChannel);
+            }
+            completedSends.add(send);
         }
-        completedSends.add(send);
     }
 
     private void completeDelayedReceives() {

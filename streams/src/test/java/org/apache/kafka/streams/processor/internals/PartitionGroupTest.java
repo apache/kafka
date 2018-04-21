@@ -30,9 +30,10 @@ import org.apache.kafka.test.MockTimestampExtractor;
 import org.junit.Test;
 
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.Assert.assertEquals;
 
 public class PartitionGroupTest {
@@ -61,12 +62,7 @@ public class PartitionGroupTest {
     private final byte[] recordValue = intSerializer.serialize(null, 10);
     private final byte[] recordKey = intSerializer.serialize(null, 1);
 
-    private final PartitionGroup group = new PartitionGroup(new HashMap<TopicPartition, RecordQueue>() {
-        {
-            put(partition1, queue1);
-            put(partition2, queue2);
-        }
-    });
+    private final PartitionGroup group = new PartitionGroup(mkMap(mkEntry(partition1, queue1), mkEntry(partition2, queue2)));
 
     @Test
     public void testTimeTracking() {

@@ -25,7 +25,7 @@ import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
-import org.apache.kafka.test.MockProcessorContext;
+import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.NoOpRecordCollector;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -45,7 +45,7 @@ import static org.junit.Assert.assertTrue;
 public class RocksDBSessionStoreTest {
 
     private SessionStore<String, Long> sessionStore;
-    private MockProcessorContext context;
+    private InternalMockProcessorContext context;
 
     @Before
     public void before() {
@@ -59,7 +59,7 @@ public class RocksDBSessionStoreTest {
                                                  Serdes.String(),
                                                  Serdes.Long());
 
-        context = new MockProcessorContext(TestUtils.tempDirectory(),
+        context = new InternalMockProcessorContext(TestUtils.tempDirectory(),
                                            Serdes.String(),
                                            Serdes.Long(),
                                            new NoOpRecordCollector(),

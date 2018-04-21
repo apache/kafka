@@ -692,6 +692,10 @@ class KafkaConfigTest {
         //Sasl Configs
         case KafkaConfig.SaslMechanismInterBrokerProtocolProp => // ignore
         case KafkaConfig.SaslEnabledMechanismsProp =>
+        case KafkaConfig.SaslClientCallbackHandlerClassProp =>
+        case KafkaConfig.SaslServerCallbackHandlerClassProp =>
+        case KafkaConfig.SaslLoginClassProp =>
+        case KafkaConfig.SaslLoginCallbackHandlerClassProp =>
         case KafkaConfig.SaslKerberosServiceNameProp => // ignore string
         case KafkaConfig.SaslKerberosKinitCmdProp =>
         case KafkaConfig.SaslKerberosTicketRenewWindowFactorProp =>
@@ -774,6 +778,15 @@ class KafkaConfigTest {
     props.put(KafkaConfig.ZkConnectProp, "127.0.0.1:2181")
     props.put(KafkaConfig.ListenersProp, "PLAINTEXT://0.0.0.0:9092")
     assertFalse(isValidKafkaConfig(props))
+  }
+
+  @Test
+  def testMaxConnectionsPerIpProp() {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    props.put(KafkaConfig.MaxConnectionsPerIpProp, "0")
+    assertFalse(isValidKafkaConfig(props))
+    props.put(KafkaConfig.MaxConnectionsPerIpOverridesProp, "127.0.0.1:100")
+    assertTrue(isValidKafkaConfig(props))
   }
 
   private def assertPropertyInvalid(validRequiredProps: => Properties, name: String, values: Any*) {

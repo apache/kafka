@@ -1284,11 +1284,8 @@ public class InternalTopologyBuilder {
 
         if (nodeFactory instanceof SourceNodeFactory) {
             final List<String> topics = ((SourceNodeFactory) nodeFactory).topics;
-            if (topics != null && topics.size() == 1 && globalTopics.contains(topics.get(0))) {
-                return true;
-            }
+            return topics != null && topics.size() == 1 && globalTopics.contains(topics.get(0));
         }
-
         return false;
     }
 
@@ -1882,5 +1879,9 @@ public class InternalTopologyBuilder {
         // update the topic groups with the returned subscription set for regex pattern subscriptions
         subscriptionUpdates.updateTopics(topics);
         updateSubscriptions(subscriptionUpdates, logPrefix);
+    }
+
+    public synchronized Set<String> getSourceTopicNames() {
+        return sourceTopicNames;
     }
 }

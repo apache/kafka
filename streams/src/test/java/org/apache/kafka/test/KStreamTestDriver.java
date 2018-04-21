@@ -42,13 +42,14 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 public class KStreamTestDriver extends ExternalResource {
 
-    private static final long DEFAULT_CACHE_SIZE_BYTES = 1 * 1024 * 1024L;
+    private static final long DEFAULT_CACHE_SIZE_BYTES = 1024 * 1024L;
 
     private ProcessorTopology topology;
-    private MockProcessorContext context;
+    private InternalMockProcessorContext context;
     private ProcessorTopology globalTopology;
     private final LogContext logContext = new LogContext("testCache ");
 
@@ -85,7 +86,7 @@ public class KStreamTestDriver extends ExternalResource {
         topology = builder.build(null);
         globalTopology = builder.buildGlobalStateTopology();
         final ThreadCache cache = new ThreadCache(logContext, cacheSize, new MockStreamsMetrics(new Metrics()));
-        context = new MockProcessorContext(stateDir, keySerde, valSerde, new MockRecordCollector(), cache);
+        context = new InternalMockProcessorContext(stateDir, keySerde, valSerde, new MockRecordCollector(), cache);
         context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "topic"));
         // init global topology first as it will add stores to the
         // store map that are required for joins etc.
@@ -126,7 +127,7 @@ public class KStreamTestDriver extends ExternalResource {
         globalTopology = internalTopologyBuilder.buildGlobalStateTopology();
 
         final ThreadCache cache = new ThreadCache(logContext, cacheSize, new MockStreamsMetrics(new Metrics()));
-        context = new MockProcessorContext(stateDir, keySerde, valSerde, new MockRecordCollector(), cache);
+        context = new InternalMockProcessorContext(stateDir, keySerde, valSerde, new MockRecordCollector(), cache);
         context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "topic"));
 
         // init global topology first as it will add stores to the
@@ -184,9 +185,15 @@ public class KStreamTestDriver extends ExternalResource {
 
     private ProcessorNode sourceNodeByTopicName(final String topicName) {
         ProcessorNode topicNode = topology.source(topicName);
-
-        if (topicNode == null && globalTopology != null) {
-            topicNode = globalTopology.source(topicName);
+        if (topicNode == null) {
+            for (final String sourceTopic : topology.sourceTopics()) {
+                if (Pattern.compile(sourceTopic).matcher(topicName).matches()) {
+                    return topology.source(sourceTopic);
+                }
+            }
+            if (globalTopology != null) {
+                topicNode = globalTopology.source(topicName);
+            }
         }
 
         return topicNode;
@@ -231,7 +238,7 @@ public class KStreamTestDriver extends ExternalResource {
 
         final List<ProcessorNode> nodes = topology.processors();
 
-        for (final ProcessorNode node: nodes) {
+        for (final ProcessorNode node : nodes) {
             names.add(node.name());
         }
 
@@ -241,7 +248,7 @@ public class KStreamTestDriver extends ExternalResource {
     public ProcessorNode processor(final String name) {
         final List<ProcessorNode> nodes = topology.processors();
 
-        for (final ProcessorNode node: nodes) {
+        for (final ProcessorNode node : nodes) {
             if (node.name().equals(name)) {
                 return node;
             }

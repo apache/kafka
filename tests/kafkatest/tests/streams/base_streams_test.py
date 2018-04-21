@@ -94,6 +94,6 @@ class BaseStreamsTest(KafkaTest):
 
     @staticmethod
     def verify_from_file(processor, message, file):
-        result = processor.node.account.ssh_output("grep '%s' %s | wc -l" % (message, file), allow_fail=False)
+        result = processor.node.account.ssh_output("grep -E '%s' %s | wc -l" % (message, file), allow_fail=False)
         return int(result)
 

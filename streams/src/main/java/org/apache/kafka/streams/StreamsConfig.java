@@ -123,7 +123,7 @@ import static org.apache.kafka.common.requests.IsolationLevel.READ_COMMITTED;
  * </ul>
  *
  *
- * @see KafkaStreams#KafkaStreams(org.apache.kafka.streams.Topology, StreamsConfig)
+ * @see KafkaStreams#KafkaStreams(org.apache.kafka.streams.Topology, Properties)
  * @see ConsumerConfig
  * @see ProducerConfig
  */
@@ -166,6 +166,36 @@ public class StreamsConfig extends AbstractConfig {
      * properties}.
      */
     public static final String ADMIN_CLIENT_PREFIX = "admin.";
+
+    /**
+     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 0.10.0.x}.
+     */
+    public static final String UPGRADE_FROM_0100 = "0.10.0";
+
+    /**
+     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 0.10.1.x}.
+     */
+    public static final String UPGRADE_FROM_0101 = "0.10.1";
+
+    /**
+     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 0.10.2.x}.
+     */
+    public static final String UPGRADE_FROM_0102 = "0.10.2";
+
+    /**
+     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 0.11.0.x}.
+     */
+    public static final String UPGRADE_FROM_0110 = "0.11.0";
+
+    /**
+     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 1.0.x}.
+     */
+    public static final String UPGRADE_FROM_10 = "1.0";
+
+    /**
+     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 1.1.x}.
+     */
+    public static final String UPGRADE_FROM_11 = "1.1";
 
     /**
      * Config value for parameter {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"} for at-least-once processing guarantees.
@@ -340,6 +370,12 @@ public class StreamsConfig extends AbstractConfig {
     public static final String TIMESTAMP_EXTRACTOR_CLASS_CONFIG = "timestamp.extractor";
     private static final String TIMESTAMP_EXTRACTOR_CLASS_DOC = "Timestamp extractor class that implements the <code>org.apache.kafka.streams.processor.TimestampExtractor</code> interface. This config is deprecated, use <code>" + DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG + "</code> instead";
 
+    /** {@code upgrade.from} */
+    public static final String UPGRADE_FROM_CONFIG = "upgrade.from";
+    public static final String UPGRADE_FROM_DOC = "Allows upgrading from versions 0.10.0/0.10.1/0.10.2/0.11.0/1.0/1.1 to version 1.2 (or newer) in a backward compatible way. " +
+        "When upgrading from 1.2 to a newer version it is not required to specify this config." +
+        "Default is null. Accepted values are \"" + UPGRADE_FROM_0100 + "\", \"" + UPGRADE_FROM_0101 + "\", \"" + UPGRADE_FROM_0102 + "\", \"" + UPGRADE_FROM_0110 + "\", \"" + UPGRADE_FROM_10 + "\", \"" + UPGRADE_FROM_11 + "\" (for upgrading from the corresponding old version).";
+
     /**
      * {@code value.serde}
      * @deprecated Use {@link #DEFAULT_VALUE_SERDE_CLASS_CONFIG} instead.
@@ -354,7 +390,7 @@ public class StreamsConfig extends AbstractConfig {
 
     /**
      * {@code zookeeper.connect}
-     * @deprecated Kakfa Streams does not use Zookeeper anymore and this parameter will be ignored.
+     * @deprecated Kafka Streams does not use Zookeeper anymore and this parameter will be ignored.
      */
     @Deprecated
     public static final String ZOOKEEPER_CONNECT_CONFIG = "zookeeper.connect";
@@ -468,12 +504,12 @@ public class StreamsConfig extends AbstractConfig {
                     COMMIT_INTERVAL_MS_DOC)
             .define(CONNECTIONS_MAX_IDLE_MS_CONFIG,
                     ConfigDef.Type.LONG,
-                    9 * 60 * 1000,
+                    9 * 60 * 1000L,
                     ConfigDef.Importance.LOW,
                     CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_DOC)
             .define(METADATA_MAX_AGE_CONFIG,
                     ConfigDef.Type.LONG,
-                    5 * 60 * 1000,
+                    5 * 60 * 1000L,
                     atLeast(0),
                     ConfigDef.Importance.LOW,
                     CommonClientConfigs.METADATA_MAX_AGE_DOC)
@@ -496,7 +532,7 @@ public class StreamsConfig extends AbstractConfig {
                     CommonClientConfigs.METRICS_RECORDING_LEVEL_DOC)
             .define(METRICS_SAMPLE_WINDOW_MS_CONFIG,
                     Type.LONG,
-                    30000,
+                    30000L,
                     atLeast(0),
                     Importance.LOW,
                     CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_DOC)
@@ -507,7 +543,7 @@ public class StreamsConfig extends AbstractConfig {
                     PARTITION_GROUPER_CLASS_DOC)
             .define(POLL_MS_CONFIG,
                     Type.LONG,
-                    100,
+                    100L,
                     Importance.LOW,
                     POLL_MS_DOC)
             .define(RECEIVE_BUFFER_CONFIG,
@@ -559,12 +595,18 @@ public class StreamsConfig extends AbstractConfig {
                     CommonClientConfigs.SEND_BUFFER_DOC)
             .define(STATE_CLEANUP_DELAY_MS_CONFIG,
                     Type.LONG,
-                    10 * 60 * 1000,
+                    10 * 60 * 1000L,
                     Importance.LOW,
                     STATE_CLEANUP_DELAY_MS_DOC)
+            .define(UPGRADE_FROM_CONFIG,
+                    ConfigDef.Type.STRING,
+                    null,
+                    in(null, UPGRADE_FROM_0100, UPGRADE_FROM_0101, UPGRADE_FROM_0102, UPGRADE_FROM_0110, UPGRADE_FROM_10, UPGRADE_FROM_11),
+                    Importance.LOW,
+                    UPGRADE_FROM_DOC)
             .define(WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG,
                     Type.LONG,
-                    24 * 60 * 60 * 1000,
+                    24 * 60 * 60 * 1000L,
                     Importance.LOW,
                     WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_DOC)
 
@@ -793,6 +835,7 @@ public class StreamsConfig extends AbstractConfig {
         consumerProps.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId + "-consumer");
 
         // add configs required for stream partition assignor
+        consumerProps.put(UPGRADE_FROM_CONFIG, getString(UPGRADE_FROM_CONFIG));
         consumerProps.put(REPLICATION_FACTOR_CONFIG, getInt(REPLICATION_FACTOR_CONFIG));
         consumerProps.put(APPLICATION_SERVER_CONFIG, getString(APPLICATION_SERVER_CONFIG));
         consumerProps.put(NUM_STANDBY_REPLICAS_CONFIG, getInt(NUM_STANDBY_REPLICAS_CONFIG));

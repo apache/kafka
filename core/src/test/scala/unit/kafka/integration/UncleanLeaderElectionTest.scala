@@ -191,12 +191,17 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
     produceMessage(servers, topic, "second")
     assertEquals(List("first", "second"), consumeAllMessages(topic))
 
+    //remove any previous unclean election metric
+    servers.map(server => server.kafkaController.controllerContext.stats.removeMetric("UncleanLeaderElectionsPerSec"))
+
     // shutdown leader and then restart follower
     servers.filter(server => server.config.brokerId == leaderId).map(server => shutdownServer(server))
-    servers.filter(server => server.config.brokerId == followerId).map(server => server.startup())
+    val followerServer = servers.find(_.config.brokerId == followerId).get
+    followerServer.startup()
 
     // wait until new leader is (uncleanly) elected
     waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, newLeaderOpt = Some(followerId))
+    assertEquals(1, followerServer.kafkaController.controllerContext.stats.uncleanLeaderElectionRate.count())
 
     produceMessage(servers, topic, "third")
 
@@ -224,12 +229,17 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
     produceMessage(servers, topic, "second")
     assertEquals(List("first", "second"), consumeAllMessages(topic))
 
+    //remove any previous unclean election metric
+    servers.map(server => server.kafkaController.controllerContext.stats.removeMetric("UncleanLeaderElectionsPerSec"))
+
     // shutdown leader and then restart follower
     servers.filter(server => server.config.brokerId == leaderId).map(server => shutdownServer(server))
-    servers.filter(server => server.config.brokerId == followerId).map(server => server.startup())
+    val followerServer = servers.find(_.config.brokerId == followerId).get
+    followerServer.startup()
 
     // verify that unclean election to non-ISR follower does not occur
     waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, newLeaderOpt = Some(-1))
+    assertEquals(0, followerServer.kafkaController.controllerContext.stats.uncleanLeaderElectionRate.count())
 
     // message production and consumption should both fail while leader is down
     try {

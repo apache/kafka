@@ -33,7 +33,7 @@ import java.util.Map;
 
 public class JaasContext {
 
-    private static final Logger LOG = LoggerFactory.getLogger(JaasUtils.class);
+    private static final Logger LOG = LoggerFactory.getLogger(JaasContext.class);
 
     private static final String GLOBAL_CONTEXT_NAME_SERVER = "KafkaServer";
     private static final String GLOBAL_CONTEXT_NAME_CLIENT = "KafkaClient";
@@ -183,7 +183,7 @@ public class JaasContext {
      * Returns the configuration option for <code>key</code> from this context.
      * If login module name is specified, return option value only from that module.
      */
-    public String configEntryOption(String key, String loginModuleName) {
+    public static String configEntryOption(List<AppConfigurationEntry> configurationEntries, String key, String loginModuleName) {
         for (AppConfigurationEntry entry : configurationEntries) {
             if (loginModuleName != null && !loginModuleName.equals(entry.getLoginModuleName()))
                 continue;

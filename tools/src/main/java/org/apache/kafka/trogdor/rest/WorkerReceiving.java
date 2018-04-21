@@ -19,6 +19,8 @@ package org.apache.kafka.trogdor.rest;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.TextNode;
 import org.apache.kafka.trogdor.task.TaskSpec;
 
 /**
@@ -27,7 +29,13 @@ import org.apache.kafka.trogdor.task.TaskSpec;
  */
 public final class WorkerReceiving extends WorkerState {
     @JsonCreator
-    public WorkerReceiving(@JsonProperty("spec") TaskSpec spec) {
-        super(spec);
+    public WorkerReceiving(@JsonProperty("taskId") String taskId,
+            @JsonProperty("spec") TaskSpec spec) {
+        super(taskId, spec);
+    }
+
+    @Override
+    public JsonNode status() {
+        return new TextNode("receiving");
     }
 }

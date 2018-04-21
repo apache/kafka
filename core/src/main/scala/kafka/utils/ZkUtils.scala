@@ -26,7 +26,7 @@ import kafka.cluster._
 import kafka.common.{KafkaException, NoEpochForPartitionException, TopicAndPartition}
 import kafka.consumer.{ConsumerThreadId, TopicCount}
 import kafka.controller.{LeaderIsrAndControllerEpoch, ReassignedPartitionsContext}
-import kafka.zk.{BrokerIdZNode, ZkData}
+import kafka.zk.{BrokerIdZNode, ReassignPartitionsZNode, ZkData}
 import org.I0Itec.zkclient.exception.{ZkBadVersionException, ZkException, ZkMarshallingError, ZkNoNodeException, ZkNodeExistsException}
 import org.I0Itec.zkclient.serialize.ZkSerializer
 import org.I0Itec.zkclient.{IZkChildListener, IZkDataListener, IZkStateListener, ZkClient, ZkConnection}
@@ -142,20 +142,14 @@ object ZkUtils {
   def getDeleteTopicPath(topic: String): String =
     DeleteTopicsPath + "/" + topic
 
-  // Parses without deduplicating keys so the data can be checked before allowing reassignment to proceed
   def parsePartitionReassignmentData(jsonData: String): Map[TopicAndPartition, Seq[Int]] = {
-    val seq = for {
-      js <- Json.parseFull(jsonData).toSeq
-      partitionsSeq <- js.asJsonObject.get("partitions").toSeq
-      p <- partitionsSeq.asJsonArray.iterator
-    } yield {
-      val partitionFields = p.asJsonObject
-      val topic = partitionFields("topic").to[String]
-      val partition = partitionFields("partition").to[Int]
-      val newReplicas = partitionFields("replicas").to[Seq[Int]]
-      TopicAndPartition(topic, partition) -> newReplicas
+    val utf8Bytes = jsonData.getBytes(StandardCharsets.UTF_8)
+    val assignments = ReassignPartitionsZNode.decode(utf8Bytes) match {
+      case Left(e) => throw e
+      case Right(result) => result
     }
-    seq.toMap
+
+    assignments.map { case (tp, p) => (new TopicAndPartition(tp), p) }
   }
 
   def parseTopicsData(jsonData: String): Seq[String] = {
