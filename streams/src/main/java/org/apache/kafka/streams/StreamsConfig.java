@@ -787,8 +787,7 @@ public class StreamsConfig extends AbstractConfig {
         // Streams will be used instead.
         final Object maxInflightRequests = clientProvidedProps.get(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION);
         if (eosEnabled && maxInflightRequests != null && 5 < (int) maxInflightRequests) {
-            throw new ConfigException("Must set " + ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + " to at most 5" +
-                    " to use the idempotent producer.");
+            throw new ConfigException(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + " can't exceed 5 when using the idempotent producer");
         }
         for (final String config: nonConfigurableConfigs) {
             if (clientProvidedProps.containsKey(config)) {

@@ -553,7 +553,7 @@ public class StreamsConfigTest {
         try {
             final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs("clientId");
         } catch (ConfigException e) {
-            assertEquals("Must set max.in.flight.requests.per.connection to at most 5 to use the idempotent producer.", e.getMessage());
+            assertEquals("max.in.flight.requests.per.connection can't exceed 5 when using the idempotent producer", e.getMessage());
         }
     }
 
