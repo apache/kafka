@@ -910,7 +910,7 @@ public class SslTransportLayerTest {
         NetworkTestUtils.checkClientConnection(oldClientSelector, oldNode, 100, 10);
 
         Map<String, Object>  invalidConfigs = new HashMap<>(newTruststoreConfigs);
-        invalidConfigs.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, "PKCS12");
+        invalidConfigs.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, "INVALID_TYPE");
         try {
             reconfigurableBuilder.validateReconfiguration(invalidConfigs);
             fail("Should have failed validation with an exception with invalid truststore type");
