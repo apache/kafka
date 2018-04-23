@@ -55,11 +55,6 @@ public class SinkNodeTest {
         sink.init(context);
     }
 
-    @After
-    public void after() {
-        context.close();
-    }
-
     @Test
     @SuppressWarnings("unchecked")
     public void shouldThrowStreamsExceptionOnInputRecordWithInvalidTimestamp() {

@@ -68,11 +68,6 @@ public class StoreChangeLoggerTest {
 
     private final StoreChangeLogger<Integer, String> changeLogger = new StoreChangeLogger<>(topic, context, StateSerdes.withBuiltinTypes(topic, Integer.class, String.class));
 
-    @After
-    public void after() {
-        context.close();
-    }
-
     @Test
     public void testAddRemove() {
         context.setTime(1);

@@ -53,8 +53,9 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
         this.metrics = metrics;
 
-        this.tags = new LinkedHashMap<>();
+        final HashMap<String, String> tags = new LinkedHashMap<>();
         tags.put("client-id", threadName);
+        this.tags = Collections.unmodifiableMap(tags);
 
         this.parentSensors = new HashMap<>();
 
@@ -114,10 +115,6 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                 cacheLevelSensors.remove(key);
             }
         }
-    }
-
-    public final Metrics registry() {
-        return metrics;
     }
 
     protected final Map<String, String> tags() {
@@ -293,4 +290,5 @@ public class StreamsMetricsImpl implements StreamsMetrics {
             metrics.removeSensor(parent.name());
         }
     }
+
 }

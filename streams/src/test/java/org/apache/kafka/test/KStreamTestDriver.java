@@ -235,7 +235,6 @@ public class KStreamTestDriver extends ExternalResource {
         }
 
         closeState();
-        context.close();
     }
 
     public Set<String> allProcessorNames() {

@@ -83,11 +83,6 @@ public class MeteredWindowStoreTest {
         );
     }
 
-    @After
-    public void after() {
-        context.close();
-    }
-
     @Test
     public void shouldRecordRestoreLatencyOnInit() {
         innerStoreMock.init(context, store);

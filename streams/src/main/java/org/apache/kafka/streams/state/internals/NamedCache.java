@@ -370,7 +370,7 @@ class NamedCache {
                 "record-cache-id", "all",
                 "task-id", taskName
             );
-            final Sensor threadLevelHitRatioSensor = this.metrics.threadLevelSensor("hitRatio", Sensor.RecordingLevel.DEBUG);
+            final Sensor threadLevelHitRatioSensor = metrics.threadLevelSensor("hitRatio", Sensor.RecordingLevel.DEBUG);
             threadLevelHitRatioSensor.add(
                 new MetricName("hitRatio-avg", "stream-record-cache-metrics", "The average cache hit ratio.", allMetricTags),
                 new Avg()
@@ -390,7 +390,7 @@ class NamedCache {
                 "task-id", taskName
             );
 
-            hitRatioSensor = this.metrics.cacheLevelSensor(
+            hitRatioSensor = metrics.cacheLevelSensor(
                 taskName,
                 cacheName,
                 "hitRatio",
