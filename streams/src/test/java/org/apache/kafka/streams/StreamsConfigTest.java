@@ -551,8 +551,9 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
         try {
-            final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs("clientId");
-        } catch (ConfigException e) {
+            streamsConfig.getProducerConfigs("clientId");
+            fail("Should throw ConfigException when Eos is enabled and maxInFlight requests exceeds 5");
+        } catch (final ConfigException e) {
             assertEquals("max.in.flight.requests.per.connection can't exceed 5 when using the idempotent producer", e.getMessage());
         }
     }
