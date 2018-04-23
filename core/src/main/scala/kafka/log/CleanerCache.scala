@@ -18,7 +18,6 @@
 package kafka.log
 
 import java.nio.ByteBuffer
-import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.util
 
@@ -122,9 +121,9 @@ class SkimpyCleanerCache(val memory: Int, val hashAlgorithm: String = "MD5", val
   /**
    * The number of bytes of space each entry uses.
    * This evaluates to the number of bytes in the hash plus 8 bytes for the offset
-   * and, if applicable, another 8 bytes for the version header.
+   * and, if applicable, another 8 bytes for versioning.
    */
-  val bytesPerEntry: Int = hashSize + 8 + (if (enhancedCache) 8 else 0)
+  val bytesPerEntry: Int = hashSize + 8 + (if (isOffsetStrategy) 0 else 8)
 
   val slots: Int = memory / bytesPerEntry
 
@@ -147,7 +146,7 @@ class SkimpyCleanerCache(val memory: Int, val hashAlgorithm: String = "MD5", val
       if (util.Arrays.equals(hash1, hash2)) {
         // we found an existing entry, overwrite it and return (size does not change)
         bytes.putLong(recordOffset)
-        if (enhancedCache)
+        if (!isOffsetStrategy)
           bytes.putLong(recordVersion)
         updateLatestOffset(recordOffset)
         return true
@@ -159,7 +158,7 @@ class SkimpyCleanerCache(val memory: Int, val hashAlgorithm: String = "MD5", val
     bytes.position(pos)
     bytes.put(hash1)
     bytes.putLong(recordOffset)
-    if (enhancedCache)
+    if (!isOffsetStrategy)
       bytes.putLong(recordVersion)
     updateLatestOffset(recordOffset)
     entries += 1
@@ -167,7 +166,7 @@ class SkimpyCleanerCache(val memory: Int, val hashAlgorithm: String = "MD5", val
   }
 
   override def greater(record: Record): Boolean = {
-    if (enhancedCache) {
+    if (!isOffsetStrategy) {
       val recordVersion = extractVersion(record)
       val cachedVersion = version(record.key)
 
@@ -203,7 +202,7 @@ class SkimpyCleanerCache(val memory: Int, val hashAlgorithm: String = "MD5", val
   }
 
   override def version(key: ByteBuffer): Long = {
-    if (!enhancedCache) {
+    if (isOffsetStrategy) {
       return -1
     }
     lookups += 1
@@ -248,14 +247,29 @@ class SkimpyCleanerCache(val memory: Int, val hashAlgorithm: String = "MD5", val
     if (lastOffset < offset) lastOffset = offset
   }
 
-  private def enhancedCache: Boolean = strategy != null && strategy.trim.nonEmpty &&
-    !Defaults.CompactionStrategy.equalsIgnoreCase(strategy)
+  private def isOffsetStrategy: Boolean = strategy == null ||
+    Defaults.CompactionStrategy.equalsIgnoreCase(strategy)
+
+  private def isTimestampStrategy: Boolean = !isOffsetStrategy &&
+    "timestamp".equalsIgnoreCase(strategy)
+
+  private def isHeaderStrategy: Boolean = !isOffsetStrategy && !isTimestampStrategy
 
   /** @return The version as it is extracted from the record headers, or -1 */
   private def extractVersion(record: Record): Long = {
-    if (!enhancedCache || record == null || record.headers() == null || record.headers.isEmpty) {
+    if (isOffsetStrategy) {
+      // not using enhanced cache mode
       return -1
     }
+    if (isTimestampStrategy) {
+      // enhancing cache with version based on the record timestamp
+      return record.timestamp
+    }
+    if (record == null || record.headers() == null || record.headers.isEmpty) {
+      // not able to determine the version of this header
+      return -1
+    }
+    // enhancing cache with version based on custom header
     record.headers()
       .filter(it => it.value != null && it.value.nonEmpty)
       .find(it => strategy.trim.equalsIgnoreCase(it.key.trim))
