@@ -1158,7 +1158,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
         client.maybeTriggerWakeup();
 
-        while (!internalUpdateAssignmentMetadataIfNeeded(0)) {}
+        while (!internalUpdateAssignmentMetadataIfNeeded(0)) { }
 //        if (!internalUpdateAssignmentMetadataIfNeeded(30000)) {
 //             we ran out of time.
 //            return Collections.emptyMap();

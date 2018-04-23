@@ -255,11 +255,8 @@ public abstract class AbstractCoordinator implements Closeable {
      * @return true if it should, false otherwise
      */
     protected synchronized boolean needRejoin() {
-        return rejoinNeeded;
-    }
-
-    private synchronized boolean rejoinIncomplete() {
-        return joinFuture != null;
+        // if there's a pending joinFuture, we should try to complete handling it.
+        return rejoinNeeded || joinFuture != null;
     }
 
     /**
@@ -364,7 +361,7 @@ public abstract class AbstractCoordinator implements Closeable {
      */
     private boolean joinGroupIfNeeded(final long timeoutMs) {
         final long startTime = time.milliseconds();
-        while (needRejoin() || rejoinIncomplete()) {
+        while (needRejoin()) {
             final long remainingTime = timeoutMs - (time.milliseconds() - startTime);
             if (!ensureCoordinatorReady(remainingTime)) {
                 return false;
