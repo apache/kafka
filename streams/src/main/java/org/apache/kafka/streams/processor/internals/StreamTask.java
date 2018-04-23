@@ -25,10 +25,8 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.ProductionExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -38,6 +36,7 @@ import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TimestampExtractor;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.util.Collection;
@@ -68,16 +67,16 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     private boolean commitOffsetNeeded = false;
     private boolean transactionInFlight = false;
     private final Time time;
-    private final TaskMetrics metrics;
+    private final TaskMetrics taskMetrics;
 
-    protected static class TaskMetrics {
+    protected static final class TaskMetrics {
         final StreamsMetricsImpl metrics;
         final Sensor taskCommitTimeSensor;
 
 
-        TaskMetrics(final TaskId id, final StreamsMetrics metrics) {
+        TaskMetrics(final TaskId id, final StreamsMetricsImpl metrics) {
             final String name = id.toString();
-            this.metrics = (StreamsMetricsImpl) metrics;
+            this.metrics = metrics;
             taskCommitTimeSensor = metrics.addLatencyAndThroughputSensor("task", name, "commit", Sensor.RecordingLevel.DEBUG);
         }
 
@@ -86,41 +85,51 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         }
     }
 
-    /**
-     * Create {@link StreamTask} with its assigned partitions
-     *
-     * @param id              the ID of this task
-     * @param partitions      the collection of assigned {@link TopicPartition}
-     * @param topology        the instance of {@link ProcessorTopology}
-     * @param consumer        the instance of {@link Consumer}
-     * @param changelogReader the instance of {@link ChangelogReader} used for restoring state
-     * @param config          the {@link StreamsConfig} specified by the user
-     * @param metrics         the {@link StreamsMetrics} created by the thread
-     * @param stateDirectory  the {@link StateDirectory} created by the thread
-     * @param cache           the {@link ThreadCache} created by the thread
-     * @param time            the system {@link Time} of the thread
-     * @param producer        the instance of {@link Producer} used to produce records
-     */
     public StreamTask(final TaskId id,
                       final Collection<TopicPartition> partitions,
                       final ProcessorTopology topology,
                       final Consumer<byte[], byte[]> consumer,
                       final ChangelogReader changelogReader,
                       final StreamsConfig config,
-                      final StreamsMetrics metrics,
+                      final StreamsMetricsImpl metrics,
                       final StateDirectory stateDirectory,
                       final ThreadCache cache,
                       final Time time,
                       final Producer<byte[], byte[]> producer) {
+        this(id, partitions, topology, consumer, changelogReader, config, metrics, stateDirectory, cache, time, producer, null);
+    }
+
+    public StreamTask(final TaskId id,
+                      final Collection<TopicPartition> partitions,
+                      final ProcessorTopology topology,
+                      final Consumer<byte[], byte[]> consumer,
+                      final ChangelogReader changelogReader,
+                      final StreamsConfig config,
+                      final StreamsMetricsImpl metrics,
+                      final StateDirectory stateDirectory,
+                      final ThreadCache cache,
+                      final Time time,
+                      final Producer<byte[], byte[]> producer,
+                      final RecordCollector recordCollector) {
         super(id, partitions, topology, consumer, changelogReader, false, stateDirectory, config);
 
         this.time = time;
         this.producer = producer;
-        this.metrics = new TaskMetrics(id, metrics);
+        this.taskMetrics = new TaskMetrics(id, metrics);
 
         final ProductionExceptionHandler productionExceptionHandler = config.defaultProductionExceptionHandler();
 
-        recordCollector = createRecordCollector(logContext, productionExceptionHandler);
+        if (recordCollector == null) {
+            this.recordCollector = new RecordCollectorImpl(
+                producer,
+                id.toString(),
+                logContext,
+                productionExceptionHandler,
+                metrics.skippedRecordsSensor()
+            );
+        } else {
+            this.recordCollector = recordCollector;
+        }
         streamTimePunctuationQueue = new PunctuationQueue();
         systemTimePunctuationQueue = new PunctuationQueue();
         maxBufferedSize = config.getInt(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
@@ -133,7 +142,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         final Map<TopicPartition, RecordQueue> partitionQueues = new HashMap<>();
 
         // initialize the topology with its own context
-        processorContext = new ProcessorContextImpl(id, this, config, recordCollector, stateMgr, metrics, cache);
+        processorContext = new ProcessorContextImpl(id, this, config, this.recordCollector, stateMgr, metrics, cache);
 
         final TimestampExtractor defaultTimestampExtractor = config.defaultTimestampExtractor();
         final DeserializationExceptionHandler defaultDeserializationExceptionHandler = config.defaultDeserializationExceptionHandler();
@@ -312,22 +321,20 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      */
     // visible for testing
     void commit(final boolean startNewTransaction) {
+        final long startNs = time.nanoseconds();
         log.debug("Committing");
-        metrics.metrics.measureLatencyNs(
-            time,
-            new Runnable() {
-                @Override
-                public void run() {
-                    flushState();
-                    if (!eosEnabled) {
-                        stateMgr.checkpoint(recordCollectorOffsets());
-                    }
-                    commitOffsets(startNewTransaction);
-                }
-            },
-            metrics.taskCommitTimeSensor);
+
+        flushState();
+
+        if (!eosEnabled) {
+            stateMgr.checkpoint(recordCollectorOffsets());
+        }
+
+        commitOffsets(startNewTransaction);
 
         commitRequested = false;
+
+        taskMetrics.taskCommitTimeSensor.record(time.nanoseconds() - startNs);
     }
 
     @Override
@@ -489,7 +496,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
         try {
             partitionGroup.close();
-            metrics.removeAllSensors();
+            taskMetrics.removeAllSensors();
         } finally {
             if (eosEnabled) {
                 if (!clean) {
@@ -567,11 +574,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      *
      * @param partition the partition
      * @param records   the records
-     * @return the number of added records
      */
     @SuppressWarnings("unchecked")
-    public int addRecords(final TopicPartition partition, final Iterable<ConsumerRecord<byte[], byte[]>> records) {
-        final int oldQueueSize = partitionGroup.numBuffered(partition);
+    public void addRecords(final TopicPartition partition, final Iterable<ConsumerRecord<byte[], byte[]>> records) {
         final int newQueueSize = partitionGroup.addRawRecords(partition, records);
 
         if (log.isTraceEnabled()) {
@@ -583,8 +588,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         if (newQueueSize > maxBufferedSize) {
             consumer.pause(singleton(partition));
         }
-
-        return newQueueSize - oldQueueSize;
     }
 
     /**
@@ -691,11 +694,5 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     // visible for testing only
     RecordCollector recordCollector() {
         return recordCollector;
-    }
-
-    // visible for testing only
-    RecordCollector createRecordCollector(final LogContext logContext,
-                                          final ProductionExceptionHandler productionExceptionHandler) {
-        return new RecordCollectorImpl(producer, id.toString(), logContext, productionExceptionHandler);
     }
 }

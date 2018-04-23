@@ -23,6 +23,7 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsBuilderTest;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
@@ -37,6 +38,9 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
 
+import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
+import static org.hamcrest.CoreMatchers.hasItem;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 
 public class KStreamKTableJoinTest {
@@ -181,4 +185,23 @@ public class KStreamKTableJoinTest {
         processor.checkAndClearProcessResult("2:XX2+Y2", "3:XX3+Y3");
     }
 
+    @Test
+    public void shouldLogAndMeterWhenSkippingNullLeftKey() {
+        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
+        driver.process(streamTopic, null, "A");
+        LogCaptureAppender.unregister(appender);
+
+        assertEquals(1.0, getMetricByName(driver.context().metrics().metrics(), "skipped-records-total", "stream-metrics").metricValue());
+        assertThat(appender.getMessages(), hasItem("Skipping record due to null key or value. key=[null] value=[A] topic=[streamTopic] partition=[-1] offset=[-1]"));
+    }
+
+    @Test
+    public void shouldLogAndMeterWhenSkippingNullLeftValue() {
+        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
+        driver.process(streamTopic, 1, null);
+        LogCaptureAppender.unregister(appender);
+
+        assertEquals(1.0, getMetricByName(driver.context().metrics().metrics(), "skipped-records-total", "stream-metrics").metricValue());
+        assertThat(appender.getMessages(), hasItem("Skipping record due to null key or value. key=[1] value=[null] topic=[streamTopic] partition=[-1] offset=[-1]"));
+    }
 }

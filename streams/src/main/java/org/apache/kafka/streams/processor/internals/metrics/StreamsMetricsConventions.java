@@ -14,14 +14,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor.internals;
+package org.apache.kafka.streams.processor.internals.metrics;
 
-import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
-public class MockStreamsMetrics extends StreamsMetricsImpl {
+public final class StreamsMetricsConventions {
+    private StreamsMetricsConventions() {
+    }
 
-    public MockStreamsMetrics(final Metrics metrics) {
-        super(metrics, "test");
+    public static String threadLevelSensorName(final String threadName, final String sensorName) {
+        return "thread." + threadName + "." + sensorName;
+    }
+
+    static Map<String, String> threadLevelTags(final String threadName, final Map<String, String> tags) {
+        if (tags.containsKey("client-id")) {
+            return tags;
+        } else {
+            final LinkedHashMap<String, String> newTags = new LinkedHashMap<>(tags);
+            newTags.put("client-id", threadName);
+            return newTags;
+        }
     }
 }
