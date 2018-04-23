@@ -120,6 +120,7 @@ libs += [
   log4j: "log4j:log4j:$versions.log4j",
   lz4: "org.lz4:lz4-java:$versions.lz4",
   metrics: "io.dropwizard.metrics:metrics-core:$versions.metrics",
+  metrics_jmx: "io.dropwizard.metrics:metrics-jmx:$versions.metrics",
   powermockJunit4: "org.powermock:powermock-module-junit4:$versions.powermock",
   powermockEasymock: "org.powermock:powermock-api-easymock:$versions.powermock",
   reflections: "org.reflections:reflections:$versions.reflections",
