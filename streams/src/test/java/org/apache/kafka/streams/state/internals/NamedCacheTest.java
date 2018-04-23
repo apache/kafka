@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
@@ -31,6 +33,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.kafka.test.StreamsTestUtils.getMetricByNameFilterByTags;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -73,33 +76,25 @@ public class NamedCacheTest {
         }
     }
 
-    private void testSpecificMetrics(final String groupName, final String entityName, final String opName,
-                                     final Map<String, String> metricTags) {
-        assertNotNull(streamMetrics.registry().metrics().get(streamMetrics.registry().metricName(opName + "-avg",
-                groupName, "The average cache hit ratio of " + entityName, metricTags)));
-        assertNotNull(streamMetrics.registry().metrics().get(streamMetrics.registry().metricName(opName + "-min",
-                groupName, "The minimum cache hit ratio of " + entityName, metricTags)));
-        assertNotNull(streamMetrics.registry().metrics().get(streamMetrics.registry().metricName(opName + "-max",
-                groupName, "The maximum cache hit ratio of " + entityName, metricTags)));
-    }
     @Test
     public void testMetrics() {
-        final String scope = "record-cache";
-        final String entityName = cache.name();
-        final String opName = "hitRatio";
-        final String tagKey = "record-cache-id";
-        final String tagValue = underlyingStoreName;
-        final String groupName = "stream-" + scope + "-metrics";
         final Map<String, String> metricTags = new LinkedHashMap<>();
-        metricTags.put(tagKey, tagValue);
+        metricTags.put("record-cache-id", underlyingStoreName);
         metricTags.put("task-id", taskIDString);
+        metricTags.put("client-id", "test");
 
-        assertNotNull(streamMetrics.registry().getSensor(opName));
-        testSpecificMetrics(groupName, entityName, opName, metricTags);
+        assertNotNull(streamMetrics.registry().getSensor("hitRatio"));
+        final Map<MetricName, KafkaMetric> metrics1 = streamMetrics.registry().metrics();
+        getMetricByNameFilterByTags(metrics1, "hitRatio-avg", "stream-record-cache-metrics", metricTags);
+        getMetricByNameFilterByTags(metrics1, "hitRatio-min", "stream-record-cache-metrics", metricTags);
+        getMetricByNameFilterByTags(metrics1, "hitRatio-max", "stream-record-cache-metrics", metricTags);
 
         // test "all"
-        metricTags.put(tagKey, "all");
-        testSpecificMetrics(groupName, entityName, opName, metricTags);
+        metricTags.put("record-cache-id", "all");
+        final Map<MetricName, KafkaMetric> metrics = streamMetrics.registry().metrics();
+        getMetricByNameFilterByTags(metrics, "hitRatio-avg", "stream-record-cache-metrics", metricTags);
+        getMetricByNameFilterByTags(metrics, "hitRatio-min", "stream-record-cache-metrics", metricTags);
+        getMetricByNameFilterByTags(metrics, "hitRatio-max", "stream-record-cache-metrics", metricTags);
     }
 
     @Test

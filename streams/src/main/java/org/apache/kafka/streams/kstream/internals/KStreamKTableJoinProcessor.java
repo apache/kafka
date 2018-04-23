@@ -20,13 +20,18 @@ import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 class KStreamKTableJoinProcessor<K1, K2, V1, V2, R> extends AbstractProcessor<K1, V1> {
+    private static final Logger LOG = LoggerFactory.getLogger(KStreamKTableJoinProcessor.class);
 
     private final KTableValueGetter<K2, V2> valueGetter;
     private final KeyValueMapper<? super K1, ? super V1, ? extends K2> keyMapper;
     private final ValueJoiner<? super V1, ? super V2, ? extends R> joiner;
     private final boolean leftJoin;
+    private StreamsMetricsImpl metrics;
 
     KStreamKTableJoinProcessor(final KTableValueGetter<K2, V2> valueGetter,
                                final KeyValueMapper<? super K1, ? super V1, ? extends K2> keyMapper,
@@ -41,6 +46,7 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, R> extends AbstractProcessor<K1
     @Override
     public void init(final ProcessorContext context) {
         super.init(context);
+        metrics = (StreamsMetricsImpl) context.metrics();
         valueGetter.init(context);
     }
 
@@ -54,7 +60,13 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, R> extends AbstractProcessor<K1
         // an empty message (ie, there is nothing to be joined) -- this contrast SQL NULL semantics
         // furthermore, on left/outer joins 'null' in ValueJoiner#apply() indicates a missing record --
         // thus, to be consistent and to avoid ambiguous null semantics, null values are ignored
-        if (key != null && value != null) {
+        if (key == null || value == null) {
+            LOG.warn(
+                "Skipping record due to null key or value. key=[{}] value=[{}] topic=[{}] partition=[{}] offset=[{}]",
+                key, value, context().topic(), context().partition(), context().offset()
+            );
+            metrics.skippedRecordsSensor().record();
+        } else {
             final K2 mappedKey = keyMapper.apply(key, value);
             final V2 value2 = mappedKey == null ? null : valueGetter.get(mappedKey);
             if (leftJoin || value2 != null) {

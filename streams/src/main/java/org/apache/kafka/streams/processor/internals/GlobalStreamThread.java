@@ -26,16 +26,15 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateRestoreListener;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.slf4j.Logger;
 
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -56,7 +55,7 @@ public class GlobalStreamThread extends Thread {
     private final StateDirectory stateDirectory;
     private final Time time;
     private final ThreadCache cache;
-    private final StreamsMetrics streamsMetrics;
+    private final StreamsMetricsImpl streamsMetrics;
     private final ProcessorTopology topology;
     private volatile StreamsException startupException;
 
@@ -186,7 +185,7 @@ public class GlobalStreamThread extends Thread {
         this.topology = topology;
         this.globalConsumer = globalConsumer;
         this.stateDirectory = stateDirectory;
-        this.streamsMetrics = new StreamsMetricsImpl(metrics, threadClientId, Collections.singletonMap("client-id", threadClientId));
+        this.streamsMetrics = new StreamsMetricsImpl(metrics, threadClientId);
         this.logPrefix = String.format("global-stream-thread [%s] ", threadClientId);
         this.logContext = new LogContext(logPrefix);
         this.log = logContext.logger(getClass());
@@ -298,6 +297,9 @@ public class GlobalStreamThread extends Thread {
             } catch (final IOException e) {
                 log.error("Failed to close state maintainer due to the following error:", e);
             }
+
+            streamsMetrics.removeOwnedSensors();
+
             setState(DEAD);
 
             log.info("Shutdown complete");

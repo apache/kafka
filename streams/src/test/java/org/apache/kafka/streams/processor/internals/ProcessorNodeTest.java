@@ -25,6 +25,7 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
 
 import java.util.Collections;
@@ -93,19 +94,6 @@ public class ProcessorNodeTest {
         }
     }
 
-    private void testSpecificMetrics(final Metrics metrics,
-                                     @SuppressWarnings("SameParameterValue") final String groupName,
-                                     final String opName,
-                                     final Map<String, String> metricTags) {
-        assertNotNull(metrics.metrics().get(metrics.metricName(opName + "-latency-avg", groupName,
-            "The average latency of " + opName + " operation.", metricTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName(opName + "-latency-max", groupName,
-            "The max latency of " + opName + " operation.", metricTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName(opName + "-rate", groupName,
-            "The average number of occurrence of " + opName + " operation per second.", metricTags)));
-
-    }
-
     @Test
     public void testMetrics() {
         final StateSerdes anyStateSerde = StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class);
@@ -113,7 +101,13 @@ public class ProcessorNodeTest {
         final Metrics metrics = new Metrics();
         final InternalMockProcessorContext context = new InternalMockProcessorContext(
             anyStateSerde,
-            new RecordCollectorImpl(null, null, new LogContext("processnode-test "), new DefaultProductionExceptionHandler()),
+            new RecordCollectorImpl(
+                null,
+                null,
+                new LogContext("processnode-test "),
+                new DefaultProductionExceptionHandler(),
+                metrics.sensor("skipped-records")
+            ),
             metrics
         );
         final ProcessorNode<Object, Object> node = new ProcessorNode<>("name", new NoOpProcessor(), Collections.<String>emptySet());
@@ -125,6 +119,7 @@ public class ProcessorNodeTest {
         final Map<String, String> metricTags = new LinkedHashMap<>();
         metricTags.put("processor-node-id", node.name());
         metricTags.put("task-id", context.taskId().toString());
+        metricTags.put("client-id", "mock");
 
 
         for (final String operation : latencyOperations) {
@@ -133,7 +128,10 @@ public class ProcessorNodeTest {
         assertNotNull(metrics.getSensor(throughputOperation));
 
         for (final String opName : latencyOperations) {
-            testSpecificMetrics(metrics, groupName, opName, metricTags);
+            StreamsTestUtils.getMetricByNameFilterByTags(metrics.metrics(), opName + "-latency-avg", groupName, metricTags);
+            StreamsTestUtils.getMetricByNameFilterByTags(metrics.metrics(), opName + "-latency-max", groupName, metricTags);
+            StreamsTestUtils.getMetricByNameFilterByTags(metrics.metrics(), opName + "-rate", groupName, metricTags);
+            StreamsTestUtils.getMetricByNameFilterByTags(metrics.metrics(), opName + "-total", groupName, metricTags);
         }
         assertNotNull(metrics.metrics().get(metrics.metricName(throughputOperation + "-rate", groupName,
             "The average number of occurrence of " + throughputOperation + " operation per second.", metricTags)));
@@ -141,7 +139,10 @@ public class ProcessorNodeTest {
         // test "all"
         metricTags.put("processor-node-id", "all");
         for (final String opName : latencyOperations) {
-            testSpecificMetrics(metrics, groupName, opName, metricTags);
+            StreamsTestUtils.getMetricByNameFilterByTags(metrics.metrics(), opName + "-latency-avg", groupName, metricTags);
+            StreamsTestUtils.getMetricByNameFilterByTags(metrics.metrics(), opName + "-latency-max", groupName, metricTags);
+            StreamsTestUtils.getMetricByNameFilterByTags(metrics.metrics(), opName + "-rate", groupName, metricTags);
+            StreamsTestUtils.getMetricByNameFilterByTags(metrics.metrics(), opName + "-total", groupName, metricTags);
         }
         assertNotNull(metrics.metrics().get(metrics.metricName(throughputOperation + "-rate", groupName,
             "The average number of occurrence of " + throughputOperation + " operation per second.", metricTags)));

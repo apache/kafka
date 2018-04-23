@@ -63,7 +63,15 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
         for (final String storeName : storeNames) {
             final String sourceTopic = storeNameToTopic.get(storeName);
             final SourceNode source = topology.source(sourceTopic);
-            deserializers.put(sourceTopic, new RecordDeserializer(source, deserializationExceptionHandler, logContext));
+            deserializers.put(
+                sourceTopic,
+                new RecordDeserializer(
+                    source,
+                    deserializationExceptionHandler,
+                    logContext,
+                    processorContext.metrics().skippedRecordsSensor()
+                )
+            );
         }
         initTopology();
         processorContext.initialized();

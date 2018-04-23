@@ -54,7 +54,7 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
 
     @SuppressWarnings("unchecked")
     @Override
-    public void init(final ProcessorContext context) {
+    public void init(final InternalProcessorContext context) {
         super.init(context);
         this.context = context;
 

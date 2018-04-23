@@ -19,10 +19,10 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.io.File;
@@ -37,7 +37,7 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     private final TaskId taskId;
     private final String applicationId;
     private final StreamsConfig config;
-    private final StreamsMetrics metrics;
+    private final StreamsMetricsImpl metrics;
     private final Serde keySerde;
     private final ThreadCache cache;
     private final Serde valueSerde;
@@ -48,7 +48,7 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
 
     public AbstractProcessorContext(final TaskId taskId,
                                     final StreamsConfig config,
-                                    final StreamsMetrics metrics,
+                                    final StreamsMetricsImpl metrics,
                                     final StateManager stateManager,
                                     final ThreadCache cache) {
         this.taskId = taskId;
@@ -87,7 +87,7 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     }
 
     @Override
-    public StreamsMetrics metrics() {
+    public StreamsMetricsImpl metrics() {
         return metrics;
     }
 

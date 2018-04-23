@@ -23,6 +23,8 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
@@ -53,7 +55,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StoreChangelogReader;
 import org.apache.kafka.streams.processor.internals.StreamTask;
-import org.apache.kafka.streams.processor.internals.StreamsMetricsImpl;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.WindowStore;
@@ -178,8 +180,9 @@ public class TopologyTestDriver implements Closeable {
     private final GlobalStateManager globalStateManager;
 
     private final StateDirectory stateDirectory;
+    private final Metrics metrics;
     private final ProcessorTopology processorTopology;
-    
+
     private final MockProducer<byte[], byte[]> producer;
 
     private final Set<String> internalTopics = new HashSet<>();
@@ -232,10 +235,11 @@ public class TopologyTestDriver implements Closeable {
 
         final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
         stateDirectory = new StateDirectory(streamsConfig, mockTime);
-        final StreamsMetrics streamsMetrics = new StreamsMetricsImpl(
-            new Metrics(),
-            "topology-test-driver-stream-metrics",
-            Collections.<String, String>emptyMap());
+        metrics = new Metrics();
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(
+            metrics,
+            "topology-test-driver-virtual-thread"
+        );
         final ThreadCache cache = new ThreadCache(
             new LogContext("topology-test-driver "),
             Math.max(0, streamsConfig.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG)),
@@ -290,7 +294,8 @@ public class TopologyTestDriver implements Closeable {
                 globalProcessorContext,
                 globalStateManager,
                 new LogAndContinueExceptionHandler(),
-                new LogContext());
+                new LogContext()
+            );
             globalStateTask.initialize();
         } else {
             globalStateManager = null;
@@ -318,6 +323,15 @@ public class TopologyTestDriver implements Closeable {
         } else {
             task = null;
         }
+    }
+
+    /**
+     * Get read-only handle on global metrics registry.
+     *
+     * @return Map of all metrics.
+     */
+    public Map<MetricName, ? extends Metric> metrics() {
+        return Collections.unmodifiableMap(metrics.metrics());
     }
 
     /**
@@ -498,7 +512,7 @@ public class TopologyTestDriver implements Closeable {
         final V value = valueDeserializer.deserialize(record.topic(), record.value());
         return new ProducerRecord<>(record.topic(), record.partition(), record.timestamp(), key, value);
     }
-    
+
     /**
      * Get all {@link StateStore StateStores} from the topology.
      * The stores can be a "regular" or global stores.

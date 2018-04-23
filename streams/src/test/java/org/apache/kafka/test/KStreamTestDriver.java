@@ -174,7 +174,7 @@ public class KStreamTestDriver extends ExternalResource {
         final ProcessorNode currNode = sourceNodeByTopicName(topicName);
 
         if (currNode != null) {
-            context.setRecordContext(createRecordContext(context.timestamp()));
+            context.setRecordContext(createRecordContext(topicName, context.timestamp()));
             context.setCurrentNode(currNode);
             try {
                 context.forward(key, value);
@@ -204,7 +204,7 @@ public class KStreamTestDriver extends ExternalResource {
         final ProcessorNode prevNode = context.currentNode();
         for (final ProcessorNode processor : topology.processors()) {
             if (processor.processor() != null) {
-                context.setRecordContext(createRecordContext(timestamp));
+                context.setRecordContext(createRecordContext(context.topic(), timestamp));
                 context.setCurrentNode(processor);
                 try {
                     processor.processor().punctuate(timestamp);
@@ -278,13 +278,13 @@ public class KStreamTestDriver extends ExternalResource {
         }
     }
 
-    private ProcessorRecordContext createRecordContext(final long timestamp) {
-        return new ProcessorRecordContext(timestamp, -1, -1, "topic", null);
+    private ProcessorRecordContext createRecordContext(final String topicName, final long timestamp) {
+        return new ProcessorRecordContext(timestamp, -1, -1, topicName, null);
     }
 
     private class MockRecordCollector extends RecordCollectorImpl {
         MockRecordCollector() {
-            super(null, "KStreamTestDriver", new LogContext("KStreamTestDriver "), new DefaultProductionExceptionHandler());
+            super(null, "KStreamTestDriver", new LogContext("KStreamTestDriver "), new DefaultProductionExceptionHandler(), new Metrics().sensor("skipped-records"));
         }
 
         @Override

@@ -178,6 +178,7 @@ public class StreamThreadStateStoreProviderTest {
                                          final MockClientSupplier clientSupplier,
                                          final ProcessorTopology topology,
                                          final TaskId taskId) {
+        final Metrics metrics = new Metrics();
         return new StreamTask(
             taskId,
             Collections.singletonList(new TopicPartition(topicName, taskId.partition)),
@@ -185,7 +186,7 @@ public class StreamThreadStateStoreProviderTest {
             clientSupplier.consumer,
             new StoreChangelogReader(clientSupplier.restoreConsumer, new MockStateRestoreListener(), new LogContext("test-stream-task ")),
             streamsConfig,
-            new MockStreamsMetrics(new Metrics()),
+            new MockStreamsMetrics(metrics),
             stateDirectory,
             null,
             new MockTime(),
