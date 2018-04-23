@@ -19,21 +19,20 @@ package unit.kafka.log
 
 import java.lang.{Long => JLong}
 import java.nio.ByteBuffer
-import java.nio.charset.StandardCharsets
 
 import org.apache.kafka.common.header.Header
 import org.apache.kafka.common.header.internals.RecordHeader
 import org.apache.kafka.common.record.{Record, TimestampType}
 import org.apache.kafka.common.utils.ByteUtils
 
-class FakeRecord(fakeKey: ByteBuffer, fakeOffset: Number, fakeVersion: Long) extends Record {
+class FakeRecord(fakeKey: ByteBuffer, fakeOffset: Number, fakeVersion: Long = -1, fakeTimestamp: Long = -1) extends Record {
 
   private var fakeHeaders: Array[Header] = _
 
   init()
 
   private def init(): Unit = {
-    if (Option(fakeVersion).isEmpty)
+    if (Option(fakeVersion).isEmpty || fakeVersion <= 0)
       fakeHeaders = new Array[Header](0)
     else
       fakeHeaders = Array[Header](
@@ -56,7 +55,7 @@ class FakeRecord(fakeKey: ByteBuffer, fakeOffset: Number, fakeVersion: Long) ext
 
   override def checksumOrNull: JLong = null
 
-  override def timestamp: Long = -1
+  override def timestamp: Long = fakeTimestamp
 
   override def isValid = true
 
