@@ -66,7 +66,7 @@ public class KStreamKStreamJoinTest {
     }
 
     @Test
-    public void shouldLogAndMeterOnSkippedRecords() {
+    public void shouldLogAndMeterOnSkippedRecordsWithNullValue() {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<String, Integer> left = builder.stream("left", Consumed.with(stringSerde, intSerde));

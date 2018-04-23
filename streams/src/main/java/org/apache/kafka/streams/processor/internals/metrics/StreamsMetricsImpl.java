@@ -29,10 +29,11 @@ import org.apache.kafka.streams.StreamsMetrics;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Stack;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsConventions.threadLevelSensorName;
@@ -41,7 +42,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     private final Metrics metrics;
     private final Map<String, String> tags;
     private final Map<Sensor, Sensor> parentSensors;
-    private final Stack<String> ownedSensors = new Stack<>();
+    private final Deque<String> ownedSensors = new LinkedList<>();
     private final Sensor skippedRecordsSensor;
 
     public StreamsMetricsImpl(final Metrics metrics, final String threadName) {
@@ -237,7 +238,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
     public void removeOwnedSensors() {
         synchronized (ownedSensors) {
-            while (!ownedSensors.empty()) {
+            while (!ownedSensors.isEmpty()) {
                 metrics.removeSensor(ownedSensors.pop());
             }
         }

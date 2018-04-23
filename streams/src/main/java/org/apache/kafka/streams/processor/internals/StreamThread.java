@@ -52,12 +52,13 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.Stack;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -499,10 +500,6 @@ public class StreamThread extends Thread {
         }
     }
 
-    /**
-     * This class extends {@link StreamsMetricsImpl(Metrics, String, String, Map)} and
-     * overrides one of its functions for efficiency
-     */
     static class StreamsMetricsThreadImpl extends StreamsMetricsImpl {
 
         private final Sensor commitTimeSensor;
@@ -512,7 +509,7 @@ public class StreamThread extends Thread {
         private final Sensor taskCreatedSensor;
         private final Sensor tasksClosedSensor;
 
-        private final Stack<String> ownedSensors = new Stack<>();
+        private final Deque<String> ownedSensors = new LinkedList<>();
 
         StreamsMetricsThreadImpl(final Metrics metrics, final String threadName) {
             super(metrics, threadName);
@@ -560,7 +557,7 @@ public class StreamThread extends Thread {
         public void removeOwnedSensors() {
             synchronized (ownedSensors) {
                 super.removeOwnedSensors();
-                while (!ownedSensors.empty()) {
+                while (!ownedSensors.isEmpty()) {
                     registry().removeSensor(ownedSensors.pop());
                 }
             }
