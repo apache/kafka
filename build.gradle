@@ -124,7 +124,8 @@ if (new File('.git').exists()) {
         '**/id_rsa',
         '**/id_rsa.pub',
         'checkstyle/suppressions.xml',
-        'streams/quickstart/java/src/test/resources/projects/basic/goal.txt'
+        'streams/quickstart/java/src/test/resources/projects/basic/goal.txt',
+        'streams/streams-scala/logs/*'
     ])
   }
 }
@@ -518,7 +519,7 @@ for ( sv in availableScalaVersions ) {
 }
 
 def connectPkgs = ['connect:api', 'connect:runtime', 'connect:transforms', 'connect:json', 'connect:file']
-def pkgs = ['clients', 'examples', 'log4j-appender', 'tools', 'streams', 'streams:test-utils', 'streams:examples'] + connectPkgs
+def pkgs = ['clients', 'examples', 'log4j-appender', 'tools', 'streams', 'streams:streams-scala', 'streams:test-utils', 'streams:examples'] + connectPkgs
 
 /** Create one task per default Scala version */
 def withDefScalaVersions(taskName) {
@@ -740,6 +741,8 @@ project(':core') {
     from(project(':connect:file').configurations.runtime) { into("libs/") }
     from(project(':streams').jar) { into("libs/") }
     from(project(':streams').configurations.runtime) { into("libs/") }
+    from(project(':streams:streams-scala').jar) { into("libs/") }
+    from(project(':streams:streams-scala').configurations.runtime) { into("libs/") }
     from(project(':streams:test-utils').jar) { into("libs/") }
     from(project(':streams:test-utils').configurations.runtime) { into("libs/") }
     from(project(':streams:examples').jar) { into("libs/") }
@@ -972,6 +975,46 @@ project(':streams') {
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "streams_config.html").newOutputStream()
   }
+}
+
+project(':streams:streams-scala') {
+  println "Building project 'streams-scala' with Scala version ${versions.scala}"
+  apply plugin: 'scala'
+  archivesBaseName = "kafka-streams-scala"
+
+  dependencies {
+    compile project(':streams')
+
+    compile libs.scalaLibrary
+
+    testCompile project(':core')
+    testCompile project(':core').sourceSets.test.output
+    testCompile project(':streams').sourceSets.test.output
+    testCompile project(':clients').sourceSets.test.output
+    testCompile libs.scalaLogging
+
+    testCompile libs.junit
+    testCompile libs.scalatest
+
+    testRuntime libs.slf4jlog4j
+  }
+
+  javadoc {
+    include "**/org/apache/kafka/streams/scala/**"
+  }
+
+  tasks.create(name: "copyDependantLibs", type: Copy) {
+    from (configurations.runtime) {
+      exclude('kafka-streams*')
+    }
+    into "$buildDir/dependant-libs-${versions.scala}"
+    duplicatesStrategy 'exclude'
+  }
+
+  jar {
+    dependsOn 'copyDependantLibs'
+  }
+
 }
 
 project(':streams:test-utils') {
