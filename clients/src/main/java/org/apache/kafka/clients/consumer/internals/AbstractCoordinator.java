@@ -207,14 +207,16 @@ public abstract class AbstractCoordinator implements Closeable {
         final long startTimeMs = time.milliseconds();
 
         while (coordinatorUnknown()) {
-            if (remainingTimeMs(startTimeMs, timeoutMs) <= 0) break;
-
             final RequestFuture<Void> future = lookupCoordinator();
             client.poll(future, remainingTimeMs(startTimeMs, timeoutMs));
+            if (!future.isDone()) {
+                // ran out of time
+                break;
+            }
 
             if (future.failed()) {
                 if (future.isRetriable()) {
-                    if (remainingTimeMs(startTimeMs, timeoutMs) <= 0) break;
+                    if (remainingTimeMs(startTimeMs, timeoutMs) < 0) break;
 
                     log.debug("Coordinator discovery failed, refreshing metadata");
                     client.awaitMetadataUpdate(remainingTimeMs(startTimeMs, timeoutMs));
@@ -307,10 +309,6 @@ public abstract class AbstractCoordinator implements Closeable {
      * @return true iff the group is active
      */
     boolean ensureActiveGroup(final long timeoutMs) {
-        if (timeoutMs <= 0) {
-            return false;
-        }
-
         final long startTime = time.milliseconds();
         // always ensure that the coordinator is ready because we may have been disconnected
         // when sending heartbeats and does not necessarily require us to rejoin the group.
@@ -383,7 +381,11 @@ public abstract class AbstractCoordinator implements Closeable {
             }
 
             final RequestFuture<ByteBuffer> future = initiateJoinGroup();
-            client.poll(future);
+            client.poll(future, remainingTime);
+            if (!future.isDone()) {
+                // we ran out of time
+                return false;
+            }
 
             if (future.succeeded()) {
                 onJoinComplete(generation.generationId, generation.memberId, generation.protocol, future.value());
@@ -1069,7 +1071,8 @@ public abstract class AbstractCoordinator implements Closeable {
 
     private long remainingTimeMs(final long startTime, final long executionTimeBudget) {
         final long now = time.milliseconds();
-        return executionTimeBudget - (now - startTime);
+        final long remaining = executionTimeBudget - (now - startTime);
+        return remaining;
     }
 
 }

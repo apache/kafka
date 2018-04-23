@@ -42,7 +42,7 @@ public class MockTime implements Time {
     private final AtomicLong highResTimeNs;
 
     public MockTime() {
-        this(0);
+        this(1);
     }
 
     public MockTime(long autoTickMs) {

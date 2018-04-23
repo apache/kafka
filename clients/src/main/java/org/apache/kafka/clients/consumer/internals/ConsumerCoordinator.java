@@ -280,7 +280,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         if (subscriptions.partitionsAutoAssigned()) {
             if (coordinatorUnknown()) {
-                final long remainingTimeout = remainingTimeMs(startTime, timeoutMs);
+                final long remainingTimeout = remainingTimeAtLeastZeroMillis(startTime, timeoutMs);
                 if (!ensureCoordinatorReady(remainingTimeout)) {
                     return false;
                 }
@@ -291,12 +291,12 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 // we need to ensure that the metadata is fresh before joining initially. This ensures
                 // that we have matched the pattern against the cluster's topics at least once before joining.
                 if (subscriptions.hasPatternSubscription()) {
-                    if (!client.ensureFreshMetadata(remainingTimeMs(startTime, timeoutMs))) {
+                    if (!client.ensureFreshMetadata(remainingTimeAtLeastZeroMillis(startTime, timeoutMs))) {
                         return false;
                     }
                 }
 
-                if (!ensureActiveGroup(remainingTimeMs(startTime, timeoutMs))) {
+                if (!ensureActiveGroup(remainingTimeAtLeastZeroMillis(startTime, timeoutMs))) {
                     return false;
                 }
             }
@@ -321,7 +321,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         return true;
     }
 
-    private long remainingTimeMs(final long startTime, final long executionTimeBudget) {
+    private long remainingTimeAtLeastZeroMillis(final long startTime, final long executionTimeBudget) {
         final long now = time.milliseconds();
         return Math.max(0, executionTimeBudget - (now - startTime));
     }
@@ -486,11 +486,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         if (partitions.isEmpty()) return Collections.emptyMap();
 
         while (true) {
-            if (!ensureCoordinatorReady(remainingTimeMs(startMs, timeoutMs))) return null;
+            if (!ensureCoordinatorReady(remainingTimeAtLeastZeroMillis(startMs, timeoutMs))) return null;
 
             // contact coordinator to fetch committed offsets
             final RequestFuture<Map<TopicPartition, OffsetAndMetadata>> future = sendOffsetFetchRequest(partitions);
-            client.poll(future, remainingTimeMs(startMs, timeoutMs));
+            client.poll(future, remainingTimeAtLeastZeroMillis(startMs, timeoutMs));
 
             if (future.succeeded())
                 return future.value();
@@ -498,7 +498,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             if (!future.isRetriable())
                 throw future.exception();
 
-            final long timeoutRemaining = remainingTimeMs(startMs, timeoutMs);
+            final long timeoutRemaining = remainingTimeAtLeastZeroMillis(startMs, timeoutMs);
             if (timeoutRemaining <= 0) {
                 return null;
             } else {

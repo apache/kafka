@@ -1158,10 +1158,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
         client.maybeTriggerWakeup();
 
-        if (!internalUpdateAssignmentMetadataIfNeeded(30000)) {
-            // we ran out of time.
-            return Collections.emptyMap();
-        }
+        while (!internalUpdateAssignmentMetadataIfNeeded(0)) {}
+//        if (!internalUpdateAssignmentMetadataIfNeeded(30000)) {
+//             we ran out of time.
+//            return Collections.emptyMap();
+//        }
 
         // if data is available already, return it immediately
         final Map<TopicPartition, List<ConsumerRecord<K, V>>> records = fetcher.fetchedRecords();
