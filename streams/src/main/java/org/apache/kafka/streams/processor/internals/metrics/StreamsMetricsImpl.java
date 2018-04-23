@@ -31,41 +31,93 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsConventions.threadLevelSensorName;
-
 public class StreamsMetricsImpl implements StreamsMetrics {
     private final Metrics metrics;
     private final Map<String, String> tags;
     private final Map<Sensor, Sensor> parentSensors;
-    private final Deque<String> ownedSensors = new LinkedList<>();
     private final Sensor skippedRecordsSensor;
     private final String threadName;
+
+    private final Deque<String> threadLevelSensors = new LinkedList<>();
+    private final Map<String, Deque<String>> cacheLevelSensors = new HashMap<>();
 
     public StreamsMetricsImpl(final Metrics metrics, final String threadName) {
         Objects.requireNonNull(metrics, "Metrics cannot be null");
         this.threadName = threadName;
 
         this.metrics = metrics;
-        this.tags = StreamsMetricsConventions.threadLevelTags(threadName, Collections.<String, String>emptyMap());
+
+        this.tags = new LinkedHashMap<>();
+        tags.put("client-id", threadName);
+
         this.parentSensors = new HashMap<>();
 
-        skippedRecordsSensor = metrics.sensor(threadLevelSensorName(threadName, "skipped-records"), Sensor.RecordingLevel.INFO);
+        skippedRecordsSensor = threadLevelSensor("skipped-records", Sensor.RecordingLevel.INFO);
         skippedRecordsSensor.add(metrics.metricName("skipped-records-rate", "stream-metrics", "The average per-second number of skipped records", tags), new Rate(TimeUnit.SECONDS, new Count()));
         skippedRecordsSensor.add(metrics.metricName("skipped-records-total", "stream-metrics", "The total number of skipped records", tags), new Total());
-        ownedSensors.push(skippedRecordsSensor.name());
+    }
+
+    public final Sensor threadLevelSensor(final String sensorName,
+                                          final Sensor.RecordingLevel recordingLevel,
+                                          final Sensor... parents) {
+        synchronized (threadLevelSensors) {
+            final String fullSensorName = threadName + "." + sensorName;
+            final Sensor sensor = metrics.sensor(fullSensorName, recordingLevel, parents);
+            threadLevelSensors.push(fullSensorName);
+
+            return sensor;
+        }
+    }
+
+    public final void removeAllThreadLevelSensors() {
+        synchronized (threadLevelSensors) {
+            while (!threadLevelSensors.isEmpty()) {
+                metrics.removeSensor(threadLevelSensors.pop());
+            }
+        }
+    }
+
+    public final Sensor cacheLevelSensor(final String taskName,
+                                         final String cacheName,
+                                         final String sensorName,
+                                         final Sensor.RecordingLevel recordingLevel,
+                                         final Sensor... parents) {
+        final String key = threadName + "." + taskName + "." + cacheName;
+        synchronized (cacheLevelSensors) {
+            if (!cacheLevelSensors.containsKey(key)) {
+                cacheLevelSensors.put(key, new LinkedList<String>());
+            }
+
+            final String fullSensorName = key + "." + sensorName;
+
+            final Sensor sensor = metrics.sensor(fullSensorName, recordingLevel, parents);
+
+            cacheLevelSensors.get(key).push(fullSensorName);
+
+            return sensor;
+        }
+    }
+
+    public final void removeAllCacheLevelSensors(final String taskName, final String cacheName) {
+        final String key = threadName + "." + taskName + "." + cacheName;
+        synchronized (cacheLevelSensors) {
+            if (cacheLevelSensors.containsKey(key)) {
+                while (!cacheLevelSensors.get(key).isEmpty()) {
+                    metrics.removeSensor(cacheLevelSensors.get(key).pop());
+                }
+                cacheLevelSensors.remove(key);
+            }
+        }
     }
 
     public final Metrics registry() {
         return metrics;
-    }
-
-    public String threadName() {
-        return threadName;
     }
 
     protected final Map<String, String> tags() {
@@ -239,14 +291,6 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         final Sensor parent = parentSensors.get(sensor);
         if (parent != null) {
             metrics.removeSensor(parent.name());
-        }
-    }
-
-    public void removeOwnedSensors() {
-        synchronized (ownedSensors) {
-            while (!ownedSensors.isEmpty()) {
-                metrics.removeSensor(ownedSensors.pop());
-            }
         }
     }
 }

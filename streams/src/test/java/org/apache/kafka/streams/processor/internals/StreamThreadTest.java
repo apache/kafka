@@ -243,7 +243,7 @@ public class StreamThreadTest {
     public void testMetricsCreatedAtStartup() {
         final StreamThread thread = createStreamThread(clientId, config, false);
         final String defaultGroupName = "stream-metrics";
-        final String defaultPrefix = "thread." + thread.getName();
+        final String defaultPrefix = thread.getName();
         final Map<String, String> defaultTags = Collections.singletonMap("client-id", thread.getName());
 
         assertNotNull(metrics.getSensor(defaultPrefix + ".commit-latency"));
