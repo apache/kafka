@@ -67,6 +67,12 @@
                 </li>
                 <li><a class="reference internal" href="#writing-streams-back-to-kafka" id="id25">Writing streams back to Kafka</a></li>
                 <li><a class="reference internal" href="#testing-a-streams-app" id="id26">Testing a Streams application</a></li>
+                <li><a class="reference internal" href="#scala-dsl" id="id27">Kafka Streams DSL for Scala</a></li>
+                <ul>
+                    <li><a class="reference internal" href="#scala-dsl-sample-usage" id="id28">Sample Usage</a></li>
+                    <li><a class="reference internal" href="#scala-dsl-implicit-serdes" id="id29">Implicit SerDes</a></li>
+                    <li><a class="reference internal" href="#scala-dsl-user-defined-serdes" id="id30">User-Defined SerDes</a></li>
+                </ul>
             </ul>
         </div>
         <div class="section" id="overview">
@@ -3153,11 +3159,183 @@ t=5 (blue), which lead to a merge of sessions and an extension of a session, res
                     <a class="reference internal" href="../../connect/index.html#kafka-connect"><span class="std std-ref">Kafka Connect API</span></a> instead.  However, if you do use such a sink processor, please be aware that
                     it is now your responsibility to guarantee message delivery semantics when talking to such external systems (e.g., to
                     retry on delivery failure or to prevent message duplication).</p>
-</div>
-</div>
+            </div>
+        </div>
         <div class="section" id="testing-a-streams-app">
             <a class="headerlink" href="#testing-a-streams-app" title="Permalink to this headline"><h2>Testing a Streams application</a></h2>
             Kafka Streams comes with a <code>test-utils</code> module to help you test your application <a href="testing.html">here</a>.
+            </div>
+        </div>
+        <div class="section" id="scala-dsl">
+            <span id="streams-developer-guide-dsl-scala-dsl"></span><h2><a class="toc-backref" href="#id27">Kafka Streams DSL for Scala</a><a class="headerlink" href="#scala-dsl" title="Permalink to this headline"></a></h2>
+            <p id="scala-dsl-motivation">The Kafka Streams DSL Java APIs are based on the Builder design pattern, which allows users to incrementally build the target functionality using lower level compositional fluent APIs.  These APIs can be called from Scala, but there are several issues:</p>
+            <ol class="last arabic simple">
+              <li><strong>Additional type annotations</strong> - The Java APIs use Java generics in a way that are not fully compatible with the type inferencer of the Scala compiler. Hence the user has to add type annotations to the Scala code, which seems rather non-idiomatic in Scala.</li>
+              <li><strong>Verbosity</strong> - In some cases the Java APIs appear too verbose compared to idiomatic Scala.</li>
+              <li><strong>Type Unsafety</strong> - The Java APIs offer some options where the compile time type safety is sometimes subverted and can result in runtime errors. This stems from the fact that the SerDes defined as part of config are not type checked during compile time. Hence any missing SerDes can result in runtime errors.</li>
+            </ol>
+            <p id="scala-dsl-overview">The Kafka Streams DSL for Scala library is a wrapper over the existing Java APIs for Kafka Streams DSL that addresses the concerns raised above.
+              It does not attempt to provide idiomatic Scala APIs that one would implement in a Scala library developed from scratch. The intention is to make the Java APIs more usable in Scala through better type inferencing, enhanced expressiveness, and lesser boilerplates.
+            </p>
+            <p>The library wraps Java Stream DSL APIs in Scala thereby providing:</p>
+            <ol class="last arabic simple">
+              <li>Better type inference in Scala.</li>
+              <li>Less boilerplate in application code.</li>
+              <li>The usual builder-style composition that developers get with the original Java API.</li>
+              <li>Implicit serializers and de-serializers leading to better abstraction and less verbosity.</li>
+              <li>Better type safety during compile time.</li>
+            </ol>
+            <p>All functionality provided by Kafka Streams DSL for Scala are under the root package name of <code class="docutils literal"><span class="pre">org.apache.kafka.streams.scala</span></code>.</p>
+            <p>Many of the public facing types from the Java API are wrapped. The following Scala abstractions are available to the user:</p>
+            <ul>
+              <li><code class="docutils literal"><span class="pre">org.apache.kafka.streams.scala.StreamsBuilder</span></code></li>
+              <li><code class="docutils literal"><span class="pre">org.apache.kafka.streams.scala.kstream.KStream</span></code></li>
+              <li><code class="docutils literal"><span class="pre">org.apache.kafka.streams.scala.kstream.KTable</span></code></li>
+              <li><code class="docutils literal"><span class="pre">org.apache.kafka.streams.scala.kstream.KGroupedStream</span></code></li>
+              <li><code class="docutils literal"><span class="pre">org.apache.kafka.streams.scala.kstream.KGroupedTable</span></code></li>
+              <li><code class="docutils literal"><span class="pre">org.apache.kafka.streams.scala.kstream.SessionWindowedKStream</span></code></li>
+              <li><code class="docutils literal"><span class="pre">org.apache.kafka.streams.scala.kstream.TimeWindowedKStream</span></code></li>
+            </ul>
+            <p>The library also has several utility abstractions and modules that the user needs to use for proper semantics.</p>
+            <ul>
+              <li><code class="docutils literal"><span class="pre">org.apache.kafka.streams.scala.ImplicitConversions</span></code>: Module that brings into scope the implicit conversions between the Scala and Java classes.</li>
+              <li><code class="docutils literal"><span class="pre">org.apache.kafka.streams.scala.DefaultSerdes</span></code>: Module that brings into scope the implicit values of all primitive SerDes.</li>
+              <li><code class="docutils literal"><span class="pre">org.apache.kafka.streams.scala.ScalaSerde</span></code>: Base abstraction that can be used to implement custom SerDes in a type safe way.</li>
+            </ul>
+            <p>The library is cross-built with Scala 2.11 and 2.12.  To reference the library compiled against Scala 2.11 include the following in your maven <code>pom.xml</code> add the following:</p>
+            <pre class="brush: xml;">
+              &lt;dependency&gt;
+                &lt;groupId&gt;org.apache.kafka&lt;/groupId&gt;
+                &lt;artifactId&gt;kafka-streams-scala_2.11&lt;/artifactId&gt;
+                &lt;version&gt;{{fullDotVersion}}&lt;/version&gt;
+              &lt;/dependency&gt;
+            </pre>
+            <p>To use the library compiled against Scala 2.12 replace the <code class="docutils literal"><span class="pre">artifactId</span></code> with <code class="docutils literal"><span class="pre">kafka-streams-scala_2.12</span></code>.</p>
+            <p>When using SBT then you can reference the correct library using the following:</p>
+            <pre class="brush: scala;">
+              libraryDependencies += "org.apache.kafka" %% "kafka-streams-scala" % "{{fullDotVersion}}"
+            </pre>
+            <div class="section" id="scala-dsl-sample-usage">
+              <span id="streams-developer-guide-dsl-sample-usage"></span><h3><a class="toc-backref" href="#id28">Sample Usage</a><a class="headerlink" href="#scala-dsl-sample-usage" title="Permalink to this headline"></a></h3>
+              <p>The library works by wrapping the original Java abstractions of Kafka Streams within a Scala wrapper object and then using implicit conversions between them. All the Scala abstractions are named identically as the corresponding Java abstraction, but they reside in a different package of the library e.g. the Scala class <code class="docutils literal"><span class="pre">org.apache.kafka.streams.scala.StreamsBuilder</span></code> is a wrapper around <code class="docutils literal"><span class="pre">org.apache.kafka.streams.StreamsBuilder</span></code>, <code class="docutils literal"><span class="pre">org.apache.kafka.streams.scala.kstream.KStream</span></code> is a wrapper around <code class="docutils literal"><span class="pre">org.apache.kafka.streams.kstream.KStream</span></code>, and so on.</p>
+              <p>Here's an example of the classic WordCount program that uses the Scala <code class="docutils literal"><span class="pre">StreamsBuilder</span></code> that builds an instance of <code class="docutils literal"><span class="pre">KStream</span></code> which is a wrapper around Java <code class="docutils literal"><span class="pre">KStream</span></code>. Then we reify to a table and get a <code class="docutils literal"><span class="pre">KTable</span></code>, which, again is a wrapper around Java <code class="docutils literal"><span class="pre">KTable</span></code>.</p>
+              <p>The net result is that the following code is structured just like using the Java API, but with Scala and with far fewer type annotations compared to using the Java API directly from Scala. The difference in type annotation usage is more obvious when given an example.  Below is an example WordCount implementation that will be used to demonstrate the differences between the Scala and Java API.</p>
+              <pre class="brush: scala;">
+import java.util.Properties
+import java.util.concurrent.TimeUnit
+
+import org.apache.kafka.streams.kstream.Materialized
+import org.apache.kafka.streams.{KafkaStreams, StreamsConfig}
+
+object WordCountApplication extends App {
+  import DefaultSerdes._
+  import ImplicitConversions._
+
+  val config: Properties = {
+    val p = new Properties()
+    p.put(StreamsConfig.APPLICATION_ID_CONFIG, "wordcount-application")
+    p.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "kafka-broker1:9092")
+    p
+  }
+
+  val builder = new StreamsBuilder()
+  val textLines = builder.stream[String, String]("TextLinesTopic")
+  val wordCounts = textLines
+    .flatMapValues(textLine => textLine.toLowerCase.split("\\W+"))
+    .groupBy((_, word) => word)
+    .count(Materialized.as("counts-store"))
+  wordCounts.toStream.to("WordsWithCountsTopic")
+
+  val streams: KafkaStreams = new KafkaStreams(builder.build(), config)
+  streams.start()
+
+  sys.ShutdownHookThread {
+    streams.close(10, TimeUnit.SECONDS)
+  }
+}
+              </pre>
+              <p>In the above code snippet, we don't have to provide any SerDes, <code class="docutils literal"><span class="pre">Serialized</span></code>, <code class="docutils literal"><span class="pre">Produced</span></code>, <code class="docutils literal"><span class="pre">Consumed</span></code> or <code class="docutils literal"><span class="pre">Joined</span></code> explicitly. They will also not be dependent on any SerDes specified in the config.  <strong>In fact all SerDes specified in the config will be ignored by the Scala APIs</strong>. All SerDes and <code class="docutils literal"><span class="pre">Serialized</span></code>, <code class="docutils literal"><span class="pre">Produced</span></code>, <code class="docutils literal"><span class="pre">Consumed</span></code> or <code class="docutils literal"><span class="pre">Joined</span></code> will be handled through implicit SerDes as discussed later in the <a href="#scala-dsl-implicit-serdes">Implicit SerDes</a> section. The complete independence from configuration based SerDes is what makes this library completely typesafe.  Any missing instances of SerDes, <code class="docutils literal"><span class="pre">Serialized</span></code>, <code class="docutils literal"><span class="pre">Produced</span></code>, <code class="docutils literal"><span class="pre">Consumed</span></code> or <code class="docutils literal"><span class="pre">Joined</span></code> will be flagged as a compile time error.</p>
+            </div>
+            <div class="section" id="scala-dsl-implicit-serdes">
+              <span id="streams-developer-guide-dsl-scala-dsl-implicit-serdes"></span><h3><a class="toc-backref" href="#id29">Implicit SerDes</a><a class="headerlink" href="#scala-dsl-implicit-serdes" title="Permalink to this headline"></a></h3>
+              <p>One of the common complaints of Scala users with the Java API has been the repetitive usage of the SerDes in API invocations. Many of the APIs need to take the SerDes through abstractions like <code class="docutils literal"><span class="pre">Serialized</span></code>, <code class="docutils literal"><span class="pre">Produced</span></code>, <code class="docutils literal"><span class="pre">Consumed</span></code> or <code class="docutils literal"><span class="pre">Joined</span></code>. And the user has to supply them every time through the with function of these classes.</p>
+              <p>The library uses the power of <a href="https://docs.scala-lang.org/tour/implicit-parameters.html">Scala implicit parameters</a> to alleviate this concern. As a user you can provide implicit SerDes or implicit values of <code class="docutils literal"><span class="pre">Serialized</span></code>, <code class="docutils literal"><span class="pre">Produced</span></code>, <code class="docutils literal"><span class="pre">Consumed</span></code> or <code class="docutils literal"><span class="pre">Joined</span></code> once and make your code less verbose. In fact you can just have the implicit SerDes in scope and the library will make the instances of <code class="docutils literal"><span class="pre">Serialized</span></code>, <code class="docutils literal"><span class="pre">Produced</span></code>, <code class="docutils literal"><span class="pre">Consumed</span></code> or <code class="docutils literal"><span class="pre">Joined</span></code> available in scope.</p>
+              <p>The library also bundles all implicit SerDes of the commonly used primitive types in a Scala module - so just import the module vals and have all SerDes in scope.  A similar strategy of modular implicits can be adopted for any user-defined SerDes as well (User-defined SerDes are discussed in the next section).</p>
+              <p>Here's an example:</p>
+              <pre class="brush: scala;">
+// DefaultSerdes brings into scope implicit SerDes (mostly for primitives)
+// that will set up all Serialized, Produced, Consumed and Joined instances.
+// So all APIs below that accept Serialized, Produced, Consumed or Joined will
+// get these instances automatically
+import DefaultSerdes._
+
+val builder = new StreamsBuilder()
+
+val userClicksStream: KStream[String, Long] = builder.stream(userClicksTopic)
+
+val userRegionsTable: KTable[String, String] = builder.table(userRegionsTopic)
+
+// The following code fragment does not have a single instance of Serialized,
+// Produced, Consumed or Joined supplied explicitly.
+// All of them are taken care of by the implicit SerDes imported by DefaultSerdes
+val clicksPerRegion: KTable[String, Long] =
+  userClicksStream
+    .leftJoin(userRegionsTable,
+      (clicks: Long, region: String) =>
+        (if (region == null) "UNKNOWN" else region, clicks))
+    .map((_, regionWithClicks) => regionWithClicks)
+    .groupByKey
+    .reduce(_ + _)
+
+clicksPerRegion.toStream.to(outputTopic)
+              </pre>
+              <p>Quite a few things are going on in the above code snippet that may warrant a few lines of elaboration:</p>
+              <ol>
+                <li>The code snippet does not depend on any config defined SerDes. In fact any SerDes defined as part of the config will be ignored.</li>
+                <li>All SerDes are picked up from the implicits in scope. And <code class="docutils literal"><span class="pre">import DefaultSerdes._</span></code> brings all necessary SerDes in scope.</li>
+                <li>This is an example of compile time type safety that we don't have in the Java APIs.</li>
+                <li>The code looks less verbose and more focused towards the actual transformation that it does on the data stream.</li>
+              </ol>
+            </div>
+            <div class="section" id="scala-dsl-user-defined-serdes">
+              <span id="streams-developer-guide-dsl-scala-dsl-user-defined-serdes"></span><h3><a class="toc-backref" href="#id30">User-Defined SerDes</a><a class="headerlink" href="#scala-dsl-user-defined-serdes" title="Permalink to this headline"></a></h3>
+              <p>When the default primitive SerDes are not enough and we need to define custom SerDes, the usage is exactly the same as above. Just define the implicit SerDes and start building the stream transformation. Here's an example with <code class="docutils literal"><span class="pre">AvroSerde</span></code>:</p>
+              <pre class="brush: scala;">
+// domain object as a case class
+case class UserClicks(clicks: Long)
+
+// An implicit Serde implementation for the values we want to
+// serialize as avro
+implicit val userClicksSerde: Serde[UserClicks] = new AvroSerde
+
+// Primitive SerDes
+import DefaultSerdes._
+
+// And then business as usual ..
+
+val userClicksStream: KStream[String, UserClicks] = builder.stream(userClicksTopic)
+
+val userRegionsTable: KTable[String, String] = builder.table(userRegionsTopic)
+
+// Compute the total per region by summing the individual click counts per region.
+val clicksPerRegion: KTable[String, Long] =
+ userClicksStream
+
+   // Join the stream against the table.
+   .leftJoin(userRegionsTable, (clicks: UserClicks, region: String) => (if (region == null) "UNKNOWN" else region, clicks.clicks))
+
+   // Change the stream from <user> -> <region, clicks> to <region> -> <clicks>
+   .map((_, regionWithClicks) => regionWithClicks)
+
+   // Compute the total per region by summing the individual click counts per region.
+   .groupByKey
+   .reduce(_ + _)
+
+// Write the (continuously updating) results to the output topic.
+clicksPerRegion.toStream.to(outputTopic)
+              </pre>
+              <p>A complete example of user-defined SerDes can be found in a test class within the library.</p>
+            </div>
         </div>
 </div>
 
