@@ -246,7 +246,7 @@ public class ConnectHeaders implements Headers {
     @Override
     public Header lastWithName(String key) {
         checkKey(key);
-        if (headers != null) {
+        if (!isEmpty()) {
             ListIterator<Header> iter = headers.listIterator(headers.size());
             while (iter.hasPrevious()) {
                 Header header = iter.previous();
@@ -274,7 +274,7 @@ public class ConnectHeaders implements Headers {
     @Override
     public Headers remove(String key) {
         checkKey(key);
-        if (!headers.isEmpty()) {
+        if (!isEmpty()) {
             Iterator<Header> iterator = iterator();
             while (iterator.hasNext()) {
                 if (iterator.next().key().equals(key)) {
@@ -287,7 +287,7 @@ public class ConnectHeaders implements Headers {
 
     @Override
     public Headers retainLatest() {
-        if (!headers.isEmpty()) {
+        if (!isEmpty()) {
             Set<String> keys = new HashSet<>();
             ListIterator<Header> iter = headers.listIterator(headers.size());
             while (iter.hasPrevious()) {
@@ -304,7 +304,7 @@ public class ConnectHeaders implements Headers {
     @Override
     public Headers retainLatest(String key) {
         checkKey(key);
-        if (!headers.isEmpty()) {
+        if (!isEmpty()) {
             boolean found = false;
             ListIterator<Header> iter = headers.listIterator(headers.size());
             while (iter.hasPrevious()) {
@@ -322,7 +322,7 @@ public class ConnectHeaders implements Headers {
     @Override
     public Headers apply(String key, HeaderTransform transform) {
         checkKey(key);
-        if (!headers.isEmpty()) {
+        if (!isEmpty()) {
             ListIterator<Header> iter = headers.listIterator();
             while (iter.hasNext()) {
                 Header orig = iter.next();
@@ -341,7 +341,7 @@ public class ConnectHeaders implements Headers {
 
     @Override
     public Headers apply(HeaderTransform transform) {
-        if (!headers.isEmpty()) {
+        if (!isEmpty()) {
             ListIterator<Header> iter = headers.listIterator();
             while (iter.hasNext()) {
                 Header orig = iter.next();

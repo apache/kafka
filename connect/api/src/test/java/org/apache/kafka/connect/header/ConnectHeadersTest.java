@@ -544,4 +544,20 @@ public class ConnectHeadersTest {
         assertSame(schema, header.schema());
         assertSame(value, header.value());
     }
+
+    @Test
+    public void shouldNoNpeHappenToEmptyConnectHeaders() {
+        ConnectHeaders emptyCH = new ConnectHeaders(null);
+        assertNoNpe(emptyCH);
+        ConnectHeaders cloneOfEmptyCH = new ConnectHeaders(emptyCH);
+        assertNoNpe(cloneOfEmptyCH);
+    }
+
+    private void assertNoNpe(ConnectHeaders ch) {
+        ch.remove("key")
+                .retainLatest()
+                .retainLatest("key")
+                .apply(appendToKey("key"))
+                .apply("key", appendToKey("key"));
+    }
 }
