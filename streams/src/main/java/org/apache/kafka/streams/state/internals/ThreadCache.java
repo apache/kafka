@@ -92,7 +92,7 @@ public class ThreadCache {
      * @return
      */
     public static String taskIDfromCacheName(final String cacheName) {
-        String[] tokens = cacheName.split("-");
+        String[] tokens = cacheName.split("-", 2);
         return tokens[0];
     }
 
@@ -102,7 +102,7 @@ public class ThreadCache {
      * @return
      */
     public static String underlyingStoreNamefromCacheName(final String cacheName) {
-        String[] tokens = cacheName.split("-");
+        String[] tokens = cacheName.split("-", 2);
         return tokens[1];
     }
 
