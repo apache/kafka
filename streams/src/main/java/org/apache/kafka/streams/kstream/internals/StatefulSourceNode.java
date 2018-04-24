@@ -125,53 +125,53 @@ class StatefulSourceNode<K, V> extends StreamSourceNode<K, V> {
         }
 
 
-        StatefulSourceNodeBuilder withPredecessorNodeName(String predecessorNodeName) {
+        StatefulSourceNodeBuilder withPredecessorNodeName(final String predecessorNodeName) {
             this.predecessorNodeName = predecessorNodeName;
             return this;
         }
 
-        StatefulSourceNodeBuilder withSourceName(String sourceName) {
+        StatefulSourceNodeBuilder withSourceName(final String sourceName) {
             this.sourceName = sourceName;
             return this;
         }
 
-        StatefulSourceNodeBuilder withProcessorName(String processorName) {
+        StatefulSourceNodeBuilder withProcessorName(final String processorName) {
             this.processorName = processorName;
             return this;
         }
 
-        StatefulSourceNodeBuilder withTopic(String topic) {
+        StatefulSourceNodeBuilder withTopic(final String topic) {
             this.topic = topic;
             return this;
         }
 
-        StatefulSourceNodeBuilder withStoreSupplier(StateStoreSupplier<KeyValueStore> storeSupplier) {
+        StatefulSourceNodeBuilder withStoreSupplier(final StateStoreSupplier<KeyValueStore> storeSupplier) {
             this.storeSupplier = storeSupplier;
             return this;
         }
 
 
-        StatefulSourceNodeBuilder withStoreBuilder(StoreBuilder<KeyValueStore<K, V>> storeBuilder) {
+        StatefulSourceNodeBuilder withStoreBuilder(final StoreBuilder<KeyValueStore<K, V>> storeBuilder) {
             this.storeBuilder = storeBuilder;
             return this;
         }
 
-        StatefulSourceNodeBuilder withConsumedInternal(ConsumedInternal<K, V> consumedInternal) {
+        StatefulSourceNodeBuilder withConsumedInternal(final ConsumedInternal<K, V> consumedInternal) {
             this.consumedInternal = consumedInternal;
             return this;
         }
 
-        StatefulSourceNodeBuilder withProcessorSupplier(ProcessorSupplier<K, V> processorSupplier) {
+        StatefulSourceNodeBuilder withProcessorSupplier(final ProcessorSupplier<K, V> processorSupplier) {
             this.processorSupplier = processorSupplier;
             return this;
         }
 
-        StatefulSourceNodeBuilder withKTableSource(KTableSource<K, V> kTableSource) {
+        StatefulSourceNodeBuilder withKTableSource(final KTableSource<K, V> kTableSource) {
             this.kTableSource = kTableSource;
             return this;
         }
 
-        StatefulSourceNodeBuilder withNodeName(String nodeName) {
+        StatefulSourceNodeBuilder withNodeName(final String nodeName) {
             this.nodeName = nodeName;
             return this;
         }

@@ -146,12 +146,12 @@ class StreamStreamJoinNode<K, V, V1, V2, VR> extends BaseJoinProcessorNode<K, V,
             return this;
         }
 
-        StreamStreamJoinNodeBuilder withLeftHandSideStreamName(String leftHandSideStreamName) {
+        StreamStreamJoinNodeBuilder withLeftHandSideStreamName(final String leftHandSideStreamName) {
             this.leftHandSideStreamName = leftHandSideStreamName;
             return this;
         }
 
-        StreamStreamJoinNodeBuilder withOtherStreamName(String otherStreamName) {
+        StreamStreamJoinNodeBuilder withOtherStreamName(final String otherStreamName) {
             this.otherStreamName = otherStreamName;
             return this;
         }

@@ -88,41 +88,37 @@ class StatefulProcessorNode<K, V> extends StatelessProcessorNode<K, V> {
         private StatefulProcessorNodeBuilder() {
         }
 
-        static StatefulProcessorNodeBuilder aStatefulProcessorNode() {
-            return new StatefulProcessorNodeBuilder();
-        }
-
-        StatefulProcessorNodeBuilder withProcessorSupplier(ProcessorSupplier<K, V> processorSupplier) {
+        StatefulProcessorNodeBuilder withProcessorSupplier(final ProcessorSupplier<K, V> processorSupplier) {
             this.processorSupplier = processorSupplier;
             return this;
         }
 
-        StatefulProcessorNodeBuilder withName(String name) {
+        StatefulProcessorNodeBuilder withName(final String name) {
             this.name = name;
             return this;
         }
 
-        StatefulProcessorNodeBuilder withPredecessorNodeName(String predecessorNodeName) {
+        StatefulProcessorNodeBuilder withPredecessorNodeName(final String predecessorNodeName) {
             this.predecessorNodeName = predecessorNodeName;
             return this;
         }
 
-        StatefulProcessorNodeBuilder withStoreNames(String[] storeNames) {
+        StatefulProcessorNodeBuilder withStoreNames(final String[] storeNames) {
             this.storeNames = storeNames;
             return this;
         }
 
-        StatefulProcessorNodeBuilder withRepartitionRequired(boolean repartitionRequired) {
+        StatefulProcessorNodeBuilder withRepartitionRequired(final boolean repartitionRequired) {
             this.repartitionRequired = repartitionRequired;
             return this;
         }
 
-        StatefulProcessorNodeBuilder withStoreSupplier(StateStoreSupplier<KeyValueStore> storeSupplier) {
+        StatefulProcessorNodeBuilder withStoreSupplier(final StateStoreSupplier<KeyValueStore> storeSupplier) {
             this.storeSupplier = storeSupplier;
             return this;
         }
 
-        StatefulProcessorNodeBuilder withStoreBuilder(StoreBuilder<KeyValueStore<K, V>> storeBuilder) {
+        StatefulProcessorNodeBuilder withStoreBuilder(final StoreBuilder<KeyValueStore<K, V>> storeBuilder) {
             this.storeBuilder = storeBuilder;
             return this;
         }

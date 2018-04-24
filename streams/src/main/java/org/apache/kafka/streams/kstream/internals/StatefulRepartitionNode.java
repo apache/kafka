@@ -102,53 +102,53 @@ class StatefulRepartitionNode<K, V, T> extends RepartitionNode<K, V> {
         private StatefulRepartitionNodeBuilder() {
         }
 
-        StatefulRepartitionNodeBuilder withKeySerde(Serde<K> keySerde) {
+        StatefulRepartitionNodeBuilder withKeySerde(final Serde<K> keySerde) {
             this.keySerde = keySerde;
             return this;
         }
 
 
-        StatefulRepartitionNodeBuilder withValueSerde(Serde<V> valueSerde) {
+        StatefulRepartitionNodeBuilder withValueSerde(final Serde<V> valueSerde) {
             this.valueSerde = valueSerde;
             return this;
         }
 
-        StatefulRepartitionNodeBuilder withPredecessorNodeName(String predecessorNodeName) {
+        StatefulRepartitionNodeBuilder withPredecessorNodeName(final String predecessorNodeName) {
             this.predecessorNodeName = predecessorNodeName;
             return this;
         }
 
-        StatefulRepartitionNodeBuilder withSinkName(String sinkName) {
+        StatefulRepartitionNodeBuilder withSinkName(final String sinkName) {
             this.sinkName = sinkName;
             return this;
         }
 
-        StatefulRepartitionNodeBuilder withSourceName(String sourceName) {
+        StatefulRepartitionNodeBuilder withSourceName(final String sourceName) {
             this.sourceName = sourceName;
             return this;
         }
 
-        StatefulRepartitionNodeBuilder withRepartitionTopic(String repartitionTopic) {
+        StatefulRepartitionNodeBuilder withRepartitionTopic(final String repartitionTopic) {
             this.repartitionTopic = repartitionTopic;
             return this;
         }
 
-        StatefulRepartitionNodeBuilder withProcessorName(String processorName) {
+        StatefulRepartitionNodeBuilder withProcessorName(final String processorName) {
             this.processorName = processorName;
             return this;
         }
 
-        StatefulRepartitionNodeBuilder withStatefulProcessorSupplier(ProcessorSupplier<K, Change<V>> statefulProcessorSupplier) {
+        StatefulRepartitionNodeBuilder withStatefulProcessorSupplier(final ProcessorSupplier<K, Change<V>> statefulProcessorSupplier) {
             this.statefulProcessorSupplier = statefulProcessorSupplier;
             return this;
         }
 
-        StatefulRepartitionNodeBuilder withMaterialized(MaterializedInternal<K, T, KeyValueStore<Bytes, byte[]>> materialized) {
+        StatefulRepartitionNodeBuilder withMaterialized(final MaterializedInternal<K, T, KeyValueStore<Bytes, byte[]>> materialized) {
             this.materialized = materialized;
             return this;
         }
 
-        StatefulRepartitionNodeBuilder withNodeName(String nodeName) {
+        StatefulRepartitionNodeBuilder withNodeName(final String nodeName) {
             this.nodeName = nodeName;
             return this;
         }

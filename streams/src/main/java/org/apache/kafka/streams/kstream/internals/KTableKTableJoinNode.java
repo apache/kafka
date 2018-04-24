@@ -92,7 +92,7 @@ class KTableKTableJoinNode<K, V, V1, V2, VR> extends BaseJoinProcessorNode<K, V,
         private KTableKTableJoinNodeBuilder() {
         }
 
-        KTableKTableJoinNodeBuilder withJoinThisStoreNames(String[] joinThisStoreNames) {
+        KTableKTableJoinNodeBuilder withJoinThisStoreNames(final String[] joinThisStoreNames) {
             this.joinThisStoreNames = joinThisStoreNames;
             return this;
         }
@@ -107,12 +107,12 @@ class KTableKTableJoinNode<K, V, V1, V2, VR> extends BaseJoinProcessorNode<K, V,
             return this;
         }
 
-        KTableKTableJoinNodeBuilder withJoinOtherStoreNames(String[] joinOtherStoreNames) {
+        KTableKTableJoinNodeBuilder withJoinOtherStoreNames(final String[] joinOtherStoreNames) {
             this.joinOtherStoreNames = joinOtherStoreNames;
             return this;
         }
 
-        KTableKTableJoinNodeBuilder withPredecessorNodeName(String predecessorNodeName) {
+        KTableKTableJoinNodeBuilder withPredecessorNodeName(final String predecessorNodeName) {
             this.predecessorNodeName = predecessorNodeName;
             return this;
         }
@@ -127,17 +127,17 @@ class KTableKTableJoinNode<K, V, V1, V2, VR> extends BaseJoinProcessorNode<K, V,
             return this;
         }
 
-        KTableKTableJoinNodeBuilder withValueJoiner(ValueJoiner<? super V, ? super V1, ? extends V2> valueJoiner) {
+        KTableKTableJoinNodeBuilder withValueJoiner(final ValueJoiner<? super V, ? super V1, ? extends V2> valueJoiner) {
             this.valueJoiner = valueJoiner;
             return this;
         }
 
-        KTableKTableJoinNodeBuilder withThisJoinSide(String thisJoinSide) {
+        KTableKTableJoinNodeBuilder withThisJoinSide(final String thisJoinSide) {
             this.thisJoinSide = thisJoinSide;
             return this;
         }
 
-        KTableKTableJoinNodeBuilder withOtherJoinSide(String otherJoinSide) {
+        KTableKTableJoinNodeBuilder withOtherJoinSide(final String otherJoinSide) {
             this.otherJoinSide = otherJoinSide;
             return this;
         }

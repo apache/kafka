@@ -102,47 +102,47 @@ class RepartitionNode<K, V> extends StatelessProcessorNode<K, V> {
         private RepartitionNodeBuilder() {
         }
 
-        RepartitionNodeBuilder withProcessorSupplier(ProcessorSupplier<K, V> processorSupplier) {
+        RepartitionNodeBuilder withProcessorSupplier(final ProcessorSupplier<K, V> processorSupplier) {
             this.processorSupplier = processorSupplier;
             return this;
         }
 
-        RepartitionNodeBuilder withKeySerde(Serde<K> keySerde) {
+        RepartitionNodeBuilder withKeySerde(final Serde<K> keySerde) {
             this.keySerde = keySerde;
             return this;
         }
 
-        RepartitionNodeBuilder withValueSerde(Serde<V> valueSerde) {
+        RepartitionNodeBuilder withValueSerde(final Serde<V> valueSerde) {
             this.valueSerde = valueSerde;
             return this;
         }
 
-        RepartitionNodeBuilder withSinkName(String sinkName) {
+        RepartitionNodeBuilder withSinkName(final String sinkName) {
             this.sinkName = sinkName;
             return this;
         }
 
-        RepartitionNodeBuilder withSourceName(String sourceName) {
+        RepartitionNodeBuilder withSourceName(final String sourceName) {
             this.sourceName = sourceName;
             return this;
         }
 
-        RepartitionNodeBuilder withRepartitionTopic(String repartitionTopic) {
+        RepartitionNodeBuilder withRepartitionTopic(final String repartitionTopic) {
             this.repartitionTopic = repartitionTopic;
             return this;
         }
 
-        RepartitionNodeBuilder withProcessorName(String processorName) {
+        RepartitionNodeBuilder withProcessorName(final String processorName) {
             this.processorName = processorName;
             return this;
         }
 
-        RepartitionNodeBuilder withPredecessorName(String predecessorName) {
+        RepartitionNodeBuilder withPredecessorName(final String predecessorName) {
             this.predecessorName = predecessorName;
             return this;
         }
 
-        RepartitionNodeBuilder withNodeName(String nodeName) {
+        RepartitionNodeBuilder withNodeName(final String nodeName) {
             this.nodeName = nodeName;
             return this;
         }
