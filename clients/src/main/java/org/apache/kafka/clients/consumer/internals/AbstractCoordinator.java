@@ -208,7 +208,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
         while (coordinatorUnknown()) {
             final RequestFuture<Void> future = lookupCoordinator();
-            client.poll(future, remainingTimeMs(startTimeMs, timeoutMs));
+            client.poll(future, remainingTimeMsAtLeastZero(startTimeMs, timeoutMs));
             if (!future.isDone()) {
                 // ran out of time
                 break;
@@ -216,10 +216,10 @@ public abstract class AbstractCoordinator implements Closeable {
 
             if (future.failed()) {
                 if (future.isRetriable()) {
-                    if (remainingTimeMs(startTimeMs, timeoutMs) < 0) break;
+                    if (remainingTimeMsAtLeastZero(startTimeMs, timeoutMs) <= 0) break;
 
                     log.debug("Coordinator discovery failed, refreshing metadata");
-                    client.awaitMetadataUpdate(remainingTimeMs(startTimeMs, timeoutMs));
+                    client.awaitMetadataUpdate(remainingTimeMsAtLeastZero(startTimeMs, timeoutMs));
                 } else
                     throw future.exception();
             } else if (coordinator != null && client.isUnavailable(coordinator)) {
@@ -1066,10 +1066,10 @@ public abstract class AbstractCoordinator implements Closeable {
 
     }
 
-    private long remainingTimeMs(final long startTime, final long executionTimeBudget) {
+    private long remainingTimeMsAtLeastZero(final long startTime, final long executionTimeBudget) {
         final long now = time.milliseconds();
         final long remaining = executionTimeBudget - (now - startTime);
-        return remaining;
+        return Math.max(0, remaining);
     }
 
 }

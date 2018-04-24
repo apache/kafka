@@ -90,7 +90,7 @@ public class ClientAuthenticationFailureTest {
         } catch (SaslAuthenticationException e) {
             // OK
         } catch (Exception e) {
-            fail("Expected only an authentication error, but another error occurred: " + e.getMessage());
+            throw new AssertionError("Expected only an authentication error, but another error occurred.", e);
         }
     }
 
