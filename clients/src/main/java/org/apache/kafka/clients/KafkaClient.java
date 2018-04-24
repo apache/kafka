@@ -59,8 +59,9 @@ public interface KafkaClient extends Closeable {
     long connectionDelay(Node node, long now);
 
     /**
-     * Returns the timeout for polling in milliseconds based on the connection state. If the connection has been
-     * established, return throttle delay. Otherwise, return connection delay.
+     * Returns the number of milliseconds to wait, based on the connection state and the throttle time, before
+     * attempting to send data. If the connection has been established but being throttled, return throttle delay.
+     * Otherwise, return connection delay.
      *
      * @param node the connection to check
      * @param now the current time in ms

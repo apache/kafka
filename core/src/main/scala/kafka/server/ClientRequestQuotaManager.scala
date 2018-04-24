@@ -56,19 +56,11 @@ class ClientRequestQuotaManager(private val config: ClientQuotaManagerConfig,
     if (quotasEnabled) {
       request.recordNetworkThreadTimeCallback = Some(timeNanos => recordNoThrottle(
         getOrCreateQuotaSensors(request.session, request.header.clientId), nanosToPercentage(timeNanos)))
+      recordAndGetThrottleTimeMs(request.session, request.header.clientId,
+        nanosToPercentage(request.requestThreadTimeNanos))
+    } else {
+      0
     }
-    super.maybeRecordAndGetThrottleTimeMs(request, nanosToPercentage(request.requestThreadTimeNanos))
-  }
-
-  /**
-    * A convenience method that calls maybeRecord() and maybeThrottle() if throttling is needed.
-    * @param request client request
-    * @return A tuple that consists of throttling delay in milliseconds and an optional ThrottledChannel object.
-    */
-  def maybeRecordAndThrottle(request: RequestChannel.Request): Int = {
-    val throttleTimeMs = maybeRecordAndGetThrottleTimeMs(request)
-    throttle(request, throttleTimeMs)
-    throttleTimeMs
   }
 
   def maybeRecordExempt(request: RequestChannel.Request): Unit = {
