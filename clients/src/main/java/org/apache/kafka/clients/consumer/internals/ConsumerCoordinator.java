@@ -495,7 +495,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             if (future.succeeded())
                 return future.value();
 
-            if (!future.isRetriable())
+            if (future.failed() && !future.isRetriable())
                 throw future.exception();
 
             final long timeoutRemaining = remainingTimeAtLeastZeroMillis(startMs, timeoutMs);
