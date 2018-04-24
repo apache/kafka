@@ -226,20 +226,25 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
   }
 
   def maybeRecordAndGetThrottleTimeMs(session: Session, clientId: String, value: Double): Int = {
-    var throttleTimeMs = 0
-
     // Record metrics only if quotas are enabled.
     if (quotasEnabled) {
-      val clientSensors = getOrCreateQuotaSensors(session, clientId)
-      try {
-        clientSensors.quotaSensor.record(value)
-      } catch {
-        case _: QuotaViolationException =>
-          // Compute the delay
-          val clientMetric = metrics.metrics().get(clientRateMetricName(clientSensors.metricTags))
-          throttleTimeMs = throttleTime(clientMetric).toInt
-          error("Quota violated for sensor (%s). Delay time: (%d)".format(clientSensors.quotaSensor.name(), throttleTimeMs))
-      }
+      recordAndGetThrottleTimeMs(session, clientId, value)
+    } else {
+      0
+    }
+  }
+
+  def recordAndGetThrottleTimeMs(session: Session, clientId: String, value: Double): Int = {
+    var throttleTimeMs = 0
+    val clientSensors = getOrCreateQuotaSensors(session, clientId)
+    try {
+      clientSensors.quotaSensor.record(value)
+    } catch {
+      case _: QuotaViolationException =>
+        // Compute the delay
+        val clientMetric = metrics.metrics().get(clientRateMetricName(clientSensors.metricTags))
+        throttleTimeMs = throttleTime(clientMetric).toInt
+        debug("Quota violated for sensor (%s). Delay time: (%d)".format(clientSensors.quotaSensor.name(), throttleTimeMs))
     }
     throttleTimeMs
   }
@@ -263,7 +268,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
       val throttledChannel = new ThrottledChannel(time, throttleTimeMs, channelThrottlingCallback)
       delayQueue.add(throttledChannel)
       delayQueueSensor.record()
-      error("Channel throttled for sensor (%s). Delay time: (%d)".format(clientSensors.quotaSensor.name(), throttleTimeMs))
+      debug("Channel throttled for sensor (%s). Delay time: (%d)".format(clientSensors.quotaSensor.name(), throttleTimeMs))
     }
   }
 

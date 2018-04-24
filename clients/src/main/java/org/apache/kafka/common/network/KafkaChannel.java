@@ -45,13 +45,15 @@ public class KafkaChannel {
     private boolean muted;
     private ChannelState state;
 
-    // Tracks the unmute eligibility of this channel by keeping the reference count. More specifically,
+    // SocketServer can unmute channel after a response has been sent out to the client. Also, in case of client-side
+    // throttling due to quota violation, the channel cannot be unmuted until the throttling is done. SocketServer
+    // tracks this unmute eligiblity by keeping a reference count. More specifically,
     // - increase the count when
-    //   (1) mute() is called
-    //   (2) throttling is requested for this channel due to quota violation
-    // - decrease the count after
-    //   (1) a response has been sent out to the client
-    //   (2) throttling is done
+    //    (1) mute() is called
+    //    (2) throttling is requested for this channel due to quota violation
+    // - the count is decreased after any of the event mentioned above
+    //    (1) a response is sent
+    //    (2) throttling is done
     //
     // The channel can be unmuted only when the count is 0.
     private AtomicInteger unmuteRefCount = new AtomicInteger(0);

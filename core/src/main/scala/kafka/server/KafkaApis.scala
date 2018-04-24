@@ -2251,12 +2251,14 @@ class KafkaApis(val requestChannel: RequestChannel,
   // Throttle the channel if the request quota is enabled but has been violated. Regardless of throttling, send the
   // response immediately.
   private def sendResponseMaybeThrottle(request: RequestChannel.Request, createResponse: Int => AbstractResponse): Unit = {
-    val throttleTimeMs = quotas.request.maybeRecordAndThrottle(request)
+    val throttleTimeMs = quotas.request.maybeRecordAndGetThrottleTimeMs(request)
+    quotas.request.throttle(request, throttleTimeMs)
     sendResponse(request, Some(createResponse(throttleTimeMs)))
   }
 
   private def sendErrorResponseMaybeThrottle(request: RequestChannel.Request, error: Throwable) {
-    val throttleTimeMs = quotas.request.maybeRecordAndThrottle(request)
+    val throttleTimeMs = quotas.request.maybeRecordAndGetThrottleTimeMs(request)
+    quotas.request.throttle(request, throttleTimeMs)
     sendErrorOrCloseConnection(request, error, throttleTimeMs)
   }
 
