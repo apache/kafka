@@ -378,7 +378,7 @@ public abstract class AbstractCoordinator implements Closeable {
             }
 
             final RequestFuture<ByteBuffer> future = initiateJoinGroup();
-            client.poll(future, remainingTime);
+            client.poll(future, remainingTimeMsAtLeastZero(startTime, remainingTime));
             if (!future.isDone()) {
                 // we ran out of time
                 return false;
