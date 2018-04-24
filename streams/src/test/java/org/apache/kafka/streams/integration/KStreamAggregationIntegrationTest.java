@@ -54,8 +54,10 @@ import org.apache.kafka.streams.kstream.WindowedSerdes;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlySessionStore;
+import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockMapper;
@@ -167,7 +169,7 @@ public class KStreamAggregationIntegrationTest {
     public void shouldReduce() throws Exception {
         produceMessages(mockTime.milliseconds());
         groupedStream
-            .reduce(reducer, "reduce-by-key")
+            .reduce(reducer, Materialized.<String, String, KeyValueStore<Bytes,byte[]>>as("reduce-by-key"))
             .to(Serdes.String(), Serdes.String(), outputTopic);
 
         startStreams();
@@ -285,15 +287,14 @@ public class KStreamAggregationIntegrationTest {
         }
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void shouldAggregate() throws Exception {
         produceMessages(mockTime.milliseconds());
         groupedStream.aggregate(
             initializer,
             aggregator,
-            Serdes.Integer(),
-            "aggregate-by-selected-key")
+            Materialized.<String, Integer, KeyValueStore<Bytes,byte[]>>as("aggregate-by-selected-key")
+                .withValueSerde(Serdes.Integer()))
             .to(Serdes.String(), Serdes.Integer(), outputTopic);
 
         startStreams();
@@ -439,12 +440,11 @@ public class KStreamAggregationIntegrationTest {
         )));
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void shouldCount() throws Exception {
         produceMessages(mockTime.milliseconds());
 
-        groupedStream.count("count-by-key")
+        groupedStream.count(Materialized.<String, Long, KeyValueStore<Bytes,byte[]>>as("count-by-key"))
             .to(Serdes.String(), Serdes.Long(), outputTopic);
 
         shouldCountHelper();
@@ -573,7 +573,8 @@ public class KStreamAggregationIntegrationTest {
 
         builder.stream(userSessionsStream, Consumed.with(Serdes.String(), Serdes.String()))
                 .groupByKey(Serialized.with(Serdes.String(), Serdes.String()))
-                .count(SessionWindows.with(sessionGap).until(maintainMillis))
+                .windowedBy(SessionWindows.with(sessionGap).until(maintainMillis))
+                .count()
                 .toStream()
                 .foreach(new ForeachAction<Windowed<String>, Long>() {
                     @Override
@@ -661,12 +662,13 @@ public class KStreamAggregationIntegrationTest {
         final String userSessionsStore = "UserSessionsStore";
         builder.stream(userSessionsStream, Consumed.with(Serdes.String(), Serdes.String()))
                 .groupByKey(Serialized.with(Serdes.String(), Serdes.String()))
+                .windowedBy(SessionWindows.with(sessionGap).until(maintainMillis))
                 .reduce(new Reducer<String>() {
                     @Override
                     public String apply(final String value1, final String value2) {
                         return value1 + ":" + value2;
                     }
-                }, SessionWindows.with(sessionGap).until(maintainMillis), userSessionsStore)
+                }, Materialized.<String, String, SessionStore<Bytes,byte[]>>as(userSessionsStore))
                 .foreach(new ForeachAction<Windowed<String>, String>() {
                     @Override
                     public void apply(final Windowed<String> key, final String value) {

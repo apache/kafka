@@ -18,7 +18,6 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Aggregator;
@@ -48,7 +47,6 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
 
     protected final Serde<K> keySerde;
     protected final Serde<V> valSerde;
-    private boolean isQueryable;
     private final Initializer<Long> countInitializer = new Initializer<Long>() {
         @Override
         public Long apply() {
@@ -78,83 +76,6 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
         super(builder, name, Collections.singleton(sourceName));
         this.keySerde = keySerde;
         this.valSerde = valSerde;
-        this.isQueryable = true;
-    }
-
-    private void determineIsQueryable(final String queryableStoreName) {
-        if (queryableStoreName == null) {
-            isQueryable = false;
-        } // no need for else {} since isQueryable is true by default
-    }
-
-    @SuppressWarnings("deprecation")
-    @Override
-    public <T> KTable<K, T> aggregate(final Initializer<T> initializer,
-                                      final Aggregator<? super K, ? super V, T> adder,
-                                      final Aggregator<? super K, ? super V, T> subtractor,
-                                      final Serde<T> aggValueSerde,
-                                      final String queryableStoreName) {
-        determineIsQueryable(queryableStoreName);
-        return aggregate(initializer, adder, subtractor, keyValueStore(keySerde, aggValueSerde, getOrCreateName(queryableStoreName, AGGREGATE_NAME)));
-    }
-
-    @SuppressWarnings("deprecation")
-    @Override
-    public <T> KTable<K, T> aggregate(final Initializer<T> initializer,
-                                      final Aggregator<? super K, ? super V, T> adder,
-                                      final Aggregator<? super K, ? super V, T> subtractor,
-                                      final Serde<T> aggValueSerde) {
-        return aggregate(initializer, adder, subtractor, aggValueSerde, null);
-    }
-
-    @SuppressWarnings("deprecation")
-    @Override
-    public <T> KTable<K, T> aggregate(final Initializer<T> initializer,
-                                      final Aggregator<? super K, ? super V, T> adder,
-                                      final Aggregator<? super K, ? super V, T> subtractor,
-                                      final String queryableStoreName) {
-        determineIsQueryable(queryableStoreName);
-        return aggregate(initializer, adder, subtractor, null, getOrCreateName(queryableStoreName, AGGREGATE_NAME));
-    }
-
-    @Override
-    public <T> KTable<K, T> aggregate(final Initializer<T> initializer,
-                                      final Aggregator<? super K, ? super V, T> adder,
-                                      final Aggregator<? super K, ? super V, T> subtractor) {
-        return aggregate(initializer, adder, subtractor, (String) null);
-    }
-
-    @SuppressWarnings("deprecation")
-    @Override
-    public <T> KTable<K, T> aggregate(final Initializer<T> initializer,
-                                      final Aggregator<? super K, ? super V, T> adder,
-                                      final Aggregator<? super K, ? super V, T> subtractor,
-                                      final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier) {
-        Objects.requireNonNull(initializer, "initializer can't be null");
-        Objects.requireNonNull(adder, "adder can't be null");
-        Objects.requireNonNull(subtractor, "subtractor can't be null");
-        Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
-        ProcessorSupplier<K, Change<V>> aggregateSupplier = new KTableAggregate<>(storeSupplier.name(), initializer, adder, subtractor);
-        return doAggregate(aggregateSupplier, AGGREGATE_NAME, storeSupplier);
-    }
-
-    @SuppressWarnings("deprecation")
-    private <T> KTable<K, T> doAggregate(final ProcessorSupplier<K, Change<V>> aggregateSupplier,
-                                         final String functionName,
-                                         final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier) {
-        final String sinkName = builder.newProcessorName(KStreamImpl.SINK_NAME);
-        final String sourceName = builder.newProcessorName(KStreamImpl.SOURCE_NAME);
-        final String funcName = builder.newProcessorName(functionName);
-
-        buildAggregate(aggregateSupplier,
-                       storeSupplier.name() + KStreamImpl.REPARTITION_TOPIC_SUFFIX,
-                       funcName,
-                       sourceName,
-                       sinkName);
-        builder.internalTopologyBuilder.addStateStore(storeSupplier, funcName);
-
-        // return the KTable representation with the intermediate topic as the sources
-        return new KTableImpl<>(builder, funcName, aggregateSupplier, Collections.singleton(sourceName), storeSupplier.name(), isQueryable);
     }
 
     private void buildAggregate(final ProcessorSupplier<K, Change<V>> aggregateSupplier,
@@ -196,16 +117,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
                                                               .materialize(), funcName);
 
         // return the KTable representation with the intermediate topic as the sources
-        return new KTableImpl<>(builder, funcName, aggregateSupplier, Collections.singleton(sourceName), materialized.storeName(), isQueryable);
-    }
-
-    @SuppressWarnings("deprecation")
-    @Override
-    public KTable<K, V> reduce(final Reducer<V> adder,
-                               final Reducer<V> subtractor,
-                               final String queryableStoreName) {
-        determineIsQueryable(queryableStoreName);
-        return reduce(adder, subtractor, keyValueStore(keySerde, valSerde, getOrCreateName(queryableStoreName, REDUCE_NAME)));
+        return new KTableImpl<>(builder, funcName, aggregateSupplier, Collections.singleton(sourceName), materialized.storeName(), materialized.isQueryable());
     }
 
     @Override
@@ -226,26 +138,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
     @Override
     public KTable<K, V> reduce(final Reducer<V> adder,
                                final Reducer<V> subtractor) {
-        return reduce(adder, subtractor, (String) null);
-    }
-
-    @SuppressWarnings("deprecation")
-    @Override
-    public KTable<K, V> reduce(final Reducer<V> adder,
-                               final Reducer<V> subtractor,
-                               final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier) {
-        Objects.requireNonNull(adder, "adder can't be null");
-        Objects.requireNonNull(subtractor, "subtractor can't be null");
-        Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
-        ProcessorSupplier<K, Change<V>> aggregateSupplier = new KTableReduce<>(storeSupplier.name(), adder, subtractor);
-        return doAggregate(aggregateSupplier, REDUCE_NAME, storeSupplier);
-    }
-
-    @SuppressWarnings("deprecation")
-    @Override
-    public KTable<K, Long> count(final String queryableStoreName) {
-        determineIsQueryable(queryableStoreName);
-        return count(keyValueStore(keySerde, Serdes.Long(), getOrCreateName(queryableStoreName, AGGREGATE_NAME)));
+        return reduce(adder, subtractor, Materialized.<K, V, KeyValueStore<Bytes,byte[]>>as(getOrCreateName(null, AGGREGATE_NAME)));
     }
 
     @Override
@@ -256,7 +149,12 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
                          materialized);
     }
 
-    @SuppressWarnings("unchecked")
+    @Override
+    public KTable<K, Long> count() {
+        return count(Materialized.<K, Long, KeyValueStore<Bytes,byte[]>>as(getOrCreateName(null, AGGREGATE_NAME)));
+    }
+
+
     @Override
     public <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,
                                         final Aggregator<? super K, ? super V, VR> adder,
@@ -266,6 +164,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
         Objects.requireNonNull(adder, "adder can't be null");
         Objects.requireNonNull(subtractor, "subtractor can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
+
         final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal =
                 new MaterializedInternal<>(materialized, builder, AGGREGATE_NAME);
         if (materializedInternal.keySerde() == null) {
@@ -279,18 +178,10 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
     }
 
     @Override
-    public KTable<K, Long> count() {
-        return count((String) null);
-    }
-
-    @SuppressWarnings("deprecation")
-    @Override
-    public KTable<K, Long> count(final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier) {
-        return this.aggregate(
-                countInitializer,
-                countAdder,
-                countSubtractor,
-                storeSupplier);
+    public <T> KTable<K, T> aggregate(final Initializer<T> initializer,
+                                      final Aggregator<? super K, ? super V, T> adder,
+                                      final Aggregator<? super K, ? super V, T> subtractor) {
+        return aggregate(initializer, adder, subtractor, Materialized.<K, T, KeyValueStore<Bytes,byte[]>>as(getOrCreateName(null, AGGREGATE_NAME)));
     }
 
 }

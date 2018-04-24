@@ -24,6 +24,7 @@ import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
@@ -34,11 +35,14 @@ import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.TestUtils;
@@ -59,7 +63,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
 
 /**
- * Similar to KStreamAggregationIntegrationTest but with dedupping enabled
+ * Similar to KStreamAggregationIntegrationTest but with de dupping enabled
  * by virtue of having a large commit interval
  */
 @Category({IntegrationTest.class})
@@ -100,7 +104,7 @@ public class KStreamAggregationDedupIntegrationTest {
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 10 * 1024 * 1024L);
         streamsConfiguration.put(IntegrationTestUtils.INTERNAL_LEAVE_GROUP_ON_CLOSE, true);
 
-        KeyValueMapper<Integer, String, String> mapper = MockMapper.<Integer, String>selectValueMapper();
+        KeyValueMapper<Integer, String, String> mapper = MockMapper.selectValueMapper();
         stream = builder.stream(streamOneInput, Consumed.with(Serdes.Integer(), Serdes.String()));
         groupedStream = stream
             .groupBy(
@@ -128,8 +132,9 @@ public class KStreamAggregationDedupIntegrationTest {
     public void shouldReduce() throws Exception {
         produceMessages(System.currentTimeMillis());
         groupedStream
-            .reduce(reducer, "reduce-by-key")
-            .to(Serdes.String(), Serdes.String(), outputTopic);
+            .reduce(reducer, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("reduce-by-key"))
+            .toStream()
+            .to(outputTopic, Produced.with(Serdes.String(), Serdes.String()));
 
         startStreams();
 
@@ -174,7 +179,8 @@ public class KStreamAggregationDedupIntegrationTest {
         produceMessages(secondBatchTimestamp);
 
         groupedStream
-            .reduce(reducer, TimeWindows.of(500L), "reduce-time-windows")
+            .windowedBy(TimeWindows.of(500L))
+            .reduce(reducer, Materialized.<String, String, WindowStore<Bytes, byte[]>>as("reduce-time-windows"))
             .toStream(new KeyValueMapper<Windowed<String>, String, String>() {
                 @Override
                 public String apply(Windowed<String> windowedKey, String value) {
@@ -227,7 +233,8 @@ public class KStreamAggregationDedupIntegrationTest {
         produceMessages(timestamp);
 
         stream.groupByKey(Serialized.with(Serdes.Integer(), Serdes.String()))
-            .count(TimeWindows.of(500L), "count-windows")
+            .windowedBy(TimeWindows.of(500L))
+            .count(Materialized.<Integer, Long, WindowStore<Bytes, byte[]>>as("count-windows"))
             .toStream(new KeyValueMapper<Windowed<Integer>, Long, String>() {
                 @Override
                 public String apply(final Windowed<Integer> windowedKey, final Long value) {
