@@ -102,6 +102,37 @@
     <!-- TODO: verify release verion and update `id` and `href` attributes (also at other places that link to this headline) -->
     <h3><a id="streams_api_changes_120" href="#streams_api_changes_120">Streams API changes in 1.2.0</a></h3>
     <p>
+        We have removed the <code>skippedDueToDeserializationError-rate</code> and <code>skippedDueToDeserializationError-total</code> metrics.
+        Deserialization errors, and all other causes of record skipping, are now accounted for in the pre-existing metrics
+        <code>skipped-records-rate</code> and <code>skipped-records-total</code>. When a record is skipped, the event is
+        now logged at WARN level. If these warnings become burdensome, we recommend explicitly filtering out unprocessable
+        records instead of depending on record skipping semantics. For more details, see
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-274%3A+Kafka+Streams+Skipped+Records+Metrics">KIP-274</a>.
+        As of right now, the potential causes of skipped records are:
+    </p>
+    <ul>
+        <li><code>null</code> keys in table sources</li>
+        <li><code>null</code> keys in table-table inner/left/outer/right joins</li>
+        <li><code>null</code> keys or values in stream-table joins</li>
+        <li><code>null</code> keys or values in stream-stream joins</li>
+        <li><code>null</code> keys or values in aggregations on grouped streams</li>
+        <li><code>null</code> keys or values in reductions on grouped streams</li>
+        <li><code>null</code> keys in aggregations on windowed streams</li>
+        <li><code>null</code> keys in reductions on windowed streams</li>
+        <li><code>null</code> keys in aggregations on session-windowed streams</li>
+        <li>
+            Errors producing results, when the configured <code>default.production.exception.handler</code> decides to
+            <code>CONTINUE</code> (the default is to <code>FAIL</code> and throw an exception).
+        </li>
+        <li>
+            Errors deserializing records, when the configured <code>default.deserialization.exception.handler</code>
+            decides to <code>CONTINUE</code> (the default is to <code>FAIL</code> and throw an exception).
+            This was the case previously captured in the <code>skippedDueToDeserializationError</code> metrics.
+        </li>
+        <li>Fetched records having a negative timestamp.</li>
+    </ul>
+
+    <p>
         We have added support for methods in <code>ReadOnlyWindowStore</code> which allows for querying a single window's key-value pair.
         For users who have customized window store implementations on the above interface, they'd need to update their code to implement the newly added method as well.
         For more details, see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-261%3A+Add+Single+Value+Fetch+in+Window+Stores">KIP-261</a>.
