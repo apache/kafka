@@ -79,7 +79,13 @@ public class RocksDBWindowStoreTest {
     private final ThreadCache cache = new ThreadCache(new LogContext("TestCache "), DEFAULT_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()));
 
     private final Producer<byte[], byte[]> producer = new MockProducer<>(true, Serdes.ByteArray().serializer(), Serdes.ByteArray().serializer());
-    private final RecordCollector recordCollector = new RecordCollectorImpl(producer, "RocksDBWindowStoreTestTask", new LogContext("RocksDBWindowStoreTestTask "), new DefaultProductionExceptionHandler()) {
+    private final RecordCollector recordCollector = new RecordCollectorImpl(
+        producer,
+        "RocksDBWindowStoreTestTask",
+        new LogContext("RocksDBWindowStoreTestTask "),
+        new DefaultProductionExceptionHandler(),
+        new Metrics().sensor("skipped-records")
+    ) {
         @Override
         public <K1, V1> void send(final String topic,
                                   final K1 key,

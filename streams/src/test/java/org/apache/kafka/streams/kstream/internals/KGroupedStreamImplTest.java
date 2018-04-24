@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
@@ -37,6 +39,7 @@ import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
+import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.WindowStore;
@@ -55,9 +58,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
 
 public class KGroupedStreamImplTest {
@@ -558,6 +564,19 @@ public class KGroupedStreamImplTest {
         assertThat(count.get("3"), equalTo(2L));
     }
 
+    @Test
+    public void shouldLogAndMeasureSkipsInAggregate() {
+        groupedStream.count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("count").withKeySerde(Serdes.String()));
+        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
+        processData();
+        LogCaptureAppender.unregister(appender);
+
+        final Map<MetricName, ? extends Metric> metrics = driver.context().metrics().metrics();
+        assertEquals(1.0, getMetricByName(metrics, "skipped-records-total", "stream-metrics").metricValue());
+        assertNotEquals(0.0, getMetricByName(metrics, "skipped-records-rate", "stream-metrics").metricValue());
+        assertThat(appender.getMessages(), hasItem("Skipping record due to null key or value. key=[3] value=[null] topic=[topic] partition=[-1] offset=[-1]"));
+    }
+
 
     @SuppressWarnings("unchecked")
     @Test
@@ -576,6 +595,26 @@ public class KGroupedStreamImplTest {
         assertThat(reduced.get("2"), equalTo("B"));
         assertThat(reduced.get("3"), equalTo("E+F"));
     }
+
+    @Test
+    public void shouldLogAndMeasureSkipsInReduce() {
+        groupedStream.reduce(
+            MockReducer.STRING_ADDER,
+            Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("reduce")
+                .withKeySerde(Serdes.String())
+                .withValueSerde(Serdes.String())
+        );
+
+        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
+        processData();
+        LogCaptureAppender.unregister(appender);
+
+        final Map<MetricName, ? extends Metric> metrics = driver.context().metrics().metrics();
+        assertEquals(1.0, getMetricByName(metrics, "skipped-records-total", "stream-metrics").metricValue());
+        assertNotEquals(0.0, getMetricByName(metrics, "skipped-records-rate", "stream-metrics").metricValue());
+        assertThat(appender.getMessages(), hasItem("Skipping record due to null key or value. key=[3] value=[null] topic=[topic] partition=[-1] offset=[-1]"));
+    }
+
 
     @SuppressWarnings("unchecked")
     @Test

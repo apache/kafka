@@ -14,47 +14,60 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor.internals;
+package org.apache.kafka.streams.processor.internals.metrics;
 
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.metrics.MeasurableStat;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Count;
 import org.apache.kafka.common.metrics.stats.Max;
-import org.apache.kafka.common.metrics.stats.Meter;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.metrics.stats.Rate;
+import org.apache.kafka.common.metrics.stats.Total;
 import org.apache.kafka.streams.StreamsMetrics;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.TimeUnit;
+
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsConventions.threadLevelSensorName;
 
 public class StreamsMetricsImpl implements StreamsMetrics {
-    private static final Logger log = LoggerFactory.getLogger(StreamsMetricsImpl.class);
-
-    final Metrics metrics;
-    final String groupName;
-    final Map<String, String> tags;
+    private final Metrics metrics;
+    private final Map<String, String> tags;
     private final Map<Sensor, Sensor> parentSensors;
+    private final Deque<String> ownedSensors = new LinkedList<>();
+    private final Sensor skippedRecordsSensor;
 
-    public StreamsMetricsImpl(final Metrics metrics, final String groupName, final Map<String, String> tags) {
+    public StreamsMetricsImpl(final Metrics metrics, final String threadName) {
         Objects.requireNonNull(metrics, "Metrics cannot be null");
 
         this.metrics = metrics;
-        this.groupName = groupName;
-        this.tags = tags;
+        this.tags = StreamsMetricsConventions.threadLevelTags(threadName, Collections.<String, String>emptyMap());
         this.parentSensors = new HashMap<>();
+
+        skippedRecordsSensor = metrics.sensor(threadLevelSensorName(threadName, "skipped-records"), Sensor.RecordingLevel.INFO);
+        skippedRecordsSensor.add(metrics.metricName("skipped-records-rate", "stream-metrics", "The average per-second number of skipped records", tags), new Rate(TimeUnit.SECONDS, new Count()));
+        skippedRecordsSensor.add(metrics.metricName("skipped-records-total", "stream-metrics", "The total number of skipped records", tags), new Total());
+        ownedSensors.push(skippedRecordsSensor.name());
     }
 
-    public Metrics registry() {
+    public final Metrics registry() {
         return metrics;
+    }
+
+    protected final Map<String, String> tags() {
+        return tags;
+    }
+
+    public final Sensor skippedRecordsSensor() {
+        return skippedRecordsSensor;
     }
 
     @Override
@@ -131,11 +144,13 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
         // first add the global operation metrics if not yet, with the global tags only
         final Sensor parent = metrics.sensor(sensorName(operationName, null), recordingLevel);
-        addLatencyAndThroughputMetrics(scopeName, parent, operationName, allTagMap);
+        addLatencyMetrics(scopeName, parent, operationName, allTagMap);
+        addThroughputMetrics(scopeName, parent, operationName, allTagMap);
 
         // add the operation metrics with additional tags
         final Sensor sensor = metrics.sensor(sensorName(operationName, entityName), recordingLevel, parent);
-        addLatencyAndThroughputMetrics(scopeName, sensor, operationName, tagMap);
+        addLatencyMetrics(scopeName, sensor, operationName, tagMap);
+        addThroughputMetrics(scopeName, sensor, operationName, tagMap);
 
         parentSensors.put(sensor, parent);
 
@@ -167,64 +182,44 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         return sensor;
     }
 
-    private void addLatencyAndThroughputMetrics(final String scopeName,
-                                                final Sensor sensor,
-                                                final String opName,
-                                                final Map<String, String> tags) {
-        maybeAddMetric(sensor, metrics.metricName(opName + "-latency-avg", groupNameFromScope(scopeName),
-            "The average latency of " + opName + " operation.", tags), new Avg());
-        maybeAddMetric(sensor, metrics.metricName(opName + "-latency-max", groupNameFromScope(scopeName),
-            "The max latency of " + opName + " operation.", tags), new Max());
-        addThroughputMetrics(scopeName, sensor, opName, tags);
+    private void addLatencyMetrics(final String scopeName, final Sensor sensor, final String opName, final Map<String, String> tags) {
+        sensor.add(
+            metrics.metricName(
+                opName + "-latency-avg",
+                groupNameFromScope(scopeName),
+                "The average latency of " + opName + " operation.", tags),
+            new Avg()
+        );
+        sensor.add(
+            metrics.metricName(
+                opName + "-latency-max",
+                groupNameFromScope(scopeName),
+                "The max latency of " + opName + " operation.",
+                tags
+            ),
+            new Max()
+        );
     }
 
-    private void addThroughputMetrics(final String scopeName,
-                                      final Sensor sensor,
-                                      final String opName,
-                                      final Map<String, String> tags) {
-        final MetricName rateMetricName = metrics.metricName(opName + "-rate", groupNameFromScope(scopeName),
-            "The average number of occurrence of " + opName + " operation per second.", tags);
-        final MetricName totalMetricName = metrics.metricName(opName + "-total", groupNameFromScope(scopeName),
-            "The total number of occurrence of " + opName + " operations.", tags);
-        if (!metrics.metrics().containsKey(rateMetricName) && !metrics.metrics().containsKey(totalMetricName)) {
-            sensor.add(new Meter(new Count(), rateMetricName, totalMetricName));
-        } else {
-            log.trace("Trying to add metric twice: {} {}", rateMetricName, totalMetricName);
-        }
-    }
-
-    /**
-     * Register a metric on the sensor if it isn't already there.
-     *
-     * @param sensor The sensor on which to register the metric
-     * @param name   The name of the metric
-     * @param stat   The metric to track
-     * @throws IllegalArgumentException if the same metric name is already in use elsewhere in the metrics
-     */
-    public void maybeAddMetric(final Sensor sensor, final MetricName name, final MeasurableStat stat) {
-        sensor.add(name, stat);
-    }
-
-    /**
-     * Helper function. Measure the latency of an action. This is equivalent to
-     * startTs = time.nanoseconds()
-     * action.run()
-     * endTs = time.nanoseconds()
-     * sensor.record(endTs - startTs)
-     *
-     * @param time   Time object.
-     * @param action Action to run.
-     * @param sensor Sensor to record value.
-     */
-    void measureLatencyNs(final Time time, final Runnable action, final Sensor sensor) {
-        long startNs = -1;
-        if (sensor.shouldRecord()) {
-            startNs = time.nanoseconds();
-        }
-        action.run();
-        if (startNs != -1) {
-            recordLatency(sensor, startNs, time.nanoseconds());
-        }
+    private void addThroughputMetrics(final String scopeName, final Sensor sensor, final String opName, final Map<String, String> tags) {
+        sensor.add(
+            metrics.metricName(
+                opName + "-rate",
+                groupNameFromScope(scopeName),
+                "The average number of occurrence of " + opName + " operation per second.",
+                tags
+            ),
+            new Rate(TimeUnit.SECONDS, new Count())
+        );
+        sensor.add(
+            metrics.metricName(
+                opName + "-total",
+                groupNameFromScope(scopeName),
+                "The total number of occurrence of " + opName + " operations.",
+                tags
+            ),
+            new Count()
+        );
     }
 
     /**
@@ -239,6 +234,13 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         if (parent != null) {
             metrics.removeSensor(parent.name());
         }
+    }
 
+    public void removeOwnedSensors() {
+        synchronized (ownedSensors) {
+            while (!ownedSensors.isEmpty()) {
+                metrics.removeSensor(ownedSensors.pop());
+            }
+        }
     }
 }
