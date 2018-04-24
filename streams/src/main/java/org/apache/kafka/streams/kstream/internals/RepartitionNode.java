@@ -40,7 +40,11 @@ class RepartitionNode<K, V> extends StatelessProcessorNode<K, V> {
                     final String repartitionTopic,
                     final String processorName) {
 
-        super(predecessorNodeName, nodeName, processorSupplier, false);
+        super(predecessorNodeName,
+              nodeName,
+              processorSupplier,
+              false);
+
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
         this.sinkName = sinkName;
