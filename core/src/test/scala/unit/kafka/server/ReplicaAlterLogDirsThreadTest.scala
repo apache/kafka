@@ -150,7 +150,7 @@ class ReplicaAlterLogDirsThreadTest {
     val responseCallback: Capture[Seq[(TopicPartition, FetchPartitionData)] => Unit]  = EasyMock.newCapture()
 
     val leaderEpoch = 2
-    val futureReplicaLEO = 200
+    val futureReplicaLEO = 191
     val replicaT1p0LEO = 190
     val replicaT1p1LEO = 192
 
@@ -185,7 +185,7 @@ class ReplicaAlterLogDirsThreadTest {
 
     //We should have truncated to the offsets in the response
     assertTrue(truncateToCapture.getValues.asScala.contains(replicaT1p0LEO))
-    assertTrue(truncateToCapture.getValues.asScala.contains(replicaT1p1LEO))
+    assertTrue(truncateToCapture.getValues.asScala.contains(futureReplicaLEO))
   }
 
   @Test
@@ -263,6 +263,7 @@ class ReplicaAlterLogDirsThreadTest {
     val replicaManager = createMock(classOf[kafka.server.ReplicaManager])
     val responseCallback: Capture[Seq[(TopicPartition, FetchPartitionData)] => Unit]  = EasyMock.newCapture()
 
+    val futureReplicaLeaderEpoch = 1
     val futureReplicaLEO = 290
     val replicaLEO = 300
 
@@ -271,8 +272,8 @@ class ReplicaAlterLogDirsThreadTest {
     expect(replica.epochs).andReturn(Some(leaderEpochs)).anyTimes()
     expect(futureReplica.epochs).andReturn(Some(futureReplicaLeaderEpochs)).anyTimes()
 
-    expect(futureReplicaLeaderEpochs.latestEpoch).andReturn(1).anyTimes()
-    expect(leaderEpochs.endOffsetFor(1)).andReturn(replicaLEO).anyTimes()
+    expect(futureReplicaLeaderEpochs.latestEpoch).andReturn(futureReplicaLeaderEpoch).anyTimes()
+    expect(leaderEpochs.endOffsetFor(futureReplicaLeaderEpoch)).andReturn(replicaLEO).anyTimes()
 
     expect(futureReplica.logEndOffset).andReturn(new LogOffsetMetadata(futureReplicaLEO)).anyTimes()
     expect(replicaManager.getReplica(t1p0)).andReturn(Some(replica)).anyTimes()
@@ -313,18 +314,18 @@ class ReplicaAlterLogDirsThreadTest {
       brokerTopicStats = null)
     thread.addPartitions(Map(t1p0 -> 0))
 
-    //Run thread 3 times (exactly number of times we mock expection for getReplicaOrException)
+    // Run thread 3 times (exactly number of times we mock exception for getReplicaOrException)
     (0 to 2).foreach { _ =>
       thread.doWork()
                      }
 
-    //Then should loop continuously while replica not available
+    // Nothing happened since the replica was not available
     assertEquals(0, truncated.getValues.size())
 
-    // next time we loop, getReplicaOrException will return replica
+    // Next time we loop, getReplicaOrException will return replica
     thread.doWork()
 
-    //Now the final call should have actually done a truncation (to offset 156)
+    // Now the final call should have actually done a truncation (to offset futureReplicaLEO)
     assertEquals(futureReplicaLEO, truncated.getValue)
   }
 
@@ -344,11 +345,11 @@ class ReplicaAlterLogDirsThreadTest {
     val responseCallback: Capture[Seq[(TopicPartition, FetchPartitionData)] => Unit]  = EasyMock.newCapture()
 
     val leaderEpoch = 5
-    val futureReplicaLEO = 200
-    val replicaLEO = 190
+    val futureReplicaLEO = 190
+    val replicaLEO = 213
 
     //Stubs
-    expect(partition.truncateTo(replicaLEO, true)).once()
+    expect(partition.truncateTo(futureReplicaLEO, true)).once()
     expect(replica.epochs).andReturn(Some(leaderEpochs)).anyTimes()
     expect(futureReplica.epochs).andReturn(Some(futureReplicaLeaderEpochs)).anyTimes()
 
