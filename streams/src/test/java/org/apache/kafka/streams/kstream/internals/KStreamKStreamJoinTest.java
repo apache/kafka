@@ -24,7 +24,9 @@ import org.apache.kafka.streams.StreamsBuilderTest;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.Joined;
 import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
+import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
@@ -40,7 +42,10 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
 
+import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
+import static org.hamcrest.CoreMatchers.hasItem;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThat;
 
 public class KStreamKStreamJoinTest {
 
@@ -58,6 +63,35 @@ public class KStreamKStreamJoinTest {
     @Before
     public void setUp() {
         stateDir = TestUtils.tempDirectory("kafka-test");
+    }
+
+    @Test
+    public void shouldLogAndMeterOnSkippedRecordsWithNullValue() {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final KStream<String, Integer> left = builder.stream("left", Consumed.with(stringSerde, intSerde));
+        final KStream<String, Integer> right = builder.stream("right", Consumed.with(stringSerde, intSerde));
+
+        left.join(
+            right,
+            new ValueJoiner<Integer, Integer, Integer>() {
+                @Override
+                public Integer apply(final Integer value1, final Integer value2) {
+                    return value1 + value2;
+                }
+            },
+            JoinWindows.of(100),
+            Joined.with(stringSerde, intSerde, intSerde)
+        );
+
+        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
+        driver.setUp(builder, stateDir);
+        driver.process("left", "A", null);
+        LogCaptureAppender.unregister(appender);
+
+        assertThat(appender.getMessages(), hasItem("Skipping record due to null key or value. key=[A] value=[null] topic=[left] partition=[-1] offset=[-1]"));
+
+        assertEquals(1.0, getMetricByName(driver.context().metrics().metrics(), "skipped-records-total", "stream-metrics").metricValue());
     }
 
     @Test

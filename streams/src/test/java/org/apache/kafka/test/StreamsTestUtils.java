@@ -17,6 +17,8 @@
 package org.apache.kafka.test;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
@@ -25,13 +27,15 @@ import org.apache.kafka.streams.kstream.Windowed;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 
-public class StreamsTestUtils {
+public final class StreamsTestUtils {
+    private StreamsTestUtils() {}
 
     public static Properties getStreamsConfig(final String applicationId,
                                               final String bootstrapServers,
@@ -86,5 +90,64 @@ public class StreamsTestUtils {
         assertThat(actual.key.window(), equalTo(expectedKey.window()));
         assertThat(actual.key.key(), equalTo(expectedKey.key()));
         assertThat(actual.value, equalTo(expectedValue.getBytes()));
+    }
+
+    public static Metric getMetricByName(final Map<MetricName, ? extends Metric> metrics,
+                                         final String name,
+                                         final String group) {
+        Metric metric = null;
+        for (final Map.Entry<MetricName, ? extends Metric> entry : metrics.entrySet()) {
+            if (entry.getKey().name().equals(name) && entry.getKey().group().equals(group)) {
+                if (metric == null) {
+                    metric = entry.getValue();
+                } else {
+                    throw new IllegalStateException(
+                        "Found two metrics with name=[" + name + "]: \n" +
+                            metric.metricName().toString() +
+                            " AND \n" +
+                            entry.getKey().toString()
+                    );
+                }
+            }
+        }
+        if (metric == null) {
+            throw new IllegalStateException("Didn't find metric with name=[" + name + "]");
+        } else {
+            return metric;
+        }
+    }
+
+    public static Metric getMetricByNameFilterByTags(final Map<MetricName, ? extends Metric> metrics,
+                                                     final String name,
+                                                     final String group,
+                                                     final Map<String, String> filterTags) {
+        Metric metric = null;
+        for (final Map.Entry<MetricName, ? extends Metric> entry : metrics.entrySet()) {
+            if (entry.getKey().name().equals(name) && entry.getKey().group().equals(group)) {
+                boolean filtersMatch = true;
+                for (final Map.Entry<String, String> filter : filterTags.entrySet()) {
+                    if (!filter.getValue().equals(entry.getKey().tags().get(filter.getKey()))) {
+                        filtersMatch = false;
+                    }
+                }
+                if (filtersMatch) {
+                    if (metric == null) {
+                        metric = entry.getValue();
+                    } else {
+                        throw new IllegalStateException(
+                            "Found two metrics with name=[" + name + "] and tags=[" + filterTags + "]: \n" +
+                                metric.metricName().toString() +
+                                " AND \n" +
+                                entry.getKey().toString()
+                        );
+                    }
+                }
+            }
+        }
+        if (metric == null) {
+            throw new IllegalStateException("Didn't find metric with name=[" + name + "] and tags=[" + filterTags + "]");
+        } else {
+            return metric;
+        }
     }
 }
