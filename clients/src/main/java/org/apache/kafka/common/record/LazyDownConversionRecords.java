@@ -47,6 +47,7 @@ public class LazyDownConversionRecords implements Records {
     private RecordsWriter convertedRecordsWriter = null;
     private LazyDownConversionRecordsIterator recordsIterator = null;
     private RecordsProcessingStats processingStats = null;
+    private static final long MAX_READ_SIZE = 16L * 1024L;
 
     /**
      * @param records Records to lazily down-convert
@@ -74,7 +75,7 @@ public class LazyDownConversionRecords implements Records {
     @Override
     public long writeTo(GatheringByteChannel channel, long position, int length) throws IOException {
         if (position == 0) {
-            recordsIterator = new LazyDownConversionRecordsIterator(records);
+            recordsIterator = lazyDownConversionRecordsIterator(MAX_READ_SIZE);
             processingStats = new RecordsProcessingStats(0, 0, 0);
         }
 
@@ -137,6 +138,11 @@ public class LazyDownConversionRecords implements Records {
         return new TopicPartitionRecordsStats(topicPartition, processingStats);
     }
 
+    // Protected for unit tests
+    protected LazyDownConversionRecordsIterator lazyDownConversionRecordsIterator(long maximumReadSize) {
+        return new LazyDownConversionRecordsIterator(records, maximumReadSize);
+    }
+
     /**
      * Implementation for writing {@link Records} to a particular channel. Internally tracks the progress of writes.
      */
@@ -176,7 +182,7 @@ public class LazyDownConversionRecords implements Records {
      * it as memory-efficient as possible by not having to maintain all down-converted records in-memory. Maintains
      * a view into batches of down-converted records.
      */
-    private class LazyDownConversionRecordsIterator extends AbstractIterator<ConvertedRecords> {
+    protected class LazyDownConversionRecordsIterator extends AbstractIterator<ConvertedRecords> {
         /**
          * Iterator over records that require down-conversion.
          */
@@ -185,10 +191,11 @@ public class LazyDownConversionRecords implements Records {
         /**
          * Maximum possible size of messages that will be read. This limit does not apply for the first message batch.
          */
-        private static final long MAX_READ_SIZE = 16L * 1024L;
+        private final long maximumReadSize;
 
-        LazyDownConversionRecordsIterator(Records recordsToDownConvert) {
-            batchIterator = recordsToDownConvert.batchIterator();
+        LazyDownConversionRecordsIterator(Records recordsToDownConvert, long maximumReadSize) {
+            this.batchIterator = recordsToDownConvert.batchIterator();
+            this.maximumReadSize = maximumReadSize;
         }
 
         /**
@@ -206,7 +213,7 @@ public class LazyDownConversionRecords implements Records {
 
             // Figure out batches we should down-convert based on the size constraints
             while (batchIterator.hasNext() &&
-                    (isFirstBatch || (batchIterator.peek().sizeInBytes() + sizeSoFar) <= MAX_READ_SIZE)) {
+                    (isFirstBatch || (batchIterator.peek().sizeInBytes() + sizeSoFar) <= maximumReadSize)) {
                 RecordBatch currentBatch = batchIterator.next();
                 batches.add(currentBatch);
                 sizeSoFar += currentBatch.sizeInBytes();
