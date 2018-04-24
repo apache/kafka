@@ -24,20 +24,15 @@ import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.kstream.Merger;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.SessionWindowedKStream;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.TimeWindowedKStream;
 import org.apache.kafka.streams.kstream.Window;
-import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.WindowStore;
 
-import java.util.Collections;
 import java.util.Objects;
 import java.util.Set;
 
@@ -50,7 +45,6 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
     private final Serde<V> valSerde;
     private final boolean repartitionRequired;
     private final GroupedStreamAggregateBuilder<K, V> aggregateBuilder;
-    private boolean isQueryable = true;
 
     KGroupedStreamImpl(final InternalStreamsBuilder builder,
                        final String name,
@@ -68,37 +62,11 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
         this.keySerde = keySerde;
         this.valSerde = valSerde;
         this.repartitionRequired = repartitionRequired;
-        this.isQueryable = true;
-    }
-
-    private void determineIsQueryable(final String queryableStoreName) {
-        if (queryableStoreName == null) {
-            isQueryable = false;
-        } // no need for else {} since isQueryable is true by default
-    }
-
-    @SuppressWarnings("deprecation")
-    public KTable<K, V> reduce(final Reducer<V> reducer,
-                               final String queryableStoreName) {
-        determineIsQueryable(queryableStoreName);
-        return reduce(reducer, keyValueStore(keySerde, valSerde, getOrCreateName(queryableStoreName, REDUCE_NAME)));
     }
 
     @Override
     public KTable<K, V> reduce(final Reducer<V> reducer) {
-        determineIsQueryable(null);
-        return reduce(reducer, (String) null);
-    }
-
-    @SuppressWarnings("deprecation")
-    public KTable<K, V> reduce(final Reducer<V> reducer,
-                               final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier) {
-        Objects.requireNonNull(reducer, "reducer can't be null");
-        Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
-        return doAggregate(
-                new KStreamReduce<K, V>(storeSupplier.name(), reducer),
-                REDUCE_NAME,
-                storeSupplier);
+        return reduce(reducer, Materialized.<K, V, KeyValueStore<Bytes,byte[]>>with(null, null));
     }
 
     @Override
@@ -112,29 +80,6 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
                 new KStreamReduce<K, V>(materializedInternal.storeName(), reducer),
                 REDUCE_NAME,
                 materializedInternal);
-    }
-
-    @SuppressWarnings({"unchecked", "deprecation"})
-    public <W extends Window> KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
-                                                            final Windows<W> windows,
-                                                            final org.apache.kafka.streams.processor.StateStoreSupplier<WindowStore> storeSupplier) {
-        Objects.requireNonNull(reducer, "reducer can't be null");
-        Objects.requireNonNull(windows, "windows can't be null");
-        Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
-        return (KTable<Windowed<K>, V>) doAggregate(
-                new KStreamWindowReduce<K, V, W>(windows, storeSupplier.name(), reducer),
-                REDUCE_NAME,
-                storeSupplier
-        );
-    }
-
-    @SuppressWarnings("deprecation")
-    public <T> KTable<K, T> aggregate(final Initializer<T> initializer,
-                                      final Aggregator<? super K, ? super V, T> aggregator,
-                                      final Serde<T> aggValueSerde,
-                                      final String queryableStoreName) {
-        determineIsQueryable(queryableStoreName);
-        return aggregate(initializer, aggregator, keyValueStore(keySerde, aggValueSerde, getOrCreateName(queryableStoreName, AGGREGATE_NAME)));
     }
 
     @Override
@@ -173,49 +118,9 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
 
     }
 
-    @SuppressWarnings("deprecation")
-    public <T> KTable<K, T> aggregate(final Initializer<T> initializer,
-                                      final Aggregator<? super K, ? super V, T> aggregator,
-                                      final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier) {
-        Objects.requireNonNull(initializer, "initializer can't be null");
-        Objects.requireNonNull(aggregator, "aggregator can't be null");
-        Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
-        return doAggregate(
-                new KStreamAggregate<>(storeSupplier.name(), initializer, aggregator),
-                AGGREGATE_NAME,
-                storeSupplier);
-    }
-
-    @SuppressWarnings({"unchecked", "deprecation"})
-    public <W extends Window, T> KTable<Windowed<K>, T> aggregate(final Initializer<T> initializer,
-                                                                  final Aggregator<? super K, ? super V, T> aggregator,
-                                                                  final Windows<W> windows,
-                                                                  final org.apache.kafka.streams.processor.StateStoreSupplier<WindowStore> storeSupplier) {
-        Objects.requireNonNull(initializer, "initializer can't be null");
-        Objects.requireNonNull(aggregator, "aggregator can't be null");
-        Objects.requireNonNull(windows, "windows can't be null");
-        Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
-        return (KTable<Windowed<K>, T>) doAggregate(
-                new KStreamWindowAggregate<>(windows, storeSupplier.name(), initializer, aggregator),
-                AGGREGATE_NAME,
-                storeSupplier
-        );
-    }
-
-    @SuppressWarnings("deprecation")
-    public KTable<K, Long> count(final String queryableStoreName) {
-        determineIsQueryable(queryableStoreName);
-        return count(keyValueStore(keySerde, Serdes.Long(), getOrCreateName(queryableStoreName, AGGREGATE_NAME)));
-    }
-
     @Override
     public KTable<K, Long> count() {
-        return count((String) null);
-    }
-
-    @SuppressWarnings("deprecation")
-    public KTable<K, Long> count(final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier) {
-        return aggregate(aggregateBuilder.countInitializer, aggregateBuilder.countAggregator, storeSupplier);
+        return count(Materialized.<K, Long, KeyValueStore<Bytes, byte[]>>with(null, null));
     }
 
     @Override
@@ -227,36 +132,6 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
             materialized.withValueSerde(Serdes.Long());
         }
         return aggregate(aggregateBuilder.countInitializer, aggregateBuilder.countAggregator, materialized);
-    }
-
-    @SuppressWarnings("deprecation")
-    public <W extends Window> KTable<Windowed<K>, Long> count(final Windows<W> windows,
-                                                              final org.apache.kafka.streams.processor.StateStoreSupplier<WindowStore> storeSupplier) {
-        return aggregate(
-                aggregateBuilder.countInitializer,
-                aggregateBuilder.countAggregator,
-                windows,
-                storeSupplier);
-    }
-
-    @SuppressWarnings({"unchecked", "deprecation"})
-    public <T> KTable<Windowed<K>, T> aggregate(final Initializer<T> initializer,
-                                                final Aggregator<? super K, ? super V, T> aggregator,
-                                                final Merger<? super K, T> sessionMerger,
-                                                final SessionWindows sessionWindows,
-                                                final Serde<T> aggValueSerde,
-                                                final org.apache.kafka.streams.processor.StateStoreSupplier<SessionStore> storeSupplier) {
-        Objects.requireNonNull(initializer, "initializer can't be null");
-        Objects.requireNonNull(aggregator, "aggregator can't be null");
-        Objects.requireNonNull(sessionWindows, "sessionWindows can't be null");
-        Objects.requireNonNull(sessionMerger, "sessionMerger can't be null");
-        Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
-
-        return (KTable<Windowed<K>, T>) doAggregate(
-                new KStreamSessionWindowAggregate<>(sessionWindows, storeSupplier.name(), initializer, aggregator, sessionMerger),
-                AGGREGATE_NAME,
-                storeSupplier);
-
     }
 
     @Override
@@ -281,43 +156,6 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
                                                 aggregateBuilder);
     }
 
-
-    @SuppressWarnings("deprecation")
-    public KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
-                                         final SessionWindows sessionWindows,
-                                         final org.apache.kafka.streams.processor.StateStoreSupplier<SessionStore> storeSupplier) {
-        Objects.requireNonNull(reducer, "reducer can't be null");
-        Objects.requireNonNull(sessionWindows, "sessionWindows can't be null");
-        Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
-
-        final Initializer<V> initializer = new Initializer<V>() {
-            @Override
-            public V apply() {
-                return null;
-            }
-        };
-
-        final Aggregator<K, V, V> aggregator = new Aggregator<K, V, V>() {
-            @Override
-            public V apply(final K aggKey, final V value, final V aggregate) {
-                if (aggregate == null) {
-                    return value;
-                }
-                return reducer.apply(aggregate, value);
-            }
-        };
-
-        final Merger<K, V> sessionMerger = new Merger<K, V>() {
-            @Override
-            public V apply(final K aggKey, final V aggOne, final V aggTwo) {
-                return aggregator.apply(aggKey, aggTwo, aggOne);
-            }
-        };
-
-        return aggregate(initializer, aggregator, sessionMerger, sessionWindows, valSerde, storeSupplier);
-    }
-
-
     private <T> KTable<K, T> doAggregate(final KStreamAggProcessorSupplier<K, ?, V, T> aggregateSupplier,
                                          final String functionName,
                                          final MaterializedInternal<K, T, KeyValueStore<Bytes, byte[]>> materializedInternal) {
@@ -326,29 +164,6 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
                 .materialize();
         return aggregateBuilder.build(aggregateSupplier, functionName, storeBuilder, materializedInternal.isQueryable());
 
-    }
-
-    @SuppressWarnings("deprecation")
-    private <T> KTable<K, T> doAggregate(
-            final KStreamAggProcessorSupplier<K, ?, V, T> aggregateSupplier,
-            final String functionName,
-            final org.apache.kafka.streams.processor.StateStoreSupplier storeSupplier) {
-
-        final String aggFunctionName = builder.newProcessorName(functionName);
-
-        final String sourceName = repartitionIfRequired(storeSupplier.name());
-
-        builder.internalTopologyBuilder.addProcessor(aggFunctionName, aggregateSupplier, sourceName);
-        builder.internalTopologyBuilder.addStateStore(storeSupplier, aggFunctionName);
-
-        return new KTableImpl<>(
-            builder,
-            aggFunctionName,
-            aggregateSupplier,
-            sourceName.equals(this.name) ? sourceNodes
-                    : Collections.singleton(sourceName),
-            storeSupplier.name(),
-            isQueryable);
     }
 
     /**
