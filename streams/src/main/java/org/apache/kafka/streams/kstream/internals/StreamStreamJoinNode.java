@@ -78,16 +78,6 @@ class StreamStreamJoinNode<K, V, V1, V2, VR> extends BaseJoinProcessorNode<K, V,
         return new StreamStreamJoinNodeBuilder<>();
     }
 
-    @Override
-    public boolean equals(Object o) {
-        return super.equals(o);
-    }
-
-    @Override
-    public int hashCode() {
-        return super.hashCode();
-    }
-
     static final class StreamStreamJoinNodeBuilder<K, V, V1, V2, VR> {
 
         private String name;

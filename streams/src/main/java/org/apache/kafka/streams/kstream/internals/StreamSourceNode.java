@@ -82,13 +82,4 @@ class StreamSourceNode<K, V> extends StreamGraphNode<K, V> {
         return consumedInternal.offsetResetPolicy();
     }
 
-    @Override
-    public boolean equals(Object o) {
-        return super.equals(o);
-    }
-
-    @Override
-    public int hashCode() {
-        return super.hashCode();
-    }
 }

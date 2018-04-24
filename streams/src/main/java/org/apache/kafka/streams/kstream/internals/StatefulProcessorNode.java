@@ -65,16 +65,6 @@ class StatefulProcessorNode<K, V> extends StatelessProcessorNode<K, V> {
         return new StatefulProcessorNodeBuilder<>();
     }
 
-    @Override
-    public boolean equals(Object o) {
-        return super.equals(o);
-    }
-
-    @Override
-    public int hashCode() {
-        return super.hashCode();
-    }
-
     static final class StatefulProcessorNodeBuilder<K, V> {
 
         private ProcessorSupplier<K, V> processorSupplier;

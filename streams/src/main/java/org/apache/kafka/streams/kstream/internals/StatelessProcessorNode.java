@@ -46,13 +46,4 @@ class StatelessProcessorNode<K, V> extends StreamGraphNode<K, V> {
         return processorSupplier;
     }
 
-    @Override
-    public boolean equals(Object o) {
-        return super.equals(o);
-    }
-
-    @Override
-    public int hashCode() {
-        return super.hashCode();
-    }
 }

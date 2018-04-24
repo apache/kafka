@@ -76,15 +76,6 @@ class StatefulRepartitionNode<K, V, T> extends RepartitionNode<K, V> {
         return new StatefulRepartitionNodeBuilder<>();
     }
 
-    @Override
-    public boolean equals(Object o) {
-        return super.equals(o);
-    }
-
-    @Override
-    public int hashCode() {
-        return super.hashCode();
-    }
 
     static final class StatefulRepartitionNodeBuilder<K, V, T> {
 

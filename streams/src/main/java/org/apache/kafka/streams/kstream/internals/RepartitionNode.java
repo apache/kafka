@@ -81,15 +81,6 @@ class RepartitionNode<K, V> extends StatelessProcessorNode<K, V> {
         return new RepartitionNodeBuilder<>();
     }
 
-    @Override
-    public boolean equals(Object o) {
-        return super.equals(o);
-    }
-
-    @Override
-    public int hashCode() {
-        return super.hashCode();
-    }
 
     static final class RepartitionNodeBuilder<K, V> {
 

@@ -63,13 +63,4 @@ class StreamSinkNode<K, V> extends StreamGraphNode<K, V> {
         return producedInternal.streamPartitioner();
     }
 
-    @Override
-    public boolean equals(Object o) {
-        return super.equals(o);
-    }
-
-    @Override
-    public int hashCode() {
-        return super.hashCode();
-    }
 }

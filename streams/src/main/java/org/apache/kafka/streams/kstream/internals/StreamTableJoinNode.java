@@ -63,15 +63,4 @@ class StreamTableJoinNode<K, V, V1, V2> extends StreamGraphNode<K, V> {
         return processorSupplier;
     }
 
-
-    // needed for findbugs
-    @Override
-    public boolean equals(Object o) {
-        return super.equals(o);
-    }
-
-    @Override
-    public int hashCode() {
-        return super.hashCode();
-    }
 }

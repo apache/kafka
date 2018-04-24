@@ -66,16 +66,6 @@ class KTableKTableJoinNode<K, V, V1, V2, VR> extends BaseJoinProcessorNode<K, V,
         return new KTableKTableJoinNodeBuilder<>();
     }
 
-    @Override
-    public boolean equals(Object o) {
-        return super.equals(o);
-    }
-
-    @Override
-    public int hashCode() {
-        return super.hashCode();
-    }
-
     static final class KTableKTableJoinNodeBuilder<K, V, V1, V2, VR> {
 
         private String name;

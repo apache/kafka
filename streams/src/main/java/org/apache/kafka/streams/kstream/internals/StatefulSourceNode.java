@@ -98,16 +98,6 @@ class StatefulSourceNode<K, V> extends StreamSourceNode<K, V> {
         return new StatefulSourceNodeBuilder<>();
     }
 
-    @Override
-    public boolean equals(Object o) {
-        return super.equals(o);
-    }
-
-    @Override
-    public int hashCode() {
-        return super.hashCode();
-    }
-
     static final class StatefulSourceNodeBuilder<K, V> {
 
         private String predecessorNodeName;

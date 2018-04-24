@@ -19,7 +19,6 @@ package org.apache.kafka.streams.kstream.internals;
 
 import java.util.Collection;
 import java.util.LinkedHashSet;
-import java.util.Objects;
 
 class StreamGraphNode<K, V> {
 
@@ -100,22 +99,4 @@ class StreamGraphNode<K, V> {
         this.streamsTopologyGraph = streamsTopologyGraph;
     }
 
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) {
-            return true;
-        }
-        if (o == null || getClass() != o.getClass()) {
-            return false;
-        }
-        StreamGraphNode<?, ?> that = (StreamGraphNode<?, ?>) o;
-        return Objects.equals(nodeName, that.nodeName) &&
-               Objects.equals(id, that.id);
-    }
-
-    @Override
-    public int hashCode() {
-
-        return Objects.hash(nodeName, id);
-    }
 }
