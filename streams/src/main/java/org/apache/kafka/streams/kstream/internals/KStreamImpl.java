@@ -104,8 +104,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     private static final String FOREACH_NAME = "KSTREAM-FOREACH-";
 
-    private final KeyValueMapper<K, V, String> defaultKeyValueMapper;
-
     private final boolean repartitionRequired;
 
     public KStreamImpl(final InternalStreamsBuilder builder,
@@ -114,12 +112,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                        final boolean repartitionRequired) {
         super(builder, name, sourceNodes);
         this.repartitionRequired = repartitionRequired;
-        this.defaultKeyValueMapper = new KeyValueMapper<K, V, String>() {
-            @Override
-            public String apply(K key, V value) {
-                return String.format("%s, %s", key, value);
-            }
-        };
     }
 
     @Override
@@ -191,33 +183,12 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         return new KStreamImpl<>(builder, name, sourceNodes, this.repartitionRequired);
     }
 
-    @SuppressWarnings("deprecation")
-    public void print(final KeyValueMapper<? super K, ? super V, String> mapper,
-                      final Serde<K> keySerde,
-                      final Serde<V> valSerde,
-                      final String label) {
-        Objects.requireNonNull(mapper, "mapper can't be null");
-        Objects.requireNonNull(label, "label can't be null");
-        print(Printed.<K, V>toSysOut().withLabel(label).withKeyValueMapper(mapper));
-    }
-
     @Override
     public void print(final Printed<K, V> printed) {
         Objects.requireNonNull(printed, "printed can't be null");
         final PrintedInternal<K, V> printedInternal = new PrintedInternal<>(printed);
         final String name = builder.newProcessorName(PRINTING_NAME);
         builder.internalTopologyBuilder.addProcessor(name, printedInternal.build(this.name), this.name);
-    }
-
-    @SuppressWarnings("deprecation")
-    public void writeAsText(final String filePath,
-                            final String label,
-                            final Serde<K> keySerde,
-                            final Serde<V> valSerde, KeyValueMapper<? super K, ? super V, String> mapper) {
-        Objects.requireNonNull(filePath, "filePath can't be null");
-        Objects.requireNonNull(label, "label can't be null");
-        Objects.requireNonNull(mapper, "mapper can't be null");
-        print(Printed.<K, V>toFile(filePath).withKeyValueMapper(mapper).withLabel(label));
     }
 
     @Override
@@ -295,13 +266,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         return new KStreamImpl<>(builder, name, allSourceNodes, requireRepartitioning);
     }
 
-    @SuppressWarnings("deprecation")
-    public KStream<K, V> through(final Serde<K> keySerde,
-                                 final Serde<V> valSerde,
-                                 final StreamPartitioner<? super K, ? super V> partitioner, String topic) {
-        return through(topic, Produced.with(keySerde, valSerde, partitioner));
-    }
-
     @Override
     public KStream<K, V> through(final String topic, final Produced<K, V> produced) {
         final ProducedInternal<K, V> producedInternal = new ProducedInternal<>(produced);
@@ -333,7 +297,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     @Override
     public KStream<K, V> through(final String topic) {
-        return through(null, null, null, topic);
+        return through(topic, Produced.<K, V>with(null, null, null));
     }
 
     @Override
