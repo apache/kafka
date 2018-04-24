@@ -40,7 +40,7 @@ ec2_keypair_file = nil
 
 ec2_region = "us-east-1"
 ec2_az = nil # Uses set by AWS
-ec2_ami = "ami-9eaa1cf6"
+ec2_ami = "ami-905730e8"
 ec2_instance_type = "m3.medium"
 ec2_user = "ubuntu"
 ec2_instance_name_prefix = "kafka-vagrant"
