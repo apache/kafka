@@ -54,7 +54,7 @@ import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.{StringDeserializer, StringSerializer}
 import org.junit.Assert._
-import org.junit.{After, Before, Test}
+import org.junit.{After, Before, Test, Ignore}
 
 import scala.collection._
 import scala.collection.mutable.ArrayBuffer
@@ -652,6 +652,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
   }
 
   @Test
+  @Ignore // Re-enable once we make it less flaky (KAFKA-6824)
   def testAddRemoveSslListener(): Unit = {
     verifyAddListener("SSL", SecurityProtocol.SSL, Seq.empty)
 
