@@ -474,6 +474,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         return true;
     }
 
+    private Set<TopicPartition> pendingCommittedOffsetRequest = null;
+    private RequestFuture<Map<TopicPartition, OffsetAndMetadata>> pendingCommittedOffsetResponse = null;
+
     /**
      * Fetch the current committed offsets from the coordinator for a set of partitions.
      *
@@ -482,6 +485,12 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
      */
     public Map<TopicPartition, OffsetAndMetadata> fetchCommittedOffsets(final Set<TopicPartition> partitions,
                                                                         final long timeoutMs) {
+        if (!partitions.equals(pendingCommittedOffsetRequest)) {
+            // if we were waiting for a different request, then just clear it.
+            pendingCommittedOffsetRequest = null;
+            pendingCommittedOffsetResponse = null;
+        }
+
         final long startMs = time.milliseconds();
         if (partitions.isEmpty()) return Collections.emptyMap();
 
@@ -489,21 +498,31 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             if (!ensureCoordinatorReady(remainingTimeAtLeastZeroMillis(startMs, timeoutMs))) return null;
 
             // contact coordinator to fetch committed offsets
-            final RequestFuture<Map<TopicPartition, OffsetAndMetadata>> future = sendOffsetFetchRequest(partitions);
+            final RequestFuture<Map<TopicPartition, OffsetAndMetadata>> future;
+            if (pendingCommittedOffsetResponse != null) {
+                future = pendingCommittedOffsetResponse;
+            } else {
+                pendingCommittedOffsetRequest = partitions;
+                pendingCommittedOffsetResponse = future = sendOffsetFetchRequest(partitions);
+
+            }
             client.poll(future, remainingTimeAtLeastZeroMillis(startMs, timeoutMs));
 
-            if (future.succeeded())
-                return future.value();
+            if (future.isDone()) {
+                pendingCommittedOffsetRequest = null;
+                pendingCommittedOffsetResponse = null;
 
-            if (future.failed() && !future.isRetriable())
-                throw future.exception();
-
-            final long timeoutRemaining = remainingTimeAtLeastZeroMillis(startMs, timeoutMs);
-            if (timeoutRemaining <= 0) {
-                return null;
+                if (future.succeeded()) {
+                    return future.value();
+                } else if (!future.isRetriable()) {
+                    throw future.exception();
+                } else {
+                    time.sleep(Math.min(retryBackoffMs, remainingTimeAtLeastZeroMillis(startMs, timeoutMs)));
+                }
             } else {
-                time.sleep(Math.min(retryBackoffMs, timeoutRemaining));
+                return null;
             }
+
         }
     }
 
