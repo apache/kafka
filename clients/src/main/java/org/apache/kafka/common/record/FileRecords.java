@@ -349,10 +349,10 @@ public class FileRecords extends AbstractRecords implements Closeable {
 
     @Override
     public String toString() {
-        return "FileRecords{file= " + file +
+        return "FileRecords(file= " + file +
                 ", start=" + start +
                 ", end=" + end +
-                "}";
+                ")";
     }
 
     private Iterable<FileChannelRecordBatch> batchesFrom(final int start) {
@@ -370,7 +370,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
             end = this.end;
         else
             end = this.sizeInBytes();
-        FileLogInputStream inputStream = new FileLogInputStream(channel, start, end);
+        FileLogInputStream inputStream = new FileLogInputStream(this, start, end);
         return new RecordBatchIterator<>(inputStream);
     }
 

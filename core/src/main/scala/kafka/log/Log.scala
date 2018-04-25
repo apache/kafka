@@ -714,7 +714,7 @@ class Log(@volatile var dir: File,
         } else {
           // we are taking the offsets we are given
           if (!appendInfo.offsetsMonotonic || appendInfo.firstOrLastOffset < nextOffsetMetadata.messageOffset)
-            throw new IllegalArgumentException(s"Out of order offsets found in in append to $topicPartition: " +
+            throw new IllegalArgumentException(s"Out of order offsets found in append to $topicPartition: " +
               records.records.asScala.map(_.offset))
         }
 
