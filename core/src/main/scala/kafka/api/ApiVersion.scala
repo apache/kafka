@@ -110,12 +110,10 @@ object ApiVersion {
 }
 
 sealed trait ApiVersion extends Ordered[ApiVersion] {
-  lazy val version: String =
-    if (subVersion.isEmpty) shortVersion else shortVersion + "-" + subVersion
+  def version: String
   def shortVersion: String
   def recordVersion: RecordVersion
   def id: Int
-  protected def subVersion: String
 
   override def compare(that: ApiVersion): Int =
     ApiVersion.orderingByVersion.compare(this, that)
@@ -123,113 +121,125 @@ sealed trait ApiVersion extends Ordered[ApiVersion] {
   override def toString: String = version
 }
 
+/**
+ * For versions before 0.10.0, `version` and `shortVersion` were the same.
+ */
+sealed trait LegacyApiVersion extends ApiVersion {
+  def version = shortVersion
+}
+
+/**
+ * From 0.10.0 onwards, each version has a sub-version. For example, IV0 is the sub-version of 0.10.0-IV0.
+ */
+sealed trait DefaultApiVersion extends ApiVersion {
+  lazy val version = shortVersion + "-" + subVersion
+  protected def subVersion: String
+}
+
 // Keep the IDs in order of versions
-case object KAFKA_0_8_0 extends ApiVersion {
+case object KAFKA_0_8_0 extends LegacyApiVersion {
   val shortVersion = "0.8.0"
-  val subVersion = ""
   val recordVersion = RecordVersion.V0
   val id: Int = 0
 }
 
-case object KAFKA_0_8_1 extends ApiVersion {
+case object KAFKA_0_8_1 extends LegacyApiVersion {
   val shortVersion = "0.8.1"
-  val subVersion = ""
   val recordVersion = RecordVersion.V0
   val id: Int = 1
 }
 
-case object KAFKA_0_8_2 extends ApiVersion {
+case object KAFKA_0_8_2 extends LegacyApiVersion {
   val shortVersion = "0.8.2"
-  val subVersion = ""
   val recordVersion = RecordVersion.V0
   val id: Int = 2
 }
 
-case object KAFKA_0_9_0 extends ApiVersion {
+case object KAFKA_0_9_0 extends LegacyApiVersion {
   val shortVersion = "0.9.0"
   val subVersion = ""
   val recordVersion = RecordVersion.V0
   val id: Int = 3
 }
 
-case object KAFKA_0_10_0_IV0 extends ApiVersion {
+case object KAFKA_0_10_0_IV0 extends DefaultApiVersion {
   val shortVersion = "0.10.0"
   val subVersion = "IV0"
   val recordVersion = RecordVersion.V1
   val id: Int = 4
 }
 
-case object KAFKA_0_10_0_IV1 extends ApiVersion {
+case object KAFKA_0_10_0_IV1 extends DefaultApiVersion {
   val shortVersion = "0.10.0"
   val subVersion = "IV1"
   val recordVersion = RecordVersion.V1
   val id: Int = 5
 }
 
-case object KAFKA_0_10_1_IV0 extends ApiVersion {
+case object KAFKA_0_10_1_IV0 extends DefaultApiVersion {
   val shortVersion = "0.10.1"
   val subVersion = "IV0"
   val recordVersion = RecordVersion.V1
   val id: Int = 6
 }
 
-case object KAFKA_0_10_1_IV1 extends ApiVersion {
+case object KAFKA_0_10_1_IV1 extends DefaultApiVersion {
   val shortVersion = "0.10.1"
   val subVersion = "IV1"
   val recordVersion = RecordVersion.V1
   val id: Int = 7
 }
 
-case object KAFKA_0_10_1_IV2 extends ApiVersion {
+case object KAFKA_0_10_1_IV2 extends DefaultApiVersion {
   val shortVersion = "0.10.1"
   val subVersion = "IV2"
   val recordVersion = RecordVersion.V1
   val id: Int = 8
 }
 
-case object KAFKA_0_10_2_IV0 extends ApiVersion {
+case object KAFKA_0_10_2_IV0 extends DefaultApiVersion {
   val shortVersion = "0.10.2"
   val subVersion = "IV0"
   val recordVersion = RecordVersion.V1
   val id: Int = 9
 }
 
-case object KAFKA_0_11_0_IV0 extends ApiVersion {
+case object KAFKA_0_11_0_IV0 extends DefaultApiVersion {
   val shortVersion = "0.11.0"
   val subVersion = "IV0"
   val recordVersion = RecordVersion.V2
   val id: Int = 10
 }
 
-case object KAFKA_0_11_0_IV1 extends ApiVersion {
+case object KAFKA_0_11_0_IV1 extends DefaultApiVersion {
   val shortVersion = "0.11.0"
   val subVersion = "IV1"
   val recordVersion = RecordVersion.V2
   val id: Int = 11
 }
 
-case object KAFKA_0_11_0_IV2 extends ApiVersion {
+case object KAFKA_0_11_0_IV2 extends DefaultApiVersion {
   val shortVersion = "0.11.0"
   val subVersion = "IV2"
   val recordVersion = RecordVersion.V2
   val id: Int = 12
 }
 
-case object KAFKA_1_0_IV0 extends ApiVersion {
+case object KAFKA_1_0_IV0 extends DefaultApiVersion {
   val shortVersion = "1.0"
   val subVersion = "IV0"
   val recordVersion = RecordVersion.V2
   val id: Int = 13
 }
 
-case object KAFKA_1_1_IV0 extends ApiVersion {
+case object KAFKA_1_1_IV0 extends DefaultApiVersion {
   val shortVersion = "1.1"
   val subVersion = "IV0"
   val recordVersion = RecordVersion.V2
   val id: Int = 14
 }
 
-case object KAFKA_2_0_IV0 extends ApiVersion {
+case object KAFKA_2_0_IV0 extends DefaultApiVersion {
   val shortVersion: String = "2.0"
   val subVersion = "IV0"
   val recordVersion = RecordVersion.V2
