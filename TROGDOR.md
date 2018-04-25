@@ -24,7 +24,7 @@ To run the Trogdor Agent:
 
 To run the Trogdor Coordinator:
 
-    > ./bin/trogdor.sh coordinator -c ./config/trogdor.conf -n node0 &> /tmp/trogdor-coordinator.log &&
+    > ./bin/trogdor.sh coordinator -c ./config/trogdor.conf -n node0 &> /tmp/trogdor-coordinator.log &
 
 Let's confirm that all of the daemons are running:
 
@@ -109,7 +109,7 @@ Tasks are described by specifications containing:
 * A "durationMs" field describing how long the task should last.  This is given in terms of milliseconds.
 * Other fields which are task-specific.
 
-The task specification is usually written as JSON.  For example, this task specification describes a network partition between nodes1 and 2, and 3:
+The task specification is usually written as JSON.  For example, this task specification describes a network partition between nodes 1 and 2, and 3:
 
     {
         "class": "org.apache.kafka.trogdor.fault.NetworkPartitionFaultSpec",
@@ -135,20 +135,20 @@ Workloads
 Trogdor can run several workloads.  Workloads perform operations on the cluster and measure their performance.  Workloads fail when the operations cannot be performed.
 
 ### ProduceBench
-ProduceBench starts a Kafka producer on a single agent node, producing to several partitions.  The workload measures the average produce latency, as well as the median, 90th percentile, and 99th percentile latency.
+ProduceBench starts a Kafka producer on a single agent node, producing to several partitions.  The workload measures the average produce latency, as well as the median, 95th percentile, and 99th percentile latency.
 
 ### RoundTripWorkload
 RoundTripWorkload tests both production and consumption.  The workload starts a Kafka producer and consumer on a single node.  The consumer will read back the messages that were produced by the producer.
 
 ### ConsumeBench
-ConsumeBench starts a Kafka consumer on a single agent node.  The workload measures the average produce latency, as well as the median, 90th percentile, and 99th percentile latency.
+ConsumeBench starts a Kafka consumer on a single agent node.  The workload measures the average produce latency, as well as the median, 95th percentile, and 99th percentile latency.
 
 Faults
 ========================================
 Trogdor can run several faults which deliberately break something in the cluster.
 
 ### ProcessStopFault
-ProcessStopFault stops a process by sending it a SIGSTP signal.  When the fault ends, the process is resumed with SIGCONT.
+ProcessStopFault stops a process by sending it a SIGSTOP signal.  When the fault ends, the process is resumed with SIGCONT.
 
 ### NetworkPartitionFault
 NetworkPartitionFault sets up an artificial network partition between one or more sets of nodes.  Currently, this is implemented using iptables.  The iptables rules are set up on the outbound traffic from the affected nodes.  Therefore, the affected nodes should still be reachable from outside the cluster.
