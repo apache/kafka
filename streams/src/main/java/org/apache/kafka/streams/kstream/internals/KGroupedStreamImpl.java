@@ -126,10 +126,10 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
         final MaterializedInternal<K, Long, KeyValueStore<Bytes, byte[]>> materializedInternal
                 = new MaterializedInternal<>(materialized, builder, AGGREGATE_NAME);
         if (materializedInternal.keySerde() == null) {
-            materialized.withKeySerde(keySerde);
+            materializedInternal.withKeySerde(keySerde);
         }
         if (materializedInternal.valueSerde() == null) {
-            materialized.withValueSerde(Serdes.Long());
+            materializedInternal.withValueSerde(Serdes.Long());
         }
 
         return doAggregate(

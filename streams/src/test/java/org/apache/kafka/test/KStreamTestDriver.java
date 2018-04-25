@@ -122,6 +122,8 @@ public class KStreamTestDriver extends ExternalResource {
                       final long cacheSize) {
         final InternalTopologyBuilder internalTopologyBuilder = StreamsBuilderTest.internalTopologyBuilder(builder);
 
+        System.out.println(builder.build().describe());
+
         internalTopologyBuilder.setApplicationId("TestDriver");
         topology = internalTopologyBuilder.build(null);
         globalTopology = internalTopologyBuilder.buildGlobalStateTopology();
