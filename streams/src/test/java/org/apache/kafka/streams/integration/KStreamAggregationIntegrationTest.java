@@ -663,7 +663,7 @@ public class KStreamAggregationIntegrationTest {
                     public String apply(final String value1, final String value2) {
                         return value1 + ":" + value2;
                     }
-                }, Materialized.<String, String, SessionStore<Bytes, byte[]>>as(userSessionsStore).withValueSerde(Serdes.String()))
+                }, Materialized.<String, String, SessionStore<Bytes, byte[]>>as(userSessionsStore))
                 .foreach(new ForeachAction<Windowed<String>, String>() {
                     @Override
                     public void apply(final Windowed<String> key, final String value) {

@@ -297,7 +297,7 @@ public class KGroupedStreamImplTest {
                     public String apply(final String value1, final String value2) {
                         return value1 + ":" + value2;
                     }
-                }, Materialized.<String, String, SessionStore<Bytes, byte[]>>as("session-store").withValueSerde(Serdes.String()));
+                }, Materialized.<String, String, SessionStore<Bytes, byte[]>>as("session-store"));
         table.toStream().foreach(new ForeachAction<Windowed<String>, String>() {
             @Override
             public void apply(final Windowed<String> key, final String value) {
@@ -317,7 +317,7 @@ public class KGroupedStreamImplTest {
                     public String apply(final String value1, final String value2) {
                         return value1 + ":" + value2;
                     }
-                }, Materialized.<String, String, SessionStore<Bytes, byte[]>>with(Serdes.String(), Serdes.String()));
+                });
         table.toStream().foreach(new ForeachAction<Windowed<String>, String>() {
             @Override
             public void apply(final Windowed<String> key, final String value) {
