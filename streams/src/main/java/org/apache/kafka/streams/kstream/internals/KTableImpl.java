@@ -146,7 +146,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         // only materialize if the state store is queryable
         KTableProcessorSupplier<K, V, V> processorSupplier;
 
-        if (materialized.isQueryable()) {
+        if (materialized != null && materialized.isQueryable()) {
             processorSupplier = new KTableFilter<>(this,
                     predicate,
                     filterNot,
@@ -154,6 +154,15 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
             builder.internalTopologyBuilder.addProcessor(name, processorSupplier, this.name);
             this.builder.internalTopologyBuilder.addStateStore(new KeyValueStoreMaterializer<>(materialized).materialize(), name);
+
+            return new KTableImpl<>(builder,
+                    name,
+                    processorSupplier,
+                    this.keySerde,
+                    this.valSerde,
+                    sourceNodes,
+                    materialized.storeName(),
+                    true);
         } else {
             processorSupplier = new KTableFilter<>(this,
                     predicate,
@@ -161,21 +170,22 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                     null);
 
             builder.internalTopologyBuilder.addProcessor(name, processorSupplier, this.name);
-        }
 
-        return new KTableImpl<>(builder,
-                                name,
-                                processorSupplier,
-                                this.keySerde,
-                                this.valSerde,
-                                sourceNodes,
-                                materialized.storeName(),
-                                materialized.isQueryable());
+            return new KTableImpl<>(builder,
+                    name,
+                    processorSupplier,
+                    this.keySerde,
+                    this.valSerde,
+                    sourceNodes,
+                    this.queryableStoreName,
+                    false);
+        }
     }
 
     @Override
     public KTable<K, V> filter(final Predicate<? super K, ? super V> predicate) {
-        return filter(predicate, Materialized.<K, V, KeyValueStore<Bytes, byte[]>>with(keySerde, valSerde));
+        Objects.requireNonNull(predicate, "predicate can't be null");
+        return doFilter(predicate, null, false);
     }
 
     @Override
@@ -188,7 +198,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
     @Override
     public KTable<K, V> filterNot(final Predicate<? super K, ? super V> predicate) {
-        return filterNot(predicate, Materialized.<K, V, KeyValueStore<Bytes, byte[]>>with(keySerde, valSerde));
+        Objects.requireNonNull(predicate, "predicate can't be null");
+        return doFilter(predicate, null, true);
     }
 
     @Override
@@ -201,13 +212,21 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
     @Override
     public <V1> KTable<K, V1> mapValues(final ValueMapper<? super V, ? extends V1> mapper) {
-        return mapValues(withKey(mapper), Materialized.<K, V1, KeyValueStore<Bytes, byte[]>>with(keySerde, null));
+        return mapValues(withKey(mapper));
     }
 
     @Override
     public <VR> KTable<K, VR> mapValues(final ValueMapperWithKey<? super K, ? super V, ? extends VR> mapper) {
-        return mapValues(mapper, Materialized.<K, VR, KeyValueStore<Bytes, byte[]>>with(keySerde, null));
+        Objects.requireNonNull(mapper, "mapper can't be null");
+        final String name = builder.newProcessorName(MAPVALUES_NAME);
 
+        final KTableProcessorSupplier<K, V, VR> processorSupplier = new KTableMapValues<>(
+                this,
+                mapper,
+                null);
+        builder.internalTopologyBuilder.addProcessor(name, processorSupplier, this.name);
+
+        return new KTableImpl<>(builder, name, processorSupplier, sourceNodes, this.queryableStoreName, false);
     }
 
     @Override
