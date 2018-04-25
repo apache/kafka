@@ -263,6 +263,27 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
       "partition reassignment path should remain while reassignment in progress")
   }
 
+
+  // TODO: Test cases:
+  // [0, 1, 2] -> [1, 0, 2]
+  // [0, 1, 2] -> [3, 4, 5]
+  // [0, 1, 2] -> [0, 1, 3]
+  // [0, 1, 2] -> [3, 1, 2]
+  // [0, 1, 2] -> [0, 1]
+  // [0, 1, 2] -> [0]
+  // [0, 1, 2] -> [3]
+  // [0, 1, 2] -> [1, 2] ?
+  // [0, 1, 2] -> [3, 4]
+  // [0, 1] -> [0, 1, 2]
+  // [0, 1] -> [3, 4, 5]
+  // [0, 1, 2] -> []
+  //
+  // controller failover in the middle
+  // old broker fails / gets out of ISR
+  // old broker not in ISR from beginning
+  // more topics, partitions
+
+  var serverStarted = false
   @Test
   def testPartitionReassignmentResumesAfterReplicaComesOnline(): Unit = {
     servers = makeServers(2)
@@ -271,6 +292,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     val tp = new TopicPartition("t", 0)
     val assignment = Map(tp.partition -> Seq(controllerId))
     val reassignment = Map(tp -> Seq(otherBrokerId))
+    println(s"Reassignment: $reassignment")
     TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
     servers(otherBrokerId).shutdown()
     servers(otherBrokerId).awaitShutdown()
@@ -278,6 +300,8 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     waitForPartitionState(tp, firstControllerEpoch, controllerId, LeaderAndIsr.initialLeaderEpoch + 1,
       "failed to get expected partition state during partition reassignment with offline replica")
     servers(otherBrokerId).startup()
+    println("Triggered server startup")
+    serverStarted = true
     waitForPartitionState(tp, firstControllerEpoch, otherBrokerId, LeaderAndIsr.initialLeaderEpoch + 4,
       "failed to get expected partition state after partition reassignment")
     TestUtils.waitUntilTrue(() => zkClient.getReplicaAssignmentForTopics(Set(tp.topic)) == reassignment,
@@ -596,6 +620,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
                                     message: String): Unit = {
     TestUtils.waitUntilTrue(() => {
       val leaderIsrAndControllerEpochMap = zkClient.getTopicPartitionStates(Seq(tp))
+      println(tp)
       leaderIsrAndControllerEpochMap.contains(tp) &&
         isExpectedPartitionState(leaderIsrAndControllerEpochMap(tp), controllerEpoch, leader, leaderEpoch)
     }, message)
@@ -604,10 +629,17 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
   private def isExpectedPartitionState(leaderIsrAndControllerEpoch: LeaderIsrAndControllerEpoch,
                                        controllerEpoch: Int,
                                        leader: Int,
-                                       leaderEpoch: Int) =
+                                       leaderEpoch: Int) = {
+    if (serverStarted){
+      println ("***************************************************************")
+      println(leaderIsrAndControllerEpoch.controllerEpoch == controllerEpoch)
+      println(s"${leaderIsrAndControllerEpoch.leaderAndIsr.leader} == $leader")
+      println(s"${leaderIsrAndControllerEpoch.leaderAndIsr.leaderEpoch} == $leaderEpoch")
+    }
     leaderIsrAndControllerEpoch.controllerEpoch == controllerEpoch &&
       leaderIsrAndControllerEpoch.leaderAndIsr.leader == leader &&
       leaderIsrAndControllerEpoch.leaderAndIsr.leaderEpoch == leaderEpoch
+  }
 
   private def makeServers(numConfigs: Int,
                           autoLeaderRebalanceEnable: Boolean = false,

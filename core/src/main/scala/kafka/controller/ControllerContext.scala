@@ -53,6 +53,7 @@ class ControllerContext {
   }
 
   def updatePartitionReplicaAssignment(topicPartition: TopicPartition, newReplicas: Seq[Int]): Unit = {
+    println(s"Updating partition replica reassignment to $newReplicas")
     partitionReplicaAssignmentUnderlying.getOrElseUpdate(topicPartition.topic, mutable.Map.empty)
       .put(topicPartition.partition, newReplicas)
   }
