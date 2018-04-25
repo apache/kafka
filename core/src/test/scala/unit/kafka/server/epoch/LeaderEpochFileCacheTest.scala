@@ -50,7 +50,7 @@ class LeaderEpochFileCacheTest {
     //Then
     assertEquals(2, cache.latestEpoch())
     assertEquals(EpochEntry(2, 10), cache.epochEntries()(0))
-    assertEquals((2, 11), cache.endOffsetFor(2)) //should match leo
+    assertEquals((2, leo), cache.endOffsetFor(2)) //should match leo
   }
 
   @Test
@@ -67,15 +67,24 @@ class LeaderEpochFileCacheTest {
     leo = 14
 
     //Then
-    assertEquals((2, 14), cache.endOffsetFor(2))
+    assertEquals((leo, 14), cache.endOffsetFor(2))
   }
 
   @Test
   def shouldReturnUndefinedOffsetIfUndefinedEpochRequested() = {
     def leoFinder() = new LogOffsetMetadata(0)
+    val expectedEpochEndOffset = (UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
 
     //Given cache with some data on leader
     val cache = new LeaderEpochFileCache(tp, () => leoFinder, checkpoint)
+
+    // when requesting undefined offset from empty cache
+    val epochAndOffsetForUndefined = cache.endOffsetFor(UNDEFINED_EPOCH)
+    // should return undefined offset
+    assertEquals("Expected undefined epoch and offset if undefined epoch requested. Empty cache.",
+                 expectedEpochEndOffset, epochAndOffsetForUndefined)
+
+    // assign couple of epochs
     cache.assign(epoch = 2, offset = 11)
     cache.assign(epoch = 3, offset = 12)
 
@@ -83,7 +92,8 @@ class LeaderEpochFileCacheTest {
     val epochAndOffsetFor = cache.endOffsetFor(UNDEFINED_EPOCH)
 
     //Then
-    assertEquals((UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET), epochAndOffsetFor)
+    assertEquals("Expected undefined epoch and offset if undefined epoch requested. Cache not empty.",
+                 expectedEpochEndOffset, epochAndOffsetFor)
   }
 
   @Test
@@ -303,7 +313,7 @@ class LeaderEpochFileCacheTest {
     //Then end offset for epoch 1 shouldn't have changed
     assertEquals((1, 6), cache.endOffsetFor(1))
 
-    //Then end offset for epoch 2 has to be the offset of the epoch 1 message (I can't thing of a better option)
+    //Then end offset for epoch 2 has to be the offset of the epoch 1 message (I can't think of a better option)
     assertEquals((2, 8), cache.endOffsetFor(2))
 
     //Epoch history shouldn't have changed

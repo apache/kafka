@@ -334,8 +334,8 @@ class ReplicaFetcherThread(name: String,
             } else {
               // get (leader epoch, end offset) pair that corresponds to the largest leader epoch
               // less than or equal to the requested epoch.
-              val epochAndOffset = replica.epochs.get.endOffsetFor(epochOffset.leaderEpoch)
-              if (epochAndOffset._2 == UNDEFINED_EPOCH_OFFSET) {
+              val (replicaLeaderEpoch, replicaEndOffset) = replica.epochs.get.endOffsetFor (epochOffset.leaderEpoch)
+              if (replicaEndOffset == UNDEFINED_EPOCH_OFFSET) {
                 // This can happen if replica was not tracking offsets at that point (before the
                 // upgrade, or if this broker is new).
                 // I think we then should truncate to start offset of epoch that we sent
@@ -345,17 +345,17 @@ class ReplicaFetcherThread(name: String,
                      s"below any follower's tracked epochs for ${replica.topicPartition}. " +
                      s"The leader's offset only ${epochOffset.endOffset} will be used for truncation.")
                 finalFetchLeaderEpochOffset(epochOffset.endOffset, replica)
-              } else if (epochAndOffset._1 != epochOffset.leaderEpoch) {
+              } else if (replicaLeaderEpoch != epochOffset.leaderEpoch) {
                 // the replica does not know about the epoch that leader replied with
                 // we truncate to the end offset of the largest epoch that is smaller than the
                 // epoch the leader replied with, and send another offset for leader epoch request
-                val intermediateOffsetToTruncateTo = min(epochAndOffset._2, replica.logEndOffset.messageOffset)
+                val intermediateOffsetToTruncateTo = min(replicaEndOffset, replica.logEndOffset.messageOffset)
                 warn(s"Based on follower's leader epoch, leader replied with epoch ${epochOffset.leaderEpoch} " +
                      s"unknown to the follower for ${replica.topicPartition}. " +
                      s"Will truncate to $intermediateOffsetToTruncateTo and send another leader epoch request to the leader.")
                 OffsetTruncationState(intermediateOffsetToTruncateTo, truncationCompleted = false)
               } else {
-                val offsetToTruncateTo = min(epochAndOffset._2, epochOffset.endOffset)
+                val offsetToTruncateTo = min(replicaEndOffset, epochOffset.endOffset)
                 finalFetchLeaderEpochOffset(offsetToTruncateTo, replica)
               }
             }

@@ -20,7 +20,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
 
 import kafka.server.LogOffsetMetadata
 import kafka.server.checkpoints.LeaderEpochCheckpoint
-import org.apache.kafka.common.requests.EpochEndOffset.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
+import org.apache.kafka.common.requests.EpochEndOffset._
 import kafka.utils.CoreUtils._
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
@@ -105,13 +105,13 @@ class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetM
         } else if (requestedEpoch == latestEpoch) {
           (requestedEpoch, leo().messageOffset)
         } else {
-          val subsequentEpochs = epochs.filter(e => e.epoch > requestedEpoch)
+          val (subsequentEpochs, previousEpochs) = epochs.partition { e => e.epoch > requestedEpoch}
           if (subsequentEpochs.isEmpty || requestedEpoch < epochs.head.epoch)
+            // no epochs recorded or requested epoch < the first epoch cached
             (UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
           else {
             // we must get at least one element in previous epochs list, because if we are here,
             // it means that requestedEpoch >= epochs.head.epoch -- so at least the first epoch is
-            val previousEpochs = epochs.filter(e => e.epoch <= requestedEpoch)
             (previousEpochs.last.epoch, subsequentEpochs.head.startOffset)
           }
         }
