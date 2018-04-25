@@ -39,6 +39,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
+import static org.apache.kafka.streams.processor.internals.ConsumerUtil.poll;
 import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.DEAD;
 import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.PENDING_SHUTDOWN;
 
@@ -232,7 +233,7 @@ public class GlobalStreamThread extends Thread {
 
         void pollAndUpdate() {
             try {
-                final ConsumerRecords<byte[], byte[]> received = globalConsumer.poll(pollMs);
+                final ConsumerRecords<byte[], byte[]> received = poll(globalConsumer, pollMs);
                 for (final ConsumerRecord<byte[], byte[]> record : received) {
                     stateMaintainer.update(record);
                 }
@@ -367,5 +368,6 @@ public class GlobalStreamThread extends Thread {
         // one could call shutdown() multiple times, so ignore subsequent calls
         // if already shutting down or dead
         setState(PENDING_SHUTDOWN);
+        globalConsumer.wakeup();
     }
 }

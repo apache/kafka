@@ -62,6 +62,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.util.Collections.singleton;
+import static org.apache.kafka.streams.processor.internals.ConsumerUtil.poll;
 
 public class StreamThread extends Thread {
 
@@ -824,7 +825,7 @@ public class StreamThread extends Thread {
         ConsumerRecords<byte[], byte[]> records = null;
 
         try {
-            records = consumer.poll(pollTimeMs);
+            records = poll(consumer, pollTimeMs);
         } catch (final InvalidOffsetException e) {
             resetInvalidOffsets(e);
         }
@@ -1051,7 +1052,7 @@ public class StreamThread extends Thread {
             }
 
             try {
-                final ConsumerRecords<byte[], byte[]> records = restoreConsumer.poll(0);
+                final ConsumerRecords<byte[], byte[]> records = poll(restoreConsumer, 0);
 
                 if (!records.isEmpty()) {
                     for (final TopicPartition partition : records.partitions()) {
@@ -1116,6 +1117,8 @@ public class StreamThread extends Thread {
     public void shutdown() {
         log.info("Informed to shut down");
         final State oldState = setState(State.PENDING_SHUTDOWN);
+        consumer.wakeup(); // gracefully interrupt the consumer if it's in the middle of something.
+        restoreConsumer.wakeup();
         if (oldState == State.CREATED) {
             // The thread may not have been started. Take responsibility for shutting down
             completeShutdown(true);

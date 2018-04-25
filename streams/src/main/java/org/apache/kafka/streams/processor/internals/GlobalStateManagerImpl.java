@@ -46,6 +46,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.apache.kafka.streams.processor.internals.ConsumerUtil.poll;
+
 /**
  * This class is responsible for the initialization, restoration, closing, flushing etc
  * of Global State Stores. There is only ever 1 instance of this class per Application Instance.
@@ -262,7 +264,7 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
 
             while (offset < highWatermark) {
                 try {
-                    final ConsumerRecords<byte[], byte[]> records = globalConsumer.poll(100);
+                    final ConsumerRecords<byte[], byte[]> records = poll(globalConsumer, 100);
                     final List<KeyValue<byte[], byte[]>> restoreRecords = new ArrayList<>();
                     for (ConsumerRecord<byte[], byte[]> record : records) {
                         if (record.key() != null) {
