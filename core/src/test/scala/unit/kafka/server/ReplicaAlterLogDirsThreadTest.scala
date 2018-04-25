@@ -61,7 +61,7 @@ class ReplicaAlterLogDirsThreadTest {
 
     //Stubs
     expect(replica.epochs).andReturn(Some(leaderEpochs)).anyTimes()
-    expect(leaderEpochs.endOffsetFor(leaderEpoch)).andReturn(leo).anyTimes()
+    expect(leaderEpochs.endOffsetFor(leaderEpoch)).andReturn((leaderEpoch, leo)).anyTimes()
     stub(replica, replica, futureReplica, partition, replicaManager)
 
     replay(leaderEpochs, replicaManager, replica)
@@ -78,8 +78,8 @@ class ReplicaAlterLogDirsThreadTest {
     val result = thread.fetchEpochsFromLeader(Map(t1p0 -> leaderEpoch, t1p1 -> leaderEpoch))
 
     val expected = Map(
-      t1p0 -> new EpochEndOffset(Errors.NONE, leo),
-      t1p1 -> new EpochEndOffset(Errors.NONE, leo)
+      t1p0 -> new EpochEndOffset(Errors.NONE, leaderEpoch, leo),
+      t1p1 -> new EpochEndOffset(Errors.NONE, leaderEpoch, leo)
     )
 
     assertEquals("results from leader epoch request should have offset from local replica",
@@ -101,7 +101,7 @@ class ReplicaAlterLogDirsThreadTest {
 
     //Stubs
     expect(replica.epochs).andReturn(Some(leaderEpochs)).anyTimes()
-    expect(leaderEpochs.endOffsetFor(leaderEpoch)).andReturn(leo).anyTimes()
+    expect(leaderEpochs.endOffsetFor(leaderEpoch)).andReturn((leaderEpoch, leo)).anyTimes()
     expect(replicaManager.getReplicaOrException(t1p0)).andReturn(replica).anyTimes()
     expect(replicaManager.getPartition(t1p0)).andReturn(Some(partition)).anyTimes()
     expect(replicaManager.getReplicaOrException(t1p1)).andThrow(new KafkaStorageException).once()
@@ -121,8 +121,8 @@ class ReplicaAlterLogDirsThreadTest {
     val result = thread.fetchEpochsFromLeader(Map(t1p0 -> leaderEpoch, t1p1 -> leaderEpoch))
 
     val expected = Map(
-      t1p0 -> new EpochEndOffset(Errors.NONE, leo),
-      t1p1 -> new EpochEndOffset(Errors.KAFKA_STORAGE_ERROR, UNDEFINED_EPOCH_OFFSET)
+      t1p0 -> new EpochEndOffset(Errors.NONE, leaderEpoch, leo),
+      t1p1 -> new EpochEndOffset(Errors.KAFKA_STORAGE_ERROR, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
     )
 
     assertEquals(expected, result)
@@ -161,8 +161,8 @@ class ReplicaAlterLogDirsThreadTest {
     expect(futureReplica.epochs).andReturn(Some(futureReplicaLeaderEpochs)).anyTimes()
     expect(futureReplica.logEndOffset).andReturn(new LogOffsetMetadata(futureReplicaLEO)).anyTimes()
     expect(futureReplicaLeaderEpochs.latestEpoch).andReturn(leaderEpoch).anyTimes()
-    expect(leaderEpochsT1p0.endOffsetFor(leaderEpoch)).andReturn(replicaT1p0LEO).anyTimes()
-    expect(leaderEpochsT1p1.endOffsetFor(leaderEpoch)).andReturn(replicaT1p1LEO).anyTimes()
+    expect(leaderEpochsT1p0.endOffsetFor(leaderEpoch)).andReturn((leaderEpoch, replicaT1p0LEO)).anyTimes()
+    expect(leaderEpochsT1p1.endOffsetFor(leaderEpoch)).andReturn((leaderEpoch, replicaT1p1LEO)).anyTimes()
     expect(replicaManager.logManager).andReturn(logManager).anyTimes()
     stubWithFetchMessages(replicaT1p0, replicaT1p1, futureReplica, partition, replicaManager, responseCallback)
 
@@ -221,7 +221,7 @@ class ReplicaAlterLogDirsThreadTest {
 
     // since UNDEFINED_EPOCH is -1 wich will be lower than any valid leader epoch, the method
     // will return UNDEFINED_EPOCH_OFFSET if requested epoch is lower than the first epoch cached
-    expect(leaderEpochs.endOffsetFor(UNDEFINED_EPOCH)).andReturn(UNDEFINED_EPOCH_OFFSET).anyTimes()
+    expect(leaderEpochs.endOffsetFor(UNDEFINED_EPOCH)).andReturn((UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)).anyTimes()
     stubWithFetchMessages(replica, replica, futureReplica, partition, replicaManager, responseCallback)
     replay(replicaManager, logManager, quotaManager, leaderEpochs, futureReplicaLeaderEpochs,
            replica, futureReplica, partition)
@@ -273,7 +273,7 @@ class ReplicaAlterLogDirsThreadTest {
     expect(futureReplica.epochs).andReturn(Some(futureReplicaLeaderEpochs)).anyTimes()
 
     expect(futureReplicaLeaderEpochs.latestEpoch).andReturn(futureReplicaLeaderEpoch).anyTimes()
-    expect(leaderEpochs.endOffsetFor(futureReplicaLeaderEpoch)).andReturn(replicaLEO).anyTimes()
+    expect(leaderEpochs.endOffsetFor(futureReplicaLeaderEpoch)).andReturn((futureReplicaLeaderEpoch, replicaLEO)).anyTimes()
 
     expect(futureReplica.logEndOffset).andReturn(new LogOffsetMetadata(futureReplicaLEO)).anyTimes()
     expect(replicaManager.getReplica(t1p0)).andReturn(Some(replica)).anyTimes()
@@ -355,7 +355,7 @@ class ReplicaAlterLogDirsThreadTest {
 
     expect(futureReplica.logEndOffset).andReturn(new LogOffsetMetadata(futureReplicaLEO)).anyTimes()
     expect(futureReplicaLeaderEpochs.latestEpoch).andReturn(leaderEpoch)
-    expect(leaderEpochs.endOffsetFor(leaderEpoch)).andReturn(replicaLEO)
+    expect(leaderEpochs.endOffsetFor(leaderEpoch)).andReturn((leaderEpoch, replicaLEO))
     expect(replicaManager.logManager).andReturn(logManager).anyTimes()
     stubWithFetchMessages(replica, replica, futureReplica, partition, replicaManager, responseCallback)
 
