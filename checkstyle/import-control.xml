@@ -307,7 +307,12 @@
     <subpackage name="converters">
       <allow pkg="org.apache.kafka.connect.storage" />
     </subpackage>
-    
+
+    <subpackage name="rest.extension">
+      <allow pkg="org.apache.kafka.connect.rest.extension.entities" />
+      <allow pkg="javax.ws.rs" />
+    </subpackage>
+
     <subpackage name="runtime">
       <allow pkg="org.apache.kafka.connect" />
       <allow pkg="org.reflections"/>
