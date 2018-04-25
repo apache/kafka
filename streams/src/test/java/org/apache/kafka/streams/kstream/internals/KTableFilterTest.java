@@ -253,7 +253,7 @@ public class KTableFilterTest {
                 public boolean test(String key, Integer value) {
                     return (value % 2) == 0;
                 }
-            }, "anyStoreNameFilter");
+            }, Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("anyStoreNameFilter"));
         KTableImpl<String, Integer, Integer> table3 = (KTableImpl<String, Integer, Integer>) table1.filterNot(
             new Predicate<String, Integer>() {
                 @Override
@@ -337,7 +337,7 @@ public class KTableFilterTest {
                 public boolean test(String key, Integer value) {
                     return (value % 2) == 0;
                 }
-            }, "anyStoreNameFilter");
+            }, Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("anyStoreNameFilter"));
 
         doTestNotSendingOldValue(builder, table1, table2, topic1);
     }
@@ -415,7 +415,7 @@ public class KTableFilterTest {
                 public boolean test(String key, Integer value) {
                     return (value % 2) == 0;
                 }
-            }, "anyStoreNameFilter");
+            }, Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("anyStoreNameFilter"));
 
         doTestSendingOldValue(builder, table1, table2, topic1);
     }
@@ -457,7 +457,7 @@ public class KTableFilterTest {
                     return value.equalsIgnoreCase("accept");
                 }
             }).groupBy(MockMapper.<String, String>noOpKeyValueMapper())
-            .reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, Materialized.<String, String, KeyValueStore<Bytes,byte[]>>as("mock-result"));
+            .reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("mock-result"));
 
         doTestSkipNullOnMaterialization(builder, table1, table2, topic1);
     }
@@ -478,8 +478,8 @@ public class KTableFilterTest {
                 public boolean test(String key, String value) {
                     return value.equalsIgnoreCase("accept");
                 }
-            }, "anyStoreNameFilter").groupBy(MockMapper.<String, String>noOpKeyValueMapper())
-            .reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, Materialized.<String, String, KeyValueStore<Bytes,byte[]>>as("mock-result"));
+            }, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("anyStoreNameFilter")).groupBy(MockMapper.<String, String>noOpKeyValueMapper())
+            .reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("mock-result"));
 
         doTestSkipNullOnMaterialization(builder, table1, table2, topic1);
     }

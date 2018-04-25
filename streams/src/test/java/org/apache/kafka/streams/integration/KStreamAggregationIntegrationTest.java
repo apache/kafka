@@ -164,12 +164,11 @@ public class KStreamAggregationIntegrationTest {
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void shouldReduce() throws Exception {
         produceMessages(mockTime.milliseconds());
         groupedStream
-            .reduce(reducer, Materialized.<String, String, KeyValueStore<Bytes,byte[]>>as("reduce-by-key"))
+            .reduce(reducer, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("reduce-by-key"))
             .to(Serdes.String(), Serdes.String(), outputTopic);
 
         startStreams();
@@ -293,8 +292,7 @@ public class KStreamAggregationIntegrationTest {
         groupedStream.aggregate(
             initializer,
             aggregator,
-            Materialized.<String, Integer, KeyValueStore<Bytes,byte[]>>as("aggregate-by-selected-key")
-                .withValueSerde(Serdes.Integer()))
+            Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("aggregate-by-selected-key"))
             .to(Serdes.String(), Serdes.Integer(), outputTopic);
 
         startStreams();
@@ -444,13 +442,12 @@ public class KStreamAggregationIntegrationTest {
     public void shouldCount() throws Exception {
         produceMessages(mockTime.milliseconds());
 
-        groupedStream.count(Materialized.<String, Long, KeyValueStore<Bytes,byte[]>>as("count-by-key"))
+        groupedStream.count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("count-by-key"))
             .to(Serdes.String(), Serdes.Long(), outputTopic);
 
         shouldCountHelper();
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void shouldCountWithInternalStore() throws Exception {
         produceMessages(mockTime.milliseconds());
@@ -506,7 +503,6 @@ public class KStreamAggregationIntegrationTest {
 
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void shouldCountSessionWindows() throws Exception {
         final long sessionGap = 5 * 60 * 1000L;
@@ -595,7 +591,6 @@ public class KStreamAggregationIntegrationTest {
         assertThat(results.get(new Windowed<>("penny", new SessionWindow(t3, t3))), equalTo(1L));
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void shouldReduceSessionWindows() throws Exception {
         final long sessionGap = 1000L; // something to do with time
@@ -668,7 +663,7 @@ public class KStreamAggregationIntegrationTest {
                     public String apply(final String value1, final String value2) {
                         return value1 + ":" + value2;
                     }
-                }, Materialized.<String, String, SessionStore<Bytes,byte[]>>as(userSessionsStore))
+                }, Materialized.<String, String, SessionStore<Bytes, byte[]>>as(userSessionsStore).withValueSerde(Serdes.String()))
                 .foreach(new ForeachAction<Windowed<String>, String>() {
                     @Override
                     public void apply(final Windowed<String> key, final String value) {

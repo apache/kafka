@@ -65,52 +65,52 @@ public class KGroupedTableImplTest {
 
     @Test
     public void shouldAllowNullStoreNameOnCount()  {
-        groupedTable.count(Materialized.<String, Long, KeyValueStore<Bytes,byte[]>>as(null));
+        groupedTable.count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as(null));
     }
 
     @Test
     public void shouldAllowNullStoreNameOnAggregate() {
-        groupedTable.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, MockAggregator.TOSTRING_REMOVER, Materialized.<String, String, KeyValueStore<Bytes,byte[]>>as(null));
+        groupedTable.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, MockAggregator.TOSTRING_REMOVER, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as(null));
     }
 
     @Test(expected = InvalidTopicException.class)
     public void shouldNotAllowInvalidStoreNameOnAggregate() {
-        groupedTable.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, MockAggregator.TOSTRING_REMOVER, Materialized.<String, String, KeyValueStore<Bytes,byte[]>>as(INVALID_STORE_NAME));
+        groupedTable.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, MockAggregator.TOSTRING_REMOVER, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as(INVALID_STORE_NAME));
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullInitializerOnAggregate() {
-        groupedTable.aggregate(null, MockAggregator.TOSTRING_ADDER, MockAggregator.TOSTRING_REMOVER, Materialized.<String, String, KeyValueStore<Bytes,byte[]>>as("store"));
+        groupedTable.aggregate(null, MockAggregator.TOSTRING_ADDER, MockAggregator.TOSTRING_REMOVER, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("store"));
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullAdderOnAggregate() {
-        groupedTable.aggregate(MockInitializer.STRING_INIT, null, MockAggregator.TOSTRING_REMOVER, Materialized.<String, String, KeyValueStore<Bytes,byte[]>>as("store"));
+        groupedTable.aggregate(MockInitializer.STRING_INIT, null, MockAggregator.TOSTRING_REMOVER, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("store"));
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullSubtractorOnAggregate() {
-        groupedTable.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, null, Materialized.<String, String, KeyValueStore<Bytes,byte[]>>as("store"));
+        groupedTable.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, null, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("store"));
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullAdderOnReduce() {
-        groupedTable.reduce(null, MockReducer.STRING_REMOVER, Materialized.<String, String, KeyValueStore<Bytes,byte[]>>as("store"));
+        groupedTable.reduce(null, MockReducer.STRING_REMOVER, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("store"));
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullSubtractorOnReduce() {
-        groupedTable.reduce(MockReducer.STRING_ADDER, null, Materialized.<String, String, KeyValueStore<Bytes,byte[]>>as("store"));
+        groupedTable.reduce(MockReducer.STRING_ADDER, null, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("store"));
     }
 
     @Test
     public void shouldAllowNullStoreNameOnReduce() {
-        groupedTable.reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, Materialized.<String, String, KeyValueStore<Bytes,byte[]>>as(null));
+        groupedTable.reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as(null));
     }
 
     @Test(expected = InvalidTopicException.class)
     public void shouldNotAllowInvalidStoreNameOnReduce() {
-        groupedTable.reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, Materialized.<String, String, KeyValueStore<Bytes,byte[]>>as(INVALID_STORE_NAME));
+        groupedTable.reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as(INVALID_STORE_NAME));
     }
 
     private void doShouldReduce(final KTable<String, Integer> reduced, final String topic) {
@@ -157,7 +157,7 @@ public class KGroupedTableImplTest {
                                                                       .withKeySerde(Serdes.String())
                                                                       .withValueSerde(Serdes.Double()))
             .groupBy(intProjection)
-            .reduce(MockReducer.INTEGER_ADDER, MockReducer.INTEGER_SUBTRACTOR, Materialized.<String, Integer, KeyValueStore<Bytes,byte[]>>as("reduced"));
+            .reduce(MockReducer.INTEGER_ADDER, MockReducer.INTEGER_SUBTRACTOR, Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("reduced"));
 
         doShouldReduce(reduced, topic);
         assertEquals(reduced.queryableStoreName(), "reduced");

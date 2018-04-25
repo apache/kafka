@@ -341,7 +341,7 @@ public class YahooBenchmark {
         keyedByCampaign
             .groupByKey(Serialized.with(Serdes.String(), Serdes.String()))
             .windowedBy(TimeWindows.of(10 * 1000))
-            .count(Materialized.<String, Long, WindowStore<Bytes,byte[]>>as("time-windows"));
+            .count(Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("time-windows"));
 
         return new KafkaStreams(builder.build(), streamConfig);
     }

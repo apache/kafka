@@ -138,7 +138,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
     @Override
     public KTable<K, V> reduce(final Reducer<V> adder,
                                final Reducer<V> subtractor) {
-        return reduce(adder, subtractor, Materialized.<K, V, KeyValueStore<Bytes,byte[]>>as(getOrCreateName(null, AGGREGATE_NAME)));
+        return reduce(adder, subtractor, Materialized.<K, V, KeyValueStore<Bytes, byte[]>>as(getOrCreateName(null, AGGREGATE_NAME)));
     }
 
     @Override
@@ -151,7 +151,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
 
     @Override
     public KTable<K, Long> count() {
-        return count(Materialized.<K, Long, KeyValueStore<Bytes,byte[]>>as(getOrCreateName(null, AGGREGATE_NAME)));
+        return count(Materialized.<K, Long, KeyValueStore<Bytes, byte[]>>as(getOrCreateName(null, AGGREGATE_NAME)));
     }
 
 
@@ -181,7 +181,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
     public <T> KTable<K, T> aggregate(final Initializer<T> initializer,
                                       final Aggregator<? super K, ? super V, T> adder,
                                       final Aggregator<? super K, ? super V, T> subtractor) {
-        return aggregate(initializer, adder, subtractor, Materialized.<K, T, KeyValueStore<Bytes,byte[]>>as(getOrCreateName(null, AGGREGATE_NAME)));
+        return aggregate(initializer, adder, subtractor, Materialized.<K, T, KeyValueStore<Bytes, byte[]>>as(getOrCreateName(null, AGGREGATE_NAME)));
     }
 
 }

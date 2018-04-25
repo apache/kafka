@@ -361,7 +361,7 @@ public class KTableKTableLeftJoinTest {
                 },
                 Serialized.with(Serdes.Long(), Serdes.String())
             )
-            .reduce(MockReducer.STRING_ADDER, MockReducer.STRING_ADDER, Materialized.<Long, String, KeyValueStore<Bytes,byte[]>>as("agg-store"));
+            .reduce(MockReducer.STRING_ADDER, MockReducer.STRING_ADDER, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("agg-store"));
 
         final KTable<Long, String> one = builder.table(tableOne, consumed);
         final KTable<Long, String> two = builder.table(tableTwo, consumed);

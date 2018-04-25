@@ -81,7 +81,7 @@ public class KTableAggregateTest {
         ).aggregate(MockInitializer.STRING_INIT,
                 MockAggregator.TOSTRING_ADDER,
                 MockAggregator.TOSTRING_REMOVER,
-                Materialized.<String, String, KeyValueStore<Bytes,byte[]>>as("topic1-Canonized").withValueSerde(stringSerde));
+                Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("topic1-Canonized").withValueSerde(stringSerde));
 
         table2.toStream().process(proc);
 
@@ -128,7 +128,7 @@ public class KTableAggregateTest {
         ).aggregate(MockInitializer.STRING_INIT,
             MockAggregator.TOSTRING_ADDER,
             MockAggregator.TOSTRING_REMOVER,
-            Materialized.<String, String, KeyValueStore<Bytes,byte[]>>as("topic1-Canonized").withValueSerde(stringSerde));
+            Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("topic1-Canonized").withValueSerde(stringSerde));
 
         table2.toStream().process(proc);
 
@@ -168,7 +168,7 @@ public class KTableAggregateTest {
                 .aggregate(MockInitializer.STRING_INIT,
                 MockAggregator.TOSTRING_ADDER,
                 MockAggregator.TOSTRING_REMOVER,
-                Materialized.<String, String, KeyValueStore<Bytes,byte[]>>as("topic1-Canonized").withValueSerde(stringSerde));
+                Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("topic1-Canonized").withValueSerde(stringSerde));
 
         table2.toStream().process(proc);
 
@@ -236,7 +236,7 @@ public class KTableAggregateTest {
 
         builder.table(input, consumed)
                 .groupBy(MockMapper.<String, String>selectValueKeyValueMapper(), stringSerialzied)
-                .count(Materialized.<String, Long, KeyValueStore<Bytes,byte[]>>as("count"))
+                .count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("count"))
                 .toStream()
                 .process(proc);
 
@@ -266,7 +266,7 @@ public class KTableAggregateTest {
 
         builder.table(input, consumed)
             .groupBy(MockMapper.<String, String>selectValueKeyValueMapper(), stringSerialzied)
-            .count(Materialized.<String, Long, KeyValueStore<Bytes,byte[]>>as("count"))
+            .count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("count"))
             .toStream()
             .process(proc);
 
@@ -319,7 +319,7 @@ public class KTableAggregateTest {
                     public String apply(String key, String value, String aggregate) {
                         return aggregate.replaceAll(value, "");
                     }
-                }, Materialized.<String, String, KeyValueStore<Bytes,byte[]>>as("someStore").withValueSerde(Serdes.String()))
+                }, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("someStore").withValueSerde(Serdes.String()))
                 .toStream()
                 .process(proc);
 
@@ -370,7 +370,7 @@ public class KTableAggregateTest {
                     public Long apply(final Long value1, final Long value2) {
                         return value1 - value2;
                     }
-                }, Materialized.<String, Long, KeyValueStore<Bytes,byte[]>>as("reducer-store"));
+                }, Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("reducer-store"));
 
         reduce.toStream().foreach(new ForeachAction<String, Long>() {
             @Override
