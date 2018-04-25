@@ -123,7 +123,7 @@ class RequestQuotaTest extends BaseRequestTest {
   @Test
   def testResponseThrottleTimeWhenBothProduceAndRequestQuotasViolated() {
     val apiKey = ApiKeys.PRODUCE;
-    submitTest(apiKey, () => checkSmallQuotaProducerkRequestThrottleTime(apiKey))
+    submitTest(apiKey, () => checkSmallQuotaProducerRequestThrottleTime(apiKey))
     waitAndCheckResults()
   }
 
@@ -462,7 +462,7 @@ class RequestQuotaTest extends BaseRequestTest {
     assertTrue(s"Throttle time metrics not updated: $client" , throttleTimeMetricValue(clientId) > 0)
   }
 
-  private def checkSmallQuotaProducerkRequestThrottleTime(apiKey: ApiKeys) {
+  private def checkSmallQuotaProducerRequestThrottleTime(apiKey: ApiKeys) {
 
     // Request until throttled using client-id with default small producer quota
     val smallQuotaProducerClient = Client(smallQuotaProducerClientId, apiKey)
@@ -471,7 +471,7 @@ class RequestQuotaTest extends BaseRequestTest {
     assertTrue(s"Response not throttled: $smallQuotaProducerClient", throttled)
     assertTrue(s"Throttle time metrics for produce quota not updated: $smallQuotaProducerClient",
       throttleTimeMetricValueForQuotaType(smallQuotaProducerClientId, QuotaType.Produce) > 0)
-    assertTrue(s"Throttle time metrics for requoest quota updated: $smallQuotaProducerClient",
+    assertTrue(s"Throttle time metrics for request quota updated: $smallQuotaProducerClient",
       throttleTimeMetricValueForQuotaType(smallQuotaProducerClientId, QuotaType.Request) == 0)
   }
 
@@ -484,7 +484,7 @@ class RequestQuotaTest extends BaseRequestTest {
     assertTrue(s"Response not throttled: $smallQuotaConsumerClientId", throttled)
     assertTrue(s"Throttle time metrics for consumer quota not updated: $smallQuotaConsumerClientId",
       throttleTimeMetricValueForQuotaType(smallQuotaConsumerClientId, QuotaType.Fetch) > 0)
-    assertTrue(s"Throttle time metrics for requoest quota updated: $smallQuotaConsumerClient",
+    assertTrue(s"Throttle time metrics for request quota updated: $smallQuotaConsumerClient",
       throttleTimeMetricValueForQuotaType(smallQuotaConsumerClientId, QuotaType.Request) == 0)
   }
 

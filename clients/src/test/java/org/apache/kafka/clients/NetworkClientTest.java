@@ -165,8 +165,7 @@ public class NetworkClientTest {
                 request.correlationId(), handler.response.requestHeader().correlationId());
     }
 
-    private void setExpectedApiVersionsResponse() {
-        ApiVersionsResponse response = ApiVersionsResponse.defaultApiVersionsResponse();
+    private void setExpectedApiVersionsResponse(ApiVersionsResponse response) {
         short apiVersionsResponseVersion = response.apiVersion(ApiKeys.API_VERSIONS.id).maxVersion;
         ByteBuffer buffer = response.serialize(apiVersionsResponseVersion, new ResponseHeader(0));
         selector.delayedReceive(new DelayedReceive(node.idString(), new NetworkReceive(node.idString(), buffer)));
@@ -174,7 +173,7 @@ public class NetworkClientTest {
 
     private void awaitReady(NetworkClient client, Node node) {
         if (client.discoverBrokerVersions()) {
-            setExpectedApiVersionsResponse();
+            setExpectedApiVersionsResponse(ApiVersionsResponse.defaultApiVersionsResponse());
         }
         while (!client.ready(node, time.milliseconds()))
             client.poll(1, time.milliseconds());
@@ -240,28 +239,25 @@ public class NetworkClientTest {
         assertEquals(0, client.throttleDelayMs(node, time.milliseconds()));
     }
 
-    // Sets expected ApiVersionsResponse from the specified node, where the max protocol version for API_VERSIONS is set
-    // to the specified version.
-    private void setExpectedApiVersionsResponse(Node node, short apiVersionsMaxProtocolVersion) {
+    // Creates expected ApiVersionsResponse from the specified node, where the max protocol version for API_VERSIONS is
+    // set to the specified version.
+    private ApiVersionsResponse createExpectedApiVersionsResponse(Node node, short apiVersionsMaxProtocolVersion) {
         List<ApiVersionsResponse.ApiVersion> versionList = new ArrayList<>();
         for (ApiKeys apiKey : ApiKeys.values()) {
             if (apiKey == ApiKeys.API_VERSIONS) {
-                versionList.add(new ApiVersionsResponse.ApiVersion(apiKey.id, (short) 0,
-                    apiVersionsMaxProtocolVersion));
+                versionList.add(new ApiVersionsResponse.ApiVersion(apiKey.id, (short) 0, apiVersionsMaxProtocolVersion));
             } else {
                 versionList.add(new ApiVersionsResponse.ApiVersion(apiKey));
             }
         }
-        ApiVersionsResponse response = new ApiVersionsResponse(0, Errors.NONE, versionList);
-        ByteBuffer buffer = response.serialize(apiVersionsMaxProtocolVersion, new ResponseHeader(0));
-        selector.delayedReceive(new DelayedReceive(node.idString(), new NetworkReceive(node.idString(), buffer)));
+        return new ApiVersionsResponse(0, Errors.NONE, versionList);
     }
 
     @Test
     public void testThrottlingNotEnabledForConnectionToOlderBroker() {
         // Instrument the test so that the max protocol version for API_VERSIONS returned from the node is 1 and thus
         // client-side throttling is not enabled. Also, return a response with a 100ms throttle delay.
-        setExpectedApiVersionsResponse(node, (short) 1);
+        setExpectedApiVersionsResponse(createExpectedApiVersionsResponse(node, (short) 1));
         while (!client.ready(node, time.milliseconds()))
             client.poll(1, time.milliseconds());
         selector.clear();
