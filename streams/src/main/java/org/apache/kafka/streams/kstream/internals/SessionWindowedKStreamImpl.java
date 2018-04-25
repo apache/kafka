@@ -37,6 +37,7 @@ import java.util.Objects;
 import java.util.Set;
 
 import static org.apache.kafka.streams.kstream.internals.KGroupedStreamImpl.AGGREGATE_NAME;
+import static org.apache.kafka.streams.kstream.internals.KGroupedStreamImpl.REDUCE_NAME;
 
 public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K> implements SessionWindowedKStream<K, V> {
     private final SessionWindows windows;
@@ -49,13 +50,6 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K> implemen
             return aggOne + aggTwo;
         }
     };
-    private final Initializer<V> reduceInitializer = new Initializer<V>() {
-        @Override
-        public V apply() {
-            return null;
-        }
-    };
-
 
     SessionWindowedKStreamImpl(final SessionWindows windows,
                                final InternalStreamsBuilder builder,
@@ -74,42 +68,62 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K> implemen
 
     @Override
     public KTable<Windowed<K>, Long> count() {
-        return count(Materialized.<K, Long, SessionStore<Bytes, byte[]>>with(null, Serdes.Long()));
+        return count(Materialized.<K, Long, SessionStore<Bytes, byte[]>>with(keySerde, Serdes.Long()));
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public KTable<Windowed<K>, Long> count(final Materialized<K, Long, SessionStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(materialized, "materialized can't be null");
         final MaterializedInternal<K, Long, SessionStore<Bytes, byte[]>> materializedInternal
                 = new MaterializedInternal<>(materialized, builder, AGGREGATE_NAME);
-        if (materializedInternal.valueSerde() == null) {
-            materialized.withValueSerde(Serdes.Long());
+        if (materializedInternal.keySerde() == null) {
+            materializedInternal.withKeySerde(keySerde);
         }
-        return aggregate(aggregateBuilder.countInitializer,
-                         aggregateBuilder.countAggregator,
-                         countMerger,
-                         materialized);
+        if (materializedInternal.valueSerde() == null) {
+            materializedInternal.withValueSerde(Serdes.Long());
+        }
+
+        return (KTable<Windowed<K>, Long>) aggregateBuilder.build(
+                new KStreamSessionWindowAggregate<>(windows, materializedInternal.storeName(), aggregateBuilder.countInitializer, aggregateBuilder.countAggregator, countMerger),
+                AGGREGATE_NAME,
+                materialize(materializedInternal),
+                materializedInternal.isQueryable());
     }
 
     @Override
     public KTable<Windowed<K>, V> reduce(final Reducer<V> reducer) {
-        return reduce(reducer, Materialized.<K, V, SessionStore<Bytes, byte[]>>with(null, null));
+        return reduce(reducer, Materialized.<K, V, SessionStore<Bytes, byte[]>>with(keySerde, valSerde));
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
                                          final Materialized<K, V, SessionStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(reducer, "reducer can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
         final Aggregator<K, V, V> reduceAggregator = aggregatorForReducer(reducer);
-        return aggregate(reduceInitializer, reduceAggregator, mergerForAggregator(reduceAggregator), materialized);
+        final MaterializedInternal<K, V, SessionStore<Bytes, byte[]>> materializedInternal
+                = new MaterializedInternal<>(materialized, builder, AGGREGATE_NAME);
+        if (materializedInternal.keySerde() == null) {
+            materializedInternal.withKeySerde(keySerde);
+        }
+        if (materializedInternal.valueSerde() == null) {
+            materializedInternal.withValueSerde(valSerde);
+        }
+
+        return (KTable<Windowed<K>, V>) aggregateBuilder.build(
+                new KStreamSessionWindowAggregate<>(windows, materializedInternal.storeName(), aggregateBuilder.reduceInitializer, reduceAggregator, mergerForAggregator(reduceAggregator)),
+                REDUCE_NAME,
+                materialize(materializedInternal),
+                materializedInternal.isQueryable());
     }
 
     @Override
     public <T> KTable<Windowed<K>, T> aggregate(final Initializer<T> initializer,
                                                 final Aggregator<? super K, ? super V, T> aggregator,
                                                 final Merger<? super K, T> sessionMerger) {
-        return aggregate(initializer, aggregator, sessionMerger, Materialized.<K, T, SessionStore<Bytes, byte[]>>with(null, null));
+        return aggregate(initializer, aggregator, sessionMerger, Materialized.<K, T, SessionStore<Bytes, byte[]>>with(keySerde, null));
     }
 
     @SuppressWarnings("unchecked")

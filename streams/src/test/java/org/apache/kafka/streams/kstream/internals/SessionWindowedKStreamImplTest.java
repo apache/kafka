@@ -92,7 +92,7 @@ public class SessionWindowedKStreamImplTest {
     @Test
     public void shouldReduceWindowed() {
         final Map<Windowed<String>, String> results = new HashMap<>();
-        stream.reduce(MockReducer.STRING_ADDER)
+        stream.reduce(MockReducer.STRING_ADDER, Materialized.<String, String, SessionStore<Bytes, byte[]>>with(Serdes.String(), Serdes.String()))
                 .toStream()
                 .foreach(new ForeachAction<Windowed<String>, String>() {
                     @Override
@@ -112,7 +112,8 @@ public class SessionWindowedKStreamImplTest {
         final Map<Windowed<String>, String> results = new HashMap<>();
         stream.aggregate(MockInitializer.STRING_INIT,
                          MockAggregator.TOSTRING_ADDER,
-                         sessionMerger)
+                         sessionMerger,
+                         Materialized.<String, String, SessionStore<Bytes, byte[]>>with(Serdes.String(), Serdes.String()))
                 .toStream()
                 .foreach(new ForeachAction<Windowed<String>, String>() {
                     @Override

@@ -63,16 +63,6 @@ public class KGroupedTableImplTest {
                 .groupBy(MockMapper.<String, String>selectValueKeyValueMapper());
     }
 
-    @Test
-    public void shouldAllowNullStoreNameOnCount()  {
-        groupedTable.count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as(null));
-    }
-
-    @Test
-    public void shouldAllowNullStoreNameOnAggregate() {
-        groupedTable.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, MockAggregator.TOSTRING_REMOVER, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as(null));
-    }
-
     @Test(expected = InvalidTopicException.class)
     public void shouldNotAllowInvalidStoreNameOnAggregate() {
         groupedTable.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, MockAggregator.TOSTRING_REMOVER, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as(INVALID_STORE_NAME));
@@ -101,11 +91,6 @@ public class KGroupedTableImplTest {
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullSubtractorOnReduce() {
         groupedTable.reduce(MockReducer.STRING_ADDER, null, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("store"));
-    }
-
-    @Test
-    public void shouldAllowNullStoreNameOnReduce() {
-        groupedTable.reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as(null));
     }
 
     @Test(expected = InvalidTopicException.class)

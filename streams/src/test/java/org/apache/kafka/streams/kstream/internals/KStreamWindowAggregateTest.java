@@ -70,7 +70,7 @@ public class KStreamWindowAggregateTest {
             .stream(topic1, Consumed.with(strSerde, strSerde))
             .groupByKey(Serialized.with(strSerde, strSerde))
             .windowedBy(TimeWindows.of(10).advanceBy(5))
-            .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic1-Canonized"));
+            .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic1-Canonized").withValueSerde(strSerde));
 
         final MockProcessorSupplier<Windowed<String>, String> proc2 = new MockProcessorSupplier<>();
         table2.toStream().process(proc2);
@@ -164,7 +164,7 @@ public class KStreamWindowAggregateTest {
             .stream(topic1, Consumed.with(strSerde, strSerde))
             .groupByKey(Serialized.with(strSerde, strSerde))
             .windowedBy(TimeWindows.of(10).advanceBy(5))
-            .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic1-Canonized"));
+            .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic1-Canonized").withValueSerde(strSerde));
 
         final MockProcessorSupplier<Windowed<String>, String> proc1 = new MockProcessorSupplier<>();
         table1.toStream().process(proc1);
@@ -173,7 +173,7 @@ public class KStreamWindowAggregateTest {
             .stream(topic2, Consumed.with(strSerde, strSerde))
             .groupByKey(Serialized.with(strSerde, strSerde))
             .windowedBy(TimeWindows.of(10).advanceBy(5))
-            .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic2-Canonized"));
+            .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic2-Canonized").withValueSerde(strSerde));
 
         final MockProcessorSupplier<Windowed<String>, String> proc2 = new MockProcessorSupplier<>();
         table2.toStream().process(proc2);

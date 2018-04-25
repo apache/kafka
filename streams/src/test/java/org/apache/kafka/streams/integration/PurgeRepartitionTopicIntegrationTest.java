@@ -166,6 +166,8 @@ public class PurgeRepartitionTopicIntegrationTest {
                .groupBy(MockMapper.selectKeyKeyValueMapper())
                .count();
 
+        System.out.print(builder.build().describe());
+
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration, time);
     }
 
