@@ -178,15 +178,6 @@ class ReplicaAlterLogDirsThread(name: String,
     val fetchOffsets = scala.collection.mutable.HashMap.empty[TopicPartition, OffsetTruncationState]
     val partitionsWithError = mutable.Set[TopicPartition]()
 
-    def finalFetchLeaderEpochOffset(offsetToTruncateTo: Long, futureReplica: Replica): OffsetTruncationState = {
-      val fetchOffset =
-        if (offsetToTruncateTo >= futureReplica.logEndOffset.messageOffset)
-          futureReplica.logEndOffset.messageOffset
-        else
-          offsetToTruncateTo
-      OffsetTruncationState(fetchOffset, truncationCompleted = true)
-    }
-
     fetchedEpochs.foreach { case (topicPartition, epochOffset) =>
       try {
         val futureReplica = replicaMgr.getReplicaOrException(topicPartition, Request.FutureLocalReplicaId)
@@ -198,25 +189,29 @@ class ReplicaAlterLogDirsThread(name: String,
         } else {
           val offsetTruncationState =
             if (epochOffset.endOffset == UNDEFINED_EPOCH_OFFSET) {
+              // since both replicas are on the same broker, they are using same version of OffsetForLeaderEpoch
+              // request/response, so we cannot get a valid epoch with undefined offset; log warn
+              // in case that happens so we know we made a wrong assumption somewhere
+              if (epochOffset.leaderEpoch != UNDEFINED_EPOCH)
+                info(s"Replica responded with undefined offset but a valid leader epoch ${epochOffset.leaderEpoch} for $topicPartition")
               OffsetTruncationState(partitionStates.stateValue(topicPartition).fetchOffset, truncationCompleted = true)
-            } else if (epochOffset.leaderEpoch == UNDEFINED_EPOCH) {
-              // this may happen if the leader used version 0 of OffsetForLeaderEpoch request/response
-              finalFetchLeaderEpochOffset(epochOffset.endOffset, futureReplica)
             } else {
               // get (leader epoch, end offset) pair that corresponds to the largest leader epoch
               // less than or equal to the requested epoch.
-              val epochAndOffset = futureReplica.epochs.get.endOffsetFor(epochOffset.leaderEpoch)
-              if (epochAndOffset._2 == UNDEFINED_EPOCH_OFFSET) {
+              val (futureLeaderEpoch, futureEndOffset) = futureReplica.epochs.get.endOffsetFor (epochOffset.leaderEpoch)
+              if (futureEndOffset == UNDEFINED_EPOCH_OFFSET) {
                 // This can happen if replica was not tracking offsets at that point (before the
                 // upgrade, or if this broker is new).
-                finalFetchLeaderEpochOffset(epochOffset.endOffset, futureReplica)
-              } else if (epochAndOffset._1 != epochOffset.leaderEpoch) {
+                // to be safe, we truncate to min of start offset and leader's end offset
+                val offsetToTruncateTo = min(partitionStates.stateValue(topicPartition).fetchOffset, epochOffset.endOffset)
+                finalFetchLeaderEpochOffset(offsetToTruncateTo, futureReplica, isFutureReplica = true)
+              } else if (futureLeaderEpoch != epochOffset.leaderEpoch) {
                 // the replica does not know about the epoch that leader replied with
-                val intermediateOffsetToTruncateTo = min(epochAndOffset._2, futureReplica.logEndOffset.messageOffset)
+                val intermediateOffsetToTruncateTo = min(futureEndOffset, futureReplica.logEndOffset.messageOffset)
                 OffsetTruncationState(intermediateOffsetToTruncateTo, truncationCompleted = false)
               } else {
-                val offsetToTruncateTo = min(epochAndOffset._2, epochOffset.endOffset)
-                finalFetchLeaderEpochOffset(offsetToTruncateTo, futureReplica)
+                val offsetToTruncateTo = min(futureEndOffset, epochOffset.endOffset)
+                finalFetchLeaderEpochOffset(offsetToTruncateTo, futureReplica, isFutureReplica = true)
               }
             }
 

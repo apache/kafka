@@ -19,7 +19,7 @@ package kafka.server
 
 import java.util.concurrent.locks.ReentrantLock
 
-import kafka.cluster.BrokerEndPoint
+import kafka.cluster.{Replica, BrokerEndPoint}
 import kafka.utils.{DelayedItem, Pool, ShutdownableThread}
 import org.apache.kafka.common.errors.{CorruptRecordException, KafkaStorageException}
 import kafka.common.{ClientIdAndBroker, KafkaException}
@@ -286,6 +286,35 @@ abstract class AbstractFetcherThread(name: String,
         (state.topicPartition(), maybeTruncationComplete)
       }.toMap
     partitionStates.set(newStates.asJava)
+  }
+
+  /**
+   * Called from ReplicaFetcherThread and ReplicaAlterLogDirsThread maybeTruncate when
+   * 'offsetToTruncateTo' is the final offset to truncate to.
+   * @param offsetToTruncateTo   Final offset to truncate to
+   * @param replica              Follower's replica, which is either local replica (ReplicaFetcherThread)
+   *                             or future replica (ReplicaAlterLogDirsThread)
+   * @return                     Log end offset if given 'offsetToTruncateTo' is equal or larger
+   *                             than log end offset and logs the message that truncation is not
+   *                             needed. Otherwise, returns given 'offsetToTruncateTo'
+   */
+  def finalFetchLeaderEpochOffset(offsetToTruncateTo: Long, replica: Replica, isFutureReplica: Boolean = false): OffsetTruncationState = {
+    val fetchOffset =
+      if (offsetToTruncateTo >= replica.logEndOffset.messageOffset) {
+        val logEndOffset = replica.logEndOffset.messageOffset
+        // to make sure we can distinguish log output for fetching from remote leader or local replica
+        val followerName =
+          if (isFutureReplica)
+            "future replica"
+          else
+            "follower"
+        info(
+          s"Based on $followerName's leader epoch, leader replied with an offset $logEndOffset >= the " +
+          s"$followerName's log end offset $logEndOffset in ${replica.topicPartition}. No truncation needed.")
+        logEndOffset
+      } else
+        offsetToTruncateTo
+    OffsetTruncationState(fetchOffset, truncationCompleted = true)
   }
 
   def delayPartitions(partitions: Iterable[TopicPartition], delay: Long) {

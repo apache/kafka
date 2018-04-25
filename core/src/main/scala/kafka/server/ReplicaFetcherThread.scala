@@ -299,18 +299,6 @@ class ReplicaFetcherThread(name: String,
     val fetchOffsets = scala.collection.mutable.HashMap.empty[TopicPartition, OffsetTruncationState]
     val partitionsWithError = mutable.Set[TopicPartition]()
 
-    // Called when 'offsetToTruncateTo' is the final offset to truncate to.
-    // Returns log end offset if given 'offsetToTruncateTo' is equal or larger than log end
-    // offset and logs the message that truncation is not needed. Otherwise returns given 'offsetToTruncateTo'
-    def finalFetchLeaderEpochOffset(offsetToTruncateTo: Long, replica: Replica): OffsetTruncationState = {
-      val fetchOffset =
-        if (offsetToTruncateTo >= replica.logEndOffset.messageOffset)
-          logEndOffset(replica, offsetToTruncateTo)
-        else
-          offsetToTruncateTo
-      OffsetTruncationState(fetchOffset, truncationCompleted = true)
-    }
-
     fetchedEpochs.foreach { case (tp, epochOffset) =>
       try {
         val replica = replicaMgr.getReplicaOrException(tp)
@@ -337,10 +325,9 @@ class ReplicaFetcherThread(name: String,
               val (replicaLeaderEpoch, replicaEndOffset) = replica.epochs.get.endOffsetFor (epochOffset.leaderEpoch)
               if (replicaEndOffset == UNDEFINED_EPOCH_OFFSET) {
                 // This can happen if replica was not tracking offsets at that point (before the
-                // upgrade, or if this broker is new).
-                // I think we then should truncate to start offset of epoch that we sent
-                // initially? but it's possible that the leader just wasn't trucking, so we
-                // cannot distinguish this situation? Unless this is epoch 0? Special case?
+                // upgrade, or if this broker is new). Since the leader replied with epoch <=
+                // requested epoch from follower, so should be safe to truncate to leader's
+                // offset (this is the same behavior as post-KIP-101 and pre-KIP-279)
                 warn(s"Based on follower's leader epoch, leader replied with epoch ${epochOffset.leaderEpoch} " +
                      s"below any follower's tracked epochs for ${replica.topicPartition}. " +
                      s"The leader's offset only ${epochOffset.endOffset} will be used for truncation.")
@@ -361,7 +348,9 @@ class ReplicaFetcherThread(name: String,
             }
 
           partition.truncateTo(offsetTruncationState.offset, isFuture = false)
-          replicaMgr.replicaAlterLogDirsManager.markPartitionsForTruncation(brokerConfig.brokerId, tp, offsetTruncationState.offset)
+          // mark the future replica for truncation only when we do last truncation
+          if (offsetTruncationState.truncationCompleted)
+            replicaMgr.replicaAlterLogDirsManager.markPartitionsForTruncation(brokerConfig.brokerId, tp, offsetTruncationState.offset)
           fetchOffsets.put(tp, offsetTruncationState)
         }
       } catch {
@@ -412,13 +401,6 @@ class ReplicaFetcherThread(name: String,
       }
     }
     result
-  }
-
-  private def logEndOffset(replica: Replica, epochOffset: Long): Long = {
-    val logEndOffset = replica.logEndOffset.messageOffset
-    info(s"Based on follower's leader epoch, leader replied with an offset $epochOffset >= the " +
-      s"follower's log end offset $logEndOffset in ${replica.topicPartition}. No truncation needed.")
-    logEndOffset
   }
 
   /**
