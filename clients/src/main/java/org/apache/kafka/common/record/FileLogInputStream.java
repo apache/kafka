@@ -59,7 +59,7 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
 
     @Override
     public FileChannelRecordBatch nextBatch() throws IOException {
-        if ((long) position + HEADER_SIZE_UP_TO_MAGIC >= end)
+        if (position >= end - HEADER_SIZE_UP_TO_MAGIC)
             return null;
 
         logHeaderBuffer.rewind();
@@ -73,7 +73,7 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
         if (size < LegacyRecord.RECORD_OVERHEAD_V0)
             throw new CorruptRecordException(String.format("Record size is smaller than minimum record overhead (%d).", LegacyRecord.RECORD_OVERHEAD_V0));
 
-        if ((long) position + LOG_OVERHEAD + size > end)
+        if (position > end - LOG_OVERHEAD - size)
             return null;
 
         byte magic = logHeaderBuffer.get(MAGIC_OFFSET);
