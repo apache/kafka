@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
 /**
  * Too much information to generalize, so Stream-Stream joins are
@@ -72,6 +73,11 @@ class StreamStreamJoinNode<K, V, V1, V2, VR> extends BaseJoinProcessorNode<K, V,
 
     String otherWindowedStreamName() {
         return otherWindowedStreamName;
+    }
+
+    @Override
+    void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
+        //TODO will implement in follow-up pr
     }
 
     static <K, V, V1, V2, VR> StreamStreamJoinNodeBuilder<K, V, V1, V2, VR> streamStreamJoinNodeBuilder() {

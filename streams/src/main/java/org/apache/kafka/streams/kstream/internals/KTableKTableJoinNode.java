@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
 import java.util.Arrays;
 
@@ -60,6 +61,11 @@ class KTableKTableJoinNode<K, V, V1, V2, VR> extends BaseJoinProcessorNode<K, V,
 
     String[] joinOtherStoreNames() {
         return Arrays.copyOf(joinOtherStoreNames, joinOtherStoreNames.length);
+    }
+
+    @Override
+    void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
+        //TODO will implement in follow-up pr
     }
 
     static <K, V, V1, V2, VR> KTableKTableJoinNodeBuilder<K, V, V1, V2, VR> kTableKTableJoinNodeBuilder() {

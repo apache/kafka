@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
 /**
  * Used to represent any type of stateless operation:
@@ -46,4 +47,8 @@ class StatelessProcessorNode<K, V> extends StreamGraphNode<K, V> {
         return processorSupplier;
     }
 
+    @Override
+    void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
+        //TODO will implement in follow-up pr
+    }
 }

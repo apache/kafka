@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
+import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 
@@ -59,6 +60,11 @@ class StatefulProcessorNode<K, V> extends StatelessProcessorNode<K, V> {
 
     StoreBuilder<KeyValueStore<K, V>> storeBuilder() {
         return storeBuilder;
+    }
+
+    @Override
+    void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
+        //TODO will implement in follow-up pr
     }
 
     static <K, V> StatefulProcessorNodeBuilder<K, V> statefulProcessorNodeBuilder() {

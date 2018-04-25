@@ -21,6 +21,7 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.processor.TimestampExtractor;
+import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -80,6 +81,11 @@ class StreamSourceNode<K, V> extends StreamGraphNode<K, V> {
 
     Topology.AutoOffsetReset autoOffsetReset() {
         return consumedInternal.offsetResetPolicy();
+    }
+
+    @Override
+    void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
+        //TODO will implement in follow-up pr
     }
 
 }

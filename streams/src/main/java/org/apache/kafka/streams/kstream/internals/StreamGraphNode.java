@@ -17,10 +17,12 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
+
 import java.util.Collection;
 import java.util.LinkedHashSet;
 
-class StreamGraphNode<K, V> {
+abstract class StreamGraphNode<K, V> {
 
     private StreamGraphNode<K, V> parentNode;
     private final Collection<StreamGraphNode<K, V>> childNodes = new LinkedHashSet<>();
@@ -29,7 +31,7 @@ class StreamGraphNode<K, V> {
     private boolean repartitionRequired;
     private boolean triggersRepartitioning;
     private Integer id;
-    private StreamsTopologyGraph streamsTopologyGraph;
+    private StreamsTopologyGraphImpl streamsTopologyGraph;
 
     StreamGraphNode(final String parentNodeName,
                     final String nodeName,
@@ -47,11 +49,11 @@ class StreamGraphNode<K, V> {
         return parentNodeName;
     }
 
-    void setParentNodeName(String parentNodeName) {
+    void setParentNodeName(final String parentNodeName) {
         this.parentNodeName = parentNodeName;
     }
 
-    void setParentNode(StreamGraphNode<K, V> parentNode) {
+    void setParentNode(final StreamGraphNode<K, V> parentNode) {
         this.parentNode = parentNode;
     }
 
@@ -59,7 +61,7 @@ class StreamGraphNode<K, V> {
         return new LinkedHashSet<>(childNodes);
     }
 
-    void addChildNode(StreamGraphNode<K, V> node) {
+    void addChildNode(final StreamGraphNode<K, V> node) {
         this.childNodes.add(node);
     }
 
@@ -79,7 +81,7 @@ class StreamGraphNode<K, V> {
         return triggersRepartitioning;
     }
 
-    public void setTriggersRepartitioning(boolean triggersRepartitioning) {
+    public void setTriggersRepartitioning(final boolean triggersRepartitioning) {
         this.triggersRepartitioning = triggersRepartitioning;
     }
 
@@ -91,12 +93,14 @@ class StreamGraphNode<K, V> {
         return this.id;
     }
 
-    public StreamsTopologyGraph getStreamsTopologyGraph() {
+    public void setStreamsTopologyGraph(final StreamsTopologyGraphImpl streamsTopologyGraph) {
+        this.streamsTopologyGraph = streamsTopologyGraph;
+    }
+
+    StreamsTopologyGraphImpl streamsTopologyGraph() {
         return streamsTopologyGraph;
     }
 
-    public void setStreamsTopologyGraph(StreamsTopologyGraph streamsTopologyGraph) {
-        this.streamsTopologyGraph = streamsTopologyGraph;
-    }
+    abstract void writeToTopology(final InternalTopologyBuilder topologyBuilder);
 
 }

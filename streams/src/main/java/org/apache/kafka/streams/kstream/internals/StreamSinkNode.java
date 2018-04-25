@@ -20,6 +20,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
 class StreamSinkNode<K, V> extends StreamGraphNode<K, V> {
 
@@ -61,6 +62,11 @@ class StreamSinkNode<K, V> extends StreamGraphNode<K, V> {
 
     StreamPartitioner<? super K, ? super V> streamPartitioner() {
         return producedInternal.streamPartitioner();
+    }
+
+    @Override
+    void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
+        //TODO will implement in follow-up pr
     }
 
 }

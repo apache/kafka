@@ -22,6 +22,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 
 class StatefulRepartitionNode<K, V, T> extends RepartitionNode<K, V> {
@@ -74,6 +75,11 @@ class StatefulRepartitionNode<K, V, T> extends RepartitionNode<K, V> {
 
     static <K, V, T> StatefulRepartitionNodeBuilder<K, V, T> statefulRepartitionNodeBuilder() {
         return new StatefulRepartitionNodeBuilder<>();
+    }
+
+    @Override
+    void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
+        //TODO will implement in follow-up pr
     }
 
 

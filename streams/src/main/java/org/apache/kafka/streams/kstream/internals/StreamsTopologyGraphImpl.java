@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -33,7 +34,12 @@ class StreamsTopologyGraphImpl implements StreamsTopologyGraph {
     private StreamGraphNode previousNode;
     private final AtomicInteger nodeIdCounter = new AtomicInteger(0);
     public static final String TOPOLOGY_ROOT = "root";
-    protected final StreamGraphNode root = new StreamGraphNode(TOPOLOGY_ROOT, TOPOLOGY_ROOT, false);
+    protected final StreamGraphNode root = new StreamGraphNode(TOPOLOGY_ROOT, TOPOLOGY_ROOT, false) {
+        @Override
+        void writeToTopology(InternalTopologyBuilder topologyBuilder) {
+            // no-op for root node
+        }
+    };
 
     private final Map<StreamGraphNode, Set<StreamGraphNode>> repartitioningNodeToRepartitioned = new HashMap<>();
     private final Map<StreamGraphNode, StreamGraphNode> stateStoreNodeToSinkNodes = new HashMap<>();

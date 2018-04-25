@@ -24,7 +24,7 @@ import org.apache.kafka.streams.processor.ProcessorSupplier;
  * Utility base class containing the common fields between
  * a Stream-Stream join and a KTable-KTable join
  */
-class BaseJoinProcessorNode<K, V, V1, V2, VR> extends StreamGraphNode<K, V> {
+abstract class BaseJoinProcessorNode<K, V, V1, V2, VR> extends StreamGraphNode<K, V> {
 
     private final ProcessorSupplier<K, V1> joinThisProcessSupplier;
     private final ProcessorSupplier<K, V2> joinOtherProcessSupplier;
