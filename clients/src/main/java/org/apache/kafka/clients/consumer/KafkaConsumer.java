@@ -1097,9 +1097,95 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws java.lang.IllegalArgumentException if the timeout value is negative
      * @throws java.lang.IllegalStateException if the consumer is not subscribed to any topics or manually assigned any
      *             partitions to consume from
+     *
+     *
+     * @deprecated Since 2.0. Use {@link #awaitAssignmentMetadata(long, TimeUnit)} to block on initial assignment or
+     * {@link #poll(long, TimeUnit)} to poll for records.
      */
+    @Deprecated
     @Override
     public ConsumerRecords<K, V> poll(long timeout) {
+        return poll(timeout, TimeUnit.MILLISECONDS);
+    }
+
+    /**
+     * Block until we have an assignment (and fetch offsets, etc.).
+     * <p>
+     * It is an error to not have subscribed to any topics or partitions before polling for data.
+     * <p>
+     * Throws a {@link TimeoutException} if the {@code maxBlockTime} expires before the operation completes, but it
+     * is safe to try again.
+     *
+     * @param maxBlockTime The maximum time to block and poll for metadata updates
+     * @param maxBlockTimeUnit The unit for {@code maxBlockTime}
+     *
+     * @throws org.apache.kafka.common.errors.TimeoutException if the metadata update doesn't complete within the maxBlockTime
+     * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called concurrently with this function
+     * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted concurrently with this function
+     * @throws org.apache.kafka.clients.consumer.InvalidOffsetException if the offset for a partition or set of
+     *             partitions is undefined or out of range and no offset reset policy has been configured
+     * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
+     * @throws org.apache.kafka.common.errors.AuthorizationException if caller lacks Read access to any of the subscribed
+     *             topics or to the configured groupId. See the exception for more details
+     * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors (e.g. invalid groupId or
+     *             session timeout, or any new error cases in future versions)
+     * @throws java.lang.IllegalArgumentException if the timeout value is negative
+     * @throws java.lang.IllegalStateException if the consumer is not subscribed to any topics or manually assigned any
+     *             partitions to consume from
+     */
+    @Override
+    public void awaitAssignmentMetadata(final long maxBlockTime, final TimeUnit maxBlockTimeUnit) {
+        acquireAndEnsureOpen();
+        try {
+            if (maxBlockTime < 0) {
+                throw new IllegalArgumentException("Timeout must not be negative");
+            }
+
+            if (this.subscriptions.hasNoSubscriptionOrUserAssignment()) {
+                throw new IllegalStateException("Consumer is not subscribed to any topics or assigned any partitions");
+            }
+
+            if (!internalUpdateAssignmentMetadataIfNeeded(maxBlockTimeUnit.toMillis(maxBlockTime))) {
+                throw new TimeoutException("Timed out waiting for assignment metadata");
+            }
+        } finally {
+            release();
+        }
+    }
+
+    /**
+     * Fetch data for the topics or partitions specified using one of the subscribe/assign APIs. It is an error to not have
+     * subscribed to any topics or partitions before polling for data.
+     * <p>
+     * On each poll, consumer will try to use the last consumed offset as the starting offset and fetch sequentially. The last
+     * consumed offset can be manually set through {@link #seek(TopicPartition, long)} or automatically set as the last committed
+     * offset for the subscribed list of partitions
+     *
+     *
+     * @param maxBlockTime The maximum time to block and poll for metadata updates or data.
+     * @param maxBlockTimeUnit The unit for {@code maxBlockTime}
+     *
+     * @return map of topic to records since the last fetch for the subscribed list of topics and partitions
+     *
+     * @throws org.apache.kafka.clients.consumer.InvalidOffsetException if the offset for a partition or set of
+     *             partitions is undefined or out of range and no offset reset policy has been configured
+     * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
+     *             function is called
+     * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
+     *             this function is called
+     * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
+     * @throws org.apache.kafka.common.errors.AuthorizationException if caller lacks Read access to any of the subscribed
+     *             topics or to the configured groupId. See the exception for more details
+     * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors (e.g. invalid groupId or
+     *             session timeout, errors deserializing key/value pairs, or any new error cases in future versions)
+     * @throws java.lang.IllegalArgumentException if the timeout value is negative
+     * @throws java.lang.IllegalStateException if the consumer is not subscribed to any topics or manually assigned any
+     *             partitions to consume from
+     */
+    @Override
+    public ConsumerRecords<K, V> poll(final long maxBlockTime, final TimeUnit maxBlockTimeUnit) {
+        final long timeout = maxBlockTimeUnit.toMillis(maxBlockTime);
+
         acquireAndEnsureOpen();
         try {
             if (timeout < 0)
@@ -1109,10 +1195,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 throw new IllegalStateException("Consumer is not subscribed to any topics or assigned any partitions");
 
             // poll for new data until the timeout expires
-            long start = time.milliseconds();
+            final long start = time.milliseconds();
             long remaining = timeout;
             do {
-                Map<TopicPartition, List<ConsumerRecord<K, V>>> records = pollOnce(remaining);
+                final Map<TopicPartition, List<ConsumerRecord<K, V>>> records = pollOnce(remaining);
                 if (!records.isEmpty()) {
                     // before returning the fetched records, we can send off the next round of fetches
                     // and avoid block waiting for their responses to enable pipelining while the user
@@ -1120,13 +1206,14 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     //
                     // NOTE: since the consumed position has already been updated, we must not allow
                     // wakeups or any other errors to be triggered prior to returning the fetched records.
-                    if (fetcher.sendFetches() > 0 || client.hasPendingRequests())
+                    if (fetcher.sendFetches() > 0 || client.hasPendingRequests()) {
                         client.pollNoWakeup();
+                    }
 
                     return this.interceptors.onConsume(new ConsumerRecords<>(records));
                 }
 
-                long elapsed = time.milliseconds() - start;
+                final long elapsed = time.milliseconds() - start;
                 remaining = timeout - elapsed;
             } while (remaining > 0);
 
@@ -1135,6 +1222,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             release();
         }
     }
+
 
     @SuppressWarnings("BooleanMethodIsAlwaysInverted") // because false => timed out, in which case we return early or throw.
     private boolean internalUpdateAssignmentMetadataIfNeeded(final long timeoutMs) {
@@ -1158,11 +1246,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
         client.maybeTriggerWakeup();
 
+        // TODO We probably want to do internalUpdateAssignmentMetadataIfNeeded(Long.MAX_VALUE) instead,
+        // TODO  but I'm leaving the loop with timeout=0 in for now because it proves that async metadata
+        // TODO  updates function as expected.
         while (!internalUpdateAssignmentMetadataIfNeeded(0)) { }
-//        if (!internalUpdateAssignmentMetadataIfNeeded(30000)) {
-//             we ran out of time.
-//            return Collections.emptyMap();
-//        }
 
         // if data is available already, return it immediately
         final Map<TopicPartition, List<ConsumerRecord<K, V>>> records = fetcher.fetchedRecords();

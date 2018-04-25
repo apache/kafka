@@ -76,9 +76,19 @@ public interface Consumer<K, V> extends Closeable {
     public void unsubscribe();
 
     /**
+     * @see KafkaConsumer#awaitAssignmentMetadata(long, TimeUnit)
+     */
+    void awaitAssignmentMetadata(long maxBlockTime, TimeUnit maxBlockTimeUnit);
+
+    /**
      * @see KafkaConsumer#poll(long)
      */
-    public ConsumerRecords<K, V> poll(long timeout);
+    ConsumerRecords<K, V> poll(long timeout);
+
+    /**
+     * @see KafkaConsumer#poll(long, TimeUnit)
+     */
+    ConsumerRecords<K, V> poll(long maxBlockTime, TimeUnit maxBlockTimeUnit);
 
     /**
      * @see KafkaConsumer#commitSync()
