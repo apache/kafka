@@ -21,6 +21,7 @@ import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
+import org.apache.kafka.streams.kstream.internals.graph.StreamSinkNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamSourceNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.TableSourceNode;
@@ -28,10 +29,19 @@ import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.io.Serializable;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
 import java.util.Objects;
+import java.util.PriorityQueue;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 
@@ -39,12 +49,19 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
     final InternalTopologyBuilder internalTopologyBuilder;
     private final AtomicInteger index = new AtomicInteger(0);
+    private boolean topologyBuilt;
+
+    private final AtomicInteger nodeIdCounter = new AtomicInteger(0);
+    private final NodeIdComparator nodeIdComparator = new NodeIdComparator();
+    private final Map<StreamsGraphNode, Set<StreamsGraphNode>> repartitioningNodeToRepartitioned = new HashMap<>();
+    private final Map<StreamsGraphNode, StreamSinkNode> stateStoreNodeToSinkNodes = new HashMap<>();
 
     private static final String TOPOLOGY_ROOT = "root";
+    private static final Logger LOG = LoggerFactory.getLogger(InternalStreamsBuilder.class);
 
     protected final StreamsGraphNode root = new StreamsGraphNode(TOPOLOGY_ROOT, false) {
         @Override
-        public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
+        public void writeToTopology(InternalTopologyBuilder topologyBuilder) {
             // no-op for root node
         }
     };
@@ -62,13 +79,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                                                          consumed);
 
         root.addChildNode(streamSourceNode);
-
-        internalTopologyBuilder.addSource(consumed.offsetResetPolicy(),
-                                          name,
-                                          consumed.timestampExtractor(),
-                                          consumed.keyDeserializer(),
-                                          consumed.valueDeserializer(),
-                                          topics.toArray(new String[topics.size()]));
+        addNode(streamSourceNode);
 
         return new KStreamImpl<>(this, name, Collections.singleton(name), false, streamSourceNode);
     }
@@ -81,13 +92,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                                                                 topicPattern,
                                                                                 consumed);
         root.addChildNode(streamPatternSourceNode);
-
-        internalTopologyBuilder.addSource(consumed.offsetResetPolicy(),
-                                          name,
-                                          consumed.timestampExtractor(),
-                                          consumed.keyDeserializer(),
-                                          consumed.valueDeserializer(),
-                                          topicPattern);
+        addNode(streamPatternSourceNode);
 
         return new KStreamImpl<>(this,
                                  name,
@@ -120,17 +125,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                                                                .build();
 
         root.addChildNode(tableSourceNode);
-
-        internalTopologyBuilder.addSource(consumed.offsetResetPolicy(),
-                                          source,
-                                          consumed.timestampExtractor(),
-                                          consumed.keyDeserializer(),
-                                          consumed.valueDeserializer(),
-                                          topic);
-        internalTopologyBuilder.addProcessor(name, processorSupplier, source);
-
-        internalTopologyBuilder.addStateStore(storeBuilder, name);
-        internalTopologyBuilder.markSourceStoreAndTopic(storeBuilder, topic);
+        addNode(tableSourceNode);
 
         return new KTableImpl<>(this,
                                 name,
@@ -167,15 +162,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                                                                                     .build();
 
         root.addChildNode(tableSourceNode);
-
-        internalTopologyBuilder.addGlobalStore(storeBuilder,
-                                               sourceName,
-                                               consumed.timestampExtractor(),
-                                               consumed.keyDeserializer(),
-                                               consumed.valueDeserializer(),
-                                               topic,
-                                               processorName,
-                                               tableSource);
+        addNode(tableSourceNode);
 
         return new GlobalKTableImpl<>(new KTableSourceValueGetterSupplier<K, V>(storeBuilder.name()), materialized.isQueryable());
     }
@@ -228,8 +215,71 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                        stateUpdateSupplier);
     }
 
+    public void buildAndOptimizeTopology() {
+        if (!topologyBuilt) {
+
+            final PriorityQueue<StreamsGraphNode> graphNodePriorityQueue = new PriorityQueue<>(5, nodeIdComparator);
+
+            graphNodePriorityQueue.offer(root);
+
+            LOG.debug("Root node {} child nodes {}", root, root.children());
+
+            while (!graphNodePriorityQueue.isEmpty()) {
+                final StreamsGraphNode streamGraphNode = graphNodePriorityQueue.remove();
+
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("{} child nodes {}", streamGraphNode, streamGraphNode.children());
+                }
+
+                streamGraphNode.writeToTopology(internalTopologyBuilder);
+
+                for (StreamsGraphNode graphNode : streamGraphNode.children()) {
+                    graphNodePriorityQueue.offer(graphNode);
+                }
+            }
+
+            topologyBuilt = true;
+        }
+    }
+
+
+    void addNode(final StreamsGraphNode node) {
+        node.setId(nodeIdCounter.getAndIncrement());
+        node.setInternalStreamsBuilder(this);
+
+        LOG.debug("Adding node {}", node);
+
+        if (node.parentNode() == null && !node.nodeName().equals(TOPOLOGY_ROOT)) {
+            throw new IllegalStateException(
+                "Nodes should not have a null parent node.  Name: " + node.nodeName() + " Type: "
+                + node.getClass().getSimpleName());
+        }
+
+        if (node.triggersRepartitioning()) {
+            repartitioningNodeToRepartitioned.put(node, new HashSet<>());
+        } else if (node.repartitionRequired()) {
+            StreamsGraphNode currentNode = node;
+            while (currentNode != null) {
+                final StreamsGraphNode parentNode = currentNode.parentNode();
+                if (parentNode != null &&  parentNode.triggersRepartitioning()) {
+                    repartitioningNodeToRepartitioned.get(parentNode).add(node);
+                    break;
+                }
+                currentNode = parentNode;
+            }
+        }
+    }
 
     public StreamsGraphNode root() {
         return root;
+    }
+
+    private static class NodeIdComparator implements Comparator<StreamsGraphNode>, Serializable {
+
+        @Override
+        public int compare(final StreamsGraphNode o1,
+                           final StreamsGraphNode o2) {
+            return o1.id().compareTo(o2.id());
+        }
     }
 }

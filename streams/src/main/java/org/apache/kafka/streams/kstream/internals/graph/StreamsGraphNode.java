@@ -29,12 +29,12 @@ public abstract class StreamsGraphNode {
     private final Collection<StreamsGraphNode> childNodes = new LinkedHashSet<>();
     private final String nodeName;
     private boolean repartitionRequired;
-    private boolean keyChangingOperation;
+    private boolean triggersRepartitioning;
     private Integer id;
     private InternalStreamsBuilder internalStreamsBuilder;
 
     public StreamsGraphNode(final String nodeName,
-                     final boolean repartitionRequired) {
+                            final boolean repartitionRequired) {
         this.nodeName = nodeName;
         this.repartitionRequired = repartitionRequired;
     }
@@ -64,16 +64,12 @@ public abstract class StreamsGraphNode {
         return repartitionRequired;
     }
 
-    public void setRepartitionRequired(boolean repartitionRequired) {
-        this.repartitionRequired = repartitionRequired;
+    public boolean triggersRepartitioning() {
+        return triggersRepartitioning;
     }
 
-    public boolean isKeyChangingOperation() {
-        return keyChangingOperation;
-    }
-
-    public void keyChangingOperation(final boolean keyChangingOperation) {
-        this.keyChangingOperation = keyChangingOperation;
+    public void setTriggersRepartitioning(final boolean triggersRepartitioning) {
+        this.triggersRepartitioning = triggersRepartitioning;
     }
 
     public void setId(final int id) {
@@ -94,4 +90,12 @@ public abstract class StreamsGraphNode {
 
     public abstract void writeToTopology(final InternalTopologyBuilder topologyBuilder);
 
+    @Override
+    public String toString() {
+        String parentName = parentNode != null ? parentNode.nodeName : "null";
+        return "StreamsGraphNode{" +
+               "nodeName='" + nodeName + '\'' +
+               ", id=" + id +
+               " parentNode=" + parentName + '}';
+    }
 }

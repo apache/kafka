@@ -16,10 +16,8 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
@@ -52,26 +50,11 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
 
     protected final Serde<K> keySerde;
     protected final Serde<V> valSerde;
-    private final Initializer<Long> countInitializer = new Initializer<Long>() {
-        @Override
-        public Long apply() {
-            return 0L;
-        }
-    };
+    private final Initializer<Long> countInitializer = () -> 0L;
 
-    private final Aggregator<K, V, Long> countAdder = new Aggregator<K, V, Long>() {
-        @Override
-        public Long apply(K aggKey, V value, Long aggregate) {
-            return aggregate + 1L;
-        }
-    };
+    private final Aggregator<K, V, Long> countAdder = (aggKey, value, aggregate) -> aggregate + 1L;
 
-    private Aggregator<K, V, Long> countSubtractor = new Aggregator<K, V, Long>() {
-        @Override
-        public Long apply(K aggKey, V value, Long aggregate) {
-            return aggregate - 1L;
-        }
-    };
+    private Aggregator<K, V, Long> countSubtractor = (aggKey, value, aggregate) -> aggregate - 1L;
 
     KGroupedTableImpl(final InternalStreamsBuilder builder,
                       final String name,
@@ -84,31 +67,6 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
         this.valSerde = valSerde;
     }
 
-    private <T> void buildAggregate(final ProcessorSupplier<K, Change<V>> aggregateSupplier,
-                                    final String topic,
-                                    final String funcName,
-                                    final String sourceName,
-                                    final String sinkName) {
-
-        final Serializer<? extends K> keySerializer = keySerde == null ? null : keySerde.serializer();
-        final Deserializer<? extends K> keyDeserializer = keySerde == null ? null : keySerde.deserializer();
-        final Serializer<? extends V> valueSerializer = valSerde == null ? null : valSerde.serializer();
-        final Deserializer<? extends V> valueDeserializer = valSerde == null ? null : valSerde.deserializer();
-
-        final ChangedSerializer<? extends V> changedValueSerializer = new ChangedSerializer<>(valueSerializer);
-        final ChangedDeserializer<? extends V> changedValueDeserializer = new ChangedDeserializer<>(valueDeserializer);
-
-        // send the aggregate key-value pairs to the intermediate topic for partitioning
-        builder.internalTopologyBuilder.addInternalTopic(topic);
-        builder.internalTopologyBuilder.addSink(sinkName, topic, keySerializer, changedValueSerializer, null, this.name);
-
-        // read the intermediate topic with RecordMetadataTimestampExtractor
-        builder.internalTopologyBuilder.addSource(null, sourceName, new FailOnInvalidTimestamp(), keyDeserializer, changedValueDeserializer, topic);
-
-        // aggregate the values with the aggregator and local store
-        builder.internalTopologyBuilder.addProcessor(funcName, aggregateSupplier, sourceName);
-    }
-
     private <T> KTable<K, T> doAggregate(final ProcessorSupplier<K, Change<V>> aggregateSupplier,
                                          final String functionName,
                                          final MaterializedInternal<K, T, KeyValueStore<Bytes, byte[]>> materialized) {
@@ -117,29 +75,22 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
         final String funcName = builder.newProcessorName(functionName);
         final String topic = materialized.storeName() + KStreamImpl.REPARTITION_TOPIC_SUFFIX;
 
+        GroupedTableOperationRepartitionNode.GroupedTableOperationRepartitionNodeBuilder<K, V>
+            groupedTableOperationRepartitionNodeBuilder = GroupedTableOperationRepartitionNode.groupedTableOperationNodeBuilder();
 
-        buildAggregate(aggregateSupplier,
-                       topic,
-                       funcName,
-                       sourceName,
-                       sinkName
-        );
+        ProcessorParameters processorParameters = new ProcessorParameters<>(aggregateSupplier, funcName);
 
-        builder.internalTopologyBuilder.addStateStore(new KeyValueStoreMaterializer<>(materialized)
-                                                          .materialize(), funcName);
+        groupedTableOperationRepartitionNodeBuilder.withRepartitionTopic(topic)
+                              .withSinkName(sinkName)
+                              .withSourceName(sourceName)
+                              .withProcessorParameters(processorParameters)
+                              .withKeySerde(keySerde)
+                              .withValueSerde(valSerde)
+                              .withMaterializedInternal(materialized)
+                              .withNodeName(funcName);
 
-
-        StreamsGraphNode repartitionNode = createRepartitionNode(sinkName,
-                                                                 sourceName,
-                                                                 topic);
+        GroupedTableOperationRepartitionNode repartitionNode = groupedTableOperationRepartitionNodeBuilder.build();
         addGraphNode(repartitionNode);
-
-        StatefulProcessorNode statefulProcessorNode = createStatefulProcessorNode(materialized,
-                                                                                  funcName,
-                                                                                  aggregateSupplier);
-
-        repartitionNode.addChildNode(statefulProcessorNode);
-
 
         // return the KTable representation with the intermediate topic as the sources
         return new KTableImpl<>(builder,
@@ -148,34 +99,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
                                 Collections.singleton(sourceName),
                                 materialized.storeName(),
                                 materialized.isQueryable(),
-                                statefulProcessorNode);
-    }
-
-    @SuppressWarnings("unchecked")
-    private <T> StatefulProcessorNode createStatefulProcessorNode(final MaterializedInternal<K, T, KeyValueStore<Bytes, byte[]>> materialized,
-                                                                  final String functionName,
-                                                                  final ProcessorSupplier aggregateSupplier) {
-
-        ProcessorParameters aggregateFunctionProcessorParams = new ProcessorParameters<>(aggregateSupplier, functionName);
-
-        return StatefulProcessorNode.statefulProcessorNodeBuilder()
-            .withNodeName(functionName)
-            .withProcessorParameters(aggregateFunctionProcessorParams)
-            .withStoreBuilder(new KeyValueStoreMaterializer(materialized).materialize()).build();
-    }
-
-    @SuppressWarnings("unchecked")
-    private GroupedTableOperationRepartitionNode createRepartitionNode(final String sinkName,
-                                                                       final String sourceName,
-                                                                       final String topic) {
-
-        return GroupedTableOperationRepartitionNode.groupedTableOperationNodeBuilder()
-            .withRepartitionTopic(topic)
-            .withSinkName(sinkName)
-            .withSourceName(sourceName)
-            .withKeySerde(keySerde)
-            .withValueSerde(valSerde)
-            .withNodeName(sourceName).build();
+                                repartitionNode);
     }
 
     @Override

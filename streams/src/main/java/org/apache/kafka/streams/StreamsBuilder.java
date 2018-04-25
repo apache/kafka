@@ -531,6 +531,7 @@ public class StreamsBuilder {
      */
     public synchronized Topology build(final Properties props) {
         // the props instance will be used once optimization framework merged
+        internalStreamsBuilder.buildAndOptimizeTopology();
         return topology;
     }
 }

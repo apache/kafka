@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals.graph;
 
 import org.apache.kafka.streams.kstream.Joined;
 import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.WindowStore;
@@ -86,7 +87,13 @@ public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
 
     @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
-        //TODO will implement in follow-up pr
+        topologyBuilder.addProcessor(thisWindowedStreamProcessorParameters.processorName(), thisWindowedStreamProcessorParameters.processorSupplier(), thisJoinSideNodeName());
+        topologyBuilder.addProcessor(otherWindowedStreamProcessorParameters.processorName(), otherWindowedStreamProcessorParameters.processorSupplier(), otherJoinSideNodeName());
+        topologyBuilder.addProcessor(thisProcessorParameters().processorName(), thisProcessorParameters().processorSupplier(), thisWindowedStreamProcessorParameters.processorName());
+        topologyBuilder.addProcessor(otherProcessorParameters().processorName(), otherProcessorParameters().processorSupplier(), otherWindowedStreamProcessorParameters.processorName());
+        topologyBuilder.addProcessor(mergeProcessorParameters().processorName(), mergeProcessorParameters().processorSupplier(), thisProcessorParameters().processorName(), otherProcessorParameters().processorName());
+        topologyBuilder.addStateStore(thisWindowStoreBuilder, thisWindowedStreamProcessorParameters.processorName(), otherProcessorParameters().processorName());
+        topologyBuilder.addStateStore(otherWindowStoreBuilder, otherWindowedStreamProcessorParameters.processorName(), thisProcessorParameters().processorName());
     }
 
     public static <K, V, V1, V2, VR> StreamStreamJoinNodeBuilder<K, V1, V2, VR> streamStreamJoinNodeBuilder() {

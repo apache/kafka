@@ -30,7 +30,7 @@ import java.util.Collections;
  */
 public class TableSourceNode<K, V> extends StreamSourceNode<K, V> {
 
-    private StoreBuilder<KeyValueStore<K, V>> storeBuilder;
+    private StoreBuilder storeBuilder;
     private final ProcessorParameters<K, V> processorParameters;
     private final String sourceName;
     private final boolean isGlobalKTable;
@@ -39,7 +39,7 @@ public class TableSourceNode<K, V> extends StreamSourceNode<K, V> {
                     final String sourceName,
                     final String topic,
                     final ConsumedInternal<K, V> consumedInternal,
-                    final StoreBuilder<KeyValueStore<K, V>> storeBuilder,
+                    final StoreBuilder storeBuilder,
                     final ProcessorParameters<K, V> processorParameters,
                     final boolean isGlobalKTable) {
 
@@ -53,29 +53,37 @@ public class TableSourceNode<K, V> extends StreamSourceNode<K, V> {
         this.storeBuilder = storeBuilder;
     }
 
-    StoreBuilder<KeyValueStore<K, V>> storeBuilder() {
-        return storeBuilder;
-    }
-
-    ProcessorParameters<K, V> processorParameters() {
-        return processorParameters;
-    }
-
-    String sourceName() {
-        return sourceName;
-    }
-
-    boolean isGlobalKTable() {
-        return isGlobalKTable;
-    }
-
     public static <K, V> TableSourceNodeBuilder<K, V> tableSourceNodeBuilder() {
         return new TableSourceNodeBuilder<>();
     }
 
     @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
-        //TODO will implement in follow-up pr
+        String topicName = getTopicNames().get(0);
+
+        if (isGlobalKTable) {
+            topologyBuilder.addGlobalStore(storeBuilder,
+                                           sourceName,
+                                           consumedInternal().timestampExtractor(),
+                                           consumedInternal().keyDeserializer(),
+                                           consumedInternal().valueDeserializer(),
+                                           topicName,
+                                           processorParameters.processorName(),
+                                           processorParameters.processorSupplier());
+        } else {
+            topologyBuilder.addSource(consumedInternal().offsetResetPolicy(),
+                                      sourceName,
+                                      consumedInternal().timestampExtractor(),
+                                      consumedInternal().keyDeserializer(),
+                                      consumedInternal().valueDeserializer(),
+                                      topicName);
+
+            topologyBuilder.addProcessor(processorParameters.processorName(), processorParameters.processorSupplier(), sourceName);
+
+            topologyBuilder.addStateStore(storeBuilder, nodeName());
+            topologyBuilder.markSourceStoreAndTopic(storeBuilder, topicName);
+        }
+
     }
 
     public static final class TableSourceNodeBuilder<K, V> {
@@ -84,7 +92,7 @@ public class TableSourceNode<K, V> extends StreamSourceNode<K, V> {
         private String sourceName;
         private String topic;
         private ConsumedInternal<K, V> consumedInternal;
-        private StoreBuilder<KeyValueStore<K, V>> storeBuilder;
+        private StoreBuilder storeBuilder;
         private ProcessorParameters<K, V> processorParameters;
         private boolean isGlobalKTable = false;
 
@@ -101,12 +109,12 @@ public class TableSourceNode<K, V> extends StreamSourceNode<K, V> {
             return this;
         }
 
-        public TableSourceNodeBuilder<K, V> withStoreBuilder(final StoreBuilder<KeyValueStore<K, V>> storeBuilder) {
+        public TableSourceNodeBuilder<K, V> withStoreBuilder(final StoreBuilder storeBuilder) {
             this.storeBuilder = storeBuilder;
             return this;
         }
 
-        public TableSourceNodeBuilder<K, V> withConsumedInternal(final ConsumedInternal<K, V> consumedInternal) {
+        public TableSourceNodeBuilder<K, V> withConsumedInternal(final ConsumedInternal consumedInternal) {
             this.consumedInternal = consumedInternal;
             return this;
         }

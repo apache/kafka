@@ -30,6 +30,7 @@ import java.util.Collections;
 import java.util.Set;
 
 class GroupedStreamAggregateBuilder<K, V> {
+
     private final InternalStreamsBuilder builder;
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
@@ -38,26 +39,11 @@ class GroupedStreamAggregateBuilder<K, V> {
     private final String name;
     private final StreamsGraphNode streamsGraphNode;
 
-    final Initializer<Long> countInitializer = new Initializer<Long>() {
-        @Override
-        public Long apply() {
-            return 0L;
-        }
-    };
+    final Initializer<Long> countInitializer = () -> 0L;
 
-    final Aggregator<K, V, Long> countAggregator = new Aggregator<K, V, Long>() {
-        @Override
-        public Long apply(K aggKey, V value, Long aggregate) {
-            return aggregate + 1;
-        }
-    };
+    final Aggregator<K, V, Long> countAggregator = (aggKey, value, aggregate) -> aggregate + 1;
 
-    final Initializer<V> reduceInitializer = new Initializer<V>() {
-        @Override
-        public V apply() {
-            return null;
-        }
-    };
+    final Initializer<V> reduceInitializer = () -> null;
 
     GroupedStreamAggregateBuilder(final InternalStreamsBuilder builder,
                                   final Serde<K> keySerde,
@@ -85,8 +71,26 @@ class GroupedStreamAggregateBuilder<K, V> {
         OptimizableRepartitionNode.OptimizableRepartitionNodeBuilder<K, V> repartitionNodeBuilder = OptimizableRepartitionNode.optimizableRepartitionNodeBuilder();
 
         final String sourceName = repartitionIfRequired(storeBuilder.name(), repartitionNodeBuilder);
-        builder.internalTopologyBuilder.addProcessor(aggFunctionName, aggregateSupplier, sourceName);
-        builder.internalTopologyBuilder.addStateStore(storeBuilder, aggFunctionName);
+
+        StreamsGraphNode parentNode = streamsGraphNode;
+
+        if (!sourceName.equals(this.name)) {
+            StreamsGraphNode repartitionNode = repartitionNodeBuilder.build();
+            streamsGraphNode.addChildNode(repartitionNode);
+            builder.addNode(repartitionNode);
+            parentNode = repartitionNode;
+        }
+
+        StatefulProcessorNode.StatefulProcessorNodeBuilder<K, T> statefulProcessorNodeBuilder = StatefulProcessorNode.statefulProcessorNodeBuilder();
+
+        ProcessorParameters processorParameters = new ProcessorParameters<>(aggregateSupplier, aggFunctionName);
+        statefulProcessorNodeBuilder
+            .withProcessorParameters(processorParameters)
+            .withNodeName(aggFunctionName)
+            .withRepartitionRequired(repartitionRequired)
+            .withStoreBuilder(storeBuilder);
+
+        StatefulProcessorNode<K, T> statefulProcessorNode = statefulProcessorNodeBuilder.build();
 
 
         StreamsGraphNode parentNode = streamsGraphNode;

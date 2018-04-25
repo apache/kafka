@@ -41,8 +41,8 @@ public class StatelessProcessorNode<K, V> extends StreamsGraphNode {
 
 
     public StatelessProcessorNode(final String nodeName,
-                           final ProcessorParameters processorParameters,
-                           final boolean repartitionRequired) {
+                                  final ProcessorParameters processorParameters,
+                                  final boolean repartitionRequired) {
 
         super(nodeName,
               repartitionRequired);
@@ -57,19 +57,20 @@ public class StatelessProcessorNode<K, V> extends StreamsGraphNode {
 
         this(nodeName, processorParameters, repartitionRequired);
 
-        this.multipleParentNames = multipleParentNames;
+        this.multipleParentNames = new ArrayList<>(multipleParentNames);
     }
 
-    ProcessorParameters<K, V> processorSupplier() {
+    ProcessorParameters processorParameters() {
         return processorParameters;
-    }
-
-    List<String> multipleParentNames() {
-        return new ArrayList<>(multipleParentNames);
     }
 
     @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
-        //TODO will implement in follow-up pr
+        if (processorParameters != null) {
+            if (multipleParentNames.isEmpty()) {
+                multipleParentNames.add(parentNode().nodeName());
+            }
+            topologyBuilder.addProcessor(processorParameters.processorName(), processorParameters.processorSupplier(), multipleParentNames.toArray(new String[]{}));
+        }
     }
 }
