@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
 class RepartitionNode<K, V> extends StatelessProcessorNode<K, V> {
 
@@ -75,6 +76,11 @@ class RepartitionNode<K, V> extends StatelessProcessorNode<K, V> {
 
     String processorName() {
         return processorName;
+    }
+
+    @Override
+    void writeToTopology(InternalTopologyBuilder topologyBuilder) {
+        //TODO will implement in follow-up pr
     }
 
     static <K, V> RepartitionNodeBuilder<K, V> repartitionNodeBuilder() {
