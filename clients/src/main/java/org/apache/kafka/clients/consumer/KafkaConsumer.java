@@ -1105,7 +1105,49 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     @Deprecated
     @Override
     public ConsumerRecords<K, V> poll(long timeout) {
-        return poll(timeout, TimeUnit.MILLISECONDS);
+        acquireAndEnsureOpen();
+        try {
+            if (timeout < 0)
+                throw new IllegalArgumentException("Timeout must not be negative");
+
+            if (this.subscriptions.hasNoSubscriptionOrUserAssignment())
+                throw new IllegalStateException("Consumer is not subscribed to any topics or assigned any partitions");
+
+            // poll for new data until the timeout expires
+            final long start = time.milliseconds();
+            long remaining = timeout;
+            do {
+
+                client.maybeTriggerWakeup();
+
+                // TODO We probably want to do internalUpdateAssignmentMetadataIfNeeded(Long.MAX_VALUE) instead,
+                // TODO  but I'm leaving the loop with timeout=0 in for now because it proves that async metadata
+                // TODO  updates function as expected.
+                while (!internalUpdateAssignmentMetadataIfNeeded(0)) { }
+
+                final Map<TopicPartition, List<ConsumerRecord<K, V>>> records = pollForFetches(remaining);
+                if (!records.isEmpty()) {
+                    // before returning the fetched records, we can send off the next round of fetches
+                    // and avoid block waiting for their responses to enable pipelining while the user
+                    // is handling the fetched records.
+                    //
+                    // NOTE: since the consumed position has already been updated, we must not allow
+                    // wakeups or any other errors to be triggered prior to returning the fetched records.
+                    if (fetcher.sendFetches() > 0 || client.hasPendingRequests()) {
+                        client.pollNoWakeup();
+                    }
+
+                    return this.interceptors.onConsume(new ConsumerRecords<>(records));
+                }
+
+                final long elapsed = time.milliseconds() - start;
+                remaining = timeout - elapsed;
+            } while (remaining > 0);
+
+            return ConsumerRecords.empty();
+        } finally {
+            release();
+        }
     }
 
     /**
@@ -1198,7 +1240,14 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             final long start = time.milliseconds();
             long remaining = timeout;
             do {
-                final Map<TopicPartition, List<ConsumerRecord<K, V>>> records = pollOnce(remaining);
+
+                client.maybeTriggerWakeup();
+
+                if (!internalUpdateAssignmentMetadataIfNeeded(timeout)) {
+                    return ConsumerRecords.empty();
+                }
+
+                final Map<TopicPartition, List<ConsumerRecord<K, V>>> records = pollForFetches(remaining);
                 if (!records.isEmpty()) {
                     // before returning the fetched records, we can send off the next round of fetches
                     // and avoid block waiting for their responses to enable pipelining while the user
@@ -1234,23 +1283,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         return updateFetchPositions(timeoutMs - (time.milliseconds() - startMs));
     }
 
-    /**
-     * Do one round of polling. In addition to checking for new data, this does any needed offset commits
-     * (if auto-commit is enabled), and offset resets (if an offset reset policy is defined).
-     *
-     * @param timeoutMs The maximum time to block.
-     * @return The fetched records (may be empty)
-     */
-    private Map<TopicPartition, List<ConsumerRecord<K, V>>> pollOnce(final long timeoutMs) {
-
-
-        client.maybeTriggerWakeup();
-
-        // TODO We probably want to do internalUpdateAssignmentMetadataIfNeeded(Long.MAX_VALUE) instead,
-        // TODO  but I'm leaving the loop with timeout=0 in for now because it proves that async metadata
-        // TODO  updates function as expected.
-        while (!internalUpdateAssignmentMetadataIfNeeded(0)) { }
-
+    private Map<TopicPartition, List<ConsumerRecord<K, V>>> pollForFetches(final long timeoutMs) {
         // if data is available already, return it immediately
         final Map<TopicPartition, List<ConsumerRecord<K, V>>> records = fetcher.fetchedRecords();
         if (!records.isEmpty()) {
