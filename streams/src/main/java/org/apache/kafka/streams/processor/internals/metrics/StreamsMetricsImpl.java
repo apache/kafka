@@ -45,6 +45,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     private final String threadName;
 
     private final Deque<String> threadLevelSensors = new LinkedList<>();
+    private final Map<String, Deque<String>> taskLevelSensors = new HashMap<>();
     private final Map<String, Deque<String>> cacheLevelSensors = new HashMap<>();
 
     public StreamsMetricsImpl(final Metrics metrics, final String threadName) {
@@ -80,6 +81,38 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         synchronized (threadLevelSensors) {
             while (!threadLevelSensors.isEmpty()) {
                 metrics.removeSensor(threadLevelSensors.pop());
+            }
+        }
+    }
+
+    public final Sensor taskLevelSensor(final String taskName,
+                                         final String sensorName,
+                                         final Sensor.RecordingLevel recordingLevel,
+                                         final Sensor... parents) {
+        final String key = threadName + "." + taskName;
+        synchronized (taskLevelSensors) {
+            if (!taskLevelSensors.containsKey(key)) {
+                taskLevelSensors.put(key, new LinkedList<String>());
+            }
+
+            final String fullSensorName = key + "." + sensorName;
+
+            final Sensor sensor = metrics.sensor(fullSensorName, recordingLevel, parents);
+
+            taskLevelSensors.get(key).push(fullSensorName);
+
+            return sensor;
+        }
+    }
+
+    public final void removeAllTaskLevelSensors(final String taskName) {
+        final String key = threadName + "." + taskName;
+        synchronized (taskLevelSensors) {
+            if (taskLevelSensors.containsKey(key)) {
+                while (!taskLevelSensors.get(key).isEmpty()) {
+                    metrics.removeSensor(taskLevelSensors.get(key).pop());
+                }
+                taskLevelSensors.remove(key);
             }
         }
     }
