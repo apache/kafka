@@ -631,7 +631,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         val bandwidthThrottleTimeMs = quotas.fetch.maybeRecordAndGetThrottleTimeMs(request, responseStruct.sizeOf)
         val requestThrottleTimeMs = quotas.request.maybeRecordAndGetThrottleTimeMs(request)
 
-        val maxThrottleTimeMs = bandwidthThrottleTimeMs.max(requestThrottleTimeMs)
+        val maxThrottleTimeMs = math.max(bandwidthThrottleTimeMs, requestThrottleTimeMs)
         if (maxThrottleTimeMs > 0) {
           if (bandwidthThrottleTimeMs > requestThrottleTimeMs) {
             quotas.fetch.throttle(request, bandwidthThrottleTimeMs)
