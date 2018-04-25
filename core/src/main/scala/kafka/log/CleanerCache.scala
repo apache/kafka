@@ -253,8 +253,6 @@ class SkimpyCleanerCache(val memory: Int, val hashAlgorithm: String = "MD5", val
   private def isTimestampStrategy: Boolean = !isOffsetStrategy &&
     "timestamp".equalsIgnoreCase(strategy)
 
-  private def isHeaderStrategy: Boolean = !isOffsetStrategy && !isTimestampStrategy
-
   /** @return The version as it is extracted from the record headers, or -1 */
   private def extractVersion(record: Record): Long = {
     if (isOffsetStrategy) {
