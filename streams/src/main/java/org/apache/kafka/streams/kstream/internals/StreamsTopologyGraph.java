@@ -52,7 +52,7 @@ class StreamsTopologyGraph {
     }
 
 
-    public void addNode(final StreamsGraphNode node) {
+    void addNode(final StreamsGraphNode node) {
         node.setId(nodeIdCounter.getAndIncrement());
 
         if (node.parentProcessorNodeName() == null && !node.processorNodeName().equals(TOPOLOGY_ROOT)) {

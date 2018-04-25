@@ -26,14 +26,14 @@ import java.util.Arrays;
  * Represents a join between a KStream and a KTable or GlobalKTable
  */
 
-class StreamTableJoinNode<K1, K2, V1, V2, VR> extends StreamsGraphNode {
+class StreamTableJoinNode<K, V> extends StreamsGraphNode {
 
     private final String[] storeNames;
-    private final ProcessorSupplier<K1, V1> processorSupplier;
+    private final ProcessorSupplier<K, V> processorSupplier;
 
     StreamTableJoinNode(final String parentProcessorNodeName,
                         final String processorNodeName,
-                        final ProcessorSupplier<K1, V1> processorSupplier,
+                        final ProcessorSupplier<K, V> processorSupplier,
                         final String[] storeNames) {
         super(parentProcessorNodeName,
               processorNodeName,
@@ -48,7 +48,7 @@ class StreamTableJoinNode<K1, K2, V1, V2, VR> extends StreamsGraphNode {
         return Arrays.copyOf(storeNames, storeNames.length);
     }
 
-    ProcessorSupplier<K1, V1> processorSupplier() {
+    ProcessorSupplier<K, V> processorSupplier() {
         return processorSupplier;
     }
 

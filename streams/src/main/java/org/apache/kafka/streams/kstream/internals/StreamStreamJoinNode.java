@@ -96,6 +96,10 @@ class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K, V1, V
         return otherWindowStoreBuilder;
     }
 
+    Joined<K, V1, V2> joined() {
+        return joined;
+    }
+
     @Override
     void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
         //TODO will implement in follow-up pr
