@@ -26,20 +26,21 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
-import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
+import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockProcessorSupplier;
-import org.apache.kafka.test.MockStateStoreSupplier;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
@@ -136,8 +137,6 @@ public class RegexSourceIntegrationTest {
         final List<String> expectedFirstAssignment = Arrays.asList("TEST-TOPIC-1");
         final List<String> expectedSecondAssignment = Arrays.asList("TEST-TOPIC-1", "TEST-TOPIC-2");
 
-        final StreamsConfig streamsConfig = new StreamsConfig(streamsConfiguration);
-
         CLUSTER.createTopic("TEST-TOPIC-1");
 
         final StreamsBuilder builder = new StreamsBuilder();
@@ -226,41 +225,6 @@ public class RegexSourceIntegrationTest {
             }
         }, STREAM_TASKS_NOT_UPDATED);
     }
-
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldAddStateStoreToRegexDefinedSource() throws InterruptedException {
-
-        final ProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
-        final MockStateStoreSupplier stateStoreSupplier = new MockStateStoreSupplier("testStateStore", false);
-        final long thirtySecondTimeout = 30 * 1000;
-
-        final TopologyBuilder builder = new TopologyBuilder()
-                .addSource("ingest", Pattern.compile("topic-\\d+"))
-                .addProcessor("my-processor", processorSupplier, "ingest")
-                .addStateStore(stateStoreSupplier, "my-processor");
-
-
-        streams = new KafkaStreams(builder, streamsConfiguration);
-        try {
-            streams.start();
-
-            final TestCondition stateStoreNameBoundToSourceTopic = new TestCondition() {
-                @Override
-                public boolean conditionMet() {
-                    final Map<String, List<String>> stateStoreToSourceTopic = builder.stateStoreNameToSourceTopics();
-                    final List<String> topicNamesList = stateStoreToSourceTopic.get("testStateStore");
-                    return topicNamesList != null && !topicNamesList.isEmpty() && topicNamesList.get(0).equals("topic-1");
-                }
-            };
-
-            TestUtils.waitForCondition(stateStoreNameBoundToSourceTopic, thirtySecondTimeout, "Did not find topic: [topic-1] connected to state store: [testStateStore]");
-
-        } finally {
-            streams.close();
-        }
-    }
-
 
     @Test
     public void testShouldReadFromRegexAndNamedTopics() throws Exception {

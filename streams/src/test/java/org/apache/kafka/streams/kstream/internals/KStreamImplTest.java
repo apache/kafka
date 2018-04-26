@@ -20,6 +20,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.Consumed;
+import org.apache.kafka.streams.InternalTopologyAccessor;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsBuilderTest;
@@ -39,6 +40,7 @@ import org.apache.kafka.streams.kstream.ValueMapperWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
+import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.SourceNode;
 import org.apache.kafka.test.KStreamTestDriver;
@@ -225,8 +227,8 @@ public class KStreamImplTest {
     @Test
     // TODO: this test should be refactored when we removed KStreamBuilder so that the created Topology contains internal topics as well
     public void shouldUseRecordMetadataTimestampExtractorWhenInternalRepartitioningTopicCreated() {
-        final KStreamBuilder builder = new KStreamBuilder();
-        KStream<String, String> kStream = builder.stream(stringSerde, stringSerde, "topic-1");
+        final StreamsBuilder builder = new StreamsBuilder();
+        KStream<String, String> kStream = builder.stream("topic-1", consumed);
         ValueJoiner<String, String, String> valueJoiner = MockValueJoiner.instance(":");
         long windowSize = TimeUnit.MILLISECONDS.convert(1, TimeUnit.DAYS);
         final KStream<String, String> stream = kStream
@@ -244,10 +246,11 @@ public class KStreamImplTest {
                                 Serdes.String()))
                 .to("output-topic", Produced.with(Serdes.String(), Serdes.String()));
 
-        ProcessorTopology processorTopology = builder.setApplicationId("X").build(null);
-        SourceNode originalSourceNode = processorTopology.source("topic-1");
+        ProcessorTopology topology = InternalTopologyAccessor.getInternalTopologyBuilder(builder.build()).build();
 
-        for (SourceNode sourceNode: processorTopology.sources()) {
+        SourceNode originalSourceNode = topology.source("topic-1");
+
+        for (SourceNode sourceNode: topology.sources()) {
             if (sourceNode.name().equals(originalSourceNode.name())) {
                 assertEquals(sourceNode.getTimestampExtractor(), null);
             } else {
