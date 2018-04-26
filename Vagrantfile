@@ -80,7 +80,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
       # share to a temporary location and the provisioning scripts symlink data
       # to the right location.
       override.cache.enable :generic, {
-        "oracle-jdk7" => { cache_dir: "/tmp/oracle-jdk7-installer-cache" },
+        "oracle-jdk8" => { cache_dir: "/tmp/oracle-jdk8-installer-cache" },
       }
     end
   end
