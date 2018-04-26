@@ -303,8 +303,8 @@ class AdminManager(val config: KafkaConfig,
 
           case ResourceType.TOPIC =>
             val topic = resource.name
+            Topic.validate(topic)
             if (metadataCache.contains(topic)) {
-              Topic.validate(topic)
               // Consider optimizing this by caching the configs or retrieving them from the `Log` when possible
               val topicProps = adminZkClient.fetchEntityConfig(ConfigType.Topic, topic)
               val logConfig = LogConfig.fromProps(KafkaServer.copyKafkaConfigToLog(config), topicProps)

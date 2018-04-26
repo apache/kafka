@@ -831,9 +831,14 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     client.describeConfigs(Collections.singletonList(existingTopic)).values.get(existingTopic).get()
 
     val nonExistentTopic = new ConfigResource(ConfigResource.Type.TOPIC, "unknown")
-    val describeResult = client.describeConfigs(Collections.singletonList(nonExistentTopic))
+    val describeResult1 = client.describeConfigs(Collections.singletonList(nonExistentTopic))
 
-    assertTrue(intercept[ExecutionException](describeResult.values.get(nonExistentTopic).get).getCause.isInstanceOf[UnknownTopicOrPartitionException])
+    assertTrue(intercept[ExecutionException](describeResult1.values.get(nonExistentTopic).get).getCause.isInstanceOf[UnknownTopicOrPartitionException])
+
+    val invalidTopic = new ConfigResource(ConfigResource.Type.TOPIC, "(invalid topic)")
+    val describeResult2 = client.describeConfigs(Collections.singletonList(invalidTopic))
+
+    assertTrue(intercept[ExecutionException](describeResult2.values.get(invalidTopic).get).getCause.isInstanceOf[InvalidTopicException])
 
     client.close()
   }
