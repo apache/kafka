@@ -13,15 +13,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ducktape.mark import ignore, matrix, parametrize
+import random
+import time
+from ducktape.mark import ignore, matrix
 from ducktape.mark.resource import cluster
 from ducktape.tests.test import Test
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.streams import StreamsSmokeTestDriverService, StreamsSmokeTestJobRunnerService, StreamsUpgradeTestJobRunnerService
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.version import LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0, LATEST_1_1, DEV_BRANCH, DEV_VERSION, KafkaVersion
-import random
-import time
 
 # broker 0.10.0 is not compatible with newer Kafka Streams versions
 broker_upgrade_versions = [str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1), str(DEV_BRANCH)]
@@ -56,6 +56,7 @@ class StreamsUpgradeTest(Test):
             node.version = KafkaVersion(to_version)
             self.kafka.start_node(node)
 
+    @ignore
     @cluster(num_nodes=6)
     @matrix(from_version=broker_upgrade_versions, to_version=broker_upgrade_versions)
     def test_upgrade_downgrade_brokers(self, from_version, to_version):
@@ -123,6 +124,7 @@ class StreamsUpgradeTest(Test):
         node.account.ssh("grep ALL-RECORDS-DELIVERED %s" % self.driver.STDOUT_FILE, allow_fail=False)
         self.processor1.node.account.ssh_capture("grep SMOKE-TEST-CLIENT-CLOSED %s" % self.processor1.STDOUT_FILE, allow_fail=False)
 
+    @ignore
     @matrix(from_version=metadata_2_versions, to_version=metadata_2_versions)
     def test_simple_upgrade_downgrade(self, from_version, to_version):
         """
@@ -175,6 +177,7 @@ class StreamsUpgradeTest(Test):
         self.driver.stop()
 
     #@matrix(from_version=metadata_1_versions, to_version=backward_compatible_metadata_2_versions)
+    @ignore
     @matrix(from_version=metadata_1_versions, to_version=metadata_3_versions)
     @matrix(from_version=metadata_2_versions, to_version=metadata_3_versions)
     def test_metadata_upgrade(self, from_version, to_version):
