@@ -55,7 +55,7 @@ class StoreChangeLogger<K, V> {
         if (collector != null) {
             final Serializer<K> keySerializer = serialization.keySerializer();
             final Serializer<V> valueSerializer = serialization.valueSerializer();
-            collector.send(this.topic, key, value, this.partition, context.timestamp(), keySerializer, valueSerializer);
+            collector.send(this.topic, key, value, context.headers(), this.partition, context.timestamp(), keySerializer, valueSerializer);
         }
     }
 }

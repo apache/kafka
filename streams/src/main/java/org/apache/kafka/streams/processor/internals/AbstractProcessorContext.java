@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
@@ -141,6 +142,11 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
         }
 
         return recordContext.offset();
+    }
+
+    @Override
+    public Headers headers() {
+        return recordContext.headers();
     }
 
     /**

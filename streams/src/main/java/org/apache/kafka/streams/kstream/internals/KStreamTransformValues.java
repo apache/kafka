@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -152,6 +153,11 @@ public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V> 
                     @Override
                     public long offset() {
                         return context.offset();
+                    }
+
+                    @Override
+                    public Headers headers() {
+                        return context.headers();
                     }
 
                     @Override

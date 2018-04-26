@@ -16,15 +16,31 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
+
 public class RecordContextStub implements RecordContext {
 
     private final long offset;
     private long timestamp;
     private final int partition;
     private final String topic;
+    private final Headers headers;
 
     public RecordContextStub() {
-        this(-1, -1, -1, "");
+        this(-1, -1, -1, "", null);
+    }
+
+    public RecordContextStub(final long offset,
+                             final long timestamp,
+                             final int partition,
+                             final String topic,
+                             final Headers headers) {
+        this.offset = offset;
+        this.timestamp = timestamp;
+        this.partition = partition;
+        this.topic = topic;
+        this.headers = headers;
     }
 
     public RecordContextStub(final long offset,
@@ -35,8 +51,8 @@ public class RecordContextStub implements RecordContext {
         this.timestamp = timestamp;
         this.partition = partition;
         this.topic = topic;
+        this.headers = new RecordHeaders();
     }
-
     @Override
     public long offset() {
         return offset;
@@ -60,5 +76,10 @@ public class RecordContextStub implements RecordContext {
     @Override
     public int partition() {
         return partition;
+    }
+
+    @Override
+    public Headers headers() {
+        return headers;
     }
 }

@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
@@ -45,6 +46,7 @@ public class StoreChangeLoggerTest {
                 public <K1, V1> void send(final String topic,
                                           final K1 key,
                                           final V1 value,
+                                          final Headers headers,
                                           final Integer partition,
                                           final Long timestamp,
                                           final Serializer<K1> keySerializer,
@@ -56,6 +58,7 @@ public class StoreChangeLoggerTest {
                 public <K1, V1> void send(final String topic,
                                           final K1 key,
                                           final V1 value,
+                                          final Headers headers,
                                           final Long timestamp,
                                           final Serializer<K1> keySerializer,
                                           final Serializer<V1> valueSerializer,

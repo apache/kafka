@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
@@ -55,6 +56,7 @@ public class RocksDBSessionStoreSupplierTest {
             public <K, V> void send(final String topic,
                                     final K key,
                                     final V value,
+                                    final Headers headers,
                                     final Integer partition,
                                     final Long timestamp,
                                     final Serializer<K> keySerializer,
