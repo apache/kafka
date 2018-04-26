@@ -26,6 +26,9 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.streams.processor.MockProcessorContext;
+import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockReducer;
@@ -43,6 +46,9 @@ import java.util.Locale;
 import java.util.Random;
 import java.util.Set;
 
+import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
+import static org.hamcrest.CoreMatchers.hasItem;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -396,6 +402,27 @@ public class KTableKTableLeftJoinTest {
                 driver.process(input, key, value);
             }
         }
+    }
+
+    @Test
+    public void shouldLogAndMeterSkippedRecordsDueToNullLeftKey() {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final Processor<String, Change<String>> join = new KTableKTableLeftJoin<>(
+            (KTableImpl<String, String, String>) builder.table("left", Consumed.with(stringSerde, stringSerde)),
+            (KTableImpl<String, String, String>) builder.table("right", Consumed.with(stringSerde, stringSerde)),
+            null
+        ).get();
+
+        final MockProcessorContext context = new MockProcessorContext();
+        context.setRecordMetadata("left", -1, -2, -3);
+        join.init(context);
+        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
+        join.process(null, new Change<>("new", "old"));
+        LogCaptureAppender.unregister(appender);
+
+        assertEquals(1.0, getMetricByName(context.metrics().metrics(), "skipped-records-total", "stream-metrics").metricValue());
+        assertThat(appender.getMessages(), hasItem("Skipping record due to null key. change=[(new<-old)] topic=[left] partition=[-1] offset=[-2]"));
     }
 
     private KeyValue<Integer, String> kv(final Integer key, final String value) {

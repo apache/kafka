@@ -318,8 +318,8 @@ object ConsumerPerformance extends LazyLogging {
       CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServersOpt)
 
       if (options.has(newConsumerOpt)) {
-        Console.err.println("The --new-consumer option is deprecated and will be removed in a future major release." +
-          "The new consumer is used by default if the --bootstrap-server option is provided.")
+        Console.err.println("The --new-consumer option is deprecated and will be removed in a future major release. " +
+          "The new consumer is used by default if the --broker-list option is provided.")
       }
 
       import org.apache.kafka.clients.consumer.ConsumerConfig

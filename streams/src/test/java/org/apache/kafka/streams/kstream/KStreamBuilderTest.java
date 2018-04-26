@@ -18,7 +18,10 @@ package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TopologyTestDriverWrapper;
 import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.kstream.internals.KStreamImpl;
 import org.apache.kafka.streams.kstream.internals.KTableImpl;
@@ -26,19 +29,21 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.SourceNode;
-import org.apache.kafka.test.KStreamTestDriver;
+import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.MockValueJoiner;
+import org.apache.kafka.test.TestUtils;
+import org.junit.After;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
 
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -55,12 +60,27 @@ public class KStreamBuilderTest {
     private static final String APP_ID = "app-id";
 
     private final KStreamBuilder builder = new KStreamBuilder();
-    @Rule
-    public final KStreamTestDriver driver = new KStreamTestDriver();
+    private final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
+    private TopologyTestDriverWrapper driver;
+    private final Properties props = new Properties();
 
     @Before
-    public void setUp() {
+    public void setup() {
         builder.setApplicationId(APP_ID);
+        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "kstream-builder-test");
+        props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9091");
+        props.setProperty(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
+        props.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+        props.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+    }
+
+    @After
+    public void cleanup() {
+        props.clear();
+        if (driver != null) {
+            driver.close();
+        }
+        driver = null;
     }
 
     @Test(expected = TopologyBuilderException.class)
@@ -93,10 +113,8 @@ public class KStreamBuilderTest {
 
         source.process(processorSupplier);
 
-        driver.setUp(builder);
-        driver.setTime(0L);
-
-        driver.process("topic-source", "A", "aa");
+        driver = new TopologyTestDriverWrapper(builder.internalTopologyBuilder, props);
+        driver.pipeInput(recordFactory.create("topic-source", "A", "aa"));
 
         // no exception was thrown
         assertEquals(Utils.mkList("A:aa"), processorSupplier.processed);
@@ -113,10 +131,8 @@ public class KStreamBuilderTest {
         source.process(sourceProcessorSupplier);
         through.process(throughProcessorSupplier);
 
-        driver.setUp(builder);
-        driver.setTime(0L);
-
-        driver.process("topic-source", "A", "aa");
+        driver = new TopologyTestDriverWrapper(builder.internalTopologyBuilder, props);
+        driver.pipeInput(recordFactory.create("topic-source", "A", "aa"));
 
         assertEquals(Utils.mkList("A:aa"), sourceProcessorSupplier.processed);
         assertEquals(Utils.mkList("A:aa"), throughProcessorSupplier.processed);
@@ -147,13 +163,12 @@ public class KStreamBuilderTest {
         final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
         merged.process(processorSupplier);
 
-        driver.setUp(builder);
-        driver.setTime(0L);
+        driver = new TopologyTestDriverWrapper(builder.internalTopologyBuilder, props);
 
-        driver.process(topic1, "A", "aa");
-        driver.process(topic2, "B", "bb");
-        driver.process(topic2, "C", "cc");
-        driver.process(topic1, "D", "dd");
+        driver.pipeInput(recordFactory.create(topic1, "A", "aa"));
+        driver.pipeInput(recordFactory.create(topic2, "B", "bb"));
+        driver.pipeInput(recordFactory.create(topic2, "C", "cc"));
+        driver.pipeInput(recordFactory.create(topic1, "D", "dd"));
 
         assertEquals(Utils.mkList("A:aa", "B:bb", "C:cc", "D:dd"), processorSupplier.processed);
     }

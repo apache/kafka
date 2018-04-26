@@ -20,8 +20,12 @@ import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 class KTableKTableLeftJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R, V1, V2> {
+    private static final Logger LOG = LoggerFactory.getLogger(KTableKTableLeftJoin.class);
 
     KTableKTableLeftJoin(final KTableImpl<K, ?, V1> table1,
                          final KTableImpl<K, ?, V2> table2,
@@ -55,6 +59,7 @@ class KTableKTableLeftJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R, 
     private class KTableKTableLeftJoinProcessor extends AbstractProcessor<K, Change<V1>> {
 
         private final KTableValueGetter<K, V2> valueGetter;
+        private StreamsMetricsImpl metrics;
 
         KTableKTableLeftJoinProcessor(final KTableValueGetter<K, V2> valueGetter) {
             this.valueGetter = valueGetter;
@@ -63,6 +68,7 @@ class KTableKTableLeftJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R, 
         @Override
         public void init(final ProcessorContext context) {
             super.init(context);
+            metrics = (StreamsMetricsImpl) context.metrics();
             valueGetter.init(context);
         }
 
@@ -70,6 +76,11 @@ class KTableKTableLeftJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R, 
         public void process(final K key, final Change<V1> change) {
             // we do join iff keys are equal, thus, if key is null we cannot join and just ignore the record
             if (key == null) {
+                LOG.warn(
+                    "Skipping record due to null key. change=[{}] topic=[{}] partition=[{}] offset=[{}]",
+                    change, context().topic(), context().partition(), context().offset()
+                );
+                metrics.skippedRecordsSensor().record();
                 return;
             }
 

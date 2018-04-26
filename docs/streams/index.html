@@ -59,7 +59,7 @@
                 </div>
             </div>
        </div>
-       <hr class="separator"> 
+       <hr class="separator">
        <div class="use-item-section">
            <div class="use__list__sec">
                <h3>Why you'll love using Kafka Streams!</h3>
@@ -68,18 +68,18 @@
                   <li>Deploy to containers, VMs, bare metal, cloud</li>
                   <li>Equally viable for small, medium, &amp; large use cases</li>
                   <li>Fully integrated with Kafka security</li>
-                  <li>Write standard Java applications</li>
+                  <li>Write standard Java and Scala applications</li>
                   <li>Exactly-once processing semantics</li>
                   <li>No separate processing cluster required</li>
                   <li>Develop on Mac, Linux, Windows</li>
-                  
+
                </ul>
            </div>
            <div class="first__app__cta">
                <a href="/{{version}}/documentation/streams/tutorial" class="first__app__btn">Write your first app</a>
            </div>
        </div>
-       <hr class="separator" id="streams-use-cases"> 
+       <hr class="separator" id="streams-use-cases">
         <h3 class="stream__text">Kafka Streams use cases</h3>
          <div class="customers__grid">
            <div class="customer__grid">
@@ -101,7 +101,7 @@
                  <a href="https://www.confluent.io/blog/ranking-websites-real-time-apache-kafkas-streams-api/" target='blank'> event streams</a> enables our technical team to do near-real time business intelligence.
                </p>
            </div>
-           </div>  
+           </div>
            <div class="customer__grid">
              <div class="customer__item  streams_logo_grid streams__line__grid">
                <a href="https://engineering.linecorp.com/en/blog/detail/80" target="_blank" class="grid__logo__link">
@@ -119,7 +119,7 @@
                    <a href="https://medium.com/@Pinterest_Engineering/using-kafka-streams-api-for-predictive-budgeting-9f58d206c996" target="_blank">Pinterest uses Apache Kafka and the Kafka Streams</a> at large scale to power the real-time, predictive budgeting system of their advertising infrastructure. With Kafka Streams, spend predictions are more accurate than ever.
                </p>
              </div>
-           </div> 
+           </div>
            <div class="customer__grid">
              <div class="customer__item  streams_logo_grid streams__rabobank__grid">
                <a href="https://www.confluent.io/blog/real-time-financial-alerts-rabobank-apache-kafkas-streams-api/" target="_blank" class="grid__logo__link">
@@ -127,7 +127,7 @@
                </a>
                  <p class="grid__item__customer__description">Rabobank is one of the 3 largest banks in the Netherlands. Its digital nervous system, the Business Event Bus, is powered by Apache Kafka. It is used by an increasing amount of financial processes and services, one of which is Rabo Alerts. This service alerts customers in real-time upon financial events and is <a href="https://www.confluent.io/blog/real-time-financial-alerts-rabobank-apache-kafkas-streams-api/" target="_blank">built using Kafka Streams.</a></p>
              </div>
-           </div>        
+           </div>
            <div class="customer__grid">
              <div class="customer__item streams_logo_grid streams__ny__grid">
                <a href="https://speakerdeck.com/xenji/kafka-and-debezium-at-trivago-code-dot-talks-2017-edition" target="_blank" class="grid__logo__link">
@@ -137,19 +137,19 @@
                    Trivago is a global hotel search platform. We are focused on reshaping the way travelers search for and compare hotels, while enabling hotel advertisers to grow their businesses by providing access to a broad audience of travelers via our websites and apps. As of 2017, we offer access to approximately 1.8 million hotels and other accommodations in over 190 countries. We use Kafka, Kafka Connect, and Kafka Streams to <a href="https://speakerdeck.com/xenji/kafka-and-debezium-at-trivago-code-dot-talks-2017-edition" target="_blank">enable our developers</a> to access data freely in the company. Kafka Streams powers parts of our analytics pipeline and delivers endless options to explore and operate on the data sources we have at hand.
                </p>
              </div>
-           </div>  
-         
+           </div>
+
        </div>
        <h3 style="margin-top: 5.3rem;">Hello Kafka Streams</h3>
        <p>The code example below implements a WordCount application that is elastic, highly scalable, fault-tolerant, stateful, and ready to run in production at large scale</p>
-       
+
        <div class="code-example">
            <div class="btn-group">
                <a class="selected b-java-8" data-section="java-8">Java 8+</a>
                <a class="b-java-7" data-section="java-7">Java 7</a>
                <a class="b-scala" data-section="scala">Scala</a>
            </div>
-       
+
            <div class="code-example__snippet b-java-8 selected">
                <pre class="brush: java;">
                    import org.apache.kafka.common.serialization.Serdes;
@@ -190,7 +190,7 @@
                    }
                </pre>
            </div>
-       
+
            <div class="code-example__snippet b-java-7">
                <pre class="brush: java;">
                    import org.apache.kafka.common.serialization.Serdes;
@@ -208,16 +208,16 @@
 
                    import java.util.Arrays;
                    import java.util.Properties;
-       
+
                    public class WordCountApplication {
-       
+
                        public static void main(final String[] args) throws Exception {
                            Properties config = new Properties();
                            config.put(StreamsConfig.APPLICATION_ID_CONFIG, "wordcount-application");
                            config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "kafka-broker1:9092");
                            config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
                            config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-       
+
                            StreamsBuilder builder = new StreamsBuilder();
                            KStream&lt;String, String&gt; textLines = builder.stream("TextLinesTopic");
                            KTable&lt;String, Long&gt; wordCounts = textLines
@@ -237,67 +237,59 @@
 
 
                            wordCounts.toStream().to("WordsWithCountsTopic", Produced.with(Serdes.String(), Serdes.Long()));
-       
+
                            KafkaStreams streams = new KafkaStreams(builder.build(), config);
                            streams.start();
                        }
-       
+
                    }
                </pre>
            </div>
-       
+
            <div class="code-example__snippet b-scala">
                <pre class="brush: scala;">
-                   import java.lang.Long
-                   import java.util.Properties
-                   import java.util.concurrent.TimeUnit
+import java.util.Properties
+import java.util.concurrent.TimeUnit
 
-                   import org.apache.kafka.common.serialization._
-                   import org.apache.kafka.common.utils.Bytes
-                   import org.apache.kafka.streams._
-                   import org.apache.kafka.streams.kstream.{KStream, KTable, Materialized, Produced}
-                   import org.apache.kafka.streams.state.KeyValueStore
+import org.apache.kafka.streams.kstream.Materialized
+import org.apache.kafka.streams.scala.kstream._
+import org.apache.kafka.streams.{KafkaStreams, StreamsConfig}
 
-                   import scala.collection.JavaConverters.asJavaIterableConverter
+object WordCountApplication extends App {
+  import DefaultSerdes._
+  import ImplicitConversions._
 
-                   object WordCountApplication {
+  val config: Properties = {
+    val p = new Properties()
+    p.put(StreamsConfig.APPLICATION_ID_CONFIG, "wordcount-application")
+    p.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "kafka-broker1:9092")
+    p
+  }
 
-                       def main(args: Array[String]) {
-                           val config: Properties = {
-                               val p = new Properties()
-                               p.put(StreamsConfig.APPLICATION_ID_CONFIG, "wordcount-application")
-                               p.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "kafka-broker1:9092")
-                               p.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass)
-                               p.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass)
-                               p
-                           }
+  val builder: StreamsBuilder = new StreamsBuilder()
+  val textLines: KStream[String, String] = builder.stream[String, String]("TextLinesTopic")
+  val wordCounts: KTable[String, Long] = textLines
+    .flatMapValues(textLine => textLine.toLowerCase.split("\\W+"))
+    .groupBy((_, word) => word)
+    .count(Materialized.as("counts-store"))
+  wordCounts.toStream.to("WordsWithCountsTopic")
 
-                           val builder: StreamsBuilder = new StreamsBuilder()
-                           val textLines: KStream[String, String] = builder.stream("TextLinesTopic")
-                           val wordCounts: KTable[String, Long] = textLines
-                               .flatMapValues(textLine => textLine.toLowerCase.split("\\W+").toIterable.asJava)
-                               .groupBy((_, word) => word)
-                               .count(Materialized.as("counts-store").asInstanceOf[Materialized[String, Long, KeyValueStore[Bytes, Array[Byte]]]])
-                           wordCounts.toStream().to("WordsWithCountsTopic", Produced.`with`(Serdes.String(), Serdes.Long()))
+  val streams: KafkaStreams = new KafkaStreams(builder.build(), config)
+  streams.start()
 
-                           val streams: KafkaStreams = new KafkaStreams(builder.build(), config)
-                           streams.start()
-
-                           Runtime.getRuntime.addShutdownHook(new Thread(() => {
-                               streams.close(10, TimeUnit.SECONDS)
-                           }))
-                       }
-
-                   }
+  sys.ShutdownHookThread {
+    streams.close(10, TimeUnit.SECONDS)
+  }
+}
                </pre>
            </div>
        </div>
-       
+
        <div class="pagination">
            <a href="/{{version}}/documentation" class="pagination__btn pagination__btn__prev">Previous</a>
            <a href="/{{version}}/documentation/streams/quickstart" class="pagination__btn pagination__btn__next">Next</a>
        </div>
-     
+
 </script>
 <!--#include virtual="../../includes/_header.htm" -->
 <!--#include virtual="../../includes/_top.htm" -->
@@ -316,52 +308,52 @@
 <!--#include virtual="../../includes/_footer.htm" -->
 <script>
   $(function() {
-         
+
          // Show selected style on nav item
          $('.b-nav__streams').addClass('selected');
-    
-         $('.video_list_1').click(function(){    
+
+         $('.video_list_1').click(function(){
              $('.video_2').attr('src', $('.video_2').attr('src'));
              $('.video_3').attr('src', $('.video_3').attr('src'));
              $('.video_4').attr('src', $('.video_4').attr('src'));
 
            });
 
-         $('.video_list_2').click(function(){    
+         $('.video_list_2').click(function(){
                $('.video_1').attr('src', $('.video_1').attr('src'));
                $('.video_3').attr('src', $('.video_3').attr('src'));
                $('.video_4').attr('src', $('.video_4').attr('src'));
 
            });
 
-         $('.video_list_3').click(function(){    
+         $('.video_list_3').click(function(){
               $('.video_1').attr('src', $('.video_1').attr('src'));
               $('.video_2').attr('src', $('.video_2').attr('src'));
               $('.video_4').attr('src', $('.video_4').attr('src'));
            });
 
-         $('.video_list_4').click(function(){    
+         $('.video_list_4').click(function(){
               $('.video_1').attr('src', $('.video_1').attr('src'));
               $('.video_2').attr('src', $('.video_2').attr('src'));
               $('.video_3').attr('src', $('.video_3').attr('src'));
            });
-           
+
 
           //sticky secondary nav
           var $navbar = $(".sub-nav-sticky"),
                y_pos = $navbar.offset().top,
                height = $navbar.height();
-       
+
            $(window).scroll(function() {
                var scrollTop = $(window).scrollTop();
-           
+
                if (scrollTop > y_pos - height) {
                    $navbar.addClass("navbar-fixed")
                } else if (scrollTop <= y_pos) {
                    $navbar.removeClass("navbar-fixed")
                }
            });
-       
+
          // Display docs subnav items
          $('.b-nav__docs').parent().toggleClass('nav__item__with__subs--expanded');
          // Show selected code example

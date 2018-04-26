@@ -22,6 +22,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.TestUtils;
@@ -31,8 +32,11 @@ import org.junit.Test;
 
 import java.io.File;
 
+import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
+import static org.hamcrest.CoreMatchers.hasItem;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 
 public class KTableSourceTest {
@@ -71,6 +75,22 @@ public class KTableSourceTest {
         driver.flushState();
 
         assertEquals(Utils.mkList("A:1", "B:2", "C:3", "D:4", "A:null", "B:null"), proc1.processed);
+    }
+
+    @Test
+    public void kTableShouldLogAndMeterOnSkippedRecords() {
+        final StreamsBuilder streamsBuilder = new StreamsBuilder();
+        final String topic = "topic";
+        streamsBuilder.table(topic, Consumed.with(stringSerde, intSerde));
+
+        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
+        driver.setUp(streamsBuilder, stateDir);
+        driver.process(topic, null, "value");
+        driver.flushState();
+        LogCaptureAppender.unregister(appender);
+
+        assertEquals(1.0, getMetricByName(driver.context().metrics().metrics(), "skipped-records-total", "stream-metrics").metricValue());
+        assertThat(appender.getMessages(), hasItem("Skipping record due to null key. topic=[topic] partition=[-1] offset=[-1]"));
     }
 
     @Test

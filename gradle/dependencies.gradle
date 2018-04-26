@@ -60,6 +60,7 @@ versions += [
   log4j: "1.2.17",
   scalaLogging: "3.8.0",
   jaxb: "2.3.0",
+  jfreechart: "1.0.0",
   jopt: "5.0.4",
   junit: "4.12",
   kafka_0100: "0.10.0.1",
@@ -69,6 +70,7 @@ versions += [
   kafka_10: "1.0.1",
   kafka_11: "1.1.0",
   lz4: "1.4.1",
+  mavenArtifact: "3.5.3",
   metrics: "2.2.0",
   // PowerMock 1.x doesn't support Java 9, so use PowerMock 2.0.0 beta
   powermock: "2.0.0-beta.5",
@@ -79,14 +81,11 @@ versions += [
   slf4j: "1.7.25",
   snappy: "1.1.7.1",
   zkclient: "0.10",
-  zookeeper: "3.4.10",
-  jfreechart: "1.0.0",
-  mavenArtifact: "3.5.3"
+  zookeeper: "3.4.10"
 ]
 
 libs += [
   activation: "javax.activation:activation:$versions.activation",
-  argparse4j: "net.sourceforge.argparse4j:argparse4j:$versions.argparse4j",
   apacheda: "org.apache.directory.api:api-all:$versions.apacheda",
   apachedsCoreApi: "org.apache.directory.server:apacheds-core-api:$versions.apacheds",
   apachedsInterceptorKerberos: "org.apache.directory.server:apacheds-interceptor-kerberos:$versions.apacheds",
@@ -96,6 +95,7 @@ libs += [
   apachedsLdifPartition: "org.apache.directory.server:apacheds-ldif-partition:$versions.apacheds",
   apachedsMavibotPartition: "org.apache.directory.server:apacheds-mavibot-partition:$versions.apacheds",
   apachedsJdbmPartition: "org.apache.directory.server:apacheds-jdbm-partition:$versions.apacheds",
+  argparse4j: "net.sourceforge.argparse4j:argparse4j:$versions.argparse4j",
   bcpkix: "org.bouncycastle:bcpkix-jdk15on:$versions.bcpkix",
   easymock: "org.easymock:easymock:$versions.easymock",
   jacksonDatabind: "com.fasterxml.jackson.core:jackson-databind:$versions.jackson",
@@ -106,6 +106,7 @@ libs += [
   jettyServlet: "org.eclipse.jetty:jetty-servlet:$versions.jetty",
   jettyServlets: "org.eclipse.jetty:jetty-servlets:$versions.jetty",
   jerseyContainerServlet: "org.glassfish.jersey.containers:jersey-container-servlet:$versions.jersey",
+  jfreechart: "1.0.0",
   jmhCore: "org.openjdk.jmh:jmh-core:$versions.jmh",
   jmhCoreBenchmarks: "org.openjdk.jmh:jmh-core-benchmarks:$versions.jmh",
   jmhGeneratorAnnProcess: "org.openjdk.jmh:jmh-generator-annprocess:$versions.jmh",

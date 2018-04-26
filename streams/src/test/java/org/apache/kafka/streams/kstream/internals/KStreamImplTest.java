@@ -18,11 +18,14 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsBuilderTest;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.JoinWindows;
@@ -42,16 +45,18 @@ import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.SourceNode;
-import org.apache.kafka.test.KStreamTestDriver;
+import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
+import org.apache.kafka.test.TestUtils;
+import org.junit.After;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
@@ -71,13 +76,29 @@ public class KStreamImplTest {
     private StreamsBuilder builder;
     private final Consumed<String, String> consumed = Consumed.with(stringSerde, stringSerde);
 
-    @Rule
-    public final KStreamTestDriver driver = new KStreamTestDriver();
+    private final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
+    private TopologyTestDriver driver;
+    private final Properties props = new Properties();
 
     @Before
     public void before() {
         builder = new StreamsBuilder();
         testStream = builder.stream("source");
+
+        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "kstream-impl-test");
+        props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9091");
+        props.setProperty(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
+        props.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+        props.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+    }
+
+    @After
+    public void cleanup() {
+        props.clear();
+        if (driver != null) {
+            driver.close();
+        }
+        driver = null;
     }
 
     @Test
@@ -204,8 +225,8 @@ public class KStreamImplTest {
         final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
         stream.through("through-topic", Produced.with(stringSerde, stringSerde)).process(processorSupplier);
 
-        driver.setUp(builder);
-        driver.process(input, "a", "b");
+        driver = new TopologyTestDriver(builder.build(), props);
+        driver.pipeInput(recordFactory.create(input, "a", "b"));
         assertThat(processorSupplier.processed, equalTo(Collections.singletonList("a:b")));
     }
 
@@ -218,8 +239,8 @@ public class KStreamImplTest {
         stream.to("to-topic", Produced.with(stringSerde, stringSerde));
         builder.stream("to-topic", consumed).process(processorSupplier);
 
-        driver.setUp(builder);
-        driver.process(input, "e", "f");
+        driver = new TopologyTestDriver(builder.build(), props);
+        driver.pipeInput(recordFactory.create(input, "e", "f"));
         assertThat(processorSupplier.processed, equalTo(Collections.singletonList("e:f")));
     }
 
@@ -501,13 +522,12 @@ public class KStreamImplTest {
         final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
         merged.process(processorSupplier);
 
-        driver.setUp(builder);
-        driver.setTime(0L);
+        driver = new TopologyTestDriver(builder.build(), props);
 
-        driver.process(topic1, "A", "aa");
-        driver.process(topic2, "B", "bb");
-        driver.process(topic2, "C", "cc");
-        driver.process(topic1, "D", "dd");
+        driver.pipeInput(recordFactory.create(topic1, "A", "aa"));
+        driver.pipeInput(recordFactory.create(topic2, "B", "bb"));
+        driver.pipeInput(recordFactory.create(topic2, "C", "cc"));
+        driver.pipeInput(recordFactory.create(topic1, "D", "dd"));
 
         assertEquals(Utils.mkList("A:aa", "B:bb", "C:cc", "D:dd"), processorSupplier.processed);
     }
@@ -528,17 +548,16 @@ public class KStreamImplTest {
         final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
         merged.process(processorSupplier);
 
-        driver.setUp(builder);
-        driver.setTime(0L);
+        driver = new TopologyTestDriver(builder.build(), props);
 
-        driver.process(topic1, "A", "aa");
-        driver.process(topic2, "B", "bb");
-        driver.process(topic3, "C", "cc");
-        driver.process(topic4, "D", "dd");
-        driver.process(topic4, "E", "ee");
-        driver.process(topic3, "F", "ff");
-        driver.process(topic2, "G", "gg");
-        driver.process(topic1, "H", "hh");
+        driver.pipeInput(recordFactory.create(topic1, "A", "aa"));
+        driver.pipeInput(recordFactory.create(topic2, "B", "bb"));
+        driver.pipeInput(recordFactory.create(topic3, "C", "cc"));
+        driver.pipeInput(recordFactory.create(topic4, "D", "dd"));
+        driver.pipeInput(recordFactory.create(topic4, "E", "ee"));
+        driver.pipeInput(recordFactory.create(topic3, "F", "ff"));
+        driver.pipeInput(recordFactory.create(topic2, "G", "gg"));
+        driver.pipeInput(recordFactory.create(topic1, "H", "hh"));
 
         assertEquals(Utils.mkList("A:aa", "B:bb", "C:cc", "D:dd", "E:ee", "F:ff", "G:gg", "H:hh"),
                      processorSupplier.processed);
@@ -551,14 +570,13 @@ public class KStreamImplTest {
         final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
         pattern2Source.process(processorSupplier);
 
-        driver.setUp(builder);
-        driver.setTime(0L);
+        driver = new TopologyTestDriver(builder.build(), props);
 
-        driver.process("topic-3", "A", "aa");
-        driver.process("topic-4", "B", "bb");
-        driver.process("topic-5", "C", "cc");
-        driver.process("topic-6", "D", "dd");
-        driver.process("topic-7", "E", "ee");
+        driver.pipeInput(recordFactory.create("topic-3", "A", "aa"));
+        driver.pipeInput(recordFactory.create("topic-4", "B", "bb"));
+        driver.pipeInput(recordFactory.create("topic-5", "C", "cc"));
+        driver.pipeInput(recordFactory.create("topic-6", "D", "dd"));
+        driver.pipeInput(recordFactory.create("topic-7", "E", "ee"));
 
         assertEquals(Utils.mkList("A:aa", "B:bb", "C:cc", "D:dd", "E:ee"),
                 processorSupplier.processed);
@@ -576,14 +594,13 @@ public class KStreamImplTest {
         final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
         merged.process(processorSupplier);
 
-        driver.setUp(builder);
-        driver.setTime(0L);
+        driver = new TopologyTestDriver(builder.build(), props);
 
-        driver.process("topic-3", "A", "aa");
-        driver.process("topic-4", "B", "bb");
-        driver.process("topic-A", "C", "cc");
-        driver.process("topic-Z", "D", "dd");
-        driver.process(topic3, "E", "ee");
+        driver.pipeInput(recordFactory.create("topic-3", "A", "aa"));
+        driver.pipeInput(recordFactory.create("topic-4", "B", "bb"));
+        driver.pipeInput(recordFactory.create("topic-A", "C", "cc"));
+        driver.pipeInput(recordFactory.create("topic-Z", "D", "dd"));
+        driver.pipeInput(recordFactory.create(topic3, "E", "ee"));
 
         assertEquals(Utils.mkList("A:aa", "B:bb", "C:cc", "D:dd", "E:ee"),
                 processorSupplier.processed);
