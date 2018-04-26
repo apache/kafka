@@ -54,15 +54,17 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
         this.metrics = metrics;
 
+
         final HashMap<String, String> tags = new LinkedHashMap<>();
         tags.put("client-id", threadName);
         this.tags = Collections.unmodifiableMap(tags);
 
         this.parentSensors = new HashMap<>();
 
+        final String group = "stream-metrics";
         skippedRecordsSensor = threadLevelSensor("skipped-records", Sensor.RecordingLevel.INFO);
-        skippedRecordsSensor.add(metrics.metricName("skipped-records-rate", "stream-metrics", "The average per-second number of skipped records", tags), new Rate(TimeUnit.SECONDS, new Count()));
-        skippedRecordsSensor.add(metrics.metricName("skipped-records-total", "stream-metrics", "The total number of skipped records", tags), new Total());
+        skippedRecordsSensor.add(metrics.metricName("skipped-records-rate", group, "The average per-second number of skipped records", tags), new Rate(TimeUnit.SECONDS, new Count()));
+        skippedRecordsSensor.add(metrics.metricName("skipped-records-total", group, "The total number of skipped records", tags), new Total());
     }
 
     public final Sensor threadLevelSensor(final String sensorName,

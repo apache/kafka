@@ -364,6 +364,7 @@ class NamedCache {
             taskName = ThreadCache.taskIDfromCacheName(cacheName);
             this.cacheName = cacheName;
             this.metrics = metrics;
+            final String group = "stream-record-cache-metrics";
 
             // add parent
             final Map<String, String> allMetricTags = metrics.tagMap(
@@ -372,15 +373,15 @@ class NamedCache {
             );
             final Sensor taskLevelHitRatioSensor = metrics.taskLevelSensor("hitRatio", taskName, Sensor.RecordingLevel.DEBUG);
             taskLevelHitRatioSensor.add(
-                new MetricName("hitRatio-avg", "stream-record-cache-metrics", "The average cache hit ratio.", allMetricTags),
+                new MetricName("hitRatio-avg", group, "The average cache hit ratio.", allMetricTags),
                 new Avg()
             );
             taskLevelHitRatioSensor.add(
-                new MetricName("hitRatio-min", "stream-record-cache-metrics", "The minimum cache hit ratio.", allMetricTags),
+                new MetricName("hitRatio-min", group, "The minimum cache hit ratio.", allMetricTags),
                 new Min()
             );
             taskLevelHitRatioSensor.add(
-                new MetricName("hitRatio-max", "stream-record-cache-metrics", "The maximum cache hit ratio.", allMetricTags),
+                new MetricName("hitRatio-max", group, "The maximum cache hit ratio.", allMetricTags),
                 new Max()
             );
 
@@ -398,15 +399,15 @@ class NamedCache {
                 taskLevelHitRatioSensor
             );
             hitRatioSensor.add(
-                new MetricName("hitRatio-avg", "stream-record-cache-metrics", "The average cache hit ratio.", metricTags),
+                new MetricName("hitRatio-avg", group, "The average cache hit ratio.", metricTags),
                 new Avg()
             );
             hitRatioSensor.add(
-                new MetricName("hitRatio-min", "stream-record-cache-metrics", "The minimum cache hit ratio.", metricTags),
+                new MetricName("hitRatio-min", group, "The minimum cache hit ratio.", metricTags),
                 new Min()
             );
             hitRatioSensor.add(
-                new MetricName("hitRatio-max", "stream-record-cache-metrics", "The maximum cache hit ratio.", metricTags),
+                new MetricName("hitRatio-max", group, "The maximum cache hit ratio.", metricTags),
                 new Max()
             );
 

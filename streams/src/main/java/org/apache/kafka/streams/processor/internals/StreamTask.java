@@ -84,24 +84,25 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         TaskMetrics(final TaskId id, final StreamsMetricsImpl metrics) {
             taskName = id.toString();
             this.metrics = metrics;
+            final String group = "stream-task-metrics";
 
             // first add the global operation metrics if not yet, with the global tags only
             final Map<String, String> allTagMap = metrics.tagMap("task-id", "all");
             final Sensor parent = metrics.threadLevelSensor("commit", Sensor.RecordingLevel.DEBUG);
             parent.add(
-                new MetricName("commit-latency-avg", "stream-task-metrics", "The average latency of commit operation.", allTagMap),
+                new MetricName("commit-latency-avg", group, "The average latency of commit operation.", allTagMap),
                 new Avg()
             );
             parent.add(
-                new MetricName("commit-latency-max", "stream-task-metrics", "The max latency of commit operation.", allTagMap),
+                new MetricName("commit-latency-max", group, "The max latency of commit operation.", allTagMap),
                 new Max()
             );
             parent.add(
-                new MetricName("commit-rate", "stream-task-metrics", "The average number of occurrence of commit operation per second.", allTagMap),
+                new MetricName("commit-rate", group, "The average number of occurrence of commit operation per second.", allTagMap),
                 new Rate(TimeUnit.SECONDS, new Count())
             );
             parent.add(
-                new MetricName("commit-total", "stream-task-metrics", "The total number of occurrence of commit operations.", allTagMap),
+                new MetricName("commit-total", group, "The total number of occurrence of commit operations.", allTagMap),
                 new Count()
             );
 
@@ -109,19 +110,19 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             final Map<String, String> tagMap = metrics.tagMap("task-id", taskName);
             taskCommitTimeSensor = metrics.taskLevelSensor("commit", taskName, Sensor.RecordingLevel.DEBUG, parent);
             taskCommitTimeSensor.add(
-                new MetricName("commit-latency-avg", "stream-task-metrics", "The average latency of commit operation.", tagMap),
+                new MetricName("commit-latency-avg", group, "The average latency of commit operation.", tagMap),
                 new Avg()
             );
             taskCommitTimeSensor.add(
-                new MetricName("commit-latency-max", "stream-task-metrics", "The max latency of commit operation.", tagMap),
+                new MetricName("commit-latency-max", group, "The max latency of commit operation.", tagMap),
                 new Max()
             );
             taskCommitTimeSensor.add(
-                new MetricName("commit-rate", "stream-task-metrics", "The average number of occurrence of commit operation per second.", tagMap),
+                new MetricName("commit-rate", group, "The average number of occurrence of commit operation per second.", tagMap),
                 new Rate(TimeUnit.SECONDS, new Count())
             );
             taskCommitTimeSensor.add(
-                new MetricName("commit-total", "stream-task-metrics", "The total number of occurrence of commit operations.", tagMap),
+                new MetricName("commit-total", group, "The total number of occurrence of commit operations.", tagMap),
                 new Count()
             );
         }
