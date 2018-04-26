@@ -91,7 +91,7 @@ public class RecordCollectorTest {
         assertEquals((Long) 0L, offsets.get(new TopicPartition("topic1", 2)));
 
         // ignore StreamPartitioner
-        collector.send("topic1", "999", "0", null,0, null, stringSerializer, stringSerializer);
+        collector.send("topic1", "999", "0", null, 0, null, stringSerializer, stringSerializer);
         collector.send("topic1", "999", "0", null, 1, null, stringSerializer, stringSerializer);
         collector.send("topic1", "999", "0", null, 2, null, stringSerializer, stringSerializer);
 

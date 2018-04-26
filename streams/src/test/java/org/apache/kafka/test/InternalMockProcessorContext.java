@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.test;
 
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
@@ -257,6 +258,14 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
             return -1L;
         }
         return recordContext.offset();
+    }
+
+    @Override
+    public Headers headers() {
+        if (recordContext == null) {
+            return null;
+        }
+        return recordContext.headers();
     }
 
     Map<String, StateStore> allStateStores() {
