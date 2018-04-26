@@ -78,7 +78,7 @@ import java.util.concurrent.atomic.AtomicInteger
  *
  * 1        [c+2,c+2]  [c+3,c+3]  [c+4,c+4]
  * 2        [c,c+2]    [c+3,c+5]  [c+6,c+8]
- * 3        [c,c+8]    [c+9,c+17] [c+18,c+18]
+ * 3        [c,c+8]    [c+9,c+17] [c+18,c+26]
  *
  * At time = c+3, [c+2,c+2] is newly expired.
  * Level 2 moves to c+3, and [c+5,c+5] and [c+9,c+11] are created.
@@ -86,7 +86,7 @@ import java.util.concurrent.atomic.AtomicInteger
  *
  * 1        [c+3,c+3]  [c+4,c+4]  [c+5,c+5]
  * 2        [c+3,c+5]  [c+6,c+8]  [c+9,c+11]
- * 3        [c,c+8]    [c+9,c+17] [c+8,c+11]
+ * 3        [c,c+8]    [c+9,c+17] [c+18,c+26]
  *
  * The hierarchical timing wheels works especially well when operations are completed before they time out.
  * Even when everything times out, it still has advantageous when there are many items in the timer.
