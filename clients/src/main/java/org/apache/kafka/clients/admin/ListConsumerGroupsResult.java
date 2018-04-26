@@ -70,7 +70,7 @@ public class ListConsumerGroupsResult {
      * In the event of a failure, the future yields nothing but the first exception which
      * occurred.
      */
-    public KafkaFutureImpl<Collection<ConsumerGroupListing>> all() {
+    public KafkaFuture<Collection<ConsumerGroupListing>> all() {
         return all;
     }
 
@@ -83,7 +83,7 @@ public class ListConsumerGroupsResult {
      * those partial results.  When using this future, it is a good idea to also check
      * the errors future so that errors can be displayed and handled.
      */
-    public KafkaFutureImpl<Collection<ConsumerGroupListing>> valid() {
+    public KafkaFuture<Collection<ConsumerGroupListing>> valid() {
         return valid;
     }
 
@@ -96,7 +96,7 @@ public class ListConsumerGroupsResult {
      * This future itself never fails with an error.  In the event of an error, this future
      * will successfully yield a collection containing at least one exception.
      */
-    public KafkaFutureImpl<Collection<Throwable>> errors() {
+    public KafkaFuture<Collection<Throwable>> errors() {
         return errors;
     }
 }
