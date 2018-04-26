@@ -50,9 +50,13 @@ public class PartitionsSpec extends Message {
         if (partitionAssignments != null) {
             for (Entry<Integer, List<Integer>> entry : partitionAssignments.entrySet()) {
                 int partition = entry.getKey() == null ? 0 : entry.getKey();
-                List<Integer> assignments = entry.getValue() == null ?
-                    Collections.<Integer>emptyList() : new ArrayList<Integer>(entry.getValue());
-                partMap.put(partition, assignments);
+                ArrayList<Integer> assignments = new ArrayList<>();
+                if (entry.getValue() != null) {
+                    for (Integer brokerId : entry.getValue()) {
+                        assignments.add(brokerId == null ? Integer.valueOf(0) : brokerId);
+                    }
+                }
+                partMap.put(partition, Collections.unmodifiableList(assignments));
             }
         }
         this.partitionAssignments = Collections.unmodifiableMap(partMap);
