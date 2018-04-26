@@ -18,14 +18,11 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
-import org.apache.kafka.common.Node;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
-import org.apache.kafka.common.utils.AbstractIterator;
 
+import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Iterator;
-import java.util.Map;
 
 /**
  * The result of the {@link AdminClient#listConsumerGroups()} call.
@@ -34,70 +31,72 @@ import java.util.Map;
  */
 @InterfaceStability.Evolving
 public class ListConsumerGroupsResult {
-    private final Map<Node, KafkaFutureImpl<Collection<ConsumerGroupListing>>> futuresMap;
-    private final KafkaFuture<Collection<ConsumerGroupListing>> flattenFuture;
-    private final KafkaFuture<Void> listFuture;
+    private final KafkaFutureImpl<Collection<ConsumerGroupListing>> all;
+    private final KafkaFutureImpl<Collection<ConsumerGroupListing>> valid;
+    private final KafkaFutureImpl<Collection<Throwable>> errors;
 
-    ListConsumerGroupsResult(final KafkaFuture<Void> listFuture,
-                             final KafkaFuture<Collection<ConsumerGroupListing>> flattenFuture,
-                             final Map<Node, KafkaFutureImpl<Collection<ConsumerGroupListing>>> futuresMap) {
-        this.flattenFuture = flattenFuture;
-        this.listFuture = listFuture;
-        this.futuresMap = futuresMap;
-    }
-
-    private class FutureConsumerGroupListingIterator extends AbstractIterator<KafkaFuture<ConsumerGroupListing>> {
-        private Iterator<KafkaFutureImpl<Collection<ConsumerGroupListing>>> futuresIter;
-        private Iterator<ConsumerGroupListing> innerIter;
-
-        @Override
-        protected KafkaFuture<ConsumerGroupListing> makeNext() {
-            if (futuresIter == null) {
-                try {
-                    listFuture.get();
-                } catch (Exception e) {
-                    // the list future has failed, there will be no listings to show at all
-                    return allDone();
-                }
-
-                futuresIter = futuresMap.values().iterator();
-            }
-
-            while (innerIter == null || !innerIter.hasNext()) {
-                if (futuresIter.hasNext()) {
-                    KafkaFuture<Collection<ConsumerGroupListing>> collectionFuture = futuresIter.next();
-                    try {
-                        Collection<ConsumerGroupListing> collection = collectionFuture.get();
-                        innerIter = collection.iterator();
-                    } catch (Exception e) {
-                        KafkaFutureImpl<ConsumerGroupListing> future = new KafkaFutureImpl<>();
-                        future.completeExceptionally(e);
-                        return future;
+    ListConsumerGroupsResult(KafkaFutureImpl<Collection<Object>> future) {
+        this.all = new KafkaFutureImpl<>();
+        this.valid = new KafkaFutureImpl<>();
+        this.errors = new KafkaFutureImpl<>();
+        future.thenApply(new KafkaFuture.BaseFunction<Collection<Object>, Void>() {
+            @Override
+            public Void apply(Collection<Object> results) {
+                ArrayList<Throwable> curErrors = new ArrayList<>();
+                ArrayList<ConsumerGroupListing> curValid = new ArrayList<>();
+                for (Object resultObject : results) {
+                    if (resultObject instanceof Throwable) {
+                        curErrors.add((Throwable) resultObject);
+                    } else {
+                        curValid.add((ConsumerGroupListing) resultObject);
                     }
-                } else {
-                    return allDone();
                 }
+                if (!curErrors.isEmpty()) {
+                    all.completeExceptionally(curErrors.get(0));
+                } else {
+                    all.complete(curValid);
+                }
+                valid.complete(curValid);
+                errors.complete(curErrors);
+                return null;
             }
-
-            KafkaFutureImpl<ConsumerGroupListing> future = new KafkaFutureImpl<>();
-            future.complete(innerIter.next());
-            return future;
-        }
+        });
     }
 
     /**
-     * Return an iterator of futures for ConsumerGroupListing objects; the returned future will throw exception
-     * if we cannot get a complete collection of consumer listings.
+     * Returns a future that yields either an exception, or the full set of consumer group
+     * listings.
+     *
+     * In the event of a failure, the future yields nothing but the first exception which
+     * occurred.
      */
-    public Iterator<KafkaFuture<ConsumerGroupListing>> iterator() {
-        return new FutureConsumerGroupListingIterator();
+    public KafkaFutureImpl<Collection<ConsumerGroupListing>> all() {
+        return all;
     }
 
     /**
-     * Return a future which yields a full collection of ConsumerGroupListing objects; will throw exception
-     * if we cannot get a complete collection of consumer listings.
+     * Returns a future which yields just the valid listings.
+     *
+     * This future never fails with an error, no matter what happens.  Errors are completely
+     * ignored.  If nothing can be fetched, an empty collection is yielded.
+     * If there is an error, but some results can be returned, this future will yield
+     * those partial results.  When using this future, it is a good idea to also check
+     * the errors future so that errors can be displayed and handled.
      */
-    public KafkaFuture<Collection<ConsumerGroupListing>> all() {
-        return flattenFuture;
+    public KafkaFutureImpl<Collection<ConsumerGroupListing>> valid() {
+        return valid;
+    }
+
+    /**
+     * Returns a future which yields just the errors which occurred.
+     *
+     * If this future yields a non-empty collection, it is very likely that elements are
+     * missing from the valid() set.
+     *
+     * This future itself never fails with an error.  In the event of an error, this future
+     * will successfully yield a collection containing at least one exception.
+     */
+    public KafkaFutureImpl<Collection<Throwable>> errors() {
+        return errors;
     }
 }
