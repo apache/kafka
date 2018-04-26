@@ -98,7 +98,7 @@ The Trogdor agent process implements the tasks.  For example, when running a wor
 
 Both the coordinator and the agent expose a REST interface that accepts objects serialized via JSON.  There is also a command-line program which makes it easy to send messages to either one without manually crafting the JSON message body.
 
-Most Trogdor RPCs are idempotent.  Sending the same RPC twice in a row has the same effect as sending the RPC once.
+All Trogdor RPCs are idempotent except the shutdown requests.  Sending an idempotent RPC twice in a row has the same effect as sending the RPC once.
 
 Tasks
 ========================================
