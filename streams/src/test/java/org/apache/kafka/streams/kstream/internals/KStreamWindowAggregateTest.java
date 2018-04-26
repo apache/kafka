@@ -18,10 +18,13 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
@@ -29,20 +32,18 @@ import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.test.InternalMockProcessorContext;
-import org.apache.kafka.test.KStreamTestDriver;
+import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.TestUtils;
+import org.junit.After;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
 
-import java.io.File;
+import java.util.Properties;
 
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
 import static org.hamcrest.CoreMatchers.hasItem;
@@ -52,13 +53,26 @@ import static org.junit.Assert.assertEquals;
 public class KStreamWindowAggregateTest {
 
     final private Serde<String> strSerde = Serdes.String();
-    private File stateDir = null;
-    @Rule
-    public final KStreamTestDriver driver = new KStreamTestDriver();
+    private final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
+    private TopologyTestDriver driver;
+    private final Properties props = new Properties();
 
     @Before
-    public void setUp() {
-        stateDir = TestUtils.tempDirectory("kafka-test");
+    public void setup() {
+        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "kstream-window-aggregate-test");
+        props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9091");
+        props.setProperty(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
+        props.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass().getName());
+        props.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass().getName());
+    }
+
+    @After
+    public void cleanup() {
+        props.clear();
+        if (driver != null) {
+            driver.close();
+        }
+        driver = null;
     }
 
     @Test
@@ -74,55 +88,24 @@ public class KStreamWindowAggregateTest {
         final MockProcessorSupplier<Windowed<String>, String> proc2 = new MockProcessorSupplier<>();
         table2.toStream().process(proc2);
 
-        driver.setUp(builder, stateDir);
+        driver = new TopologyTestDriver(builder.build(), props, 0L);
 
-        setRecordContext(0, topic1);
-        driver.process(topic1, "A", "1");
-        driver.flushState();
-        setRecordContext(1, topic1);
-        driver.process(topic1, "B", "2");
-        driver.flushState();
-        setRecordContext(2, topic1);
-        driver.process(topic1, "C", "3");
-        driver.flushState();
-        setRecordContext(3, topic1);
-        driver.process(topic1, "D", "4");
-        driver.flushState();
-        setRecordContext(4, topic1);
-        driver.process(topic1, "A", "1");
-        driver.flushState();
+        driver.pipeInput(recordFactory.create(topic1, "A", "1", 0L));
+        driver.pipeInput(recordFactory.create(topic1, "B", "2", 1L));
+        driver.pipeInput(recordFactory.create(topic1, "C", "3", 2L));
+        driver.pipeInput(recordFactory.create(topic1, "D", "4", 3L));
+        driver.pipeInput(recordFactory.create(topic1, "A", "1", 4L));
 
-        setRecordContext(5, topic1);
-        driver.process(topic1, "A", "1");
-        driver.flushState();
-        setRecordContext(6, topic1);
-        driver.process(topic1, "B", "2");
-        driver.flushState();
-        setRecordContext(7, topic1);
-        driver.process(topic1, "D", "4");
-        driver.flushState();
-        setRecordContext(8, topic1);
-        driver.process(topic1, "B", "2");
-        driver.flushState();
-        setRecordContext(9, topic1);
-        driver.process(topic1, "C", "3");
-        driver.flushState();
-        setRecordContext(10, topic1);
-        driver.process(topic1, "A", "1");
-        driver.flushState();
-        setRecordContext(11, topic1);
-        driver.process(topic1, "B", "2");
-        driver.flushState();
-        setRecordContext(12, topic1);
-        driver.flushState();
-        driver.process(topic1, "D", "4");
-        driver.flushState();
-        setRecordContext(13, topic1);
-        driver.process(topic1, "B", "2");
-        driver.flushState();
-        setRecordContext(14, topic1);
-        driver.process(topic1, "C", "3");
-        driver.flushState();
+        driver.pipeInput(recordFactory.create(topic1, "A", "1", 5L));
+        driver.pipeInput(recordFactory.create(topic1, "B", "2", 6L));
+        driver.pipeInput(recordFactory.create(topic1, "D", "4", 7L));
+        driver.pipeInput(recordFactory.create(topic1, "B", "2", 8L));
+        driver.pipeInput(recordFactory.create(topic1, "C", "3", 9L));
+        driver.pipeInput(recordFactory.create(topic1, "A", "1", 10L));
+        driver.pipeInput(recordFactory.create(topic1, "B", "2", 11L));
+        driver.pipeInput(recordFactory.create(topic1, "D", "4", 12L));
+        driver.pipeInput(recordFactory.create(topic1, "B", "2", 13L));
+        driver.pipeInput(recordFactory.create(topic1, "C", "3", 14L));
 
 
         assertEquals(
@@ -147,10 +130,6 @@ public class KStreamWindowAggregateTest {
             ),
             proc2.processed
         );
-    }
-
-    private void setRecordContext(final long time, @SuppressWarnings("SameParameterValue") final String topic) {
-        ((InternalMockProcessorContext) driver.context()).setRecordContext(new ProcessorRecordContext(time, 0, 0, topic));
     }
 
     @Test
@@ -183,23 +162,13 @@ public class KStreamWindowAggregateTest {
             }
         }).toStream().process(proc3);
 
-        driver.setUp(builder, stateDir);
+        driver = new TopologyTestDriver(builder.build(), props, 0L);
 
-        setRecordContext(0, topic1);
-        driver.process(topic1, "A", "1");
-        driver.flushState();
-        setRecordContext(1, topic1);
-        driver.process(topic1, "B", "2");
-        driver.flushState();
-        setRecordContext(2, topic1);
-        driver.process(topic1, "C", "3");
-        driver.flushState();
-        setRecordContext(3, topic1);
-        driver.process(topic1, "D", "4");
-        driver.flushState();
-        setRecordContext(4, topic1);
-        driver.process(topic1, "A", "1");
-        driver.flushState();
+        driver.pipeInput(recordFactory.create(topic1, "A", "1", 0L));
+        driver.pipeInput(recordFactory.create(topic1, "B", "2", 1L));
+        driver.pipeInput(recordFactory.create(topic1, "C", "3", 2L));
+        driver.pipeInput(recordFactory.create(topic1, "D", "4", 3L));
+        driver.pipeInput(recordFactory.create(topic1, "A", "1", 4L));
 
         proc1.checkAndClearProcessResult(
             "[A@0/10]:0+1",
@@ -211,21 +180,11 @@ public class KStreamWindowAggregateTest {
         proc2.checkAndClearProcessResult();
         proc3.checkAndClearProcessResult();
 
-        setRecordContext(5, topic1);
-        driver.process(topic1, "A", "1");
-        driver.flushState();
-        setRecordContext(6, topic1);
-        driver.process(topic1, "B", "2");
-        driver.flushState();
-        setRecordContext(7, topic1);
-        driver.process(topic1, "D", "4");
-        driver.flushState();
-        setRecordContext(8, topic1);
-        driver.process(topic1, "B", "2");
-        driver.flushState();
-        setRecordContext(9, topic1);
-        driver.process(topic1, "C", "3");
-        driver.flushState();
+        driver.pipeInput(recordFactory.create(topic1, "A", "1", 5L));
+        driver.pipeInput(recordFactory.create(topic1, "B", "2", 6L));
+        driver.pipeInput(recordFactory.create(topic1, "D", "4", 7L));
+        driver.pipeInput(recordFactory.create(topic1, "B", "2", 8L));
+        driver.pipeInput(recordFactory.create(topic1, "C", "3", 9L));
 
         proc1.checkAndClearProcessResult(
             "[A@0/10]:0+1+1+1", "[A@5/15]:0+1",
@@ -237,21 +196,11 @@ public class KStreamWindowAggregateTest {
         proc2.checkAndClearProcessResult();
         proc3.checkAndClearProcessResult();
 
-        setRecordContext(0, topic1);
-        driver.process(topic2, "A", "a");
-        driver.flushState();
-        setRecordContext(1, topic1);
-        driver.process(topic2, "B", "b");
-        driver.flushState();
-        setRecordContext(2, topic1);
-        driver.process(topic2, "C", "c");
-        driver.flushState();
-        setRecordContext(3, topic1);
-        driver.process(topic2, "D", "d");
-        driver.flushState();
-        setRecordContext(4, topic1);
-        driver.process(topic2, "A", "a");
-        driver.flushState();
+        driver.pipeInput(recordFactory.create(topic2, "A", "a", 0L));
+        driver.pipeInput(recordFactory.create(topic2, "B", "b", 1L));
+        driver.pipeInput(recordFactory.create(topic2, "C", "c", 2L));
+        driver.pipeInput(recordFactory.create(topic2, "D", "d", 3L));
+        driver.pipeInput(recordFactory.create(topic2, "A", "a", 4L));
 
         proc1.checkAndClearProcessResult();
         proc2.checkAndClearProcessResult(
@@ -268,21 +217,12 @@ public class KStreamWindowAggregateTest {
             "[D@0/10]:0+4+4%0+d",
             "[A@0/10]:0+1+1+1%0+a+a");
 
-        setRecordContext(5, topic1);
-        driver.process(topic2, "A", "a");
-        driver.flushState();
-        setRecordContext(6, topic1);
-        driver.process(topic2, "B", "b");
-        driver.flushState();
-        setRecordContext(7, topic1);
-        driver.process(topic2, "D", "d");
-        driver.flushState();
-        setRecordContext(8, topic1);
-        driver.process(topic2, "B", "b");
-        driver.flushState();
-        setRecordContext(9, topic1);
-        driver.process(topic2, "C", "c");
-        driver.flushState();
+        driver.pipeInput(recordFactory.create(topic2, "A", "a", 5L));
+        driver.pipeInput(recordFactory.create(topic2, "B", "b", 6L));
+        driver.pipeInput(recordFactory.create(topic2, "D", "d", 7L));
+        driver.pipeInput(recordFactory.create(topic2, "B", "b", 8L));
+        driver.pipeInput(recordFactory.create(topic2, "C", "c", 9L));
+
         proc1.checkAndClearProcessResult();
         proc2.checkAndClearProcessResult(
             "[A@0/10]:0+a+a+a", "[A@5/15]:0+a",
@@ -314,15 +254,13 @@ public class KStreamWindowAggregateTest {
                 Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic1-Canonicalized").withValueSerde(strSerde)
             );
 
-        driver.setUp(builder, stateDir);
+        driver = new TopologyTestDriver(builder.build(), props, 0L);
 
-        setRecordContext(0, topic);
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-        driver.process(topic, null, "1");
-        driver.flushState();
+        driver.pipeInput(recordFactory.create(topic, null, "1"));
         LogCaptureAppender.unregister(appender);
 
-        assertEquals(1.0, getMetricByName(driver.context().metrics().metrics(), "skipped-records-total", "stream-metrics").metricValue());
-        assertThat(appender.getMessages(), hasItem("Skipping record due to null key. value=[1] topic=[topic] partition=[-1] offset=[-1]"));
+        assertEquals(1.0, getMetricByName(driver.metrics(), "skipped-records-total", "stream-metrics").metricValue());
+        assertThat(appender.getMessages(), hasItem("Skipping record due to null key. value=[1] topic=[topic] partition=[0] offset=[0]"));
     }
 }

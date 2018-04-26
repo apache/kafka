@@ -44,6 +44,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 
+@Deprecated
 public class KStreamTestDriver extends ExternalResource {
 
     private static final long DEFAULT_CACHE_SIZE_BYTES = 1024 * 1024L;

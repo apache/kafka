@@ -17,22 +17,25 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
-import org.apache.kafka.test.KStreamTestDriver;
+import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.TestUtils;
+import org.junit.After;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
 
-import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Properties;
 
 import static org.junit.Assert.assertEquals;
 
@@ -43,17 +46,15 @@ public class GlobalKTableJoinsTest {
     private final Map<String, String> results = new HashMap<>();
     private final String streamTopic = "stream";
     private final String globalTopic = "global";
-    private File stateDir;
     private GlobalKTable<String, String> global;
     private KStream<String, String> stream;
     private KeyValueMapper<String, String, String> keyValueMapper;
     private ForeachAction<String, String> action;
-    @Rule
-    public final KStreamTestDriver driver = new KStreamTestDriver();
+    private TopologyTestDriver driver;
+
 
     @Before
     public void setUp() {
-        stateDir = TestUtils.tempDirectory();
         final Consumed<String, String> consumed = Consumed.with(Serdes.String(), Serdes.String());
         global = builder.globalTable(globalTopic, consumed);
         stream = builder.stream(streamTopic, consumed);
@@ -69,6 +70,14 @@ public class GlobalKTableJoinsTest {
                 results.put(key, value);
             }
         };
+    }
+
+    @After
+    public void cleanup() {
+        if (driver != null) {
+            driver.close();
+        }
+        driver = null;
     }
 
     @Test
@@ -100,16 +109,22 @@ public class GlobalKTableJoinsTest {
     }
 
     private void verifyJoin(final Map<String, String> expected) {
-        driver.setUp(builder, stateDir);
-        driver.setTime(0L);
+        final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
+
+        final Properties props = new Properties();
+        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "global-ktable-joins-test");
+        props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9091");
+        props.setProperty(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
+
+        driver = new TopologyTestDriver(builder.build(), props);
+
         // write some data to the global table
-        driver.process(globalTopic, "a", "A");
-        driver.process(globalTopic, "b", "B");
+        driver.pipeInput(recordFactory.create(globalTopic, "a", "A"));
+        driver.pipeInput(recordFactory.create(globalTopic, "b", "B"));
         //write some data to the stream
-        driver.process(streamTopic, "1", "a");
-        driver.process(streamTopic, "2", "b");
-        driver.process(streamTopic, "3", "c");
-        driver.flushState();
+        driver.pipeInput(recordFactory.create(streamTopic, "1", "a"));
+        driver.pipeInput(recordFactory.create(streamTopic, "2", "b"));
+        driver.pipeInput(recordFactory.create(streamTopic, "3", "c"));
 
         assertEquals(expected, results);
     }
