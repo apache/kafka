@@ -20,6 +20,9 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Used to represent any type of stateless operation:
  *
@@ -29,6 +32,13 @@ import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 class StatelessProcessorNode<K, V> extends StreamGraphNode<K, V> {
 
     private final ProcessorSupplier processorSupplier;
+
+    // some processors need to register multiple parent names with
+    // the InternalTopologyBuilder KStream#merge for example.
+    // There is only one parent graph node but the name of each KStream merged needs
+    // to get registered with InternalStreamsBuilder
+
+    private List<String> multipleParentNames = new ArrayList<>();
 
 
     StatelessProcessorNode(final String predecessorNodeName,
@@ -43,8 +53,23 @@ class StatelessProcessorNode<K, V> extends StreamGraphNode<K, V> {
         this.processorSupplier = processorSupplier;
     }
 
+    StatelessProcessorNode(final String parentNodeName,
+                           final String nodeName,
+                           final boolean repartitionRequired,
+                           final ProcessorSupplier processorSupplier,
+                           final List<String> multipleParentNames) {
+
+        this(parentNodeName, nodeName, processorSupplier, repartitionRequired);
+
+        this.multipleParentNames = multipleParentNames;
+    }
+
     ProcessorSupplier processorSupplier() {
         return processorSupplier;
+    }
+
+    List<String> multipleParentNames() {
+        return new ArrayList<>(multipleParentNames);
     }
 
     @Override
