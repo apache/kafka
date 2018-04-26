@@ -2343,14 +2343,14 @@ public class KafkaAdminClient extends AdminClient {
         return new DescribeConsumerGroupsResult(new HashMap<String, KafkaFuture<ConsumerGroupDescription>>(futures));
     }
 
-    private final static class ListConsumeGroupsResults {
+    private final static class ListConsumerGroupsResults {
         private final List<Throwable> errors;
         private final HashMap<String, ConsumerGroupListing> listings;
         private final HashSet<Node> remaining;
         private final KafkaFutureImpl<Collection<Object>> future;
 
-        ListConsumeGroupsResults(Collection<Throwable> errors, Collection<Node> leaders,
-                                 KafkaFutureImpl<Collection<Object>> future) {
+        ListConsumerGroupsResults(Collection<Throwable> errors, Collection<Node> leaders,
+                                  KafkaFutureImpl<Collection<Object>> future) {
             this.errors = new ArrayList<>(errors);
             this.listings = new HashMap<>();
             this.remaining = new HashSet<>(leaders);
@@ -2428,8 +2428,8 @@ public class KafkaAdminClient extends AdminClient {
                         }
                     }
                 }
-                final ListConsumeGroupsResults results =
-                    new ListConsumeGroupsResults(metadataExceptions, leaders, all);
+                final ListConsumerGroupsResults results =
+                    new ListConsumerGroupsResults(metadataExceptions, leaders, all);
                 for (final Node node : leaders) {
                     final long nowList = time.milliseconds();
                     runnable.call(new Call("listConsumerGroups", deadline, new ConstantNodeIdProvider(node.id())) {
