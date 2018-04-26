@@ -17,13 +17,13 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.util.List;
@@ -33,7 +33,7 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
 
     public GlobalProcessorContextImpl(final StreamsConfig config,
                                       final StateManager stateMgr,
-                                      final StreamsMetrics metrics,
+                                      final StreamsMetricsImpl metrics,
                                       final ThreadCache cache) {
         super(new TaskId(-1, -1), config, metrics, stateMgr, cache);
     }

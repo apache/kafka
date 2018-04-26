@@ -44,6 +44,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 
+@Deprecated
 public class KStreamTestDriver extends ExternalResource {
 
     private static final long DEFAULT_CACHE_SIZE_BYTES = 1024 * 1024L;
@@ -147,7 +148,12 @@ public class KStreamTestDriver extends ExternalResource {
 
     private void initTopology(final ProcessorTopology topology, final List<StateStore> stores) {
         for (final StateStore store : stores) {
-            store.init(context, store);
+            try {
+                store.init(context, store);
+            } catch (final RuntimeException e) {
+                new RuntimeException("Fatal exception initializing store.", e).printStackTrace();
+                throw e;
+            }
         }
 
         for (final ProcessorNode node : topology.processors()) {
@@ -173,7 +179,7 @@ public class KStreamTestDriver extends ExternalResource {
         final ProcessorNode currNode = sourceNodeByTopicName(topicName);
 
         if (currNode != null) {
-            context.setRecordContext(createRecordContext(context.timestamp()));
+            context.setRecordContext(createRecordContext(topicName, context.timestamp()));
             context.setCurrentNode(currNode);
             try {
                 context.forward(key, value);
@@ -215,7 +221,6 @@ public class KStreamTestDriver extends ExternalResource {
         }
 
         closeState();
-        context.close();
     }
 
     public Set<String> allProcessorNames() {
@@ -262,13 +267,13 @@ public class KStreamTestDriver extends ExternalResource {
         }
     }
 
-    private ProcessorRecordContext createRecordContext(final long timestamp) {
-        return new ProcessorRecordContext(timestamp, -1, -1, "topic");
+    private ProcessorRecordContext createRecordContext(final String topicName, final long timestamp) {
+        return new ProcessorRecordContext(timestamp, -1, -1, topicName);
     }
 
     private class MockRecordCollector extends RecordCollectorImpl {
         MockRecordCollector() {
-            super(null, "KStreamTestDriver", new LogContext("KStreamTestDriver "), new DefaultProductionExceptionHandler());
+            super(null, "KStreamTestDriver", new LogContext("KStreamTestDriver "), new DefaultProductionExceptionHandler(), new Metrics().sensor("skipped-records"));
         }
 
         @Override

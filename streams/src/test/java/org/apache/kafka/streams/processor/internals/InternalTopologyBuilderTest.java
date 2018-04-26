@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.TopologyTestDriverWrapper;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyDescription;
@@ -34,7 +35,6 @@ import org.apache.kafka.streams.state.internals.RocksDBWindowStoreSupplier;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockStateStoreSupplier;
 import org.apache.kafka.test.MockTimestampExtractor;
-import org.apache.kafka.test.ProcessorTopologyTestDriver;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
@@ -581,7 +581,7 @@ public class InternalTopologyBuilderTest {
         builder.addProcessor(badNodeName, new LocalMockProcessorSupplier(), sourceNodeName);
         
         try {
-            new ProcessorTopologyTestDriver(streamsConfig, builder);
+            new TopologyTestDriverWrapper(builder, config);
             fail("Should have throw StreamsException");
         } catch (final StreamsException e) {
             final String error = e.toString();
