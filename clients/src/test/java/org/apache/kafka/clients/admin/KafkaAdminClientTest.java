@@ -34,6 +34,7 @@ import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.NotLeaderForPartitionException;
@@ -80,7 +81,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -648,9 +648,8 @@ public class KafkaAdminClientTest {
         }
     }
 
-    //Ignoring test to be fixed on follow-up PR
     @Test
-    public void testListConsumerGroups() {
+    public void testListConsumerGroups() throws Exception {
         final HashMap<Integer, Node> nodes = new HashMap<>();
         Node node0 = new Node(0, "localhost", 8121);
         Node node1 = new Node(1, "localhost", 8122);
@@ -685,7 +684,8 @@ public class KafkaAdminClientTest {
                             env.cluster().nodes(),
                             env.cluster().clusterResource().clusterId(),
                             env.cluster().controller().id(),
-                            Collections.singletonList(new MetadataResponse.TopicMetadata(Errors.NONE, Topic.GROUP_METADATA_TOPIC_NAME, true, partitionMetadata))));
+                            Collections.singletonList(new MetadataResponse.TopicMetadata(Errors.NONE,
+                                Topic.GROUP_METADATA_TOPIC_NAME, true, partitionMetadata))));
 
             env.kafkaClient().prepareResponseFrom(
                     new ListGroupsResponse(
@@ -713,31 +713,29 @@ public class KafkaAdminClientTest {
                     node2);
 
             final ListConsumerGroupsResult result = env.adminClient().listConsumerGroups();
-
-            try {
-                Collection<ConsumerGroupListing> listing = result.all().get();
-                fail("Expected to throw exception");
-            } catch (Exception e) {
-                // this is good
+            assertFutureError(result.all(), CoordinatorNotAvailableException.class);
+            Collection<ConsumerGroupListing> listings = result.valid().get();
+            assertEquals(2, listings.size());
+            for (ConsumerGroupListing listing : listings) {
+                assertTrue(listing.groupId().equals("group-1") || listing.groupId().equals("group-2"));
             }
+            assertEquals(1, result.errors().get().size());
 
-            Iterator<KafkaFuture<ConsumerGroupListing>> iterator = result.iterator();
-            int numListing = 0;
-            int numFailure = 0;
-
-            while (iterator.hasNext()) {
-                KafkaFuture<ConsumerGroupListing> future = iterator.next();
-                try {
-                    ConsumerGroupListing listing = future.get();
-                    numListing++;
-                    assertTrue(listing.groupId().equals("group-1") || listing.groupId().equals("group-2"));
-                } catch (Exception e) {
-                    numFailure++;
-                }
-            }
-
-            assertEquals(2, numListing);
-            assertEquals(1, numFailure);
+            // Test handling the error where we are unable to get metadata for the __consumer_offsets topic.
+            env.kafkaClient().prepareResponse(
+                new MetadataResponse(
+                    env.cluster().nodes(),
+                    env.cluster().clusterResource().clusterId(),
+                    env.cluster().controller().id(),
+                    Collections.singletonList(new MetadataResponse.TopicMetadata(
+                        Errors.UNKNOWN_TOPIC_OR_PARTITION, Topic.GROUP_METADATA_TOPIC_NAME,
+                        true, Collections.<MetadataResponse.PartitionMetadata>emptyList()))));
+            final ListConsumerGroupsResult result2 = env.adminClient().listConsumerGroups();
+            Collection<Throwable> errors = result2.errors().get();
+            assertEquals(1, errors.size());
+            assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.forException(errors.iterator().next()));
+            assertTrue(result2.valid().get().isEmpty());
+            assertFutureError(result2.all(), UnknownTopicOrPartitionException.class);
         }
     }
 
