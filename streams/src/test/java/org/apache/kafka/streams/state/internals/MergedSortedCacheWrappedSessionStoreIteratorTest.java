@@ -33,12 +33,7 @@ import static org.junit.Assert.assertTrue;
 
 public class MergedSortedCacheWrappedSessionStoreIteratorTest {
 
-    private static final SegmentedCacheFunction SINGLE_SEGMENT_CACHE_FUNCTION = new SegmentedCacheFunction(null, -1) {
-        @Override
-        public long segmentId(Bytes key) {
-            return 0;
-        }
-    };
+    private static final SegmentedCacheFunction SINGLE_SEGMENT_CACHE_FUNCTION = new SegmentedCacheFunction(new SessionKeySchema(), 100);
 
     private final Bytes storeKey = Bytes.wrap("a".getBytes());
     private final Bytes cacheKey = Bytes.wrap("b".getBytes());

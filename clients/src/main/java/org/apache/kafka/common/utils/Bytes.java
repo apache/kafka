@@ -149,7 +149,7 @@ public class Bytes implements Comparable<Bytes> {
                     final byte[] buffer2, int offset2, int length2);
     }
 
-    private static class LexicographicByteArrayComparator implements ByteArrayComparator {
+    public static class LexicographicByteArrayComparator implements ByteArrayComparator {
 
         @Override
         public int compare(byte[] buffer1, byte[] buffer2) {

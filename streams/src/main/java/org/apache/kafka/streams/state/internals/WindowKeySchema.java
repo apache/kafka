@@ -25,6 +25,8 @@ import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
 
+import org.rocksdb.NativeComparatorWrapper;
+
 import java.nio.ByteBuffer;
 import java.util.List;
 
@@ -33,7 +35,8 @@ public class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
     private static final int SEQNUM_SIZE = 4;
     private static final int TIMESTAMP_SIZE = 8;
     private static final int SUFFIX_SIZE = TIMESTAMP_SIZE + SEQNUM_SIZE;
-    private static final byte[] MIN_SUFFIX = new byte[SUFFIX_SIZE];
+
+    private static final WindowKeyBytesComparator COMPARATOR = new WindowKeyBytesComparator();
 
     @Override
     public void init(final String topic) {
@@ -41,27 +44,12 @@ public class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
     }
 
     @Override
-    public Bytes upperRange(final Bytes key, final long to) {
-        final byte[] maxSuffix = ByteBuffer.allocate(SUFFIX_SIZE)
-            .putLong(to)
-            .putInt(Integer.MAX_VALUE)
-            .array();
-
-        return OrderedBytes.upperRange(key, maxSuffix);
-    }
-
-    @Override
     public Bytes lowerRange(final Bytes key, final long from) {
-        return OrderedBytes.lowerRange(key, MIN_SUFFIX);
-    }
-
-    @Override
-    public Bytes lowerRangeFixedSize(final Bytes key, final long from) {
         return WindowKeySchema.toStoreKeyBinary(key, Math.max(0, from), 0);
     }
 
     @Override
-    public Bytes upperRangeFixedSize(final Bytes key, final long to) {
+    public Bytes upperRange(final Bytes key, final long to) {
         return WindowKeySchema.toStoreKeyBinary(key, to, Integer.MAX_VALUE);
     }
 
@@ -95,6 +83,11 @@ public class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
     @Override
     public List<Segment> segmentsToSearch(final Segments segments, final long from, final long to) {
         return segments.segments(from, to);
+    }
+
+    @Override
+    public Bytes.ByteArrayComparator bytesComparator() {
+        return COMPARATOR;
     }
 
     /**
@@ -221,5 +214,32 @@ public class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
         final ByteBuffer buffer = ByteBuffer.wrap(binaryKey);
         final long start = buffer.getLong(binaryKey.length - TIMESTAMP_SIZE - SEQNUM_SIZE);
         return timeWindowForSize(start, windowSize);
+    }
+
+    private static class WindowKeyBytesComparator extends Bytes.LexicographicByteArrayComparator {
+
+        @Override
+        public int compare(byte[] buffer1, byte[] buffer2) {
+            final int retOnKey = compare(buffer1, 0, buffer1.length - SUFFIX_SIZE,
+                                         buffer2, 0, buffer2.length - SUFFIX_SIZE);
+
+            if (retOnKey == 0) {
+                // if the key is the same, compare the suffix
+                return compare(buffer1, buffer1.length - SUFFIX_SIZE, SUFFIX_SIZE,
+                               buffer2, buffer2.length - SUFFIX_SIZE, SUFFIX_SIZE);
+            } else {
+                return retOnKey;
+            }
+        }
+    }
+
+    public static class NativeWindowKeyBytesComparatorWrapper extends NativeComparatorWrapper {
+
+        @Override
+        protected long initializeNative(final long... nativeParameterHandles) {
+            return newComparator();
+        }
+
+        private native long newComparator();
     }
 }

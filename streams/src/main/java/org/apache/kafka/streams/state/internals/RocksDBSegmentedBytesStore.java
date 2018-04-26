@@ -24,6 +24,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
 import java.util.List;
+import java.util.Objects;
 
 class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
 
@@ -39,15 +40,16 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
                                final KeySchema keySchema) {
         this.name = name;
         this.keySchema = keySchema;
-        this.segments = new Segments(name, retention, numSegments);
+        this.segments = new Segments(name, retention, numSegments, keySchema.bytesComparator());
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> fetch(final Bytes key, final long from, final long to) {
-        final List<Segment> searchSpace = keySchema.segmentsToSearch(segments, from, to);
+        Objects.requireNonNull(key, "key cannot be null");
 
-        final Bytes binaryFrom = keySchema.lowerRangeFixedSize(key, from);
-        final Bytes binaryTo = keySchema.upperRangeFixedSize(key, to);
+        final List<Segment> searchSpace = keySchema.segmentsToSearch(segments, from, to);
+        final Bytes binaryFrom = keySchema.lowerRange(key, from);
+        final Bytes binaryTo = keySchema.upperRange(key, to);
 
         return new SegmentIterator(searchSpace.iterator(),
                                    keySchema.hasNextCondition(key, key, from, to),
@@ -56,8 +58,10 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
 
     @Override
     public KeyValueIterator<Bytes, byte[]> fetch(final Bytes keyFrom, Bytes keyTo, final long from, final long to) {
-        final List<Segment> searchSpace = keySchema.segmentsToSearch(segments, from, to);
+        Objects.requireNonNull(keyFrom, "keyFrom cannot be null");
+        Objects.requireNonNull(keyTo, "keyTo cannot be null");
 
+        final List<Segment> searchSpace = keySchema.segmentsToSearch(segments, from, to);
         final Bytes binaryFrom = keySchema.lowerRange(keyFrom, from);
         final Bytes binaryTo = keySchema.upperRange(keyTo, to);
 
@@ -96,6 +100,8 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
 
     @Override
     public void put(final Bytes key, final byte[] value) {
+        Objects.requireNonNull(key, "key cannot be null");
+
         final long segmentId = segments.segmentId(keySchema.segmentTimestamp(key));
         final Segment segment = segments.getOrCreateSegment(segmentId, context);
         if (segment != null) {
@@ -105,6 +111,8 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
 
     @Override
     public byte[] get(final Bytes key) {
+        Objects.requireNonNull(key, "key cannot be null");
+
         final Segment segment = segments.getSegmentForTimestamp(keySchema.segmentTimestamp(key));
         if (segment == null) {
             return null;

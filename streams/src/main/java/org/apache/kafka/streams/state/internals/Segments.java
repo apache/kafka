@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -50,11 +51,13 @@ class Segments {
     private final int numSegments;
     private final long segmentInterval;
     private final SimpleDateFormat formatter;
+    private final Bytes.ByteArrayComparator comparator;
     private long minSegmentId = Long.MAX_VALUE;
     private long maxSegmentId = -1L;
 
-    Segments(final String name, final long retentionPeriod, final int numSegments) {
+    Segments(final String name, final long retentionPeriod, final int numSegments, final Bytes.ByteArrayComparator comparator) {
         this.name = name;
+        this.comparator = comparator;
         this.numSegments = numSegments;
         this.segmentInterval = segmentInterval(retentionPeriod, numSegments);
         // Create a date formatter. Formatted timestamps are used as segment name suffixes
@@ -85,7 +88,7 @@ class Segments {
             if (!isSegment(segment, segmentId)) {
                 cleanup(segmentId);
             }
-            Segment newSegment = new Segment(segmentName(segmentId), name, segmentId);
+            Segment newSegment = new Segment(segmentName(segmentId), name, segmentId, comparator);
             Segment previousSegment = segments.putIfAbsent(key, newSegment);
             if (previousSegment == null) {
                 newSegment.openDB(context);

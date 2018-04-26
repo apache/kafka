@@ -75,6 +75,8 @@ public final class StreamsTestUtils {
     }
 
     public static <K> void verifyKeyValueList(final List<KeyValue<K, byte[]>> expected, final List<KeyValue<K, byte[]>> actual) {
+        System.out.println(expected);
+        System.out.println(actual);
         assertThat(actual.size(), equalTo(expected.size()));
         for (int i = 0; i < actual.size(); i++) {
             final KeyValue<K, byte[]> expectedKv = expected.get(i);

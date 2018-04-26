@@ -80,6 +80,7 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
 
         cacheName = context.taskId() + "-" + bytesStore.name();
         cache = context.getCache();
+        cache.createCache(cacheName, (new SessionKeySchema()).bytesComparator());
         cache.addDirtyEntryFlushListener(cacheName, new ThreadCache.DirtyEntryFlushListener() {
             @Override
             public void apply(final List<ThreadCache.DirtyEntry> entries) {
@@ -94,8 +95,8 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
                                                                   final long earliestSessionEndTime,
                                                                   final long latestSessionStartTime) {
         validateStoreOpen();
-        final Bytes cacheKeyFrom = cacheFunction.cacheKey(keySchema.lowerRangeFixedSize(key, earliestSessionEndTime));
-        final Bytes cacheKeyTo = cacheFunction.cacheKey(keySchema.upperRangeFixedSize(key, latestSessionStartTime));
+        final Bytes cacheKeyFrom = cacheFunction.cacheKey(keySchema.lowerRange(key, earliestSessionEndTime));
+        final Bytes cacheKeyTo = cacheFunction.cacheKey(keySchema.upperRange(key, latestSessionStartTime));
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(cacheName, cacheKeyFrom, cacheKeyTo);
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> storeIterator = bytesStore.findSessions(key,

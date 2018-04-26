@@ -105,6 +105,24 @@ public class ThreadCache {
         return tokens[1];
     }
 
+    /**
+     * Adds a cache with the associated store name
+     */
+    public synchronized NamedCache createCache(final String name) {
+        return createCache(name, Bytes.BYTES_LEXICO_COMPARATOR);
+    }
+
+    public synchronized NamedCache createCache(final String name, final Bytes.ByteArrayComparator comparator) {
+        NamedCache cache = new NamedCache(name, this.metrics, comparator);
+
+        if (caches.get(name) != null) {
+            throw new IllegalStateException("Cache for store " + name + " has already been created, this should not happen.");
+        } else {
+            caches.put(name, cache);
+        }
+
+        return cache;
+    }
 
     /**
      * Add a listener that is called each time an entry is evicted from the cache or an explicit flush is called
@@ -113,7 +131,7 @@ public class ThreadCache {
      * @param listener
      */
     public void addDirtyEntryFlushListener(final String namespace, DirtyEntryFlushListener listener) {
-        final NamedCache cache = getOrCreateCache(namespace);
+        final NamedCache cache = getCache(namespace);
         cache.setListener(listener);
     }
 
@@ -148,21 +166,9 @@ public class ThreadCache {
     public void put(final String namespace, Bytes key, LRUCacheEntry value) {
         numPuts++;
 
-        final NamedCache cache = getOrCreateCache(namespace);
+        final NamedCache cache = getCache(namespace);
         cache.put(key, value);
-        maybeEvict(namespace);
-    }
-
-    public LRUCacheEntry putIfAbsent(final String namespace, Bytes key, LRUCacheEntry value) {
-        final NamedCache cache = getOrCreateCache(namespace);
-
-        final LRUCacheEntry result = cache.putIfAbsent(key, value);
-        maybeEvict(namespace);
-
-        if (result == null) {
-            numPuts++;
-        }
-        return result;
+        maybeEvict(cache);
     }
 
     public void putAll(final String namespace, final List<KeyValue<Bytes, LRUCacheEntry>> entries) {
@@ -229,10 +235,9 @@ public class ThreadCache {
         }
     }
 
-    private void maybeEvict(final String namespace) {
+    private void maybeEvict(final NamedCache cache) {
         int numEvicted = 0;
         while (sizeBytes() > maxCacheSizeBytes) {
-            final NamedCache cache = getOrCreateCache(namespace);
             // we abort here as the put on this cache may have triggered
             // a put on another cache. So even though the sizeInBytes() is
             // still > maxCacheSizeBytes there is nothing to evict from this
@@ -245,21 +250,12 @@ public class ThreadCache {
             numEvicted++;
         }
         if (log.isTraceEnabled()) {
-            log.trace("Evicted {} entries from cache {}", numEvicted, namespace);
+            log.trace("Evicted {} entries from cache {}", numEvicted, cache.name());
         }
     }
 
     private synchronized NamedCache getCache(final String namespace) {
         return caches.get(namespace);
-    }
-
-    private synchronized NamedCache getOrCreateCache(final String name) {
-        NamedCache cache = caches.get(name);
-        if (cache == null) {
-            cache = new NamedCache(name, this.metrics);
-            caches.put(name, cache);
-        }
-        return cache;
     }
 
     static class MemoryLRUCacheBytesIterator implements PeekingKeyValueIterator<Bytes, LRUCacheEntry> {

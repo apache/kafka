@@ -26,6 +26,8 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
+import org.rocksdb.NativeComparatorWrapper;
+
 import java.nio.ByteBuffer;
 import java.util.List;
 
@@ -34,7 +36,8 @@ public class SessionKeySchema implements SegmentedBytesStore.KeySchema {
 
     private static final int TIMESTAMP_SIZE = 8;
     private static final int SUFFIX_SIZE = 2 * TIMESTAMP_SIZE;
-    private static final byte[] MIN_SUFFIX = new byte[SUFFIX_SIZE];
+
+    private static final SessionKeyBytesComparator COMPARATOR = new SessionKeyBytesComparator();
 
     private String topic;
     private final Serde<Bytes> bytesSerdes = Serdes.Bytes();
@@ -45,30 +48,15 @@ public class SessionKeySchema implements SegmentedBytesStore.KeySchema {
     }
 
     @Override
-    public Bytes upperRangeFixedSize(final Bytes key, final long to) {
-        final Windowed<Bytes> sessionKey = new Windowed<>(key, new SessionWindow(to, Long.MAX_VALUE));
+    public Bytes upperRange(final Bytes key, final long latestSessionStartTime) {
+        final Windowed<Bytes> sessionKey = new Windowed<>(key, new SessionWindow(latestSessionStartTime, Long.MAX_VALUE));
         return Bytes.wrap(SessionKeySchema.toBinary(sessionKey, bytesSerdes.serializer(), topic));
     }
 
     @Override
-    public Bytes lowerRangeFixedSize(final Bytes key, final long from) {
-        final Windowed<Bytes> sessionKey = new Windowed<>(key, new SessionWindow(0, Math.max(0, from)));
+    public Bytes lowerRange(final Bytes key, final long earliestSessionEndTime) {
+        final Windowed<Bytes> sessionKey = new Windowed<>(key, new SessionWindow(0, Math.max(0, earliestSessionEndTime)));
         return Bytes.wrap(SessionKeySchema.toBinary(sessionKey, bytesSerdes.serializer(), topic));
-    }
-
-    @Override
-    public Bytes upperRange(Bytes key, long to) {
-        final byte[] maxSuffix = ByteBuffer.allocate(SUFFIX_SIZE)
-            .putLong(to)
-            // start can at most be equal to end
-            .putLong(to)
-            .array();
-        return OrderedBytes.upperRange(key, maxSuffix);
-    }
-
-    @Override
-    public Bytes lowerRange(Bytes key, long from) {
-        return OrderedBytes.lowerRange(key, MIN_SUFFIX);
     }
 
     @Override
@@ -102,6 +90,11 @@ public class SessionKeySchema implements SegmentedBytesStore.KeySchema {
                                           final long from,
                                           final long to) {
         return segments.segments(from, Long.MAX_VALUE);
+    }
+
+    @Override
+    public Bytes.ByteArrayComparator bytesComparator() {
+        return COMPARATOR;
     }
 
     private static <K> K extractKey(final byte[] binaryKey,
@@ -163,5 +156,32 @@ public class SessionKeySchema implements SegmentedBytesStore.KeySchema {
         buf.putLong(sessionKey.window().end());
         buf.putLong(sessionKey.window().start());
         return buf.array();
+    }
+
+    private static class SessionKeyBytesComparator extends Bytes.LexicographicByteArrayComparator {
+
+        @Override
+        public int compare(byte[] buffer1, byte[] buffer2) {
+            final int retOnKey = compare(buffer1, 0, buffer1.length - SUFFIX_SIZE,
+                                         buffer2, 0, buffer2.length - SUFFIX_SIZE);
+
+            if (retOnKey == 0) {
+                // if the key is the same, compare the suffix
+                return compare(buffer1, buffer1.length - SUFFIX_SIZE, SUFFIX_SIZE,
+                               buffer2, buffer2.length - SUFFIX_SIZE, SUFFIX_SIZE);
+            } else {
+                return retOnKey;
+            }
+        }
+    }
+
+    public static class NativeSessionKeyBytesComparatorWrapper extends NativeComparatorWrapper {
+
+        @Override
+        protected long initializeNative(final long... nativeParameterHandles) {
+            return newComparator();
+        }
+
+        private native long newComparator();
     }
 }

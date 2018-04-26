@@ -85,7 +85,7 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
                                         Serdes.ByteArray());
         name = context.taskId() + "-" + underlying.name();
         cache = this.context.getCache();
-
+        cache.createCache(name, (new WindowKeySchema()).bytesComparator());
         cache.addDirtyEntryFlushListener(name, new ThreadCache.DirtyEntryFlushListener() {
             @Override
             public void apply(final List<ThreadCache.DirtyEntry> entries) {
@@ -176,8 +176,8 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
 
         final WindowStoreIterator<byte[]> underlyingIterator = underlying.fetch(key, timeFrom, timeTo);
 
-        final Bytes cacheKeyFrom = cacheFunction.cacheKey(keySchema.lowerRangeFixedSize(key, timeFrom));
-        final Bytes cacheKeyTo = cacheFunction.cacheKey(keySchema.upperRangeFixedSize(key, timeTo));
+        final Bytes cacheKeyFrom = cacheFunction.cacheKey(keySchema.lowerRange(key, timeFrom));
+        final Bytes cacheKeyTo = cacheFunction.cacheKey(keySchema.upperRange(key, timeTo));
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(name, cacheKeyFrom, cacheKeyTo);
 
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(key,
@@ -201,6 +201,7 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
 
         final Bytes cacheKeyFrom = cacheFunction.cacheKey(keySchema.lowerRange(from, timeFrom));
         final Bytes cacheKeyTo = cacheFunction.cacheKey(keySchema.upperRange(to, timeTo));
+
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(name, cacheKeyFrom, cacheKeyTo);
 
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(from,
