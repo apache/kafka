@@ -34,7 +34,7 @@ class StatefulProcessorNode<K, V> extends StatelessProcessorNode<K, V> {
 
     StatefulProcessorNode(final String predecessorNodeName,
                           final String name,
-                          final ProcessorSupplier<K, V> processorSupplier,
+                          final ProcessorSupplier processorSupplier,
                           final String[] storeNames,
                           final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier,
                           final StoreBuilder<KeyValueStore<K, V>> storeBuilder,
@@ -73,7 +73,7 @@ class StatefulProcessorNode<K, V> extends StatelessProcessorNode<K, V> {
 
     static final class StatefulProcessorNodeBuilder<K, V> {
 
-        private ProcessorSupplier<K, V> processorSupplier;
+        private ProcessorSupplier processorSupplier;
         private String name;
         private String predecessorNodeName;
         private boolean repartitionRequired;
@@ -84,7 +84,7 @@ class StatefulProcessorNode<K, V> extends StatelessProcessorNode<K, V> {
         private StatefulProcessorNodeBuilder() {
         }
 
-        StatefulProcessorNodeBuilder<K, V> withProcessorSupplier(final ProcessorSupplier<K, V> processorSupplier) {
+        StatefulProcessorNodeBuilder<K, V> withProcessorSupplier(final ProcessorSupplier processorSupplier) {
             this.processorSupplier = processorSupplier;
             return this;
         }

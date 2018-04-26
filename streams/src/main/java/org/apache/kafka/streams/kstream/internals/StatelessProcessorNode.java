@@ -28,12 +28,12 @@ import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
  */
 class StatelessProcessorNode<K, V> extends StreamGraphNode<K, V> {
 
-    private final ProcessorSupplier<K, V> processorSupplier;
+    private final ProcessorSupplier processorSupplier;
 
 
     StatelessProcessorNode(final String predecessorNodeName,
                            final String nodeName,
-                           final ProcessorSupplier<K, V> processorSupplier,
+                           final ProcessorSupplier processorSupplier,
                            final boolean repartitionRequired) {
 
         super(predecessorNodeName,
@@ -43,7 +43,7 @@ class StatelessProcessorNode<K, V> extends StreamGraphNode<K, V> {
         this.processorSupplier = processorSupplier;
     }
 
-    ProcessorSupplier<K, V> processorSupplier() {
+    ProcessorSupplier processorSupplier() {
         return processorSupplier;
     }
 
