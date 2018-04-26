@@ -148,7 +148,6 @@ public class ProcessorNodeTest {
             "The average number of occurrence of " + throughputOperation + " operation per second.", metricTags)));
 
 
-        context.close();
     }
 
 }

@@ -76,7 +76,6 @@ public class ChangeLoggingKeyValueBytesStoreTest {
 
     @After
     public void after() {
-        context.close();
         store.close();
     }
 

@@ -16,13 +16,13 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Min;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,7 +53,7 @@ class NamedCache {
     private long numOverwrites = 0;
     private long numFlushes = 0;
 
-    NamedCache(final String name, final StreamsMetrics metrics) {
+    NamedCache(final String name, final StreamsMetricsImpl metrics) {
         this.name = name;
         this.namedCacheMetrics = new NamedCacheMetrics(metrics, name);
     }
@@ -355,45 +355,66 @@ class NamedCache {
 
     private static class NamedCacheMetrics {
         private final StreamsMetricsImpl metrics;
-        private final String groupName;
-        private final Map<String, String> metricTags;
-        private final Map<String, String> allMetricTags;
-        private final Sensor hitRatioSensor;
 
-        private NamedCacheMetrics(final StreamsMetrics metrics, final String name) {
-            final String scope = "record-cache";
-            final String opName = "hitRatio";
-            final String tagKey = scope + "-id";
-            final String tagValue = ThreadCache.underlyingStoreNamefromCacheName(name);
-            this.groupName = "stream-" + scope + "-metrics";
-            this.metrics = (StreamsMetricsImpl) metrics;
-            this.allMetricTags = ((StreamsMetricsImpl) metrics).tagMap(tagKey, "all",
-                "task-id", ThreadCache.taskIDfromCacheName(name));
-            this.metricTags = ((StreamsMetricsImpl) metrics).tagMap(tagKey, tagValue,
-                "task-id", ThreadCache.taskIDfromCacheName(name));
+        private final Sensor hitRatioSensor;
+        private final String taskName;
+        private final String cacheName;
+
+        private NamedCacheMetrics(final StreamsMetricsImpl metrics, final String cacheName) {
+            taskName = ThreadCache.taskIDfromCacheName(cacheName);
+            this.cacheName = cacheName;
+            this.metrics = metrics;
+            final String group = "stream-record-cache-metrics";
 
             // add parent
-            final Sensor parent = this.metrics.registry().sensor(opName, Sensor.RecordingLevel.DEBUG);
-            parent.add(this.metrics.registry().metricName(opName + "-avg", groupName,
-                    "The average cache hit ratio.", allMetricTags), new Avg());
-            parent.add(this.metrics.registry().metricName(opName + "-min", groupName,
-                    "The minimum cache hit ratio.", allMetricTags), new Min());
-            parent.add(this.metrics.registry().metricName(opName + "-max", groupName,
-                    "The maximum cache hit ratio.", allMetricTags), new Max());
+            final Map<String, String> allMetricTags = metrics.tagMap(
+                "record-cache-id", "all",
+                "task-id", taskName
+            );
+            final Sensor taskLevelHitRatioSensor = metrics.taskLevelSensor("hitRatio", taskName, Sensor.RecordingLevel.DEBUG);
+            taskLevelHitRatioSensor.add(
+                new MetricName("hitRatio-avg", group, "The average cache hit ratio.", allMetricTags),
+                new Avg()
+            );
+            taskLevelHitRatioSensor.add(
+                new MetricName("hitRatio-min", group, "The minimum cache hit ratio.", allMetricTags),
+                new Min()
+            );
+            taskLevelHitRatioSensor.add(
+                new MetricName("hitRatio-max", group, "The maximum cache hit ratio.", allMetricTags),
+                new Max()
+            );
 
             // add child
-            hitRatioSensor = this.metrics.registry().sensor(opName, Sensor.RecordingLevel.DEBUG, parent);
-            hitRatioSensor.add(this.metrics.registry().metricName(opName + "-avg", groupName,
-                    "The average cache hit ratio.", metricTags), new Avg());
-            hitRatioSensor.add(this.metrics.registry().metricName(opName + "-min", groupName,
-                    "The minimum cache hit ratio.", metricTags), new Min());
-            hitRatioSensor.add(this.metrics.registry().metricName(opName + "-max", groupName,
-                    "The maximum cache hit ratio.", metricTags), new Max());
+            final Map<String, String> metricTags = metrics.tagMap(
+                "record-cache-id", ThreadCache.underlyingStoreNamefromCacheName(cacheName),
+                "task-id", taskName
+            );
+
+            hitRatioSensor = metrics.cacheLevelSensor(
+                taskName,
+                cacheName,
+                "hitRatio",
+                Sensor.RecordingLevel.DEBUG,
+                taskLevelHitRatioSensor
+            );
+            hitRatioSensor.add(
+                new MetricName("hitRatio-avg", group, "The average cache hit ratio.", metricTags),
+                new Avg()
+            );
+            hitRatioSensor.add(
+                new MetricName("hitRatio-min", group, "The minimum cache hit ratio.", metricTags),
+                new Min()
+            );
+            hitRatioSensor.add(
+                new MetricName("hitRatio-max", group, "The maximum cache hit ratio.", metricTags),
+                new Max()
+            );
 
         }
 
         private void removeAllSensors() {
-            metrics.removeSensor(hitRatioSensor);
+            metrics.removeAllCacheLevelSensors(taskName, cacheName);
         }
     }
 }

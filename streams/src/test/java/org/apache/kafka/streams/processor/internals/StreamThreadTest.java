@@ -243,16 +243,7 @@ public class StreamThreadTest {
     public void testMetricsCreatedAtStartup() {
         final StreamThread thread = createStreamThread(clientId, config, false);
         final String defaultGroupName = "stream-metrics";
-        final String defaultPrefix = "thread." + thread.getName();
         final Map<String, String> defaultTags = Collections.singletonMap("client-id", thread.getName());
-
-        assertNotNull(metrics.getSensor(defaultPrefix + ".commit-latency"));
-        assertNotNull(metrics.getSensor(defaultPrefix + ".poll-latency"));
-        assertNotNull(metrics.getSensor(defaultPrefix + ".process-latency"));
-        assertNotNull(metrics.getSensor(defaultPrefix + ".punctuate-latency"));
-        assertNotNull(metrics.getSensor(defaultPrefix + ".task-created"));
-        assertNotNull(metrics.getSensor(defaultPrefix + ".task-closed"));
-        assertNotNull(metrics.getSensor(defaultPrefix + ".skipped-records"));
 
         assertNotNull(metrics.metrics().get(metrics.metricName("commit-latency-avg", defaultGroupName, "The average commit time in ms", defaultTags)));
         assertNotNull(metrics.metrics().get(metrics.metricName("commit-latency-max", defaultGroupName, "The maximum commit time in ms", defaultTags)));
