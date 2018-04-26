@@ -102,52 +102,52 @@ class StreamStreamJoinNode<K, V, V1, V2, VR> extends BaseJoinProcessorNode<K, V,
         }
 
 
-        StreamStreamJoinNodeBuilder withValueJoiner(final ValueJoiner<? super V, ? super V1, ? extends V2> valueJoiner) {
+        StreamStreamJoinNodeBuilder<K, V, V1, V2, VR> withValueJoiner(final ValueJoiner<? super V, ? super V1, ? extends V2> valueJoiner) {
             this.valueJoiner = valueJoiner;
             return this;
         }
 
-        StreamStreamJoinNodeBuilder withJoinThisProcessorParameters(final ProcessorParameters<K, V1> joinThisProcessorParameters) {
+        StreamStreamJoinNodeBuilder<K, V, V1, V2, VR> withJoinThisProcessorParameters(final ProcessorParameters<K, V1> joinThisProcessorParameters) {
             this.joinThisProcessorParameters = joinThisProcessorParameters;
             return this;
         }
 
-        StreamStreamJoinNodeBuilder withThisWindowedStreamProcessorParameters(final ProcessorParameters<K, V> thisWindowedStreamProcessorParameters) {
+        StreamStreamJoinNodeBuilder<K, V, V1, V2, VR> withThisWindowedStreamProcessorParameters(final ProcessorParameters<K, V> thisWindowedStreamProcessorParameters) {
             this.thisWindowedStreamProcessorParameters = thisWindowedStreamProcessorParameters;
             return this;
         }
 
-        StreamStreamJoinNodeBuilder withName(final String name) {
+        StreamStreamJoinNodeBuilder<K, V, V1, V2, VR> withName(final String name) {
             this.name = name;
             return this;
         }
 
-        StreamStreamJoinNodeBuilder withPredecessorNodeName(final String predecessorNodeName) {
+        StreamStreamJoinNodeBuilder<K, V, V1, V2, VR> withPredecessorNodeName(final String predecessorNodeName) {
             this.predecessorNodeName = predecessorNodeName;
             return this;
         }
 
-        StreamStreamJoinNodeBuilder withJoinOtherProcessorParameters(final ProcessorParameters<K, V2> joinOtherProcessParameters) {
+        StreamStreamJoinNodeBuilder<K, V, V1, V2, VR> withJoinOtherProcessorParameters(final ProcessorParameters<K, V2> joinOtherProcessParameters) {
             this.joinOtherProcessorParameters = joinOtherProcessParameters;
             return this;
         }
 
-        StreamStreamJoinNodeBuilder withOtherWindowedStreamProcessorParameters(final ProcessorParameters<K, V> otherWindowedStreamProcessorParameters) {
+        StreamStreamJoinNodeBuilder<K, V, V1, V2, VR> withOtherWindowedStreamProcessorParameters(final ProcessorParameters<K, V> otherWindowedStreamProcessorParameters) {
             this.otherWindowedStreamProcessorParameters = otherWindowedStreamProcessorParameters;
             return this;
         }
 
-        StreamStreamJoinNodeBuilder withJoinMergeProcessorParameters(final ProcessorParameters<K, VR> joinMergeProcessorParameters) {
+        StreamStreamJoinNodeBuilder<K, V, V1, V2, VR> withJoinMergeProcessorParameters(final ProcessorParameters<K, VR> joinMergeProcessorParameters) {
             this.joinMergeProcessorParameters = joinMergeProcessorParameters;
             return this;
         }
 
-        StreamStreamJoinNodeBuilder withLeftHandSideStreamName(final String leftHandSideStreamName) {
+        StreamStreamJoinNodeBuilder<K, V, V1, V2, VR> withLeftHandSideStreamName(final String leftHandSideStreamName) {
             this.leftHandSideStreamName = leftHandSideStreamName;
             return this;
         }
 
-        StreamStreamJoinNodeBuilder withOtherStreamName(final String otherStreamName) {
+        StreamStreamJoinNodeBuilder<K, V, V1, V2, VR> withOtherStreamName(final String otherStreamName) {
             this.otherStreamName = otherStreamName;
             return this;
         }

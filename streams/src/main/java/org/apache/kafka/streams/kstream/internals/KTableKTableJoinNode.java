@@ -88,52 +88,52 @@ class KTableKTableJoinNode<K, V, V1, V2, VR> extends BaseJoinProcessorNode<K, V,
         private KTableKTableJoinNodeBuilder() {
         }
 
-        KTableKTableJoinNodeBuilder withJoinThisStoreNames(final String[] joinThisStoreNames) {
+        KTableKTableJoinNodeBuilder<K, V, V1, V2, VR>  withJoinThisStoreNames(final String[] joinThisStoreNames) {
             this.joinThisStoreNames = joinThisStoreNames;
             return this;
         }
 
-        KTableKTableJoinNodeBuilder withJoinThisProcessorParameters(final ProcessorParameters<K, V1> joinThisProcessorParameters) {
+        KTableKTableJoinNodeBuilder<K, V, V1, V2, VR>  withJoinThisProcessorParameters(final ProcessorParameters<K, V1> joinThisProcessorParameters) {
             this.joinThisProcessorParameters = joinThisProcessorParameters;
             return this;
         }
 
-        KTableKTableJoinNodeBuilder withName(String name) {
+        KTableKTableJoinNodeBuilder<K, V, V1, V2, VR>  withName(String name) {
             this.name = name;
             return this;
         }
 
-        KTableKTableJoinNodeBuilder withJoinOtherStoreNames(final String[] joinOtherStoreNames) {
+        KTableKTableJoinNodeBuilder<K, V, V1, V2, VR>  withJoinOtherStoreNames(final String[] joinOtherStoreNames) {
             this.joinOtherStoreNames = joinOtherStoreNames;
             return this;
         }
 
-        KTableKTableJoinNodeBuilder withPredecessorNodeName(final String predecessorNodeName) {
+        KTableKTableJoinNodeBuilder<K, V, V1, V2, VR>  withPredecessorNodeName(final String predecessorNodeName) {
             this.predecessorNodeName = predecessorNodeName;
             return this;
         }
 
-        KTableKTableJoinNodeBuilder withJoinOtherProcessorParameters(final ProcessorParameters<K, V2> joinOtherProcessorParameters) {
+        KTableKTableJoinNodeBuilder<K, V, V1, V2, VR>  withJoinOtherProcessorParameters(final ProcessorParameters<K, V2> joinOtherProcessorParameters) {
             this.joinOtherProcessorParameters = joinOtherProcessorParameters;
             return this;
         }
 
-        KTableKTableJoinNodeBuilder withJoinMergeProcessorParameters(final ProcessorParameters<K, VR> joinMergeProcessorParameters) {
+        KTableKTableJoinNodeBuilder<K, V, V1, V2, VR>  withJoinMergeProcessorParameters(final ProcessorParameters<K, VR> joinMergeProcessorParameters) {
             this.joinMergeProcessorParameters = joinMergeProcessorParameters;
             return this;
         }
 
-        KTableKTableJoinNodeBuilder withValueJoiner(final ValueJoiner<? super V, ? super V1, ? extends V2> valueJoiner) {
+        KTableKTableJoinNodeBuilder<K, V, V1, V2, VR>  withValueJoiner(final ValueJoiner<? super V, ? super V1, ? extends V2> valueJoiner) {
             this.valueJoiner = valueJoiner;
             return this;
         }
 
-        KTableKTableJoinNodeBuilder withThisJoinSide(final String thisJoinSide) {
+        KTableKTableJoinNodeBuilder<K, V, V1, V2, VR>  withThisJoinSide(final String thisJoinSide) {
             this.thisJoinSide = thisJoinSide;
             return this;
         }
 
-        KTableKTableJoinNodeBuilder withOtherJoinSide(final String otherJoinSide) {
+        KTableKTableJoinNodeBuilder<K, V, V1, V2, VR>  withOtherJoinSide(final String otherJoinSide) {
             this.otherJoinSide = otherJoinSide;
             return this;
         }
