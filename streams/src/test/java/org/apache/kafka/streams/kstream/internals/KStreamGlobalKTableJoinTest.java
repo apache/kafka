@@ -78,8 +78,6 @@ public class KStreamGlobalKTableJoinTest {
         };
         stream.join(table, keyMapper, MockValueJoiner.TOSTRING_JOINER).process(supplier);
 
-        processor = supplier.getTheProcessor();
-
         final Properties props = new Properties();
         props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "kstream-global-ktable-join-test");
         props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9091");
@@ -88,6 +86,8 @@ public class KStreamGlobalKTableJoinTest {
         props.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
 
         driver = new TopologyTestDriver(builder.build(), props);
+
+        processor = supplier.getTheProcessor();
     }
 
     @After

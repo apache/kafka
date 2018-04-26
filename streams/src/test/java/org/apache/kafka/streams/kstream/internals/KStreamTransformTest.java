@@ -78,29 +78,28 @@ public class KStreamTransformTest {
     public void testTransform() {
         StreamsBuilder builder = new StreamsBuilder();
 
-        TransformerSupplier<Number, Number, KeyValue<Integer, Integer>> transformerSupplier =
-                new TransformerSupplier<Number, Number, KeyValue<Integer, Integer>>() {
-                    public Transformer<Number, Number, KeyValue<Integer, Integer>> get() {
-                        return new Transformer<Number, Number, KeyValue<Integer, Integer>>() {
+        TransformerSupplier<Number, Number, KeyValue<Integer, Integer>> transformerSupplier = new TransformerSupplier<Number, Number, KeyValue<Integer, Integer>>() {
+            public Transformer<Number, Number, KeyValue<Integer, Integer>> get() {
+                return new Transformer<Number, Number, KeyValue<Integer, Integer>>() {
 
-                            private int total = 0;
+                    private int total = 0;
 
-                            @Override
-                            public void init(ProcessorContext context) {
-                            }
+                    @Override
+                    public void init(ProcessorContext context) {
+                    }
 
-                            @Override
-                            public KeyValue<Integer, Integer> transform(Number key, Number value) {
-                                total += value.intValue();
-                                return KeyValue.pair(key.intValue() * 2, total);
-                            }
+                    @Override
+                    public KeyValue<Integer, Integer> transform(Number key, Number value) {
+                        total += value.intValue();
+                        return KeyValue.pair(key.intValue() * 2, total);
+                    }
 
-                            @Override
-                            public void close() {
-                            }
-                        };
+                    @Override
+                    public void close() {
                     }
                 };
+            }
+        };
 
         final int[] expectedKeys = {1, 10, 100, 1000};
 
@@ -132,35 +131,35 @@ public class KStreamTransformTest {
     public void testTransformWithNewDriverAndPunctuator() {
         StreamsBuilder builder = new StreamsBuilder();
 
-        TransformerSupplier<Number, Number, KeyValue<Integer, Integer>> transformerSupplier =
-                new TransformerSupplier<Number, Number, KeyValue<Integer, Integer>>() {
-                    public Transformer<Number, Number, KeyValue<Integer, Integer>> get() {
-                        return new Transformer<Number, Number, KeyValue<Integer, Integer>>() {
+        TransformerSupplier<Number, Number, KeyValue<Integer, Integer>> transformerSupplier = new TransformerSupplier<Number, Number, KeyValue<Integer, Integer>>() {
+            public Transformer<Number, Number, KeyValue<Integer, Integer>> get() {
+                return new Transformer<Number, Number, KeyValue<Integer, Integer>>() {
 
-                            private int total = 0;
+                    private int total = 0;
 
+                    @Override
+                    public void init(final ProcessorContext context) {
+                        context.schedule(1, PunctuationType.WALL_CLOCK_TIME, new Punctuator() {
                             @Override
-                            public void init(final ProcessorContext context) {
-                                context.schedule(1, PunctuationType.WALL_CLOCK_TIME, new Punctuator() {
-                                    @Override
-                                    public void punctuate(long timestamp) {
-                                        context.forward(-1, (int) timestamp);
-                                    }
-                                });
+                            public void punctuate(long timestamp) {
+                                context.forward(-1, (int) timestamp);
                             }
+                        });
+                    }
 
-                            @Override
-                            public KeyValue<Integer, Integer> transform(Number key, Number value) {
-                                total += value.intValue();
-                                return KeyValue.pair(key.intValue() * 2, total);
-                            }
+                    @Override
+                    public KeyValue<Integer, Integer> transform(Number key, Number value) {
+                        total += value.intValue();
+                        return KeyValue.pair(key.intValue() * 2, total);
+                    }
 
-                            @Override
-                            public void close() {
-                            }
-                        };
+                    @Override
+                    public void close() {
                     }
                 };
+            }
+        };
+
 
         final int[] expectedKeys = {1, 10, 100, 1000};
 
