@@ -70,7 +70,6 @@ public class RocksDBSessionStoreSupplierTest {
 
     @After
     public void close() {
-        context.close();
         store.close();
     }
 

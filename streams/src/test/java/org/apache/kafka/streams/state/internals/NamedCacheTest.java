@@ -16,12 +16,11 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -44,13 +43,14 @@ import static org.junit.Assert.assertSame;
 public class NamedCacheTest {
 
     private NamedCache cache;
-    private MockStreamsMetrics streamMetrics;
+    private StreamsMetricsImpl metrics;
     private final String taskIDString = "0.0";
     private final String underlyingStoreName = "storeName";
+
     @Before
     public void setUp() {
-        streamMetrics = new MockStreamsMetrics(new Metrics());
-        cache = new NamedCache(taskIDString + "-" + underlyingStoreName, streamMetrics);
+        metrics = new MockStreamsMetrics(new Metrics());
+        cache = new NamedCache(taskIDString + "-" + underlyingStoreName, metrics);
     }
 
     @Test
@@ -83,18 +83,15 @@ public class NamedCacheTest {
         metricTags.put("task-id", taskIDString);
         metricTags.put("client-id", "test");
 
-        assertNotNull(streamMetrics.registry().getSensor("hitRatio"));
-        final Map<MetricName, KafkaMetric> metrics1 = streamMetrics.registry().metrics();
-        getMetricByNameFilterByTags(metrics1, "hitRatio-avg", "stream-record-cache-metrics", metricTags);
-        getMetricByNameFilterByTags(metrics1, "hitRatio-min", "stream-record-cache-metrics", metricTags);
-        getMetricByNameFilterByTags(metrics1, "hitRatio-max", "stream-record-cache-metrics", metricTags);
+        getMetricByNameFilterByTags(metrics.metrics(), "hitRatio-avg", "stream-record-cache-metrics", metricTags);
+        getMetricByNameFilterByTags(metrics.metrics(), "hitRatio-min", "stream-record-cache-metrics", metricTags);
+        getMetricByNameFilterByTags(metrics.metrics(), "hitRatio-max", "stream-record-cache-metrics", metricTags);
 
         // test "all"
         metricTags.put("record-cache-id", "all");
-        final Map<MetricName, KafkaMetric> metrics = streamMetrics.registry().metrics();
-        getMetricByNameFilterByTags(metrics, "hitRatio-avg", "stream-record-cache-metrics", metricTags);
-        getMetricByNameFilterByTags(metrics, "hitRatio-min", "stream-record-cache-metrics", metricTags);
-        getMetricByNameFilterByTags(metrics, "hitRatio-max", "stream-record-cache-metrics", metricTags);
+        getMetricByNameFilterByTags(metrics.metrics(), "hitRatio-avg", "stream-record-cache-metrics", metricTags);
+        getMetricByNameFilterByTags(metrics.metrics(), "hitRatio-min", "stream-record-cache-metrics", metricTags);
+        getMetricByNameFilterByTags(metrics.metrics(), "hitRatio-max", "stream-record-cache-metrics", metricTags);
     }
 
     @Test

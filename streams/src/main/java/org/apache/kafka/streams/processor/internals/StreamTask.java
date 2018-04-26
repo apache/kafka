@@ -22,9 +22,14 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.stats.Avg;
+import org.apache.kafka.common.metrics.stats.Count;
+import org.apache.kafka.common.metrics.stats.Max;
+import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
@@ -42,6 +47,7 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import static java.lang.String.format;
 import static java.util.Collections.singleton;
@@ -72,16 +78,57 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     protected static final class TaskMetrics {
         final StreamsMetricsImpl metrics;
         final Sensor taskCommitTimeSensor;
+        private final String taskName;
 
 
         TaskMetrics(final TaskId id, final StreamsMetricsImpl metrics) {
-            final String name = id.toString();
+            taskName = id.toString();
             this.metrics = metrics;
-            taskCommitTimeSensor = metrics.addLatencyAndThroughputSensor("task", name, "commit", Sensor.RecordingLevel.DEBUG);
+            final String group = "stream-task-metrics";
+
+            // first add the global operation metrics if not yet, with the global tags only
+            final Map<String, String> allTagMap = metrics.tagMap("task-id", "all");
+            final Sensor parent = metrics.threadLevelSensor("commit", Sensor.RecordingLevel.DEBUG);
+            parent.add(
+                new MetricName("commit-latency-avg", group, "The average latency of commit operation.", allTagMap),
+                new Avg()
+            );
+            parent.add(
+                new MetricName("commit-latency-max", group, "The max latency of commit operation.", allTagMap),
+                new Max()
+            );
+            parent.add(
+                new MetricName("commit-rate", group, "The average number of occurrence of commit operation per second.", allTagMap),
+                new Rate(TimeUnit.SECONDS, new Count())
+            );
+            parent.add(
+                new MetricName("commit-total", group, "The total number of occurrence of commit operations.", allTagMap),
+                new Count()
+            );
+
+            // add the operation metrics with additional tags
+            final Map<String, String> tagMap = metrics.tagMap("task-id", taskName);
+            taskCommitTimeSensor = metrics.taskLevelSensor("commit", taskName, Sensor.RecordingLevel.DEBUG, parent);
+            taskCommitTimeSensor.add(
+                new MetricName("commit-latency-avg", group, "The average latency of commit operation.", tagMap),
+                new Avg()
+            );
+            taskCommitTimeSensor.add(
+                new MetricName("commit-latency-max", group, "The max latency of commit operation.", tagMap),
+                new Max()
+            );
+            taskCommitTimeSensor.add(
+                new MetricName("commit-rate", group, "The average number of occurrence of commit operation per second.", tagMap),
+                new Rate(TimeUnit.SECONDS, new Count())
+            );
+            taskCommitTimeSensor.add(
+                new MetricName("commit-total", group, "The total number of occurrence of commit operations.", tagMap),
+                new Count()
+            );
         }
 
         void removeAllSensors() {
-            metrics.removeSensor(taskCommitTimeSensor);
+            metrics.removeAllTaskLevelSensors(taskName);
         }
     }
 

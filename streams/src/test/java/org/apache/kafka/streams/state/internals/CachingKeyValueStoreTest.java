@@ -83,7 +83,6 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
     @After
     public void after() {
         super.after();
-        context.close();
     }
 
     @SuppressWarnings("unchecked")

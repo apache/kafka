@@ -35,7 +35,6 @@ import org.apache.kafka.test.NoOpRecordCollector;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 import org.easymock.EasyMock;
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -81,11 +80,6 @@ public class MeteredWindowStoreTest {
             },
             new ThreadCache(new LogContext("testCache "), 0, streamsMetrics)
         );
-    }
-
-    @After
-    public void after() {
-        context.close();
     }
 
     @Test

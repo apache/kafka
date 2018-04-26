@@ -82,7 +82,6 @@ public class CachingSessionStoreTest {
 
     @After
     public void close() {
-        context.close();
         cachingStore.close();
     }
 

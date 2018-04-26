@@ -148,7 +148,12 @@ public class KStreamTestDriver extends ExternalResource {
 
     private void initTopology(final ProcessorTopology topology, final List<StateStore> stores) {
         for (final StateStore store : stores) {
-            store.init(context, store);
+            try {
+                store.init(context, store);
+            } catch (final RuntimeException e) {
+                new RuntimeException("Fatal exception initializing store.", e).printStackTrace();
+                throw e;
+            }
         }
 
         for (final ProcessorNode node : topology.processors()) {
@@ -231,7 +236,6 @@ public class KStreamTestDriver extends ExternalResource {
         }
 
         closeState();
-        context.close();
     }
 
     public Set<String> allProcessorNames() {
