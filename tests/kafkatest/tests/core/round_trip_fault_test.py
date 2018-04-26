@@ -25,6 +25,8 @@ from kafkatest.services.zookeeper import ZookeeperService
 
 
 class RoundTripFaultTest(Test):
+    topic_name_index = 0
+
     def __init__(self, test_context):
         """:type test_context: ducktape.tests.test.TestContext"""
         super(RoundTripFaultTest, self).__init__(test_context)
@@ -33,7 +35,9 @@ class RoundTripFaultTest(Test):
         self.workload_service = RoundTripWorkloadService(test_context, self.kafka)
         self.trogdor = TrogdorService(context=self.test_context,
                                       client_services=[self.zk, self.kafka, self.workload_service])
-        active_topics={"round_trip_topic":{"partitionAssignments":{"0": [0,1,2]}}}
+        topic_name = "round_trip_topic%d" % RoundTripFaultTest.topic_name_index
+        RoundTripFaultTest.topic_name_index = RoundTripFaultTest.topic_name_index + 1
+        active_topics={topic_name : {"partitionAssignments":{"0": [0,1,2]}}}
         self.round_trip_spec = RoundTripWorkloadSpec(0, TaskSpec.MAX_DURATION_MS,
                                      self.workload_service.client_node,
                                      self.workload_service.bootstrap_servers,
