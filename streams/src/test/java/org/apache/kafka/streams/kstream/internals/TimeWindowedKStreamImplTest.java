@@ -106,7 +106,7 @@ public class TimeWindowedKStreamImplTest {
         final Map<Windowed<String>, String> results = new HashMap<>();
         windowedStream.aggregate(MockInitializer.STRING_INIT,
                 MockAggregator.TOSTRING_ADDER,
-                Materialized.<String, String, WindowStore<Bytes,byte[]>>with(Serdes.String(), Serdes.String()
+                Materialized.<String, String, WindowStore<Bytes, byte[]>>with(Serdes.String(), Serdes.String()
         ))
                 .toStream()
                 .foreach(new ForeachAction<Windowed<String>, String>() {

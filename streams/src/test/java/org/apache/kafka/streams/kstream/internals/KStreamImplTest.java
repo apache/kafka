@@ -28,7 +28,6 @@ import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.Joined;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Predicate;
@@ -40,7 +39,6 @@ import org.apache.kafka.streams.kstream.ValueMapperWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
-import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.SourceNode;
 import org.apache.kafka.test.KStreamTestDriver;
@@ -225,7 +223,6 @@ public class KStreamImplTest {
     }
 
     @Test
-    // TODO: this test should be refactored when we removed KStreamBuilder so that the created Topology contains internal topics as well
     public void shouldUseRecordMetadataTimestampExtractorWhenInternalRepartitioningTopicCreated() {
         final StreamsBuilder builder = new StreamsBuilder();
         KStream<String, String> kStream = builder.stream("topic-1", consumed);
@@ -246,7 +243,7 @@ public class KStreamImplTest {
                                 Serdes.String()))
                 .to("output-topic", Produced.with(Serdes.String(), Serdes.String()));
 
-        ProcessorTopology topology = InternalTopologyAccessor.getInternalTopologyBuilder(builder.build()).build();
+        ProcessorTopology topology = InternalTopologyAccessor.getInternalTopologyBuilder(builder.build()).setApplicationId("X").build();
 
         SourceNode originalSourceNode = topology.source("topic-1");
 

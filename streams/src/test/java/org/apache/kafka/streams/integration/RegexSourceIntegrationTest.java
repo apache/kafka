@@ -26,21 +26,15 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Produced;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
-import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.test.IntegrationTest;
-import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
@@ -59,11 +53,12 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
 
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertThat;
-import static org.junit.Assert.fail;
 
 /**
  * End-to-end integration test based on using regex and named topics for creating sources, using
@@ -342,8 +337,7 @@ public class RegexSourceIntegrationTest {
 
     }
 
-    // TODO should be updated to expected = TopologyBuilderException after KAFKA-3708
-    @Test(expected = AssertionError.class)
+    @Test
     public void testNoMessagesSentExceptionFromOverlappingPatterns() throws Exception {
 
         final String fooMessage = "fooMessage";
@@ -355,17 +349,24 @@ public class RegexSourceIntegrationTest {
         final StreamsBuilder builder = new StreamsBuilder();
 
 
-        // overlapping patterns here, no messages should be sent as TopologyBuilderException
+        // overlapping patterns here, no messages should be sent as TopologyException
         // will be thrown when the processor topology is built.
-
         final KStream<String, String> pattern1Stream = builder.stream(Pattern.compile("foo.*"));
         final KStream<String, String> pattern2Stream = builder.stream(Pattern.compile("f.*"));
-
 
         pattern1Stream.to(DEFAULT_OUTPUT_TOPIC, Produced.with(stringSerde, stringSerde));
         pattern2Stream.to(DEFAULT_OUTPUT_TOPIC, Produced.with(stringSerde, stringSerde));
 
+        final AtomicBoolean expectError = new AtomicBoolean(false);
+
         streams = new KafkaStreams(builder.build(), streamsConfiguration);
+        streams.setStateListener(new KafkaStreams.StateListener() {
+            @Override
+            public void onChange(KafkaStreams.State newState, KafkaStreams.State oldState) {
+                if (newState == KafkaStreams.State.ERROR)
+                    expectError.set(true);
+            }
+        });
         streams.start();
 
         final Properties producerConfig = TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, StringSerializer.class);
@@ -374,9 +375,13 @@ public class RegexSourceIntegrationTest {
         IntegrationTestUtils.produceValuesSynchronously(FOO_TOPIC, Arrays.asList(fooMessage), producerConfig, mockTime);
 
         final Properties consumerConfig = TestUtils.consumerConfig(CLUSTER.bootstrapServers(), StringDeserializer.class, StringDeserializer.class);
+        try {
+            IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, DEFAULT_OUTPUT_TOPIC, 2, 5000);
+        } catch (AssertionError e) {
+            // this is fine
+        }
 
-        IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, DEFAULT_OUTPUT_TOPIC, 2, 5000);
-        fail("Should not get here");
+        assertThat(expectError.get(), is(true));
     }
 
     private static class TheConsumerRebalanceListener implements ConsumerRebalanceListener {
