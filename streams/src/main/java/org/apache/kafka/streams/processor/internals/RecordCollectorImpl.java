@@ -150,7 +150,7 @@ public class RecordCollectorImpl implements RecordCollector {
         final byte[] valBytes = valueSerializer.serialize(topic, value);
 
         final ProducerRecord<byte[], byte[]> serializedRecord =
-                new ProducerRecord<>(topic, partition, timestamp, keyBytes, valBytes);
+                new ProducerRecord<>(topic, partition, timestamp, keyBytes, valBytes, headers);
 
         try {
             producer.send(serializedRecord, new Callback() {
