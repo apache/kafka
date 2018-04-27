@@ -44,6 +44,11 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 
+/**
+ * KStreamTestDriver
+ *
+ * @deprecated please use {@link org.apache.kafka.streams.TopologyTestDriver} instead
+ */
 @Deprecated
 public class KStreamTestDriver extends ExternalResource {
 
