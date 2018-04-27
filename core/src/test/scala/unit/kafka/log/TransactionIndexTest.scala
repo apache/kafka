@@ -19,7 +19,7 @@ package kafka.log
 import java.io.File
 
 import kafka.utils.TestUtils
-import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
+import org.apache.kafka.common.requests.AbstractFetchResponse.AbortedTransaction
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 import org.scalatest.junit.JUnitSuite

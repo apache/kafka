@@ -26,8 +26,7 @@ import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.FetchMetadata.{FINAL_EPOCH, INITIAL_EPOCH, INVALID_SESSION_ID}
-import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
-import org.apache.kafka.common.requests.{FetchMetadata => JFetchMetadata}
+import org.apache.kafka.common.requests.{AbstractFetchResponse, FetchRequest, FetchResponse, FetchMetadata => JFetchMetadata}
 import org.apache.kafka.common.utils.{ImplicitLinkedHashSet, Time, Utils}
 
 import scala.math.Ordered.orderingToOrdered
@@ -36,7 +35,7 @@ import scala.collection.JavaConverters._
 
 object FetchSession {
   type REQ_MAP = util.Map[TopicPartition, FetchRequest.PartitionData]
-  type RESP_MAP = util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData]
+  type RESP_MAP = util.LinkedHashMap[TopicPartition, AbstractFetchResponse.PartitionData]
   type CACHE_MAP = ImplicitLinkedHashSet[CachedPartition]
 
   val NUM_INCREMENTAL_FETCH_SESSISONS = "NumIncrementalFetchSessions"
@@ -99,7 +98,7 @@ class CachedPartition(val topic: String,
       reqData.logStartOffset, -1)
 
   def this(part: TopicPartition, reqData: FetchRequest.PartitionData,
-           respData: FetchResponse.PartitionData) =
+           respData: AbstractFetchResponse.PartitionData) =
     this(part.topic(), part.partition(),
       reqData.maxBytes, reqData.fetchOffset, respData.highWatermark,
       reqData.logStartOffset, respData.logStartOffset)
@@ -124,7 +123,7 @@ class CachedPartition(val topic: String,
     * @return True if this partition should be included in the FetchResponse
     *         we send back to the fetcher; false if it can be omitted.
     */
-  def updateResponseData(respData: FetchResponse.PartitionData): Boolean = {
+  def updateResponseData(respData: AbstractFetchResponse.PartitionData): Boolean = {
     // Check the response data.
     var mustRespond = false
     if ((respData.records != null) && (respData.records.sizeInBytes() > 0)) {

@@ -27,8 +27,7 @@ import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, Produce
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{Record, RecordBatch}
-import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
-import org.apache.kafka.common.requests.{FetchMetadata => JFetchMetadata}
+import org.apache.kafka.common.requests.{AbstractFetchResponse, FetchRequest, FetchResponse, FetchMetadata => JFetchMetadata}
 import org.apache.kafka.common.serialization.{ByteArraySerializer, StringSerializer}
 import org.junit.Assert._
 import org.junit.Test
@@ -349,7 +348,7 @@ class FetchRequestTest extends BaseRequestTest {
     assertFalse(resp4.responseData().containsKey(bar0))
   }
 
-  private def records(partitionData: FetchResponse.PartitionData): Seq[Record] = {
+  private def records(partitionData: AbstractFetchResponse.PartitionData): Seq[Record] = {
     partitionData.records.records.asScala.toIndexedSeq
   }
 
