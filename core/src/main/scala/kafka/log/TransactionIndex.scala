@@ -23,7 +23,7 @@ import java.nio.file.{Files, StandardOpenOption}
 
 import kafka.utils.{Logging, nonthreadsafe}
 import org.apache.kafka.common.KafkaException
-import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
+import org.apache.kafka.common.requests.AbstractFetchResponse.AbortedTransaction
 import org.apache.kafka.common.utils.Utils
 
 import scala.collection.mutable.ListBuffer

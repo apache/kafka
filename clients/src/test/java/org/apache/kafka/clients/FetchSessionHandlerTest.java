@@ -18,6 +18,7 @@ package org.apache.kafka.clients;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.AbstractFetchResponse;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.utils.LogContext;
@@ -153,11 +154,11 @@ public class FetchSessionHandlerTest {
 
     private static final class RespEntry {
         final TopicPartition part;
-        final FetchResponse.PartitionData data;
+        final AbstractFetchResponse.PartitionData data;
 
         RespEntry(String topic, int partition, long highWatermark, long lastStableOffset) {
             this.part = new TopicPartition(topic, partition);
-            this.data = new FetchResponse.PartitionData(
+            this.data = new AbstractFetchResponse.PartitionData(
                 Errors.NONE,
                 highWatermark,
                 lastStableOffset,
@@ -167,8 +168,8 @@ public class FetchSessionHandlerTest {
         }
     }
 
-    private static LinkedHashMap<TopicPartition, FetchResponse.PartitionData> respMap(RespEntry... entries) {
-        LinkedHashMap<TopicPartition, FetchResponse.PartitionData> map = new LinkedHashMap<>();
+    private static LinkedHashMap<TopicPartition, AbstractFetchResponse.PartitionData> respMap(RespEntry... entries) {
+        LinkedHashMap<TopicPartition, AbstractFetchResponse.PartitionData> map = new LinkedHashMap<>();
         for (RespEntry entry : entries) {
             map.put(entry.part, entry.data);
         }

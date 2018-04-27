@@ -39,7 +39,7 @@ import java.util.List;
  * {@link #sizeInBytes() sizeInBytes} and {@link #writeTo(GatheringByteChannel, long, int) writeTo} methods only.
  * </p>
  */
-public class LazyDownConversionRecords implements Records {
+public class LazyDownConversionRecords implements SerializableRecords {
     private final TopicPartition topicPartition;
     private final Records records;
     private final byte toMagic;
@@ -101,36 +101,6 @@ public class LazyDownConversionRecords implements Records {
             convertedRecordsWriter = new RecordsWriter(convertedRecords);
         }
         return convertedRecordsWriter.writeTo(channel, length);
-    }
-
-    @Override
-    public Iterable<? extends RecordBatch> batches() {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public boolean hasMatchingMagic(byte magic) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public boolean hasCompatibleMagic(byte magic) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public ConvertedRecords<? extends Records> downConvert(byte toMagic, long firstOffset, Time time) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public Iterable<Record> records() {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public AbstractIterator<? extends RecordBatch> batchIterator() {
-        throw new UnsupportedOperationException();
     }
 
     @Override
