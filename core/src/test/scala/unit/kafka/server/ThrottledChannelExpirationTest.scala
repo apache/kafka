@@ -21,28 +21,30 @@ package kafka.server
 import java.util.Collections
 import java.util.concurrent.{DelayQueue, TimeUnit}
 
+import kafka.network.RequestChannel.{EndThrottlingAction, ResponseAction, StartThrottlingAction}
 import org.apache.kafka.common.metrics.MetricConfig
 import org.apache.kafka.common.utils.MockTime
 import org.junit.{Assert, Before, Test}
 
 class ThrottledChannelExpirationTest {
   private val time = new MockTime
-  private var numCallbacks: Int = 0
+  private var numCallbacksForStartThrottling: Int = 0
+  private var numCallbacksForEndThrottling: Int = 0
   private val metrics = new org.apache.kafka.common.metrics.Metrics(new MetricConfig(),
                                                                     Collections.emptyList(),
                                                                     time)
 
-  def callback(throttledChannelEvent: ThrottledChannelEvent) {
-    // Count how many times this callback is called for tryUnmute().
-    throttledChannelEvent match {
-      case StartThrottling =>
-      case EndThrottling => numCallbacks += 1
+  def callback(responseAction: ResponseAction): Unit = {
+    responseAction match {
+      case StartThrottlingAction => numCallbacksForStartThrottling += 1
+      case EndThrottlingAction => numCallbacksForEndThrottling += 1
     }
   }
 
   @Before
   def beforeMethod() {
-    numCallbacks = 0
+    numCallbacksForStartThrottling = 0
+    numCallbacksForEndThrottling = 0
   }
 
   @Test
@@ -61,17 +63,18 @@ class ThrottledChannelExpirationTest {
       delayQueue.add(channel2)
       delayQueue.add(channel3)
       delayQueue.add(channel4)
+      Assert.assertEquals(4, numCallbacksForStartThrottling)
 
       for(itr <- 1 to 3) {
         time.sleep(10)
         reaper.doWork()
-        Assert.assertEquals(itr, numCallbacks)
+        Assert.assertEquals(itr, numCallbacksForEndThrottling)
       }
       reaper.doWork()
-      Assert.assertEquals(4, numCallbacks)
+      Assert.assertEquals(4, numCallbacksForEndThrottling)
       Assert.assertEquals(0, delayQueue.size())
       reaper.doWork()
-      Assert.assertEquals(4, numCallbacks)
+      Assert.assertEquals(4, numCallbacksForEndThrottling)
     } finally {
       clientMetrics.shutdown()
     }

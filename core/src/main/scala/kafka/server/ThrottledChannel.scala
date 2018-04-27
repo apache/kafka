@@ -20,6 +20,7 @@ package kafka.server
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{Delayed, TimeUnit}
 
+import kafka.network.RequestChannel.{EndThrottlingAction, ResponseAction, StartThrottlingAction}
 import kafka.utils.Logging
 import org.apache.kafka.common.utils.Time
 
@@ -30,18 +31,17 @@ import org.apache.kafka.common.utils.Time
   * @param throttleTimeMs delay associated with this request
   * @param channelThrottlingCallback Callback for channel throttling
   */
-class ThrottledChannel(val time: Time, val throttleTimeMs: Int,
-                       channelThrottlingCallback: (ThrottledChannelEvent) => Unit)
+class ThrottledChannel(val time: Time, val throttleTimeMs: Int, channelThrottlingCallback: (ResponseAction) => Unit)
   extends Delayed with Logging {
   var endTime = time.milliseconds + throttleTimeMs
 
-  // Indicate that throttling has started.
-  channelThrottlingCallback(StartThrottling)
+  // Notify the socket server that throttling has started for this channel.
+  channelThrottlingCallback(StartThrottlingAction)
 
-  def tryUnmute(): Unit = {
+  // Notify the socket server that throttling has been done for this channel.
+  def notifyThrottlingDone(): Unit = {
     trace("Channel throttled for: " + throttleTimeMs + " ms")
-    // Throttling is done now. Try unmuting the channel.
-    channelThrottlingCallback(EndThrottling)
+    channelThrottlingCallback(EndThrottlingAction)
   }
 
   override def getDelay(unit: TimeUnit): Long = {
@@ -55,7 +55,3 @@ class ThrottledChannel(val time: Time, val throttleTimeMs: Int,
     else 0
   }
 }
-
-sealed trait ThrottledChannelEvent
-case object StartThrottling extends ThrottledChannelEvent
-case object EndThrottling extends ThrottledChannelEvent

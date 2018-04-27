@@ -55,8 +55,7 @@ public class ApiVersionsResponse extends AbstractResponse {
             THROTTLE_TIME_MS);
 
     /**
-     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling
-     * (KIP-219).
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
      */
     private static final Schema API_VERSIONS_RESPONSE_V2 = API_VERSIONS_RESPONSE_V1;
 

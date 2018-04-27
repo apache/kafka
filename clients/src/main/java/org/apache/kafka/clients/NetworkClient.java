@@ -112,7 +112,7 @@ public class NetworkClient implements KafkaClient {
     private final Sensor throttleTimeSensor;
 
     /**
-     *  KIP-219: When communicating with the nodes contained in this set, if a response with a non-zero throttle time is
+     *  When communicating with the nodes contained in this set, if a response with a non-zero throttle time is
      *  received, block the connection to the node for the specified throttle time. The broker had not throttled before
      *  it sent out the response.
      *
@@ -766,7 +766,7 @@ public class NetworkClient implements KafkaClient {
         }
         NodeApiVersions nodeVersionInfo = new NodeApiVersions(apiVersionsResponse.apiVersions());
         apiVersions.update(node, nodeVersionInfo);
-        // KIP-219: enable client-side throttling for the connection to this node if the max version of
+        // Enable client-side throttling for the connection to this node if the max version of
         // ApiVersionsResponse supported by the node is >= 2.
         if (apiVersionsResponse.apiVersion(ApiKeys.API_VERSIONS.id).maxVersion >= 2) {
             nodesWithClientSideThrottlingEnabled.add(node);

@@ -34,7 +34,7 @@ import kafka.coordinator.group.{GroupCoordinator, JoinGroupResult}
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
 import kafka.log.{Log, LogManager, TimestampOffset}
 import kafka.network.RequestChannel
-import kafka.network.RequestChannel.{CloseConnectionAction, NoOpAction, SendAction}
+import kafka.network.RequestChannel._
 import kafka.security.SecurityUtils
 import kafka.security.auth.{Resource, _}
 import kafka.utils.{CoreUtils, Logging}
@@ -45,7 +45,7 @@ import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANS
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.{ControlRecordType, EndTransactionMarker, MemoryRecords, RecordBatch, RecordsProcessingStats}
+import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.CreateAclsResponse.AclCreationResponse
 import org.apache.kafka.common.requests.DeleteAclsResponse.{AclDeletionResult, AclFilterResponse}
 import org.apache.kafka.common.requests.{Resource => RResource, ResourceType => RResourceType, _}
@@ -435,9 +435,9 @@ class KafkaApis(val requestChannel: RequestChannel,
       val maxThrottleTimeMs = Math.max(bandwidthThrottleTimeMs, requestThrottleTimeMs)
       if (maxThrottleTimeMs > 0) {
         if (bandwidthThrottleTimeMs > requestThrottleTimeMs) {
-          quotas.produce.throttle(request, bandwidthThrottleTimeMs)
+          quotas.produce.throttle(request, bandwidthThrottleTimeMs, sendActionOnlyResponse(request))
         } else {
-          quotas.request.throttle(request, requestThrottleTimeMs)
+          quotas.request.throttle(request, requestThrottleTimeMs, sendActionOnlyResponse(request))
         }
       }
 
@@ -634,9 +634,9 @@ class KafkaApis(val requestChannel: RequestChannel,
         val maxThrottleTimeMs = math.max(bandwidthThrottleTimeMs, requestThrottleTimeMs)
         if (maxThrottleTimeMs > 0) {
           if (bandwidthThrottleTimeMs > requestThrottleTimeMs) {
-            quotas.fetch.throttle(request, bandwidthThrottleTimeMs)
+            quotas.fetch.throttle(request, bandwidthThrottleTimeMs, sendActionOnlyResponse(request))
           } else {
-            quotas.request.throttle(request, requestThrottleTimeMs)
+            quotas.request.throttle(request, requestThrottleTimeMs, sendActionOnlyResponse(request))
           }
         }
 
@@ -2250,13 +2250,13 @@ class KafkaApis(val requestChannel: RequestChannel,
   // response immediately.
   private def sendResponseMaybeThrottle(request: RequestChannel.Request, createResponse: Int => AbstractResponse): Unit = {
     val throttleTimeMs = quotas.request.maybeRecordAndGetThrottleTimeMs(request)
-    quotas.request.throttle(request, throttleTimeMs)
+    quotas.request.throttle(request, throttleTimeMs, sendActionOnlyResponse(request))
     sendResponse(request, Some(createResponse(throttleTimeMs)))
   }
 
   private def sendErrorResponseMaybeThrottle(request: RequestChannel.Request, error: Throwable) {
     val throttleTimeMs = quotas.request.maybeRecordAndGetThrottleTimeMs(request)
-    quotas.request.throttle(request, throttleTimeMs)
+    quotas.request.throttle(request, throttleTimeMs, sendActionOnlyResponse(request))
     sendErrorOrCloseConnection(request, error, throttleTimeMs)
   }
 
@@ -2288,7 +2288,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     // This case is used when the request handler has encountered an error, but the client
     // does not expect a response (e.g. when produce request has acks set to 0)
     requestChannel.updateErrorMetrics(request.header.apiKey, errorCounts.asScala)
-    requestChannel.sendResponse(new RequestChannel.Response(request, None, CloseConnectionAction, None))
+    sendActionOnlyResponse(request)(CloseConnectionAction)
   }
 
   private def sendResponse(request: RequestChannel.Request, responseOpt: Option[AbstractResponse]): Unit = {
@@ -2303,8 +2303,11 @@ class KafkaApis(val requestChannel: RequestChannel,
           else None
         requestChannel.sendResponse(new RequestChannel.Response(request, Some(responseSend), SendAction, responseString))
       case None =>
-        requestChannel.sendResponse(new RequestChannel.Response(request, None, NoOpAction, None))
+        sendActionOnlyResponse(request)(NoOpAction)
     }
   }
 
+  private def sendActionOnlyResponse(request: RequestChannel.Request)(responseAction: ResponseAction): Unit = {
+    requestChannel.sendResponse(new RequestChannel.Response(request, None, responseAction, None))
+  }
 }

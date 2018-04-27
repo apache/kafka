@@ -31,8 +31,7 @@ public class ApiVersionsRequest extends AbstractRequest {
     private static final Schema API_VERSIONS_REQUEST_V1 = API_VERSIONS_REQUEST_V0;
 
     /**
-     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling
-     * (KIP-219).
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
      */
     private static final Schema API_VERSIONS_REQUEST_V2 = API_VERSIONS_REQUEST_V1;
 
