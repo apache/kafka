@@ -42,7 +42,7 @@ import java.util.Locale;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
-import static org.apache.kafka.streams.processor.internals.ConsumerUtil.poll;
+import static org.apache.kafka.streams.processor.internals.ConsumerUtils.poll;
 
 public class BrokerCompatibilityTest {
 

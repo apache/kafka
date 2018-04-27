@@ -25,8 +25,8 @@ import org.apache.kafka.common.errors.WakeupException;
 import java.util.Collections;
 import java.util.List;
 
-public final class ConsumerUtil {
-    private ConsumerUtil() {}
+public final class ConsumerUtils {
+    private ConsumerUtils() {}
 
     public static <K, V> ConsumerRecords<K, V> poll(final Consumer<K, V> consumer, final long maxDurationMs) {
         try {

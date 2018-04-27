@@ -52,7 +52,7 @@ import java.util.Properties;
 import java.util.Random;
 import java.util.Set;
 
-import static org.apache.kafka.streams.processor.internals.ConsumerUtil.poll;
+import static org.apache.kafka.streams.processor.internals.ConsumerUtils.poll;
 
 public class EosTestDriver extends SmokeTestUtil {
 

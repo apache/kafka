@@ -47,7 +47,7 @@ import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
-import static org.apache.kafka.streams.processor.internals.ConsumerUtil.poll;
+import static org.apache.kafka.streams.processor.internals.ConsumerUtils.poll;
 
 public class SmokeTestDriver extends SmokeTestUtil {
 

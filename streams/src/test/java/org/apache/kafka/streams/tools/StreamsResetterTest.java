@@ -40,7 +40,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
-import static org.apache.kafka.streams.processor.internals.ConsumerUtil.poll;
+import static org.apache.kafka.streams.processor.internals.ConsumerUtils.poll;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
