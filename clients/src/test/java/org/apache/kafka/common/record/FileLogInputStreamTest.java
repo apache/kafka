@@ -30,11 +30,18 @@ import java.util.Collection;
 import java.util.List;
 
 import static java.util.Arrays.asList;
-import static org.apache.kafka.common.record.RecordBatch.*;
+import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V0;
+import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V1;
+import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V2;
+import static org.apache.kafka.common.record.RecordBatch.NO_TIMESTAMP;
 import static org.apache.kafka.common.record.TimestampType.CREATE_TIME;
 import static org.apache.kafka.common.record.TimestampType.NO_TIMESTAMP_TYPE;
 import static org.apache.kafka.test.TestUtils.tempFile;
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 @RunWith(value = Parameterized.class)
 public class FileLogInputStreamTest {
@@ -105,14 +112,14 @@ public class FileLogInputStreamTest {
 
         try (FileRecords fileRecords = FileRecords.open(tempFile())) {
             SimpleRecord[] firstBatchRecords = new SimpleRecord[]{
-                    new SimpleRecord(3241324L, "a".getBytes(), "1".getBytes()),
-                    new SimpleRecord(234280L, "b".getBytes(), "2".getBytes())
+                new SimpleRecord(3241324L, "a".getBytes(), "1".getBytes()),
+                new SimpleRecord(234280L, "b".getBytes(), "2".getBytes())
 
             };
             SimpleRecord[] secondBatchRecords = new SimpleRecord[]{
-                    new SimpleRecord(238423489L, "c".getBytes(), "3".getBytes()),
-                    new SimpleRecord(897839L, null, "4".getBytes()),
-                    new SimpleRecord(8234020L, "e".getBytes(), null)
+                new SimpleRecord(238423489L, "c".getBytes(), "3".getBytes()),
+                new SimpleRecord(897839L, null, "4".getBytes()),
+                new SimpleRecord(8234020L, "e".getBytes(), null)
             };
 
             fileRecords.append(MemoryRecords.withRecords(magic, 0L, compression, CREATE_TIME, firstBatchRecords));
@@ -146,14 +153,14 @@ public class FileLogInputStreamTest {
             int partitionLeaderEpoch = 9832;
 
             SimpleRecord[] firstBatchRecords = new SimpleRecord[]{
-                    new SimpleRecord(3241324L, "a".getBytes(), "1".getBytes()),
-                    new SimpleRecord(234280L, "b".getBytes(), "2".getBytes())
+                new SimpleRecord(3241324L, "a".getBytes(), "1".getBytes()),
+                new SimpleRecord(234280L, "b".getBytes(), "2".getBytes())
 
             };
             SimpleRecord[] secondBatchRecords = new SimpleRecord[]{
-                    new SimpleRecord(238423489L, "c".getBytes(), "3".getBytes()),
-                    new SimpleRecord(897839L, null, "4".getBytes()),
-                    new SimpleRecord(8234020L, "e".getBytes(), null)
+                new SimpleRecord(238423489L, "c".getBytes(), "3".getBytes()),
+                new SimpleRecord(897839L, null, "4".getBytes()),
+                new SimpleRecord(8234020L, "e".getBytes(), null)
             };
 
             fileRecords.append(MemoryRecords.withIdempotentRecords(magic, 15L, compression, producerId,
@@ -211,7 +218,7 @@ public class FileLogInputStreamTest {
     }
 
     private void assertProducerData(RecordBatch batch, long producerId, short producerEpoch, int baseSequence,
-                                    boolean isTransactional, SimpleRecord... records) {
+                                    boolean isTransactional, SimpleRecord ... records) {
         assertEquals(producerId, batch.producerId());
         assertEquals(producerEpoch, batch.producerEpoch());
         assertEquals(baseSequence, batch.baseSequence());
@@ -227,7 +234,7 @@ public class FileLogInputStreamTest {
         assertFalse(batch.isTransactional());
     }
 
-    private void assertGenericRecordBatchData(RecordBatch batch, long baseOffset, long maxTimestamp, SimpleRecord... records) {
+    private void assertGenericRecordBatchData(RecordBatch batch, long baseOffset, long maxTimestamp, SimpleRecord ... records) {
         assertEquals(magic, batch.magic());
         assertEquals(compression, batch.compressionType());
 
