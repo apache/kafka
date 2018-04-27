@@ -26,6 +26,8 @@ import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
@@ -54,6 +56,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -1212,5 +1215,14 @@ public class StreamThread extends Thread {
 
     Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> standbyRecords() {
         return standbyRecords;
+    }
+
+    public Map<MetricName, Metric> consumerMetrics() {
+        final Map<MetricName, ? extends Metric> consumerMetrics = consumer.metrics();
+        final Map<MetricName, ? extends Metric> restoreConsumerMetrics = restoreConsumer.metrics();
+        final LinkedHashMap<MetricName, Metric> result = new LinkedHashMap<>();
+        result.putAll(consumerMetrics);
+        result.putAll(restoreConsumerMetrics);
+        return result;
     }
 }

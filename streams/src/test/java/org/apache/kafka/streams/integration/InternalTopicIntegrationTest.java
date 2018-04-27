@@ -22,6 +22,7 @@ import kafka.zk.AdminZkClient;
 import kafka.zk.KafkaZkClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Time;
@@ -118,8 +119,9 @@ public class InternalTopicIntegrationTest {
             final Map<String, Properties> topicConfigs = scala.collection.JavaConversions.mapAsJavaMap(adminZkClient.getAllTopicConfigs());
 
             for (Map.Entry<String, Properties> topicConfig : topicConfigs.entrySet()) {
-                if (topicConfig.getKey().equals(changelog))
+                if (topicConfig.getKey().equals(changelog)) {
                     return topicConfig.getValue();
+                }
             }
 
             return new Properties();
@@ -157,6 +159,7 @@ public class InternalTopicIntegrationTest {
         //
         // Step 3: Verify the state changelog topics are compact
         //
+        waitForCompletion(streams, 2, 5000);
         streams.close();
 
         final Properties changelogProps = getTopicProperties(ProcessorStateManager.storeChangelogTopic(appID, "Counts"));
@@ -201,6 +204,7 @@ public class InternalTopicIntegrationTest {
         //
         // Step 3: Verify the state changelog topics are compact
         //
+        waitForCompletion(streams, 2, 5000);
         streams.close();
         final Properties properties = getTopicProperties(ProcessorStateManager.storeChangelogTopic(appID, "CountWindows"));
         final List<String> policies = Arrays.asList(properties.getProperty(LogConfig.CleanupPolicyProp()).split(","));
@@ -214,5 +218,27 @@ public class InternalTopicIntegrationTest {
         final Properties repartitionProps = getTopicProperties(appID + "-CountWindows-repartition");
         assertEquals(LogConfig.Delete(), repartitionProps.getProperty(LogConfig.CleanupPolicyProp()));
         assertEquals(5, repartitionProps.size());
+    }
+
+    @SuppressWarnings("SameParameterValue") // timeout is parameterized because it makes the usage clearer
+    private void waitForCompletion(final KafkaStreams streams,
+                                   final int expectedPartitions,
+                                   final int timeoutMilliseconds) {
+        final long start = System.currentTimeMillis();
+        asdf:
+        while (true) {
+            int lagMetrics = 0;
+            for (final Metric metric : streams.metrics().values()) {
+                if (metric.metricName().name().equals("records-lag")) {
+                    lagMetrics++;
+                    if (!metric.metricValue().equals(0.0) && (System.currentTimeMillis() - start < timeoutMilliseconds)) {
+                        continue asdf;
+                    }
+                }
+            }
+            if (lagMetrics >= expectedPartitions || System.currentTimeMillis() - start >= timeoutMilliseconds) {
+                break;
+            }
+        }
     }
 }
