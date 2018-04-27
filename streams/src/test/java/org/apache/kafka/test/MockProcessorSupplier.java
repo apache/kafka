@@ -29,8 +29,7 @@ public class MockProcessorSupplier<K, V> implements ProcessorSupplier<K, V> {
 
     private final long scheduleInterval;
     private final PunctuationType punctuationType;
-
-    public List<MockProcessor<K, V>> processors = new ArrayList<>();
+    private final List<MockProcessor<K, V>> processors = new ArrayList<>();
 
     public MockProcessorSupplier() {
         this(-1L);
