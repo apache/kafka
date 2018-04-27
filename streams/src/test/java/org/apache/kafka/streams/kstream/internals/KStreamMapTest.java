@@ -91,12 +91,12 @@ public class KStreamMapTest {
             driver.pipeInput(recordFactory.create(topicName, expectedKey, "V" + expectedKey));
         }
 
-        assertEquals(4, supplier.getTheProcessor().processed.size());
+        assertEquals(4, supplier.theCapturedProcessor().processed.size());
 
         String[] expected = new String[]{"V0:0", "V1:1", "V2:2", "V3:3"};
 
         for (int i = 0; i < expected.length; i++) {
-            assertEquals(expected[i], supplier.getTheProcessor().processed.get(i));
+            assertEquals(expected[i], supplier.theCapturedProcessor().processed.get(i));
         }
     }
 

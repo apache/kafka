@@ -91,7 +91,7 @@ public class KStreamFlatMapValuesTest {
 
         String[] expected = {"0:v0", "0:V0", "1:v1", "1:V1", "2:v2", "2:V2", "3:v3", "3:V3"};
 
-        assertArrayEquals(expected, supplier.getTheProcessor().processed.toArray());
+        assertArrayEquals(expected, supplier.theCapturedProcessor().processed.toArray());
     }
 
 
@@ -125,6 +125,6 @@ public class KStreamFlatMapValuesTest {
 
         String[] expected = {"0:v0", "0:k0", "1:v1", "1:k1", "2:v2", "2:k2", "3:v3", "3:k3"};
 
-        assertArrayEquals(expected, supplier.getTheProcessor().processed.toArray());
+        assertArrayEquals(expected, supplier.theCapturedProcessor().processed.toArray());
     }
 }

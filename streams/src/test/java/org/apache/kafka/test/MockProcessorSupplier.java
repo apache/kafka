@@ -52,10 +52,15 @@ public class MockProcessorSupplier<K, V> implements ProcessorSupplier<K, V> {
         return processor;
     }
 
-    // get the processor assuming that only one processor gets returned from this supplier
-    public MockProcessor<K, V> getTheProcessor() {
-        assertEquals(1, processors.size());
+    // get the captured processor assuming that only one processor gets returned from this supplier
+    public MockProcessor<K, V> theCapturedProcessor() {
+        return capturedProcessors(1).get(0);
+    }
 
-        return processors.get(0);
+    // get the captured processors with the expected number
+    public List<MockProcessor<K, V>> capturedProcessors(final int expectedNumberOfProcessors) {
+        assertEquals(expectedNumberOfProcessors, processors.size());
+
+        return processors;
     }
 }

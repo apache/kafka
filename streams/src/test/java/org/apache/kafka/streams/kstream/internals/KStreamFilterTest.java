@@ -85,7 +85,7 @@ public class KStreamFilterTest {
             driver.pipeInput(recordFactory.create(topicName, expectedKey, "V" + expectedKey));
         }
 
-        assertEquals(2, supplier.getTheProcessor().processed.size());
+        assertEquals(2, supplier.theCapturedProcessor().processed.size());
     }
 
     @Test
@@ -105,7 +105,7 @@ public class KStreamFilterTest {
             driver.pipeInput(recordFactory.create(topicName, expectedKey, "V" + expectedKey));
         }
 
-        assertEquals(5, supplier.getTheProcessor().processed.size());
+        assertEquals(5, supplier.theCapturedProcessor().processed.size());
     }
 
     @Test

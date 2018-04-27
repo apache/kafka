@@ -101,7 +101,7 @@ public class KStreamKStreamLeftJoinTest {
 
         driver = new TopologyTestDriver(builder.build(), props, 0L);
 
-        final MockProcessor<Integer, String> processor = supplier.getTheProcessor();
+        final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
 
         // push two items to the primary stream. the other window is empty
         // w1 {}
@@ -186,7 +186,7 @@ public class KStreamKStreamLeftJoinTest {
 
         driver = new TopologyTestDriver(builder.build(), props, time);
 
-        final MockProcessor<Integer, String> processor = supplier.getTheProcessor();
+        final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
 
         // push two items to the primary stream. the other window is empty. this should produce two items
         // w1 = {}

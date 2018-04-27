@@ -137,7 +137,7 @@ public class KStreamKStreamJoinTest {
 
         driver = new TopologyTestDriver(builder.build(), props);
 
-        final MockProcessor<Integer, String> processor = supplier.getTheProcessor();
+        final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
 
         // push two items to the primary stream. the other window is empty
         // w1 = {}
@@ -238,7 +238,7 @@ public class KStreamKStreamJoinTest {
 
         driver = new TopologyTestDriver(builder.build(), props, 0L);
 
-        final MockProcessor<Integer, String> processor = supplier.getTheProcessor();
+        final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
 
         // push two items to the primary stream. the other window is empty.this should produce two items
         // w1 = {}
@@ -351,7 +351,7 @@ public class KStreamKStreamJoinTest {
             driver.pipeInput(recordFactory.create(topic1, expectedKeys[i], "X" + expectedKeys[i], time));
         }
 
-        final MockProcessor<Integer, String> processor = supplier.getTheProcessor();
+        final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
 
         processor.checkAndClearProcessResult();
 
@@ -564,7 +564,7 @@ public class KStreamKStreamJoinTest {
 
         driver = new TopologyTestDriver(builder.build(), props, time);
 
-        final MockProcessor<Integer, String> processor = supplier.getTheProcessor();
+        final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
 
         for (int i = 0; i < expectedKeys.length; i++) {
             driver.pipeInput(recordFactory.create(topic1, expectedKeys[i], "X" + expectedKeys[i], time + i));
@@ -673,7 +673,7 @@ public class KStreamKStreamJoinTest {
 
         driver = new TopologyTestDriver(builder.build(), props, time);
 
-        final MockProcessor<Integer, String> processor = supplier.getTheProcessor();
+        final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
 
         for (int i = 0; i < expectedKeys.length; i++) {
             driver.pipeInput(recordFactory.create(topic1, expectedKeys[i], "X" + expectedKeys[i], time + i));

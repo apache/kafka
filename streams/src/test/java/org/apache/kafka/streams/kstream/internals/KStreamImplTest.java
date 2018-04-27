@@ -229,7 +229,7 @@ public class KStreamImplTest {
 
         driver = new TopologyTestDriver(builder.build(), props);
         driver.pipeInput(recordFactory.create(input, "a", "b"));
-        assertThat(processorSupplier.getTheProcessor().processed, equalTo(Collections.singletonList("a:b")));
+        assertThat(processorSupplier.theCapturedProcessor().processed, equalTo(Collections.singletonList("a:b")));
     }
 
     @Test
@@ -242,7 +242,7 @@ public class KStreamImplTest {
 
         driver = new TopologyTestDriver(builder.build(), props);
         driver.pipeInput(recordFactory.create(input, "e", "f"));
-        assertThat(processorSupplier.getTheProcessor().processed, equalTo(Collections.singletonList("e:f")));
+        assertThat(processorSupplier.theCapturedProcessor().processed, equalTo(Collections.singletonList("e:f")));
     }
 
     @Test
@@ -529,7 +529,7 @@ public class KStreamImplTest {
         driver.pipeInput(recordFactory.create(topic2, "C", "cc"));
         driver.pipeInput(recordFactory.create(topic1, "D", "dd"));
 
-        assertEquals(Utils.mkList("A:aa", "B:bb", "C:cc", "D:dd"), processorSupplier.getTheProcessor().processed);
+        assertEquals(Utils.mkList("A:aa", "B:bb", "C:cc", "D:dd"), processorSupplier.theCapturedProcessor().processed);
     }
     
     @Test
@@ -559,7 +559,7 @@ public class KStreamImplTest {
         driver.pipeInput(recordFactory.create(topic1, "H", "hh"));
 
         assertEquals(Utils.mkList("A:aa", "B:bb", "C:cc", "D:dd", "E:ee", "F:ff", "G:gg", "H:hh"),
-                     processorSupplier.getTheProcessor().processed);
+                     processorSupplier.theCapturedProcessor().processed);
     }
 
     @Test
@@ -577,7 +577,7 @@ public class KStreamImplTest {
         driver.pipeInput(recordFactory.create("topic-7", "E", "ee"));
 
         assertEquals(Utils.mkList("A:aa", "B:bb", "C:cc", "D:dd", "E:ee"),
-                processorSupplier.getTheProcessor().processed);
+                processorSupplier.theCapturedProcessor().processed);
     }
 
     @Test
@@ -600,6 +600,6 @@ public class KStreamImplTest {
         driver.pipeInput(recordFactory.create(topic3, "E", "ee"));
 
         assertEquals(Utils.mkList("A:aa", "B:bb", "C:cc", "D:dd", "E:ee"),
-                processorSupplier.getTheProcessor().processed);
+                processorSupplier.theCapturedProcessor().processed);
     }
 }

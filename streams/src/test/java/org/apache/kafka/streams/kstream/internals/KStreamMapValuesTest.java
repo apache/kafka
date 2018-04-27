@@ -93,7 +93,7 @@ public class KStreamMapValuesTest {
         }
         String[] expected = {"1:1", "10:2", "100:3", "1000:4"};
 
-        assertArrayEquals(expected, supplier.getTheProcessor().processed.toArray());
+        assertArrayEquals(expected, supplier.theCapturedProcessor().processed.toArray());
     }
 
     @Test
@@ -120,7 +120,7 @@ public class KStreamMapValuesTest {
         }
         String[] expected = {"1:2", "10:12", "100:103", "1000:1004"};
 
-        assertArrayEquals(expected, supplier.getTheProcessor().processed.toArray());
+        assertArrayEquals(expected, supplier.theCapturedProcessor().processed.toArray());
     }
 
 }

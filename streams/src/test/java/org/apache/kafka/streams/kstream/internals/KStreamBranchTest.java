@@ -26,12 +26,14 @@ import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
+import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.util.List;
 import java.util.Properties;
 
 import static org.junit.Assert.assertEquals;
@@ -105,10 +107,10 @@ public class KStreamBranchTest {
             driver.pipeInput(recordFactory.create(topicName, expectedKey, "V" + expectedKey));
         }
 
-        assertEquals(3, supplier.processors.size());
-        assertEquals(3, supplier.processors.get(0).processed.size());
-        assertEquals(1, supplier.processors.get(1).processed.size());
-        assertEquals(2, supplier.processors.get(2).processed.size());
+        final List<MockProcessor<Integer, String>> processors = supplier.capturedProcessors(3);
+        assertEquals(3, processors.get(0).processed.size());
+        assertEquals(1, processors.get(1).processed.size());
+        assertEquals(2, processors.get(2).processed.size());
     }
 
     @Test

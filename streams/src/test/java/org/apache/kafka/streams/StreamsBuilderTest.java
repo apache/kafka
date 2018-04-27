@@ -189,7 +189,7 @@ public class StreamsBuilderTest {
         driver.pipeInput(recordFactory.create("topic-source", "A", "aa"));
 
         // no exception was thrown
-        assertEquals(Utils.mkList("A:aa"), processorSupplier.getTheProcessor().processed);
+        assertEquals(Utils.mkList("A:aa"), processorSupplier.theCapturedProcessor().processed);
     }
 
     @Test
@@ -208,8 +208,8 @@ public class StreamsBuilderTest {
         final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
         driver.pipeInput(recordFactory.create("topic-source", "A", "aa"));
 
-        assertEquals(Utils.mkList("A:aa"), sourceProcessorSupplier.getTheProcessor().processed);
-        assertEquals(Utils.mkList("A:aa"), throughProcessorSupplier.getTheProcessor().processed);
+        assertEquals(Utils.mkList("A:aa"), sourceProcessorSupplier.theCapturedProcessor().processed);
+        assertEquals(Utils.mkList("A:aa"), throughProcessorSupplier.theCapturedProcessor().processed);
     }
     
     @Test
@@ -232,7 +232,7 @@ public class StreamsBuilderTest {
         driver.pipeInput(recordFactory.create(topic2, "C", "cc"));
         driver.pipeInput(recordFactory.create(topic1, "D", "dd"));
 
-        assertEquals(Utils.mkList("A:aa", "B:bb", "C:cc", "D:dd"), processorSupplier.getTheProcessor().processed);
+        assertEquals(Utils.mkList("A:aa", "B:bb", "C:cc", "D:dd"), processorSupplier.theCapturedProcessor().processed);
     }
 
     @Test

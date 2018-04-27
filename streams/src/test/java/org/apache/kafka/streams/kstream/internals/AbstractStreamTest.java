@@ -94,7 +94,7 @@ public class AbstractStreamTest {
             driver.pipeInput(recordFactory.create(topicName, expectedKey, "V" + expectedKey));
         }
 
-        assertTrue(supplier.getTheProcessor().processed.size() <= expectedKeys.length);
+        assertTrue(supplier.theCapturedProcessor().processed.size() <= expectedKeys.length);
     }
 
     private class ExtendedKStream<K, V> extends AbstractStream<K> {

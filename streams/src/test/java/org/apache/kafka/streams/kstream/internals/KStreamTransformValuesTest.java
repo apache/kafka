@@ -119,7 +119,7 @@ public class KStreamTransformValuesTest {
         }
         String[] expected = {"1:10", "10:110", "100:1110", "1000:11110"};
 
-        assertArrayEquals(expected, supplier.getTheProcessor().processed.toArray());
+        assertArrayEquals(expected, supplier.theCapturedProcessor().processed.toArray());
     }
 
     @Test
@@ -162,7 +162,7 @@ public class KStreamTransformValuesTest {
         }
         String[] expected = {"1:11", "10:121", "100:1221", "1000:12221"};
 
-        assertArrayEquals(expected, supplier.getTheProcessor().processed.toArray());
+        assertArrayEquals(expected, supplier.theCapturedProcessor().processed.toArray());
     }
 
 

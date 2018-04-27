@@ -37,6 +37,7 @@ import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockMapper;
+import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockReducer;
 import org.apache.kafka.test.MockValueJoiner;
@@ -47,6 +48,7 @@ import org.junit.Test;
 
 import java.io.File;
 import java.lang.reflect.Field;
+import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -117,10 +119,11 @@ public class KTableImplTest {
         driver.flushState();
         driver.flushState();
 
-        assertEquals(Utils.mkList("A:01", "B:02", "C:03", "D:04"), supplier.processors.get(0).processed);
-        assertEquals(Utils.mkList("A:1", "B:2", "C:3", "D:4"), supplier.processors.get(1).processed);
-        assertEquals(Utils.mkList("A:null", "B:2", "C:null", "D:4"), supplier.processors.get(2).processed);
-        assertEquals(Utils.mkList("A:01", "B:02", "C:03", "D:04"), supplier.processors.get(3).processed);
+        final List<MockProcessor<String, Object>> processors = supplier.capturedProcessors(4);
+        assertEquals(Utils.mkList("A:01", "B:02", "C:03", "D:04"), processors.get(0).processed);
+        assertEquals(Utils.mkList("A:1", "B:2", "C:3", "D:4"), processors.get(1).processed);
+        assertEquals(Utils.mkList("A:null", "B:2", "C:null", "D:4"), processors.get(2).processed);
+        assertEquals(Utils.mkList("A:01", "B:02", "C:03", "D:04"), processors.get(3).processed);
     }
 
     @Test

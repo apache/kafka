@@ -88,10 +88,10 @@ public class KTableMapKeysTest {
         }
         driver.flushState();
 
-        assertEquals(3, supplier.getTheProcessor().processed.size());
+        assertEquals(3, supplier.theCapturedProcessor().processed.size());
 
         for (int i = 0; i < expected.length; i++) {
-            assertEquals(expected[i], supplier.getTheProcessor().processed.get(i));
+            assertEquals(expected[i], supplier.theCapturedProcessor().processed.get(i));
         }
     }
 }

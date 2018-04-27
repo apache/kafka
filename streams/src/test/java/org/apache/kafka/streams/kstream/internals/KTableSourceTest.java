@@ -75,7 +75,7 @@ public class KTableSourceTest {
         driver.process(topic1, "B", null);
         driver.flushState();
 
-        assertEquals(Utils.mkList("A:1", "B:2", "C:3", "D:4", "A:null", "B:null"), supplier.getTheProcessor().processed);
+        assertEquals(Utils.mkList("A:1", "B:2", "C:3", "D:4", "A:null", "B:null"), supplier.theCapturedProcessor().processed);
     }
 
     @Test
@@ -152,7 +152,7 @@ public class KTableSourceTest {
 
         driver.setUp(builder, stateDir);
 
-        final MockProcessor<String, Integer> proc1 = supplier.getTheProcessor();
+        final MockProcessor<String, Integer> proc1 = supplier.theCapturedProcessor();
 
         driver.process(topic1, "A", "01");
         driver.process(topic1, "B", "01");
@@ -197,7 +197,7 @@ public class KTableSourceTest {
 
         driver.setUp(builder, stateDir);
 
-        final MockProcessor<String, Integer> proc1 = supplier.getTheProcessor();
+        final MockProcessor<String, Integer> proc1 = supplier.theCapturedProcessor();
 
         driver.process(topic1, "A", "01");
         driver.process(topic1, "B", "01");

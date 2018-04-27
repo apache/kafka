@@ -94,7 +94,7 @@ public class KTableKTableLeftJoinTest {
         driver.setUp(builder, stateDir);
         driver.setTime(0L);
 
-        final MockProcessor<Integer, String> processor = supplier.getTheProcessor();
+        final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
 
         final KTableValueGetter<Integer, String> getter = getterSupplier.get();
         getter.init(driver.context());
@@ -188,7 +188,7 @@ public class KTableKTableLeftJoinTest {
         driver.setUp(builder, stateDir);
         driver.setTime(0L);
 
-        final MockProcessor<Integer, String> proc = supplier.getTheProcessor();
+        final MockProcessor<Integer, String> proc = supplier.theCapturedProcessor();
 
         assertTrue(((KTableImpl<?, ?, ?>) table1).sendingOldValueEnabled());
         assertFalse(((KTableImpl<?, ?, ?>) table2).sendingOldValueEnabled());
@@ -273,7 +273,7 @@ public class KTableKTableLeftJoinTest {
         driver.setUp(builder, stateDir);
         driver.setTime(0L);
 
-        final MockProcessor<Integer, String> proc = supplier.getTheProcessor();
+        final MockProcessor<Integer, String> proc = supplier.theCapturedProcessor();
 
         assertTrue(((KTableImpl<?, ?, ?>) table1).sendingOldValueEnabled());
         assertTrue(((KTableImpl<?, ?, ?>) table2).sendingOldValueEnabled());

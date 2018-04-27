@@ -88,7 +88,7 @@ public class KStreamGlobalKTableLeftJoinTest {
 
         driver = new TopologyTestDriver(builder.build(), props);
 
-        processor = supplier.getTheProcessor();
+        processor = supplier.theCapturedProcessor();
     }
 
     private void pushToStream(final int messageCount, final String valuePrefix, final boolean includeForeignKey) {

@@ -63,7 +63,7 @@ public class KTableMapValuesTest {
         driver.process(topic1, "C", "3");
         driver.process(topic1, "D", "4");
         driver.flushState();
-        assertEquals(Utils.mkList("A:1", "B:2", "C:3", "D:4"), supplier.getTheProcessor().processed);
+        assertEquals(Utils.mkList("A:1", "B:2", "C:3", "D:4"), supplier.theCapturedProcessor().processed);
     }
 
     @Test
@@ -289,7 +289,7 @@ public class KTableMapValuesTest {
 
         driver.setUp(builder, stateDir);
 
-        final MockProcessor<String, Integer> proc = supplier.getTheProcessor();
+        final MockProcessor<String, Integer> proc = supplier.theCapturedProcessor();
 
         assertFalse(table1.sendingOldValueEnabled());
         assertFalse(table2.sendingOldValueEnabled());
@@ -342,7 +342,7 @@ public class KTableMapValuesTest {
 
         driver.setUp(builder, stateDir);
 
-        final MockProcessor<String, Integer> proc = supplier.getTheProcessor();
+        final MockProcessor<String, Integer> proc = supplier.theCapturedProcessor();
 
         assertTrue(table1.sendingOldValueEnabled());
         assertTrue(table2.sendingOldValueEnabled());

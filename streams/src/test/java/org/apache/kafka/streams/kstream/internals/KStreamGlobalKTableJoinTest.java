@@ -87,7 +87,7 @@ public class KStreamGlobalKTableJoinTest {
 
         driver = new TopologyTestDriver(builder.build(), props);
 
-        processor = supplier.getTheProcessor();
+        processor = supplier.theCapturedProcessor();
     }
 
     @After

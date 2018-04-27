@@ -112,7 +112,7 @@ public class KTableAggregateTest {
                 "C:0+5",
                 "D:0+6",
                 "B:0+2-2+4-4+7",
-                "C:0+5-5+8"), supplier.getTheProcessor().processed);
+                "C:0+5-5+8"), supplier.theCapturedProcessor().processed);
     }
 
 
@@ -139,7 +139,7 @@ public class KTableAggregateTest {
         driver.process(topic1, "A", "4");
         driver.flushState();
         assertEquals(Utils.mkList(
-            "A:0+4"), supplier.getTheProcessor().processed);
+            "A:0+4"), supplier.theCapturedProcessor().processed);
     }
 
 
@@ -200,7 +200,7 @@ public class KTableAggregateTest {
                 "2:0+2-2", "4:0+4",
                   //noop
                 "4:0+4-4", "7:0+7"
-                ), supplier.getTheProcessor().processed);
+                ), supplier.theCapturedProcessor().processed);
     }
 
     private void testCountHelper(final StreamsBuilder builder, final String input, final MockProcessorSupplier<String, Object> supplier) {
@@ -225,7 +225,7 @@ public class KTableAggregateTest {
             "green:1", "blue:1",
             "yellow:1",
             "green:2"
-        ), supplier.getTheProcessor().processed);
+        ), supplier.theCapturedProcessor().processed);
     }
 
     @Test
@@ -270,7 +270,7 @@ public class KTableAggregateTest {
 
         driver.setUp(builder, stateDir);
 
-        final MockProcessor<String, Long> proc = supplier.getTheProcessor();
+        final MockProcessor<String, Long> proc = supplier.theCapturedProcessor();
 
         driver.process(input, "A", "green");
         driver.process(input, "B", "green");
@@ -325,7 +325,7 @@ public class KTableAggregateTest {
 
         driver.setUp(builder, stateDir);
 
-        final MockProcessor<String, String> proc = supplier.getTheProcessor();
+        final MockProcessor<String, String> proc = supplier.theCapturedProcessor();
 
         driver.process(input, "11", "A");
         driver.flushState();

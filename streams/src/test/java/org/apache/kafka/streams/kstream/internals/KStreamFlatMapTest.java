@@ -93,12 +93,12 @@ public class KStreamFlatMapTest {
             driver.pipeInput(recordFactory.create(topicName, expectedKey, "V" + expectedKey));
         }
 
-        assertEquals(6, supplier.getTheProcessor().processed.size());
+        assertEquals(6, supplier.theCapturedProcessor().processed.size());
 
         String[] expected = {"10:V1", "20:V2", "21:V2", "30:V3", "31:V3", "32:V3"};
 
         for (int i = 0; i < expected.length; i++) {
-            assertEquals(expected[i], supplier.getTheProcessor().processed.get(i));
+            assertEquals(expected[i], supplier.theCapturedProcessor().processed.get(i));
         }
     }
 }

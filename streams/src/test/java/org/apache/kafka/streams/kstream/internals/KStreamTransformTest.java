@@ -78,25 +78,23 @@ public class KStreamTransformTest {
     public void testTransform() {
         StreamsBuilder builder = new StreamsBuilder();
 
-        TransformerSupplier<Number, Number, KeyValue<Integer, Integer>> transformerSupplier = new TransformerSupplier<Number, Number, KeyValue<Integer, Integer>>() {
+        final TransformerSupplier<Number, Number, KeyValue<Integer, Integer>> transformerSupplier = new TransformerSupplier<Number, Number, KeyValue<Integer, Integer>>() {
             public Transformer<Number, Number, KeyValue<Integer, Integer>> get() {
                 return new Transformer<Number, Number, KeyValue<Integer, Integer>>() {
 
                     private int total = 0;
 
                     @Override
-                    public void init(ProcessorContext context) {
-                    }
+                    public void init(final ProcessorContext context) {}
 
                     @Override
-                    public KeyValue<Integer, Integer> transform(Number key, Number value) {
+                    public KeyValue<Integer, Integer> transform(final Number key, final Number value) {
                         total += value.intValue();
                         return KeyValue.pair(key.intValue() * 2, total);
                     }
 
                     @Override
-                    public void close() {
-                    }
+                    public void close() {}
                 };
             }
         };
@@ -116,14 +114,14 @@ public class KStreamTransformTest {
         //kstreamDriver.punctuate(2);
         //kstreamDriver.punctuate(3);
 
-        //assertEquals(6, processor.getTheProcessor().processed.size());
+        //assertEquals(6, processor.theCapturedProcessor().processed.size());
 
         //String[] expected = {"2:10", "20:110", "200:1110", "2000:11110", "-1:2", "-1:3"};
 
         String[] expected = {"2:10", "20:110", "200:1110", "2000:11110"};
 
         for (int i = 0; i < expected.length; i++) {
-            assertEquals(expected[i], processor.getTheProcessor().processed.get(i));
+            assertEquals(expected[i], processor.theCapturedProcessor().processed.get(i));
         }
     }
 
@@ -148,14 +146,13 @@ public class KStreamTransformTest {
                     }
 
                     @Override
-                    public KeyValue<Integer, Integer> transform(Number key, Number value) {
+                    public KeyValue<Integer, Integer> transform(final Number key, final Number value) {
                         total += value.intValue();
                         return KeyValue.pair(key.intValue() * 2, total);
                     }
 
                     @Override
-                    public void close() {
-                    }
+                    public void close() {}
                 };
             }
         };
@@ -177,12 +174,12 @@ public class KStreamTransformTest {
         // This tick further advances the clock to 3, which leads to the "-1:3" result
         driver.advanceWallClockTime(1);
 
-        assertEquals(6, processor.getTheProcessor().processed.size());
+        assertEquals(6, processor.theCapturedProcessor().processed.size());
 
         String[] expected = {"2:10", "20:110", "200:1110", "2000:11110", "-1:2", "-1:3"};
 
         for (int i = 0; i < expected.length; i++) {
-            assertEquals(expected[i], processor.getTheProcessor().processed.get(i));
+            assertEquals(expected[i], processor.theCapturedProcessor().processed.get(i));
         }
     }
 

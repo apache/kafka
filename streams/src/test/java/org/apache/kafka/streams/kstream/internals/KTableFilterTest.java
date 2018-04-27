@@ -25,8 +25,10 @@ import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Predicate;
+import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.KStreamTestDriver;
+import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockReducer;
 import org.apache.kafka.test.MockMapper;
@@ -36,6 +38,7 @@ import org.junit.Rule;
 import org.junit.Test;
 
 import java.io.File;
+import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -73,8 +76,10 @@ public class KTableFilterTest {
         driver.process(topic, "B", null);
         driver.flushState();
 
-        supplier.processors.get(0).checkAndClearProcessResult("A:null", "B:2", "C:null", "D:4", "A:null", "B:null");
-        supplier.processors.get(1).checkAndClearProcessResult("A:1", "B:null", "C:3", "D:null", "A:null", "B:null");
+        final List<MockProcessor<String, Integer>> processors = supplier.capturedProcessors(2);
+
+        processors.get(0).checkAndClearProcessResult("A:null", "B:2", "C:null", "D:4", "A:null", "B:null");
+        processors.get(1).checkAndClearProcessResult("A:1", "B:null", "C:3", "D:null", "A:null", "B:null");
     }
 
     @Test
@@ -281,25 +286,27 @@ public class KTableFilterTest {
         driver.process(topic1, "C", 1);
         driver.flushState();
 
-        supplier.processors.get(0).checkAndClearProcessResult("A:(1<-null)", "B:(1<-null)", "C:(1<-null)");
-        supplier.processors.get(1).checkAndClearProcessResult("A:(null<-null)", "B:(null<-null)", "C:(null<-null)");
+        final List<MockProcessor<String, Integer>> processors = supplier.capturedProcessors(2);
+
+        processors.get(0).checkAndClearProcessResult("A:(1<-null)", "B:(1<-null)", "C:(1<-null)");
+        processors.get(1).checkAndClearProcessResult("A:(null<-null)", "B:(null<-null)", "C:(null<-null)");
 
         driver.process(topic1, "A", 2);
         driver.process(topic1, "B", 2);
         driver.flushState();
-        supplier.processors.get(0).checkAndClearProcessResult("A:(2<-null)", "B:(2<-null)");
-        supplier.processors.get(1).checkAndClearProcessResult("A:(2<-null)", "B:(2<-null)");
+        processors.get(0).checkAndClearProcessResult("A:(2<-null)", "B:(2<-null)");
+        processors.get(1).checkAndClearProcessResult("A:(2<-null)", "B:(2<-null)");
 
         driver.process(topic1, "A", 3);
         driver.flushState();
-        supplier.processors.get(0).checkAndClearProcessResult("A:(3<-null)");
-        supplier.processors.get(1).checkAndClearProcessResult("A:(null<-null)");
+        processors.get(0).checkAndClearProcessResult("A:(3<-null)");
+        processors.get(1).checkAndClearProcessResult("A:(null<-null)");
 
         driver.process(topic1, "A", null);
         driver.process(topic1, "B", null);
         driver.flushState();
-        supplier.processors.get(0).checkAndClearProcessResult("A:(null<-null)", "B:(null<-null)");
-        supplier.processors.get(1).checkAndClearProcessResult("A:(null<-null)", "B:(null<-null)");
+        processors.get(0).checkAndClearProcessResult("A:(null<-null)", "B:(null<-null)");
+        processors.get(1).checkAndClearProcessResult("A:(null<-null)", "B:(null<-null)");
     }
 
 
@@ -360,25 +367,27 @@ public class KTableFilterTest {
         driver.process(topic1, "C", 1);
         driver.flushState();
 
-        supplier.processors.get(0).checkAndClearProcessResult("A:(1<-null)", "B:(1<-null)", "C:(1<-null)");
-        supplier.processors.get(1).checkEmptyAndClearProcessResult();
+        final List<MockProcessor<String, Integer>> processors = supplier.capturedProcessors(2);
+
+        processors.get(0).checkAndClearProcessResult("A:(1<-null)", "B:(1<-null)", "C:(1<-null)");
+        processors.get(1).checkEmptyAndClearProcessResult();
 
         driver.process(topic1, "A", 2);
         driver.process(topic1, "B", 2);
         driver.flushState();
-        supplier.processors.get(0).checkAndClearProcessResult("A:(2<-1)", "B:(2<-1)");
-        supplier.processors.get(1).checkAndClearProcessResult("A:(2<-null)", "B:(2<-null)");
+        processors.get(0).checkAndClearProcessResult("A:(2<-1)", "B:(2<-1)");
+        processors.get(1).checkAndClearProcessResult("A:(2<-null)", "B:(2<-null)");
 
         driver.process(topic1, "A", 3);
         driver.flushState();
-        supplier.processors.get(0).checkAndClearProcessResult("A:(3<-2)");
-        supplier.processors.get(1).checkAndClearProcessResult("A:(null<-2)");
+        processors.get(0).checkAndClearProcessResult("A:(3<-2)");
+        processors.get(1).checkAndClearProcessResult("A:(null<-2)");
 
         driver.process(topic1, "A", null);
         driver.process(topic1, "B", null);
         driver.flushState();
-        supplier.processors.get(0).checkAndClearProcessResult("A:(null<-3)", "B:(null<-2)");
-        supplier.processors.get(1).checkAndClearProcessResult("B:(null<-2)");
+        processors.get(0).checkAndClearProcessResult("A:(null<-3)", "B:(null<-2)");
+        processors.get(1).checkAndClearProcessResult("B:(null<-2)");
     }
 
     @Test
@@ -435,8 +444,10 @@ public class KTableFilterTest {
         driver.process(topic1, "B", "reject");
         driver.process(topic1, "C", "reject");
         driver.flushState();
-        supplier.processors.get(0).checkAndClearProcessResult("A:(reject<-null)", "B:(reject<-null)", "C:(reject<-null)");
-        supplier.processors.get(1).checkEmptyAndClearProcessResult();
+
+        final List<MockProcessor<String, String>> processors = supplier.capturedProcessors(2);
+        processors.get(0).checkAndClearProcessResult("A:(reject<-null)", "B:(reject<-null)", "C:(reject<-null)");
+        processors.get(1).checkEmptyAndClearProcessResult();
     }
 
     @Test

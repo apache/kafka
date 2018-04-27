@@ -80,7 +80,7 @@ public class KTableKTableInnerJoinTest {
         driver.setUp(builder, stateDir, Serdes.Integer(), Serdes.String());
         driver.setTime(0L);
 
-        final MockProcessor<Integer, String> processor = supplier.getTheProcessor();
+        final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
 
         final KTableValueGetter<Integer, String> getter = getterSupplier.get();
         getter.init(driver.context());
@@ -211,7 +211,7 @@ public class KTableKTableInnerJoinTest {
         driver.setUp(builder, stateDir, Serdes.Integer(), Serdes.String());
         driver.setTime(0L);
 
-        final MockProcessor<Integer, String> proc = supplier.getTheProcessor();
+        final MockProcessor<Integer, String> proc = supplier.theCapturedProcessor();
 
         if (!sendOldValues) {
             assertFalse(((KTableImpl<?, ?, ?>) table1).sendingOldValueEnabled());
