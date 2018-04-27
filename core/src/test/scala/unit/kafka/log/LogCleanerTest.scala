@@ -77,7 +77,7 @@ class LogCleanerTest extends JUnitSuite {
     // pretend we have the following keys
     val keys = immutable.ListSet(1, 3, 5, 7, 9)
     val cache = new FakeCleanerCache(Int.MaxValue)
-    keys.foreach(k => cache.putIfGreater(new FakeRecord(key(k), Long.MaxValue, Long.MaxValue)))
+    keys.foreach(k => cache.put(new FakeRecord(key(k), Long.MaxValue, Long.MaxValue)))
 
     // clean the log
     val segments = log.logSegments.take(3).toSeq
@@ -459,7 +459,7 @@ class LogCleanerTest extends JUnitSuite {
     // pretend we have the following keys
     val keys = immutable.ListSet(1, 3, 5, 7, 9)
     val cache = new FakeCleanerCache(Int.MaxValue)
-    keys.foreach(k => cache.putIfGreater(new FakeRecord(key(k), Long.MaxValue, Long.MaxValue)))
+    keys.foreach(k => cache.put(new FakeRecord(key(k), Long.MaxValue, Long.MaxValue)))
 
     // clean the log
     val stats = new CleanerStats()
@@ -777,7 +777,7 @@ class LogCleanerTest extends JUnitSuite {
 
     val keys = keysInLog(log)
     val cache = new FakeCleanerCache(Int.MaxValue)
-    keys.foreach(k => cache.putIfGreater(new FakeRecord(key(k), Long.MaxValue, Long.MaxValue)))
+    keys.foreach(k => cache.put(new FakeRecord(key(k), Long.MaxValue, Long.MaxValue)))
     intercept[LogCleaningAbortedException] {
       cleaner.cleanSegments(log, log.logSegments.take(3).toSeq, cache, 0L, new CleanerStats())
     }
@@ -948,9 +948,9 @@ class LogCleanerTest extends JUnitSuite {
       assertEquals("Last offset should be the end offset.", end, endOffset)
       assertEquals("Should have the expected number of messages in the map.", end-start, cache.size)
       for(i <- start until end)
-        assertEquals("Should find all the keys", i.toLong, cache.offset(key(i)))
-      assertEquals("Should not find a value too small", -1L, cache.offset(key(start - 1)))
-      assertEquals("Should not find a value too large", -1L, cache.offset(key(end)))
+        assertEquals("Should find all the keys", i.toLong, cache.get(key(i)))
+      assertEquals("Should not find a value too small", -1L, cache.get(key(start - 1)))
+      assertEquals("Should not find a value too large", -1L, cache.get(key(end)))
       assertEquals(end - start, stats.mapMessagesRead)
     }
 
@@ -1005,7 +1005,7 @@ class LogCleanerTest extends JUnitSuite {
     // pretend we have odd-numbered keys
     val cache = new FakeCleanerCache(Int.MaxValue)
     for (k <- 1 until messageCount by 2)
-      cache.putIfGreater(new FakeRecord(key(k), Long.MaxValue, Long.MaxValue))
+      cache.put(new FakeRecord(key(k), Long.MaxValue, Long.MaxValue))
 
     // clean the log
     cleaner.cleanSegments(log, log.logSegments.take(9).toSeq, cache, 0L, new CleanerStats())
@@ -1043,7 +1043,7 @@ class LogCleanerTest extends JUnitSuite {
       messageCount += 1
     }
     for (k <- 1 until messageCount by 2)
-      cache.putIfGreater(new FakeRecord(key(k), Long.MaxValue, Long.MaxValue))
+      cache.put(new FakeRecord(key(k), Long.MaxValue, Long.MaxValue))
     cleaner.cleanSegments(log, log.logSegments.take(9).toSeq, cache, 0L, new CleanerStats())
     // clear scheduler so that async deletes don't run
     time.scheduler.clear()
@@ -1060,7 +1060,7 @@ class LogCleanerTest extends JUnitSuite {
       messageCount += 1
     }
     for (k <- 1 until messageCount by 2)
-      cache.putIfGreater(new FakeRecord(key(k), Long.MaxValue, Long.MaxValue))
+      cache.put(new FakeRecord(key(k), Long.MaxValue, Long.MaxValue))
     cleaner.cleanSegments(log, log.logSegments.take(9).toSeq, cache, 0L, new CleanerStats())
     // clear scheduler so that async deletes don't run
     time.scheduler.clear()
@@ -1092,8 +1092,8 @@ class LogCleanerTest extends JUnitSuite {
     cleaner.buildCache(log, keyStart, offsetEnd + 1L, cache, new CleanerStats())
     assertEquals("Last offset should be the end offset.", offsetEnd, cache.latestOffset)
     assertEquals("Should have the expected number of messages in the map.", keyEnd - keyStart, cache.size)
-    assertEquals("Map should contain first value", 0L, cache.offset(key(0)))
-    assertEquals("Map should contain second value", offsetEnd, cache.offset(key(1)))
+    assertEquals("Map should contain first value", 0L, cache.get(key(0)))
+    assertEquals("Map should contain second value", offsetEnd, cache.get(key(1)))
   }
 
   /**
@@ -1116,10 +1116,10 @@ class LogCleanerTest extends JUnitSuite {
     val stats = new CleanerStats()
     cleaner.buildCache(log, 2, Int.MaxValue, cache, stats)
     assertEquals(2, cache.size)
-    assertEquals(-1, cache.offset(key(0)))
-    assertEquals(2, cache.offset(key(2)))
-    assertEquals(3, cache.offset(key(3)))
-    assertEquals(-1, cache.offset(key(4)))
+    assertEquals(-1, cache.get(key(0)))
+    assertEquals(2, cache.get(key(2)))
+    assertEquals(3, cache.get(key(3)))
+    assertEquals(-1, cache.get(key(4)))
     assertEquals(4, stats.mapMessagesRead)
   }
 
@@ -1332,7 +1332,7 @@ class FakeCleanerCache(val slots: Int) extends CleanerCache {
   private def keyFor(key: ByteBuffer) =
     new String(Utils.readBytes(key.duplicate), "UTF-8")
 
-  override def putIfGreater(record: Record): Boolean = {
+  override def put(record: Record): Boolean = {
     if (!record.hasKey || !greater(record)) {
       return false
     }
@@ -1342,18 +1342,16 @@ class FakeCleanerCache(val slots: Int) extends CleanerCache {
   }
 
   override def greater(record: Record): Boolean = {
-    record.offset >= 0 && offset(record.key) <= record.offset
+    record.offset >= 0 && get(record.key) <= record.offset
   }
 
-  override def offset(key: ByteBuffer): Long = {
+  override def get(key: ByteBuffer): Long = {
     val k = keyFor(key)
     if (map.containsKey(k))
       map.get(k).offset
     else
       -1L
   }
-
-  override def version(key: ByteBuffer): Long = -1L
 
   override def clear(): Unit = map.clear()
 
