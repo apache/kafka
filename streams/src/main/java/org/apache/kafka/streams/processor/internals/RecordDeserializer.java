@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
@@ -30,13 +31,16 @@ class RecordDeserializer {
     private final SourceNode sourceNode;
     private final DeserializationExceptionHandler deserializationExceptionHandler;
     private final Logger log;
+    private final Sensor skippedRecordSensor;
 
     RecordDeserializer(final SourceNode sourceNode,
                        final DeserializationExceptionHandler deserializationExceptionHandler,
-                       final LogContext logContext) {
+                       final LogContext logContext,
+                       final Sensor skippedRecordsSensor) {
         this.sourceNode = sourceNode;
         this.deserializationExceptionHandler = deserializationExceptionHandler;
         this.log = logContext.logger(RecordDeserializer.class);
+        this.skippedRecordSensor = skippedRecordsSensor;
     }
 
     /**
@@ -79,10 +83,17 @@ class RecordDeserializer {
                     DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG + " appropriately.",
                     deserializationException);
             } else {
-                sourceNode.sourceNodeSkippedDueToDeserializationErrorSensor().record();
+                log.warn(
+                    "Skipping record due to deserialization error. topic=[{}] partition=[{}] offset=[{}]",
+                    rawRecord.topic(),
+                    rawRecord.partition(),
+                    rawRecord.offset(),
+                    deserializationException
+                );
+                skippedRecordSensor.record();
+                return null;
             }
         }
-        return null;
     }
 
     SourceNode sourceNode() {

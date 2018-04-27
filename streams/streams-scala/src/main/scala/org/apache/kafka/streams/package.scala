@@ -1,4 +1,7 @@
 /*
+ * Copyright (C) 2018 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2017-2018 Alexis Seigneurin.
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -14,19 +17,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.streams
 
-package org.apache.kafka.streams;
+import org.apache.kafka.streams.state.KeyValueStore
+import org.apache.kafka.common.utils.Bytes
 
-import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
-
-
-/**
- * This class is meant for testing purposes only and allows the testing of
- * topologies by using the  {@link org.apache.kafka.test.ProcessorTopologyTestDriver}
- */
-public class InternalTopologyAccessor {
-
-    public static InternalTopologyBuilder getInternalTopologyBuilder(final Topology topology) {
-        return topology.internalTopologyBuilder;
-    }
+package object scala {
+  type ByteArrayKeyValueStore = KeyValueStore[Bytes, Array[Byte]]
 }

@@ -59,6 +59,29 @@ class ProduceRequestTest extends BaseRequestTest {
       new SimpleRecord(System.currentTimeMillis(), "key2".getBytes, "value2".getBytes)), 1)
   }
 
+  @Test
+  def testProduceToNonReplica() {
+    val topic = "topic"
+    val partition = 0
+
+    // Create a single-partition topic and find a broker which is not the leader
+    val partitionToLeader = TestUtils.createTopic(zkClient, topic, numPartitions = 1, 1, servers)
+    val leader = partitionToLeader(partition)
+    val nonReplicaOpt = servers.find(_.config.brokerId != leader)
+    assertTrue(nonReplicaOpt.isDefined)
+    val nonReplicaId =  nonReplicaOpt.get.config.brokerId
+
+    // Send the produce request to the non-replica
+    val records = MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("key".getBytes, "value".getBytes))
+    val topicPartition = new TopicPartition("topic", partition)
+    val partitionRecords = Map(topicPartition -> records)
+    val produceRequest = ProduceRequest.Builder.forCurrentMagic(-1, 3000, partitionRecords.asJava).build()
+
+    val produceResponse = sendProduceRequest(nonReplicaId, produceRequest)
+    assertEquals(1, produceResponse.responses.size)
+    assertEquals(Errors.NOT_LEADER_FOR_PARTITION, produceResponse.responses.asScala.head._2.error)
+  }
+
   /* returns a pair of partition id and leader id */
   private def createTopicAndFindPartitionWithLeader(topic: String): (Int, Int) = {
     val partitionToLeader = TestUtils.createTopic(zkClient, topic, 3, 2, servers)
