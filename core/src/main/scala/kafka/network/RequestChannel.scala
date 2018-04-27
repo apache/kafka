@@ -24,7 +24,6 @@ import java.util.concurrent._
 import com.typesafe.scalalogging.Logger
 import com.yammer.metrics.core.{Gauge, Meter}
 import kafka.metrics.KafkaMetricsGroup
-import kafka.server.ThrottledChannelEvent
 import kafka.utils.{Logging, NotNothing}
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.network.Send
@@ -74,8 +73,7 @@ object RequestChannel extends Logging {
                 val startTimeNanos: Long,
                 memoryPool: MemoryPool,
                 @volatile private var buffer: ByteBuffer,
-                metrics: RequestChannel.Metrics,
-                val channelThrottlingCallback: (ThrottledChannelEvent) => Unit) extends BaseRequest {
+                metrics: RequestChannel.Metrics) extends BaseRequest {
     // These need to be volatile because the readers are in the network thread and the writers are in the request
     // handler threads or the purgatory threads
     @volatile var requestDequeueTimeNanos = -1L
@@ -243,6 +241,8 @@ object RequestChannel extends Logging {
   case object SendAction extends ResponseAction
   case object NoOpAction extends ResponseAction
   case object CloseConnectionAction extends ResponseAction
+  case object StartThrottlingAction extends ResponseAction
+  case object EndThrottlingAction extends ResponseAction
 }
 
 class RequestChannel(val queueSize: Int) extends KafkaMetricsGroup {
@@ -294,6 +294,10 @@ class RequestChannel(val queueSize: Int) extends KafkaMetricsGroup {
           s"Not sending ${requestHeader.apiKey} response to client ${requestHeader.clientId} as it's not required."
         case CloseConnectionAction =>
           s"Closing connection for client ${requestHeader.clientId} due to error during ${requestHeader.apiKey}."
+        case StartThrottlingAction =>
+          s"Notifying channel throttling has started for client ${requestHeader.clientId} for ${requestHeader.apiKey}"
+        case EndThrottlingAction =>
+          s"Notifying channel throttling has ended for client ${requestHeader.clientId} for ${requestHeader.apiKey}"
       }
       trace(message)
     }

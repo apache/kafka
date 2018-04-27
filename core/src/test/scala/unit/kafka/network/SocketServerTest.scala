@@ -26,7 +26,7 @@ import javax.net.ssl._
 
 import com.yammer.metrics.core.{Gauge, Meter}
 import com.yammer.metrics.{Metrics => YammerMetrics}
-import kafka.network.RequestChannel.{NoOpAction, SendAction}
+import kafka.network.RequestChannel.{NoOpAction, ResponseAction, SendAction}
 import kafka.security.CredentialProvider
 import kafka.server.{KafkaConfig, ThrottledChannel}
 import kafka.utils.TestUtils
@@ -405,11 +405,17 @@ class SocketServerTest extends JUnitSuite {
     val request = receiveRequest(server.requestChannel)
     val byteBuffer = request.body[AbstractRequest].serialize(request.header)
     val send = new NetworkSend(request.context.connectionId, byteBuffer)
-    val throttledChannel = new ThrottledChannel(new MockTime(), 100, request.channelThrottlingCallback)
-    // Quota manager would call tryUnmute() on throttling completion. Simulate it if throttleingInProgress is false.
-    if (!throttlingInProgress) throttledChannel.tryUnmute()
+    def channelThrottlingCallback(responseAction: ResponseAction): Unit = {
+      server.requestChannel.sendResponse(new RequestChannel.Response(request, None, responseAction, None))
+    }
+    val throttledChannel = new ThrottledChannel(new MockTime(), 100, channelThrottlingCallback)
     server.requestChannel.sendResponse(new RequestChannel.Response(request, Some(send), action,
       Some(request.header.toString)))
+
+    // Quota manager would call notifyThrottlingDone() on throttling completion. Simulate it if throttleingInProgress is
+    // false.
+    if (!throttlingInProgress) throttledChannel.notifyThrottlingDone()
+
     request
   }
 

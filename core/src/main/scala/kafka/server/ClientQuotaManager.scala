@@ -197,9 +197,8 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
       if (throttledChannel != null) {
         // Decrement the size of the delay queue
         delayQueueSensor.record(-1)
-        // Try to unmute the channel. The channel can be unmuted only after a response is sent
-        // out to the client.
-        throttledChannel.tryUnmute()
+        // Notify the socket server that throttling is done for this channel, so that it can try to unmute the channel.
+        throttledChannel.notifyThrottlingDone()
       }
     }
   }
@@ -253,14 +252,16 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
     * Throttle a client by muting the associated channel for the given throttle time.
     * @param request client request
     * @param throttleTimeMs Duration in milliseconds for which the channel is to be muted.
+    * @param channelThrottlingCallback Callback for channel throttling
     * @return ThrottledChannel object
     */
-  def throttle(request: RequestChannel.Request, throttleTimeMs: Int) {
-    throttle(request.session, request.header.clientId, throttleTimeMs, request.channelThrottlingCallback)
+  def throttle(request: RequestChannel.Request, throttleTimeMs: Int,
+               channelThrottlingCallback: (ResponseAction) => Unit) {
+    throttle(request.session, request.header.clientId, throttleTimeMs, channelThrottlingCallback)
   }
 
   def throttle(session: Session, clientId: String, throttleTimeMs: Int,
-               channelThrottlingCallback: (ThrottledChannelEvent) => Unit) {
+               channelThrottlingCallback: (ResponseAction) => Unit) {
     if (throttleTimeMs > 0) {
       val clientSensors = getOrCreateQuotaSensors(session, clientId)
 

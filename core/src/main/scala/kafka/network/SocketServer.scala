@@ -29,7 +29,7 @@ import kafka.cluster.{BrokerEndPoint, EndPoint}
 import kafka.common.KafkaException
 import kafka.metrics.KafkaMetricsGroup
 import kafka.security.CredentialProvider
-import kafka.server.{EndThrottling, KafkaConfig, StartThrottling, ThrottledChannelEvent}
+import kafka.server.KafkaConfig
 import kafka.utils._
 import org.apache.kafka.common.Reconfigurable
 import org.apache.kafka.common.memory.{MemoryPool, SimpleMemoryPool}
@@ -627,10 +627,9 @@ private[kafka] class Processor(val id: Int,
             updateRequestMetrics(curr)
             trace("Socket server received empty response to send, registering for read: " + curr)
             // Try unmuting the channel. If there was no quota violation and the channel has not been throttled,
-            // it will be unmuted immediately. If the channel has been throttled, it will unmuted only if the throttling
-            // delay has already passed by now.
+            // it will be unmuted immediately. If the channel has been throttled, it will be unmuted only if the
+            // throttling delay has already passed by now.
             tryUnmuteChannel(channelId)
-
           case RequestChannel.SendAction =>
             val responseSend = curr.responseSend.getOrElse(
               throw new IllegalStateException(s"responseSend must be defined for SendAction, response: $curr"))
@@ -639,6 +638,8 @@ private[kafka] class Processor(val id: Int,
             updateRequestMetrics(curr)
             trace("Closing socket connection actively according to the response code.")
             close(channelId)
+          case RequestChannel.StartThrottlingAction => incrementChannelUnmuteRefCount(channelId)
+          case RequestChannel.EndThrottlingAction => tryUnmuteChannel(channelId)
         }
       } catch {
         case e: Throwable =>
@@ -684,23 +685,11 @@ private[kafka] class Processor(val id: Int,
             val connectionId = receive.source
             val context = new RequestContext(header, connectionId, channel.socketAddress,
               channel.principal, listenerName, securityProtocol)
-
-            // This callback is used for quota managers to throttle the channel on quota violation. More specifically,
-            // this will be called (1) when throttling starts, to tell the channel that it cannot be unmuted until
-            // the throttling is done, and (2) when throttling is done, to tell the channel that it can be unmuted as
-            // long as the response has already been sent out to the client.
-            def channelThrottlingCallback(throttledChannelEvent: ThrottledChannelEvent) = {
-              throttledChannelEvent match {
-                case StartThrottling => incrementChannelUnmuteRefCount(connectionId)
-                case EndThrottling => tryUnmuteChannel(connectionId)
-              }
-            }
             val req = new RequestChannel.Request(processor = id, context = context,
-              startTimeNanos = time.nanoseconds, memoryPool, receive.payload, requestChannel.metrics,
-              channelThrottlingCallback)
+              startTimeNanos = time.nanoseconds, memoryPool, receive.payload, requestChannel.metrics)
             requestChannel.sendRequest(req)
-            selector.mute(connectionId)
             incrementChannelUnmuteRefCount(connectionId)
+            selector.mute(connectionId)
           case None =>
             // This should never happen since completed receives are processed immediately after `poll()`
             throw new IllegalStateException(s"Channel ${receive.source} removed from selector before processing completed receive")

@@ -18,9 +18,8 @@ package kafka.server
 
 import java.util.Collections
 
-import kafka.network.RequestChannel.Session
+import kafka.network.RequestChannel.{EndThrottlingAction, ResponseAction, Session, StartThrottlingAction}
 import kafka.server.QuotaType._
-
 import org.apache.kafka.common.metrics.{MetricConfig, Metrics, Quota}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{MockTime, Sanitizer}
@@ -33,11 +32,11 @@ class ClientQuotaManagerTest {
   private val config = ClientQuotaManagerConfig(quotaBytesPerSecondDefault = 500)
 
   var numCallbacks: Int = 0
-  def callback(throttledChannelEvent: ThrottledChannelEvent) {
-    // Count how many times this callback is called for tryUnmute().
-    throttledChannelEvent match {
-      case StartThrottling =>
-      case EndThrottling => numCallbacks += 1
+  def callback (responseAction: ResponseAction) {
+    // Count how many times this callback is called for notifyThrottlingDone().
+    responseAction match {
+      case StartThrottlingAction =>
+      case EndThrottlingAction => numCallbacks += 1
     }
   }
 
@@ -52,7 +51,7 @@ class ClientQuotaManagerTest {
   }
 
   private def throttle(quotaManager: ClientQuotaManager, user: String, clientId: String, throttleTimeMs: Int,
-                       channelThrottlingCallback: (ThrottledChannelEvent) => Unit) {
+                       channelThrottlingCallback: (ResponseAction) => Unit) {
     val principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, user)
     quotaManager.throttle(Session(principal, null),clientId, throttleTimeMs, channelThrottlingCallback)
   }
