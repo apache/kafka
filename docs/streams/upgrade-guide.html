@@ -158,8 +158,8 @@
       Forwarding based on child index is not supported in the new API any longer.
     </p>
     <p>
-        <a href="https://cwiki.apache.org/confluence/x/DVyHB">KIP-284</a> changed the retention time for repartition topic by setting its default value to Long.MAX_VALUE.
-        <li>Use purge data API to keep storage small</li>
+        <a href="https://cwiki.apache.org/confluence/x/DVyHB">KIP-284</a> changed the retention time for repartition topics by setting its default value to <code>Long.MAX_VALUE</code>.
+        Instead of relying on data retention Kafka Streams uses the new purge data API to delete consumed data from those topics and to keep used storage small now.
     </p>
     <p>
       Kafka Streams DSL for Scala is a new Kafka Streams client library available for developers authoring Kafka Streams applications in Scala.  It wraps core Kafka Streams DSL types to make it easier to call when
