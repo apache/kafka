@@ -397,7 +397,7 @@ public class FetchRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
+    public FetchResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         // The error is indicated in two ways: by setting the same error code in all partitions, and by
         // setting the top-level error code.  The form where we set the same error code in all partitions
         // is needed in order to maintain backwards compatibility with older versions of the protocol
@@ -412,7 +412,7 @@ public class FetchRequest extends AbstractRequest {
                 AbstractFetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY);
             responseData.put(entry.getKey(), partitionResponse);
         }
-        return new AbstractFetchResponse(error, responseData, throttleTimeMs, metadata.sessionId());
+        return new FetchResponse(error, responseData, throttleTimeMs, metadata.sessionId());
     }
 
     public int replicaId() {

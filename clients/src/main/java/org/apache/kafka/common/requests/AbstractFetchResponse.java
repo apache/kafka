@@ -1,3 +1,19 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
@@ -31,7 +47,11 @@ import static org.apache.kafka.common.protocol.types.Type.RECORDS;
 import static org.apache.kafka.common.protocol.types.Type.STRING;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 
-public class AbstractFetchResponse<T extends AbstractFetchResponse.AbstractPartitionData> extends AbstractResponse {
+/**
+ * Generic FetchResponse implementation.
+ * @param <T> Type of partition data in this fetch response.
+ */
+public abstract class AbstractFetchResponse<T extends AbstractFetchResponse.AbstractPartitionData> extends AbstractResponse {
     protected static final String RESPONSES_KEY_NAME = "responses";
 
     // topic level field names
@@ -143,10 +163,9 @@ public class AbstractFetchResponse<T extends AbstractFetchResponse.AbstractParti
 
     public static Schema[] schemaVersions() {
         return new Schema[] {FETCH_RESPONSE_V0, FETCH_RESPONSE_V1, FETCH_RESPONSE_V2,
-                FETCH_RESPONSE_V3, FETCH_RESPONSE_V4, FETCH_RESPONSE_V5, FETCH_RESPONSE_V6,
-                FETCH_RESPONSE_V7};
+                             FETCH_RESPONSE_V3, FETCH_RESPONSE_V4, FETCH_RESPONSE_V5,
+                             FETCH_RESPONSE_V6, FETCH_RESPONSE_V7};
     }
-
 
     public static final long INVALID_HIGHWATERMARK = -1L;
     public static final long INVALID_LAST_STABLE_OFFSET = -1L;

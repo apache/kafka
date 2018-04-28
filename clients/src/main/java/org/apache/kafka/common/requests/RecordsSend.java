@@ -19,7 +19,6 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.TopicPartitionRecordsStats;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.network.TransportLayers;
-import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.SerializableRecords;
 
 import java.io.EOFException;

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.protocol.types;
 
-import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.SerializableRecords;
 
 import java.nio.ByteBuffer;

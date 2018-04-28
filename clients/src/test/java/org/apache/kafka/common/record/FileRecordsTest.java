@@ -353,7 +353,7 @@ public class FileRecordsTest {
         TopicPartition tp = new TopicPartition("topic-1", 0);
         LazyDownConversionRecords lazyRecords = new LazyDownConversionRecords(tp, slice, RecordBatch.MAGIC_VALUE_V0, 0);
         LazyDownConversionRecords.LazyDownConversionRecordsIterator it = lazyRecords.lazyDownConversionRecordsIterator(16 * 1024L);
-        assertTrue("No messages should be returned", it.hasNext() == false);
+        assertTrue("No messages should be returned", !it.hasNext());
     }
 
     @Test
@@ -458,9 +458,9 @@ public class FileRecordsTest {
 
         // Test the lazy down-conversion path
         List<Long> maximumReadSize = asList(16L * 1024L,
-                (long)fileRecords.sizeInBytes(),
-                (long)fileRecords.sizeInBytes() - 1,
-                (long)fileRecords.sizeInBytes() / 4,
+                (long) fileRecords.sizeInBytes(),
+                (long) fileRecords.sizeInBytes() - 1,
+                (long) fileRecords.sizeInBytes() / 4,
                 maxBatchSize + 1,
                 1L);
         for (long readSize : maximumReadSize) {
