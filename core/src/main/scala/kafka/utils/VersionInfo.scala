@@ -23,7 +23,8 @@ object VersionInfo {
 
   def main(args: Array[String]) {
     val version = AppInfoParser.getVersion
-    System.out.println(s"Kafka ${version}")
+    val commitId = AppInfoParser.getCommitId
+    System.out.println(s"${version} (Commit:${commitId})")
     System.exit(0)
   }
 }
