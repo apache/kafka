@@ -15,25 +15,28 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.trogdor.rest;
+package org.apache.kafka.clients.admin;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import org.apache.kafka.trogdor.task.TaskSpec;
+import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
- * A response from the Trogdor coordinator about stopping a task.
+ * The result of the {@link KafkaAdminClient#expireDelegationToken(byte[], ExpireDelegationTokenOptions)} call.
+ *
+ * The API of this class is evolving, see {@link AdminClient} for details.
  */
-public class StopTaskResponse extends Message {
-    private final TaskSpec spec;
+@InterfaceStability.Evolving
+public class RenewDelegationTokenResult {
+    private final KafkaFuture<Long> expiryTimestamp;
 
-    @JsonCreator
-    public StopTaskResponse(@JsonProperty("spec") TaskSpec spec) {
-        this.spec = spec;
+    RenewDelegationTokenResult(KafkaFuture<Long> expiryTimestamp) {
+        this.expiryTimestamp = expiryTimestamp;
     }
 
-    @JsonProperty
-    public TaskSpec spec() {
-        return spec;
+    /**
+     * Returns a future which yields expiry timestamp
+     */
+    public KafkaFuture<Long> expiryTimestamp() {
+        return expiryTimestamp;
     }
 }

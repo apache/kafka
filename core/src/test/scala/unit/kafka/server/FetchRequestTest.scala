@@ -170,6 +170,27 @@ class FetchRequestTest extends BaseRequestTest {
     assertEquals(0, records(partitionData).map(_.sizeInBytes).sum)
   }
 
+  @Test
+  def testFetchRequestToNonReplica(): Unit = {
+    val topic = "topic"
+    val partition = 0
+    val topicPartition = new TopicPartition(topic, partition)
+
+    // Create a single-partition topic and find a broker which is not the leader
+    val partitionToLeader = TestUtils.createTopic(zkClient, topic, numPartitions = 1, 1, servers)
+    val leader = partitionToLeader(partition)
+    val nonReplicaOpt = servers.find(_.config.brokerId != leader)
+    assertTrue(nonReplicaOpt.isDefined)
+    val nonReplicaId =  nonReplicaOpt.get.config.brokerId
+
+    // Send the fetch request to the non-replica and verify the error code
+    val fetchRequest = FetchRequest.Builder.forConsumer(Int.MaxValue, 0, createPartitionMap(1024,
+      Seq(topicPartition))).build()
+    val fetchResponse = sendFetchRequest(nonReplicaId, fetchRequest)
+    val partitionData = fetchResponse.responseData.get(topicPartition)
+    assertEquals(Errors.NOT_LEADER_FOR_PARTITION, partitionData.error)
+  }
+
   /**
    * Tests that down-conversions dont leak memory. Large down conversions are triggered
    * in the server. The client closes its connection after reading partial data when the

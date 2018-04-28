@@ -47,6 +47,7 @@ public class SmokeTestUtil {
 
                     @Override
                     public void init(final ProcessorContext context) {
+                        super.init(context);
                         System.out.println("initializing processor: topic=" + topic + " taskId=" + context.taskId());
                         numRecordsProcessed = 0;
                     }
@@ -59,12 +60,6 @@ public class SmokeTestUtil {
                             System.out.println("processed " + numRecordsProcessed + " records from topic=" + topic);
                         }
                     }
-
-                    @Override
-                    public void punctuate(final long timestamp) {}
-
-                    @Override
-                    public void close() {}
                 };
             }
         };

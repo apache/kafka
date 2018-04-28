@@ -19,81 +19,60 @@ package org.apache.kafka.streams.processor.internals.assignment;
 import org.apache.kafka.streams.processor.TaskId;
 import org.junit.Test;
 
-import java.nio.ByteBuffer;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
 
 public class SubscriptionInfoTest {
+    private final UUID processId = UUID.randomUUID();
+    private final Set<TaskId> activeTasks = new HashSet<>(Arrays.asList(
+        new TaskId(0, 0),
+        new TaskId(0, 1),
+        new TaskId(1, 0)));
+    private final Set<TaskId> standbyTasks = new HashSet<>(Arrays.asList(
+        new TaskId(1, 1),
+        new TaskId(2, 0)));
+
+    private final static String IGNORED_USER_ENDPOINT = "ignoredUserEndpoint:80";
 
     @Test
-    public void testEncodeDecode() {
-        UUID processId = UUID.randomUUID();
+    public void shouldUseLatestSupportedVersionByDefault() {
+        final SubscriptionInfo info = new SubscriptionInfo(processId, activeTasks, standbyTasks, "localhost:80");
+        assertEquals(SubscriptionInfo.LATEST_SUPPORTED_VERSION, info.version());
+    }
 
-        Set<TaskId> activeTasks =
-                new HashSet<>(Arrays.asList(new TaskId(0, 0), new TaskId(0, 1), new TaskId(1, 0)));
-        Set<TaskId> standbyTasks =
-                new HashSet<>(Arrays.asList(new TaskId(1, 1), new TaskId(2, 0)));
+    @Test(expected = IllegalArgumentException.class)
+    public void shouldThrowForUnknownVersion1() {
+        new SubscriptionInfo(0, processId, activeTasks, standbyTasks, "localhost:80");
+    }
 
-        SubscriptionInfo info = new SubscriptionInfo(processId, activeTasks, standbyTasks, null);
-        SubscriptionInfo decoded = SubscriptionInfo.decode(info.encode());
-
-        assertEquals(info, decoded);
+    @Test(expected = IllegalArgumentException.class)
+    public void shouldThrowForUnknownVersion2() {
+        new SubscriptionInfo(SubscriptionInfo.LATEST_SUPPORTED_VERSION + 1, processId, activeTasks, standbyTasks, "localhost:80");
     }
 
     @Test
-    public void shouldEncodeDecodeWithUserEndPoint() {
-        SubscriptionInfo original = new SubscriptionInfo(UUID.randomUUID(),
-                Collections.singleton(new TaskId(0, 0)), Collections.<TaskId>emptySet(), "localhost:80");
-        SubscriptionInfo decoded = SubscriptionInfo.decode(original.encode());
-        assertEquals(original, decoded);
+    public void shouldEncodeAndDecodeVersion1() {
+        final SubscriptionInfo info = new SubscriptionInfo(1, processId, activeTasks, standbyTasks, IGNORED_USER_ENDPOINT);
+        final SubscriptionInfo expectedInfo = new SubscriptionInfo(1, SubscriptionInfo.UNKNOWN, processId, activeTasks, standbyTasks, null);
+        assertEquals(expectedInfo, SubscriptionInfo.decode(info.encode()));
     }
 
     @Test
-    public void shouldBeBackwardCompatible() {
-        UUID processId = UUID.randomUUID();
-
-        Set<TaskId> activeTasks =
-                new HashSet<>(Arrays.asList(new TaskId(0, 0), new TaskId(0, 1), new TaskId(1, 0)));
-        Set<TaskId> standbyTasks =
-                new HashSet<>(Arrays.asList(new TaskId(1, 1), new TaskId(2, 0)));
-
-        final ByteBuffer v1Encoding = encodePreviousVersion(processId, activeTasks, standbyTasks);
-        final SubscriptionInfo decode = SubscriptionInfo.decode(v1Encoding);
-        assertEquals(activeTasks, decode.prevTasks());
-        assertEquals(standbyTasks, decode.standbyTasks());
-        assertEquals(processId, decode.processId());
-        assertNull(decode.userEndPoint());
+    public void shouldEncodeAndDecodeVersion2() {
+        final SubscriptionInfo info = new SubscriptionInfo(2, processId, activeTasks, standbyTasks, "localhost:80");
+        final SubscriptionInfo expectedInfo = new SubscriptionInfo(2, SubscriptionInfo.UNKNOWN, processId, activeTasks, standbyTasks, "localhost:80");
+        assertEquals(expectedInfo, SubscriptionInfo.decode(info.encode()));
     }
 
-    /**
-     * This is a clone of what the V1 encoding did. The encode method has changed for V2
-     * so it is impossible to test compatibility without having this
-     */
-    private ByteBuffer encodePreviousVersion(UUID processId,  Set<TaskId> prevTasks, Set<TaskId> standbyTasks) {
-        ByteBuffer buf = ByteBuffer.allocate(4 /* version */ + 16 /* process id */ + 4 + prevTasks.size() * 8 + 4 + standbyTasks.size() * 8);
-        // version
-        buf.putInt(1);
-        // encode client UUID
-        buf.putLong(processId.getMostSignificantBits());
-        buf.putLong(processId.getLeastSignificantBits());
-        // encode ids of previously running tasks
-        buf.putInt(prevTasks.size());
-        for (TaskId id : prevTasks) {
-            id.writeTo(buf);
-        }
-        // encode ids of cached tasks
-        buf.putInt(standbyTasks.size());
-        for (TaskId id : standbyTasks) {
-            id.writeTo(buf);
-        }
-        buf.rewind();
-
-        return buf;
+    @Test
+    public void shouldEncodeAndDecodeVersion3() {
+        final SubscriptionInfo info = new SubscriptionInfo(3, processId, activeTasks, standbyTasks, "localhost:80");
+        final SubscriptionInfo expectedInfo = new SubscriptionInfo(3, SubscriptionInfo.LATEST_SUPPORTED_VERSION, processId, activeTasks, standbyTasks, "localhost:80");
+        assertEquals(expectedInfo, SubscriptionInfo.decode(info.encode()));
     }
+
 }

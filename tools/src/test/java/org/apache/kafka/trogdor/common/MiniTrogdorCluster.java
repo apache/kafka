@@ -185,7 +185,7 @@ public class MiniTrogdorCluster implements AutoCloseable {
                             }
                             if (node.coordinatorRestResource != null) {
                                 node.coordinator = new Coordinator(node.platform, scheduler,
-                                    node.coordinatorRestServer, node.coordinatorRestResource);
+                                    node.coordinatorRestServer, node.coordinatorRestResource, 0);
                             }
                         } catch (Exception e) {
                             log.error("Unable to initialize {}", nodeName, e);

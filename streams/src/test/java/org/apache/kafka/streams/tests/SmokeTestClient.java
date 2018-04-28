@@ -44,20 +44,19 @@ import java.util.concurrent.TimeUnit;
 
 public class SmokeTestClient extends SmokeTestUtil {
 
-    private final String kafka;
     private final Properties streamsProperties;
-    private KafkaStreams streams;
+
     private Thread thread;
+    private KafkaStreams streams;
     private boolean uncaughtException = false;
 
-    public SmokeTestClient(final Properties streamsProperties, final String kafka) {
+    public SmokeTestClient(final Properties streamsProperties) {
         super();
-        this.kafka = kafka;
         this.streamsProperties = streamsProperties;
     }
 
     public void start() {
-        streams = createKafkaStreams(streamsProperties, kafka);
+        streams = createKafkaStreams(streamsProperties);
         streams.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
             @Override
             public void uncaughtException(final Thread t, final Throwable e) {
@@ -97,26 +96,26 @@ public class SmokeTestClient extends SmokeTestUtil {
         }
     }
 
-    private static Properties getStreamsConfig(final Properties props, final String kafka) {
-        final Properties config = new Properties(props);
-        config.put(StreamsConfig.APPLICATION_ID_CONFIG, "SmokeTest");
-        config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
-        config.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 3);
-        config.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 2);
-        config.put(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, 100);
-        config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000);
-        config.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 3);
-        config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        config.put(ProducerConfig.RETRIES_CONFIG, Integer.MAX_VALUE);
-        config.put(ProducerConfig.ACKS_CONFIG, "all");
-        //TODO remove this config or set to smaller value when KIP-91 is merged
-        config.put(StreamsConfig.producerPrefix(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG), 80000);
+    private static Properties getStreamsConfig(final Properties props) {
+        final Properties fullProps = new Properties(props);
+        fullProps.put(StreamsConfig.APPLICATION_ID_CONFIG, "SmokeTest");
+        fullProps.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 3);
+        fullProps.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 2);
+        fullProps.put(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, 100);
+        fullProps.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000);
+        fullProps.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 3);
+        fullProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        fullProps.put(ProducerConfig.RETRIES_CONFIG, Integer.MAX_VALUE);
+        fullProps.put(ProducerConfig.ACKS_CONFIG, "all");
 
-        config.putAll(props);
-        return config;
+        //TODO remove this config or set to smaller value when KIP-91 is merged
+        fullProps.put(StreamsConfig.producerPrefix(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG), 80000);
+
+        fullProps.putAll(props);
+        return fullProps;
     }
 
-    private static KafkaStreams createKafkaStreams(final Properties props, final String kafka) {
+    private static KafkaStreams createKafkaStreams(final Properties props) {
         final StreamsBuilder builder = new StreamsBuilder();
         final Consumed<String, Integer> stringIntConsumed = Consumed.with(stringSerde, intSerde);
         final KStream<String, Integer> source = builder.stream("data", stringIntConsumed);
@@ -252,7 +251,7 @@ public class SmokeTestClient extends SmokeTestUtil {
             .toStream()
             .to("tagg", Produced.with(stringSerde, longSerde));
 
-        final KafkaStreams streamsClient = new KafkaStreams(builder.build(), getStreamsConfig(props, kafka));
+        final KafkaStreams streamsClient = new KafkaStreams(builder.build(), getStreamsConfig(props));
         streamsClient.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
             @Override
             public void uncaughtException(final Thread t, final Throwable e) {

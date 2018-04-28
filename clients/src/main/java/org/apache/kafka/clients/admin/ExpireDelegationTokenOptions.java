@@ -15,25 +15,25 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.trogdor.rest;
+package org.apache.kafka.clients.admin;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import org.apache.kafka.trogdor.task.TaskSpec;
+import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
- * A response from the Trogdor coordinator about creating a task.
+ * Options for {@link AdminClient#expireDelegationToken(byte[], ExpireDelegationTokenOptions)}.
+ *
+ * The API of this class is evolving, see {@link AdminClient} for details.
  */
-public class CreateTaskResponse extends Message {
-    private final TaskSpec spec;
+@InterfaceStability.Evolving
+public class ExpireDelegationTokenOptions extends AbstractOptions<ExpireDelegationTokenOptions> {
+    private long expiryTimePeriodMs = -1L;
 
-    @JsonCreator
-    public CreateTaskResponse(@JsonProperty("spec") TaskSpec spec) {
-        this.spec = spec;
+    public ExpireDelegationTokenOptions expiryTimePeriodMs(long expiryTimePeriodMs) {
+        this.expiryTimePeriodMs = expiryTimePeriodMs;
+        return this;
     }
 
-    @JsonProperty
-    public TaskSpec spec() {
-        return spec;
+    public long expiryTimePeriodMs() {
+        return expiryTimePeriodMs;
     }
 }

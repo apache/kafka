@@ -25,11 +25,8 @@ import org.apache.kafka.trogdor.task.TaskSpec;
 import org.apache.kafka.trogdor.task.TaskWorker;
 
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
-import java.util.NavigableMap;
 import java.util.Set;
-import java.util.TreeMap;
 
 /**
  * The specification for a workload that sends messages to a broker and then
@@ -39,8 +36,8 @@ public class RoundTripWorkloadSpec extends TaskSpec {
     private final String clientNode;
     private final String bootstrapServers;
     private final int targetMessagesPerSec;
-    private final NavigableMap<Integer, List<Integer>> partitionAssignments;
     private final PayloadGenerator valueGenerator;
+    private final TopicsSpec activeTopics;
     private final int maxMessages;
     private final Map<String, String> commonClientConf;
     private final Map<String, String> producerConf;
@@ -57,17 +54,17 @@ public class RoundTripWorkloadSpec extends TaskSpec {
              @JsonProperty("consumerConf") Map<String, String> consumerConf,
              @JsonProperty("producerConf") Map<String, String> producerConf,
              @JsonProperty("targetMessagesPerSec") int targetMessagesPerSec,
-             @JsonProperty("partitionAssignments") NavigableMap<Integer, List<Integer>> partitionAssignments,
              @JsonProperty("valueGenerator") PayloadGenerator valueGenerator,
+             @JsonProperty("activeTopics") TopicsSpec activeTopics,
              @JsonProperty("maxMessages") int maxMessages) {
         super(startMs, durationMs);
         this.clientNode = clientNode == null ? "" : clientNode;
         this.bootstrapServers = bootstrapServers == null ? "" : bootstrapServers;
         this.targetMessagesPerSec = targetMessagesPerSec;
-        this.partitionAssignments = partitionAssignments == null ?
-            new TreeMap<Integer, List<Integer>>() : partitionAssignments;
         this.valueGenerator = valueGenerator == null ?
             new UniformRandomPayloadGenerator(32, 123, 10) : valueGenerator;
+        this.activeTopics = activeTopics == null ?
+            TopicsSpec.EMPTY : activeTopics.immutableCopy();
         this.maxMessages = maxMessages;
         this.commonClientConf = configOrEmptyMap(commonClientConf);
         this.adminClientConf = configOrEmptyMap(adminClientConf);
@@ -91,8 +88,8 @@ public class RoundTripWorkloadSpec extends TaskSpec {
     }
 
     @JsonProperty
-    public NavigableMap<Integer, List<Integer>> partitionAssignments() {
-        return partitionAssignments;
+    public TopicsSpec activeTopics() {
+        return activeTopics;
     }
 
     @JsonProperty

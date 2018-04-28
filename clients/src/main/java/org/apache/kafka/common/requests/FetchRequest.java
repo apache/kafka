@@ -52,7 +52,7 @@ public class FetchRequest extends AbstractRequest {
     private static final String MIN_BYTES_KEY_NAME = "min_bytes";
     private static final String ISOLATION_LEVEL_KEY_NAME = "isolation_level";
     private static final String TOPICS_KEY_NAME = "topics";
-    private static final String FORGOTTEN_TOPICS_DATA = "forgetten_topics_data";
+    private static final String FORGOTTEN_TOPICS_DATA = "forgotten_topics_data";
 
     // request and partition level name
     private static final String MAX_BYTES_KEY_NAME = "max_bytes";

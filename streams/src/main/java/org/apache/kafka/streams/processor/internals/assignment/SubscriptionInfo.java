@@ -23,6 +23,7 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
@@ -31,16 +32,21 @@ public class SubscriptionInfo {
 
     private static final Logger log = LoggerFactory.getLogger(SubscriptionInfo.class);
 
-    public static final int LATEST_SUPPORTED_VERSION = 2;
+    public static final int LATEST_SUPPORTED_VERSION = 3;
+    public static final int UNKNOWN = -1;
 
     private final int usedVersion;
+    private final int latestSupportedVersion;
     private UUID processId;
     private Set<TaskId> prevTasks;
     private Set<TaskId> standbyTasks;
     private String userEndPoint;
 
-    private SubscriptionInfo(final int version) {
+    // used for decoding; don't apply version checks
+    private SubscriptionInfo(final int version,
+                             final int latestSupportedVersion) {
         this.usedVersion = version;
+        this.latestSupportedVersion = latestSupportedVersion;
     }
 
     public SubscriptionInfo(final UUID processId,
@@ -55,7 +61,23 @@ public class SubscriptionInfo {
                             final Set<TaskId> prevTasks,
                             final Set<TaskId> standbyTasks,
                             final String userEndPoint) {
+        this(version, LATEST_SUPPORTED_VERSION, processId, prevTasks, standbyTasks, userEndPoint);
+
+        if (version < 1 || version > LATEST_SUPPORTED_VERSION) {
+            throw new IllegalArgumentException("version must be between 1 and " + LATEST_SUPPORTED_VERSION
+                + "; was: " + version);
+        }
+    }
+
+    // for testing only; don't apply version checks
+    protected SubscriptionInfo(final int version,
+                               final int latestSupportedVersion,
+                               final UUID processId,
+                               final Set<TaskId> prevTasks,
+                               final Set<TaskId> standbyTasks,
+                               final String userEndPoint) {
         this.usedVersion = version;
+        this.latestSupportedVersion = latestSupportedVersion;
         this.processId = processId;
         this.prevTasks = prevTasks;
         this.standbyTasks = standbyTasks;
@@ -64,6 +86,10 @@ public class SubscriptionInfo {
 
     public int version() {
         return usedVersion;
+    }
+
+    public int latestSupportedVersion() {
+        return latestSupportedVersion;
     }
 
     public UUID processId() {
@@ -93,7 +119,10 @@ public class SubscriptionInfo {
                 buf = encodeVersionOne();
                 break;
             case 2:
-                buf = encodeVersionTwo(prepareUserEndPoint());
+                buf = encodeVersionTwo();
+                break;
+            case 3:
+                buf = encodeVersionThree();
                 break;
             default:
                 throw new IllegalStateException("Unknown metadata version: " + usedVersion
@@ -108,7 +137,9 @@ public class SubscriptionInfo {
         final ByteBuffer buf = ByteBuffer.allocate(getVersionOneByteLength());
 
         buf.putInt(1); // version
-        encodeVersionOneData(buf);
+        encodeClientUUID(buf);
+        encodeTasks(buf, prevTasks);
+        encodeTasks(buf, standbyTasks);
 
         return buf;
     }
@@ -120,18 +151,15 @@ public class SubscriptionInfo {
                4 + standbyTasks.size() * 8; // length + standby tasks
     }
 
-    private void encodeVersionOneData(final ByteBuffer buf) {
-        // encode client UUID
+    private void encodeClientUUID(final ByteBuffer buf) {
         buf.putLong(processId.getMostSignificantBits());
         buf.putLong(processId.getLeastSignificantBits());
-        // encode ids of previously running tasks
-        buf.putInt(prevTasks.size());
-        for (TaskId id : prevTasks) {
-            id.writeTo(buf);
-        }
-        // encode ids of cached tasks
-        buf.putInt(standbyTasks.size());
-        for (TaskId id : standbyTasks) {
+    }
+
+    private void encodeTasks(final ByteBuffer buf,
+                             final Collection<TaskId> taskIds) {
+        buf.putInt(taskIds.size());
+        for (TaskId id : taskIds) {
             id.writeTo(buf);
         }
     }
@@ -144,52 +172,87 @@ public class SubscriptionInfo {
         }
     }
 
-    private ByteBuffer encodeVersionTwo(final byte[] endPointBytes) {
+    private ByteBuffer encodeVersionTwo() {
+        final byte[] endPointBytes = prepareUserEndPoint();
+
         final ByteBuffer buf = ByteBuffer.allocate(getVersionTwoByteLength(endPointBytes));
 
         buf.putInt(2); // version
-        encodeVersionTwoData(buf, endPointBytes);
+        encodeClientUUID(buf);
+        encodeTasks(buf, prevTasks);
+        encodeTasks(buf, standbyTasks);
+        encodeUserEndPoint(buf, endPointBytes);
 
         return buf;
     }
 
     private int getVersionTwoByteLength(final byte[] endPointBytes) {
-        return getVersionOneByteLength() +
+        return 4 + // version
+               16 + // client ID
+               4 + prevTasks.size() * 8 + // length + prev tasks
+               4 + standbyTasks.size() * 8 + // length + standby tasks
                4 + endPointBytes.length; // length + userEndPoint
     }
 
-    private void encodeVersionTwoData(final ByteBuffer buf,
-                                      final byte[] endPointBytes) {
-        encodeVersionOneData(buf);
+    private void encodeUserEndPoint(final ByteBuffer buf,
+                                    final byte[] endPointBytes) {
         if (endPointBytes != null) {
             buf.putInt(endPointBytes.length);
             buf.put(endPointBytes);
         }
     }
 
+    private ByteBuffer encodeVersionThree() {
+        final byte[] endPointBytes = prepareUserEndPoint();
+
+        final ByteBuffer buf = ByteBuffer.allocate(getVersionThreeByteLength(endPointBytes));
+
+        buf.putInt(3); // used version
+        buf.putInt(LATEST_SUPPORTED_VERSION); // supported version
+        encodeClientUUID(buf);
+        encodeTasks(buf, prevTasks);
+        encodeTasks(buf, standbyTasks);
+        encodeUserEndPoint(buf, endPointBytes);
+
+        return buf;
+    }
+
+    private int getVersionThreeByteLength(final byte[] endPointBytes) {
+        return 4 + // used version
+               4 + // latest supported version version
+               16 + // client ID
+               4 + prevTasks.size() * 8 + // length + prev tasks
+               4 + standbyTasks.size() * 8 + // length + standby tasks
+               4 + endPointBytes.length; // length + userEndPoint
+    }
+
     /**
      * @throws TaskAssignmentException if method fails to decode the data
      */
     public static SubscriptionInfo decode(final ByteBuffer data) {
+        final SubscriptionInfo subscriptionInfo;
+
         // ensure we are at the beginning of the ByteBuffer
         data.rewind();
 
-        // decode used version
         final int usedVersion = data.getInt();
-        final SubscriptionInfo subscriptionInfo = new SubscriptionInfo(usedVersion);
-
         switch (usedVersion) {
             case 1:
+                subscriptionInfo = new SubscriptionInfo(usedVersion, UNKNOWN);
                 decodeVersionOneData(subscriptionInfo, data);
                 break;
             case 2:
+                subscriptionInfo = new SubscriptionInfo(usedVersion, UNKNOWN);
                 decodeVersionTwoData(subscriptionInfo, data);
                 break;
+            case 3:
+                final int latestSupportedVersion = data.getInt();
+                subscriptionInfo = new SubscriptionInfo(usedVersion, latestSupportedVersion);
+                decodeVersionThreeData(subscriptionInfo, data);
+                break;
             default:
-                TaskAssignmentException fatalException = new TaskAssignmentException("Unable to decode subscription data: " +
-                    "used version: " + usedVersion + "; latest supported version: " + LATEST_SUPPORTED_VERSION);
-                log.error(fatalException.getMessage(), fatalException);
-                throw fatalException;
+                subscriptionInfo = new SubscriptionInfo(usedVersion, UNKNOWN);
+                log.info("Unable to decode subscription data: used version: {}; latest supported version: {}", usedVersion, LATEST_SUPPORTED_VERSION);
         }
 
         return subscriptionInfo;
@@ -197,30 +260,43 @@ public class SubscriptionInfo {
 
     private static void decodeVersionOneData(final SubscriptionInfo subscriptionInfo,
                                              final ByteBuffer data) {
-        // decode client UUID
-        subscriptionInfo.processId = new UUID(data.getLong(), data.getLong());
+        decodeClientUUID(subscriptionInfo, data);
 
-        // decode previously active tasks
-        final int numPrevs = data.getInt();
         subscriptionInfo.prevTasks = new HashSet<>();
-        for (int i = 0; i < numPrevs; i++) {
-            TaskId id = TaskId.readFrom(data);
-            subscriptionInfo.prevTasks.add(id);
-        }
+        decodeTasks(subscriptionInfo.prevTasks, data);
 
-        // decode previously cached tasks
-        final int numCached = data.getInt();
         subscriptionInfo.standbyTasks = new HashSet<>();
-        for (int i = 0; i < numCached; i++) {
-            subscriptionInfo.standbyTasks.add(TaskId.readFrom(data));
+        decodeTasks(subscriptionInfo.standbyTasks, data);
+    }
+
+    private static void decodeClientUUID(final SubscriptionInfo subscriptionInfo,
+                                         final ByteBuffer data) {
+        subscriptionInfo.processId = new UUID(data.getLong(), data.getLong());
+    }
+
+    private static void decodeTasks(final Collection<TaskId> taskIds,
+                                    final ByteBuffer data) {
+        final int numPrevs = data.getInt();
+        for (int i = 0; i < numPrevs; i++) {
+            taskIds.add(TaskId.readFrom(data));
         }
     }
 
     private static void decodeVersionTwoData(final SubscriptionInfo subscriptionInfo,
                                              final ByteBuffer data) {
-        decodeVersionOneData(subscriptionInfo, data);
+        decodeClientUUID(subscriptionInfo, data);
 
-        // decode user end point (can be null)
+        subscriptionInfo.prevTasks = new HashSet<>();
+        decodeTasks(subscriptionInfo.prevTasks, data);
+
+        subscriptionInfo.standbyTasks = new HashSet<>();
+        decodeTasks(subscriptionInfo.standbyTasks, data);
+
+        decodeUserEndPoint(subscriptionInfo, data);
+    }
+
+    private static void decodeUserEndPoint(final SubscriptionInfo subscriptionInfo,
+                                           final ByteBuffer data) {
         int bytesLength = data.getInt();
         if (bytesLength != 0) {
             final byte[] bytes = new byte[bytesLength];
@@ -229,9 +305,21 @@ public class SubscriptionInfo {
         }
     }
 
-    @Override
+    private static void decodeVersionThreeData(final SubscriptionInfo subscriptionInfo,
+                                               final ByteBuffer data) {
+        decodeClientUUID(subscriptionInfo, data);
+
+        subscriptionInfo.prevTasks = new HashSet<>();
+        decodeTasks(subscriptionInfo.prevTasks, data);
+
+        subscriptionInfo.standbyTasks = new HashSet<>();
+        decodeTasks(subscriptionInfo.standbyTasks, data);
+
+        decodeUserEndPoint(subscriptionInfo, data);
+    }
+
     public int hashCode() {
-        final int hashCode = usedVersion ^ processId.hashCode() ^ prevTasks.hashCode() ^ standbyTasks.hashCode();
+        final int hashCode = usedVersion ^ latestSupportedVersion ^ processId.hashCode() ^ prevTasks.hashCode() ^ standbyTasks.hashCode();
         if (userEndPoint == null) {
             return hashCode;
         }
@@ -243,6 +331,7 @@ public class SubscriptionInfo {
         if (o instanceof SubscriptionInfo) {
             final SubscriptionInfo other = (SubscriptionInfo) o;
             return this.usedVersion == other.usedVersion &&
+                    this.latestSupportedVersion == other.latestSupportedVersion &&
                     this.processId.equals(other.processId) &&
                     this.prevTasks.equals(other.prevTasks) &&
                     this.standbyTasks.equals(other.standbyTasks) &&
@@ -252,4 +341,13 @@ public class SubscriptionInfo {
         }
     }
 
+    @Override
+    public String toString() {
+        return "[version=" + usedVersion
+            + ", supported version=" + latestSupportedVersion
+            + ", process ID=" + processId
+            + ", prev tasks=" + prevTasks
+            + ", standby tasks=" + standbyTasks
+            + ", user endpoint=" + userEndPoint + "]";
+    }
 }

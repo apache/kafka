@@ -24,15 +24,15 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  * A request to the Trogdor agent to stop a worker.
  */
 public class StopWorkerRequest extends Message {
-    private final String id;
+    private final long workerId;
 
     @JsonCreator
-    public StopWorkerRequest(@JsonProperty("id") String id) {
-        this.id = id;
+    public StopWorkerRequest(@JsonProperty("workerId") long workerId) {
+        this.workerId = workerId;
     }
 
     @JsonProperty
-    public String id() {
-        return id;
+    public long workerId() {
+        return workerId;
     }
 }

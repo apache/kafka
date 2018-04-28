@@ -15,18 +15,29 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams;
+package org.apache.kafka.trogdor.task;
 
-import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
-
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.NullNode;
 
 /**
- * This class is meant for testing purposes only and allows the testing of
- * topologies by using the  {@link org.apache.kafka.test.ProcessorTopologyTestDriver}
+ * Tracks the status of a Trogdor worker.
  */
-public class InternalTopologyAccessor {
+public class AgentWorkerStatusTracker implements WorkerStatusTracker {
+    private JsonNode status = NullNode.instance;
 
-    public static InternalTopologyBuilder getInternalTopologyBuilder(final Topology topology) {
-        return topology.internalTopologyBuilder;
+    @Override
+    public void update(JsonNode newStatus) {
+        JsonNode status = newStatus.deepCopy();
+        synchronized (this) {
+            this.status = status;
+        }
+    }
+
+    /**
+     * Retrieves the status.
+     */
+    public synchronized JsonNode get() {
+        return status;
     }
 }

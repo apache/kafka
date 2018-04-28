@@ -19,6 +19,8 @@ package org.apache.kafka.trogdor.rest;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.NullNode;
 import org.apache.kafka.trogdor.task.TaskSpec;
 
 /**
@@ -34,15 +36,16 @@ public class WorkerStopping extends WorkerState {
      * The task status.  The format will depend on the type of task that is
      * being run.
      */
-    private final String status;
+    private final JsonNode status;
 
     @JsonCreator
-    public WorkerStopping(@JsonProperty("spec") TaskSpec spec,
+    public WorkerStopping(@JsonProperty("taskId") String taskId,
+            @JsonProperty("spec") TaskSpec spec,
             @JsonProperty("startedMs") long startedMs,
-            @JsonProperty("status") String status) {
-        super(spec);
+            @JsonProperty("status") JsonNode status) {
+        super(taskId, spec);
         this.startedMs = startedMs;
-        this.status = status == null ? "" : status;
+        this.status = status == null ? NullNode.instance : status;
     }
 
     @JsonProperty
@@ -53,7 +56,7 @@ public class WorkerStopping extends WorkerState {
 
     @JsonProperty
     @Override
-    public String status() {
+    public JsonNode status() {
         return status;
     }
 

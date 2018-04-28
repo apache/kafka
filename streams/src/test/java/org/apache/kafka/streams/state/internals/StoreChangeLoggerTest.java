@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
@@ -24,7 +25,6 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.test.InternalMockProcessorContext;
-import org.junit.After;
 import org.junit.Test;
 
 import java.util.HashMap;
@@ -40,37 +40,32 @@ public class StoreChangeLoggerTest {
     private final Map<Integer, String> logged = new HashMap<>();
 
     private final InternalMockProcessorContext context = new InternalMockProcessorContext(StateSerdes.withBuiltinTypes(topic, Integer.class, String.class),
-            new RecordCollectorImpl(null, "StoreChangeLoggerTest", new LogContext("StoreChangeLoggerTest "), new DefaultProductionExceptionHandler()) {
-                @Override
-                public <K1, V1> void send(final String topic,
-                                          final K1 key,
-                                          final V1 value,
-                                          final Integer partition,
-                                          final Long timestamp,
-                                          final Serializer<K1> keySerializer,
-                                          final Serializer<V1> valueSerializer) {
-                    logged.put((Integer) key, (String) value);
-                }
-
-                @Override
-                public <K1, V1> void send(final String topic,
-                                          final K1 key,
-                                          final V1 value,
-                                          final Long timestamp,
-                                          final Serializer<K1> keySerializer,
-                                          final Serializer<V1> valueSerializer,
-                                          final StreamPartitioner<? super K1, ? super V1> partitioner) {
-                    throw new UnsupportedOperationException();
-                }
+        new RecordCollectorImpl(null, "StoreChangeLoggerTest", new LogContext("StoreChangeLoggerTest "), new DefaultProductionExceptionHandler(), new Metrics().sensor("skipped-records")) {
+            @Override
+            public <K1, V1> void send(final String topic,
+                                      final K1 key,
+                                      final V1 value,
+                                      final Integer partition,
+                                      final Long timestamp,
+                                      final Serializer<K1> keySerializer,
+                                      final Serializer<V1> valueSerializer) {
+                logged.put((Integer) key, (String) value);
             }
+
+            @Override
+            public <K1, V1> void send(final String topic,
+                                      final K1 key,
+                                      final V1 value,
+                                      final Long timestamp,
+                                      final Serializer<K1> keySerializer,
+                                      final Serializer<V1> valueSerializer,
+                                      final StreamPartitioner<? super K1, ? super V1> partitioner) {
+                throw new UnsupportedOperationException();
+            }
+        }
     );
 
     private final StoreChangeLogger<Integer, String> changeLogger = new StoreChangeLogger<>(topic, context, StateSerdes.withBuiltinTypes(topic, Integer.class, String.class));
-
-    @After
-    public void after() {
-        context.close();
-    }
 
     @Test
     public void testAddRemove() {
