@@ -18,14 +18,12 @@
 package kafka
 
 import java.util.Properties
-import java.util.concurrent.ConcurrentHashMap
 
-import sun.misc.{Signal, SignalHandler}
 import joptsimple.OptionParser
 import kafka.utils.Implicits._
 import kafka.server.{KafkaServer, KafkaServerStartable}
 import kafka.utils.{CommandLineUtils, Exit, Logging}
-import org.apache.kafka.common.utils.{OperatingSystem, Utils}
+import org.apache.kafka.common.utils.{LoggingSignalHandler, Utils}
 
 import scala.collection.JavaConverters._
 
@@ -55,34 +53,12 @@ object Kafka extends Logging {
     props
   }
 
-  private def registerLoggingSignalHandler(): Unit = {
-    val jvmSignalHandlers = new ConcurrentHashMap[String, SignalHandler]().asScala
-    val handler = new SignalHandler() {
-      override def handle(signal: Signal) {
-        info(s"Terminating process due to signal $signal")
-        jvmSignalHandlers.get(signal.getName).foreach(_.handle(signal))
-      }
-    }
-    def registerHandler(signalName: String) {
-      val oldHandler = Signal.handle(new Signal(signalName), handler)
-      if (oldHandler != null)
-        jvmSignalHandlers.put(signalName, oldHandler)
-    }
-
-    if (!OperatingSystem.IS_WINDOWS) {
-      registerHandler("TERM")
-      registerHandler("INT")
-      registerHandler("HUP")
-    }
-  }
-
   def main(args: Array[String]): Unit = {
     try {
       val serverProps = getPropsFromArgs(args)
       val kafkaServerStartable = KafkaServerStartable.fromProps(serverProps)
 
-      // register signal handler to log termination due to SIGTERM, SIGHUP and SIGINT (control-c)
-      registerLoggingSignalHandler()
+      LoggingSignalHandler.maybeRegister()
 
       // attach shutdown handler to catch terminating signals as well as normal termination
       Runtime.getRuntime().addShutdownHook(new Thread("kafka-shutdown-hook") {
