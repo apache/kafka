@@ -24,7 +24,6 @@ import java.nio.channels.{Selector => NSelector}
 import java.util.concurrent._
 import java.util.concurrent.atomic._
 
-import com.codahale.metrics.Gauge
 import kafka.cluster.{BrokerEndPoint, EndPoint}
 import kafka.common.KafkaException
 import kafka.metrics.KafkaMetricsGroup
@@ -96,29 +95,17 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
       }
     }
 
-    newGauge("NetworkProcessorAvgIdlePercent",
-      new Gauge[Double] {
+    newGauge("NetworkProcessorAvgIdlePercent", () => SocketServer.this.synchronized {
+      val ioWaitRatioMetricNames = processors.values.asScala.map { p =>
+        metrics.metricName("io-wait-ratio", "socket-server-metrics", p.metricTags)
+      }
+      ioWaitRatioMetricNames.map { metricName =>
+        Option(metrics.metric(metricName)).fold(0.0)(_.value)
+      }.sum / processors.size
+    })
+    newGauge("MemoryPoolAvailable", () => memoryPool.availableMemory())
+    newGauge("MemoryPoolUsed", () => memoryPool.size() - memoryPool.availableMemory())
 
-        def getValue = SocketServer.this.synchronized {
-          val ioWaitRatioMetricNames = processors.values.asScala.map { p =>
-            metrics.metricName("io-wait-ratio", "socket-server-metrics", p.metricTags)
-          }
-          ioWaitRatioMetricNames.map { metricName =>
-            Option(metrics.metric(metricName)).fold(0.0)(_.value)
-          }.sum / processors.size
-        }
-      }
-    )
-    newGauge("MemoryPoolAvailable",
-      new Gauge[Long] {
-        def getValue = memoryPool.availableMemory()
-      }
-    )
-    newGauge("MemoryPoolUsed",
-      new Gauge[Long] {
-        def getValue = memoryPool.size() - memoryPool.availableMemory()
-      }
-    )
     info("Started " + acceptors.size + " acceptor threads")
   }
 
@@ -527,12 +514,9 @@ private[kafka] class Processor(val id: Int,
     NetworkProcessorMetricTag -> id.toString
   ).asJava
 
-  newGauge(IdlePercentMetricName,
-    new Gauge[Double] {
-      def getValue = {
-        Option(metrics.metric(metrics.metricName("io-wait-ratio", "socket-server-metrics", metricTags))).fold(0.0)(_.value)
-      }
-    },
+  newGauge(IdlePercentMetricName, () => {
+    Option(metrics.metric(metrics.metricName("io-wait-ratio", "socket-server-metrics", metricTags))).fold(0.0)(_.value)
+  },
     // for compatibility, only add a networkProcessor tag to the Dropwizard Metrics alias (the equivalent Selector metric
     // also includes the listener name)
     Map(NetworkProcessorMetricTag -> id.toString)

@@ -17,7 +17,6 @@
 package kafka.producer
 
 import kafka.metrics.KafkaMetricsGroup
-import java.util.concurrent.TimeUnit
 import kafka.utils.Pool
 
 @deprecated("This class has been deprecated and will be removed in a future release.", "0.10.0.0")

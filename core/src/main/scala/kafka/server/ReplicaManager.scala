@@ -21,7 +21,6 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
 import java.util.concurrent.locks.Lock
 
-import com.codahale.metrics.Gauge
 import kafka.api._
 import kafka.cluster.{BrokerEndPoint, Partition, Replica}
 import kafka.controller.{KafkaController, StateChangeLogger}
@@ -205,36 +204,11 @@ class ReplicaManager(val config: KafkaConfig,
     }
   }
 
-  val leaderCount = newGauge(
-    "LeaderCount",
-    new Gauge[Int] {
-      def getValue = leaderPartitionsIterator.size
-    }
-  )
-  val partitionCount = newGauge(
-    "PartitionCount",
-    new Gauge[Int] {
-      def getValue = allPartitions.size
-    }
-  )
-  val offlineReplicaCount = newGauge(
-    "OfflineReplicaCount",
-    new Gauge[Int] {
-      def getValue = offlinePartitionsIterator.size
-    }
-  )
-  val underReplicatedPartitions = newGauge(
-    "UnderReplicatedPartitions",
-    new Gauge[Int] {
-      def getValue = underReplicatedPartitionCount
-    }
-  )
-  val underMinIsrPartitionCount = newGauge(
-    "UnderMinIsrPartitionCount",
-    new Gauge[Int] {
-      def getValue = leaderPartitionsIterator.count(_.isUnderMinIsr)
-    }
-  )
+  val leaderCount = newGauge("LeaderCount", () => leaderPartitionsIterator.size)
+  val partitionCount = newGauge("PartitionCount", () => allPartitions.size)
+  val offlineReplicaCount = newGauge("OfflineReplicaCount", () => offlinePartitionsIterator.size)
+  val underReplicatedPartitions = newGauge("UnderReplicatedPartitions", () => underReplicatedPartitionCount)
+  val underMinIsrPartitionCount = newGauge("UnderMinIsrPartitionCount", () => leaderPartitionsIterator.count(_.isUnderMinIsr))
 
   val isrExpandRate = newMeter("IsrExpandsPerSec")
   val isrShrinkRate = newMeter("IsrShrinksPerSec")

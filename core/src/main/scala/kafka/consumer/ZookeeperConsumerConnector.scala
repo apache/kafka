@@ -23,7 +23,6 @@ import java.util.concurrent._
 import java.util.concurrent.atomic._
 import java.util.concurrent.locks.ReentrantLock
 
-import com.codahale.metrics.Gauge
 import kafka.api._
 import kafka.client.ClientUtils
 import kafka.cluster._
@@ -116,14 +115,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
   private val zkCommitMeter = newMeter("ZooKeeperCommitsPerSec", Map("clientId" -> config.clientId))
   private val rebalanceTimer = new KafkaTimer(newTimer("RebalanceRateAndTime", Map("clientId" -> config.clientId)))
 
-  newGauge(
-    "dropwizard-metrics-count",
-    new Gauge[Int] {
-      def getValue = {
-        kafka.metrics.getKafkaMetrics().size
-      }
-    }
-  )
+  newGauge("dropwizard-metrics-count", () => kafka.metrics.getKafkaMetrics().size)
 
   val consumerIdString = {
     var consumerUuid : String = null
@@ -568,11 +560,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
     private val cond = lock.newCondition()
 
     @volatile private var allTopicsOwnedPartitionsCount = 0
-    newGauge("OwnedPartitionsCount",
-      new Gauge[Int] {
-        def getValue = allTopicsOwnedPartitionsCount
-      },
-      Map("clientId" -> config.clientId, "groupId" -> config.groupId))
+    newGauge("OwnedPartitionsCount", () => allTopicsOwnedPartitionsCount, Map("clientId" -> config.clientId, "groupId" -> config.groupId))
 
     private def ownedPartitionsCountMetricTags(topic: String) = Map("clientId" -> config.clientId, "groupId" -> config.groupId, "topic" -> topic)
 
@@ -738,11 +726,8 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
 
             partitionAssignment.view.groupBy { case (topicPartition, _) => topicPartition.topic }
                                       .foreach { case (topic, partitionThreadPairs) =>
-              newGauge("OwnedPartitionsCount",
-                new Gauge[Int] {
-                  def getValue() = partitionThreadPairs.size
-                },
-                ownedPartitionsCountMetricTags(topic))
+                                        newGauge("OwnedPartitionsCount", () => partitionThreadPairs.size,
+                                          ownedPartitionsCountMetricTags(topic))
             }
 
             topicRegistry = currentTopicRegistry
@@ -939,11 +924,8 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       val q = e._2._1
       topicThreadIdAndQueues.put(topicThreadId, q)
       debug("Adding topicThreadId %s and queue %s to topicThreadIdAndQueues data structure".format(topicThreadId, q.toString))
-      newGauge(
-        "FetchQueueSize",
-        new Gauge[Int] {
-          def getValue = q.size
-        },
+
+      newGauge("FetchQueueSize", () => q.size,
         Map("clientId" -> config.clientId,
           "topic" -> topicThreadId._1,
           "threadId" -> topicThreadId._2.threadId.toString)

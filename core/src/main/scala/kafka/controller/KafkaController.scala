@@ -18,7 +18,6 @@ package kafka.controller
 
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 
-import com.codahale.metrics.Gauge
 import kafka.admin.AdminOperationException
 import kafka.api._
 import kafka.common._
@@ -97,47 +96,17 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
   /* single-thread scheduler to clean expired tokens */
   private val tokenCleanScheduler = new KafkaScheduler(threads = 1, threadNamePrefix = "delegation-token-cleaner")
 
-  newGauge(
-    "ActiveControllerCount",
-    new Gauge[Int] {
-      def getValue = if (isActive) 1 else 0
-    }
-  )
+  newGauge("ActiveControllerCount", () => if (isActive) 1 else 0)
 
-  newGauge(
-    "OfflinePartitionsCount",
-    new Gauge[Int] {
-      def getValue: Int = offlinePartitionCount
-    }
-  )
+  newGauge("OfflinePartitionsCount", () => offlinePartitionCount)
 
-  newGauge(
-    "PreferredReplicaImbalanceCount",
-    new Gauge[Int] {
-      def getValue: Int = preferredReplicaImbalanceCount
-    }
-  )
+  newGauge("PreferredReplicaImbalanceCount", () => preferredReplicaImbalanceCount)
 
-  newGauge(
-    "ControllerState",
-    new Gauge[Byte] {
-      def getValue: Byte = state.value
-    }
-  )
+  newGauge("ControllerState", () => state.value)
 
-  newGauge(
-    "GlobalTopicCount",
-    new Gauge[Int] {
-      def getValue: Int = globalTopicCount
-    }
-  )
+  newGauge("GlobalTopicCount", () => globalTopicCount)
 
-  newGauge(
-    "GlobalPartitionCount",
-    new Gauge[Int] {
-      def getValue: Int = globalPartitionCount
-    }
-  )
+  newGauge("GlobalPartitionCount", () => globalPartitionCount)
 
   /**
    * Returns true if this broker is the current controller.

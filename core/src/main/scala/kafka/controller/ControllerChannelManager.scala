@@ -53,14 +53,9 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
   private val brokerLock = new Object
   this.logIdent = "[Channel manager on controller " + config.brokerId + "]: "
 
-  newGauge(
-    "TotalQueueSize",
-    new Gauge[Int] {
-      def getValue: Int = brokerLock synchronized {
-        brokerStateInfo.values.iterator.map(_.messageQueue.size).sum
-      }
-    }
-  )
+  newGauge("TotalQueueSize", () => brokerLock synchronized {
+    brokerStateInfo.values.iterator.map(_.messageQueue.size).sum
+  })
 
   controllerContext.liveBrokers.foreach(addNewBroker)
 
@@ -155,13 +150,7 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
       brokerNode, config, time, stateChangeLogger, threadName)
     requestThread.setDaemon(false)
 
-    val queueSizeGauge = newGauge(
-      QueueSizeMetricName,
-      new Gauge[Int] {
-        def getValue: Int = messageQueue.size
-      },
-      queueSizeTags(broker.id)
-    )
+    val queueSizeGauge = newGauge(QueueSizeMetricName, () => messageQueue.size, queueSizeTags(broker.id))
 
     brokerStateInfo.put(broker.id, new ControllerBrokerStateInfo(networkClient, brokerNode, messageQueue,
       requestThread, queueSizeGauge))

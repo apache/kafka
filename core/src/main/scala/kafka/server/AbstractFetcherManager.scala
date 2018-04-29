@@ -20,7 +20,6 @@ package kafka.server
 import kafka.utils.Logging
 import kafka.cluster.BrokerEndPoint
 import kafka.metrics.KafkaMetricsGroup
-import com.codahale.metrics.Gauge
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Utils
 
@@ -36,35 +35,24 @@ abstract class AbstractFetcherManager(protected val name: String, clientId: Stri
   private var numFetchersPerBroker = numFetchers
   this.logIdent = "[" + name + "] "
 
-  newGauge(
-    "MaxLag",
-    new Gauge[Long] {
-      // current max lag across all fetchers/topics/partitions
-      def getValue = fetcherThreadMap.foldLeft(0L)((curMaxAll, fetcherThreadMapEntry) => {
-        fetcherThreadMapEntry._2.fetcherLagStats.stats.foldLeft(0L)((curMaxThread, fetcherLagStatsEntry) => {
-          curMaxThread.max(fetcherLagStatsEntry._2.lag)
-        }).max(curMaxAll)
-      })
-    },
-    Map("clientId" -> clientId)
-  )
+  newGauge("MaxLag", () =>  {
+    // current max lag across all fetchers/topics/partitions
+    fetcherThreadMap.foldLeft(0L)((curMaxAll, fetcherThreadMapEntry) => {
+      fetcherThreadMapEntry._2.fetcherLagStats.stats.foldLeft(0L)((curMaxThread, fetcherLagStatsEntry) => {
+        curMaxThread.max(fetcherLagStatsEntry._2.lag)
+      }).max(curMaxAll)
+    })
+  }, Map("clientId" -> clientId))
 
-  newGauge(
-  "MinFetchRate", {
-    new Gauge[Double] {
-      // current min fetch rate across all fetchers/topics/partitions
-      def getValue = {
-        val headRate: Double =
-          fetcherThreadMap.headOption.map(_._2.fetcherStats.requestRate.getOneMinuteRate()).getOrElse(0)
+  newGauge("MinFetchRate", () => {
+    // current min fetch rate across all fetchers/topics/partitions
+    val headRate: Double =
+      fetcherThreadMap.headOption.map(_._2.fetcherStats.requestRate.getOneMinuteRate()).getOrElse(0)
 
-        fetcherThreadMap.foldLeft(headRate)((curMinAll, fetcherThreadMapEntry) => {
-          fetcherThreadMapEntry._2.fetcherStats.requestRate.getOneMinuteRate().min(curMinAll)
-        })
-      }
-    }
-  },
-  Map("clientId" -> clientId)
-  )
+    fetcherThreadMap.foldLeft(headRate)((curMinAll, fetcherThreadMapEntry) => {
+      fetcherThreadMapEntry._2.fetcherStats.requestRate.getOneMinuteRate().min(curMinAll)
+    })
+  }, Map("clientId" -> clientId))
 
   def resizeThreadPool(newSize: Int): Unit = {
     def migratePartitions(newSize: Int): Unit = {

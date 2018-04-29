@@ -33,7 +33,6 @@ import scala.collection.JavaConverters._
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 
-import com.codahale.metrics.Gauge
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.{FatalExitError, PartitionStates}
 import org.apache.kafka.common.record.MemoryRecords
@@ -357,12 +356,7 @@ class FetcherLagMetrics(metricId: ClientIdTopicPartition) extends KafkaMetricsGr
     "topic" -> metricId.topic,
     "partition" -> metricId.partitionId.toString)
 
-  newGauge(FetcherMetrics.ConsumerLag,
-    new Gauge[Long] {
-      def getValue = lagVal.get
-    },
-    tags
-  )
+  newGauge(FetcherMetrics.ConsumerLag, () => lagVal.get, tags)
 
   def lag_=(newLag: Long) {
     lagVal.set(newLag)

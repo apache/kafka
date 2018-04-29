@@ -20,7 +20,6 @@ package kafka.zookeeper
 import java.util.concurrent.locks.{ReentrantLock, ReentrantReadWriteLock}
 import java.util.concurrent.{ArrayBlockingQueue, ConcurrentHashMap, CountDownLatch, Semaphore, TimeUnit}
 
-import com.codahale.metrics.Gauge
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.CoreUtils.{inLock, inReadLock, inWriteLock}
 import kafka.utils.{KafkaScheduler, Logging}
@@ -84,9 +83,7 @@ class ZooKeeperClient(connectString: String,
   // Fail-fast if there's an error during construction (so don't call initialize, which retries forever)
   @volatile private var zooKeeper = new ZooKeeper(connectString, sessionTimeoutMs, ZooKeeperClientWatcher)
 
-  newGauge("SessionState", new Gauge[String] {
-    override def getValue: String = Option(connectionState.toString).getOrElse("DISCONNECTED")
-  })
+  newGauge("SessionState", () => Option(connectionState.toString).getOrElse("DISCONNECTED"))
 
   metricNames += "SessionState"
 

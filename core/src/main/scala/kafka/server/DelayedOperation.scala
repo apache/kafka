@@ -21,7 +21,6 @@ import java.util.concurrent._
 import java.util.concurrent.atomic._
 import java.util.concurrent.locks.{Lock, ReentrantLock, ReentrantReadWriteLock}
 
-import com.codahale.metrics.Gauge
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
@@ -182,21 +181,9 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
 
   private val metricsTags = Map("delayedOperation" -> purgatoryName)
 
-  newGauge(
-    "PurgatorySize",
-    new Gauge[Int] {
-      def getValue: Int = watched
-    },
-    metricsTags
-  )
+  newGauge("PurgatorySize", () => watched, metricsTags)
 
-  newGauge(
-    "NumDelayedOperations",
-    new Gauge[Int] {
-      def getValue: Int = delayed
-    },
-    metricsTags
-  )
+  newGauge("NumDelayedOperations", () => delayed, metricsTags)
 
   if (reaperEnabled)
     expirationReaper.start()

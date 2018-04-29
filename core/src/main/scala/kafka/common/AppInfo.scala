@@ -17,7 +17,6 @@
 
 package kafka.common
 
-import com.codahale.metrics.Gauge
 import kafka.metrics.KafkaMetricsGroup
 import org.apache.kafka.common.utils.AppInfoParser
 
@@ -32,19 +31,9 @@ object AppInfo extends KafkaMetricsGroup {
       }
     }
 
-    newGauge("Version",
-      new Gauge[String] {
-        def getValue = {
-          AppInfoParser.getVersion()
-        }
-      })
+    newGauge("Version", () => AppInfoParser.getVersion())
 
-    newGauge("CommitID",
-      new Gauge[String] {
-        def getValue = {
-          AppInfoParser.getCommitId()
-        }
-      })
+    newGauge("CommitID", () => AppInfoParser.getCommitId())
 
     lock.synchronized {
       isRegistered = true

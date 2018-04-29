@@ -19,7 +19,6 @@ package kafka.cluster
 
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
-import com.codahale.metrics.Gauge
 import kafka.api.LeaderAndIsr
 import kafka.api.Request
 import kafka.controller.KafkaController
@@ -79,52 +78,19 @@ class Partition(val topic: String,
 
   // Do not create metrics if this partition is ReplicaManager.OfflinePartition
   if (!isOffline) {
-    newGauge("UnderReplicated",
-      new Gauge[Int] {
-        def getValue = {
-          if (isUnderReplicated) 1 else 0
-        }
-      },
-      tags
-    )
+    newGauge("UnderReplicated", () => if (isUnderReplicated) 1 else 0, tags)
 
-    newGauge("InSyncReplicasCount",
-      new Gauge[Int] {
-        def getValue = {
-          if (isLeaderReplicaLocal) inSyncReplicas.size else 0
-        }
-      },
-      tags
-    )
+    newGauge("InSyncReplicasCount", () => if (isLeaderReplicaLocal) inSyncReplicas.size else 0, tags)
 
-    newGauge("UnderMinIsr",
-      new Gauge[Int] {
-        def getValue = {
-          if (isUnderMinIsr) 1 else 0
-        }
-      },
-      tags
-    )
+    newGauge("UnderMinIsr", () => if (isUnderMinIsr) 1 else 0, tags)
 
-    newGauge("ReplicasCount",
-      new Gauge[Int] {
-        def getValue = {
-          if (isLeaderReplicaLocal) assignedReplicas.size else 0
-        }
-      },
-      tags
-    )
+    newGauge("ReplicasCount", () => if (isLeaderReplicaLocal) assignedReplicas.size else 0, tags)
 
-    newGauge("LastStableOffsetLag",
-      new Gauge[Long] {
-        def getValue = {
-          leaderReplicaIfLocal.map { replica =>
-            replica.highWatermark.messageOffset - replica.lastStableOffset.messageOffset
-          }.getOrElse(0)
-        }
-      },
-      tags
-    )
+    newGauge("LastStableOffsetLag", () => {
+      leaderReplicaIfLocal.map { replica =>
+        replica.highWatermark.messageOffset - replica.lastStableOffset.messageOffset
+      }.getOrElse(0)
+    }, tags)
   }
 
   private def isLeaderReplicaLocal: Boolean = leaderReplicaIfLocal.isDefined

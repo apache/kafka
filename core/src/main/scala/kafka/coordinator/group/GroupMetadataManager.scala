@@ -24,7 +24,6 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
 
-import com.codahale.metrics.Gauge
 import kafka.api.{ApiVersion, KAFKA_0_10_1_IV0}
 import kafka.common.{KafkaException, MessageFormatter, OffsetAndMetadata}
 import kafka.metrics.KafkaMetricsGroup
@@ -83,57 +82,36 @@ class GroupMetadataManager(brokerId: Int,
 
   this.logIdent = s"[GroupMetadataManager brokerId=$brokerId] "
 
-  private def recreateGauge[T](name: String, gauge: Gauge[T]): Gauge[T] = {
+  private def recreateGauge[T](name: String, gauge: () => T) = {
     removeMetric(name)
     newGauge(name, gauge)
   }
 
-  recreateGauge("NumOffsets",
-    new Gauge[Int] {
-      def getValue = groupMetadataCache.values.map(group => {
-        group.inLock { group.numOffsets }
-      }).sum
-    })
+  recreateGauge("NumOffsets", () => groupMetadataCache.values.map(group => {
+    group.inLock { group.numOffsets }
+  }).sum)
 
-  recreateGauge("NumGroups",
-    new Gauge[Int] {
-      def getValue = groupMetadataCache.size
-    })
+  recreateGauge("NumGroups", () => groupMetadataCache.size)
 
-  recreateGauge("NumGroupsPreparingRebalance",
-    new Gauge[Int] {
-      def getValue: Int = groupMetadataCache.values.count(group => {
-        group synchronized { group.is(PreparingRebalance) }
-      })
-    })
+  recreateGauge("NumGroupsPreparingRebalance", () => groupMetadataCache.values.count(group => {
+    group synchronized { group.is(PreparingRebalance) }
+  }))
 
-  recreateGauge("NumGroupsCompletingRebalance",
-    new Gauge[Int] {
-      def getValue: Int = groupMetadataCache.values.count(group => {
-        group synchronized { group.is(CompletingRebalance) }
-      })
-    })
+  recreateGauge("NumGroupsCompletingRebalance", () => groupMetadataCache.values.count(group => {
+    group synchronized { group.is(CompletingRebalance) }
+  }))
 
-  recreateGauge("NumGroupsStable",
-    new Gauge[Int] {
-      def getValue: Int = groupMetadataCache.values.count(group => {
-        group synchronized { group.is(Stable) }
-      })
-    })
+  recreateGauge("NumGroupsStable", () => groupMetadataCache.values.count(group => {
+    group synchronized { group.is(Stable) }
+  }))
 
-  recreateGauge("NumGroupsDead",
-    new Gauge[Int] {
-      def getValue: Int = groupMetadataCache.values.count(group => {
-        group synchronized { group.is(Dead) }
-      })
-    })
+  recreateGauge("NumGroupsDead", () => groupMetadataCache.values.count(group => {
+    group synchronized { group.is(Dead) }
+  }))
 
-  recreateGauge("NumGroupsEmpty",
-    new Gauge[Int] {
-      def getValue: Int = groupMetadataCache.values.count(group => {
-        group synchronized { group.is(Empty) }
-      })
-    })
+  recreateGauge("NumGroupsEmpty", () => groupMetadataCache.values.count(group => {
+    group synchronized { group.is(Empty) }
+  }))
 
   def enableMetadataExpiration() {
     scheduler.startup()

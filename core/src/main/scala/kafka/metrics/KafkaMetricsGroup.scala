@@ -66,8 +66,12 @@ trait KafkaMetricsGroup extends Logging {
     nameBuilder.toString
   }
 
-  def newGauge[T](name: String, metric: Gauge[T], tags: scala.collection.Map[String, String] = Map.empty) =
+  def newGauge[T](name: String, gauge: () => T, tags: scala.collection.Map[String, String] = Map.empty) = {
+    val metric = new Gauge[T] {
+      override def getValue: T = gauge()
+    }
     kafkaMetricRegistry.register(metricName(name, tags), metric)
+  }
 
   def newMeter(name: String, tags: scala.collection.Map[String, String] = Map.empty) =
     kafkaMetricRegistry.meter(metricName(name, tags))

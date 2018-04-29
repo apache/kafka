@@ -23,7 +23,6 @@ import java.util.concurrent.{BlockingQueue, CountDownLatch, TimeUnit}
 import collection.mutable.ArrayBuffer
 import kafka.producer.KeyedMessage
 import kafka.metrics.KafkaMetricsGroup
-import com.codahale.metrics.Gauge
 import org.apache.kafka.common.utils.Time
 
 @deprecated("This class has been deprecated and will be removed in a future release.", "0.10.0.0")
@@ -37,11 +36,7 @@ class ProducerSendThread[K,V](val threadName: String,
   private val shutdownLatch = new CountDownLatch(1)
   private val shutdownCommand = new KeyedMessage[K,V]("shutdown", null.asInstanceOf[K], null.asInstanceOf[V])
 
-  newGauge("ProducerQueueSize",
-          new Gauge[Int] {
-            def getValue = queue.size
-          },
-          Map("clientId" -> clientId))
+  newGauge("ProducerQueueSize", () => queue.size(), Map("clientId" -> clientId))
 
   override def run {
     try {

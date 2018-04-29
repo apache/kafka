@@ -18,9 +18,8 @@
 package kafka.server
 
 import java.util
-import java.util.concurrent.{ThreadLocalRandom, TimeUnit}
+import java.util.concurrent.ThreadLocalRandom
 
-import com.codahale.metrics.Gauge
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
@@ -39,7 +38,7 @@ object FetchSession {
   type RESP_MAP = util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData]
   type CACHE_MAP = ImplicitLinkedHashSet[CachedPartition]
 
-  val NUM_INCREMENTAL_FETCH_SESSISONS = "NumIncrementalFetchSessions"
+  val NUM_INCREMENTAL_FETCH_SESSIONS = "NumIncrementalFetchSessions"
   val NUM_INCREMENTAL_FETCH_PARTITIONS_CACHED = "NumIncrementalFetchPartitionsCached"
   val INCREMENTAL_FETCH_SESSIONS_EVICTIONS_PER_SEC = "IncrementalFetchSessionEvictionsPerSec"
   val EVICTIONS = "evictions"
@@ -459,18 +458,12 @@ class FetchSessionCache(private val maxEntries: Int,
   private val evictableByPrivileged = new util.TreeMap[EvictableKey, FetchSession]
 
   // Set up metrics.
-  removeMetric(FetchSession.NUM_INCREMENTAL_FETCH_SESSISONS)
-  newGauge(FetchSession.NUM_INCREMENTAL_FETCH_SESSISONS,
-    new Gauge[Int] {
-      def getValue = FetchSessionCache.this.size
-    }
-  )
+  removeMetric(FetchSession.NUM_INCREMENTAL_FETCH_SESSIONS)
+  newGauge(FetchSession.NUM_INCREMENTAL_FETCH_SESSIONS, () => FetchSessionCache.this.size)
+
   removeMetric(FetchSession.NUM_INCREMENTAL_FETCH_PARTITIONS_CACHED)
-  newGauge(FetchSession.NUM_INCREMENTAL_FETCH_PARTITIONS_CACHED,
-    new Gauge[Long] {
-      def getValue = FetchSessionCache.this.totalPartitions
-    }
-  )
+  newGauge(FetchSession.NUM_INCREMENTAL_FETCH_PARTITIONS_CACHED, () => FetchSessionCache.this.totalPartitions)
+
   removeMetric(FetchSession.INCREMENTAL_FETCH_SESSIONS_EVICTIONS_PER_SEC)
   val evictionsMeter = newMeter(FetchSession.INCREMENTAL_FETCH_SESSIONS_EVICTIONS_PER_SEC, Map.empty)
 

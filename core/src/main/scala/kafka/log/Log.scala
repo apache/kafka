@@ -35,7 +35,6 @@ import org.apache.kafka.common.requests.{IsolationLevel, ListOffsetRequest}
 import scala.collection.JavaConverters._
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.collection.{Seq, Set, mutable}
-import com.codahale.metrics.Gauge
 import org.apache.kafka.common.utils.{Time, Utils}
 import kafka.message.{BrokerCompressionCodec, CompressionCodec, NoCompressionCodec}
 import kafka.server.checkpoints.{LeaderEpochCheckpointFile, LeaderEpochFile}
@@ -253,29 +252,13 @@ class Log(@volatile var dir: File,
     Map("topic" -> topicPartition.topic, "partition" -> topicPartition.partition.toString) ++ maybeFutureTag
   }
 
-  newGauge("NumLogSegments",
-    new Gauge[Int] {
-      def getValue = numberOfSegments
-    },
-    tags)
+  newGauge("NumLogSegments",  () => numberOfSegments, tags)
 
-  newGauge("LogStartOffset",
-    new Gauge[Long] {
-      def getValue = logStartOffset
-    },
-    tags)
+  newGauge("LogStartOffset", () => logStartOffset, tags)
 
-  newGauge("LogEndOffset",
-    new Gauge[Long] {
-      def getValue = logEndOffset
-    },
-    tags)
+  newGauge("LogEndOffset", () => logEndOffset, tags)
 
-  newGauge("Size",
-    new Gauge[Long] {
-      def getValue = size
-    },
-    tags)
+  newGauge("Size", () => size, tags)
 
   scheduler.schedule(name = "PeriodicProducerExpirationCheck", fun = () => {
     lock synchronized {

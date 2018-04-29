@@ -23,7 +23,6 @@ import java.nio.file.Files
 import java.util.Date
 import java.util.concurrent.TimeUnit
 
-import com.codahale.metrics.Gauge
 import kafka.common._
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.{BrokerReconfigurable, KafkaConfig, LogDirFailureChannel}
@@ -114,24 +113,17 @@ class LogCleaner(initialConfig: CleanerConfig,
   private val cleaners = mutable.ArrayBuffer[CleanerThread]()
 
   /* a metric to track the maximum utilization of any thread's buffer in the last cleaning */
-  newGauge("max-buffer-utilization-percent",
-           new Gauge[Int] {
-             def getValue: Int = cleaners.map(_.lastStats).map(100 * _.bufferUtilization).max.toInt
-           })
+  newGauge("max-buffer-utilization-percent", () => cleaners.map(_.lastStats).map(100 * _.bufferUtilization).max.toInt)
+
   /* a metric to track the recopy rate of each thread's last cleaning */
-  newGauge("cleaner-recopy-percent",
-           new Gauge[Int] {
-             def getValue: Int = {
+  newGauge("cleaner-recopy-percent", () => {
                val stats = cleaners.map(_.lastStats)
                val recopyRate = stats.map(_.bytesWritten).sum.toDouble / math.max(stats.map(_.bytesRead).sum, 1)
                (100 * recopyRate).toInt
-             }
-           })
+             })
+
   /* a metric to track the maximum cleaning time for the last cleaning from each thread */
-  newGauge("max-clean-time-secs",
-           new Gauge[Int] {
-             def getValue: Int = cleaners.map(_.lastStats).map(_.elapsedSecs).max.toInt
-           })
+  newGauge("max-clean-time-secs", () => cleaners.map(_.lastStats).map(_.elapsedSecs).max.toInt)
 
   /**
    * Start the background cleaning

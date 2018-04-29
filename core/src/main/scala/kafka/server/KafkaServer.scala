@@ -23,7 +23,6 @@ import java.util
 import java.util.concurrent._
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 
-import com.codahale.metrics.Gauge
 import kafka.api.KAFKA_0_9_0
 import kafka.cluster.Broker
 import kafka.common.{GenerateBrokerIdException, InconsistentBrokerIdException}
@@ -157,28 +156,11 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
   private[kafka] def brokerTopicStats = _brokerTopicStats
 
-  newGauge(
-    "BrokerState",
-    new Gauge[Int] {
-      def getValue = brokerState.currentState
-    }
-  )
+  newGauge("BrokerState", () => brokerState.currentState)
 
-  newGauge(
-    "ClusterId",
-    new Gauge[String] {
-      def getValue = clusterId
-    }
-  )
+  newGauge("ClusterId", () => clusterId)
 
-  newGauge(
-    "dropwizard-metrics-count",
-    new Gauge[Int] {
-      def getValue = {
-        kafka.metrics.getKafkaMetrics().size
-      }
-    }
-  )
+  newGauge("dropwizard-metrics-count", () => kafka.metrics.getKafkaMetrics().size)
 
   /**
    * Start up API for bringing up a single instance of the Kafka server.

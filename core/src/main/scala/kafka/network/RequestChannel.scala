@@ -22,7 +22,7 @@ import java.nio.ByteBuffer
 import java.util.concurrent._
 
 import com.typesafe.scalalogging.Logger
-import com.codahale.metrics.{Gauge, Meter}
+import com.codahale.metrics.Meter
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.{Logging, NotNothing}
 import org.apache.kafka.common.memory.MemoryPool
@@ -249,26 +249,17 @@ class RequestChannel(val queueSize: Int) extends KafkaMetricsGroup {
   private val requestQueue = new ArrayBlockingQueue[BaseRequest](queueSize)
   private val processors = new ConcurrentHashMap[Int, Processor]()
 
-  newGauge(RequestQueueSizeMetric, new Gauge[Int] {
-      def getValue = requestQueue.size
-  })
+  newGauge(RequestQueueSizeMetric, () => requestQueue.size)
 
-  newGauge(ResponseQueueSizeMetric, new Gauge[Int]{
-    def getValue = processors.values.asScala.foldLeft(0) {(total, processor) =>
-      total + processor.responseQueueSize
-    }
+  newGauge(ResponseQueueSizeMetric, () => processors.values.asScala.foldLeft(0) {(total, processor) =>
+    total + processor.responseQueueSize
   })
 
   def addProcessor(processor: Processor): Unit = {
     if (processors.putIfAbsent(processor.id, processor) != null)
       warn(s"Unexpected processor with processorId ${processor.id}")
 
-    newGauge(ResponseQueueSizeMetric,
-      new Gauge[Int] {
-        def getValue = processor.responseQueueSize
-      },
-      Map(ProcessorMetricTag -> processor.id.toString)
-    )
+    newGauge(ResponseQueueSizeMetric, () => processor.responseQueueSize, Map(ProcessorMetricTag -> processor.id.toString))
   }
 
   def removeProcessor(processorId: Int): Unit = {
