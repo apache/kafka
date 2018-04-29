@@ -17,8 +17,6 @@
 
 package kafka.consumer
 
-import java.util.concurrent.TimeUnit
-
 import kafka.common.{ClientIdAllBrokers, ClientIdBroker, ClientIdAndBroker}
 import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
 import kafka.utils.Pool
@@ -33,9 +31,9 @@ class FetchRequestAndResponseMetrics(metricId: ClientIdBroker) extends KafkaMetr
       Map("clientId" -> clientId)
   }
 
-  val requestTimer = new KafkaTimer(newTimer("FetchRequestRateAndTimeMs", TimeUnit.MILLISECONDS, TimeUnit.SECONDS, tags))
-  val requestSizeHist = newHistogram("FetchResponseSize", biased = true, tags)
-  val throttleTimeStats = newTimer("FetchRequestThrottleRateAndTimeMs", TimeUnit.MILLISECONDS, TimeUnit.SECONDS, tags)
+  val requestTimer = new KafkaTimer(newTimer("FetchRequestRateAndTimeMs", tags))
+  val requestSizeHist = newHistogram("FetchResponseSize", tags)
+  val throttleTimeStats = newTimer("FetchRequestThrottleRateAndTimeMs", tags)
 }
 
 /**

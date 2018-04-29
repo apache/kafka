@@ -569,5 +569,5 @@ object LogSegment {
 }
 
 object LogFlushStats extends KafkaMetricsGroup {
-  val logFlushTimer = new KafkaTimer(newTimer("LogFlushRateAndTimeMs", TimeUnit.MILLISECONDS, TimeUnit.SECONDS))
+  val logFlushTimer = new KafkaTimer(newTimer("LogFlushRateAndTimeMs"))
 }

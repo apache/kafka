@@ -122,7 +122,7 @@ class DelayedDeleteRecords(delayMs: Long,
 
 object DelayedDeleteRecordsMetrics extends KafkaMetricsGroup {
 
-  private val aggregateExpirationMeter = newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS)
+  private val aggregateExpirationMeter = newMeter("ExpiresPerSec")
 
   def recordExpiration(partition: TopicPartition) {
     aggregateExpirationMeter.mark()

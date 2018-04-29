@@ -22,7 +22,7 @@ import java.nio.ByteBuffer
 import java.util.concurrent._
 
 import com.typesafe.scalalogging.Logger
-import com.yammer.metrics.core.{Gauge, Meter}
+import com.codahale.metrics.{Gauge, Meter}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.{Logging, NotNothing}
 import org.apache.kafka.common.memory.MemoryPool
@@ -250,11 +250,11 @@ class RequestChannel(val queueSize: Int) extends KafkaMetricsGroup {
   private val processors = new ConcurrentHashMap[Int, Processor]()
 
   newGauge(RequestQueueSizeMetric, new Gauge[Int] {
-      def value = requestQueue.size
+      def getValue = requestQueue.size
   })
 
   newGauge(ResponseQueueSizeMetric, new Gauge[Int]{
-    def value = processors.values.asScala.foldLeft(0) {(total, processor) =>
+    def getValue = processors.values.asScala.foldLeft(0) {(total, processor) =>
       total + processor.responseQueueSize
     }
   })
@@ -265,7 +265,7 @@ class RequestChannel(val queueSize: Int) extends KafkaMetricsGroup {
 
     newGauge(ResponseQueueSizeMetric,
       new Gauge[Int] {
-        def value = processor.responseQueueSize
+        def getValue = processor.responseQueueSize
       },
       Map(ProcessorMetricTag -> processor.id.toString)
     )
@@ -356,31 +356,31 @@ class RequestMetrics(name: String) extends KafkaMetricsGroup {
   val tags = Map("request" -> name)
   val requestRateInternal = new mutable.HashMap[Short, Meter]
   // time a request spent in a request queue
-  val requestQueueTimeHist = newHistogram(RequestQueueTimeMs, biased = true, tags)
+  val requestQueueTimeHist = newHistogram(RequestQueueTimeMs, tags)
   // time a request takes to be processed at the local broker
-  val localTimeHist = newHistogram(LocalTimeMs, biased = true, tags)
+  val localTimeHist = newHistogram(LocalTimeMs, tags)
   // time a request takes to wait on remote brokers (currently only relevant to fetch and produce requests)
-  val remoteTimeHist = newHistogram(RemoteTimeMs, biased = true, tags)
+  val remoteTimeHist = newHistogram(RemoteTimeMs, tags)
   // time a request is throttled
-  val throttleTimeHist = newHistogram(ThrottleTimeMs, biased = true, tags)
+  val throttleTimeHist = newHistogram(ThrottleTimeMs, tags)
   // time a response spent in a response queue
-  val responseQueueTimeHist = newHistogram(ResponseQueueTimeMs, biased = true, tags)
+  val responseQueueTimeHist = newHistogram(ResponseQueueTimeMs, tags)
   // time to send the response to the requester
-  val responseSendTimeHist = newHistogram(ResponseSendTimeMs, biased = true, tags)
-  val totalTimeHist = newHistogram(TotalTimeMs, biased = true, tags)
+  val responseSendTimeHist = newHistogram(ResponseSendTimeMs, tags)
+  val totalTimeHist = newHistogram(TotalTimeMs, tags)
   // request size in bytes
-  val requestBytesHist = newHistogram(RequestBytes, biased = true, tags)
+  val requestBytesHist = newHistogram(RequestBytes, tags)
   // time for message conversions (only relevant to fetch and produce requests)
   val messageConversionsTimeHist =
     if (name == ApiKeys.FETCH.name || name == ApiKeys.PRODUCE.name)
-      Some(newHistogram(MessageConversionsTimeMs, biased = true, tags))
+      Some(newHistogram(MessageConversionsTimeMs, tags))
     else
       None
   // Temporary memory allocated for processing request (only populated for fetch and produce requests)
   // This shows the memory allocated for compression/conversions excluding the actual request size
   val tempMemoryBytesHist =
     if (name == ApiKeys.FETCH.name || name == ApiKeys.PRODUCE.name)
-      Some(newHistogram(TemporaryMemoryBytes, biased = true, tags))
+      Some(newHistogram(TemporaryMemoryBytes, tags))
     else
       None
 
@@ -388,7 +388,7 @@ class RequestMetrics(name: String) extends KafkaMetricsGroup {
   Errors.values.foreach(error => errorMeters.put(error, new ErrorMeter(name, error)))
 
   def requestRate(version: Short): Meter = {
-      requestRateInternal.getOrElseUpdate(version, newMeter("RequestsPerSec", "requests", TimeUnit.SECONDS, tags + ("version" -> version.toString)))
+      requestRateInternal.getOrElseUpdate(version, newMeter("RequestsPerSec", tags + ("version" -> version.toString)))
   }
 
   class ErrorMeter(name: String, error: Errors) {
@@ -402,7 +402,7 @@ class RequestMetrics(name: String) extends KafkaMetricsGroup {
       else {
         synchronized {
           if (meter == null)
-             meter = newMeter(ErrorsPerSec, "requests", TimeUnit.SECONDS, tags)
+             meter = newMeter(ErrorsPerSec, tags)
           meter
         }
       }

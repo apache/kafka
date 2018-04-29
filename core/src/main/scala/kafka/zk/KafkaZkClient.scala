@@ -18,7 +18,6 @@ package kafka.zk
 
 import java.util.Properties
 
-import com.yammer.metrics.core.MetricName
 import kafka.api.LeaderAndIsr
 import kafka.cluster.Broker
 import kafka.common.KafkaException
@@ -53,7 +52,7 @@ import scala.collection.{Seq, mutable}
 class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: Time) extends AutoCloseable with
   Logging with KafkaMetricsGroup {
 
-  override def metricName(name: String, metricTags: scala.collection.Map[String, String]): MetricName = {
+  override def metricName(name: String, metricTags: scala.collection.Map[String, String]): String = {
     explicitMetricName("kafka.server", "ZooKeeperClientMetrics", name, metricTags)
   }
 

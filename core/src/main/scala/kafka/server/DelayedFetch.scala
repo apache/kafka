@@ -170,7 +170,7 @@ class DelayedFetch(delayMs: Long,
 
 object DelayedFetchMetrics extends KafkaMetricsGroup {
   private val FetcherTypeKey = "fetcherType"
-  val followerExpiredRequestMeter = newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS, tags = Map(FetcherTypeKey -> "follower"))
-  val consumerExpiredRequestMeter = newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS, tags = Map(FetcherTypeKey -> "consumer"))
+  val followerExpiredRequestMeter = newMeter("ExpiresPerSec", tags = Map(FetcherTypeKey -> "follower"))
+  val consumerExpiredRequestMeter = newMeter("ExpiresPerSec", tags = Map(FetcherTypeKey -> "consumer"))
 }
 

@@ -23,7 +23,7 @@ import java.util.concurrent.{BlockingQueue, CountDownLatch, TimeUnit}
 import collection.mutable.ArrayBuffer
 import kafka.producer.KeyedMessage
 import kafka.metrics.KafkaMetricsGroup
-import com.yammer.metrics.core.Gauge
+import com.codahale.metrics.Gauge
 import org.apache.kafka.common.utils.Time
 
 @deprecated("This class has been deprecated and will be removed in a future release.", "0.10.0.0")
@@ -39,7 +39,7 @@ class ProducerSendThread[K,V](val threadName: String,
 
   newGauge("ProducerQueueSize",
           new Gauge[Int] {
-            def value = queue.size
+            def getValue = queue.size
           },
           Map("clientId" -> clientId))
 

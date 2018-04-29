@@ -18,7 +18,7 @@ package kafka.controller
 
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 
-import com.yammer.metrics.core.Gauge
+import com.codahale.metrics.Gauge
 import kafka.admin.AdminOperationException
 import kafka.api._
 import kafka.common._
@@ -100,42 +100,42 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
   newGauge(
     "ActiveControllerCount",
     new Gauge[Int] {
-      def value = if (isActive) 1 else 0
+      def getValue = if (isActive) 1 else 0
     }
   )
 
   newGauge(
     "OfflinePartitionsCount",
     new Gauge[Int] {
-      def value: Int = offlinePartitionCount
+      def getValue: Int = offlinePartitionCount
     }
   )
 
   newGauge(
     "PreferredReplicaImbalanceCount",
     new Gauge[Int] {
-      def value: Int = preferredReplicaImbalanceCount
+      def getValue: Int = preferredReplicaImbalanceCount
     }
   )
 
   newGauge(
     "ControllerState",
     new Gauge[Byte] {
-      def value: Byte = state.value
+      def getValue: Byte = state.value
     }
   )
 
   newGauge(
     "GlobalTopicCount",
     new Gauge[Int] {
-      def value: Int = globalTopicCount
+      def getValue: Int = globalTopicCount
     }
   )
 
   newGauge(
     "GlobalPartitionCount",
     new Gauge[Int] {
-      def value: Int = globalPartitionCount
+      def getValue: Int = globalPartitionCount
     }
   )
 
@@ -1635,11 +1635,11 @@ case class LeaderIsrAndControllerEpoch(leaderAndIsr: LeaderAndIsr, controllerEpo
 }
 
 private[controller] class ControllerStats extends KafkaMetricsGroup {
-  val uncleanLeaderElectionRate = newMeter("UncleanLeaderElectionsPerSec", "elections", TimeUnit.SECONDS)
+  val uncleanLeaderElectionRate = newMeter("UncleanLeaderElectionsPerSec")
 
   val rateAndTimeMetrics: Map[ControllerState, KafkaTimer] = ControllerState.values.flatMap { state =>
     state.rateAndTimeMetricName.map { metricName =>
-      state -> new KafkaTimer(newTimer(metricName, TimeUnit.MILLISECONDS, TimeUnit.SECONDS))
+      state -> new KafkaTimer(newTimer(metricName))
     }
   }.toMap
 

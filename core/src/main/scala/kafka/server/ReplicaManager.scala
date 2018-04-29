@@ -21,7 +21,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
 import java.util.concurrent.locks.Lock
 
-import com.yammer.metrics.core.Gauge
+import com.codahale.metrics.Gauge
 import kafka.api._
 import kafka.cluster.{BrokerEndPoint, Partition, Replica}
 import kafka.controller.{KafkaController, StateChangeLogger}
@@ -208,37 +208,37 @@ class ReplicaManager(val config: KafkaConfig,
   val leaderCount = newGauge(
     "LeaderCount",
     new Gauge[Int] {
-      def value = leaderPartitionsIterator.size
+      def getValue = leaderPartitionsIterator.size
     }
   )
   val partitionCount = newGauge(
     "PartitionCount",
     new Gauge[Int] {
-      def value = allPartitions.size
+      def getValue = allPartitions.size
     }
   )
   val offlineReplicaCount = newGauge(
     "OfflineReplicaCount",
     new Gauge[Int] {
-      def value = offlinePartitionsIterator.size
+      def getValue = offlinePartitionsIterator.size
     }
   )
   val underReplicatedPartitions = newGauge(
     "UnderReplicatedPartitions",
     new Gauge[Int] {
-      def value = underReplicatedPartitionCount
+      def getValue = underReplicatedPartitionCount
     }
   )
   val underMinIsrPartitionCount = newGauge(
     "UnderMinIsrPartitionCount",
     new Gauge[Int] {
-      def value = leaderPartitionsIterator.count(_.isUnderMinIsr)
+      def getValue = leaderPartitionsIterator.count(_.isUnderMinIsr)
     }
   )
 
-  val isrExpandRate = newMeter("IsrExpandsPerSec", "expands", TimeUnit.SECONDS)
-  val isrShrinkRate = newMeter("IsrShrinksPerSec", "shrinks", TimeUnit.SECONDS)
-  val failedIsrUpdatesRate = newMeter("FailedIsrUpdatesPerSec", "failedUpdates", TimeUnit.SECONDS)
+  val isrExpandRate = newMeter("IsrExpandsPerSec")
+  val isrShrinkRate = newMeter("IsrShrinksPerSec")
+  val failedIsrUpdatesRate = newMeter("FailedIsrUpdatesPerSec")
 
   def underReplicatedPartitionCount: Int = leaderPartitionsIterator.count(_.isUnderReplicated)
 

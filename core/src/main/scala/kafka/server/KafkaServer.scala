@@ -23,7 +23,7 @@ import java.util
 import java.util.concurrent._
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 
-import com.yammer.metrics.core.Gauge
+import com.codahale.metrics.Gauge
 import kafka.api.KAFKA_0_9_0
 import kafka.cluster.Broker
 import kafka.common.{GenerateBrokerIdException, InconsistentBrokerIdException}
@@ -160,22 +160,22 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
   newGauge(
     "BrokerState",
     new Gauge[Int] {
-      def value = brokerState.currentState
+      def getValue = brokerState.currentState
     }
   )
 
   newGauge(
     "ClusterId",
     new Gauge[String] {
-      def value = clusterId
+      def getValue = clusterId
     }
   )
 
   newGauge(
-    "yammer-metrics-count",
+    "dropwizard-metrics-count",
     new Gauge[Int] {
-      def value = {
-        com.yammer.metrics.Metrics.defaultRegistry.allMetrics.size
+      def getValue = {
+        kafka.metrics.getKafkaMetrics().size
       }
     }
   )

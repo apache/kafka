@@ -24,7 +24,7 @@ import java.nio.channels.{Selector => NSelector}
 import java.util.concurrent._
 import java.util.concurrent.atomic._
 
-import com.yammer.metrics.core.Gauge
+import com.codahale.metrics.Gauge
 import kafka.cluster.{BrokerEndPoint, EndPoint}
 import kafka.common.KafkaException
 import kafka.metrics.KafkaMetricsGroup
@@ -99,7 +99,7 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
     newGauge("NetworkProcessorAvgIdlePercent",
       new Gauge[Double] {
 
-        def value = SocketServer.this.synchronized {
+        def getValue = SocketServer.this.synchronized {
           val ioWaitRatioMetricNames = processors.values.asScala.map { p =>
             metrics.metricName("io-wait-ratio", "socket-server-metrics", p.metricTags)
           }
@@ -111,12 +111,12 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
     )
     newGauge("MemoryPoolAvailable",
       new Gauge[Long] {
-        def value = memoryPool.availableMemory()
+        def getValue = memoryPool.availableMemory()
       }
     )
     newGauge("MemoryPoolUsed",
       new Gauge[Long] {
-        def value = memoryPool.size() - memoryPool.availableMemory()
+        def getValue = memoryPool.size() - memoryPool.availableMemory()
       }
     )
     info("Started " + acceptors.size + " acceptor threads")
@@ -529,11 +529,11 @@ private[kafka] class Processor(val id: Int,
 
   newGauge(IdlePercentMetricName,
     new Gauge[Double] {
-      def value = {
+      def getValue = {
         Option(metrics.metric(metrics.metricName("io-wait-ratio", "socket-server-metrics", metricTags))).fold(0.0)(_.value)
       }
     },
-    // for compatibility, only add a networkProcessor tag to the Yammer Metrics alias (the equivalent Selector metric
+    // for compatibility, only add a networkProcessor tag to the Dropwizard Metrics alias (the equivalent Selector metric
     // also includes the listener name)
     Map(NetworkProcessorMetricTag -> id.toString)
   )

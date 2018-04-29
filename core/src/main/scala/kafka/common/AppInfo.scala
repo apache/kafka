@@ -17,7 +17,7 @@
 
 package kafka.common
 
-import com.yammer.metrics.core.Gauge
+import com.codahale.metrics.Gauge
 import kafka.metrics.KafkaMetricsGroup
 import org.apache.kafka.common.utils.AppInfoParser
 
@@ -34,14 +34,14 @@ object AppInfo extends KafkaMetricsGroup {
 
     newGauge("Version",
       new Gauge[String] {
-        def value = {
+        def getValue = {
           AppInfoParser.getVersion()
         }
       })
 
     newGauge("CommitID",
       new Gauge[String] {
-        def value = {
+        def getValue = {
           AppInfoParser.getCommitId()
         }
       })

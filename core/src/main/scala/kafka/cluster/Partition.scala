@@ -19,7 +19,7 @@ package kafka.cluster
 
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
-import com.yammer.metrics.core.Gauge
+import com.codahale.metrics.Gauge
 import kafka.api.LeaderAndIsr
 import kafka.api.Request
 import kafka.controller.KafkaController
@@ -81,7 +81,7 @@ class Partition(val topic: String,
   if (!isOffline) {
     newGauge("UnderReplicated",
       new Gauge[Int] {
-        def value = {
+        def getValue = {
           if (isUnderReplicated) 1 else 0
         }
       },
@@ -90,7 +90,7 @@ class Partition(val topic: String,
 
     newGauge("InSyncReplicasCount",
       new Gauge[Int] {
-        def value = {
+        def getValue = {
           if (isLeaderReplicaLocal) inSyncReplicas.size else 0
         }
       },
@@ -99,7 +99,7 @@ class Partition(val topic: String,
 
     newGauge("UnderMinIsr",
       new Gauge[Int] {
-        def value = {
+        def getValue = {
           if (isUnderMinIsr) 1 else 0
         }
       },
@@ -108,7 +108,7 @@ class Partition(val topic: String,
 
     newGauge("ReplicasCount",
       new Gauge[Int] {
-        def value = {
+        def getValue = {
           if (isLeaderReplicaLocal) assignedReplicas.size else 0
         }
       },
@@ -117,7 +117,7 @@ class Partition(val topic: String,
 
     newGauge("LastStableOffsetLag",
       new Gauge[Long] {
-        def value = {
+        def getValue = {
           leaderReplicaIfLocal.map { replica =>
             replica.highWatermark.messageOffset - replica.lastStableOffset.messageOffset
           }.getOrElse(0)

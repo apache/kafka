@@ -18,7 +18,6 @@
 package kafka.consumer
 
 import kafka.utils.{Pool, threadsafe, Logging}
-import java.util.concurrent.TimeUnit
 import kafka.metrics.KafkaMetricsGroup
 import kafka.common.{ClientIdTopic, ClientIdAllTopics, ClientIdAndTopic}
 
@@ -30,8 +29,8 @@ class ConsumerTopicMetrics(metricId: ClientIdTopic) extends KafkaMetricsGroup {
     case ClientIdAllTopics(clientId) => Map("clientId" -> clientId)
   }
 
-  val messageRate = newMeter("MessagesPerSec", "messages", TimeUnit.SECONDS, tags)
-  val byteRate = newMeter("BytesPerSec", "bytes", TimeUnit.SECONDS, tags)
+  val messageRate = newMeter("MessagesPerSec", tags)
+  val byteRate = newMeter("BytesPerSec", tags)
 }
 
 /**

@@ -28,9 +28,9 @@ class ProducerRequestMetrics(metricId: ClientIdBroker) extends KafkaMetricsGroup
     case ClientIdAllBrokers(clientId) => Map("clientId" -> clientId)
   }
 
-  val requestTimer = new KafkaTimer(newTimer("ProducerRequestRateAndTimeMs", TimeUnit.MILLISECONDS, TimeUnit.SECONDS, tags))
-  val requestSizeHist = newHistogram("ProducerRequestSize", biased = true, tags)
-  val throttleTimeStats = newTimer("ProducerRequestThrottleRateAndTimeMs", TimeUnit.MILLISECONDS, TimeUnit.SECONDS, tags)
+  val requestTimer = new KafkaTimer(newTimer("ProducerRequestRateAndTimeMs", tags))
+  val requestSizeHist = newHistogram("ProducerRequestSize", tags)
+  val throttleTimeStats = newTimer("ProducerRequestThrottleRateAndTimeMs", tags)
 }
 
 /**

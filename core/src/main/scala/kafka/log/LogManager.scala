@@ -21,7 +21,7 @@ import java.io._
 import java.nio.file.Files
 import java.util.concurrent._
 
-import com.yammer.metrics.core.Gauge
+import com.codahale.metrics.Gauge
 import kafka.common.KafkaException
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.checkpoints.OffsetCheckpointFile
@@ -121,7 +121,7 @@ class LogManager(logDirs: Seq[File],
   val offlineLogDirectoryCount = newGauge(
     "OfflineLogDirectoryCount",
     new Gauge[Int] {
-      def value = offlineLogDirs.size
+      def getValue = offlineLogDirs.size
     }
   )
 
@@ -129,7 +129,7 @@ class LogManager(logDirs: Seq[File],
     newGauge(
       "LogDirectoryOffline",
       new Gauge[Int] {
-        def value = if (_liveLogDirs.contains(dir)) 0 else 1
+        def getValue = if (_liveLogDirs.contains(dir)) 0 else 1
       },
       Map("logDirectory" -> dir.getAbsolutePath)
     )

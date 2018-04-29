@@ -69,7 +69,7 @@ trait KafkaMetricsGroup extends Logging {
   def newGauge[T](name: String, metric: Gauge[T], tags: scala.collection.Map[String, String] = Map.empty) =
     kafkaMetricRegistry.register(metricName(name, tags), metric)
 
-  def newMeter(name: String, eventType: String, tags: scala.collection.Map[String, String] = Map.empty) =
+  def newMeter(name: String, tags: scala.collection.Map[String, String] = Map.empty) =
     kafkaMetricRegistry.meter(metricName(name, tags))
 
   def newHistogram(name: String, tags: scala.collection.Map[String, String] = Map.empty) =

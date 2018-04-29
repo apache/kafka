@@ -35,7 +35,7 @@ import org.apache.kafka.common.requests.{IsolationLevel, ListOffsetRequest}
 import scala.collection.JavaConverters._
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.collection.{Seq, Set, mutable}
-import com.yammer.metrics.core.Gauge
+import com.codahale.metrics.Gauge
 import org.apache.kafka.common.utils.{Time, Utils}
 import kafka.message.{BrokerCompressionCodec, CompressionCodec, NoCompressionCodec}
 import kafka.server.checkpoints.{LeaderEpochCheckpointFile, LeaderEpochFile}
@@ -145,7 +145,7 @@ case class CompletedTxn(producerId: Long, firstOffset: Long, lastOffset: Long, i
  *                       Other activities such as log cleaning are not affected by logStartOffset.
  * @param recoveryPoint The offset at which to begin recovery--i.e. the first offset which has not been flushed to disk
  * @param scheduler The thread pool scheduler used for background actions
- * @param brokerTopicStats Container for Broker Topic Yammer Metrics
+ * @param brokerTopicStats Container for Broker Topic Dropwizard Metrics
  * @param time The time instance used for checking the clock
  * @param maxProducerIdExpirationMs The maximum amount of time to wait before a producer id is considered expired
  * @param producerIdExpirationCheckIntervalMs How often to check for producer ids which need to be expired
@@ -255,25 +255,25 @@ class Log(@volatile var dir: File,
 
   newGauge("NumLogSegments",
     new Gauge[Int] {
-      def value = numberOfSegments
+      def getValue = numberOfSegments
     },
     tags)
 
   newGauge("LogStartOffset",
     new Gauge[Long] {
-      def value = logStartOffset
+      def getValue = logStartOffset
     },
     tags)
 
   newGauge("LogEndOffset",
     new Gauge[Long] {
-      def value = logEndOffset
+      def getValue = logEndOffset
     },
     tags)
 
   newGauge("Size",
     new Gauge[Long] {
-      def value = size
+      def getValue = size
     },
     tags)
 
