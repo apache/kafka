@@ -153,7 +153,7 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
     val queueSizeGauge = newGauge(QueueSizeMetricName, () => messageQueue.size, queueSizeTags(broker.id))
 
     brokerStateInfo.put(broker.id, new ControllerBrokerStateInfo(networkClient, brokerNode, messageQueue,
-      requestThread, queueSizeGauge))
+      requestThread, queueSizeGauge.asInstanceOf[Gauge[Int]]))
   }
 
   private def queueSizeTags(brokerId: Int) = Map("broker-id" -> brokerId.toString)
