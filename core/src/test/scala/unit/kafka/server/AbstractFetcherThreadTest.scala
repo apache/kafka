@@ -36,7 +36,7 @@ import scala.collection.{Map, Set, mutable}
 class AbstractFetcherThreadTest {
 
   @Before
-  def cleanMetricRegistry(): Unit = kafka.metrics.getKafkaMetrics().foreach(name => kafka.metrics.removeMetric(_))
+  def cleanMetricRegistry(): Unit = kafka.metrics.getKafkaMetrics().keySet.foreach(kafka.metrics.removeMetric)
 
   @Test
   def testMetricsRemovedOnShutdown() {

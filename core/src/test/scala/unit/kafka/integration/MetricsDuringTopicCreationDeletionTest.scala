@@ -56,7 +56,7 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
     // see https://issues.apache.org/jira/browse/KAFKA-4605
     for (m <- testedMetrics) {
         val metricName = kafka.metrics.getKafkaMetrics().keys.find(_.endsWith(m))
-        metricName.foreach(name => kafka.metrics.removeMetric(_))
+        metricName.foreach(kafka.metrics.removeMetric)
     }
     
     super.setUp
