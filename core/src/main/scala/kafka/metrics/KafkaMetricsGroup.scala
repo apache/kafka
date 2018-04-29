@@ -18,6 +18,7 @@
 package kafka.metrics
 
 import com.codahale.metrics.Gauge
+import com.codahale.metrics.MetricRegistry.MetricSupplier
 import kafka.consumer.{ConsumerTopicStatsRegistry, FetchRequestAndResponseStatsRegistry}
 import kafka.producer.{ProducerRequestStatsRegistry, ProducerStatsRegistry, ProducerTopicStatsRegistry}
 import kafka.utils.Logging
@@ -67,10 +68,12 @@ trait KafkaMetricsGroup extends Logging {
   }
 
   def newGauge[T](name: String, gauge: () => T, tags: scala.collection.Map[String, String] = Map.empty) = {
-    val metric = new Gauge[T] {
-      override def getValue: T = gauge()
+    val supplier = new MetricSupplier[Gauge[_]] {
+      override def newMetric(): Gauge[T] = new Gauge[T] {
+        override def getValue: T = gauge()
+      }
     }
-    kafkaMetricRegistry.register(metricName(name, tags), metric)
+    kafkaMetricRegistry.gauge(metricName(name, tags), supplier)
   }
 
   def newMeter(name: String, tags: scala.collection.Map[String, String] = Map.empty) =
