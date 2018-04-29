@@ -53,7 +53,7 @@ class PartitionLeaderElectionAlgorithmsTest  extends JUnitSuite {
       uncleanLeaderElectionEnabled = false,
       controllerContext)
     assertEquals(None, leaderOpt)
-    assertEquals(0, controllerContext.stats.uncleanLeaderElectionRate.count())
+    assertEquals(0, controllerContext.stats.uncleanLeaderElectionRate.getCount())
   }
 
   @Test
@@ -67,7 +67,7 @@ class PartitionLeaderElectionAlgorithmsTest  extends JUnitSuite {
       uncleanLeaderElectionEnabled = true,
       controllerContext)
     assertEquals(Option(4), leaderOpt)
-    assertEquals(1, controllerContext.stats.uncleanLeaderElectionRate.count())
+    assertEquals(1, controllerContext.stats.uncleanLeaderElectionRate.getCount())
   }
 
   @Test

@@ -31,7 +31,6 @@ import scala.util.Random
 import java.io.IOException
 
 import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import java.nio.channels.ClosedByInterruptException
 
@@ -49,9 +48,9 @@ object TestOffsetManager {
       println("Aggregate stats for commits:")
       println("Error count: %d; Max:%f; Min: %f; Mean: %f; Commit count: %d".format(
         commitThreads.map(_.numErrors.get).sum,
-        commitThreads.map(_.timer.max()).max,
-        commitThreads.map(_.timer.min()).min,
-        commitThreads.map(_.timer.mean()).sum / commitThreads.size,
+        commitThreads.map(_.timer.getSnapshot().getMax()).max,
+        commitThreads.map(_.timer.getSnapshot().getMin()).min,
+        commitThreads.map(_.timer.getSnapshot().getMean()).sum / commitThreads.size,
         commitThreads.map(_.numCommits.get).sum))
       println("--------------------------------------------------------------------------------")
       commitThreads.foreach(t => println(t.stats))
@@ -75,7 +74,7 @@ object TestOffsetManager {
     private var offset = 0L
     val numErrors = new AtomicInteger(0)
     val numCommits = new AtomicInteger(0)
-    val timer = newTimer("commit-thread", TimeUnit.MILLISECONDS, TimeUnit.SECONDS)
+    val timer = newTimer("commit-thread")
     private val commitTimer = new KafkaTimer(timer)
     val shutdownLock = new Object
 
@@ -117,7 +116,7 @@ object TestOffsetManager {
 
     def stats = {
       "Commit thread %d :: Error count: %d; Max:%f; Min: %f; Mean: %f; Commit count: %d"
-      .format(id, numErrors.get(), timer.max(), timer.min(), timer.mean(), numCommits.get())
+      .format(id, numErrors.get(), timer.getSnapshot().getMax(), timer.getSnapshot().getMin(), timer.getSnapshot().getMean(), numCommits.get())
     }
   }
 
@@ -125,7 +124,7 @@ object TestOffsetManager {
         extends ShutdownableThread("fetch-thread")
         with KafkaMetricsGroup {
 
-    private val timer = newTimer("fetch-thread", TimeUnit.MILLISECONDS, TimeUnit.SECONDS)
+    private val timer = newTimer("fetch-thread")
     private val fetchTimer = new KafkaTimer(timer)
 
     private val channels = mutable.Map[Int, BlockingChannel]()
@@ -192,7 +191,8 @@ object TestOffsetManager {
 
     def stats = {
       "Fetch thread :: Error count: %d; Max:%f; Min: %f; Mean: %f; Fetch count: %d"
-      .format(numErrors.get(), timer.max(), timer.min(), timer.mean(), timer.count())
+      .format(numErrors.get(), timer.getSnapshot().getMax(), timer.getSnapshot().getMin(),
+        timer.getSnapshot().getMean(), timer.getCount())
     }
   }
 

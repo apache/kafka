@@ -201,7 +201,7 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
 
     // wait until new leader is (uncleanly) elected
     waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, newLeaderOpt = Some(followerId))
-    assertEquals(1, followerServer.kafkaController.controllerContext.stats.uncleanLeaderElectionRate.count())
+    assertEquals(1, followerServer.kafkaController.controllerContext.stats.uncleanLeaderElectionRate.getCount())
 
     produceMessage(servers, topic, "third")
 
@@ -239,7 +239,7 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
 
     // verify that unclean election to non-ISR follower does not occur
     waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, newLeaderOpt = Some(-1))
-    assertEquals(0, followerServer.kafkaController.controllerContext.stats.uncleanLeaderElectionRate.count())
+    assertEquals(0, followerServer.kafkaController.controllerContext.stats.uncleanLeaderElectionRate.getCount())
 
     // message production and consumption should both fail while leader is down
     try {

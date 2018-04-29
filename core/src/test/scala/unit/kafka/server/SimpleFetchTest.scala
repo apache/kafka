@@ -167,8 +167,8 @@ class SimpleFetchTest {
   @Test
   def testReadFromLog() {
     val brokerTopicStats = new BrokerTopicStats
-    val initialTopicCount = brokerTopicStats.topicStats(topic).totalFetchRequestRate.count()
-    val initialAllTopicsCount = brokerTopicStats.allTopicsStats.totalFetchRequestRate.count()
+    val initialTopicCount = brokerTopicStats.topicStats(topic).totalFetchRequestRate.getCount()
+    val initialAllTopicsCount = brokerTopicStats.allTopicsStats.totalFetchRequestRate.getCount()
 
     val readCommittedRecords = replicaManager.readFromLocalLog(
       replicaId = Request.OrdinaryConsumerId,
@@ -197,7 +197,7 @@ class SimpleFetchTest {
     assertEquals("Reading any data can return messages up to the end of the log", recordToLEO,
       new SimpleRecord(firstRecord))
 
-    assertEquals("Counts should increment after fetch", initialTopicCount+2, brokerTopicStats.topicStats(topic).totalFetchRequestRate.count())
-    assertEquals("Counts should increment after fetch", initialAllTopicsCount+2, brokerTopicStats.allTopicsStats.totalFetchRequestRate.count())
+    assertEquals("Counts should increment after fetch", initialTopicCount+2, brokerTopicStats.topicStats(topic).totalFetchRequestRate.getCount())
+    assertEquals("Counts should increment after fetch", initialAllTopicsCount+2, brokerTopicStats.allTopicsStats.totalFetchRequestRate.getCount())
   }
 }

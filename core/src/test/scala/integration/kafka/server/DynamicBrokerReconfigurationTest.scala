@@ -26,8 +26,6 @@ import java.util.{Collections, Properties}
 import java.util.concurrent._
 import javax.management.ObjectName
 
-import com.yammer.metrics.Metrics
-import com.yammer.metrics.core.MetricName
 import kafka.admin.ConfigCommand
 import kafka.api.{KafkaSasl, SaslSetup}
 import kafka.coordinator.group.OffsetConfig
@@ -464,14 +462,13 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     verifyMarkPartitionsForTruncation()
   }
 
-  private def isProcessorMetric(metricName: MetricName): Boolean = {
-    val mbeanName = metricName.getMBeanName
-    mbeanName.contains(s"${Processor.NetworkProcessorMetricTag}=") || mbeanName.contains(s"${RequestChannel.ProcessorMetricTag}=")
+  private def isProcessorMetric(metricName: String): Boolean = {
+    metricName.contains(s"${Processor.NetworkProcessorMetricTag}=") || metricName.contains(s"${RequestChannel.ProcessorMetricTag}=")
   }
 
   private def clearLeftOverProcessorMetrics(): Unit = {
-    val metricsFromOldTests = Metrics.defaultRegistry.allMetrics.keySet.asScala.filter(isProcessorMetric)
-    metricsFromOldTests.foreach(Metrics.defaultRegistry.removeMetric)
+    val metricsFromOldTests = kafka.metrics.getKafkaMetrics().keySet.filter(isProcessorMetric)
+    metricsFromOldTests.foreach(kafka.metrics.removeMetric)
   }
 
   // Verify that metrics from processors that were removed have been deleted.
@@ -485,9 +482,9 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       .groupBy(_.tags.get(Processor.NetworkProcessorMetricTag))
     assertEquals(numProcessors, kafkaMetrics.size)
 
-    Metrics.defaultRegistry.allMetrics.keySet.asScala
+    kafka.metrics.getKafkaMetrics().keySet
       .filter(isProcessorMetric)
-      .groupBy(_.getName)
+      .groupBy(ObjectName.getInstance(_).getKeyProperty("name"))
       .foreach { case (name, set) => assertEquals(s"Metrics not deleted $name", numProcessors, set.size) }
   }
 

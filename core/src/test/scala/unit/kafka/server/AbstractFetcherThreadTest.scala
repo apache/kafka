@@ -17,8 +17,9 @@
 
 package kafka.server
 
+import javax.management.ObjectName
+
 import AbstractFetcherThread._
-import com.yammer.metrics.Metrics
 import kafka.cluster.BrokerEndPoint
 import kafka.server.AbstractFetcherThread.{FetchRequest, PartitionData}
 import kafka.utils.TestUtils
@@ -35,10 +36,7 @@ import scala.collection.{Map, Set, mutable}
 class AbstractFetcherThreadTest {
 
   @Before
-  def cleanMetricRegistry(): Unit = {
-    for (metricName <- Metrics.defaultRegistry().allMetrics().keySet().asScala)
-      Metrics.defaultRegistry().removeMetric(metricName)
-  }
+  def cleanMetricRegistry(): Unit = kafka.metrics.getKafkaMetrics().foreach(name => kafka.metrics.removeMetric(_))
 
   @Test
   def testMetricsRemovedOnShutdown() {
@@ -58,7 +56,7 @@ class AbstractFetcherThreadTest {
     fetcherThread.shutdown()
 
     // after shutdown, they should be gone
-    assertTrue(Metrics.defaultRegistry().allMetrics().isEmpty)
+    assertTrue(kafka.metrics.getKafkaMetrics().isEmpty)
   }
 
   @Test
@@ -84,7 +82,7 @@ class AbstractFetcherThreadTest {
     fetcherThread.shutdown()
   }
 
-  private def allMetricsNames = Metrics.defaultRegistry().allMetrics().asScala.keySet.map(_.getName)
+  private def allMetricsNames = kafka.metrics.getKafkaMetrics().keySet.map(ObjectName.getInstance(_).getKeyProperty("name"))
 
   class DummyFetchRequest(val offsets: collection.Map[TopicPartition, Long]) extends FetchRequest {
     override def isEmpty: Boolean = offsets.isEmpty

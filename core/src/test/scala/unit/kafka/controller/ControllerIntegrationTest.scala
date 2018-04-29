@@ -17,8 +17,7 @@
 
 package kafka.controller
 
-import com.yammer.metrics.Metrics
-import com.yammer.metrics.core.Timer
+import com.codahale.metrics.Timer
 import kafka.api.LeaderAndIsr
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.TestUtils
@@ -26,8 +25,6 @@ import kafka.zk.{PreferredReplicaElectionZNode, ZooKeeperTestHarness}
 import org.junit.{After, Before, Test}
 import org.junit.Assert.assertTrue
 import org.apache.kafka.common.TopicPartition
-
-import scala.collection.JavaConverters._
 
 class ControllerIntegrationTest extends ZooKeeperTestHarness {
   var servers = Seq.empty[KafkaServer]
@@ -136,7 +133,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     val controllerId = TestUtils.waitUntilControllerElected(zkClient)
 
     val metricName = s"kafka.controller:type=ControllerStats,name=${ControllerState.PartitionReassignment.rateAndTimeMetricName.get}"
-    val timerCount = timer(metricName).count
+    val timerCount = timer(metricName).getCount()
 
     val otherBrokerId = servers.map(_.config.brokerId).filter(_ != controllerId).head
     val tp = new TopicPartition("t", 0)
@@ -151,7 +148,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     TestUtils.waitUntilTrue(() => !zkClient.reassignPartitionsInProgress(),
       "failed to remove reassign partitions path after completion")
 
-    val updatedTimerCount = timer(metricName).count
+    val updatedTimerCount = timer(metricName).getCount()
     assertTrue(s"Timer count $updatedTimerCount should be greater than $timerCount", updatedTimerCount > timerCount)
   }
 
@@ -343,7 +340,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
   }
 
   private def timer(metricName: String): Timer = {
-    Metrics.defaultRegistry.allMetrics.asScala.filterKeys(_.getMBeanName == metricName).values.headOption
+    kafka.metrics.getKafkaMetrics().filterKeys(_ == metricName).values.headOption
       .getOrElse(fail(s"Unable to find metric $metricName")).asInstanceOf[Timer]
   }
 
