@@ -22,7 +22,7 @@ package kafka
 
 import javax.management.{MalformedObjectNameException, ObjectName}
 
-import com.codahale.metrics.jmx.{JmxReporter, ObjectNameFactory}
+import com.codahale.metrics.{JmxReporter, ObjectNameFactory}
 import com.codahale.metrics.{Metric, MetricRegistry}
 
 import scala.collection.JavaConverters._

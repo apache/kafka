@@ -70,7 +70,7 @@ versions += [
   kafka_10: "1.0.1",
   kafka_11: "1.1.0",
   lz4: "1.4.1",
-  metrics: "4.0.2",
+  metrics: "3.2.6",
   mavenArtifact: "3.5.3",
   // PowerMock 1.x doesn't support Java 9, so use PowerMock 2.0.0 beta
   powermock: "2.0.0-beta.5",
@@ -121,7 +121,6 @@ libs += [
   log4j: "log4j:log4j:$versions.log4j",
   lz4: "org.lz4:lz4-java:$versions.lz4",
   metrics: "io.dropwizard.metrics:metrics-core:$versions.metrics",
-  metricsJmx: "io.dropwizard.metrics:metrics-jmx:$versions.metrics",
   powermockJunit4: "org.powermock:powermock-module-junit4:$versions.powermock",
   powermockEasymock: "org.powermock:powermock-api-easymock:$versions.powermock",
   reflections: "org.reflections:reflections:$versions.reflections",
