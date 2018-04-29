@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.test;
 
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 
 import java.util.Collections;
@@ -49,7 +49,7 @@ public class MockProcessorNode<K, V> extends ProcessorNode<K, V> {
     }
 
     @Override
-    public void init(final ProcessorContext context) {
+    public void init(final InternalProcessorContext context) {
         super.init(context);
         initialized = true;
     }

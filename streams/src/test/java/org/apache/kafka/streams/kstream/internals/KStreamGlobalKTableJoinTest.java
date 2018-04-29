@@ -16,46 +16,46 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsBuilderTest;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
-import org.apache.kafka.test.KStreamTestDriver;
+import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.TestUtils;
+import org.junit.After;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.Collection;
+import java.util.Properties;
 import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
 
 public class KStreamGlobalKTableJoinTest {
 
-    final private String streamTopic = "streamTopic";
-    final private String globalTableTopic = "globalTableTopic";
-
-    final private Serde<Integer> intSerde = Serdes.Integer();
-    final private Serde<String> stringSerde = Serdes.String();
-    @Rule
-    public final KStreamTestDriver driver = new KStreamTestDriver();
-    private File stateDir = null;
+    private final String streamTopic = "streamTopic";
+    private final String globalTableTopic = "globalTableTopic";
+    private final Serde<Integer> intSerde = Serdes.Integer();
+    private final Serde<String> stringSerde = Serdes.String();
+    private TopologyTestDriver driver;
     private MockProcessorSupplier<Integer, String> processor;
     private final int[] expectedKeys = {0, 1, 2, 3};
     private StreamsBuilder builder;
 
     @Before
     public void setUp() throws IOException {
-        stateDir = TestUtils.tempDirectory("kafka-test");
 
         builder = new StreamsBuilder();
         final KStream<Integer, String> stream;
@@ -78,29 +78,46 @@ public class KStreamGlobalKTableJoinTest {
         };
         stream.join(table, keyMapper, MockValueJoiner.TOSTRING_JOINER).process(processor);
 
-        driver.setUp(builder, stateDir);
-        driver.setTime(0L);
+        final Properties props = new Properties();
+        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "kstream-global-ktable-join-test");
+        props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9091");
+        props.setProperty(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
+        props.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass().getName());
+        props.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+
+        driver = new TopologyTestDriver(builder.build(), props);
+    }
+
+    @After
+    public void cleanup() {
+        if (driver != null) {
+            driver.close();
+        }
+        driver = null;
     }
 
     private void pushToStream(final int messageCount, final String valuePrefix, final boolean includeForeignKey) {
+        final ConsumerRecordFactory<Integer, String> recordFactory = new ConsumerRecordFactory<>(new IntegerSerializer(), new StringSerializer());
         for (int i = 0; i < messageCount; i++) {
             String value = valuePrefix + expectedKeys[i];
             if (includeForeignKey) {
                 value = value + ",FKey" + expectedKeys[i];
             }
-            driver.process(streamTopic, expectedKeys[i], value);
+            driver.pipeInput(recordFactory.create(streamTopic, expectedKeys[i], value));
         }
     }
 
     private void pushToGlobalTable(final int messageCount, final String valuePrefix) {
+        final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
         for (int i = 0; i < messageCount; i++) {
-            driver.process(globalTableTopic, "FKey" + expectedKeys[i], valuePrefix + expectedKeys[i]);
+            driver.pipeInput(recordFactory.create(globalTableTopic, "FKey" + expectedKeys[i], valuePrefix + expectedKeys[i]));
         }
     }
 
     private void pushNullValueToGlobalTable(final int messageCount) {
+        final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
         for (int i = 0; i < messageCount; i++) {
-            driver.process(globalTableTopic, "FKey" + expectedKeys[i], null);
+            driver.pipeInput(recordFactory.create(globalTableTopic, "FKey" + expectedKeys[i], null));
         }
     }
 
