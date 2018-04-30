@@ -78,7 +78,7 @@ public class WorkerConfig extends AbstractConfig {
     public static final String HEADER_CONVERTER_CLASS_DEFAULT = SimpleHeaderConverter.class.getName();
 
     /**
-     * @deprecated As of 1.2.0
+     * @deprecated As of 2.0.0
      */
     @Deprecated
     public static final String INTERNAL_KEY_CONVERTER_CLASS_CONFIG = "internal.key.converter";
@@ -92,7 +92,7 @@ public class WorkerConfig extends AbstractConfig {
                     " Deprecated; will be removed in an upcoming version.";
 
     /**
-     * @deprecated As of 1.2.0
+     * @deprecated As of 2.0.0
      */
     @Deprecated
     public static final String INTERNAL_VALUE_CONVERTER_CLASS_CONFIG = "internal.value.converter";

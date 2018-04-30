@@ -248,7 +248,7 @@ public class Plugins {
 
                 // If they haven't explicitly specified values for internal.key.converter.schemas.enable
                 // or internal.value.converter.schemas.enable, we can safely default them to false
-                if (!converterConfig.containsKey(classPropertyName + "." + JsonConverterConfig.SCHEMAS_ENABLE_CONFIG)) {
+                if (!converterConfig.containsKey(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG)) {
                     converterConfig.put(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, false);
                 }
             }
