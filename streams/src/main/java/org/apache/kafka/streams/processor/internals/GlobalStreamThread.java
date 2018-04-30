@@ -24,9 +24,9 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LockException;
+import org.apache.kafka.streams.errors.ShutdownException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -104,6 +104,10 @@ public class GlobalStreamThread extends Thread {
             return equals(RUNNING);
         }
 
+        public boolean isStarting() {
+            return equals(CREATED);
+        }
+
         @Override
         public boolean isValidTransition(final ThreadStateTransitionValidator newState) {
             final State tmpState = (State) newState;
@@ -168,6 +172,12 @@ public class GlobalStreamThread extends Thread {
     public boolean stillRunning() {
         synchronized (stateLock) {
             return state.isRunning();
+        }
+    }
+
+    private boolean stillStarting() {
+        synchronized (stateLock) {
+            return state.isStarting();
         }
     }
 
@@ -264,7 +274,19 @@ public class GlobalStreamThread extends Thread {
 
     @Override
     public void run() {
-        final StateConsumer stateConsumer = initialize();
+        final StateConsumer stateConsumer;
+        try {
+            stateConsumer = initialize();
+        } catch (final ShutdownException e) {
+            log.info("Shutting down from initialization");
+            // Almost certainly, we arrived here because the state is already PENDING_SHUTDOWN, but it's harmless to
+            // just make sure
+            setState(State.PENDING_SHUTDOWN);
+            setState(State.DEAD);
+            streamsMetrics.removeAllThreadLevelSensors();
+            log.info("Shutdown complete");
+            return;
+        }
 
         if (stateConsumer == null) {
             // during initialization, the caller thread would wait for the state consumer
@@ -276,6 +298,7 @@ public class GlobalStreamThread extends Thread {
             setState(State.DEAD);
 
             log.warn("Error happened during initialization of the global state store; this thread has shutdown");
+            streamsMetrics.removeAllThreadLevelSensors();
 
             return;
         }
@@ -315,7 +338,14 @@ public class GlobalStreamThread extends Thread {
                 globalConsumer,
                 stateDirectory,
                 stateRestoreListener,
-                config);
+                config,
+                new GlobalStateManagerImpl.IsRunning() {
+                    @Override
+                    public boolean check() {
+                        return stillStarting() || stillRunning();
+                    }
+                }
+            );
 
             final GlobalProcessorContextImpl globalProcessorContext = new GlobalProcessorContextImpl(
                 config,
@@ -344,23 +374,11 @@ public class GlobalStreamThread extends Thread {
             final String errorMsg = "Could not lock global state directory. This could happen if multiple KafkaStreams " +
                 "instances are running on the same host using the same state directory.";
             log.error(errorMsg, fatalException);
-            startupException = new StreamsException(errorMsg, fatalException);
+            throw new StreamsException(errorMsg, fatalException);
         } catch (final StreamsException fatalException) {
-            startupException = fatalException;
-        } catch (final Exception fatalException) {
-            startupException = new StreamsException("Exception caught during initialization of GlobalStreamThread", fatalException);
-        }
-        return null;
-    }
-
-    @Override
-    public synchronized void start() {
-        super.start();
-        while (!stillRunning()) {
-            Utils.sleep(1);
-            if (startupException != null) {
-                throw startupException;
-            }
+            throw fatalException;
+        } catch (final RuntimeException fatalException) {
+            throw new StreamsException("Exception caught during initialization of GlobalStreamThread", fatalException);
         }
     }
 

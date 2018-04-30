@@ -1120,7 +1120,7 @@ public class StreamThread extends Thread {
     public void shutdown() {
         log.info("Informed to shut down");
         final State oldState = setState(State.PENDING_SHUTDOWN);
-        consumer.wakeup(); // gracefully interrupt the consumer if it's in the middle of something.
+        consumer.wakeup();
         restoreConsumer.wakeup();
         if (oldState == State.CREATED) {
             // The thread may not have been started. Take responsibility for shutting down

@@ -23,12 +23,14 @@ import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.errors.ShutdownException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.BatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
@@ -62,13 +64,15 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
     private InternalProcessorContext processorContext;
     private final int retries;
     private final long retryBackoffMs;
+    private final IsRunning isRunning;
 
     public GlobalStateManagerImpl(final LogContext logContext,
                                   final ProcessorTopology topology,
                                   final Consumer<byte[], byte[]> globalConsumer,
                                   final StateDirectory stateDirectory,
                                   final StateRestoreListener stateRestoreListener,
-                                  final StreamsConfig config) {
+                                  final StreamsConfig config,
+                                  final IsRunning isRunning) {
         super(stateDirectory.globalStateDir());
 
         this.log = logContext.logger(GlobalStateManagerImpl.class);
@@ -78,6 +82,11 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
         this.stateRestoreListener = stateRestoreListener;
         this.retries = config.getInt(StreamsConfig.RETRIES_CONFIG);
         this.retryBackoffMs = config.getLong(StreamsConfig.RETRY_BACKOFF_MS_CONFIG);
+        this.isRunning = isRunning;
+    }
+
+    public interface IsRunning {
+        boolean check();
     }
 
     @Override
@@ -202,6 +211,12 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
             try {
                 partitionInfos = globalConsumer.partitionsFor(sourceTopic);
                 break;
+            } catch (final WakeupException wakeupException) {
+                if (isRunning.check()) {
+                    throw new IllegalStateException("Got unexpected WakeupException during initialization.", wakeupException);
+                } else {
+                    throw new ShutdownException("Shutting down from fetching partitions");
+                }
             } catch (final TimeoutException retryableException) {
                 if (++attempts > retries) {
                     log.error("Failed to get partitions for topic {} after {} retry attempts due to timeout. " +
@@ -252,17 +267,18 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
 
             long offset = globalConsumer.position(topicPartition);
             final Long highWatermark = highWatermarks.get(topicPartition);
-            BatchingStateRestoreCallback
-                stateRestoreAdapter =
-                (BatchingStateRestoreCallback) ((stateRestoreCallback instanceof
-                                                     BatchingStateRestoreCallback)
-                                                ? stateRestoreCallback
-                                                : new WrappedBatchingStateRestoreCallback(stateRestoreCallback));
+            final BatchingStateRestoreCallback stateRestoreAdapter =
+                (BatchingStateRestoreCallback) ((stateRestoreCallback instanceof BatchingStateRestoreCallback)
+                    ? stateRestoreCallback
+                    : new WrappedBatchingStateRestoreCallback(stateRestoreCallback));
 
             stateRestoreListener.onRestoreStart(topicPartition, storeName, offset, highWatermark);
             long restoreCount = 0L;
 
             while (offset < highWatermark) {
+                if (!isRunning.check()) {
+                    throw new ShutdownException("Streams is not running (any more)");
+                }
                 try {
                     final ConsumerRecords<byte[], byte[]> records = poll(globalConsumer, 100);
                     final List<KeyValue<byte[], byte[]>> restoreRecords = new ArrayList<>();
