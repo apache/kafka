@@ -22,12 +22,13 @@ import org.apache.kafka.common.TopicPartitionRecordsStats;
 import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.GatheringByteChannel;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -40,6 +41,7 @@ import java.util.List;
  * </p>
  */
 public class LazyDownConversionRecords implements SerializableRecords {
+    private static final Logger log = LoggerFactory.getLogger(LazyDownConversionRecords.class);
     private final TopicPartition topicPartition;
     private final Records records;
     private final byte toMagic;
@@ -75,6 +77,7 @@ public class LazyDownConversionRecords implements SerializableRecords {
     @Override
     public long writeTo(GatheringByteChannel channel, long position, int length) throws IOException {
         if (position == 0) {
+            log.info("Initializing lazy down-conversion for {" + topicPartition + "} with length=" + length);
             recordsIterator = lazyDownConversionRecordsIterator(MAX_READ_SIZE);
             processingStats = new RecordsProcessingStats(0, 0, 0);
         }
@@ -87,19 +90,25 @@ public class LazyDownConversionRecords implements SerializableRecords {
                 ConvertedRecords recordsAndStats = recordsIterator.next();
                 convertedRecords = recordsAndStats.records();
                 processingStats.addToProcessingStats(recordsAndStats.recordsProcessingStats());
+                log.info("Got lazy converted records for {" + topicPartition + "} with length=" + convertedRecords.sizeInBytes());
             } else {
                 // We do not have any records left to down-convert. Construct a "fake" message for the length remaining.
                 // This message will be ignored by the consumer because its length will be past the length of maximum
                 // possible response size.
-                // TODO: check if this implementation is correct.
-                // TODO: there should be a better way to encapsulate this logic.
-                byte[] fakeMessage = new byte[length];
-                Arrays.fill(fakeMessage, Byte.MAX_VALUE);
-                ByteBuffer buffer = ByteBuffer.wrap(fakeMessage);
-                convertedRecords = MemoryRecords.readableRecords(buffer);
+                // DefaultRecordBatch =>
+                //      BaseOffset => Int64
+                //      Length => Int32
+                //      ...
+                log.info("Constructing fake message batch for topic-partition {" + topicPartition + "} of length " + length);
+                ByteBuffer fakeMessageBatch = ByteBuffer.allocate(length);
+                fakeMessageBatch.putLong(-1L);
+                fakeMessageBatch.putInt(length + 1);
+                fakeMessageBatch.clear();
+                convertedRecords = MemoryRecords.readableRecords(fakeMessageBatch);
             }
             convertedRecordsWriter = new RecordsWriter(convertedRecords);
         }
+
         return convertedRecordsWriter.writeTo(channel, length);
     }
 
