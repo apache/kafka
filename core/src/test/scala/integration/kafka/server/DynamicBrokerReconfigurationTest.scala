@@ -717,26 +717,6 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     verifyRemoveListener("SASL_PLAINTEXT", SecurityProtocol.SASL_PLAINTEXT, Seq("GSSAPI"))
   }
 
-  @Test
-   def testUpdateAlreadyRegisteredAdvertisedListeners(): Unit = {
-    val adminClient = adminClients.head
-
-    val server1 = servers(0)
-    val server2 = servers(1)
-
-    // update server1 listeners with server2 listeners
-    val resource = new ConfigResource(ConfigResource.Type.BROKER, server1.config.brokerId.toString)
-    val newListeners = server1.config.advertisedListeners.map { e =>
-      s"${e.listenerName.value}://${e.host}:${server2.boundPort(e.listenerName)}"
-    }.mkString(",")
-    val configEntry = new ConfigEntry(KafkaConfig.AdvertisedListenersProp, newListeners)
-    (resource, new Config(Collections.singleton(configEntry)))
-    val configs =  Map(resource -> new Config(Collections.singleton(configEntry))).asJava
-
-    val exception = intercept[ExecutionException](adminClient.alterConfigs(configs).values().get(resource).get)
-    assertTrue(exception.getCause.isInstanceOf[InvalidRequestException])
-  }
-
   private def verifyAddListener(listenerName: String, securityProtocol: SecurityProtocol,
                                 saslMechanisms: Seq[String]): Unit = {
     val config = servers.head.config
