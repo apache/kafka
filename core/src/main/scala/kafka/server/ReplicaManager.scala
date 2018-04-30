@@ -754,8 +754,8 @@ class ReplicaManager(val config: KafkaConfig,
           brokerTopicStats.topicStats(topicPartition.topic).messagesInRate.mark(numAppendedMessages)
           brokerTopicStats.allTopicsStats.messagesInRate.mark(numAppendedMessages)
 
-          trace(s"${records.sizeInBytes} written to log ${topicPartition.topic}-${topicPartition.partition} " +
-            s"beginning at offset ${info.firstOffset.getOrElse(-1)} and ending at offset ${info.lastOffset}")
+          trace(s"${records.sizeInBytes} written to log ${topicPartition} beginning at offset " +
+            s"${info.firstOffset.getOrElse(-1)} and ending at offset ${info.lastOffset}")
           (topicPartition, LogAppendResult(info))
         } catch {
           // NOTE: Failed produce requests metric is not incremented for known exceptions
