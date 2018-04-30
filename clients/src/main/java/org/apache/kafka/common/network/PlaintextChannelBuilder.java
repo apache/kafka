@@ -81,7 +81,9 @@ public class PlaintextChannelBuilder implements ChannelBuilder {
         @Override
         public KafkaPrincipal principal() {
             InetAddress clientAddress = transportLayer.socketChannel().socket().getInetAddress();
-            return principalBuilder.build(new PlaintextAuthenticationContext(clientAddress, listenerName));
+            // listenerName should only be null in Client mode
+            String listenerNameStr = listenerName != null ? listenerName.value() : null;
+            return principalBuilder.build(new PlaintextAuthenticationContext(clientAddress, listenerNameStr));
         }
 
         @Override

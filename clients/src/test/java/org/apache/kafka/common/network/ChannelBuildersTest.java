@@ -51,7 +51,7 @@ public class ChannelBuildersTest {
         assertTrue(OldPrincipalBuilder.configured);
 
         // test delegation
-        KafkaPrincipal principal = builder.build(new PlaintextAuthenticationContext(InetAddress.getLocalHost(), ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)));
+        KafkaPrincipal principal = builder.build(new PlaintextAuthenticationContext(InetAddress.getLocalHost(), SecurityProtocol.PLAINTEXT.name()));
         assertEquals(OldPrincipalBuilder.PRINCIPAL_NAME, principal.getName());
         assertEquals(KafkaPrincipal.USER_TYPE, principal.getPrincipalType());
     }

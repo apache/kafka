@@ -18,7 +18,6 @@ package org.apache.kafka.common.security.auth;
 
 import java.net.InetAddress;
 
-import org.apache.kafka.common.network.ListenerName;
 
 /**
  * An object representing contextual information from the authentication session. See
@@ -39,5 +38,5 @@ public interface AuthenticationContext {
     /**
      * Name of the listener used for the connection
      */
-    ListenerName listenerName();
+    String listenerName();
 }

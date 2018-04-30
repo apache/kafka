@@ -57,16 +57,6 @@ class ListenerAndPrincipalBuilderTest extends BaseRequestTest {
     }
     assertEquals("CUSTOM", ListenerAndPrincipalBuilderTest.lastListenerName)
   }
-
-  private def requestResponse(socket: Socket, clientId: String, correlationId: Int, requestBuilder: AbstractRequest.Builder[_ <: AbstractRequest]): Struct = {
-    val apiKey = requestBuilder.apiKey
-    val request = requestBuilder.build()
-    val header = new RequestHeader(apiKey, request.version, clientId, correlationId)
-    val response = requestAndReceive(socket, request.serialize(header).array)
-    val responseBuffer = skipResponseHeader(response)
-    apiKey.parseResponse(request.version, responseBuffer)
-  }
-
 }
 
 object ListenerAndPrincipalBuilderTest {
@@ -74,7 +64,7 @@ object ListenerAndPrincipalBuilderTest {
 
   class TestPrincipalBuilder extends KafkaPrincipalBuilder {
     override def build(context: AuthenticationContext): KafkaPrincipal = {
-      lastListenerName = context.listenerName.value
+      lastListenerName = context.listenerName
       KafkaPrincipal.ANONYMOUS
     }
   }

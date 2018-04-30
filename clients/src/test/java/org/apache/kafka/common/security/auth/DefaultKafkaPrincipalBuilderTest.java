@@ -18,7 +18,6 @@ package org.apache.kafka.common.security.auth;
 
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.network.Authenticator;
-import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder;
 import org.apache.kafka.common.security.kerberos.KerberosName;
@@ -54,7 +53,7 @@ public class DefaultKafkaPrincipalBuilderTest extends EasyMockSupport {
         DefaultKafkaPrincipalBuilder builder = DefaultKafkaPrincipalBuilder.fromOldPrincipalBuilder(authenticator,
                 transportLayer, oldPrincipalBuilder, null);
 
-        KafkaPrincipal principal = builder.build(new PlaintextAuthenticationContext(InetAddress.getLocalHost(), ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)));
+        KafkaPrincipal principal = builder.build(new PlaintextAuthenticationContext(InetAddress.getLocalHost(), SecurityProtocol.PLAINTEXT.name()));
         assertEquals(KafkaPrincipal.USER_TYPE, principal.getPrincipalType());
         assertEquals("foo", principal.getName());
 
@@ -65,7 +64,7 @@ public class DefaultKafkaPrincipalBuilderTest extends EasyMockSupport {
     @Test
     public void testReturnAnonymousPrincipalForPlaintext() throws Exception {
         DefaultKafkaPrincipalBuilder builder = new DefaultKafkaPrincipalBuilder(null);
-        assertEquals(KafkaPrincipal.ANONYMOUS, builder.build(new PlaintextAuthenticationContext(InetAddress.getLocalHost(), ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))));
+        assertEquals(KafkaPrincipal.ANONYMOUS, builder.build(new PlaintextAuthenticationContext(InetAddress.getLocalHost(), SecurityProtocol.PLAINTEXT.name())));
         builder.close();
     }
 
@@ -87,7 +86,7 @@ public class DefaultKafkaPrincipalBuilderTest extends EasyMockSupport {
         DefaultKafkaPrincipalBuilder builder = DefaultKafkaPrincipalBuilder.fromOldPrincipalBuilder(authenticator,
                 transportLayer, oldPrincipalBuilder, null);
 
-        KafkaPrincipal principal = builder.build(new SslAuthenticationContext(session, InetAddress.getLocalHost(), ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)));
+        KafkaPrincipal principal = builder.build(new SslAuthenticationContext(session, InetAddress.getLocalHost(), SecurityProtocol.PLAINTEXT.name()));
         assertEquals(KafkaPrincipal.USER_TYPE, principal.getPrincipalType());
         assertEquals("foo", principal.getName());
 
@@ -105,7 +104,7 @@ public class DefaultKafkaPrincipalBuilderTest extends EasyMockSupport {
 
         DefaultKafkaPrincipalBuilder builder = new DefaultKafkaPrincipalBuilder(null);
 
-        KafkaPrincipal principal = builder.build(new SslAuthenticationContext(session, InetAddress.getLocalHost(), ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)));
+        KafkaPrincipal principal = builder.build(new SslAuthenticationContext(session, InetAddress.getLocalHost(), SecurityProtocol.PLAINTEXT.name()));
         assertEquals(KafkaPrincipal.USER_TYPE, principal.getPrincipalType());
         assertEquals("foo", principal.getName());
 
@@ -125,7 +124,7 @@ public class DefaultKafkaPrincipalBuilderTest extends EasyMockSupport {
         DefaultKafkaPrincipalBuilder builder = new DefaultKafkaPrincipalBuilder(null);
 
         KafkaPrincipal principal = builder.build(new SaslAuthenticationContext(server,
-                SecurityProtocol.SASL_PLAINTEXT, InetAddress.getLocalHost(), ListenerName.forSecurityProtocol(SecurityProtocol.SASL_PLAINTEXT)));
+                SecurityProtocol.SASL_PLAINTEXT, InetAddress.getLocalHost(), SecurityProtocol.SASL_PLAINTEXT.name()));
         assertEquals(KafkaPrincipal.USER_TYPE, principal.getPrincipalType());
         assertEquals("foo", principal.getName());
 
@@ -148,7 +147,7 @@ public class DefaultKafkaPrincipalBuilderTest extends EasyMockSupport {
         DefaultKafkaPrincipalBuilder builder = new DefaultKafkaPrincipalBuilder(kerberosShortNamer);
 
         KafkaPrincipal principal = builder.build(new SaslAuthenticationContext(server,
-                SecurityProtocol.SASL_PLAINTEXT, InetAddress.getLocalHost(), ListenerName.forSecurityProtocol(SecurityProtocol.SASL_PLAINTEXT)));
+                SecurityProtocol.SASL_PLAINTEXT, InetAddress.getLocalHost(), SecurityProtocol.SASL_PLAINTEXT.name()));
         assertEquals(KafkaPrincipal.USER_TYPE, principal.getPrincipalType());
         assertEquals("foo", principal.getName());
 
