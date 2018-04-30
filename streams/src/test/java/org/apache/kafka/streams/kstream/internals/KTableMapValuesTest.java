@@ -16,27 +16,28 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.TopologyTestDriverWrapper;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.test.KStreamTestDriver;
+import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
-import org.apache.kafka.test.TestUtils;
-import org.junit.Before;
-import org.junit.Rule;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
 
-import java.io.File;
+import java.util.Properties;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -45,27 +46,19 @@ import static org.junit.Assert.assertTrue;
 
 public class KTableMapValuesTest {
 
-    private final Serde<String> stringSerde = Serdes.String();
-    private final Consumed<String, String> consumed = Consumed.with(stringSerde, stringSerde);
-    private final Produced<String, String> produced = Produced.with(stringSerde, stringSerde);
-    @Rule
-    public final KStreamTestDriver driver = new KStreamTestDriver();
-    private File stateDir = null;
-
-    @Before
-    public void setUp() {
-        stateDir = TestUtils.tempDirectory("kafka-test");
-    }
+    private final Consumed<String, String> consumed = Consumed.with(Serdes.String(), Serdes.String());
+    private final Produced<String, String> produced = Produced.with(Serdes.String(), Serdes.String());
+    private final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
+    private final Properties props = StreamsTestUtils.topologyTestConfig(Serdes.String(), Serdes.String());
 
     private void doTestKTable(final StreamsBuilder builder, final String topic1, final MockProcessorSupplier<String, Integer> supplier) {
-        driver.setUp(builder, stateDir, Serdes.String(), Serdes.String());
-
-        driver.process(topic1, "A", "1");
-        driver.process(topic1, "B", "2");
-        driver.process(topic1, "C", "3");
-        driver.process(topic1, "D", "4");
-        driver.flushState();
-        assertEquals(Utils.mkList("A:1", "B:2", "C:3", "D:4"), supplier.theCapturedProcessor().processed);
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            driver.pipeInput(recordFactory.create(topic1, "A", "1"));
+            driver.pipeInput(recordFactory.create(topic1, "B", "2"));
+            driver.pipeInput(recordFactory.create(topic1, "C", "3"));
+            driver.pipeInput(recordFactory.create(topic1, "D", "4"));
+            assertEquals(Utils.mkList("A:1", "B:2", "C:3", "D:4"), supplier.theCapturedProcessor().processed);
+        }
     }
 
     @Test
@@ -119,94 +112,91 @@ public class KTableMapValuesTest {
         final KTableValueGetterSupplier<String, Integer> getterSupplier3 = table3.valueGetterSupplier();
         final KTableValueGetterSupplier<String, String> getterSupplier4 = table4.valueGetterSupplier();
 
-        driver.setUp(builder, stateDir, Serdes.String(), Serdes.String());
-        final KTableValueGetter<String, String> getter1 = getterSupplier1.get();
-        getter1.init(driver.context());
-        final KTableValueGetter<String, Integer> getter2 = getterSupplier2.get();
-        getter2.init(driver.context());
-        final KTableValueGetter<String, Integer> getter3 = getterSupplier3.get();
-        getter3.init(driver.context());
-        final KTableValueGetter<String, String> getter4 = getterSupplier4.get();
-        getter4.init(driver.context());
+        try (final TopologyTestDriverWrapper driver = new TopologyTestDriverWrapper(builder.build(), props)) {
+            KTableValueGetter<String, String> getter1 = getterSupplier1.get();
+            getter1.init(driver.getProcessorContext(topic1));
+            KTableValueGetter<String, Integer> getter2 = getterSupplier2.get();
+            getter2.init(driver.getProcessorContext(topic1));
+            KTableValueGetter<String, Integer> getter3 = getterSupplier3.get();
+            getter3.init(driver.getProcessorContext(topic1));
+            KTableValueGetter<String, String> getter4 = getterSupplier4.get();
+            getter4.init(driver.getProcessorContext(topic1));
 
-        driver.process(topic1, "A", "01");
-        driver.process(topic1, "B", "01");
-        driver.process(topic1, "C", "01");
-        driver.flushState();
+            driver.pipeInput(recordFactory.create(topic1, "A", "01"));
+            driver.pipeInput(recordFactory.create(topic1, "B", "01"));
+            driver.pipeInput(recordFactory.create(topic1, "C", "01"));
 
-        assertEquals("01", getter1.get("A"));
-        assertEquals("01", getter1.get("B"));
-        assertEquals("01", getter1.get("C"));
+            assertEquals("01", getter1.get("A"));
+            assertEquals("01", getter1.get("B"));
+            assertEquals("01", getter1.get("C"));
 
-        assertEquals(new Integer(1), getter2.get("A"));
-        assertEquals(new Integer(1), getter2.get("B"));
-        assertEquals(new Integer(1), getter2.get("C"));
+            assertEquals(new Integer(1), getter2.get("A"));
+            assertEquals(new Integer(1), getter2.get("B"));
+            assertEquals(new Integer(1), getter2.get("C"));
 
-        assertNull(getter3.get("A"));
-        assertNull(getter3.get("B"));
-        assertNull(getter3.get("C"));
+            assertNull(getter3.get("A"));
+            assertNull(getter3.get("B"));
+            assertNull(getter3.get("C"));
 
-        assertEquals("01", getter4.get("A"));
-        assertEquals("01", getter4.get("B"));
-        assertEquals("01", getter4.get("C"));
+            assertEquals("01", getter4.get("A"));
+            assertEquals("01", getter4.get("B"));
+            assertEquals("01", getter4.get("C"));
 
-        driver.process(topic1, "A", "02");
-        driver.process(topic1, "B", "02");
-        driver.flushState();
+            driver.pipeInput(recordFactory.create(topic1, "A", "02"));
+            driver.pipeInput(recordFactory.create(topic1, "B", "02"));
 
-        assertEquals("02", getter1.get("A"));
-        assertEquals("02", getter1.get("B"));
-        assertEquals("01", getter1.get("C"));
+            assertEquals("02", getter1.get("A"));
+            assertEquals("02", getter1.get("B"));
+            assertEquals("01", getter1.get("C"));
 
-        assertEquals(new Integer(2), getter2.get("A"));
-        assertEquals(new Integer(2), getter2.get("B"));
-        assertEquals(new Integer(1), getter2.get("C"));
+            assertEquals(new Integer(2), getter2.get("A"));
+            assertEquals(new Integer(2), getter2.get("B"));
+            assertEquals(new Integer(1), getter2.get("C"));
 
-        assertEquals(new Integer(2), getter3.get("A"));
-        assertEquals(new Integer(2), getter3.get("B"));
-        assertNull(getter3.get("C"));
+            assertEquals(new Integer(2), getter3.get("A"));
+            assertEquals(new Integer(2), getter3.get("B"));
+            assertNull(getter3.get("C"));
 
-        assertEquals("02", getter4.get("A"));
-        assertEquals("02", getter4.get("B"));
-        assertEquals("01", getter4.get("C"));
+            assertEquals("02", getter4.get("A"));
+            assertEquals("02", getter4.get("B"));
+            assertEquals("01", getter4.get("C"));
 
-        driver.process(topic1, "A", "03");
-        driver.flushState();
+            driver.pipeInput(recordFactory.create(topic1, "A", "03"));
 
-        assertEquals("03", getter1.get("A"));
-        assertEquals("02", getter1.get("B"));
-        assertEquals("01", getter1.get("C"));
+            assertEquals("03", getter1.get("A"));
+            assertEquals("02", getter1.get("B"));
+            assertEquals("01", getter1.get("C"));
 
-        assertEquals(new Integer(3), getter2.get("A"));
-        assertEquals(new Integer(2), getter2.get("B"));
-        assertEquals(new Integer(1), getter2.get("C"));
+            assertEquals(new Integer(3), getter2.get("A"));
+            assertEquals(new Integer(2), getter2.get("B"));
+            assertEquals(new Integer(1), getter2.get("C"));
 
-        assertNull(getter3.get("A"));
-        assertEquals(new Integer(2), getter3.get("B"));
-        assertNull(getter3.get("C"));
+            assertNull(getter3.get("A"));
+            assertEquals(new Integer(2), getter3.get("B"));
+            assertNull(getter3.get("C"));
 
-        assertEquals("03", getter4.get("A"));
-        assertEquals("02", getter4.get("B"));
-        assertEquals("01", getter4.get("C"));
+            assertEquals("03", getter4.get("A"));
+            assertEquals("02", getter4.get("B"));
+            assertEquals("01", getter4.get("C"));
 
-        driver.process(topic1, "A", null);
-        driver.flushState();
+            driver.pipeInput(recordFactory.create(topic1, "A", null));
 
-        assertNull(getter1.get("A"));
-        assertEquals("02", getter1.get("B"));
-        assertEquals("01", getter1.get("C"));
+            assertNull(getter1.get("A"));
+            assertEquals("02", getter1.get("B"));
+            assertEquals("01", getter1.get("C"));
 
-        assertNull(getter2.get("A"));
-        assertEquals(new Integer(2), getter2.get("B"));
-        assertEquals(new Integer(1), getter2.get("C"));
+            assertNull(getter2.get("A"));
+            assertEquals(new Integer(2), getter2.get("B"));
+            assertEquals(new Integer(1), getter2.get("C"));
 
-        assertNull(getter3.get("A"));
-        assertEquals(new Integer(2), getter3.get("B"));
-        assertNull(getter3.get("C"));
+            assertNull(getter3.get("A"));
+            assertEquals(new Integer(2), getter3.get("B"));
+            assertNull(getter3.get("C"));
 
-        assertNull(getter4.get("A"));
-        assertEquals("02", getter4.get("B"));
-        assertEquals("01", getter4.get("C"));
+            assertNull(getter4.get("A"));
+            assertEquals("02", getter4.get("B"));
+            assertEquals("01", getter4.get("C"));
+        }
     }
 
     @Test
@@ -285,37 +275,34 @@ public class KTableMapValuesTest {
 
         final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
 
-        builder.build().addProcessor("proc", supplier, table2.name);
+        final Topology topology = builder.build().addProcessor("proc", supplier, table2.name);
 
-        driver.setUp(builder, stateDir);
+        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
 
-        final MockProcessor<String, Integer> proc = supplier.theCapturedProcessor();
+            final MockProcessor<String, Integer> proc = supplier.theCapturedProcessor();
 
-        assertFalse(table1.sendingOldValueEnabled());
-        assertFalse(table2.sendingOldValueEnabled());
+            assertFalse(table1.sendingOldValueEnabled());
+            assertFalse(table2.sendingOldValueEnabled());
 
-        driver.process(topic1, "A", "01");
-        driver.process(topic1, "B", "01");
-        driver.process(topic1, "C", "01");
-        driver.flushState();
+            driver.pipeInput(recordFactory.create(topic1, "A", "01"));
+            driver.pipeInput(recordFactory.create(topic1, "B", "01"));
+            driver.pipeInput(recordFactory.create(topic1, "C", "01"));
 
-        proc.checkAndClearProcessResult("A:(1<-null)", "B:(1<-null)", "C:(1<-null)");
+            proc.checkAndClearProcessResult("A:(1<-null)", "B:(1<-null)", "C:(1<-null)");
 
-        driver.process(topic1, "A", "02");
-        driver.process(topic1, "B", "02");
-        driver.flushState();
+            driver.pipeInput(recordFactory.create(topic1, "A", "02"));
+            driver.pipeInput(recordFactory.create(topic1, "B", "02"));
 
-        proc.checkAndClearProcessResult("A:(2<-null)", "B:(2<-null)");
+            proc.checkAndClearProcessResult("A:(2<-null)", "B:(2<-null)");
 
-        driver.process(topic1, "A", "03");
-        driver.flushState();
+            driver.pipeInput(recordFactory.create(topic1, "A", "03"));
 
-        proc.checkAndClearProcessResult("A:(3<-null)");
+            proc.checkAndClearProcessResult("A:(3<-null)");
 
-        driver.process(topic1, "A", null);
-        driver.flushState();
+            driver.pipeInput(recordFactory.create(topic1, "A", null));
 
-        proc.checkAndClearProcessResult("A:(null<-null)");
+            proc.checkAndClearProcessResult("A:(null<-null)");
+        }
     }
 
     @Test
@@ -340,34 +327,31 @@ public class KTableMapValuesTest {
 
         builder.build().addProcessor("proc", supplier, table2.name);
 
-        driver.setUp(builder, stateDir);
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
 
-        final MockProcessor<String, Integer> proc = supplier.theCapturedProcessor();
+            final MockProcessor<String, Integer> proc = supplier.theCapturedProcessor();
 
-        assertTrue(table1.sendingOldValueEnabled());
-        assertTrue(table2.sendingOldValueEnabled());
+            assertTrue(table1.sendingOldValueEnabled());
+            assertTrue(table2.sendingOldValueEnabled());
 
-        driver.process(topic1, "A", "01");
-        driver.process(topic1, "B", "01");
-        driver.process(topic1, "C", "01");
-        driver.flushState();
+            driver.pipeInput(recordFactory.create(topic1, "A", "01"));
+            driver.pipeInput(recordFactory.create(topic1, "B", "01"));
+            driver.pipeInput(recordFactory.create(topic1, "C", "01"));
 
-        proc.checkAndClearProcessResult("A:(1<-null)", "B:(1<-null)", "C:(1<-null)");
+            proc.checkAndClearProcessResult("A:(1<-null)", "B:(1<-null)", "C:(1<-null)");
 
-        driver.process(topic1, "A", "02");
-        driver.process(topic1, "B", "02");
-        driver.flushState();
+            driver.pipeInput(recordFactory.create(topic1, "A", "02"));
+            driver.pipeInput(recordFactory.create(topic1, "B", "02"));
 
-        proc.checkAndClearProcessResult("A:(2<-1)", "B:(2<-1)");
+            proc.checkAndClearProcessResult("A:(2<-1)", "B:(2<-1)");
 
-        driver.process(topic1, "A", "03");
-        driver.flushState();
+            driver.pipeInput(recordFactory.create(topic1, "A", "03"));
 
-        proc.checkAndClearProcessResult("A:(3<-2)");
+            proc.checkAndClearProcessResult("A:(3<-2)");
 
-        driver.process(topic1, "A", null);
-        driver.flushState();
+            driver.pipeInput(recordFactory.create(topic1, "A", null));
 
-        proc.checkAndClearProcessResult("A:(null<-3)");
+            proc.checkAndClearProcessResult("A:(null<-3)");
+        }
     }
 }
