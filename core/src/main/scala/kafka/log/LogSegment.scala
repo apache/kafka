@@ -28,7 +28,7 @@ import kafka.utils._
 import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.record.FileRecords.LogOffsetPosition
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{Time, OperatingSystem}
 
 import scala.collection.JavaConverters._
 import scala.math._
@@ -410,6 +410,12 @@ class LogSegment private[log] (val log: FileRecords,
    * IOException from this method should be handled by the caller
    */
   def changeFileSuffixes(oldSuffix: String, newSuffix: String) {
+        if (OperatingSystem.IS_WINDOWS) {
+      log.close()
+       offsetIndex.forceUnmap() 
+       timeIndex.forceUnmap()
+       txnIndex.close()
+    }
     log.renameTo(new File(CoreUtils.replaceSuffix(log.file.getPath, oldSuffix, newSuffix)))
     offsetIndex.renameTo(new File(CoreUtils.replaceSuffix(offsetIndex.file.getPath, oldSuffix, newSuffix)))
     timeIndex.renameTo(new File(CoreUtils.replaceSuffix(timeIndex.file.getPath, oldSuffix, newSuffix)))
