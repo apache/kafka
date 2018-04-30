@@ -100,6 +100,7 @@
     </ul>
 
     <!-- TODO: verify release verion and update `id` and `href` attributes (also at other places that link to this headline) -->
+    
     <h3><a id="streams_api_changes_120" href="#streams_api_changes_120">Streams API changes in 1.2.0</a></h3>
     <p>
         We have removed the <code>skippedDueToDeserializationError-rate</code> and <code>skippedDueToDeserializationError-total</code> metrics.
@@ -156,7 +157,10 @@
       The new class <code>To</code> allows you to send records to all or specific downstream processors by name and to set the timestamp for the output record.
       Forwarding based on child index is not supported in the new API any longer.
     </p>
-
+    <p>
+        <a href="https://cwiki.apache.org/confluence/x/DVyHB">KIP-284</a> changed the retention time for repartition topics by setting its default value to <code>Long.MAX_VALUE</code>.
+        Instead of relying on data retention Kafka Streams uses the new purge data API to delete consumed data from those topics and to keep used storage small now.
+    </p>
     <p>
       Kafka Streams DSL for Scala is a new Kafka Streams client library available for developers authoring Kafka Streams applications in Scala.  It wraps core Kafka Streams DSL types to make it easier to call when
       interoperating with Scala code.  For example, it includes higher order functions as parameters for transformations avoiding the need anonymous classes in Java 7 or experimental SAM type conversions in Scala 2.11, automatic conversion between Java and Scala collection types, a way
