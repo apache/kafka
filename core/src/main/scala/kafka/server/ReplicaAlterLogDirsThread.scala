@@ -204,14 +204,14 @@ class ReplicaAlterLogDirsThread(name: String,
                 // upgrade, or if this broker is new).
                 // to be safe, we truncate to min of start offset and leader's end offset
                 val offsetToTruncateTo = min(partitionStates.stateValue(topicPartition).fetchOffset, epochOffset.endOffset)
-                finalFetchLeaderEpochOffset(offsetToTruncateTo, futureReplica, isFutureReplica = true)
+                finalFetchLeaderEpochOffset(offsetToTruncateTo, epochOffset.endOffset, futureReplica, isFutureReplica = true)
               } else if (futureLeaderEpoch != epochOffset.leaderEpoch) {
                 // the replica does not know about the epoch that leader replied with
                 val intermediateOffsetToTruncateTo = min(futureEndOffset, futureReplica.logEndOffset.messageOffset)
                 OffsetTruncationState(intermediateOffsetToTruncateTo, truncationCompleted = false)
               } else {
                 val offsetToTruncateTo = min(futureEndOffset, epochOffset.endOffset)
-                finalFetchLeaderEpochOffset(offsetToTruncateTo, futureReplica, isFutureReplica = true)
+                finalFetchLeaderEpochOffset(offsetToTruncateTo, epochOffset.endOffset, futureReplica, isFutureReplica = true)
               }
             }
 

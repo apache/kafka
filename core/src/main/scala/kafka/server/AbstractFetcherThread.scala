@@ -292,13 +292,15 @@ abstract class AbstractFetcherThread(name: String,
    * Called from ReplicaFetcherThread and ReplicaAlterLogDirsThread maybeTruncate when
    * 'offsetToTruncateTo' is the final offset to truncate to.
    * @param offsetToTruncateTo   Final offset to truncate to
+   * @param offsetFromLeader     Offset received from the leader, could be same as
+   *                             offsetToTruncateTo, this parameter is used only for logging
    * @param replica              Follower's replica, which is either local replica (ReplicaFetcherThread)
    *                             or future replica (ReplicaAlterLogDirsThread)
    * @return                     Log end offset if given 'offsetToTruncateTo' is equal or larger
    *                             than log end offset and logs the message that truncation is not
    *                             needed. Otherwise, returns given 'offsetToTruncateTo'
    */
-  def finalFetchLeaderEpochOffset(offsetToTruncateTo: Long, replica: Replica, isFutureReplica: Boolean = false): OffsetTruncationState = {
+  def finalFetchLeaderEpochOffset(offsetToTruncateTo: Long, offsetFromLeader: Long, replica: Replica, isFutureReplica: Boolean = false): OffsetTruncationState = {
     val fetchOffset =
       if (offsetToTruncateTo >= replica.logEndOffset.messageOffset) {
         val logEndOffset = replica.logEndOffset.messageOffset
@@ -309,7 +311,7 @@ abstract class AbstractFetcherThread(name: String,
           else
             "follower"
         info(
-          s"Based on $followerName's leader epoch, leader replied with an offset $logEndOffset >= the " +
+          s"Based on $followerName's leader epoch, leader replied with an offset $offsetFromLeader. Min(leader offset, leader epoch end offset on the follower) $offsetToTruncateTo >= the " +
           s"$followerName's log end offset $logEndOffset in ${replica.topicPartition}. No truncation needed.")
         logEndOffset
       } else

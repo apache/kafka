@@ -67,7 +67,7 @@ class LeaderEpochFileCacheTest {
     leo = 14
 
     //Then
-    assertEquals((leo, 14), cache.endOffsetFor(2))
+    assertEquals((2, leo), cache.endOffsetFor(2))
   }
 
   @Test

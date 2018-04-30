@@ -318,7 +318,7 @@ class ReplicaFetcherThread(name: String,
               // request/response
               warn(s"Based on follower's leader epoch, leader replied with an unknown leader epoch in ${replica.topicPartition}. " +
                    s"The leader's offset only ${epochOffset.endOffset} will be used for truncation.")
-              finalFetchLeaderEpochOffset(epochOffset.endOffset, replica)
+              finalFetchLeaderEpochOffset(epochOffset.endOffset, epochOffset.endOffset, replica)
             } else {
               // get (leader epoch, end offset) pair that corresponds to the largest leader epoch
               // less than or equal to the requested epoch.
@@ -331,7 +331,7 @@ class ReplicaFetcherThread(name: String,
                 warn(s"Based on follower's leader epoch, leader replied with epoch ${epochOffset.leaderEpoch} " +
                      s"below any follower's tracked epochs for ${replica.topicPartition}. " +
                      s"The leader's offset only ${epochOffset.endOffset} will be used for truncation.")
-                finalFetchLeaderEpochOffset(epochOffset.endOffset, replica)
+                finalFetchLeaderEpochOffset(epochOffset.endOffset, epochOffset.endOffset, replica)
               } else if (replicaLeaderEpoch != epochOffset.leaderEpoch) {
                 // the replica does not know about the epoch that leader replied with
                 // we truncate to the end offset of the largest epoch that is smaller than the
@@ -343,7 +343,7 @@ class ReplicaFetcherThread(name: String,
                 OffsetTruncationState(intermediateOffsetToTruncateTo, truncationCompleted = false)
               } else {
                 val offsetToTruncateTo = min(replicaEndOffset, epochOffset.endOffset)
-                finalFetchLeaderEpochOffset(offsetToTruncateTo, replica)
+                finalFetchLeaderEpochOffset(offsetToTruncateTo, epochOffset.endOffset, replica)
               }
             }
 
