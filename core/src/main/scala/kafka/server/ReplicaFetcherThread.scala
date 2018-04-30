@@ -287,14 +287,21 @@ class ReplicaFetcherThread(name: String,
   }
 
   /**
-    * - Truncate the log to the leader's offset for each partition's epoch.
-    * - If the leader's offset is greater, we stick with the Log End Offset
-    *   otherwise we truncate to the leaders offset.
-    * - If the leader replied with undefined epoch offset we must use the high watermark
-    * - If the leader replied with leader epoch not known to this follower, we truncate to the
-    *   end offset of the largest epoch that is smaller than the epoch the leader replied with,
-    *   and send offset for leader epoch request with that leader epoch.
-    */
+   * Truncate the log for each partition's epoch based on leader's returned epoch and offset.
+   *  -- If the leader replied with undefined epoch offset, we must use the watermark. This can
+   *  happen if 1) the leader is on the protocol version < KAFKA_0_11_0_IV2; 2) the follower
+   *  requested leader epoch < the first leader epoch known to the leader.
+   *  -- If the leader replied with the valid offset but undefined leader epoch, we truncate to
+   *  leader's offset if it is lower than follower's Log End Offset. This may happen if the
+   *  leader in on the protocol version < KAFKA_1_1_IV0
+   *  -- If the leader replied with leader epoch not known to the follower, we truncate to the
+   *  end offset of the largest epoch that is smaller than the epoch the leader replied with, and
+   *  send offset for leader epoch request with that leader epoch. In a more rare case, where the
+   *  follower was not tracking epochs smaller than the epoch the leader replied with, we
+   *  truncate the leader's offset (and do not send any more leader epoch requesrs).
+   *  -- Otherwise, truncate to min(leader's offset, end offset on the follower for epoch that
+   *  leader replied with, follower's Log End Offset).
+   */
   override def maybeTruncate(fetchedEpochs: Map[TopicPartition, EpochEndOffset]): ResultWithPartitions[Map[TopicPartition, OffsetTruncationState]] = {
     val fetchOffsets = scala.collection.mutable.HashMap.empty[TopicPartition, OffsetTruncationState]
     val partitionsWithError = mutable.Set[TopicPartition]()
@@ -310,6 +317,7 @@ class ReplicaFetcherThread(name: String,
         } else {
           val offsetTruncationState =
             if (epochOffset.endOffset == UNDEFINED_EPOCH_OFFSET) {
+              // truncate to initial offset which is the high watermark
               warn(s"Based on follower's leader epoch, leader replied with an unknown offset in ${replica.topicPartition}. " +
                 s"The initial fetch offset ${partitionStates.stateValue(tp).fetchOffset} will be used for truncation.")
               OffsetTruncationState(partitionStates.stateValue(tp).fetchOffset, truncationCompleted = true)
@@ -325,7 +333,7 @@ class ReplicaFetcherThread(name: String,
               val (replicaLeaderEpoch, replicaEndOffset) = replica.epochs.get.endOffsetFor (epochOffset.leaderEpoch)
               if (replicaEndOffset == UNDEFINED_EPOCH_OFFSET) {
                 // This can happen if replica was not tracking offsets at that point (before the
-                // upgrade, or if this broker is new). Since the leader replied with epoch <=
+                // upgrade, or if this broker is new). Since the leader replied with epoch <
                 // requested epoch from follower, so should be safe to truncate to leader's
                 // offset (this is the same behavior as post-KIP-101 and pre-KIP-279)
                 warn(s"Based on follower's leader epoch, leader replied with epoch ${epochOffset.leaderEpoch} " +
