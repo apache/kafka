@@ -1327,14 +1327,14 @@ project(':connect:runtime') {
   archivesBaseName = "connect-runtime"
 
   dependencies {
-    compileOnly project(':connect:json')
-    compileOnly project(':connect:transforms')
 
     compile project(':connect:api')
     compile project(':clients')
     compile project(':tools')
-    compile libs.slf4jApi
+    compileOnly project(':connect:json')
+    compileOnly project(':connect:transforms')
 
+    compile libs.slf4jApi
     compile libs.jacksonJaxrsJsonProvider
     compile libs.jerseyContainerServlet
     compile libs.jaxbApi // Jersey dependency that was available in the JDK before Java 9

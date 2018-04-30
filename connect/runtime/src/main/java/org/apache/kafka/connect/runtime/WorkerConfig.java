@@ -24,6 +24,8 @@ import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.connect.json.JsonConverter;
+import org.apache.kafka.connect.json.JsonConverterConfig;
+import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.SimpleHeaderConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -104,6 +106,8 @@ public class WorkerConfig extends AbstractConfig {
                     " This setting controls the format used for internal bookkeeping data used by the framework, such as" +
                     " configs and offsets, so users can typically use any functioning Converter implementation." +
                     " Deprecated; will be removed in an upcoming version.";
+
+    private static final Class<? extends Converter> INTERNAL_CONVERTER_DEFAULT = JsonConverter.class;
 
     public static final String TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG
             = "task.shutdown.graceful.timeout.ms";
@@ -204,9 +208,9 @@ public class WorkerConfig extends AbstractConfig {
                         Importance.HIGH, KEY_CONVERTER_CLASS_DOC)
                 .define(VALUE_CONVERTER_CLASS_CONFIG, Type.CLASS,
                         Importance.HIGH, VALUE_CONVERTER_CLASS_DOC)
-                .define(INTERNAL_KEY_CONVERTER_CLASS_CONFIG, Type.CLASS, JsonConverter.class,
+                .define(INTERNAL_KEY_CONVERTER_CLASS_CONFIG, Type.CLASS, INTERNAL_CONVERTER_DEFAULT,
                         Importance.LOW, INTERNAL_KEY_CONVERTER_CLASS_DOC)
-                .define(INTERNAL_VALUE_CONVERTER_CLASS_CONFIG, Type.CLASS, JsonConverter.class,
+                .define(INTERNAL_VALUE_CONVERTER_CLASS_CONFIG, Type.CLASS, INTERNAL_CONVERTER_DEFAULT,
                         Importance.LOW, INTERNAL_VALUE_CONVERTER_CLASS_DOC)
                 .define(TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG, Type.LONG,
                         TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_DEFAULT, Importance.LOW,
@@ -253,19 +257,58 @@ public class WorkerConfig extends AbstractConfig {
                         Importance.LOW, HEADER_CONVERTER_CLASS_DOC);
     }
 
-    private void logDeprecationWarnings(Map<String, String> props) {
+    private void logInternalConverterDeprecationWarnings(Map<String, String> props) {
         String[] deprecatedConfigs = new String[] {
             INTERNAL_KEY_CONVERTER_CLASS_CONFIG,
             INTERNAL_VALUE_CONVERTER_CLASS_CONFIG
         };
         for (String config : deprecatedConfigs) {
             if (props.containsKey(config)) {
-                log.warn("Configuration {} is deprecated and will be removed in an upcoming version", config);
+                if (INTERNAL_CONVERTER_DEFAULT.equals(getClass(config))) {
+                    log.info(
+                        "Configuration {} is deprecated and will be removed in an upcoming release. "
+                            + "This value matches the current default, so it can be removed without concern.",
+                        config
+                    );
+                } else {
+                    log.warn(
+                        "Configuration {} is deprecated and will be removed in an upcoming release. "
+                            + "The current value '{}' does NOT match the default of {}, and behavior may change when removed.",
+                        config,
+                        getClass(config).getCanonicalName(),
+                        INTERNAL_CONVERTER_DEFAULT.getCanonicalName()
+                    );
+                }
             }
 
-            for (String prop : props.keySet()) {
+            for (Map.Entry<String, String> propEntry : props.entrySet()) {
+                String prop = propEntry.getKey();
                 if (prop.startsWith(config + ".")) {
-                    log.warn("Configuration property '{}' (along with all configuration for {}) is deprecated and will be removed in an upcoming version", prop, config);
+                    if ((config + "." + JsonConverterConfig.SCHEMAS_ENABLE_CONFIG).equals(prop)) {
+                        if (Boolean.FALSE.toString().equals(propEntry.getValue())) {
+                            log.info(
+                                "Configuration {} (along with all configuration for {}) is deprecated and will be removed in an upcoming release. "
+                                    + "This value matches the current default, so it can be removed without concern.",
+                                prop,
+                                config
+                            );
+                        } else {
+                            log.warn(
+                                "Configuration {} (along with all configuration for {}) is deprecated and will be removed in an upcoming release. "
+                                    + "The current value '{}' does NOT match the default of false, and behavior may change when removed.",
+                                prop,
+                                config,
+                                get(prop)
+                            );
+                        }
+                    } else {
+                        log.warn(
+                            "Configuration property '{}' (along with all configuration for {}) is deprecated and will be removed in an upcoming release. "
+                                + "The current value has no default, and behavior may change when removed.",
+                            prop,
+                            config
+                        );
+                    }
                 }
             }
         }
@@ -285,6 +328,6 @@ public class WorkerConfig extends AbstractConfig {
 
     public WorkerConfig(ConfigDef definition, Map<String, String> props) {
         super(definition, props);
-        logDeprecationWarnings(props);
+        logInternalConverterDeprecationWarnings(props);
     }
 }
