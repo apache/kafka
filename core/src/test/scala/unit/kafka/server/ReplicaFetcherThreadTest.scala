@@ -203,8 +203,10 @@ class ReplicaFetcherThreadTest {
     thread.doWork()
 
     //We should have truncated to the offsets in the response
-    assertTrue(truncateToCapture.getValues.asScala.contains(156))
-    assertTrue(truncateToCapture.getValues.asScala.contains(172))
+    assertTrue("Expected offset 156 in captured truncation offsets " + truncateToCapture.getValues,
+               truncateToCapture.getValues.asScala.contains(156))
+    assertTrue("Expected offset 172 in captured truncation offsets " + truncateToCapture.getValues,
+               truncateToCapture.getValues.asScala.contains(172))
   }
 
   @Test
@@ -253,8 +255,10 @@ class ReplicaFetcherThreadTest {
     thread.doWork()
 
     //We should have truncated to the offsets in the response
-    assertTrue(truncateToCapture.getValues.asScala.contains(156))
-    assertTrue(truncateToCapture.getValues.asScala.contains(initialLEO))
+    assertTrue("Expected offset 156 in captured truncation offsets " + truncateToCapture.getValues,
+               truncateToCapture.getValues.asScala.contains(156))
+    assertTrue("Expected offset " + initialLEO + " in captured truncation offsets " + truncateToCapture.getValues,
+               truncateToCapture.getValues.asScala.contains(initialLEO))
   }
 
   @Test
@@ -317,9 +321,71 @@ class ReplicaFetcherThreadTest {
 
 
     //We should have truncated to the offsets in the second response
-    assertTrue("Capture trancate to values " + truncateToCapture.getValues,
+    assertTrue("Expected offset 102 in captured truncation offsets " + truncateToCapture.getValues,
                truncateToCapture.getValues.asScala.contains(102))
-    assertTrue(truncateToCapture.getValues.asScala.contains(102))
+    assertTrue("Expected offset 101 in captured truncation offsets " + truncateToCapture.getValues,
+               truncateToCapture.getValues.asScala.contains(101))
+  }
+
+  @Test
+  def shouldUseLeaderEndOffsetIfInterBrokerVersionBelow20(): Unit = {
+
+    // Create a capture to track what partitions/offsets are truncated
+    val truncateToCapture: Capture[Long] = newCapture(CaptureType.ALL)
+
+    val props = TestUtils.createBrokerConfig(1, "localhost:1234")
+    props.put(KafkaConfig.InterBrokerProtocolVersionProp, "0.11.0")
+    val config = KafkaConfig.fromProps(props)
+
+    // Setup all dependencies
+    val quota = createNiceMock(classOf[ReplicationQuotaManager])
+    val leaderEpochs = createNiceMock(classOf[LeaderEpochCache])
+    val logManager = createMock(classOf[LogManager])
+    val replicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
+    val replica = createNiceMock(classOf[Replica])
+    val partition = createMock(classOf[Partition])
+    val replicaManager = createMock(classOf[ReplicaManager])
+
+    val initialLEO = 200
+
+    // Stubs
+    expect(partition.truncateTo(capture(truncateToCapture), anyBoolean())).anyTimes()
+    expect(replica.epochs).andReturn(Some(leaderEpochs)).anyTimes()
+    expect(replica.logEndOffset).andReturn(new LogOffsetMetadata(initialLEO)).anyTimes()
+    expect(leaderEpochs.latestEpoch).andReturn(5)
+    expect(leaderEpochs.endOffsetFor(4)).andReturn((3, 120)).anyTimes()
+    expect(leaderEpochs.endOffsetFor(3)).andReturn((3, 120)).anyTimes()
+    expect(replicaManager.logManager).andReturn(logManager).anyTimes()
+    expect(replicaManager.replicaAlterLogDirsManager).andReturn(replicaAlterLogDirsManager).anyTimes()
+    stub(replica, partition, replicaManager)
+
+    replay(leaderEpochs, replicaManager, logManager, quota, replica, partition)
+
+    // Define the offsets for the OffsetsForLeaderEpochResponse
+    val offsets = Map(t1p0 -> new EpochEndOffset(4, 155), t1p1 -> new EpochEndOffset(4, 143)).asJava
+
+    // Create the fetcher thread
+    val mockNetwork = new ReplicaFetcherMockBlockingSend(offsets, brokerEndPoint, new SystemTime())
+    val thread = new ReplicaFetcherThread("bob", 0, brokerEndPoint, config, replicaManager, new Metrics(), new SystemTime(), quota, Some(mockNetwork))
+    thread.addPartitions(Map(t1p0 -> 0, t1p1 -> 0))
+
+    // Loop 1 -- both topic partitions will truncate to leader offset even though they don't know
+    // about leader epoch
+    thread.doWork()
+    assertEquals(1, mockNetwork.epochFetchCount)
+    assertEquals(1, mockNetwork.fetchCount)
+
+    //Loop 2 we should not fetch epochs
+    thread.doWork()
+    assertEquals(1, mockNetwork.epochFetchCount)
+    assertEquals(2, mockNetwork.fetchCount)
+
+
+    //We should have truncated to the offsets in the first response
+    assertTrue("Expected offset 155 in captured truncation offsets " + truncateToCapture.getValues,
+               truncateToCapture.getValues.asScala.contains(155))
+    assertTrue("Expected offset 143 in captured truncation offsets " + truncateToCapture.getValues,
+               truncateToCapture.getValues.asScala.contains(143))
   }
 
   @Test
