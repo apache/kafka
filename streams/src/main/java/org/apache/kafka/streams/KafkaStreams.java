@@ -876,10 +876,6 @@ public class KafkaStreams {
                         thread.setStateListener(null);
                         thread.shutdown();
                     }
-                    if (globalStreamThread != null) {
-                        globalStreamThread.setStateListener(null);
-                        globalStreamThread.shutdown();
-                    }
 
                     for (final StreamThread thread : threads) {
                         try {
@@ -890,6 +886,12 @@ public class KafkaStreams {
                             Thread.currentThread().interrupt();
                         }
                     }
+
+                    if (globalStreamThread != null) {
+                        globalStreamThread.setStateListener(null);
+                        globalStreamThread.shutdown();
+                    }
+
                     if (globalStreamThread != null && !globalStreamThread.stillRunning()) {
                         try {
                             globalStreamThread.join();
