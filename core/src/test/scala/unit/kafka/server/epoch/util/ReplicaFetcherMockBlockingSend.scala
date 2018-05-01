@@ -39,14 +39,14 @@ class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, Epoc
   var fetchCount = 0
   var epochFetchCount = 0
   var callback: Option[() => Unit] = None
-  var updatedOffsetsOpt: Option[java.util.Map[TopicPartition, EpochEndOffset]] = None
+  var currentOffsets: java.util.Map[TopicPartition, EpochEndOffset] = offsets
 
   def setEpochRequestCallback(postEpochFunction: () => Unit){
     callback = Some(postEpochFunction)
   }
 
   def setOffsetsForNextResponse(newOffsets: java.util.Map[TopicPartition, EpochEndOffset]): Unit = {
-    updatedOffsetsOpt = Some(newOffsets)
+    currentOffsets = newOffsets
   }
 
   override def sendRequest(requestBuilder: Builder[_ <: AbstractRequest]): ClientResponse = {
@@ -60,11 +60,7 @@ class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, Epoc
       case ApiKeys.OFFSET_FOR_LEADER_EPOCH =>
         callback.foreach(_.apply())
         epochFetchCount += 1
-        val offsetsForResponse = updatedOffsetsOpt match {
-          case Some(updatedOffsets) => updatedOffsets
-          case None => offsets
-        }
-        new OffsetsForLeaderEpochResponse(offsetsForResponse)
+        new OffsetsForLeaderEpochResponse(currentOffsets)
 
       case ApiKeys.FETCH =>
         fetchCount += 1

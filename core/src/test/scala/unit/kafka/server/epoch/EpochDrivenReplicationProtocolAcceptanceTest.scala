@@ -330,7 +330,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     brokers(1).shutdown()
     brokers(0).startup()
 
-    //Bounce the producer (this is required, although I'm unsure as to why?)
+    //Bounce the producer (this is required, probably because the broker port changes on restart?)
     producer.close()
     producer = createNewProducer(getBrokerListStrFromServers(brokers), retries = 5, acks = 1)
 
@@ -342,7 +342,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     brokers(0).shutdown()
     brokers(1).startup()
 
-    //Bounce the producer (this is required, although I'm unsure as to why?)
+    //Bounce the producer (this is required, probably because the broker port changes on restart?)
     producer.close()
     producer = createNewProducer(getBrokerListStrFromServers(brokers), retries = 5, acks = 1)
 
@@ -354,7 +354,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     brokers(1).shutdown()
     brokers(0).startup()
 
-    //Bounce the producer (this is required, although I'm unsure as to why?)
+    //Bounce the producer (this is required, probably because the broker port changes on restart?)
     producer.close()
     producer = createNewProducer(getBrokerListStrFromServers(brokers), retries = 5, acks = 1)
 
