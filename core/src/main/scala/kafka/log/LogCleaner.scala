@@ -32,7 +32,7 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.ConfigException
-import org.apache.kafka.common.errors.KafkaStorageException
+import org.apache.kafka.common.errors.{CorruptRecordException, KafkaStorageException}
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention
 
@@ -590,6 +590,7 @@ private[log] class Cleaner(val id: Int,
       }
     }
 
+    var checkCrc = false
     var position = 0
     while (position < sourceRecords.sizeInBytes) {
       checkDone(topicPartition)
@@ -605,6 +606,16 @@ private[log] class Cleaner(val id: Int,
       stats.recopyMessages(result.messagesRetained, result.bytesRetained)
 
       position += result.bytesRead
+
+      // Validate CRC if buffer was grown beyond max.message.bytes to read this batch.
+      // Note that we don't check every batch > max.message.bytes, just one batch is validated
+      // as a sanity check when the buffer is grown beyond max.message.bytes.
+      if (checkCrc && result.messagesRead > 0) {
+        checkCrc = false
+        val batches = records.batches.iterator
+        if (batches.hasNext && !batches.next.isValid)
+          throw new CorruptRecordException(s"Log for ${topicPartition} contains corrupt data")
+      }
 
       // if any messages are to be retained, write them out
       val outputBuffer = result.output
@@ -622,8 +633,19 @@ private[log] class Cleaner(val id: Int,
 
       // if we read bytes but didn't get even one complete batch, our I/O buffer is too small, grow it and try again
       // `result.bytesRead` contains bytes from the `messagesRead` and any discarded batches.
-      if (readBuffer.limit() > 0 && result.bytesRead == 0)
-        growBuffers(maxLogMessageSize)
+      if (readBuffer.limit() > 0 && result.bytesRead == 0) {
+        // In some scenarios, a record could be bigger than the current maximum size configured for the log
+        //   1. A compacted topic using compression may contain a message set slightly larger than max.message.bytes
+        //   2. max.message.bytes of a topic could have been reduced after writing larger messages
+        // In these cases, grow the buffer to hold the next batch.
+        val maxSize = if (readBuffer.capacity >= maxLogMessageSize) {
+          checkCrc = true
+          records.nextBatchSize
+        } else
+          maxLogMessageSize
+
+        growBuffers(maxSize)
+      }
     }
     restoreBuffers()
   }
