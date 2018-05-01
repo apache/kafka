@@ -20,6 +20,7 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
+import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.util.Callback;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
@@ -32,17 +33,19 @@ import org.powermock.api.easymock.PowerMock;
 import org.powermock.api.easymock.annotation.MockStrict;
 import org.powermock.modules.junit4.PowerMockRunner;
 
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+
 import javax.ws.rs.client.Client;
 import javax.ws.rs.client.ClientBuilder;
 import javax.ws.rs.client.Invocation;
 import javax.ws.rs.client.WebTarget;
 import javax.ws.rs.core.Response;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 
@@ -51,6 +54,8 @@ public class RestServerTest {
 
     @MockStrict
     private Herder herder;
+    @MockStrict
+    private Plugins plugins;
     private RestServer server;
 
     @After
@@ -151,7 +156,16 @@ public class RestServerTest {
 
     public void checkCORSRequest(String corsDomain, String origin, String expectedHeader, String method) {
         // To be able to set the Origin, we need to toggle this flag
+
+        Map<String, String> workerProps = baseWorkerProps();
+        workerProps.put(WorkerConfig.ACCESS_CONTROL_ALLOW_ORIGIN_CONFIG, corsDomain);
+        workerProps.put(WorkerConfig.ACCESS_CONTROL_ALLOW_METHODS_CONFIG, method);
+        WorkerConfig workerConfig = new DistributedConfig(workerProps);
         System.setProperty("sun.net.http.allowRestrictedHeaders", "true");
+
+        EasyMock.expect(herder.plugins()).andStubReturn(plugins);
+        EasyMock.expect(plugins.newConnectRestExtensions(Collections.EMPTY_LIST, workerConfig))
+            .andStubReturn(Collections.EMPTY_LIST);
 
         final Capture<Callback<Collection<String>>> connectorsCallback = EasyMock.newCapture();
         herder.connectors(EasyMock.capture(connectorsCallback));
@@ -165,10 +179,7 @@ public class RestServerTest {
 
         PowerMock.replayAll();
 
-        Map<String, String> workerProps = baseWorkerProps();
-        workerProps.put(WorkerConfig.ACCESS_CONTROL_ALLOW_ORIGIN_CONFIG, corsDomain);
-        workerProps.put(WorkerConfig.ACCESS_CONTROL_ALLOW_METHODS_CONFIG, method);
-        WorkerConfig workerConfig = new DistributedConfig(workerProps);
+
         server = new RestServer(workerConfig);
         server.start(herder);
 

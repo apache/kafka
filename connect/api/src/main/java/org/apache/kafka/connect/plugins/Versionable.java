@@ -15,15 +15,13 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.connect.rest.extension;
+package org.apache.kafka.connect.plugins;
 
-import org.apache.kafka.common.Configurable;
-import org.apache.kafka.connect.plugins.Versionable;
-
-import java.io.Closeable;
-
-public interface ConnectRestExtension extends Configurable, Versionable, Closeable {
-
-    void register(ConnectRestExtensionContext restPluginContext);
-
+public interface Versionable {
+    /**
+     * Get the version of this plugin.
+     *
+     * @return the version, formatted as a String
+     */
+    String version();
 }

@@ -23,6 +23,7 @@ import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.rest.extension.ConnectRestExtension;
 import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.json.JsonConverterConfig;
 import org.apache.kafka.connect.runtime.WorkerConfig;
@@ -314,6 +315,56 @@ public class Plugins {
         log.debug("Configuring the header converter with configuration:{}{}", System.lineSeparator(), converterConfig);
         plugin.configure(converterConfig);
         return plugin;
+    }
+
+
+    /**
+     * If the given configurations defines a {@link ConnectRestExtension} using the provided
+     * Class Names, return a list of new configured instances.
+     *
+     * @param klassNames         the list of Class Names of {@link ConnectRestExtension} that
+     *                           needs to instantiated and configured
+     * @param config             the configuration containing the {@link org.apache.kafka.connect.runtime.Worker}'s configuration;
+     *                           may not be null
+     * @return the instantiated and configured list of  {@link ConnectRestExtension}; EMPTY if
+     * the {@param klassNames} is NULL or EMPTY
+     * @throws ConnectException if the {@link ConnectRestExtension} implementation class could not be found
+     */
+    public List<ConnectRestExtension> newConnectRestExtensions(List<String> klassNames,
+                                                               AbstractConfig config) {
+
+        List<ConnectRestExtension> connectRestExtensions = new ArrayList<>();
+        if (klassNames == null || klassNames.isEmpty()) {
+            return connectRestExtensions;
+        }
+        for (String klassName : klassNames) {
+            ConnectRestExtension plugin;
+
+            Class<? extends ConnectRestExtension> klass;
+            try {
+                klass = pluginClass(
+                    delegatingLoader,
+                    klassName,
+                    ConnectRestExtension.class
+                );
+            } catch (ClassNotFoundException e) {
+                throw new ConnectException(
+                    "Failed to find any class that implements ConnectRestExtension and which name matches "
+                    + klassName
+                    + ", available Rest Extensions are: "
+                    + pluginNames(delegatingLoader.restExtensions())
+                );
+            }
+            plugin = newPlugin(klass);
+            if (plugin == null) {
+                throw new ConnectException(
+                    "Unable to instantiate the ConnectRestExtension '" + klassName + "'");
+            }
+            plugin.configure(config.originals());
+            connectRestExtensions.add(plugin);
+        }
+
+        return connectRestExtensions;
     }
 
     /**

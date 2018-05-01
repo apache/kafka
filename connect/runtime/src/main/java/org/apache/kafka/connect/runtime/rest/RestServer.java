@@ -299,19 +299,16 @@ public class RestServer {
     }
 
     void registerRestExtensions(Herder herder, ResourceConfig resourceConfig) {
-        connectRestExtensions = config.getConfiguredInstances(
-            WorkerConfig.REST_EXTENSION_CLASSES_CONFIG,
-            ConnectRestExtension.class
-        );
+        connectRestExtensions = herder.plugins().newConnectRestExtensions(
+            config.getList(WorkerConfig.REST_EXTENSION_CLASSES_CONFIG),
+            config);
 
         ConnectRestExtensionContext connectRestExtensionContext =
             new ConnectRestExtensionContextImpl(
                 new ConnectRestConfigurable(resourceConfig),
                 new ConnectClusterStateImpl(herder)
             );
-
         for (ConnectRestExtension connectRestExtension : connectRestExtensions) {
-            connectRestExtension.configure(config.originals());
             connectRestExtension.register(connectRestExtensionContext);
         }
 
