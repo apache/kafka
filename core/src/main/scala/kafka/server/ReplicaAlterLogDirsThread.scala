@@ -21,7 +21,8 @@ import java.nio.ByteBuffer
 import java.util
 
 import AbstractFetcherThread.ResultWithPartitions
-import kafka.cluster.{Replica, BrokerEndPoint}
+import kafka.api._
+import kafka.cluster.BrokerEndPoint
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.requests.EpochEndOffset._
 import org.apache.kafka.common.requests.{EpochEndOffset, FetchResponse, FetchRequest => JFetchRequest}
@@ -36,7 +37,6 @@ import org.apache.kafka.common.record.{FileRecords, MemoryRecords}
 
 import scala.collection.JavaConverters._
 import scala.collection.{Map, Seq, Set, mutable}
-import scala.math._
 
 class ReplicaAlterLogDirsThread(name: String,
                                 sourceBroker: BrokerEndPoint,
@@ -49,7 +49,8 @@ class ReplicaAlterLogDirsThread(name: String,
                                 sourceBroker = sourceBroker,
                                 fetchBackOffMs = brokerConfig.replicaFetchBackoffMs,
                                 isInterruptible = false,
-                                includeLogTruncation = true) {
+                                includeLogTruncation = true,
+                                useLeaderEpochInResponse = brokerConfig.interBrokerProtocolVersion >= KAFKA_2_0_IV0) {
 
   type REQ = FetchRequest
   type PD = PartitionData
@@ -174,6 +175,21 @@ class ReplicaAlterLogDirsThread(name: String,
     }
   }
 
+  /**
+   * Truncate the log for each partition based on current replica's returned epoch and offset.
+   *
+   * The logic for finding the truncation offset is the same as in ReplicaFetcherThread
+   * and mainly implemented in AbstractFetcherThread.getOffsetTruncationState. One difference is
+   * that the initial fetch offset for topic partition is truncation offset of the current replica.
+   * When the current replica truncates, it forces future replica's partition state to
+   * 'truncating' and sets initial offset to its truncation offset.
+   *
+   * The reason we have to follow the leader epoch approach for truncating a future replica is to
+   * cover the case where a future replica is offline when the current replica truncates and
+   * re-replicates offsets that may have already been copied to the future replica. In that case,
+   * the future replica may miss "mark for truncation" event and must use the offset for leader epoch
+   * exchange with the current replica to truncate to the largest common log prefix for the topic partition
+   */
   def maybeTruncate(fetchedEpochs: Map[TopicPartition, EpochEndOffset]): ResultWithPartitions[Map[TopicPartition, OffsetTruncationState]] = {
     val fetchOffsets = scala.collection.mutable.HashMap.empty[TopicPartition, OffsetTruncationState]
     val partitionsWithError = mutable.Set[TopicPartition]()
@@ -187,33 +203,7 @@ class ReplicaAlterLogDirsThread(name: String,
           info(s"Retrying leaderEpoch request for partition $topicPartition as the current replica reported an error: ${epochOffset.error}")
           partitionsWithError += topicPartition
         } else {
-          val offsetTruncationState =
-            if (epochOffset.endOffset == UNDEFINED_EPOCH_OFFSET) {
-              // since both replicas are on the same broker, they are using same version of OffsetForLeaderEpoch
-              // request/response, so we cannot get a valid epoch with undefined offset; log warn
-              // in case that happens so we know we made a wrong assumption somewhere
-              if (epochOffset.leaderEpoch != UNDEFINED_EPOCH)
-                info(s"Replica responded with undefined offset but a valid leader epoch ${epochOffset.leaderEpoch} for $topicPartition")
-              OffsetTruncationState(partitionStates.stateValue(topicPartition).fetchOffset, truncationCompleted = true)
-            } else {
-              // get (leader epoch, end offset) pair that corresponds to the largest leader epoch
-              // less than or equal to the requested epoch.
-              val (futureLeaderEpoch, futureEndOffset) = futureReplica.epochs.get.endOffsetFor (epochOffset.leaderEpoch)
-              if (futureEndOffset == UNDEFINED_EPOCH_OFFSET) {
-                // This can happen if replica was not tracking offsets at that point (before the
-                // upgrade, or if this broker is new).
-                // to be safe, we truncate to min of start offset and leader's end offset
-                val offsetToTruncateTo = min(partitionStates.stateValue(topicPartition).fetchOffset, epochOffset.endOffset)
-                finalFetchLeaderEpochOffset(offsetToTruncateTo, epochOffset.endOffset, futureReplica, isFutureReplica = true)
-              } else if (futureLeaderEpoch != epochOffset.leaderEpoch) {
-                // the replica does not know about the epoch that leader replied with
-                val intermediateOffsetToTruncateTo = min(futureEndOffset, futureReplica.logEndOffset.messageOffset)
-                OffsetTruncationState(intermediateOffsetToTruncateTo, truncationCompleted = false)
-              } else {
-                val offsetToTruncateTo = min(futureEndOffset, epochOffset.endOffset)
-                finalFetchLeaderEpochOffset(offsetToTruncateTo, epochOffset.endOffset, futureReplica, isFutureReplica = true)
-              }
-            }
+          val offsetTruncationState = getOffsetTruncationState(topicPartition, epochOffset, futureReplica, isFutureReplica = true)
 
           partition.truncateTo(offsetTruncationState.offset, isFuture = true)
           fetchOffsets.put(topicPartition, offsetTruncationState)
