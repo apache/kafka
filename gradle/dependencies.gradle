@@ -30,7 +30,7 @@ ext {
 
 // Add Scala version
 def defaultScala211Version = '2.11.12'
-def defaultScala212Version = '2.12.4'
+def defaultScala212Version = '2.12.6'
 if (hasProperty('scalaVersion')) {
   if (scalaVersion == '2.11') {
     versions["scala"] = defaultScala211Version
@@ -81,7 +81,7 @@ versions += [
   slf4j: "1.7.25",
   snappy: "1.1.7.1",
   zkclient: "0.10",
-  zookeeper: "3.4.10"
+  zookeeper: "3.4.12"
 ]
 
 libs += [
