@@ -24,6 +24,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ShutdownException;
@@ -374,11 +375,23 @@ public class GlobalStreamThread extends Thread {
             final String errorMsg = "Could not lock global state directory. This could happen if multiple KafkaStreams " +
                 "instances are running on the same host using the same state directory.";
             log.error(errorMsg, fatalException);
-            throw new StreamsException(errorMsg, fatalException);
+            startupException = new StreamsException(errorMsg, fatalException);
         } catch (final StreamsException fatalException) {
-            throw fatalException;
-        } catch (final RuntimeException fatalException) {
-            throw new StreamsException("Exception caught during initialization of GlobalStreamThread", fatalException);
+            startupException = fatalException;
+        } catch (final Exception fatalException) {
+            startupException = new StreamsException("Exception caught during initialization of GlobalStreamThread", fatalException);
+        }
+        return null;
+    }
+
+    @Override
+    public synchronized void start() {
+        super.start();
+        while (!stillRunning()) {
+            Utils.sleep(1);
+            if (startupException != null) {
+                throw startupException;
+            }
         }
     }
 
