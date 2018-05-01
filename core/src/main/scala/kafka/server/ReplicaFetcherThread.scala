@@ -288,15 +288,15 @@ class ReplicaFetcherThread(name: String,
 
   /**
    * Truncate the log for each partition's epoch based on leader's returned epoch and offset.
-   *  -- If the leader replied with undefined epoch offset, we must use the watermark. This can
-   *  happen if 1) the leader is on the protocol version < KAFKA_0_11_0_IV2; 2) the follower
+   *  -- If the leader replied with undefined epoch offset, we must use the high watermark. This can
+   *  happen if 1) the leader is still using message format older than KAFKA_0_11_0_IV2; 2) the follower
    *  requested leader epoch < the first leader epoch known to the leader.
    *  -- If the leader replied with the valid offset but undefined leader epoch, we truncate to
    *  leader's offset if it is lower than follower's Log End Offset. This may happen if the
-   *  leader in on the protocol version < KAFKA_1_1_IV0
+   *  leader is on the inter-broker protocol version < KAFKA_2_0_IV0
    *  -- If the leader replied with leader epoch not known to the follower, we truncate to the
    *  end offset of the largest epoch that is smaller than the epoch the leader replied with, and
-   *  send offset for leader epoch request with that leader epoch. In a more rare case, where the
+   *  send OffsetsForLeaderEpochRequest with that leader epoch. In a more rare case, where the
    *  follower was not tracking epochs smaller than the epoch the leader replied with, we
    *  truncate the leader's offset (and do not send any more leader epoch requesrs).
    *  -- Otherwise, truncate to min(leader's offset, end offset on the follower for epoch that
@@ -306,52 +306,52 @@ class ReplicaFetcherThread(name: String,
     val fetchOffsets = scala.collection.mutable.HashMap.empty[TopicPartition, OffsetTruncationState]
     val partitionsWithError = mutable.Set[TopicPartition]()
 
-    fetchedEpochs.foreach { case (tp, epochOffset) =>
+    fetchedEpochs.foreach { case (tp, leaderEpochOffset) =>
       try {
         val replica = replicaMgr.getReplicaOrException(tp)
         val partition = replicaMgr.getPartition(tp).get
 
-        if (epochOffset.hasError) {
-          info(s"Retrying leaderEpoch request for partition ${replica.topicPartition} as the leader reported an error: ${epochOffset.error}")
+        if (leaderEpochOffset.hasError) {
+          info(s"Retrying leaderEpoch request for partition ${replica.topicPartition} as the leader reported an error: ${leaderEpochOffset.error}")
           partitionsWithError += tp
         } else {
           val offsetTruncationState =
-            if (epochOffset.endOffset == UNDEFINED_EPOCH_OFFSET) {
+            if (leaderEpochOffset.endOffset == UNDEFINED_EPOCH_OFFSET) {
               // truncate to initial offset which is the high watermark
               warn(s"Based on follower's leader epoch, leader replied with an unknown offset in ${replica.topicPartition}. " +
                 s"The initial fetch offset ${partitionStates.stateValue(tp).fetchOffset} will be used for truncation.")
               OffsetTruncationState(partitionStates.stateValue(tp).fetchOffset, truncationCompleted = true)
-            } else if (epochOffset.leaderEpoch == UNDEFINED_EPOCH) {
-              // this may happen if the leader used version 0 of OffsetForLeaderEpoch
-              // request/response
+            } else if (leaderEpochOffset.leaderEpoch == UNDEFINED_EPOCH) {
+              // this may happen if the leader uses inter-broker protocol version < KAFKA_2_0_IV0
+              // (version 0 of OffsetForLeaderEpoch request/response)
               warn(s"Based on follower's leader epoch, leader replied with an unknown leader epoch in ${replica.topicPartition}. " +
-                   s"The leader's offset only ${epochOffset.endOffset} will be used for truncation.")
-              finalFetchLeaderEpochOffset(epochOffset.endOffset, epochOffset.endOffset, replica)
+                   s"The leader's offset ${leaderEpochOffset.endOffset} will be used for truncation.")
+              finalFetchLeaderEpochOffset(leaderEpochOffset.endOffset, leaderEpochOffset.endOffset, replica)
             } else {
               // get (leader epoch, end offset) pair that corresponds to the largest leader epoch
               // less than or equal to the requested epoch.
-              val (replicaLeaderEpoch, replicaEndOffset) = replica.epochs.get.endOffsetFor (epochOffset.leaderEpoch)
+              val (replicaLeaderEpoch, replicaEndOffset) = replica.epochs.get.endOffsetFor(leaderEpochOffset.leaderEpoch)
               if (replicaEndOffset == UNDEFINED_EPOCH_OFFSET) {
                 // This can happen if replica was not tracking offsets at that point (before the
                 // upgrade, or if this broker is new). Since the leader replied with epoch <
                 // requested epoch from follower, so should be safe to truncate to leader's
                 // offset (this is the same behavior as post-KIP-101 and pre-KIP-279)
-                warn(s"Based on follower's leader epoch, leader replied with epoch ${epochOffset.leaderEpoch} " +
+                warn(s"Based on follower's leader epoch, leader replied with epoch ${leaderEpochOffset.leaderEpoch} " +
                      s"below any follower's tracked epochs for ${replica.topicPartition}. " +
-                     s"The leader's offset only ${epochOffset.endOffset} will be used for truncation.")
-                finalFetchLeaderEpochOffset(epochOffset.endOffset, epochOffset.endOffset, replica)
-              } else if (replicaLeaderEpoch != epochOffset.leaderEpoch) {
+                     s"The leader's offset only ${leaderEpochOffset.endOffset} will be used for truncation.")
+                finalFetchLeaderEpochOffset(leaderEpochOffset.endOffset, leaderEpochOffset.endOffset, replica)
+              } else if (replicaLeaderEpoch != leaderEpochOffset.leaderEpoch) {
                 // the replica does not know about the epoch that leader replied with
                 // we truncate to the end offset of the largest epoch that is smaller than the
                 // epoch the leader replied with, and send another offset for leader epoch request
                 val intermediateOffsetToTruncateTo = min(replicaEndOffset, replica.logEndOffset.messageOffset)
-                warn(s"Based on follower's leader epoch, leader replied with epoch ${epochOffset.leaderEpoch} " +
+                warn(s"Based on follower's leader epoch, leader replied with epoch ${leaderEpochOffset.leaderEpoch} " +
                      s"unknown to the follower for ${replica.topicPartition}. " +
                      s"Will truncate to $intermediateOffsetToTruncateTo and send another leader epoch request to the leader.")
                 OffsetTruncationState(intermediateOffsetToTruncateTo, truncationCompleted = false)
               } else {
-                val offsetToTruncateTo = min(replicaEndOffset, epochOffset.endOffset)
-                finalFetchLeaderEpochOffset(offsetToTruncateTo, epochOffset.endOffset, replica)
+                val offsetToTruncateTo = min(replicaEndOffset, leaderEpochOffset.endOffset)
+                finalFetchLeaderEpochOffset(offsetToTruncateTo, leaderEpochOffset.endOffset, replica)
               }
             }
 
