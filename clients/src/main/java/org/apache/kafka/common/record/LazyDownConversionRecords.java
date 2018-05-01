@@ -99,10 +99,16 @@ public class LazyDownConversionRecords implements SerializableRecords {
                 //      BaseOffset => Int64
                 //      Length => Int32
                 //      ...
-                log.info("Constructing fake message batch for topic-partition {" + topicPartition + "} of length " + length);
+                log.info("Constructing fake message batch for topic-partition {" + topicPartition + "} for remaining length " + length);
                 ByteBuffer fakeMessageBatch = ByteBuffer.allocate(length);
-                fakeMessageBatch.putLong(-1L);
-                fakeMessageBatch.putInt(length + 1);
+
+                if (length >= ((Long.SIZE / Byte.SIZE) + (Integer.SIZE / Byte.SIZE))) {
+                    log.info("Fake batch length: " + (length + 1));
+                    fakeMessageBatch.putLong(-1L);
+                    fakeMessageBatch.putInt(length + 1);
+                } else {
+                    log.info("Batch not long enough to insert length");
+                }
                 fakeMessageBatch.clear();
                 convertedRecords = MemoryRecords.readableRecords(fakeMessageBatch);
             }
