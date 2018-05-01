@@ -321,11 +321,11 @@ class ReplicaFetcherThread(name: String,
               warn(s"Based on follower's leader epoch, leader replied with an unknown offset in ${replica.topicPartition}. " +
                 s"The initial fetch offset ${partitionStates.stateValue(tp).fetchOffset} will be used for truncation.")
               OffsetTruncationState(partitionStates.stateValue(tp).fetchOffset, truncationCompleted = true)
-            } else if (leaderEpochOffset.leaderEpoch == UNDEFINED_EPOCH) {
-              // this may happen if the leader uses inter-broker protocol version < KAFKA_2_0_IV0
+            } else if (leaderEpochOffset.leaderEpoch == UNDEFINED_EPOCH || brokerConfig.interBrokerProtocolVersion < KAFKA_2_0_IV0) {
+              // either leader or follower or both use inter-broker protocol version < KAFKA_2_0_IV0
               // (version 0 of OffsetForLeaderEpoch request/response)
-              warn(s"Based on follower's leader epoch, leader replied with an unknown leader epoch in ${replica.topicPartition}. " +
-                   s"The leader's offset ${leaderEpochOffset.endOffset} will be used for truncation.")
+              warn(s"Leader or follower is on protocol version where leader epoch is not considered in the OffsetsForLeaderEpoch response. " +
+                   s"The leader's offset ${leaderEpochOffset.endOffset} will be used for truncation in ${replica.topicPartition}.")
               finalFetchLeaderEpochOffset(leaderEpochOffset.endOffset, leaderEpochOffset.endOffset, replica)
             } else {
               // get (leader epoch, end offset) pair that corresponds to the largest leader epoch
