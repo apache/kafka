@@ -266,49 +266,46 @@ public class WorkerConfig extends AbstractConfig {
             if (props.containsKey(config)) {
                 if (INTERNAL_CONVERTER_DEFAULT.equals(getClass(config))) {
                     log.info(
-                        "Configuration {} is deprecated and will be removed in an upcoming release. "
-                            + "This value matches the current default, so it can be removed without concern.",
+                        "Worker configuration property {} is deprecated and may be removed in an upcoming release. "
+                            + "The specified value matches the default, so this property can be safely removed from the worker configuration.",
                         config
                     );
+                    for (Map.Entry<String, Object> propEntry : originalsWithPrefix(config + ".").entrySet()) {
+                        String prop = propEntry.getKey();
+                        if (JsonConverterConfig.SCHEMAS_ENABLE_CONFIG.equals(prop)) {
+                            String propValue = propEntry.getValue().toString();
+                            if (Boolean.FALSE.toString().equals(propValue)) {
+                                log.info(
+                                    "Worker configuration property {} (along with all configuration for {}) is deprecated and may be removed in an upcoming release. "
+                                        + "The specified value matches the default, so this property can be safely removed from the worker configuration.",
+                                    prop,
+                                    config
+                                );
+                            } else {
+                                log.warn(
+                                    "Configuration {} (along with all configuration for {}) is deprecated and may be removed in an upcoming release. "
+                                        + "The current value '{}' does NOT match the default and recommended value 'false'.",
+                                    prop,
+                                    config,
+                                    propValue
+                                );
+                            }
+                        } else {
+                            log.warn(
+                                "Configuration property '{}' (along with all configuration for {}) is deprecated and may be removed in an upcoming release.",
+                                prop,
+                                config
+                            );
+                        }
+                    }
                 } else {
                     log.warn(
-                        "Configuration {} is deprecated and will be removed in an upcoming release. "
-                            + "The current value '{}' does NOT match the default of {}, and behavior may change when removed.",
+                        "Worker configuration property {} is deprecated and may be removed in an upcoming release. "
+                            + "The specified value '{}' does NOT match the default and recommended value '{}'.",
                         config,
                         getClass(config).getCanonicalName(),
                         INTERNAL_CONVERTER_DEFAULT.getCanonicalName()
                     );
-                }
-            }
-
-            for (Map.Entry<String, String> propEntry : props.entrySet()) {
-                String prop = propEntry.getKey();
-                if (prop.startsWith(config + ".")) {
-                    if ((config + "." + JsonConverterConfig.SCHEMAS_ENABLE_CONFIG).equals(prop)) {
-                        if (Boolean.FALSE.toString().equals(propEntry.getValue())) {
-                            log.info(
-                                "Configuration {} (along with all configuration for {}) is deprecated and will be removed in an upcoming release. "
-                                    + "This value matches the current default, so it can be removed without concern.",
-                                prop,
-                                config
-                            );
-                        } else {
-                            log.warn(
-                                "Configuration {} (along with all configuration for {}) is deprecated and will be removed in an upcoming release. "
-                                    + "The current value '{}' does NOT match the default of false, and behavior may change when removed.",
-                                prop,
-                                config,
-                                get(prop)
-                            );
-                        }
-                    } else {
-                        log.warn(
-                            "Configuration property '{}' (along with all configuration for {}) is deprecated and will be removed in an upcoming release. "
-                                + "The current value has no default, and behavior may change when removed.",
-                            prop,
-                            config
-                        );
-                    }
                 }
             }
         }

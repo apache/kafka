@@ -79,15 +79,13 @@
     <li>Updated <code>ProcessorStateManager</code> APIs in Kafka Streams for registering state stores to the processor topology. For more details please read the Streams <a href="/{{version}}/documentation/streams/upgrade-guide#streams_api_changes_200">Upgrade Guide</a>.</li>
     <li><a href="https://cwiki.apache.org/confluence/x/AZQ7B">KIP-174</a> deprecates the <code>internal.key.converter</code> and <code>internal.value.converter</code> configurations for Kafka Connect, and establishes <code>org.apache.kafka.connect.json.JsonConverter</code> with the <code>schemas.enable</code> property set to <code>false</code> as the default value for both.</li>
     <li>
-        <a href="https://cwiki.apache.org/confluence/x/AZQ7B">KIP-174</a> deprecates the <code>internal.key.converter</code> and <code>internal.value.converter</code> configurations for Kafka Connect,
-        and establishes <code>org.apache.kafka.connect.json.JsonConverter</code> with the <code>schemas.enable</code> property set to <code>false</code> as the default value for both.
-        If you have the following properties configured for your Connect cluster, they can be safely removed:
-        <code>
-            internal.key.converter=org.apache.kafka.connect.json.JsonConverter
-            internal.key.converter.schemas.enable=false
-            internal.value.converter=org.apache.kafka.connect.json.JsonConverter
-            internal.value.converter.schemas.enable=false
-        </code>
+        In earlier releases, Connect's worker configuration required the <code>internal.key.converter</code> and <code>internal.value.converter</code> properties.
+        In 2.0, these are <a href="https://cwiki.apache.org/confluence/x/AZQ7B">no longer required</a> and default to the JSON converter.
+        You may safely remove these properties from your Connect standalone and distributed worker configurations:<br />
+        <code>internal.key.converter=org.apache.kafka.connect.json.JsonConverter</code>
+        <code>internal.key.converter.schemas.enable=false</code>
+        <code>internal.value.converter=org.apache.kafka.connect.json.JsonConverter</code>
+        <code>internal.value.converter.schemas.enable=false</code>
     </li>
 </ul>
 
