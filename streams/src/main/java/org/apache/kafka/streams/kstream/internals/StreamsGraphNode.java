@@ -22,54 +22,54 @@ import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 
-abstract class StreamGraphNode<K, V> {
+abstract class StreamsGraphNode {
 
-    private StreamGraphNode<K, V> parentNode;
-    private final Collection<StreamGraphNode<K, V>> childNodes = new LinkedHashSet<>();
-    private final String nodeName;
-    private String parentNodeName;
+    private StreamsGraphNode parentNode;
+    private final Collection<StreamsGraphNode> childNodes = new LinkedHashSet<>();
+    private final String processorNodeName;
+    private String parentProcessorNodeName;
     private boolean repartitionRequired;
     private boolean triggersRepartitioning;
     private Integer id;
-    private StreamsTopologyGraphImpl streamsTopologyGraph;
+    private StreamsTopologyGraph streamsTopologyGraph;
 
-    StreamGraphNode(final String parentNodeName,
-                    final String nodeName,
-                    final boolean repartitionRequired) {
-        this.parentNodeName = parentNodeName;
-        this.nodeName = nodeName;
+    StreamsGraphNode(final String parentProcessorNodeName,
+                     final String processorNodeName,
+                     final boolean repartitionRequired) {
+        this.parentProcessorNodeName = parentProcessorNodeName;
+        this.processorNodeName = processorNodeName;
         this.repartitionRequired = repartitionRequired;
     }
 
-    StreamGraphNode<K, V> parentNode() {
+    StreamsGraphNode parentNode() {
         return parentNode;
     }
 
-    String parentNodeName() {
-        return parentNodeName;
+    String parentProcessorNodeName() {
+        return parentProcessorNodeName;
     }
 
-    void setParentNodeName(final String parentNodeName) {
-        this.parentNodeName = parentNodeName;
+    void setParentProcessorNodeName(final String parentProcessorNodeName) {
+        this.parentProcessorNodeName = parentProcessorNodeName;
     }
 
-    void setParentNode(final StreamGraphNode<K, V> parentNode) {
+    void setParentNode(final StreamsGraphNode parentNode) {
         this.parentNode = parentNode;
     }
 
-    Collection<StreamGraphNode<K, V>> children() {
+    Collection<StreamsGraphNode> children() {
         return new LinkedHashSet<>(childNodes);
     }
 
-    void addChildNode(final StreamGraphNode<K, V> node) {
+    void addChildNode(final StreamsGraphNode node) {
         this.childNodes.add(node);
     }
 
-    String nodeName() {
-        return nodeName;
+    String processorNodeName() {
+        return processorNodeName;
     }
 
-    boolean isRepartitionRequired() {
+    boolean repartitionRequired() {
         return repartitionRequired;
     }
 
@@ -77,7 +77,7 @@ abstract class StreamGraphNode<K, V> {
         this.repartitionRequired = repartitionRequired;
     }
 
-    public boolean isTriggersRepartitioning() {
+    public boolean triggersRepartitioning() {
         return triggersRepartitioning;
     }
 
@@ -93,11 +93,11 @@ abstract class StreamGraphNode<K, V> {
         return this.id;
     }
 
-    public void setStreamsTopologyGraph(final StreamsTopologyGraphImpl streamsTopologyGraph) {
+    public void setStreamsTopologyGraph(final StreamsTopologyGraph streamsTopologyGraph) {
         this.streamsTopologyGraph = streamsTopologyGraph;
     }
 
-    StreamsTopologyGraphImpl streamsTopologyGraph() {
+    StreamsTopologyGraph streamsTopologyGraph() {
         return streamsTopologyGraph;
     }
 

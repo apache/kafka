@@ -27,32 +27,32 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
 
-class StreamSourceNode<K, V> extends StreamGraphNode<K, V> {
+class StreamSourceNode<K, V> extends StreamsGraphNode {
 
     private List<String> topics;
     private Pattern topicPattern;
     private final ConsumedInternal<K, V> consumedInternal;
 
 
-    StreamSourceNode(final String predecessorNodeName,
-                     final String name,
+    StreamSourceNode(final String parentProcessorNodeName,
+                     final String processorNodeName,
                      final List<String> topics,
                      final ConsumedInternal<K, V> consumedInternal) {
-        super(predecessorNodeName,
-              name,
+        super(parentProcessorNodeName,
+              processorNodeName,
               false);
 
         this.topics = topics;
         this.consumedInternal = consumedInternal;
     }
 
-    StreamSourceNode(final String predecessorNodeName,
-                     final String name,
+    StreamSourceNode(final String parentProcessorNodeName,
+                     final String processorNodeName,
                      final Pattern topicPattern,
                      final ConsumedInternal<K, V> consumedInternal) {
 
-        super(predecessorNodeName,
-              name,
+        super(parentProcessorNodeName,
+              processorNodeName,
               false);
 
         this.topicPattern = topicPattern;

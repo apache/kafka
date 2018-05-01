@@ -30,8 +30,8 @@ class StatefulRepartitionNode<K, V, T> extends RepartitionNode<K, V> {
     private final ProcessorSupplier<K, Change<V>> statefulProcessorSupplier;
     private final MaterializedInternal<K, T, KeyValueStore<Bytes, byte[]>> materialized;
 
-    StatefulRepartitionNode(final String predecessorNodeName,
-                            final String nodeName,
+    StatefulRepartitionNode(final String parentProcessorNodeName,
+                            final String processorNodeName,
                             final String sourceName,
                             final Serde<K> keySerde,
                             final Serde<V> valueSerde,
@@ -40,8 +40,8 @@ class StatefulRepartitionNode<K, V, T> extends RepartitionNode<K, V> {
                             final String processorName,
                             final ProcessorSupplier<K, Change<V>> statefulProcessorSupplier,
                             final MaterializedInternal<K, T, KeyValueStore<Bytes, byte[]>> materialized) {
-        super(predecessorNodeName,
-              nodeName,
+        super(parentProcessorNodeName,
+              processorNodeName,
               sourceName,
               null,
               keySerde,
@@ -85,8 +85,8 @@ class StatefulRepartitionNode<K, V, T> extends RepartitionNode<K, V> {
 
     static final class StatefulRepartitionNodeBuilder<K, V, T> {
 
-        private String predecessorNodeName;
-        private String nodeName;
+        private String parentProcessorNodeName;
+        private String processorNodeName;
         private Serde<K> keySerde;
         private Serde<V> valueSerde;
         private String sinkName;
@@ -110,8 +110,8 @@ class StatefulRepartitionNode<K, V, T> extends RepartitionNode<K, V> {
             return this;
         }
 
-        StatefulRepartitionNodeBuilder<K, V, T> withPredecessorNodeName(final String predecessorNodeName) {
-            this.predecessorNodeName = predecessorNodeName;
+        StatefulRepartitionNodeBuilder<K, V, T> withParentProcessorNodeName(final String parentProcessorNodeName) {
+            this.parentProcessorNodeName = parentProcessorNodeName;
             return this;
         }
 
@@ -130,8 +130,8 @@ class StatefulRepartitionNode<K, V, T> extends RepartitionNode<K, V> {
             return this;
         }
 
-        StatefulRepartitionNodeBuilder<K, V, T> withProcessorName(final String processorName) {
-            this.processorName = processorName;
+        StatefulRepartitionNodeBuilder<K, V, T> withProcessorNodeName(final String processorNodeName) {
+            this.processorName = processorNodeName;
             return this;
         }
 
@@ -146,14 +146,14 @@ class StatefulRepartitionNode<K, V, T> extends RepartitionNode<K, V> {
         }
 
         StatefulRepartitionNodeBuilder<K, V, T> withNodeName(final String nodeName) {
-            this.nodeName = nodeName;
+            this.processorNodeName = nodeName;
             return this;
         }
 
         public StatefulRepartitionNode<K, V, T> build() {
 
-            return new StatefulRepartitionNode<>(predecessorNodeName,
-                                                 nodeName,
+            return new StatefulRepartitionNode<>(parentProcessorNodeName,
+                                                 processorNodeName,
                                                  sourceName,
                                                  keySerde,
                                                  valueSerde,

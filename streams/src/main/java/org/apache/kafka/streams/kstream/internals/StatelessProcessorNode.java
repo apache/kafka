@@ -29,7 +29,7 @@ import java.util.List;
  * map, mapValues, flatMap, flatMapValues, filter, filterNot, branch
  *
  */
-class StatelessProcessorNode<K, V> extends StreamGraphNode<K, V> {
+class StatelessProcessorNode<K, V> extends StreamsGraphNode {
 
     private final ProcessorSupplier processorSupplier;
 
@@ -41,25 +41,25 @@ class StatelessProcessorNode<K, V> extends StreamGraphNode<K, V> {
     private List<String> multipleParentNames = new ArrayList<>();
 
 
-    StatelessProcessorNode(final String predecessorNodeName,
-                           final String nodeName,
+    StatelessProcessorNode(final String parentProcessorNodeName,
+                           final String processorNodeName,
                            final ProcessorSupplier processorSupplier,
                            final boolean repartitionRequired) {
 
-        super(predecessorNodeName,
-              nodeName,
+        super(parentProcessorNodeName,
+              processorNodeName,
               repartitionRequired);
 
         this.processorSupplier = processorSupplier;
     }
 
-    StatelessProcessorNode(final String parentNodeName,
-                           final String nodeName,
+    StatelessProcessorNode(final String parentProcessorNodeName,
+                           final String processorNodeName,
                            final boolean repartitionRequired,
                            final ProcessorSupplier processorSupplier,
                            final List<String> multipleParentNames) {
 
-        this(parentNodeName, nodeName, processorSupplier, repartitionRequired);
+        this(parentProcessorNodeName, processorNodeName, processorSupplier, repartitionRequired);
 
         this.multipleParentNames = multipleParentNames;
     }

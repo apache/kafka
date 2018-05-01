@@ -22,18 +22,18 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
-class StreamSinkNode<K, V> extends StreamGraphNode<K, V> {
+class StreamSinkNode<K, V> extends StreamsGraphNode {
 
     private final String topic;
     private final ProducedInternal<K, V> producedInternal;
 
-    StreamSinkNode(final String predecessorNodeName,
-                   final String nodeName,
+    StreamSinkNode(final String parentProcessorNodeName,
+                   final String processorNodeName,
                    final String topic,
                    final ProducedInternal<K, V> producedInternal) {
 
-        super(predecessorNodeName,
-              nodeName,
+        super(parentProcessorNodeName,
+              processorNodeName,
               false);
 
         this.topic = topic;

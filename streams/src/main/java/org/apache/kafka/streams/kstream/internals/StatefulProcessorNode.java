@@ -32,15 +32,15 @@ class StatefulProcessorNode<K, V> extends StatelessProcessorNode<K, V> {
     private final StoreBuilder<KeyValueStore<K, V>> storeBuilder;
 
 
-    StatefulProcessorNode(final String predecessorNodeName,
-                          final String name,
+    StatefulProcessorNode(final String parentNodeName,
+                          final String processorNodeName,
                           final ProcessorSupplier processorSupplier,
                           final String[] storeNames,
                           final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier,
                           final StoreBuilder<KeyValueStore<K, V>> storeBuilder,
                           final boolean repartitionRequired) {
-        super(predecessorNodeName,
-              name,
+        super(parentNodeName,
+              processorNodeName,
               processorSupplier,
               repartitionRequired);
 
@@ -74,8 +74,8 @@ class StatefulProcessorNode<K, V> extends StatelessProcessorNode<K, V> {
     static final class StatefulProcessorNodeBuilder<K, V> {
 
         private ProcessorSupplier processorSupplier;
-        private String name;
-        private String predecessorNodeName;
+        private String processorNodeName;
+        private String parentProcessorNodeName;
         private boolean repartitionRequired;
         private String[] storeNames;
         private org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier;
@@ -89,13 +89,13 @@ class StatefulProcessorNode<K, V> extends StatelessProcessorNode<K, V> {
             return this;
         }
 
-        StatefulProcessorNodeBuilder<K, V> withName(final String name) {
-            this.name = name;
+        StatefulProcessorNodeBuilder<K, V> withProcessorNodeName(final String processorNodeName) {
+            this.processorNodeName = processorNodeName;
             return this;
         }
 
-        StatefulProcessorNodeBuilder<K, V> withPredecessorNodeName(final String predecessorNodeName) {
-            this.predecessorNodeName = predecessorNodeName;
+        StatefulProcessorNodeBuilder<K, V> withParentProcessorNodeName(final String parentProcessorNodeName) {
+            this.parentProcessorNodeName = parentProcessorNodeName;
             return this;
         }
 
@@ -120,8 +120,8 @@ class StatefulProcessorNode<K, V> extends StatelessProcessorNode<K, V> {
         }
 
         StatefulProcessorNode<K, V> build() {
-            return new StatefulProcessorNode<>(predecessorNodeName,
-                                               name,
+            return new StatefulProcessorNode<>(parentProcessorNodeName,
+                                               processorNodeName,
                                                processorSupplier,
                                                storeNames,
                                                storeSupplier,

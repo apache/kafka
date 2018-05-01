@@ -22,14 +22,14 @@ import org.apache.kafka.streams.processor.ProcessorSupplier;
 
 /**
  * Utility base class containing the common fields between
- * a Stream-Stream join and a KTable-KTable join
+ * a Stream-Stream join and a Table-Table join
  */
-abstract class BaseJoinProcessorNode<K, V, V1, V2, VR> extends StreamGraphNode<K, V> {
+abstract class BaseJoinProcessorNode<K, V1, V2, VR> extends StreamsGraphNode {
 
     private final ProcessorSupplier<K, V1> joinThisProcessSupplier;
     private final ProcessorSupplier<K, V2> joinOtherProcessSupplier;
     private final ProcessorSupplier<K, VR> joinMergeProcessor;
-    private final ValueJoiner<? super V, ? super V1, ? extends V2> valueJoiner;
+    private final ValueJoiner<? super V1, ? super V2, ? extends VR> valueJoiner;
     private final String joinThisProcessorName;
     private final String joinOtherProcessorName;
     private final String joinMergeProcessorName;
@@ -37,26 +37,26 @@ abstract class BaseJoinProcessorNode<K, V, V1, V2, VR> extends StreamGraphNode<K
     private final String otherJoinSide;
 
 
-    BaseJoinProcessorNode(final String predecessorNodeName,
-                          final String name,
-                          final ValueJoiner<? super V, ? super V1, ? extends V2> valueJoiner,
-                          final ProcessorParameters<K, V1> joinThisProcessorDetails,
-                          final ProcessorParameters<K, V2> joinOtherProcessDetails,
-                          final ProcessorParameters<K, VR> joinMergeProcessorDetails,
+    BaseJoinProcessorNode(final String parentProcessorNodeName,
+                          final String processorNodeName,
+                          final ValueJoiner<? super V1, ? super V2, ? extends VR> valueJoiner,
+                          final JoinProcessorParameters<K, V1> joinThisProcessorDetails,
+                          final JoinProcessorParameters<K, V2> joinOtherProcessDetails,
+                          final JoinProcessorParameters<K, VR> joinMergeProcessorDetails,
                           final String thisJoinSide,
                           final String otherJoinSide) {
 
-        super(predecessorNodeName,
-              name,
+        super(parentProcessorNodeName,
+              processorNodeName,
               false);
 
         this.valueJoiner = valueJoiner;
         this.joinThisProcessSupplier = joinThisProcessorDetails.processorSupplier();
         this.joinOtherProcessSupplier = joinOtherProcessDetails.processorSupplier();
         this.joinMergeProcessor = joinMergeProcessorDetails.processorSupplier();
-        this.joinThisProcessorName = joinThisProcessorDetails.name();
-        this.joinOtherProcessorName = joinOtherProcessDetails.name();
-        this.joinMergeProcessorName = joinMergeProcessorDetails.name();
+        this.joinThisProcessorName = joinThisProcessorDetails.processorName();
+        this.joinOtherProcessorName = joinOtherProcessDetails.processorName();
+        this.joinMergeProcessorName = joinMergeProcessorDetails.processorName();
         this.thisJoinSide = thisJoinSide;
         this.otherJoinSide = otherJoinSide;
     }
@@ -73,7 +73,7 @@ abstract class BaseJoinProcessorNode<K, V, V1, V2, VR> extends StreamGraphNode<K
         return joinMergeProcessor;
     }
 
-    ValueJoiner<? super V, ? super V1, ? extends V2> valueJoiner() {
+    ValueJoiner<? super V1, ? super V2, ? extends VR> valueJoiner() {
         return valueJoiner;
     }
 

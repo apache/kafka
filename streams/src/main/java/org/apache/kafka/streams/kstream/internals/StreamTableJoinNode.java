@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.streams.kstream.Joined;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
@@ -32,23 +33,26 @@ import java.util.Arrays;
  * @param <V2> value type resulting from join
  */
 
-class StreamTableJoinNode<K, V, V1, V2> extends StreamGraphNode<K, V> {
+class StreamTableJoinNode<K, V, V1, V2> extends StreamsGraphNode {
 
     private final String[] storeNames;
     private final ValueJoiner<? super V, ? super V1, ? extends V2> valueJoiner;
+    private final Joined<K, V1, V2> joined;
     private final ProcessorSupplier<K, V> processorSupplier;
 
-    StreamTableJoinNode(final String predecessorNodeName,
-                        final String name,
+    StreamTableJoinNode(final String parentProcessorNodeName,
+                        final String processorNodeName,
                         final ValueJoiner<? super V, ? super V1, ? extends V2> valueJoiner,
+                        final Joined<K, V1, V2> joined,
                         final ProcessorSupplier<K, V> processorSupplier,
                         final String[] storeNames) {
-        super(predecessorNodeName,
-              name,
+        super(parentProcessorNodeName,
+              processorNodeName,
               false);
 
         this.storeNames = storeNames;
         this.valueJoiner = valueJoiner;
+        this.joined = joined;
         this.processorSupplier = processorSupplier;
     }
 
@@ -58,6 +62,10 @@ class StreamTableJoinNode<K, V, V1, V2> extends StreamGraphNode<K, V> {
 
     ValueJoiner<? super V, ? super V1, ? extends V2> valueJoiner() {
         return valueJoiner;
+    }
+
+    Joined<K, V1, V2> joined() {
+        return joined;
     }
 
     ProcessorSupplier<K, V> processorSupplier() {
