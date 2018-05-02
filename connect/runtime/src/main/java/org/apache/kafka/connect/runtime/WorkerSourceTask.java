@@ -231,15 +231,15 @@ class WorkerSourceTask extends WorkerTask {
 
                 maybeThrowProducerSendException();
 
-                if (toSend == null) {
+                if (toSend == null || toSend.isEmpty()) {
                     log.trace("{} Nothing to send to Kafka. Polling source for additional records", this);
                     long start = time.milliseconds();
                     toSend = poll();
-                    if (toSend != null) {
+                    if (toSend != null && !toSend.isEmpty()) {
                         recordPollReturned(toSend.size(), time.milliseconds() - start);
                     }
                 }
-                if (toSend == null)
+                if (toSend == null || toSend.isEmpty())
                     continue;
                 log.trace("{} About to send {} records to Kafka", this, toSend.size());
                 if (!sendRecords())

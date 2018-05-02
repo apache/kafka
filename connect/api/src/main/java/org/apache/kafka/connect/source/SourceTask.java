@@ -46,7 +46,7 @@ public abstract class SourceTask implements Task {
     /**
      * <p>
      * Poll this source task for new records. If no data is currently available, this method
-     * should block but return control to the caller regularly (by returning {@code null}) in
+     * should block but return control to the caller regularly (by returning {@code null} or empty list) in
      * order for the task to transition to the {@code PAUSED} state if requested to do so.
      * </p>
      * <p>
