@@ -42,6 +42,8 @@ import java.util.Set;
 
 public class StoreChangelogReader implements ChangelogReader {
 
+    private static final int DEFAULT_MAX = 100;
+
     private final Logger log;
     private final Consumer<byte[], byte[]> restoreConsumer;
     private final StateRestoreListener userStateRestoreListener;
@@ -81,15 +83,20 @@ public class StoreChangelogReader implements ChangelogReader {
 
         final Set<TopicPartition> restoringPartitions = new HashSet<>(needsRestoring.keySet());
         try {
-            final Set<ConsumerRecords<byte[], byte[]>> allRecords = new HashSet<>();
-            while (true) {
+            int totalNumberOfRecords = 0;
+            final Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> allRecords = new HashMap<>();
+            while (totalNumberOfRecords < DEFAULT_MAX) {
                 final ConsumerRecords<byte[], byte[]> records = restoreConsumer.poll(10);
-                if (records.count() == 0) {
+                int count = records.count();
+                if (count == 0) {
                     break;
                 }
-                allRecords.add(records);
+                totalNumberOfRecords += count;
+                for (TopicPartition partition : records.partitions()) {
+                    allRecords.put(partition, records.records(partition));
+                }
             }
-            final ConsumerRecords<byte[], byte[]> mergedRecords = mergeRecords(allRecords);
+            final ConsumerRecords<byte[], byte[]> mergedRecords = new ConsumerRecords<>(allRecords);
             for (final TopicPartition partition : restoringPartitions) {
                 final Task task = active.restoringTaskFor(partition);
                 final StateRestorer restorer = stateRestorers.get(partition);
