@@ -223,7 +223,7 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
     // and also not throwing exceptions if record context is not available.
     public void setTime(final long timestamp) {
         if (recordContext != null) {
-            recordContext = new ProcessorRecordContext(timestamp, recordContext.offset(), recordContext.partition(), recordContext.topic());
+            recordContext = new ProcessorRecordContext(timestamp, recordContext.offset(), recordContext.partition(), recordContext.topic(), recordContext.headers());
         }
         this.timestamp = timestamp;
     }

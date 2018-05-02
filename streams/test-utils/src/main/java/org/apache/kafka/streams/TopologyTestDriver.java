@@ -331,7 +331,7 @@ public class TopologyTestDriver {
                 consumerRecord.value())));
 
             // Process the record ...
-            ((InternalProcessorContext) task.context()).setRecordContext(new ProcessorRecordContext(consumerRecord.timestamp(), offset, topicPartition.partition(), topicName));
+            ((InternalProcessorContext) task.context()).setRecordContext(new ProcessorRecordContext(consumerRecord.timestamp(), offset, topicPartition.partition(), topicName, null));
             task.process();
             task.maybePunctuateStreamTime();
             task.commit();

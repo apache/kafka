@@ -87,7 +87,7 @@ public class KStreamTestDriver extends ExternalResource {
         globalTopology = builder.buildGlobalStateTopology();
         final ThreadCache cache = new ThreadCache(logContext, cacheSize, new MockStreamsMetrics(new Metrics()));
         context = new InternalMockProcessorContext(stateDir, keySerde, valSerde, new MockRecordCollector(), cache);
-        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "topic"));
+        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "topic", null));
         // init global topology first as it will add stores to the
         // store map that are required for joins etc.
         if (globalTopology != null) {
@@ -128,7 +128,7 @@ public class KStreamTestDriver extends ExternalResource {
 
         final ThreadCache cache = new ThreadCache(logContext, cacheSize, new MockStreamsMetrics(new Metrics()));
         context = new InternalMockProcessorContext(stateDir, keySerde, valSerde, new MockRecordCollector(), cache);
-        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "topic"));
+        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "topic", null));
 
         // init global topology first as it will add stores to the
         // store map that are required for joins etc.
@@ -272,7 +272,7 @@ public class KStreamTestDriver extends ExternalResource {
     }
 
     private ProcessorRecordContext createRecordContext(final long timestamp) {
-        return new ProcessorRecordContext(timestamp, -1, -1, "topic");
+        return new ProcessorRecordContext(timestamp, -1, -1, "topic", null);
     }
 
     private class MockRecordCollector extends RecordCollectorImpl {

@@ -304,6 +304,7 @@ public class KStreamKStreamLeftJoinTest {
     }
 
     private void setRecordContext(final long time, final String topic) {
-        ((InternalMockProcessorContext) driver.context()).setRecordContext(new ProcessorRecordContext(time, 0, 0, topic));
+        ((InternalMockProcessorContext) driver.context()).setRecordContext(
+            new ProcessorRecordContext(time, 0, 0, topic, null));
     }
 }
