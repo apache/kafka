@@ -223,7 +223,7 @@ public class RecordCollectorTest {
             logContext,
             new AlwaysContinueProductionExceptionHandler(),
             sensor);
-        collector.send("topic1", "3", "0", null, stringSerializer, stringSerializer, streamPartitioner);
+        collector.send("topic1", "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
         assertEquals(1.0, metrics.metrics().get(metricName).metricValue());
         assertTrue(logCaptureAppender.getMessages().contains("test Error sending records (key=[3] value=[0] timestamp=[null]) to topic=[topic1] and partition=[0]; The exception handler chose to CONTINUE processing in spite of this error."));
         LogCaptureAppender.unregister(logCaptureAppender);
