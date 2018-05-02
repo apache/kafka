@@ -54,7 +54,8 @@ public final class NetworkClientUtils {
      * This method is useful for implementing blocking behaviour on top of the non-blocking `NetworkClient`, use it with
      * care.
      */
-    public static boolean awaitReady(KafkaClient client, Node node, Time time, long timeoutMs) throws IOException {
+    public static boolean awaitReady(KafkaClient client, Node node, Time time, long timeoutMs)
+        throws IOException, InterruptedException {
         if (timeoutMs < 0) {
             throw new IllegalArgumentException("Timeout needs to be greater than 0");
         }
@@ -73,6 +74,9 @@ public final class NetworkClientUtils {
             client.poll(pollTimeout, attemptStartTime);
             if (client.authenticationException(node) != null)
                 throw client.authenticationException(node);
+            if (Thread.interrupted()) {
+                throw new InterruptedException(String.format("%s gets interrupted", Thread.currentThread().getName()));
+            }
             attemptStartTime = time.milliseconds();
         }
         return client.isReady(node, attemptStartTime);
@@ -87,10 +91,14 @@ public final class NetworkClientUtils {
      * This method is useful for implementing blocking behaviour on top of the non-blocking `NetworkClient`, use it with
      * care.
      */
-    public static ClientResponse sendAndReceive(KafkaClient client, ClientRequest request, Time time) throws IOException {
+    public static ClientResponse sendAndReceive(KafkaClient client, ClientRequest request, Time time)
+        throws IOException, InterruptedException {
         client.send(request, time.milliseconds());
         while (true) {
             List<ClientResponse> responses = client.poll(Long.MAX_VALUE, time.milliseconds());
+            if (Thread.interrupted()) {
+                throw new InterruptedException(String.format("%s gets interrupted", Thread.currentThread().getName()));
+            }
             for (ClientResponse response : responses) {
                 if (response.requestHeader().correlationId() == request.correlationId()) {
                     if (response.wasDisconnected()) {

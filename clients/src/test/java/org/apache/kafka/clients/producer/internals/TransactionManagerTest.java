@@ -121,13 +121,13 @@ public class TransactionManagerTest {
         MetricConfig metricConfig = new MetricConfig().tags(metricTags);
         this.brokerNode = new Node(0, "localhost", 2211);
         this.transactionManager = new TransactionManager(logContext, transactionalId, transactionTimeoutMs,
-                DEFAULT_RETRY_BACKOFF_MS);
+            DEFAULT_RETRY_BACKOFF_MS);
         Metrics metrics = new Metrics(metricConfig, time);
         SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(metrics);
 
         this.accumulator = new RecordAccumulator(logContext, batchSize, 1024 * 1024, CompressionType.NONE, 0L, 0L, metrics, time, apiVersions, transactionManager);
         this.sender = new Sender(logContext, this.client, this.metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL,
-                MAX_RETRIES, senderMetrics, this.time, REQUEST_TIMEOUT, 50, transactionManager, apiVersions);
+            MAX_RETRIES, senderMetrics, this.time, REQUEST_TIMEOUT, 50, transactionManager, apiVersions);
         this.metadata.update(this.cluster, Collections.<String>emptySet(), time.milliseconds());
         client.setNode(brokerNode);
     }
@@ -141,7 +141,7 @@ public class TransactionManagerTest {
 
         transactionManager.maybeAddPartitionToTransaction(tp0);
         FutureRecordMetadata sendFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+            "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
 
         prepareAddPartitionsToTxn(tp0, Errors.NONE);
         prepareProduceResponse(Errors.NONE, pid, epoch);
@@ -153,7 +153,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testEndTxnNotSentIfIncompleteBatches() {
+    public void testEndTxnNotSentIfIncompleteBatches() throws Exception {
         long pid = 13131L;
         short epoch = 1;
         doInitTransactions(pid, epoch);
@@ -188,7 +188,7 @@ public class TransactionManagerTest {
     }
 
     @Test(expected = IllegalStateException.class)
-    public void testFailIfNotReadyForSendNoOngoingTransaction() {
+    public void testFailIfNotReadyForSendNoOngoingTransaction() throws Exception {
         long pid = 13131L;
         short epoch = 1;
         doInitTransactions(pid, epoch);
@@ -196,7 +196,7 @@ public class TransactionManagerTest {
     }
 
     @Test(expected = KafkaException.class)
-    public void testFailIfNotReadyForSendAfterAbortableError() {
+    public void testFailIfNotReadyForSendAfterAbortableError() throws Exception {
         long pid = 13131L;
         short epoch = 1;
         doInitTransactions(pid, epoch);
@@ -206,7 +206,7 @@ public class TransactionManagerTest {
     }
 
     @Test(expected = KafkaException.class)
-    public void testFailIfNotReadyForSendAfterFatalError() {
+    public void testFailIfNotReadyForSendAfterFatalError() throws Exception {
         long pid = 13131L;
         short epoch = 1;
         doInitTransactions(pid, epoch);
@@ -215,7 +215,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testHasOngoingTransactionSuccessfulAbort() {
+    public void testHasOngoingTransactionSuccessfulAbort() throws Exception {
         long pid = 13131L;
         short epoch = 1;
         TopicPartition partition = new TopicPartition("foo", 0);
@@ -242,7 +242,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testHasOngoingTransactionSuccessfulCommit() {
+    public void testHasOngoingTransactionSuccessfulCommit() throws Exception {
         long pid = 13131L;
         short epoch = 1;
         TopicPartition partition = new TopicPartition("foo", 0);
@@ -269,7 +269,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testHasOngoingTransactionAbortableError() {
+    public void testHasOngoingTransactionAbortableError() throws Exception {
         long pid = 13131L;
         short epoch = 1;
         TopicPartition partition = new TopicPartition("foo", 0);
@@ -299,7 +299,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testHasOngoingTransactionFatalError() {
+    public void testHasOngoingTransactionFatalError() throws Exception {
         long pid = 13131L;
         short epoch = 1;
         TopicPartition partition = new TopicPartition("foo", 0);
@@ -322,7 +322,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testMaybeAddPartitionToTransaction() {
+    public void testMaybeAddPartitionToTransaction() throws Exception {
         long pid = 13131L;
         short epoch = 1;
         TopicPartition partition = new TopicPartition("foo", 0);
@@ -349,7 +349,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testAddPartitionToTransactionOverridesRetryBackoffForConcurrentTransactions() {
+    public void testAddPartitionToTransactionOverridesRetryBackoffForConcurrentTransactions() throws Exception {
         long pid = 13131L;
         short epoch = 1;
         TopicPartition partition = new TopicPartition("foo", 0);
@@ -370,7 +370,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testAddPartitionToTransactionRetainsRetryBackoffForRegularRetriableError() {
+    public void testAddPartitionToTransactionRetainsRetryBackoffForRegularRetriableError() throws Exception {
         long pid = 13131L;
         short epoch = 1;
         TopicPartition partition = new TopicPartition("foo", 0);
@@ -391,7 +391,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testAddPartitionToTransactionRetainsRetryBackoffWhenPartitionsAlreadyAdded() {
+    public void testAddPartitionToTransactionRetainsRetryBackoffWhenPartitionsAlreadyAdded() throws Exception {
         long pid = 13131L;
         short epoch = 1;
         TopicPartition partition = new TopicPartition("foo", 0);
@@ -422,7 +422,7 @@ public class TransactionManagerTest {
     }
 
     @Test(expected = IllegalStateException.class)
-    public void testMaybeAddPartitionToTransactionBeforeBeginTransaction() {
+    public void testMaybeAddPartitionToTransactionBeforeBeginTransaction() throws Exception {
         long pid = 13131L;
         short epoch = 1;
         doInitTransactions(pid, epoch);
@@ -430,7 +430,7 @@ public class TransactionManagerTest {
     }
 
     @Test(expected = KafkaException.class)
-    public void testMaybeAddPartitionToTransactionAfterAbortableError() {
+    public void testMaybeAddPartitionToTransactionAfterAbortableError() throws Exception {
         long pid = 13131L;
         short epoch = 1;
         doInitTransactions(pid, epoch);
@@ -440,7 +440,7 @@ public class TransactionManagerTest {
     }
 
     @Test(expected = KafkaException.class)
-    public void testMaybeAddPartitionToTransactionAfterFatalError() {
+    public void testMaybeAddPartitionToTransactionAfterFatalError() throws Exception {
         long pid = 13131L;
         short epoch = 1;
         doInitTransactions(pid, epoch);
@@ -449,7 +449,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testIsSendToPartitionAllowedWithPendingPartitionAfterAbortableError() {
+    public void testIsSendToPartitionAllowedWithPendingPartitionAfterAbortableError() throws Exception {
         final long pid = 13131L;
         final short epoch = 1;
 
@@ -464,7 +464,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testIsSendToPartitionAllowedWithInFlightPartitionAddAfterAbortableError() {
+    public void testIsSendToPartitionAllowedWithInFlightPartitionAddAfterAbortableError() throws Exception {
         final long pid = 13131L;
         final short epoch = 1;
 
@@ -482,7 +482,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testIsSendToPartitionAllowedWithPendingPartitionAfterFatalError() {
+    public void testIsSendToPartitionAllowedWithPendingPartitionAfterFatalError() throws Exception {
         final long pid = 13131L;
         final short epoch = 1;
 
@@ -497,7 +497,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testIsSendToPartitionAllowedWithInFlightPartitionAddAfterFatalError() {
+    public void testIsSendToPartitionAllowedWithInFlightPartitionAddAfterFatalError() throws Exception {
         final long pid = 13131L;
         final short epoch = 1;
 
@@ -515,7 +515,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testIsSendToPartitionAllowedWithAddedPartitionAfterAbortableError() {
+    public void testIsSendToPartitionAllowedWithAddedPartitionAfterAbortableError() throws Exception {
         final long pid = 13131L;
         final short epoch = 1;
 
@@ -534,7 +534,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testIsSendToPartitionAllowedWithAddedPartitionAfterFatalError() {
+    public void testIsSendToPartitionAllowedWithAddedPartitionAfterFatalError() throws Exception {
         final long pid = 13131L;
         final short epoch = 1;
 
@@ -552,7 +552,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testIsSendToPartitionAllowedWithPartitionNotAdded() {
+    public void testIsSendToPartitionAllowedWithPartitionNotAdded() throws Exception {
         final long pid = 13131L;
         final short epoch = 1;
         doInitTransactions(pid, epoch);
@@ -595,7 +595,7 @@ public class TransactionManagerTest {
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
         Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+            "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
 
         assertFalse(responseFuture.isDone());
         prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, pid);
@@ -652,7 +652,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testDisconnectAndRetry() {
+    public void testDisconnectAndRetry() throws Exception {
         // This is called from the initTransactions method in the producer as the first order of business.
         // It finds the coordinator and then gets a PID.
         transactionManager.initializeTransactions();
@@ -666,7 +666,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testUnsupportedFindCoordinator() {
+    public void testUnsupportedFindCoordinator() throws Exception {
         transactionManager.initializeTransactions();
         client.prepareUnsupportedVersionResponse(new MockClient.RequestMatcher() {
             @Override
@@ -685,7 +685,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testUnsupportedInitTransactions() {
+    public void testUnsupportedInitTransactions() throws Exception {
         transactionManager.initializeTransactions();
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
         sender.run(time.milliseconds()); // InitProducerRequest is queued
@@ -710,7 +710,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testUnsupportedForMessageFormatInTxnOffsetCommit() {
+    public void testUnsupportedForMessageFormatInTxnOffsetCommit() throws Exception {
         final String consumerGroupId = "consumer";
         final long pid = 13131L;
         final short epoch = 1;
@@ -720,7 +720,7 @@ public class TransactionManagerTest {
 
         transactionManager.beginTransaction();
         TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
-                singletonMap(tp, new OffsetAndMetadata(39L)), consumerGroupId);
+            singletonMap(tp, new OffsetAndMetadata(39L)), consumerGroupId);
 
         prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, pid, epoch);
         sender.run(time.milliseconds());  // AddOffsetsToTxn Handled, TxnOffsetCommit Enqueued
@@ -741,7 +741,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testLookupCoordinatorOnDisconnectAfterSend() {
+    public void testLookupCoordinatorOnDisconnectAfterSend() throws Exception {
         // This is called from the initTransactions method in the producer as the first order of business.
         // It finds the coordinator and then gets a PID.
         final long pid = 13131L;
@@ -774,7 +774,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testLookupCoordinatorOnDisconnectBeforeSend() {
+    public void testLookupCoordinatorOnDisconnectBeforeSend() throws Exception {
         // This is called from the initTransactions method in the producer as the first order of business.
         // It finds the coordinator and then gets a PID.
         final long pid = 13131L;
@@ -810,7 +810,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testLookupCoordinatorOnNotCoordinatorError() {
+    public void testLookupCoordinatorOnNotCoordinatorError() throws Exception {
         // This is called from the initTransactions method in the producer as the first order of business.
         // It finds the coordinator and then gets a PID.
         final long pid = 13131L;
@@ -842,10 +842,10 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testTransactionalIdAuthorizationFailureInFindCoordinator() {
+    public void testTransactionalIdAuthorizationFailureInFindCoordinator() throws Exception {
         TransactionalRequestResult initPidResult = transactionManager.initializeTransactions();
         prepareFindCoordinatorResponse(Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED, false,
-                CoordinatorType.TRANSACTION, transactionalId);
+            CoordinatorType.TRANSACTION, transactionalId);
         sender.run(time.milliseconds());  // find coordinator
         sender.run(time.milliseconds());
 
@@ -861,7 +861,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testTransactionalIdAuthorizationFailureInInitProducerId() {
+    public void testTransactionalIdAuthorizationFailureInInitProducerId() throws Exception {
         final long pid = 13131L;
         TransactionalRequestResult initPidResult = transactionManager.initializeTransactions();
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
@@ -881,7 +881,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testGroupAuthorizationFailureInFindCoordinator() {
+    public void testGroupAuthorizationFailureInFindCoordinator() throws Exception {
         final String consumerGroupId = "consumer";
         final long pid = 13131L;
         final short epoch = 1;
@@ -890,7 +890,7 @@ public class TransactionManagerTest {
 
         transactionManager.beginTransaction();
         TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
-                singletonMap(new TopicPartition("foo", 0), new OffsetAndMetadata(39L)), consumerGroupId);
+            singletonMap(new TopicPartition("foo", 0), new OffsetAndMetadata(39L)), consumerGroupId);
 
         prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, pid, epoch);
         sender.run(time.milliseconds());  // AddOffsetsToTxn Handled, TxnOffsetCommit Enqueued
@@ -912,7 +912,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testGroupAuthorizationFailureInTxnOffsetCommit() {
+    public void testGroupAuthorizationFailureInTxnOffsetCommit() throws Exception {
         final String consumerGroupId = "consumer";
         final long pid = 13131L;
         final short epoch = 1;
@@ -922,7 +922,7 @@ public class TransactionManagerTest {
 
         transactionManager.beginTransaction();
         TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
-                singletonMap(tp, new OffsetAndMetadata(39L)), consumerGroupId);
+            singletonMap(tp, new OffsetAndMetadata(39L)), consumerGroupId);
 
         prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, pid, epoch);
         sender.run(time.milliseconds());  // AddOffsetsToTxn Handled, TxnOffsetCommit Enqueued
@@ -947,7 +947,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testTransactionalIdAuthorizationFailureInAddOffsetsToTxn() {
+    public void testTransactionalIdAuthorizationFailureInAddOffsetsToTxn() throws Exception {
         final String consumerGroupId = "consumer";
         final long pid = 13131L;
         final short epoch = 1;
@@ -957,7 +957,7 @@ public class TransactionManagerTest {
 
         transactionManager.beginTransaction();
         TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
-                singletonMap(tp, new OffsetAndMetadata(39L)), consumerGroupId);
+            singletonMap(tp, new OffsetAndMetadata(39L)), consumerGroupId);
 
         prepareAddOffsetsToTxnResponse(Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED, consumerGroupId, pid, epoch);
         sender.run(time.milliseconds());  // AddOffsetsToTxn Handled
@@ -972,7 +972,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testTransactionalIdAuthorizationFailureInTxnOffsetCommit() {
+    public void testTransactionalIdAuthorizationFailureInTxnOffsetCommit() throws Exception {
         final String consumerGroupId = "consumer";
         final long pid = 13131L;
         final short epoch = 1;
@@ -982,7 +982,7 @@ public class TransactionManagerTest {
 
         transactionManager.beginTransaction();
         TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
-                singletonMap(tp, new OffsetAndMetadata(39L)), consumerGroupId);
+            singletonMap(tp, new OffsetAndMetadata(39L)), consumerGroupId);
 
         prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, pid, epoch);
         sender.run(time.milliseconds());  // AddOffsetsToTxn Handled, TxnOffsetCommit Enqueued
@@ -1004,7 +1004,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testTopicAuthorizationFailureInAddPartitions() {
+    public void testTopicAuthorizationFailureInAddPartitions() throws Exception {
         final long pid = 13131L;
         final short epoch = 1;
         final TopicPartition tp0 = new TopicPartition("foo", 0);
@@ -1048,7 +1048,7 @@ public class TransactionManagerTest {
         transactionManager.maybeAddPartitionToTransaction(unauthorizedPartition);
 
         Future<RecordMetadata> responseFuture = accumulator.append(unauthorizedPartition, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+            "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
 
         prepareAddPartitionsToTxn(singletonMap(unauthorizedPartition, Errors.TOPIC_AUTHORIZATION_FAILED));
         sender.run(time.milliseconds());
@@ -1071,7 +1071,7 @@ public class TransactionManagerTest {
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
         responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+            "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
 
         prepareAddPartitionsToTxn(singletonMap(tp0, Errors.NONE));
         sender.run(time.milliseconds());
@@ -1104,13 +1104,13 @@ public class TransactionManagerTest {
         prepareAddPartitionsToTxn(tp0, Errors.NONE);
 
         Future<RecordMetadata> authorizedTopicProduceFuture = accumulator.append(unauthorizedPartition, time.milliseconds(),
-                "key".getBytes(), "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+            "key".getBytes(), "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
         sender.run(time.milliseconds());
         assertTrue(transactionManager.isPartitionAdded(tp0));
 
         transactionManager.maybeAddPartitionToTransaction(unauthorizedPartition);
         Future<RecordMetadata> unauthorizedTopicProduceFuture = accumulator.append(unauthorizedPartition, time.milliseconds(),
-                "key".getBytes(), "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+            "key".getBytes(), "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
         prepareAddPartitionsToTxn(singletonMap(unauthorizedPartition, Errors.TOPIC_AUTHORIZATION_FAILED));
         sender.run(time.milliseconds());
         assertTrue(transactionManager.hasAbortableError());
@@ -1135,7 +1135,7 @@ public class TransactionManagerTest {
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
         FutureRecordMetadata nextTransactionFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+            "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
 
         prepareAddPartitionsToTxn(singletonMap(tp0, Errors.NONE));
         sender.run(time.milliseconds());
@@ -1168,7 +1168,7 @@ public class TransactionManagerTest {
         prepareAddPartitionsToTxn(tp0, Errors.NONE);
 
         Future<RecordMetadata> authorizedTopicProduceFuture = accumulator.append(tp0, time.milliseconds(),
-                "key".getBytes(), "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+            "key".getBytes(), "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
         sender.run(time.milliseconds());
         assertTrue(transactionManager.isPartitionAdded(tp0));
 
@@ -1180,7 +1180,7 @@ public class TransactionManagerTest {
 
         transactionManager.maybeAddPartitionToTransaction(unauthorizedPartition);
         Future<RecordMetadata> unauthorizedTopicProduceFuture = accumulator.append(unauthorizedPartition, time.milliseconds(),
-                "key".getBytes(), "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+            "key".getBytes(), "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
         prepareAddPartitionsToTxn(singletonMap(unauthorizedPartition, Errors.TOPIC_AUTHORIZATION_FAILED));
         sender.run(time.milliseconds());
         assertTrue(transactionManager.hasAbortableError());
@@ -1209,7 +1209,7 @@ public class TransactionManagerTest {
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
         FutureRecordMetadata nextTransactionFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+            "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
 
         prepareAddPartitionsToTxn(singletonMap(tp0, Errors.NONE));
         sender.run(time.milliseconds());
@@ -1230,7 +1230,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testTransactionalIdAuthorizationFailureInAddPartitions() {
+    public void testTransactionalIdAuthorizationFailureInAddPartitions() throws Exception {
         final long pid = 13131L;
         final short epoch = 1;
         final TopicPartition tp = new TopicPartition("foo", 0);
@@ -1260,7 +1260,7 @@ public class TransactionManagerTest {
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
         Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+            "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
 
         assertFalse(responseFuture.isDone());
 
@@ -1305,7 +1305,7 @@ public class TransactionManagerTest {
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
         Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+            "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
 
         assertFalse(responseFuture.isDone());
         prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, pid);
@@ -1320,7 +1320,7 @@ public class TransactionManagerTest {
         // In the mean time, the user does a second produce to a different partition
         transactionManager.maybeAddPartitionToTransaction(tp1);
         Future<RecordMetadata> secondResponseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+            "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
 
         prepareAddPartitionsToTxnResponse(Errors.NONE, tp1, epoch, pid);
         prepareProduceResponse(Errors.NONE, pid, epoch);
@@ -1355,7 +1355,7 @@ public class TransactionManagerTest {
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
         Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+            "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
 
         assertFalse(responseFuture.isDone());
         prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, pid);
@@ -1380,7 +1380,7 @@ public class TransactionManagerTest {
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
         Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+            "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
 
         TransactionalRequestResult commitResult = transactionManager.beginCommit();
         assertFalse(responseFuture.isDone());
@@ -1428,7 +1428,7 @@ public class TransactionManagerTest {
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
         Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+            "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
 
         assertFalse(responseFuture.isDone());
         prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, pid);
@@ -1456,7 +1456,7 @@ public class TransactionManagerTest {
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
         Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+            "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
 
         assertFalse(responseFuture.isDone());
         prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, pid);
@@ -1493,7 +1493,7 @@ public class TransactionManagerTest {
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
         Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+            "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
 
         prepareAddPartitionsToTxn(tp0, Errors.NONE);
         sender.run(time.milliseconds());
@@ -1542,7 +1542,7 @@ public class TransactionManagerTest {
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
         Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+            "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
 
         prepareAddPartitionsToTxn(tp0, Errors.NONE);
         sender.run(time.milliseconds());
@@ -1597,7 +1597,7 @@ public class TransactionManagerTest {
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
         Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+            "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
 
         assertFalse(responseFuture.isDone());
         sender.run(time.milliseconds());  // Send AddPartitionsRequest
@@ -1625,7 +1625,7 @@ public class TransactionManagerTest {
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
         Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+            "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
 
         assertFalse(responseFuture.isDone());
 
@@ -1657,7 +1657,7 @@ public class TransactionManagerTest {
         prepareAddPartitionsToTxnResponse(Errors.UNKNOWN_TOPIC_OR_PARTITION, tp0, producerEpoch, producerId);
 
         Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+            "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
 
         sender.run(time.milliseconds());  // Send AddPartitions and let it fail
         assertFalse(responseFuture.isDone());
@@ -1696,7 +1696,7 @@ public class TransactionManagerTest {
         prepareProduceResponse(Errors.REQUEST_TIMED_OUT, producerId, producerEpoch);
 
         Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+            "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
 
         sender.run(time.milliseconds());  // Send AddPartitions
         sender.run(time.milliseconds());  // Send ProduceRequest and let it fail
@@ -1731,7 +1731,7 @@ public class TransactionManagerTest {
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
         Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+            "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
 
         assertFalse(responseFuture.isDone());
         prepareAddPartitionsToTxnResponse(Errors.UNKNOWN_TOPIC_OR_PARTITION, tp0, epoch, pid);
@@ -1879,10 +1879,10 @@ public class TransactionManagerTest {
         transactionManager.beginTransaction();
         transactionManager.maybeAddPartitionToTransaction(tp0);
         accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT);
+            "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT);
         transactionManager.maybeAddPartitionToTransaction(tp1);
         accumulator.append(tp1, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT);
+            "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT);
 
         assertFalse(transactionManager.isSendToPartitionAllowed(tp0));
         assertFalse(transactionManager.isSendToPartitionAllowed(tp1));
@@ -1893,12 +1893,12 @@ public class TransactionManagerTest {
         PartitionInfo part2 = new PartitionInfo(topic, 1, node2, null, null);
 
         Cluster cluster = new Cluster(null, Arrays.asList(node1, node2), Arrays.asList(part1, part2),
-                Collections.<String>emptySet(), Collections.<String>emptySet());
+            Collections.<String>emptySet(), Collections.<String>emptySet());
         Set<Node> nodes = new HashSet<>();
         nodes.add(node1);
         nodes.add(node2);
         Map<Integer, List<ProducerBatch>> drainedBatches = accumulator.drain(cluster, nodes, Integer.MAX_VALUE,
-                time.milliseconds());
+            time.milliseconds());
 
         // We shouldn't drain batches which haven't been added to the transaction yet.
         assertTrue(drainedBatches.containsKey(node1.id()));
@@ -1931,12 +1931,12 @@ public class TransactionManagerTest {
         Node node1 = new Node(1, "localhost", 1112);
         PartitionInfo part1 = new PartitionInfo(topic, 1, node1, null, null);
         Cluster cluster = new Cluster(null, Arrays.asList(node1), Arrays.asList(part1),
-                Collections.<String>emptySet(), Collections.<String>emptySet());
+            Collections.<String>emptySet(), Collections.<String>emptySet());
         accumulator.append(tp1, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT);
+            "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT);
         Map<Integer, List<ProducerBatch>> drainedBatches = accumulator.drain(cluster, Collections.singleton(node1),
-                Integer.MAX_VALUE,
-                time.milliseconds());
+            Integer.MAX_VALUE,
+            time.milliseconds());
 
         // We should drain the appended record since we are in abortable state and the partition has already been
         // added to the transaction.
@@ -1953,16 +1953,16 @@ public class TransactionManagerTest {
         transactionManager.beginTransaction();
         // Don't execute transactionManager.maybeAddPartitionToTransaction(tp0). This should result in an error on drain.
         accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT);
+            "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT);
         Node node1 = new Node(0, "localhost", 1111);
         PartitionInfo part1 = new PartitionInfo(topic, 0, node1, null, null);
 
         Cluster cluster = new Cluster(null, Arrays.asList(node1), Arrays.asList(part1),
-                Collections.<String>emptySet(), Collections.<String>emptySet());
+            Collections.<String>emptySet(), Collections.<String>emptySet());
         Set<Node> nodes = new HashSet<>();
         nodes.add(node1);
         Map<Integer, List<ProducerBatch>> drainedBatches = accumulator.drain(cluster, nodes, Integer.MAX_VALUE,
-                time.milliseconds());
+            time.milliseconds());
 
         // We shouldn't drain batches which haven't been added to the transaction yet.
         assertTrue(drainedBatches.containsKey(node1.id()));
@@ -1979,7 +1979,7 @@ public class TransactionManagerTest {
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
         Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+            "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
 
         prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, pid);
         prepareProduceResponse(Errors.NOT_LEADER_FOR_PARTITION, pid, epoch);
@@ -1997,7 +1997,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testTransitionToAbortableErrorOnBatchExpiry() throws InterruptedException, ExecutionException {
+    public void testTransitionToAbortableErrorOnBatchExpiry() throws InterruptedException {
         final long pid = 13131L;
         final short epoch = 1;
 
@@ -2007,7 +2007,7 @@ public class TransactionManagerTest {
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
         Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+            "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
 
         assertFalse(responseFuture.isDone());
 
@@ -2043,7 +2043,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testTransitionToAbortableErrorOnMultipleBatchExpiry() throws InterruptedException, ExecutionException {
+    public void testTransitionToAbortableErrorOnMultipleBatchExpiry() throws InterruptedException {
         final long pid = 13131L;
         final short epoch = 1;
 
@@ -2054,9 +2054,9 @@ public class TransactionManagerTest {
         transactionManager.maybeAddPartitionToTransaction(tp1);
 
         Future<RecordMetadata> firstBatchResponse = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+            "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
         Future<RecordMetadata> secondBatchResponse = accumulator.append(tp1, time.milliseconds(), "key".getBytes(),
-               "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+            "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
 
         assertFalse(firstBatchResponse.isDone());
         assertFalse(secondBatchResponse.isDone());
@@ -2108,7 +2108,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testDropCommitOnBatchExpiry() throws InterruptedException, ExecutionException {
+    public void testDropCommitOnBatchExpiry() throws InterruptedException {
         final long pid = 13131L;
         final short epoch = 1;
 
@@ -2118,7 +2118,7 @@ public class TransactionManagerTest {
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
         Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+            "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
 
         assertFalse(responseFuture.isDone());
 
@@ -2175,7 +2175,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testTransitionToFatalErrorWhenRetriedBatchIsExpired() throws InterruptedException, ExecutionException {
+    public void testTransitionToFatalErrorWhenRetriedBatchIsExpired() throws InterruptedException {
         final long pid = 13131L;
         final short epoch = 1;
 
@@ -2185,7 +2185,7 @@ public class TransactionManagerTest {
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
         Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+            "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
 
         assertFalse(responseFuture.isDone());
 
@@ -2234,7 +2234,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testShouldResetProducerStateAfterResolvingSequences() throws InterruptedException, ExecutionException {
+    public void testShouldResetProducerStateAfterResolvingSequences() {
         // Create a TransactionManager without a transactionalId to test
         // shouldResetProducerStateAfterResolvingSequences.
         TransactionManager manager = new TransactionManager(logContext, null, transactionTimeoutMs,
@@ -2270,7 +2270,7 @@ public class TransactionManagerTest {
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
         Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+            "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
         assertFalse(responseFuture.isDone());
         prepareAddPartitionsToTxn(tp0, error);
         sender.run(time.milliseconds());  // attempt send addPartitions.
@@ -2294,8 +2294,8 @@ public class TransactionManagerTest {
     }
 
     private void prepareFindCoordinatorResponse(Errors error, boolean shouldDisconnect,
-                                                final CoordinatorType coordinatorType,
-                                                final String coordinatorKey) {
+        final CoordinatorType coordinatorType,
+        final String coordinatorKey) {
         client.prepareResponse(new MockClient.RequestMatcher() {
             @Override
             public boolean matches(AbstractRequest body) {
@@ -2347,19 +2347,19 @@ public class TransactionManagerTest {
     }
 
     private void prepareAddPartitionsToTxnResponse(Errors error, final TopicPartition topicPartition,
-                                                   final short epoch, final long pid) {
+        final short epoch, final long pid) {
         client.prepareResponse(addPartitionsRequestMatcher(topicPartition, epoch, pid),
-                new AddPartitionsToTxnResponse(0, singletonMap(topicPartition, error)));
+            new AddPartitionsToTxnResponse(0, singletonMap(topicPartition, error)));
     }
 
     private void sendAddPartitionsToTxnResponse(Errors error, final TopicPartition topicPartition,
-                                                final short epoch, final long pid) {
+        final short epoch, final long pid) {
         client.respond(addPartitionsRequestMatcher(topicPartition, epoch, pid),
-                new AddPartitionsToTxnResponse(0, singletonMap(topicPartition, error)));
+            new AddPartitionsToTxnResponse(0, singletonMap(topicPartition, error)));
     }
 
     private MockClient.RequestMatcher addPartitionsRequestMatcher(final TopicPartition topicPartition,
-                                                                  final short epoch, final long pid) {
+        final short epoch, final long pid) {
         return new MockClient.RequestMatcher() {
             @Override
             public boolean matches(AbstractRequest body) {
@@ -2396,7 +2396,7 @@ public class TransactionManagerTest {
     }
 
     private void prepareAddOffsetsToTxnResponse(Errors error, final String consumerGroupId, final long producerId,
-                                                final short producerEpoch) {
+        final short producerEpoch) {
         client.prepareResponse(new MockClient.RequestMatcher() {
             @Override
             public boolean matches(AbstractRequest body) {
@@ -2411,7 +2411,7 @@ public class TransactionManagerTest {
     }
 
     private void prepareTxnOffsetCommitResponse(final String consumerGroupId, final long producerId,
-                                                final short producerEpoch, Map<TopicPartition, Errors> txnOffsetCommitResponse) {
+        final short producerEpoch, Map<TopicPartition, Errors> txnOffsetCommitResponse) {
         client.prepareResponse(new MockClient.RequestMatcher() {
             @Override
             public boolean matches(AbstractRequest body) {
@@ -2431,7 +2431,7 @@ public class TransactionManagerTest {
         return new ProduceResponse(partResp, throttleTimeMs);
     }
 
-    private void doInitTransactions(long pid, short epoch) {
+    private void doInitTransactions(long pid, short epoch) throws InterruptedException {
         transactionManager.initializeTransactions();
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
         sender.run(time.milliseconds());  // find coordinator

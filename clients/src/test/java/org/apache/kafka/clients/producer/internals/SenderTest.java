@@ -1656,7 +1656,7 @@ public class SenderTest {
         int maxRetries = 10;
         Metrics m = new Metrics();
         SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
-        
+
         Sender sender = new Sender(logContext, client, metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL, maxRetries,
                 senderMetrics, time, REQUEST_TIMEOUT, 50, transactionManager, apiVersions);
 
@@ -1740,7 +1740,7 @@ public class SenderTest {
         int maxRetries = 10;
         Metrics m = new Metrics();
         SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
-        
+
         Sender sender = new Sender(logContext, client, metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL, maxRetries,
                 senderMetrics, time, REQUEST_TIMEOUT, 50, transactionManager, apiVersions);
 
@@ -1952,7 +1952,7 @@ public class SenderTest {
         }
     }
 
-    private void prepareAndReceiveInitProducerId(long producerId, Errors error) {
+    private void prepareAndReceiveInitProducerId(long producerId, Errors error) throws Exception {
         short producerEpoch = 0;
         if (error != Errors.NONE)
             producerEpoch = RecordBatch.NO_PRODUCER_EPOCH;
@@ -1966,7 +1966,7 @@ public class SenderTest {
         sender.run(time.milliseconds());
     }
 
-    private void doInitTransactions(TransactionManager transactionManager, ProducerIdAndEpoch producerIdAndEpoch) {
+    private void doInitTransactions(TransactionManager transactionManager, ProducerIdAndEpoch producerIdAndEpoch) throws Exception {
         transactionManager.initializeTransactions();
         prepareFindCoordinatorResponse(Errors.NONE);
         sender.run(time.milliseconds());

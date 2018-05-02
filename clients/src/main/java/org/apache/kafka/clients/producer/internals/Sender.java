@@ -198,7 +198,7 @@ public class Sender implements Runnable {
      *
      * @param now The current POSIX time in milliseconds
      */
-    void run(long now) {
+    void run(long now) throws InterruptedException {
         if (transactionManager != null) {
             try {
                 if (transactionManager.shouldResetProducerStateAfterResolvingSequences())
@@ -314,7 +314,7 @@ public class Sender implements Runnable {
         return pollTimeout;
     }
 
-    private boolean maybeSendTransactionalRequest(long now) {
+    private boolean maybeSendTransactionalRequest(long now) throws InterruptedException {
         if (transactionManager.isCompleting() && accumulator.hasIncomplete()) {
             if (transactionManager.isAborting())
                 accumulator.abortUndrainedBatches(new KafkaException("Failing batch since transaction was aborted"));
@@ -406,14 +406,14 @@ public class Sender implements Runnable {
         initiateClose();
     }
 
-    private ClientResponse sendAndAwaitInitProducerIdRequest(Node node) throws IOException {
+    private ClientResponse sendAndAwaitInitProducerIdRequest(Node node) throws IOException, InterruptedException {
         String nodeId = node.idString();
         InitProducerIdRequest.Builder builder = new InitProducerIdRequest.Builder(null);
         ClientRequest request = client.newClientRequest(nodeId, builder, time.milliseconds(), true, null);
         return NetworkClientUtils.sendAndReceive(client, request, time);
     }
 
-    private Node awaitLeastLoadedNodeReady(long remainingTimeMs) throws IOException {
+    private Node awaitLeastLoadedNodeReady(long remainingTimeMs) throws IOException, InterruptedException {
         Node node = client.leastLoadedNode(time.milliseconds());
         if (node != null && NetworkClientUtils.awaitReady(client, node, time, remainingTimeMs)) {
             return node;
@@ -421,7 +421,7 @@ public class Sender implements Runnable {
         return null;
     }
 
-    private void maybeWaitForProducerId() {
+    private void maybeWaitForProducerId() throws InterruptedException {
         while (!transactionManager.hasProducerId() && !transactionManager.hasError()) {
             try {
                 Node node = awaitLeastLoadedNodeReady(requestTimeout);
