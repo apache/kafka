@@ -41,11 +41,9 @@ class ByteBufferLogInputStream implements LogInputStream<MutableRecordBatch> {
 
     public MutableRecordBatch nextBatch() throws IOException {
         int remaining = buffer.remaining();
-        if (remaining < LOG_OVERHEAD)
-            return null;
 
-        int batchSize = nextBatchSize();
-        if (remaining < batchSize)
+        Integer batchSize = nextBatchSize();
+        if (batchSize == null || remaining < batchSize)
             return null;
 
         byte magic = buffer.get(buffer.position() + MAGIC_OFFSET);
@@ -60,11 +58,16 @@ class ByteBufferLogInputStream implements LogInputStream<MutableRecordBatch> {
             return new AbstractLegacyRecordBatch.ByteBufferLegacyRecordBatch(batchSlice);
     }
 
-    int nextBatchSize() throws CorruptRecordException {
+    /**
+     * Validates the header of the next batch and returns batch size.
+     * @return next batch size including LOG_OVERHEAD if buffer contains header up to
+     *         magic byte, null otherwise
+     * @throws CorruptRecordException if record size or magic is invalid
+     */
+    Integer nextBatchSize() throws CorruptRecordException {
         int remaining = buffer.remaining();
         if (remaining < LOG_OVERHEAD)
-            throw new IllegalStateException("Buffer does not contain batch header");
-
+            return null;
         int recordSize = buffer.getInt(buffer.position() + SIZE_OFFSET);
         // V0 has the smallest overhead, stricter checking is done later
         if (recordSize < LegacyRecord.RECORD_OVERHEAD_V0)
@@ -74,11 +77,13 @@ class ByteBufferLogInputStream implements LogInputStream<MutableRecordBatch> {
             throw new CorruptRecordException(String.format("Record size %d exceeds the largest allowable message size (%d).",
                     recordSize, maxMessageSize));
 
-        if (remaining >= HEADER_SIZE_UP_TO_MAGIC) {
-            byte magic = buffer.get(buffer.position() + MAGIC_OFFSET);
-            if (magic < 0 || magic > RecordBatch.CURRENT_MAGIC_VALUE)
-                throw new CorruptRecordException("Invalid magic found in record: " + magic);
-        }
+        if (remaining < HEADER_SIZE_UP_TO_MAGIC)
+            return null;
+
+        byte magic = buffer.get(buffer.position() + MAGIC_OFFSET);
+        if (magic < 0 || magic > RecordBatch.CURRENT_MAGIC_VALUE)
+            throw new CorruptRecordException("Invalid magic found in record: " + magic);
+
         return recordSize + LOG_OVERHEAD;
     }
 }

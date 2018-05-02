@@ -644,7 +644,10 @@ private[log] class Cleaner(val id: Int,
         // In these cases, grow the buffer to hold the next batch.
         val maxSize = if (readBuffer.capacity >= maxLogMessageSize) {
           checkCrc = true
-          records.nextBatchSize
+          val nextBatchSize = records.nextBatchSize
+          if (nextBatchSize == null)
+            throw new IllegalStateException(s"Could not determine next batch size for log ${sourceRecords.file} at position $position")
+          nextBatchSize.intValue
         } else
           maxLogMessageSize
 
