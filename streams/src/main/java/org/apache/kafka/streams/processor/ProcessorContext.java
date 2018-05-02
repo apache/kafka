@@ -213,6 +213,10 @@ public interface ProcessorContext {
      */
     long offset();
 
+    /**
+     * Returns the headers of the current input record
+     * @return the headers
+     */
     Headers headers();
 
     /**

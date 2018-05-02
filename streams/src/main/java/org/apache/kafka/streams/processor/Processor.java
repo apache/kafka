@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
-import org.apache.kafka.common.header.Headers;
 
 /**
  * A processor of key-value pair records.
