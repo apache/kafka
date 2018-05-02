@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.Joined;
+import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
@@ -27,24 +28,22 @@ import java.util.Arrays;
 /**
  * Represents a join between a KStream and a KTable or GlobalKTable
  *
- * @param <K> key type
- * @param <V> value type of stream
- * @param <V1> value type of table
- * @param <V2> value type resulting from join
  */
 
-class StreamTableJoinNode<K, V, V1, V2> extends StreamsGraphNode {
+class StreamTableJoinNode<K1, K2,  V1, V2, VR> extends StreamsGraphNode {
 
     private final String[] storeNames;
-    private final ValueJoiner<? super V, ? super V1, ? extends V2> valueJoiner;
-    private final Joined<K, V1, V2> joined;
-    private final ProcessorSupplier<K, V> processorSupplier;
+    private final ValueJoiner<? super V1, ? super V2, ? extends VR> valueJoiner;
+    private final Joined<K1, V1, V2> joined;
+    private final KeyValueMapper<? super K1, ? super V1, ? extends K2> keyValueMapper;
+    private final ProcessorSupplier<K1, V1> processorSupplier;
 
     StreamTableJoinNode(final String parentProcessorNodeName,
                         final String processorNodeName,
-                        final ValueJoiner<? super V, ? super V1, ? extends V2> valueJoiner,
-                        final Joined<K, V1, V2> joined,
-                        final ProcessorSupplier<K, V> processorSupplier,
+                        final ValueJoiner<? super V1, ? super V2, ? extends VR> valueJoiner,
+                        final KeyValueMapper<? super K1, ? super V1, ? extends K2> keyValueMapper,
+                        final Joined<K1, V1, V2> joined,
+                        final ProcessorSupplier<K1, V1> processorSupplier,
                         final String[] storeNames) {
         super(parentProcessorNodeName,
               processorNodeName,
@@ -52,6 +51,7 @@ class StreamTableJoinNode<K, V, V1, V2> extends StreamsGraphNode {
 
         this.storeNames = storeNames;
         this.valueJoiner = valueJoiner;
+        this.keyValueMapper = keyValueMapper;
         this.joined = joined;
         this.processorSupplier = processorSupplier;
     }
@@ -60,16 +60,20 @@ class StreamTableJoinNode<K, V, V1, V2> extends StreamsGraphNode {
         return Arrays.copyOf(storeNames, storeNames.length);
     }
 
-    ValueJoiner<? super V, ? super V1, ? extends V2> valueJoiner() {
+    ValueJoiner<? super V1, ? super V2, ? extends VR> valueJoiner() {
         return valueJoiner;
     }
 
-    Joined<K, V1, V2> joined() {
+    Joined<K1, V1, V2> joined() {
         return joined;
     }
 
-    ProcessorSupplier<K, V> processorSupplier() {
+    ProcessorSupplier<K1, V1> processorSupplier() {
         return processorSupplier;
+    }
+
+    KeyValueMapper<? super K1, ? super V1, ? extends K2> keyValueMapper() {
+        return keyValueMapper;
     }
 
     @Override
