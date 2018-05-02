@@ -141,17 +141,6 @@ public class StoreChangelogReader implements ChangelogReader {
         return completed();
     }
 
-    private ConsumerRecords<byte[], byte[]> mergeRecords(Set<ConsumerRecords<byte[], byte[]>> allRecords) {
-        final Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> mergedRecords = new HashMap<>();
-        for (ConsumerRecords<byte[], byte[]> records : allRecords) {
-            for (TopicPartition partition : records.partitions()) {
-                mergedRecords.put(partition, records.records(partition));
-            }
-        }
-        final ConsumerRecords<byte[], byte[]> result = new ConsumerRecords<>(mergedRecords);
-        return result;
-    }
-
     private void initialize() {
         if (!restoreConsumer.subscription().isEmpty()) {
             throw new StreamsException("Restore consumer should not be subscribed to any topics (" + restoreConsumer.subscription() + ")");
