@@ -31,13 +31,6 @@ public class ProcessorRecordContext implements RecordContext {
     public ProcessorRecordContext(final long timestamp,
                                   final long offset,
                                   final int partition,
-                                  final String topic) {
-        this(timestamp, offset, partition, topic, null);
-    }
-
-    public ProcessorRecordContext(final long timestamp,
-                                  final long offset,
-                                  final int partition,
                                   final String topic,
                                   final Headers headers) {
 
