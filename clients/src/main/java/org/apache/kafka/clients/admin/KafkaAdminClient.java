@@ -137,9 +137,8 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -464,58 +463,47 @@ public class KafkaAdminClient extends AdminClient {
         Node provide();
     }
 
-    private interface CoordinatorNodeProvider {
-        Map<String, Node> provide();
+    private interface AsycNodeProvider {
+        KafkaFuture<Node> provide();
     }
 
-    private class ConsumerGroupCoordinatorNodeProvider implements CoordinatorNodeProvider {
-
+    private class GroupCoordinatorAsyncProvider implements AsycNodeProvider {
+        private String groupID;
         private long timeoutMs;
-        private Collection<String> groups;
 
-        ConsumerGroupCoordinatorNodeProvider(long timeoutMs, Collection<String> groups) {
-            Objects.requireNonNull(groups);
-            this.timeoutMs = timeoutMs <= 0 ? Long.MAX_VALUE : timeoutMs;
-            this.groups = groups;
+        GroupCoordinatorAsyncProvider(String groupID, long timeoutMs) {
+            this.groupID = groupID;
+            this.timeoutMs = timeoutMs;
         }
 
         @Override
-        public Map<String, Node> provide() {
-            if (groups.isEmpty()) {
-                return Collections.emptyMap();
-            }
-            final Map<String, Node> coordinators = new HashMap<>(groups.size());
-            final CountDownLatch latch = new CountDownLatch(groups.size());
-            for (final String group: groups) {
+        public KafkaFuture<Node> provide() {
+            final KafkaFutureImpl<Node> future = new KafkaFutureImpl<>();
+            if (groupID != null && !groupID.isEmpty()) {
                 final Call call = new Call("findCoordinator", timeoutMs, new LeastLoadedNodeProvider()) {
+
                     @Override
                     AbstractRequest.Builder createRequest(int timeoutMs) {
-                        return new FindCoordinatorRequest.Builder(FindCoordinatorRequest.CoordinatorType.GROUP, group);
+                        return new FindCoordinatorRequest.Builder(FindCoordinatorRequest.CoordinatorType.GROUP, groupID);
                     }
 
                     @Override
                     void handleResponse(AbstractResponse abstractResponse) {
                         final FindCoordinatorResponse response = (FindCoordinatorResponse) abstractResponse;
-                        coordinators.put(group, response.node());
-                        latch.countDown();
+                        future.complete(response.node());
                     }
 
                     @Override
                     void handleFailure(Throwable throwable) {
                         log.warn("findCoordinator handleResponse failed with {}",  prettyPrintException(throwable));
+                        future.complete(null);
                     }
                 };
                 runnable.call(call, time.milliseconds());
+            } else {
+                future.complete(null);
             }
-            try {
-                latch.await(timeoutMs, TimeUnit.MILLISECONDS);
-            } catch (InterruptedException e) {
-                // restore the interrupt status to allow code further up the call stack the opportunity to act on it
-                Thread.currentThread().interrupt();
-            }
-            // simply return the currently available coordinators even the thread is interrupted
-            // or we failed to find all coordinators from within the `timeoutMs`
-            return coordinators;
+            return future;
         }
     }
 
@@ -556,13 +544,19 @@ public class KafkaAdminClient extends AdminClient {
         private final String callName;
         private final long deadlineMs;
         private final NodeProvider nodeProvider;
+        private KafkaFuture<Node> nodeKafkaFuture;
         private int tries = 0;
         private boolean aborted = false;
 
         Call(String callName, long deadlineMs, NodeProvider nodeProvider) {
+            this(callName, deadlineMs, nodeProvider, null);
+        }
+
+        Call(String callName, long deadlineMs, NodeProvider nodeProvider, AsycNodeProvider asycNodeProvider) {
             this.callName = callName;
             this.deadlineMs = deadlineMs;
             this.nodeProvider = nodeProvider;
+            nodeKafkaFuture = asycNodeProvider == null ? null : asycNodeProvider.provide();
         }
 
         /**
@@ -830,6 +824,12 @@ public class KafkaAdminClient extends AdminClient {
                 newCalls = new LinkedList<>();
             }
             for (Call call : newCallsToAdd) {
+                if (call.nodeKafkaFuture != null && !call.nodeKafkaFuture.isDone()) {
+                    synchronized (this) {
+                        newCalls.add(call); // add back this incomplete `Call`
+                    }
+                    continue;
+                }
                 chooseNodeForNewCall(now, callsToSend, call);
             }
         }
@@ -842,14 +842,33 @@ public class KafkaAdminClient extends AdminClient {
          * @param call          The call.
          */
         private void chooseNodeForNewCall(long now, Map<Node, List<Call>> callsToSend, Call call) {
-            Node node = call.nodeProvider.provide();
-            if (node == null) {
-                call.fail(now, new BrokerNotAvailableException(
-                    String.format("Error choosing node for %s: no node found.", call.callName)));
-                return;
+            Node node;
+
+            if (call.nodeProvider != null) {
+                node = call.nodeProvider.provide();
+                if (node == null) {
+                    call.fail(now, new BrokerNotAvailableException(
+                            String.format("Error choosing node for %s: no node found.", call.callName)));
+                    return;
+                }
+            } else {
+                try {
+                    node = call.nodeKafkaFuture.getNow(null);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().currentThread();
+                    call.fail(now, new BrokerNotAvailableException(
+                            String.format("Error choosing node for %s: no node found.", call.callName)));
+                    return;
+                } catch (ExecutionException e) {
+                    call.fail(now, new BrokerNotAvailableException(
+                            String.format("Error choosing node for %s: no node found.", call.callName), e));
+                    return;
+                }
             }
-            log.trace("Assigned {} to {}", call, node);
-            getOrCreateListValue(callsToSend, node).add(call);
+            if (node != null) {
+                log.trace("Assigned {} to {}", call, node);
+                getOrCreateListValue(callsToSend, node).add(call);
+            }
         }
 
         /**
@@ -2310,10 +2329,6 @@ public class KafkaAdminClient extends AdminClient {
             }
         }
 
-        final long startMill = time.milliseconds();
-        final long totalTimeoutMs = calcDeadlineMs(startMill, options.timeoutMs);
-        Map<String, Node> coordinators = new ConsumerGroupCoordinatorNodeProvider(totalTimeoutMs, groupIds).provide();
-
         // TODO: KAFKA-6788, we should consider grouping the request per coordinator and send one request with a list of
         // all consumer groups this coordinator host
         for (final Map.Entry<String, KafkaFutureImpl<ConsumerGroupDescription>> entry : futures.entrySet()) {
@@ -2323,13 +2338,13 @@ public class KafkaAdminClient extends AdminClient {
 
             final String groupId = entry.getKey();
 
-            final long nowDescribeConsumerGroups = time.milliseconds();
-            final long deadline = calcDeadlineMs(nowDescribeConsumerGroups, options.timeoutMs());
+            final long startDescribeConsumerGroupMs = time.milliseconds();
+            final long deadline = calcDeadlineMs(startDescribeConsumerGroupMs, options.timeoutMs());
 
-            Node coordinator = coordinators.get(groupId);
-            int nodeId = coordinator == null ? -1 : coordinator.id(); // leave null-handling to the next NodeProvider
+            AsycNodeProvider coordinatorProvider = new GroupCoordinatorAsyncProvider(groupId, deadline);
 
-            runnable.call(new Call("describeConsumerGroups", deadline, new ConstantNodeIdProvider(nodeId)) {
+            runnable.call(new Call("describeConsumerGroups", deadline, null, coordinatorProvider) {
+
                 @Override
                 AbstractRequest.Builder createRequest(int timeoutMs) {
                     return new DescribeGroupsRequest.Builder(Collections.singletonList(groupId));
@@ -2378,7 +2393,8 @@ public class KafkaAdminClient extends AdminClient {
                     KafkaFutureImpl<ConsumerGroupDescription> future = futures.get(groupId);
                     future.completeExceptionally(throwable);
                 }
-            }, nowDescribeConsumerGroups);
+            }, startDescribeConsumerGroupMs);
+
         }
 
         return new DescribeConsumerGroupsResult(new HashMap<String, KafkaFuture<ConsumerGroupDescription>>(futures));
@@ -2524,13 +2540,12 @@ public class KafkaAdminClient extends AdminClient {
     public ListConsumerGroupOffsetsResult listConsumerGroupOffsets(final String groupId, final ListConsumerGroupOffsetsOptions options) {
         final KafkaFutureImpl<Map<TopicPartition, OffsetAndMetadata>> groupOffsetListingFuture = new KafkaFutureImpl<>();
 
-        final long nowListConsumerGroupOffsets = time.milliseconds();
-        final long deadline = calcDeadlineMs(nowListConsumerGroupOffsets, options.timeoutMs());
+        final long startListConsumerGroupOffsetsMs = time.milliseconds();
+        final long deadline = calcDeadlineMs(startListConsumerGroupOffsetsMs, options.timeoutMs());
 
-        Node coordinator = new ConsumerGroupCoordinatorNodeProvider(deadline, Collections.singleton(groupId)).provide().get(groupId);
-        int nodeId = coordinator == null ? -1 : coordinator.id(); // leave null-handling to the next NodeProvider
+        AsycNodeProvider coordinatorProvider = new GroupCoordinatorAsyncProvider(groupId, deadline);
 
-        runnable.call(new Call("listConsumerGroupOffsets", deadline, new ConstantNodeIdProvider(nodeId)) {
+        runnable.call(new Call("listConsumerGroupOffsets", deadline, null, coordinatorProvider) {
             @Override
             AbstractRequest.Builder createRequest(int timeoutMs) {
                 return new OffsetFetchRequest.Builder(groupId, options.topicPartitions());
@@ -2565,7 +2580,7 @@ public class KafkaAdminClient extends AdminClient {
             void handleFailure(Throwable throwable) {
                 groupOffsetListingFuture.completeExceptionally(throwable);
             }
-        }, nowListConsumerGroupOffsets);
+        }, startListConsumerGroupOffsetsMs);
 
         return new ListConsumerGroupOffsetsResult(groupOffsetListingFuture);
     }
@@ -2585,10 +2600,6 @@ public class KafkaAdminClient extends AdminClient {
             }
         }
 
-        final long startMill = time.milliseconds();
-        final long totalTimeoutMs = calcDeadlineMs(startMill, options.timeoutMs);
-        Map<String, Node> coordinators = new ConsumerGroupCoordinatorNodeProvider(totalTimeoutMs, groupIds).provide();
-
         // TODO: KAFKA-6788, we should consider grouping the request per coordinator and send one request with a list of
         // all consumer groups this coordinator host
         for (final String groupId : groupIds) {
@@ -2596,13 +2607,12 @@ public class KafkaAdminClient extends AdminClient {
             if (futures.get(groupId).isCompletedExceptionally())
                 continue;
 
-            final long nowDeleteConsumerGroups = time.milliseconds();
-            final long deadline = calcDeadlineMs(nowDeleteConsumerGroups, options.timeoutMs());
+            final long startDeleteConsumerGroupMs = time.milliseconds();
+            final long deadline = calcDeadlineMs(startDeleteConsumerGroupMs, options.timeoutMs());
 
-            Node coordinator = coordinators.get(groupId);
-            int nodeId = coordinator == null ? -1 : coordinator.id(); // leave null-handling to the next NodeProvider
+            AsycNodeProvider coordinatorProvider = new GroupCoordinatorAsyncProvider(groupId, deadline);
 
-            runnable.call(new Call("deleteConsumerGroups", deadline, new ConstantNodeIdProvider(nodeId)) {
+            runnable.call(new Call("deleteConsumerGroups", deadline, null, coordinatorProvider) {
 
                 @Override
                 AbstractRequest.Builder createRequest(int timeoutMs) {
@@ -2628,7 +2638,8 @@ public class KafkaAdminClient extends AdminClient {
                     KafkaFutureImpl<Void> future = futures.get(groupId);
                     future.completeExceptionally(throwable);
                 }
-            }, nowDeleteConsumerGroups);
+            }, startDeleteConsumerGroupMs);
+
         }
 
         return new DeleteConsumerGroupsResult(new HashMap<String, KafkaFuture<Void>>(futures));
