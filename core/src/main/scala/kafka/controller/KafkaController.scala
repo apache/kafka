@@ -202,6 +202,10 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     eventManager.put(UncleanLeaderElectionEnable)
   }
 
+  private[kafka] def enableTopicUncleanLeaderElection(topic: String): Unit = {
+    eventManager.put(TopicUncleanLeaderElectionEnable(topic))
+  }
+
   private def state: ControllerState = eventManager.state
 
   /**
@@ -1022,6 +1026,16 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     override def process(): Unit = {
       if (!isActive) return
       partitionStateMachine.triggerOnlinePartitionStateChange()
+    }
+  }
+
+  case class TopicUncleanLeaderElectionEnable(topic: String) extends ControllerEvent {
+
+    def state = ControllerState.TopicUncleanLeaderElectionEnable
+
+    override def process(): Unit = {
+      if (!isActive) return
+      partitionStateMachine.triggerOnlinePartitionStateChange(topic)
     }
   }
 

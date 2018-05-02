@@ -945,8 +945,11 @@ object TestUtils extends Logging {
 
   def produceMessage(servers: Seq[KafkaServer], topic: String, message: String) {
     val producer = createProducer(TestUtils.getBrokerListStrFromServers(servers))
-    producer.send(new ProducerRecord(topic, topic.getBytes, message.getBytes)).get
-    producer.close()
+    try {
+      producer.send(new ProducerRecord(topic, topic.getBytes, message.getBytes)).get
+    } finally {
+      producer.close()
+    }
   }
 
   def verifyTopicDeletion(zkClient: KafkaZkClient, topic: String, numPartitions: Int, servers: Seq[KafkaServer]) {
@@ -1303,6 +1306,13 @@ object TestUtils extends Logging {
     } else {
       Map(new ConfigResource(ConfigResource.Type.BROKER, "") -> newConfig).asJava
     }
+    adminClient.alterConfigs(configs)
+  }
+
+  def alterTopicConfigs(topic: String, adminClient: AdminClient, props: Properties): AlterConfigsResult = {
+    val configEntries = props.asScala.map { case (k, v) => new ConfigEntry(k, v) }.toList.asJava
+    val newConfig = new Config(configEntries)
+    val configs = Map(new ConfigResource(ConfigResource.Type.TOPIC, topic) -> newConfig).asJava
     adminClient.alterConfigs(configs)
   }
 
