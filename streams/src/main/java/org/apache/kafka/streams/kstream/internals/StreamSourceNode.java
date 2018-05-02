@@ -24,19 +24,20 @@ import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.regex.Pattern;
 
 class StreamSourceNode<K, V> extends StreamsGraphNode {
 
-    private List<String> topics;
+    private Collection<String> topics;
     private Pattern topicPattern;
     private final ConsumedInternal<K, V> consumedInternal;
 
 
     StreamSourceNode(final String parentProcessorNodeName,
                      final String processorNodeName,
-                     final List<String> topics,
+                     final Collection<String> topics,
                      final ConsumedInternal<K, V> consumedInternal) {
         super(parentProcessorNodeName,
               processorNodeName,
