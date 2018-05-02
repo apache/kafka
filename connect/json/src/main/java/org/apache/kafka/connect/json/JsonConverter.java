@@ -334,7 +334,8 @@ public class JsonConverter implements Converter, HeaderConverter {
             throw new DataException("Converting byte[] to Kafka Connect data failed due to serialization error: ", e);
         }
 
-        if (enableSchemas && (jsonValue == null || !jsonValue.isObject() || jsonValue.size() != 2 || !jsonValue.has("schema") || !jsonValue.has("payload")))
+        if (enableSchemas && (jsonValue == null || !jsonValue.isObject() || jsonValue.size() != 2
+                || !jsonValue.has(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME) || !jsonValue.has(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME)))
             throw new DataException("JsonConverter with schemas.enable requires \"schema\" and \"payload\" fields and may not contain additional fields." +
                     " If you are trying to deserialize plain JSON data, set schemas.enable=false in your converter configuration.");
 
@@ -342,8 +343,8 @@ public class JsonConverter implements Converter, HeaderConverter {
         // was stripped during serialization and we need to fill in an all-encompassing schema.
         if (!enableSchemas) {
             ObjectNode envelope = JsonNodeFactory.instance.objectNode();
-            envelope.set("schema", null);
-            envelope.set("payload", jsonValue);
+            envelope.set(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME, null);
+            envelope.set(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME, jsonValue);
             jsonValue = envelope;
         }
 
