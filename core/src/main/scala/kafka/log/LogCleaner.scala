@@ -613,8 +613,12 @@ private[log] class Cleaner(val id: Int,
       if (checkCrc && result.messagesRead > 0) {
         checkCrc = false
         val batches = records.batches.iterator
-        if (batches.hasNext && !batches.next.isValid)
-          throw new CorruptRecordException(s"Log for ${topicPartition} contains corrupt data")
+        if (batches.hasNext) {
+          val batch = batches.next
+          if (!batch.isValid) {
+            throw new CorruptRecordException(s"Log ${sourceRecords.file} contains corrupt data at base offset ${batch.baseOffset}")
+          }
+        }
       }
 
       // if any messages are to be retained, write them out
