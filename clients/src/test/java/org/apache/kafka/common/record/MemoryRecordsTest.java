@@ -806,21 +806,21 @@ public class MemoryRecordsTest {
         buffer.flip();
         int size = buffer.remaining();
         MemoryRecords records = MemoryRecords.readableRecords(buffer);
-        assertEquals(size, records.nextBatchSize().intValue());
+        assertEquals(size, records.firstBatchSize().intValue());
         assertEquals(0, buffer.position());
 
         buffer.limit(1); // size not in buffer
-        assertEquals(null, records.nextBatchSize());
+        assertEquals(null, records.firstBatchSize());
         buffer.limit(Records.LOG_OVERHEAD); // magic not in buffer
-        assertEquals(null, records.nextBatchSize());
+        assertEquals(null, records.firstBatchSize());
         buffer.limit(Records.HEADER_SIZE_UP_TO_MAGIC); // payload not in buffer
-        assertEquals(size, records.nextBatchSize().intValue());
+        assertEquals(size, records.firstBatchSize().intValue());
 
         buffer.limit(size);
         byte magic = buffer.get(Records.MAGIC_OFFSET);
         buffer.put(Records.MAGIC_OFFSET, (byte) 10);
         try {
-            records.nextBatchSize();
+            records.firstBatchSize();
             fail("Did not fail with corrupt magic");
         } catch (CorruptRecordException e) {
             // Expected exception
@@ -829,7 +829,7 @@ public class MemoryRecordsTest {
 
         buffer.put(Records.SIZE_OFFSET + 3, (byte) 0);
         try {
-            records.nextBatchSize();
+            records.firstBatchSize();
             fail("Did not fail with corrupt size");
         } catch (CorruptRecordException e) {
             // Expected exception

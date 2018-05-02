@@ -119,12 +119,12 @@ public class MemoryRecords extends AbstractRecords {
     }
 
     /**
-     * Validates the header of the next batch and returns batch size.
-     * @return next batch size including LOG_OVERHEAD if buffer contains header up to
+     * Validates the header of the first batch and returns batch size.
+     * @return first batch size including LOG_OVERHEAD if buffer contains header up to
      *         magic byte, null otherwise
      * @throws CorruptRecordException if record size or magic is invalid
      */
-    public Integer nextBatchSize() {
+    public Integer firstBatchSize() {
         if (buffer.remaining() < HEADER_SIZE_UP_TO_MAGIC)
             return null;
         return new ByteBufferLogInputStream(buffer, Integer.MAX_VALUE).nextBatchSize();
