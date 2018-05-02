@@ -27,10 +27,9 @@ import java.util.Arrays;
 
 /**
  * Represents a join between a KStream and a KTable or GlobalKTable
- *
  */
 
-class StreamTableJoinNode<K1, K2,  V1, V2, VR> extends StreamsGraphNode {
+class StreamTableJoinNode<K1, K2, V1, V2, VR> extends StreamsGraphNode {
 
     private final String[] storeNames;
     private final ValueJoiner<? super V1, ? super V2, ? extends VR> valueJoiner;
@@ -76,8 +75,73 @@ class StreamTableJoinNode<K1, K2,  V1, V2, VR> extends StreamsGraphNode {
         return keyValueMapper;
     }
 
+    static <K1, K2, V1, V2, VR> StreamTableJoinNodeBuilder<K1, K2, V1, V2, VR> streamTableJoinNodeBuilder() {
+        return new StreamTableJoinNodeBuilder<>();
+    }
+
     @Override
     void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
         //TODO will implement in follow-up pr
+    }
+
+
+    static final class StreamTableJoinNodeBuilder<K1, K2, V1, V2, VR> {
+
+        private String processorNodeName;
+        private String parentProcessorNodeName;
+        private String[] storeNames;
+        private ValueJoiner<? super V1, ? super V2, ? extends VR> valueJoiner;
+        private Joined<K1, V1, V2> joined;
+        private KeyValueMapper<? super K1, ? super V1, ? extends K2> keyValueMapper;
+        private ProcessorSupplier<K1, V1> processorSupplier;
+
+        private StreamTableJoinNodeBuilder() {
+        }
+
+        StreamTableJoinNodeBuilder<K1, K2, V1, V2, VR> withProcessorNodeName(String processorNodeName) {
+            this.processorNodeName = processorNodeName;
+            return this;
+        }
+
+        StreamTableJoinNodeBuilder<K1, K2, V1, V2, VR> withParentProcessorNodeName(String parentProcessorNodeName) {
+            this.parentProcessorNodeName = parentProcessorNodeName;
+            return this;
+        }
+
+        StreamTableJoinNodeBuilder<K1, K2, V1, V2, VR> withStoreNames(String[] storeNames) {
+            this.storeNames = storeNames;
+            return this;
+        }
+
+        StreamTableJoinNodeBuilder<K1, K2, V1, V2, VR> withValueJoiner(ValueJoiner<? super V1, ? super V2, ? extends VR> valueJoiner) {
+            this.valueJoiner = valueJoiner;
+            return this;
+        }
+
+        StreamTableJoinNodeBuilder<K1, K2, V1, V2, VR> withJoined(Joined<K1, V1, V2> joined) {
+            this.joined = joined;
+            return this;
+        }
+
+        StreamTableJoinNodeBuilder<K1, K2, V1, V2, VR> withKeyValueMapper(KeyValueMapper<? super K1, ? super V1, ? extends K2> keyValueMapper) {
+            this.keyValueMapper = keyValueMapper;
+            return this;
+        }
+
+        StreamTableJoinNodeBuilder<K1, K2, V1, V2, VR> withProcessorSupplier(ProcessorSupplier<K1, V1> processorSupplier) {
+            this.processorSupplier = processorSupplier;
+            return this;
+        }
+
+        StreamTableJoinNode<K1, K2, V1, V2, VR> build() {
+            return new StreamTableJoinNode<>(parentProcessorNodeName,
+                                             processorNodeName,
+                                             valueJoiner,
+                                             keyValueMapper,
+                                             joined,
+                                             processorSupplier,
+                                             storeNames);
+
+        }
     }
 }
