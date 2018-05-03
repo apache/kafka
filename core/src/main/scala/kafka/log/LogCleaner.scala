@@ -826,7 +826,7 @@ private[log] class Cleaner(val id: Int,
               if (record.hasKey && record.offset >= startOffset) {
                 if (cache.size >= maxDesiredMapSize)
                   return true
-                cache.put(record)
+                cache.putIfGreater(record)
               }
               stats.indexMessagesRead(1)
             }
