@@ -55,7 +55,7 @@ public class MockProcessor<K, V> extends AbstractProcessor<K, V> {
         if (scheduleInterval > 0L) {
             scheduleCancellable = context.schedule(scheduleInterval, punctuationType, new Punctuator() {
                 @Override
-                public void punctuate(long timestamp) {
+                public void punctuate(final long timestamp) {
                     if (punctuationType == PunctuationType.STREAM_TIME) {
                         assertEquals(timestamp, context().timestamp());
                     }
@@ -70,7 +70,7 @@ public class MockProcessor<K, V> extends AbstractProcessor<K, V> {
     }
 
     @Override
-    public void process(K key, V value) {
+    public void process(final K key, final V value) {
         processedKeys.add(key);
         processedValues.add(value);
         processed.add((key == null ? "null" : key) + ":" +
@@ -78,7 +78,7 @@ public class MockProcessor<K, V> extends AbstractProcessor<K, V> {
 
     }
 
-    public void checkAndClearProcessResult(String... expected) {
+    public void checkAndClearProcessResult(final String... expected) {
         assertEquals("the number of outputs:" + processed, expected.length, processed.size());
         for (int i = 0; i < expected.length; i++) {
             assertEquals("output[" + i + "]:", expected[i], processed.get(i));
@@ -88,13 +88,12 @@ public class MockProcessor<K, V> extends AbstractProcessor<K, V> {
     }
 
     public void checkEmptyAndClearProcessResult() {
-
         assertEquals("the number of outputs:", 0, processed.size());
         processed.clear();
     }
 
-    public void checkAndClearPunctuateResult(PunctuationType type, long... expected) {
-        ArrayList<Long> punctuated = type == PunctuationType.STREAM_TIME ? punctuatedStreamTime : punctuatedSystemTime;
+    public void checkAndClearPunctuateResult(final PunctuationType type, final long... expected) {
+        final ArrayList<Long> punctuated = type == PunctuationType.STREAM_TIME ? punctuatedStreamTime : punctuatedSystemTime;
         assertEquals("the number of outputs:", expected.length, punctuated.size());
 
         for (int i = 0; i < expected.length; i++) {

@@ -32,7 +32,7 @@ public class PunctuationQueueTest {
     private final PunctuationQueue queue = new PunctuationQueue();
     private final Punctuator punctuator = new Punctuator() {
         @Override
-        public void punctuate(long timestamp) {
+        public void punctuate(final long timestamp) {
             node.mockProcessor.punctuatedStreamTime.add(timestamp);
         }
     };
