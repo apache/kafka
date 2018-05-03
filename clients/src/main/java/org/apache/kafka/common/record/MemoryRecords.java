@@ -145,10 +145,9 @@ public class MemoryRecords extends AbstractRecords {
         long maxOffset = -1L;
         long shallowOffsetOfMaxTimestamp = -1L;
         int messagesRead = 0;
-        int bytesRead = 0;
+        int bytesRead = 0; // bytes processed from `batches`
         int messagesRetained = 0;
         int bytesRetained = 0;
-        int batchesDeleted = 0;
 
         ByteBufferOutputStream bufferOutputStream = new ByteBufferOutputStream(destinationBuffer);
 
@@ -156,10 +155,8 @@ public class MemoryRecords extends AbstractRecords {
             bytesRead += batch.sizeInBytes();
 
             BatchRetention batchRetention = filter.checkBatchRetention(batch);
-            if (batchRetention == BatchRetention.DELETE) {
-                batchesDeleted++;
+            if (batchRetention == BatchRetention.DELETE)
                 continue;
-            }
 
             // We use the absolute offset to decide whether to retain the message or not. Due to KAFKA-4298, we have to
             // allow for the possibility that a previous version corrupted the log by writing a compressed record batch
@@ -236,11 +233,11 @@ public class MemoryRecords extends AbstractRecords {
             ByteBuffer outputBuffer = bufferOutputStream.buffer();
             if (outputBuffer != destinationBuffer)
                 return new FilterResult(outputBuffer, messagesRead, bytesRead, messagesRetained, bytesRetained,
-                        batchesDeleted, maxOffset, maxTimestamp, shallowOffsetOfMaxTimestamp);
+                        maxOffset, maxTimestamp, shallowOffsetOfMaxTimestamp);
         }
 
         return new FilterResult(destinationBuffer, messagesRead, bytesRead, messagesRetained, bytesRetained,
-                batchesDeleted, maxOffset, maxTimestamp, shallowOffsetOfMaxTimestamp);
+                maxOffset, maxTimestamp, shallowOffsetOfMaxTimestamp);
     }
 
     private static MemoryRecordsBuilder buildRetainedRecordsInto(RecordBatch originalBatch,
@@ -358,17 +355,17 @@ public class MemoryRecords extends AbstractRecords {
         public final int bytesRead;
         public final int messagesRetained;
         public final int bytesRetained;
-        public final int batchesDeleted;
         public final long maxOffset;
         public final long maxTimestamp;
         public final long shallowOffsetOfMaxTimestamp;
 
+        // Note that `bytesRead` should contain only bytes from batches that have been processed,
+        // i.e. bytes from `messagesRead` and any discarded batches.
         public FilterResult(ByteBuffer output,
                             int messagesRead,
                             int bytesRead,
                             int messagesRetained,
                             int bytesRetained,
-                            int batchesDeleted,
                             long maxOffset,
                             long maxTimestamp,
                             long shallowOffsetOfMaxTimestamp) {
@@ -377,7 +374,6 @@ public class MemoryRecords extends AbstractRecords {
             this.bytesRead = bytesRead;
             this.messagesRetained = messagesRetained;
             this.bytesRetained = bytesRetained;
-            this.batchesDeleted = batchesDeleted;
             this.maxOffset = maxOffset;
             this.maxTimestamp = maxTimestamp;
             this.shallowOffsetOfMaxTimestamp = shallowOffsetOfMaxTimestamp;
