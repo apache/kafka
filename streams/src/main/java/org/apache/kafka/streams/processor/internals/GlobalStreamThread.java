@@ -20,6 +20,8 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.LogContext;
@@ -36,6 +38,7 @@ import org.slf4j.Logger;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -400,5 +403,9 @@ public class GlobalStreamThread extends Thread {
         // if already shutting down or dead
         setState(PENDING_SHUTDOWN);
         globalConsumer.wakeup();
+    }
+
+    public Map<MetricName, Metric> consumerMetrics() {
+        return Collections.unmodifiableMap(globalConsumer.metrics());
     }
 }

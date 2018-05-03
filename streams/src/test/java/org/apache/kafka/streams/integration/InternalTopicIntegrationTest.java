@@ -22,7 +22,6 @@ import kafka.zk.AdminZkClient;
 import kafka.zk.KafkaZkClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Time;
@@ -56,6 +55,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForCompletion;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -218,27 +218,5 @@ public class InternalTopicIntegrationTest {
         final Properties repartitionProps = getTopicProperties(appID + "-CountWindows-repartition");
         assertEquals(LogConfig.Delete(), repartitionProps.getProperty(LogConfig.CleanupPolicyProp()));
         assertEquals(5, repartitionProps.size());
-    }
-
-    @SuppressWarnings("SameParameterValue") // timeout is parameterized because it makes the usage clearer
-    private void waitForCompletion(final KafkaStreams streams,
-                                   final int expectedPartitions,
-                                   final int timeoutMilliseconds) {
-        final long start = System.currentTimeMillis();
-        asdf:
-        while (true) {
-            int lagMetrics = 0;
-            for (final Metric metric : streams.metrics().values()) {
-                if (metric.metricName().name().equals("records-lag")) {
-                    lagMetrics++;
-                    if (!metric.metricValue().equals(0.0) && (System.currentTimeMillis() - start < timeoutMilliseconds)) {
-                        continue asdf;
-                    }
-                }
-            }
-            if (lagMetrics >= expectedPartitions || System.currentTimeMillis() - start >= timeoutMilliseconds) {
-                break;
-            }
-        }
     }
 }

@@ -213,6 +213,7 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
                 break;
             } catch (final WakeupException wakeupException) {
                 if (isRunning.check()) {
+                    // note we may decide later that this condition is ok and just let the retry loop continue
                     throw new IllegalStateException("Got unexpected WakeupException during initialization.", wakeupException);
                 } else {
                     throw new ShutdownException("Shutting down from fetching partitions");
