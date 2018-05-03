@@ -119,7 +119,7 @@ class SkimpyCleanerCache(val memory: Int, val hashAlgorithm: String = "MD5", val
    * The number of bytes of space each entry uses.
    * This evaluates to the number of bytes in the hash plus 8 bytes for the value.
    */
-  val bytesPerEntry: Int = hashSize + 8
+  val bytesPerEntry: Int = hashSize + java.lang.Long.BYTES
 
   val slots: Int = memory / bytesPerEntry
 
@@ -229,7 +229,8 @@ class SkimpyCleanerCache(val memory: Int, val hashAlgorithm: String = "MD5", val
 
   /** Check that there is no entry at the given position . */
   private def isEmpty(position: Int): Boolean = bytes.getLong(position) == 0 &&
-      bytes.getLong(position + 8) == 0 && bytes.getLong(position + 16) == 0
+      bytes.getLong(position + java.lang.Long.BYTES) == 0 &&
+      bytes.getLong(position + 16) == 0
 
   /**
     * Calculate the ith probe position. We first try reading successive integers from the hash itself
