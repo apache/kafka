@@ -22,6 +22,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 
 import java.io.Closeable;
+import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -77,29 +78,37 @@ public interface Consumer<K, V> extends Closeable {
     void unsubscribe();
 
     /**
-     * @see KafkaConsumer#awaitAssignmentMetadata(long, TimeUnit)
-     */
-    void awaitAssignmentMetadata(long maxBlockTime, TimeUnit maxBlockTimeUnit);
-
-    /**
      * @see KafkaConsumer#poll(long)
      */
+    @Deprecated
     ConsumerRecords<K, V> poll(long timeout);
 
     /**
-     * @see KafkaConsumer#poll(long, TimeUnit)
+     * @see KafkaConsumer#poll(Duration)
      */
-    ConsumerRecords<K, V> poll(long maxBlockTime, TimeUnit maxBlockTimeUnit);
+    ConsumerRecords<K, V> poll(Duration timeout);
 
     /**
      * @see KafkaConsumer#commitSync()
      */
+    @Deprecated
     void commitSync();
 
     /**
      * @see KafkaConsumer#commitSync(Map)
      */
+    @Deprecated
     void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets);
+
+    /**
+     * @see KafkaConsumer#commitSync()
+     */
+    void commitSync(Duration timeout);
+
+    /**
+     * @see KafkaConsumer#commitSync(Map)
+     */
+    void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets, Duration timeout);
 
     /**
      * @see KafkaConsumer#commitAsync()
@@ -134,12 +143,24 @@ public interface Consumer<K, V> extends Closeable {
     /**
      * @see KafkaConsumer#position(TopicPartition)
      */
+    @Deprecated
     long position(TopicPartition partition);
+
+    /**
+     * @see KafkaConsumer#position(TopicPartition, Duration)
+     */
+    long position(TopicPartition partition, Duration timeout);
 
     /**
      * @see KafkaConsumer#committed(TopicPartition)
      */
+    @Deprecated
     OffsetAndMetadata committed(TopicPartition partition);
+
+    /**
+     * @see KafkaConsumer#committed(TopicPartition, Duration)
+     */
+    OffsetAndMetadata committed(TopicPartition partition, Duration timeout);
 
     /**
      * @see KafkaConsumer#metrics()
@@ -149,12 +170,24 @@ public interface Consumer<K, V> extends Closeable {
     /**
      * @see KafkaConsumer#partitionsFor(String)
      */
+    @Deprecated
     List<PartitionInfo> partitionsFor(String topic);
+
+    /**
+     * @see KafkaConsumer#partitionsFor(String, Duration)
+     */
+    List<PartitionInfo> partitionsFor(String topic, Duration timeout);
 
     /**
      * @see KafkaConsumer#listTopics()
      */
+    @Deprecated
     Map<String, List<PartitionInfo>> listTopics();
+
+    /**
+     * @see KafkaConsumer#listTopics(Duration)
+     */
+    Map<String, List<PartitionInfo>> listTopics(Duration timeout);
 
     /**
      * @see KafkaConsumer#paused()
@@ -174,27 +207,52 @@ public interface Consumer<K, V> extends Closeable {
     /**
      * @see KafkaConsumer#offsetsForTimes(java.util.Map)
      */
+    @Deprecated
     Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch);
+
+    /**
+     * @see KafkaConsumer#offsetsForTimes(java.util.Map)
+     */
+    Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch, Duration timeout);
 
     /**
      * @see KafkaConsumer#beginningOffsets(java.util.Collection)
      */
+    @Deprecated
     Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions);
+
+    /**
+     * @see KafkaConsumer#beginningOffsets(java.util.Collection, Duration)
+     */
+    Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions, Duration timeout);
 
     /**
      * @see KafkaConsumer#endOffsets(java.util.Collection)
      */
+    @Deprecated
     Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions);
+
+    /**
+     * @see KafkaConsumer#endOffsets(java.util.Collection, Duration timeout)
+     */
+    Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions, Duration timeout);
 
     /**
      * @see KafkaConsumer#close()
      */
+    @Deprecated
     void close();
 
     /**
      * @see KafkaConsumer#close(long, TimeUnit)
      */
+    @Deprecated
     void close(long timeout, TimeUnit unit);
+
+    /**
+     * @see KafkaConsumer#close(long, TimeUnit)
+     */
+    void close(Duration timeout);
 
     /**
      * @see KafkaConsumer#wakeup()
