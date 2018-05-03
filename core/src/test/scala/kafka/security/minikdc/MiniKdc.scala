@@ -113,7 +113,7 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
 
   def host: String = config.getProperty(MiniKdc.KdcBindAddress)
 
-  def start() {
+  def start(): Unit = {
     if (kdc != null)
       throw new RuntimeException("KDC already started")
     if (closed)
@@ -123,7 +123,7 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
     initJvmKerberosConfig()
   }
 
-  private def initDirectoryService() {
+  private def initDirectoryService(): Unit = {
     ds = new DefaultDirectoryService
     ds.setInstanceLayout(new InstanceLayout(workDir))
     ds.setCacheService(new CacheService)
@@ -187,9 +187,9 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
     ds.getAdminSession.add(entry)
   }
 
-  private def initKdcServer() {
+  private def initKdcServer(): Unit = {
 
-    def addInitialEntriesToDirectoryService(bindAddress: String) {
+    def addInitialEntriesToDirectoryService(bindAddress: String): Unit = {
       val map = Map (
         "0" -> orgName.toLowerCase(Locale.ENGLISH),
         "1" -> orgDomain.toLowerCase(Locale.ENGLISH),
@@ -245,7 +245,7 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
     refreshJvmKerberosConfig()
   }
 
-  private def writeKrb5Conf() {
+  private def writeKrb5Conf(): Unit = {
     val stringBuilder = new StringBuilder
     val reader = new BufferedReader(
       new InputStreamReader(MiniKdc.getResourceAsStream("minikdc-krb5.conf"), StandardCharsets.UTF_8))
@@ -268,7 +268,7 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
     klass.getMethod("refresh").invoke(klass)
   }
 
-  def stop() {
+  def stop(): Unit = {
     if (!closed) {
       closed = true
       if (kdc != null) {
@@ -291,7 +291,7 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
     * @param principal principal name, do not include the domain.
     * @param password  password.
     */
-  private def createPrincipal(principal: String, password: String) {
+  private def createPrincipal(principal: String, password: String): Unit = {
     val ldifContent = s"""
       |dn: uid=$principal,ou=users,dc=${orgName.toLowerCase(Locale.ENGLISH)},dc=${orgDomain.toLowerCase(Locale.ENGLISH)}
       |objectClass: top
@@ -316,7 +316,7 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
     * @param keytabFile keytab file to add the created principals
     * @param principals principals to add to the KDC, do not include the domain.
     */
-  def createPrincipal(keytabFile: File, principals: String*) {
+  def createPrincipal(keytabFile: File, principals: String*): Unit = {
     val generatedPassword = UUID.randomUUID.toString
     val keytab = new Keytab
     val entries = principals.flatMap { principal =>
@@ -347,7 +347,7 @@ object MiniKdc {
   val JavaSecurityKrb5Conf = "java.security.krb5.conf"
   val SunSecurityKrb5Debug = "sun.security.krb5.debug"
 
-  def main(args: Array[String]) {
+  def main(args: Array[String]): Unit = {
     args match {
       case Array(workDirPath, configPath, keytabPath, principals@ _*) if principals.nonEmpty =>
         val workDir = new File(workDirPath)
@@ -370,7 +370,7 @@ object MiniKdc {
     }
   }
 
-  private def start(workDir: File, config: Properties, keytabFile: File, principals: Seq[String]) {
+  private def start(workDir: File, config: Properties, keytabFile: File, principals: Seq[String]): Unit = {
     val miniKdc = new MiniKdc(config, workDir)
     miniKdc.start()
     miniKdc.createPrincipal(keytabFile, principals: _*)

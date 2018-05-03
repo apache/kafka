@@ -138,7 +138,7 @@ case class FetchRequest(versionId: Short = FetchRequest.CurrentVersion,
       requestInfo = requestInfo)
   }
 
-  def writeTo(buffer: ByteBuffer) {
+  def writeTo(buffer: ByteBuffer): Unit = {
     buffer.putShort(versionId)
     buffer.putInt(correlationId)
     writeShortString(buffer, clientId)

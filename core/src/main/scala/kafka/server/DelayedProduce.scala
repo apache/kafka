@@ -112,7 +112,7 @@ class DelayedProduce(delayMs: Long,
       false
   }
 
-  override def onExpiration() {
+  override def onExpiration(): Unit = {
     produceMetadata.produceStatus.foreach { case (topicPartition, status) =>
       if (status.acksPending) {
         debug(s"Expiring produce request for partition $topicPartition with status $status")
@@ -124,7 +124,7 @@ class DelayedProduce(delayMs: Long,
   /**
    * Upon completion, return the current response status along with the error code per partition
    */
-  override def onComplete() {
+  override def onComplete(): Unit = {
     val responseStatus = produceMetadata.produceStatus.mapValues(status => status.responseStatus)
     responseCallback(responseStatus)
   }
@@ -141,7 +141,7 @@ object DelayedProduceMetrics extends KafkaMetricsGroup {
              tags = Map("topic" -> key.topic, "partition" -> key.partition.toString))
   private val partitionExpirationMeters = new Pool[TopicPartition, Meter](valueFactory = Some(partitionExpirationMeterFactory))
 
-  def recordExpiration(partition: TopicPartition) {
+  def recordExpiration(partition: TopicPartition): Unit = {
     aggregateExpirationMeter.mark()
     partitionExpirationMeters.getAndMaybePut(partition).mark()
   }

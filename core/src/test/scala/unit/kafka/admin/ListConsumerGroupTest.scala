@@ -28,7 +28,7 @@ import org.easymock.EasyMock
 class ListConsumerGroupTest extends ConsumerGroupCommandTest {
 
   @Test
-  def testListOldConsumerGroups() {
+  def testListOldConsumerGroups(): Unit = {
     val topicFilter = Whitelist(topic)
     val props = new Properties
     props.setProperty("group.id", group)
@@ -59,7 +59,7 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
   }
 
   @Test
-  def testListGroupWithNoExistingGroup() {
+  def testListGroupWithNoExistingGroup(): Unit = {
     val opts = new ConsumerGroupCommandOptions(Array("--zookeeper", zkConnect))
     val consumerGroupCommand = new ZkConsumerGroupService(opts)
     try {
@@ -70,7 +70,7 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
   }
 
   @Test
-  def testListConsumerGroups() {
+  def testListConsumerGroups(): Unit = {
     val simpleGroup = "simple-group"
     addSimpleGroupExecutor(group = simpleGroup)
     addConsumerGroupExecutor(numConsumers = 1)

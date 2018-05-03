@@ -58,7 +58,7 @@ class SimpleConsumer(val host: String,
     blockingChannel.disconnect()
   }
 
-  private def reconnect() {
+  private def reconnect(): Unit = {
     disconnect()
     connect()
   }
@@ -73,7 +73,7 @@ class SimpleConsumer(val host: String,
     disconnect()
   }
 
-  def close() {
+  def close(): Unit = {
     lock synchronized {
       disconnect()
       isClosed = true
@@ -171,7 +171,7 @@ class SimpleConsumer(val host: String,
    */
   def fetchOffsets(request: OffsetFetchRequest) = OffsetFetchResponse.readFrom(sendRequest(request).payload(), request.versionId)
 
-  private def getOrMakeConnection() {
+  private def getOrMakeConnection(): Unit = {
     if(!isClosed && !blockingChannel.isConnected) {
       connect()
     }

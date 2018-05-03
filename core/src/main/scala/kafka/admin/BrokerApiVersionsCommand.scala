@@ -75,7 +75,7 @@ object BrokerApiVersionsCommand {
     val options = parser.parse(args : _*)
     checkArgs()
 
-    def checkArgs() {
+    def checkArgs(): Unit = {
       // check required args
       CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt)
     }

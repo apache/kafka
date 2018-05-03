@@ -85,7 +85,7 @@ class MessageTest extends JUnitSuite {
   }
 
   @Test
-  def testChecksum() {
+  def testChecksum(): Unit = {
     for(v <- messages) {
       assertTrue("Auto-computed checksum should be valid", v.message.isValid)
       // garble checksum
@@ -96,7 +96,7 @@ class MessageTest extends JUnitSuite {
   }
 
   @Test
-  def testEquality() {
+  def testEquality(): Unit = {
     for (v <- messages) {
       assertFalse("Should not equal null", v.message.equals(null))
       assertFalse("Should not equal a random string", v.message.equals("asdf"))
@@ -107,22 +107,22 @@ class MessageTest extends JUnitSuite {
   }
 
   @Test(expected = classOf[IllegalArgumentException])
-  def testInvalidTimestampAndMagicValueCombination() {
+  def testInvalidTimestampAndMagicValueCombination(): Unit = {
       new Message("hello".getBytes, 0L, Message.MagicValue_V0)
   }
 
   @Test(expected = classOf[IllegalArgumentException])
-  def testInvalidTimestamp() {
+  def testInvalidTimestamp(): Unit = {
     new Message("hello".getBytes, -3L, Message.MagicValue_V1)
   }
 
   @Test(expected = classOf[IllegalArgumentException])
-  def testInvalidMagicByte() {
+  def testInvalidMagicByte(): Unit = {
     new Message("hello".getBytes, 0L, 2.toByte)
   }
 
   @Test
-  def testIsHashable() {
+  def testIsHashable(): Unit = {
     // this is silly, but why not
     val m = new HashMap[Message, Message]()
     for(v <- messages)
@@ -132,7 +132,7 @@ class MessageTest extends JUnitSuite {
   }
 
   @Test
-  def testExceptionMapping() {
+  def testExceptionMapping(): Unit = {
     val expected = Errors.CORRUPT_MESSAGE
     val actual = Errors.forException(new InvalidMessageException())
 

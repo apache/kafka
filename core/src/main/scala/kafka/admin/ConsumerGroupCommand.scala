@@ -47,7 +47,7 @@ import scala.collection.{Seq, Set, mutable}
 
 object ConsumerGroupCommand extends Logging {
 
-  def main(args: Array[String]) {
+  def main(args: Array[String]): Unit = {
     val opts = new ConsumerGroupCommandOptions(args)
 
     if (args.length == 0)
@@ -350,7 +350,7 @@ object ConsumerGroupCommand extends Logging {
       ZkUtils(zkUrl, 30000, 30000, JaasUtils.isZkSecurityEnabled)
     }
 
-    def close() {
+    def close(): Unit = {
       zkUtils.close()
     }
 
@@ -635,7 +635,7 @@ object ConsumerGroupCommand extends Logging {
       successfulLogTimestampOffsets ++ getLogEndOffsets(unsuccessfulOffsetsForTimes.keySet.toSeq)
     }
 
-    def close() {
+    def close(): Unit = {
       adminClient.close()
       if (consumer != null) consumer.close()
     }
@@ -1003,7 +1003,7 @@ object ConsumerGroupCommand extends Logging {
     val allResetOffsetScenarioOpts: Set[OptionSpec[_]] = Set(resetToOffsetOpt, resetShiftByOpt,
       resetToDatetimeOpt, resetByDurationOpt, resetToEarliestOpt, resetToLatestOpt, resetToCurrentOpt, resetFromFileOpt)
 
-    def checkArgs() {
+    def checkArgs(): Unit = {
       // check required args
       if (options.has(timeoutMsOpt) && (!describeOptPresent || useOldConsumer))
         debug(s"Option $timeoutMsOpt is applicable only when both $bootstrapServerOpt and $describeOpt are used.")

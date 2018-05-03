@@ -41,7 +41,7 @@ class AbstractFetcherThreadTest {
   }
 
   @Test
-  def testMetricsRemovedOnShutdown() {
+  def testMetricsRemovedOnShutdown(): Unit = {
     val partition = new TopicPartition("topic", 0)
     val fetcherThread = new DummyFetcherThread("dummy", "client", new BrokerEndPoint(0, "localhost", 9092))
 
@@ -62,7 +62,7 @@ class AbstractFetcherThreadTest {
   }
 
   @Test
-  def testConsumerLagRemovedWithPartition() {
+  def testConsumerLagRemovedWithPartition(): Unit = {
     val partition = new TopicPartition("topic", 0)
     val fetcherThread = new DummyFetcherThread("dummy", "client", new BrokerEndPoint(0, "localhost", 9092))
 
@@ -138,7 +138,7 @@ class AbstractFetcherThreadTest {
 
 
   @Test
-  def testFetchRequestCorruptedMessageException() {
+  def testFetchRequestCorruptedMessageException(): Unit = {
     val partition = new TopicPartition("topic", 0)
     val fetcherThread = new CorruptingFetcherThread("test", "client", new BrokerEndPoint(0, "localhost", 9092),
       fetchBackOffMs = 1)

@@ -50,7 +50,7 @@ object KafkaMetricReporterClusterIdTest {
 
   class MockBrokerMetricsReporter extends MockMetricsReporter with ClusterResourceListener {
 
-    override def onUpdate(clusterMetadata: ClusterResource) {
+    override def onUpdate(clusterMetadata: ClusterResource): Unit = {
       MockBrokerMetricsReporter.CLUSTER_META.set(clusterMetadata)
     }
 
@@ -80,7 +80,7 @@ class KafkaMetricReporterClusterIdTest extends ZooKeeperTestHarness {
   var config: KafkaConfig = null
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
     val props = TestUtils.createBrokerConfig(1, zkConnect)
     props.setProperty("kafka.metrics.reporters", "kafka.server.KafkaMetricReporterClusterIdTest$MockKafkaMetricsReporter")
@@ -93,7 +93,7 @@ class KafkaMetricReporterClusterIdTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testClusterIdPresent() {
+  def testClusterIdPresent(): Unit = {
     assertEquals("", KafkaMetricReporterClusterIdTest.setupError.get())
 
     assertNotNull(KafkaMetricReporterClusterIdTest.MockKafkaMetricsReporter.CLUSTER_META)
@@ -107,7 +107,7 @@ class KafkaMetricReporterClusterIdTest extends ZooKeeperTestHarness {
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     server.shutdown()
     CoreUtils.delete(config.logDirs)
     TestUtils.verifyNonDaemonThreadsStatus(this.getClass.getName)

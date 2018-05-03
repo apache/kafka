@@ -176,7 +176,7 @@ object KafkaMetricsGroup extends KafkaMetricsGroup with Logging {
   }
 
   @deprecated("This method has been deprecated and will be removed in a future release.", "0.11.0.0")
-  def removeAllConsumerMetrics(clientId: String) {
+  def removeAllConsumerMetrics(clientId: String): Unit = {
     FetchRequestAndResponseStatsRegistry.removeConsumerFetchRequestAndResponseStats(clientId)
     ConsumerTopicStatsRegistry.removeConsumerTopicStat(clientId)
     ProducerRequestStatsRegistry.removeProducerRequestStats(clientId)
@@ -184,14 +184,14 @@ object KafkaMetricsGroup extends KafkaMetricsGroup with Logging {
   }
 
   @deprecated("This method has been deprecated and will be removed in a future release.", "0.10.0.0")
-  def removeAllProducerMetrics(clientId: String) {
+  def removeAllProducerMetrics(clientId: String): Unit = {
     ProducerRequestStatsRegistry.removeProducerRequestStats(clientId)
     ProducerTopicStatsRegistry.removeProducerTopicStats(clientId)
     ProducerStatsRegistry.removeProducerStats(clientId)
     removeAllMetricsInList(KafkaMetricsGroup.producerMetricNameList, clientId)
   }
 
-  private def removeAllMetricsInList(metricNameList: immutable.List[MetricName], clientId: String) {
+  private def removeAllMetricsInList(metricNameList: immutable.List[MetricName], clientId: String): Unit = {
     metricNameList.foreach(metric => {
       val pattern = (".*clientId=" + clientId + ".*").r
       val registeredMetrics = Metrics.defaultRegistry().allMetrics().keySet().asScala

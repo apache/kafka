@@ -50,7 +50,7 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
     new Socket("localhost", s.boundPort(ListenerName.forSecurityProtocol(protocol)))
   }
 
-  private def sendRequest(socket: Socket, request: Array[Byte], id: Option[Short] = None) {
+  private def sendRequest(socket: Socket, request: Array[Byte], id: Option[Short] = None): Unit = {
     val outgoing = new DataOutputStream(socket.getOutputStream)
     id match {
       case Some(id) =>
@@ -98,7 +98,7 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
     buffer.array()
   }
 
-  private def verifyDisconnect(request: Array[Byte]) {
+  private def verifyDisconnect(request: Array[Byte]): Unit = {
     val plainSocket = connect()
     try {
       sendRequest(plainSocket, requestHeaderBytes(-1, 0))
@@ -109,7 +109,7 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def testProduceRequestWithNullClientId() {
+  def testProduceRequestWithNullClientId(): Unit = {
     val topic = "topic"
     val topicPartition = new TopicPartition(topic, 0)
     val correlationId = -1
@@ -143,22 +143,22 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def testHeaderOnlyRequest() {
+  def testHeaderOnlyRequest(): Unit = {
     verifyDisconnect(requestHeaderBytes(ApiKeys.PRODUCE.id, 1))
   }
 
   @Test
-  def testInvalidApiKeyRequest() {
+  def testInvalidApiKeyRequest(): Unit = {
     verifyDisconnect(requestHeaderBytes(-1, 0))
   }
 
   @Test
-  def testInvalidApiVersionRequest() {
+  def testInvalidApiVersionRequest(): Unit = {
     verifyDisconnect(requestHeaderBytes(ApiKeys.PRODUCE.id, -1))
   }
 
   @Test
-  def testMalformedHeaderRequest() {
+  def testMalformedHeaderRequest(): Unit = {
     val serializedBytes = {
       // Only send apiKey and apiVersion
       val buffer = ByteBuffer.allocate(

@@ -50,7 +50,7 @@ abstract class InterBrokerSendThread(name: String,
     awaitShutdown()
   }
 
-  override def doWork() {
+  override def doWork(): Unit = {
     var now = time.milliseconds()
 
     generateRequests().foreach { request =>

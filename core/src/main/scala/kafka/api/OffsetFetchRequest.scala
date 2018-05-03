@@ -60,7 +60,7 @@ case class OffsetFetchRequest(groupId: String,
 
   lazy val requestInfoGroupedByTopic = requestInfo.groupBy(_.topic)
 
-  def writeTo(buffer: ByteBuffer) {
+  def writeTo(buffer: ByteBuffer): Unit = {
     // Write envelope
     buffer.putShort(versionId)
     buffer.putInt(correlationId)

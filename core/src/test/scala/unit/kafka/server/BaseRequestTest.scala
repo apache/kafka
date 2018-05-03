@@ -40,7 +40,7 @@ abstract class BaseRequestTest extends KafkaServerTestHarness {
   protected def logDirCount: Int = 1
 
   // If required, override properties by mutating the passed Properties object
-  protected def propertyOverrides(properties: Properties) {}
+  protected def propertyOverrides(properties: Properties): Unit = {}
 
   def generateConfigs = {
     val props = TestUtils.createBrokerConfigs(numBrokers, zkConnect,
@@ -80,7 +80,7 @@ abstract class BaseRequestTest extends KafkaServerTestHarness {
     new Socket("localhost", s.boundPort(ListenerName.forSecurityProtocol(protocol)))
   }
 
-  private def sendRequest(socket: Socket, request: Array[Byte]) {
+  private def sendRequest(socket: Socket, request: Array[Byte]): Unit = {
     val outgoing = new DataOutputStream(socket.getOutputStream)
     outgoing.writeInt(request.length)
     outgoing.write(request)

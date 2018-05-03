@@ -63,7 +63,7 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
   }
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
     // set up 2 brokers with 4 partitions each
     val props1 = TestUtils.createBrokerConfig(brokerId1, zkConnect, false)
@@ -81,7 +81,7 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     // restore set request handler logger to a higher level
     requestHandlerLogger.setLevel(Level.ERROR)
 
@@ -95,7 +95,7 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
   }
 
   @Test
-  def testUpdateBrokerPartitionInfo() {
+  def testUpdateBrokerPartitionInfo(): Unit = {
     val topic = "new-topic"
     TestUtils.createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 2, servers = servers)
 
@@ -143,7 +143,7 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
   }
 
   @Test
-  def testSendToNewTopic() {
+  def testSendToNewTopic(): Unit = {
     val props1 = new util.Properties()
     props1.put("request.required.acks", "-1")
 
@@ -212,7 +212,7 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
 
 
   @Test
-  def testSendWithDeadBroker() {
+  def testSendWithDeadBroker(): Unit = {
     val props = new Properties()
     props.put("request.required.acks", "1")
     // No need to retry since the topic will be created beforehand and normal send will succeed on the first try.
@@ -277,7 +277,7 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
   }
 
   @Test
-  def testAsyncSendCanCorrectlyFailWithTimeout() {
+  def testAsyncSendCanCorrectlyFailWithTimeout(): Unit = {
     val topic = "new-topic"
     // create topics in ZK
     TestUtils.createTopic(zkClient, topic, partitionReplicaAssignment = Map(0->Seq(0, 1)), servers = servers)
@@ -331,7 +331,7 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
   }
 
   @Test
-  def testSendNullMessage() {
+  def testSendNullMessage(): Unit = {
     val producer = TestUtils.createProducer[String, String](
       brokerList = TestUtils.getBrokerListStrFromServers(Seq(server1, server2)),
       encoder = classOf[StringEncoder].getName,

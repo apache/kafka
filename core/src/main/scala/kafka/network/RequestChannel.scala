@@ -115,7 +115,7 @@ object RequestChannel extends Logging {
       math.max(apiLocalCompleteTimeNanos - requestDequeueTimeNanos, 0L)
     }
 
-    def updateRequestMetrics(networkThreadTimeNanos: Long, response: Response) {
+    def updateRequestMetrics(networkThreadTimeNanos: Long, response: Response): Unit = {
       val endTimeNanos = Time.SYSTEM.nanoseconds
       // In some corner cases, apiLocalCompleteTimeNanos may not be set when the request completes if the remote
       // processing time is really small. This value is set in KafkaApis from a request handling thread.
@@ -277,12 +277,12 @@ class RequestChannel(val queueSize: Int) extends KafkaMetricsGroup {
   }
 
   /** Send a request to be handled, potentially blocking until there is room in the queue for the request */
-  def sendRequest(request: RequestChannel.Request) {
+  def sendRequest(request: RequestChannel.Request): Unit = {
     requestQueue.put(request)
   }
 
   /** Send a response back to the socket server to be sent over the network */
-  def sendResponse(response: RequestChannel.Response) {
+  def sendResponse(response: RequestChannel.Response): Unit = {
     if (isTraceEnabled) {
       val requestHeader = response.request.header
       val message = response.responseAction match {
@@ -312,17 +312,17 @@ class RequestChannel(val queueSize: Int) extends KafkaMetricsGroup {
   def receiveRequest(): RequestChannel.BaseRequest =
     requestQueue.take()
 
-  def updateErrorMetrics(apiKey: ApiKeys, errors: collection.Map[Errors, Integer]) {
+  def updateErrorMetrics(apiKey: ApiKeys, errors: collection.Map[Errors, Integer]): Unit = {
     errors.foreach { case (error, count) =>
       metrics(apiKey.name).markErrorMeter(error, count)
     }
   }
 
-  def clear() {
+  def clear(): Unit = {
     requestQueue.clear()
   }
 
-  def shutdown() {
+  def shutdown(): Unit = {
     clear()
     metrics.close()
   }
@@ -418,7 +418,7 @@ class RequestMetrics(name: String) extends KafkaMetricsGroup {
     }
   }
 
-  def markErrorMeter(error: Errors, count: Int) {
+  def markErrorMeter(error: Errors, count: Int): Unit = {
     errorMeters(error).getOrCreateMeter().mark(count.toLong)
   }
 

@@ -64,13 +64,13 @@ abstract class AbstractFetcherThread(name: String,
   /* callbacks to be defined in subclass */
 
   // process fetched data
-  protected def processPartitionData(topicPartition: TopicPartition, fetchOffset: Long, partitionData: PD)
+  protected def processPartitionData(topicPartition: TopicPartition, fetchOffset: Long, partitionData: PD): Unit
 
   // handle a partition whose offset is out of range and return a new fetch offset
   protected def handleOffsetOutOfRange(topicPartition: TopicPartition): Long
 
   // deal with partitions with errors, potentially due to leadership changes
-  protected def handlePartitionsWithErrors(partitions: Iterable[TopicPartition])
+  protected def handlePartitionsWithErrors(partitions: Iterable[TopicPartition]): Unit
 
   protected def buildLeaderEpochRequest(allPartitions: Seq[(TopicPartition, PartitionFetchState)]): ResultWithPartitions[Map[TopicPartition, Int]]
 
@@ -82,7 +82,7 @@ abstract class AbstractFetcherThread(name: String,
 
   protected def fetch(fetchRequest: REQ): Seq[(TopicPartition, PD)]
 
-  override def shutdown() {
+  override def shutdown(): Unit = {
     initiateShutdown()
     inLock(partitionMapLock) {
       partitionMapCond.signalAll()
@@ -96,7 +96,7 @@ abstract class AbstractFetcherThread(name: String,
 
   private def states() = partitionStates.partitionStates.asScala.map { state => state.topicPartition -> state.value }
 
-  override def doWork() {
+  override def doWork(): Unit = {
     maybeTruncate()
     val fetchRequest = inLock(partitionMapLock) {
       val ResultWithPartitions(fetchRequest, partitionsWithError) = buildFetchRequest(states)
@@ -137,7 +137,7 @@ abstract class AbstractFetcherThread(name: String,
     }
   }
 
-  private def processFetchRequest(fetchRequest: REQ) {
+  private def processFetchRequest(fetchRequest: REQ): Unit = {
     val partitionsWithError = mutable.Set[TopicPartition]()
     var responseData: Seq[(TopicPartition, PD)] = Seq.empty
 
@@ -238,7 +238,7 @@ abstract class AbstractFetcherThread(name: String,
     }
   }
 
-  def markPartitionsForTruncation(topicPartition: TopicPartition, truncationOffset: Long) {
+  def markPartitionsForTruncation(topicPartition: TopicPartition, truncationOffset: Long): Unit = {
     if (!includeLogTruncation)
       throw new IllegalStateException("Truncation should not be requested if includeLogTruncation is disabled")
     partitionMapLock.lockInterruptibly()
@@ -251,7 +251,7 @@ abstract class AbstractFetcherThread(name: String,
     } finally partitionMapLock.unlock()
   }
 
-  def addPartitions(initialFetchOffsets: Map[TopicPartition, Long]) {
+  def addPartitions(initialFetchOffsets: Map[TopicPartition, Long]): Unit = {
     partitionMapLock.lockInterruptibly()
     try {
       // If the partitionMap already has the topic/partition, then do not update the map with the old offset
@@ -276,7 +276,7 @@ abstract class AbstractFetcherThread(name: String,
     *
     * @param fetchOffsets the partitions to mark truncation complete
     */
-  private def markTruncationCompleteAndUpdateFetchOffset(fetchOffsets: Map[TopicPartition, Long]) {
+  private def markTruncationCompleteAndUpdateFetchOffset(fetchOffsets: Map[TopicPartition, Long]): Unit = {
     val newStates: Map[TopicPartition, PartitionFetchState] = partitionStates.partitionStates.asScala
       .map { state =>
         val maybeTruncationComplete = fetchOffsets.get(state.topicPartition()) match {
@@ -288,7 +288,7 @@ abstract class AbstractFetcherThread(name: String,
     partitionStates.set(newStates.asJava)
   }
 
-  def delayPartitions(partitions: Iterable[TopicPartition], delay: Long) {
+  def delayPartitions(partitions: Iterable[TopicPartition], delay: Long): Unit = {
     partitionMapLock.lockInterruptibly()
     try {
       for (partition <- partitions) {
@@ -301,7 +301,7 @@ abstract class AbstractFetcherThread(name: String,
     } finally partitionMapLock.unlock()
   }
 
-  def removePartitions(topicPartitions: Set[TopicPartition]) {
+  def removePartitions(topicPartitions: Set[TopicPartition]): Unit = {
     partitionMapLock.lockInterruptibly()
     try {
       topicPartitions.foreach { topicPartition =>
@@ -364,13 +364,13 @@ class FetcherLagMetrics(metricId: ClientIdTopicPartition) extends KafkaMetricsGr
     tags
   )
 
-  def lag_=(newLag: Long) {
+  def lag_=(newLag: Long): Unit = {
     lagVal.set(newLag)
   }
 
   def lag = lagVal.get
 
-  def unregister() {
+  def unregister(): Unit = {
     removeMetric(FetcherMetrics.ConsumerLag, tags)
   }
 }
@@ -391,12 +391,12 @@ class FetcherLagStats(metricId: ClientIdAndBroker) {
       false
   }
 
-  def unregister(topic: String, partitionId: Int) {
+  def unregister(topic: String, partitionId: Int): Unit = {
     val lagMetrics = stats.remove(ClientIdTopicPartition(metricId.clientId, topic, partitionId))
     if (lagMetrics != null) lagMetrics.unregister()
   }
 
-  def unregister() {
+  def unregister(): Unit = {
     stats.keys.toBuffer.foreach { key: ClientIdTopicPartition =>
       unregister(key.topic, key.partitionId)
     }
@@ -412,7 +412,7 @@ class FetcherStats(metricId: ClientIdAndBroker) extends KafkaMetricsGroup {
 
   val byteRate = newMeter(FetcherMetrics.BytesPerSec, "bytes", TimeUnit.SECONDS, tags)
 
-  def unregister() {
+  def unregister(): Unit = {
     removeMetric(FetcherMetrics.RequestsPerSec, tags)
     removeMetric(FetcherMetrics.BytesPerSec, tags)
   }

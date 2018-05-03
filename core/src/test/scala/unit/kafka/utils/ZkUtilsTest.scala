@@ -31,20 +31,20 @@ class ZkUtilsTest extends ZooKeeperTestHarness {
   var zkUtils: ZkUtils = _
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp
     zkUtils = ZkUtils(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled))
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     if (zkUtils != null)
      CoreUtils.swallow(zkUtils.close(), this)
     super.tearDown
   }
 
   @Test
-  def testSuccessfulConditionalDeletePath() {
+  def testSuccessfulConditionalDeletePath(): Unit = {
     // Given an existing path
     zkUtils.createPersistentPath(path)
     val (_, statAfterCreation) = zkUtils.readData(path)
@@ -60,7 +60,7 @@ class ZkUtilsTest extends ZooKeeperTestHarness {
 
   // Verify behaviour of ZkUtils.createSequentialPersistentPath since PIDManager relies on it
   @Test
-  def testPersistentSequentialPath() {
+  def testPersistentSequentialPath(): Unit = {
     // Given an existing path
     zkUtils.createPersistentPath(path)
 
@@ -74,7 +74,7 @@ class ZkUtilsTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testAbortedConditionalDeletePath() {
+  def testAbortedConditionalDeletePath(): Unit = {
     // Given an existing path that gets updated
     zkUtils.createPersistentPath(path)
     val (_, statAfterCreation) = zkUtils.readData(path)
@@ -87,13 +87,13 @@ class ZkUtilsTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testClusterIdentifierJsonParsing() {
+  def testClusterIdentifierJsonParsing(): Unit = {
     val clusterId = "test"
     assertEquals(zkUtils.ClusterId.fromJson(zkUtils.ClusterId.toJson(clusterId)), clusterId)
   }
 
   @Test
-  def testGetAllPartitionsTopicWithoutPartitions() {
+  def testGetAllPartitionsTopicWithoutPartitions(): Unit = {
     val topic = "testtopic"
     // Create a regular topic and a topic without any partitions
     zkUtils.createPersistentPath(ZkUtils.getTopicPartitionPath(topic, 0))
@@ -103,7 +103,7 @@ class ZkUtilsTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testGetLeaderIsrAndEpochForPartition() {
+  def testGetLeaderIsrAndEpochForPartition(): Unit = {
     val topic = "my-topic-test"
     val partition = 0
     val leader = 1
@@ -123,7 +123,7 @@ class ZkUtilsTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testGetSequenceIdMethod() {
+  def testGetSequenceIdMethod(): Unit = {
     val path = "/test/seqid"
     (1 to 10).foreach { seqid =>
       assertEquals(seqid, zkUtils.getSequenceId(path))

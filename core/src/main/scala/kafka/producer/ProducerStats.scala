@@ -40,7 +40,7 @@ object ProducerStatsRegistry {
     statsRegistry.getAndMaybePut(clientId)
   }
 
-  def removeProducerStats(clientId: String) {
+  def removeProducerStats(clientId: String): Unit = {
     statsRegistry.remove(clientId)
   }
 }

@@ -28,7 +28,7 @@ import scala.collection.JavaConverters._
 class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
 
   @Test
-  def testValidCreateTopicsRequests() {
+  def testValidCreateTopicsRequests(): Unit = {
     val timeout = 10000
     // Generated assignments
     validateValidCreateTopicsRequests(new CreateTopicsRequest.Builder(Map("topic1" -> new CreateTopicsRequest.TopicDetails(1, 1.toShort)).asJava, timeout).build())
@@ -56,7 +56,7 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
   }
 
   @Test
-  def testErrorCreateTopicsRequests() {
+  def testErrorCreateTopicsRequests(): Unit = {
     val timeout = 10000
     val existingTopic = "existing-topic"
     createTopic(existingTopic, 1, 1)
@@ -112,7 +112,7 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
   }
 
   @Test
-  def testInvalidCreateTopicsRequests() {
+  def testInvalidCreateTopicsRequests(): Unit = {
     // Duplicate
     val singleRequest = new CreateTopicsRequest.Builder(Map("duplicate-topic" ->
         new CreateTopicsRequest.TopicDetails(1, 1.toShort)).asJava, 1000).build()
@@ -155,7 +155,7 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
   }
 
   @Test
-  def testNotController() {
+  def testNotController(): Unit = {
     val request = new CreateTopicsRequest.Builder(Map("topic1" -> new CreateTopicsRequest.TopicDetails(1, 1.toShort)).asJava, 1000).build()
     val response = sendCreateTopicRequest(request, notControllerSocketServer)
 

@@ -369,7 +369,7 @@ private[kafka] object LogValidator extends Logging {
       recordsProcessingStats = recordsProcessingStats)
   }
 
-  private def validateKey(record: Record, compactedTopic: Boolean) {
+  private def validateKey(record: Record, compactedTopic: Boolean): Unit = {
     if (compactedTopic && !record.hasKey)
       throw new InvalidRecordException("Compacted topic cannot accept message without key.")
   }
@@ -382,7 +382,7 @@ private[kafka] object LogValidator extends Logging {
                                 record: Record,
                                 now: Long,
                                 timestampType: TimestampType,
-                                timestampDiffMaxMs: Long) {
+                                timestampDiffMaxMs: Long): Unit = {
     if (timestampType == TimestampType.CREATE_TIME
       && record.timestamp != RecordBatch.NO_TIMESTAMP
       && math.abs(record.timestamp - now) > timestampDiffMaxMs)

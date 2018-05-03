@@ -32,7 +32,7 @@ class ProducerIdManagerTest {
   }
 
   @Test
-  def testGetProducerId() {
+  def testGetProducerId(): Unit = {
     var zkVersion: Option[Int] = None
     var data: Array[Byte] = null
     EasyMock.expect(zkClient.getDataAndVersion(EasyMock.anyString)).andAnswer(new IAnswer[(Option[Array[Byte]], Int)] {
@@ -75,7 +75,7 @@ class ProducerIdManagerTest {
   }
 
   @Test(expected = classOf[KafkaException])
-  def testExceedProducerIdLimit() {
+  def testExceedProducerIdLimit(): Unit = {
     EasyMock.expect(zkClient.getDataAndVersion(EasyMock.anyString)).andAnswer(new IAnswer[(Option[Array[Byte]], Int)] {
       override def answer(): (Option[Array[Byte]], Int) = {
         val json = ProducerIdManager.generateProducerIdBlockJson(

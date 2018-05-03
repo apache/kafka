@@ -41,7 +41,7 @@ class ConsoleProducerTest {
   )
 
   @Test
-  def testValidConfigsNewProducer() {
+  def testValidConfigsNewProducer(): Unit = {
     val config = new ConsoleProducer.ProducerConfig(validArgs)
     // New ProducerConfig constructor is package private, so we can't call it directly
     // Creating new Producer to validate instead
@@ -51,13 +51,13 @@ class ConsoleProducerTest {
 
   @Test
   @deprecated("This test has been deprecated and it will be removed in a future release.", "0.10.0.0")
-  def testValidConfigsOldProducer() {
+  def testValidConfigsOldProducer(): Unit = {
     val config = new ConsoleProducer.ProducerConfig(validArgs)
     new ProducerConfig(ConsoleProducer.getOldProducerProps(config))
   }
 
   @Test
-  def testInvalidConfigs() {
+  def testInvalidConfigs(): Unit = {
     try {
       new ConsoleProducer.ProducerConfig(invalidArgs)
       Assert.fail("Should have thrown an UnrecognizedOptionException")

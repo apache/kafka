@@ -64,7 +64,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
   this.consumerConfig.setProperty(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "100")
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
 
     // create the test topic with all the brokers as replicas
@@ -72,7 +72,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
   }
 
   @Test
-  def testSimpleConsumption() {
+  def testSimpleConsumption(): Unit = {
     val numRecords = 10000
     sendRecords(numRecords)
 
@@ -90,7 +90,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
   }
 
   @Test
-  def testCoordinatorFailover() {
+  def testCoordinatorFailover(): Unit = {
     val listener = new TestConsumerReassignmentListener()
     this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "5000")
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "2000")
@@ -126,12 +126,12 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
     var callsToAssigned = 0
     var callsToRevoked = 0
 
-    def onPartitionsAssigned(partitions: java.util.Collection[TopicPartition]) {
+    def onPartitionsAssigned(partitions: java.util.Collection[TopicPartition]): Unit = {
       info("onPartitionsAssigned called.")
       callsToAssigned += 1
     }
 
-    def onPartitionsRevoked(partitions: java.util.Collection[TopicPartition]) {
+    def onPartitionsRevoked(partitions: java.util.Collection[TopicPartition]): Unit = {
       info("onPartitionsRevoked called.")
       callsToRevoked += 1
     }
@@ -162,7 +162,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
                                         startingTimestamp: Long = 0L,
                                         timestampType: TimestampType = TimestampType.CREATE_TIME,
                                         tp: TopicPartition = tp,
-                                        maxPollRecords: Int = Int.MaxValue) {
+                                        maxPollRecords: Int = Int.MaxValue): Unit = {
     val records = consumeRecords(consumer, numRecords, maxPollRecords = maxPollRecords)
     val now = System.currentTimeMillis()
     for (i <- 0 until numRecords) {

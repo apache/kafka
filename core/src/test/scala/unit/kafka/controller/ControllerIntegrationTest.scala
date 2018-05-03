@@ -33,13 +33,13 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
   var servers = Seq.empty[KafkaServer]
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp
     servers = Seq.empty[KafkaServer]
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     TestUtils.shutdownServers(servers)
     super.tearDown
   }

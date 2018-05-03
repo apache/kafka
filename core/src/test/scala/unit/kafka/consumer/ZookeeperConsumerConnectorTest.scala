@@ -57,21 +57,21 @@ class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with Logging
   val nMessages = 2
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
     zkUtils = ZkUtils(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled))
     dirs = new ZKGroupTopicDirs(group, topic)
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     if (zkUtils != null)
      CoreUtils.swallow(zkUtils.close(), this)
     super.tearDown()
   }
 
   @Test
-  def testBasic() {
+  def testBasic(): Unit = {
     val requestHandlerLogger = Logger.getLogger(classOf[KafkaRequestHandler])
     requestHandlerLogger.setLevel(Level.FATAL)
 
@@ -181,7 +181,7 @@ class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with Logging
   }
 
   @Test
-  def testCompression() {
+  def testCompression(): Unit = {
     val requestHandlerLogger = Logger.getLogger(classOf[kafka.server.KafkaRequestHandler])
     requestHandlerLogger.setLevel(Level.FATAL)
 
@@ -261,7 +261,7 @@ class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with Logging
   }
 
   @Test
-  def testCompressionSetConsumption() {
+  def testCompressionSetConsumption(): Unit = {
     // send some messages to each broker
     val sentMessages = sendMessages(servers, topic, 200, 0, DefaultCompressionCodec) ++
                        sendMessages(servers, topic, 200, 1, DefaultCompressionCodec)
@@ -285,7 +285,7 @@ class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with Logging
   }
 
   @Test
-  def testConsumerDecoder() {
+  def testConsumerDecoder(): Unit = {
     val requestHandlerLogger = Logger.getLogger(classOf[kafka.server.KafkaRequestHandler])
     requestHandlerLogger.setLevel(Level.FATAL)
 
@@ -325,7 +325,7 @@ class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with Logging
   }
 
   @Test
-  def testLeaderSelectionForPartition() {
+  def testLeaderSelectionForPartition(): Unit = {
     val zkUtils = ZkUtils(zkConnect, 6000, 30000, false)
 
     // create topic topic1 with 1 partition on broker 0
@@ -357,7 +357,7 @@ class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with Logging
   }
 
   @Test
-  def testConsumerRebalanceListener() {
+  def testConsumerRebalanceListener(): Unit = {
     // Send messages to create topic
     sendMessages(servers, topic, nMessages, 0)
     sendMessages(servers, topic, nMessages, 1)
@@ -432,12 +432,12 @@ class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with Logging
     var partitionOwnership: java.util.Map[String, java.util.Set[java.lang.Integer]] = null
     var globalPartitionOwnership: java.util.Map[String, java.util.Map[java.lang.Integer, ConsumerThreadId]] = null
 
-    override def beforeReleasingPartitions(partitionOwnership: java.util.Map[String, java.util.Set[java.lang.Integer]]) {
+    override def beforeReleasingPartitions(partitionOwnership: java.util.Map[String, java.util.Set[java.lang.Integer]]): Unit = {
       beforeReleasingPartitionsCalled = true
       this.partitionOwnership = partitionOwnership
     }
 
-    override def beforeStartingFetchers(consumerId: String, globalPartitionOwnership: java.util.Map[String, java.util.Map[java.lang.Integer, ConsumerThreadId]]) {
+    override def beforeStartingFetchers(consumerId: String, globalPartitionOwnership: java.util.Map[String, java.util.Map[java.lang.Integer, ConsumerThreadId]]): Unit = {
       beforeStartingFetchersCalled = true
       this.consumerId = consumerId
       this.globalPartitionOwnership = globalPartitionOwnership

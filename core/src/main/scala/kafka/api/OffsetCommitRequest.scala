@@ -103,7 +103,7 @@ case class OffsetCommitRequest(groupId: String,
 
   lazy val requestInfoGroupedByTopic = requestInfo.groupBy(_._1.topic)
 
-  def writeTo(buffer: ByteBuffer) {
+  def writeTo(buffer: ByteBuffer): Unit = {
     // Write envelope
     buffer.putShort(versionId)
     buffer.putInt(correlationId)

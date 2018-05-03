@@ -51,7 +51,7 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
     .map(KafkaConfig.fromProps(_, overridingProps))
 
   @Before
-  override def setUp {
+  override def setUp: Unit = {
     // Do some Metrics Registry cleanup by removing the metrics that this test checks. 
     // This is a test workaround to the issue that prior harness runs may have left a populated registry.
     // see https://issues.apache.org/jira/browse/KAFKA-4605
@@ -67,7 +67,7 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
    * checking all metrics we care in a single test is faster though it would be more elegant to have 3 @Test methods
    */
   @Test
-  def testMetricsDuringTopicCreateDelete() {
+  def testMetricsDuringTopicCreateDelete(): Unit = {
 
     // For UnderReplicatedPartitions, because of https://issues.apache.org/jira/browse/KAFKA-4605
     // we can't access the metrics value of each server. So instead we directly invoke the method 
@@ -87,7 +87,7 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
     // Thread checking the metric continuously
     running = true
     val thread = new Thread(new Runnable {
-      def run() {
+      def run(): Unit = {
         while (running) {
           for ( s <- servers if running) {
             underReplicatedPartitionCount = s.replicaManager.underReplicatedPartitionCount
@@ -130,7 +130,7 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
            ._2.asInstanceOf[Gauge[Int]]
   }
   
-  private def createDeleteTopics() {
+  private def createDeleteTopics(): Unit = {
     for (l <- 1 to createDeleteIterations if running) {
       // Create topics
       for (t <- topics if running) {

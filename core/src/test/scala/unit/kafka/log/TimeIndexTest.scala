@@ -34,18 +34,18 @@ class TimeIndexTest extends JUnitSuite {
   val baseOffset = 45L
 
   @Before
-  def setup() {
+  def setup(): Unit = {
     this.idx = new TimeIndex(nonExistantTempFile(), baseOffset = baseOffset, maxIndexSize = maxEntries * 12)
   }
 
   @After
-  def teardown() {
+  def teardown(): Unit = {
     if(this.idx != null)
       this.idx.file.delete()
   }
 
   @Test
-  def testLookUp() {
+  def testLookUp(): Unit = {
     // Empty time index
     assertEquals(TimestampOffset(-1L, baseOffset), idx.lookup(100L))
 
@@ -61,7 +61,7 @@ class TimeIndexTest extends JUnitSuite {
   }
 
   @Test
-  def testTruncate() {
+  def testTruncate(): Unit = {
     appendEntries(maxEntries - 1)
     idx.truncate()
     assertEquals(0, idx.entries)
@@ -72,7 +72,7 @@ class TimeIndexTest extends JUnitSuite {
   }
 
   @Test
-  def testAppend() {
+  def testAppend(): Unit = {
     appendEntries(maxEntries - 1)
     intercept[IllegalArgumentException] {
       idx.maybeAppend(10000L, 1000L)
@@ -83,7 +83,7 @@ class TimeIndexTest extends JUnitSuite {
     idx.maybeAppend(10000L, 1000L, true)
   }
 
-  private def appendEntries(numEntries: Int) {
+  private def appendEntries(numEntries: Int): Unit = {
     for (i <- 1 to numEntries)
       idx.maybeAppend(i * 10, i * 10 + baseOffset)
   }

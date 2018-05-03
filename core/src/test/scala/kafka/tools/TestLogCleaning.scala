@@ -48,7 +48,7 @@ import scala.collection.JavaConverters._
  */
 object TestLogCleaning {
 
-  def main(args: Array[String]) {
+  def main(args: Array[String]): Unit = {
     val parser = new OptionParser(false)
     val numMessagesOpt = parser.accepts("messages", "The number of messages to send or consume.")
                                .withRequiredArg
@@ -136,7 +136,7 @@ object TestLogCleaning {
     consumedDataFile.delete()
   }
 
-  def dumpLog(dir: File) {
+  def dumpLog(dir: File): Unit = {
     require(dir.exists, "Non-existent directory: " + dir.getAbsolutePath)
     for (file <- dir.list.sorted; if file.endsWith(Log.LogFileSuffix)) {
       val fileRecords = FileRecords.open(new File(dir, file))
@@ -154,7 +154,7 @@ object TestLogCleaning {
 
   def lineCount(file: File): Int = io.Source.fromFile(file).getLines.size
 
-  def validateOutput(producedDataFile: File, consumedDataFile: File) {
+  def validateOutput(producedDataFile: File, consumedDataFile: File): Unit = {
     val producedReader = externalSort(producedDataFile)
     val consumedReader = externalSort(consumedDataFile)
     val produced = valuesIterator(producedReader)
@@ -230,7 +230,7 @@ object TestLogCleaning {
     val builder = new ProcessBuilder("sort", "--key=1,2", "--stable", "--buffer-size=20%", "--temporary-directory=" + System.getProperty("java.io.tmpdir"), file.getAbsolutePath)
     val process = builder.start()
     new Thread() {
-      override def run() {
+      override def run(): Unit = {
         val exitCode = process.waitFor()
         if(exitCode != 0) {
           System.err.println("Process exited abnormally.")

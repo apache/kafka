@@ -50,7 +50,7 @@ class ConsumerIteratorTest extends KafkaServerTestHarness {
   def consumerConfig = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnect, group, consumer0))
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
     topicInfos = configs.map(_ => new PartitionTopicInfo(topic,
       0,
@@ -63,7 +63,7 @@ class ConsumerIteratorTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def testConsumerIteratorDeduplicationDeepIterator() {
+  def testConsumerIteratorDeduplicationDeepIterator(): Unit = {
     val messageStrings = (0 until 10).map(_.toString).toList
     val messages = messageStrings.map(s => new Message(s.getBytes))
     val messageSet = new ByteBufferMessageSet(DefaultCompressionCodec, new LongRef(0), messages:_*)
@@ -87,7 +87,7 @@ class ConsumerIteratorTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def testConsumerIteratorDecodingFailure() {
+  def testConsumerIteratorDecodingFailure(): Unit = {
     val messageStrings = (0 until 10).map(_.toString).toList
     val messages = messageStrings.map(s => new Message(s.getBytes))
     val messageSet = new ByteBufferMessageSet(NoCompressionCodec, new LongRef(0), messages:_*)

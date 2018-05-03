@@ -91,7 +91,7 @@ object TopicCommand extends Logging {
       allTopics
   }
 
-  def createTopic(zkClient: KafkaZkClient, opts: TopicCommandOptions) {
+  def createTopic(zkClient: KafkaZkClient, opts: TopicCommandOptions): Unit = {
     val topic = opts.options.valueOf(opts.topicOpt)
     val configs = parseTopicConfigsToBeAdded(opts)
     val ifNotExists = opts.options.has(opts.ifNotExistsOpt)
@@ -116,7 +116,7 @@ object TopicCommand extends Logging {
     }
   }
 
-  def alterTopic(zkClient: KafkaZkClient, opts: TopicCommandOptions) {
+  def alterTopic(zkClient: KafkaZkClient, opts: TopicCommandOptions): Unit = {
     val topics = getTopics(zkClient, opts)
     val ifExists = opts.options.has(opts.ifExistsOpt)
     if (topics.isEmpty && !ifExists) {
@@ -164,7 +164,7 @@ object TopicCommand extends Logging {
     }
   }
 
-  def listTopics(zkClient: KafkaZkClient, opts: TopicCommandOptions) {
+  def listTopics(zkClient: KafkaZkClient, opts: TopicCommandOptions): Unit = {
     val topics = getTopics(zkClient, opts)
     for(topic <- topics) {
       if (zkClient.isTopicMarkedForDeletion(topic)) {
@@ -175,7 +175,7 @@ object TopicCommand extends Logging {
     }
   }
 
-  def deleteTopic(zkClient: KafkaZkClient, opts: TopicCommandOptions) {
+  def deleteTopic(zkClient: KafkaZkClient, opts: TopicCommandOptions): Unit = {
     val topics = getTopics(zkClient, opts)
     val ifExists = opts.options.has(opts.ifExistsOpt)
     if (topics.isEmpty && !ifExists) {
@@ -202,7 +202,7 @@ object TopicCommand extends Logging {
     }
   }
 
-  def describeTopic(zkClient: KafkaZkClient, opts: TopicCommandOptions) {
+  def describeTopic(zkClient: KafkaZkClient, opts: TopicCommandOptions): Unit = {
     val topics = getTopics(zkClient, opts)
     val reportUnderReplicatedPartitions = opts.options.has(opts.reportUnderReplicatedPartitionsOpt)
     val reportUnavailablePartitions = opts.options.has(opts.reportUnavailablePartitionsOpt)
@@ -359,7 +359,7 @@ object TopicCommand extends Logging {
 
     val allTopicLevelOpts: Set[OptionSpec[_]] = Set(alterOpt, createOpt, describeOpt, listOpt, deleteOpt)
 
-    def checkArgs() {
+    def checkArgs(): Unit = {
       // check required args
       CommandLineUtils.checkRequiredArgs(parser, options, zkConnectOpt)
       if (!options.has(listOpt) && !options.has(describeOpt))

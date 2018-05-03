@@ -199,11 +199,11 @@ class Partition(val topic: String,
   def allReplicas: Set[Replica] =
     allReplicasMap.values.toSet
 
-  private def removeReplica(replicaId: Int) {
+  private def removeReplica(replicaId: Int): Unit = {
     allReplicasMap.remove(replicaId)
   }
 
-  def removeFutureLocalReplica() {
+  def removeFutureLocalReplica(): Unit = {
     inWriteLock(leaderIsrUpdateLock) {
       allReplicasMap.remove(Request.FutureLocalReplicaId)
     }
@@ -230,7 +230,7 @@ class Partition(val topic: String,
     } else false
   }
 
-  def delete() {
+  def delete(): Unit = {
     // need to hold the lock to prevent appendMessagesToLeader() from hitting I/O exceptions due to log being deleted
     inWriteLock(leaderIsrUpdateLock) {
       allReplicasMap.clear()
@@ -488,14 +488,14 @@ class Partition(val topic: String,
   /**
    * Try to complete any pending requests. This should be called without holding the leaderIsrUpdateLock.
    */
-  private def tryCompleteDelayedRequests() {
+  private def tryCompleteDelayedRequests(): Unit = {
     val requestKey = new TopicPartitionOperationKey(topicPartition)
     replicaManager.tryCompleteDelayedFetch(requestKey)
     replicaManager.tryCompleteDelayedProduce(requestKey)
     replicaManager.tryCompleteDelayedDeleteRecords(requestKey)
   }
 
-  def maybeShrinkIsr(replicaMaxLagTimeMs: Long) {
+  def maybeShrinkIsr(replicaMaxLagTimeMs: Long): Unit = {
     val leaderHWIncremented = inWriteLock(leaderIsrUpdateLock) {
       leaderReplicaIfLocal match {
         case Some(leaderReplica) =>
@@ -545,11 +545,11 @@ class Partition(val topic: String,
     laggingReplicas
   }
 
-  def appendRecordsToFutureReplica(records: MemoryRecords) {
+  def appendRecordsToFutureReplica(records: MemoryRecords): Unit = {
     getReplica(Request.FutureLocalReplicaId).get.log.get.appendAsFollower(records)
   }
 
-  def appendRecordsToFollower(records: MemoryRecords) {
+  def appendRecordsToFollower(records: MemoryRecords): Unit = {
     // The read lock is needed to prevent the follower replica from being updated while ReplicaAlterDirThread
     // is executing maybeDeleteAndSwapFutureReplica() to replace follower replica with the future replica.
     inReadLock(leaderIsrUpdateLock) {
@@ -623,7 +623,7 @@ class Partition(val topic: String,
     * @param offset offset to be used for truncation
     * @param isFuture True iff the truncation should be performed on the future log of this partition
     */
-  def truncateTo(offset: Long, isFuture: Boolean) {
+  def truncateTo(offset: Long, isFuture: Boolean): Unit = {
     // The read lock is needed to prevent the follower replica from being truncated while ReplicaAlterDirThread
     // is executing maybeDeleteAndSwapFutureReplica() to replace follower replica with the future replica.
     inReadLock(leaderIsrUpdateLock) {
@@ -637,7 +637,7 @@ class Partition(val topic: String,
     * @param newOffset The new offset to start the log with
     * @param isFuture True iff the truncation should be performed on the future log of this partition
     */
-  def truncateFullyAndStartAt(newOffset: Long, isFuture: Boolean) {
+  def truncateFullyAndStartAt(newOffset: Long, isFuture: Boolean): Unit = {
     // The read lock is needed to prevent the follower replica from being truncated while ReplicaAlterDirThread
     // is executing maybeDeleteAndSwapFutureReplica() to replace follower replica with the future replica.
     inReadLock(leaderIsrUpdateLock) {
@@ -660,7 +660,7 @@ class Partition(val topic: String,
     }
   }
 
-  private def updateIsr(newIsr: Set[Replica]) {
+  private def updateIsr(newIsr: Set[Replica]): Unit = {
     val newLeaderAndIsr = new LeaderAndIsr(localBrokerId, leaderEpoch, newIsr.map(_.brokerId).toList, zkVersion)
     val (updateSucceeded, newVersion) = ReplicationUtils.updateLeaderAndIsr(zkClient, topicPartition, newLeaderAndIsr,
       controllerEpoch)
@@ -679,7 +679,7 @@ class Partition(val topic: String,
   /**
    * remove deleted log metrics
    */
-  def removePartitionMetrics() {
+  def removePartitionMetrics(): Unit = {
     removeMetric("UnderReplicated", tags)
     removeMetric("UnderMinIsr", tags)
     removeMetric("InSyncReplicasCount", tags)

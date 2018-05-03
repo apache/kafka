@@ -141,7 +141,7 @@ object ConsumerPerformance extends LazyLogging {
               totalMessagesRead: AtomicLong,
               totalBytesRead: AtomicLong,
               joinTime: AtomicLong,
-              testStartTime: Long) {
+              testStartTime: Long): Unit = {
     var bytesRead = 0L
     var messagesRead = 0L
     var lastBytesRead = 0L
@@ -150,11 +150,11 @@ object ConsumerPerformance extends LazyLogging {
     var joinTimeMsInSingleRound = 0L
 
     consumer.subscribe(topics.asJava, new ConsumerRebalanceListener {
-      def onPartitionsAssigned(partitions: util.Collection[TopicPartition]) {
+      def onPartitionsAssigned(partitions: util.Collection[TopicPartition]): Unit = {
         joinTime.addAndGet(System.currentTimeMillis - joinStart)
         joinTimeMsInSingleRound += System.currentTimeMillis - joinStart
       }
-      def onPartitionsRevoked(partitions: util.Collection[TopicPartition]) {
+      def onPartitionsRevoked(partitions: util.Collection[TopicPartition]): Unit = {
         joinStart = System.currentTimeMillis
       }})
 
@@ -365,7 +365,7 @@ object ConsumerPerformance extends LazyLogging {
                            consumerTimeout: AtomicBoolean)
     extends Thread(name) {
 
-    override def run() {
+    override def run(): Unit = {
       var bytesRead = 0L
       var messagesRead = 0L
       val startMs = System.currentTimeMillis

@@ -30,7 +30,7 @@ object ReplayLogProducer extends Logging {
 
   private val GroupId: String = "replay-log-producer"
 
-  def main(args: Array[String]) {
+  def main(args: Array[String]): Unit = {
     val config = new Config(args)
 
     // if there is no group specified then avoid polluting zookeeper with persistent group data, this is a hack
@@ -125,7 +125,7 @@ object ReplayLogProducer extends Logging {
     val shutdownLatch = new CountDownLatch(1)
     val producer = new KafkaProducer[Array[Byte],Array[Byte]](config.producerProps)
 
-    override def run() {
+    override def run(): Unit = {
       info("Starting consumer thread..")
       var messageCount: Int = 0
       try {
@@ -154,7 +154,7 @@ object ReplayLogProducer extends Logging {
       info("thread finished execution !" )
     }
 
-    def shutdown() {
+    def shutdown(): Unit = {
       shutdownLatch.await
       producer.close
     }

@@ -61,7 +61,7 @@ object ZkSecurityMigrator extends Logging {
                       + "znodes as part of the process of setting up ZooKeeper "
                       + "authentication.")
 
-  def run(args: Array[String]) {
+  def run(args: Array[String]): Unit = {
     val jaasFile = System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
     val parser = new OptionParser(false)
     val zkAclOpt = parser.accepts("zookeeper.acl", "Indicates whether to make the Kafka znodes in ZooKeeper secure or unsecure."
@@ -110,7 +110,7 @@ object ZkSecurityMigrator extends Logging {
     migrator.run()
   }
 
-  def main(args: Array[String]) {
+  def main(args: Array[String]): Unit = {
     try {
       run(args)
     } catch {
@@ -156,7 +156,7 @@ class ZkSecurityMigrator(zkUtils: ZkUtils) extends Logging {
     def processResult(rc: Int,
                       path: String,
                       ctx: Object,
-                      children: java.util.List[String]) {
+                      children: java.util.List[String]): Unit = {
       val zkHandle = zkUtils.zkConnection.getZookeeper
       val promise = ctx.asInstanceOf[Promise[String]]
       Code.get(rc) match {
@@ -190,7 +190,7 @@ class ZkSecurityMigrator(zkUtils: ZkUtils) extends Logging {
     def processResult(rc: Int,
                       path: String,
                       ctx: Object,
-                      stat: Stat) {
+                      stat: Stat): Unit = {
       val zkHandle = zkUtils.zkConnection.getZookeeper
       val promise = ctx.asInstanceOf[Promise[String]]
 

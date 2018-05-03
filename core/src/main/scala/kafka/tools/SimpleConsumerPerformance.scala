@@ -34,7 +34,7 @@ import org.apache.kafka.common.utils.Time
 @deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
 object SimpleConsumerPerformance extends LazyLogging {
 
-  def main(args: Array[String]) {
+  def main(args: Array[String]): Unit = {
     logger.warn("WARNING: SimpleConsumerPerformance is deprecated and will be dropped in a future release following 0.11.0.0.")
 
     val config = new ConsumerPerfConfig(args)

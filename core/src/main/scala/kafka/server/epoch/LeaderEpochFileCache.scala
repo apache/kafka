@@ -27,13 +27,13 @@ import org.apache.kafka.common.TopicPartition
 import scala.collection.mutable.ListBuffer
 
 trait LeaderEpochCache {
-  def assign(leaderEpoch: Int, offset: Long)
+  def assign(leaderEpoch: Int, offset: Long): Unit
   def latestEpoch(): Int
   def endOffsetFor(epoch: Int): Long
-  def clearAndFlushLatest(offset: Long)
-  def clearAndFlushEarliest(offset: Long)
-  def clearAndFlush()
-  def clear()
+  def clearAndFlushLatest(offset: Long): Unit
+  def clearAndFlushEarliest(offset: Long): Unit
+  def clearAndFlush(): Unit
+  def clear(): Unit
 }
 
 /**

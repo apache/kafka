@@ -31,7 +31,7 @@ class ReplicationQuotaManagerTest {
   private val time = new MockTime
 
   @Test
-  def shouldThrottleOnlyDefinedReplicas() {
+  def shouldThrottleOnlyDefinedReplicas(): Unit = {
     val quota = new ReplicationQuotaManager(ReplicationQuotaManagerConfig(), newMetrics, QuotaType.Fetch, time)
     quota.markThrottled("topic1", Seq(1, 2, 3))
 

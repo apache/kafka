@@ -25,7 +25,7 @@ class MockTimer extends Timer {
   val time = new MockTime
   private val taskQueue = mutable.PriorityQueue[TimerTaskEntry]()(Ordering[TimerTaskEntry].reverse)
 
-  def add(timerTask: TimerTask) {
+  def add(timerTask: TimerTask): Unit = {
     if (timerTask.delayMs <= 0)
       timerTask.run()
     else {

@@ -40,7 +40,7 @@ class ConsoleConsumerTest {
   }
 
   @Test
-  def shouldResetUnConsumedOffsetsBeforeExitForNewConsumer() {
+  def shouldResetUnConsumedOffsetsBeforeExitForNewConsumer(): Unit = {
     val topic = "test"
     val maxMessages: Int = 123
     val totalMessages: Int = 700
@@ -78,7 +78,7 @@ class ConsoleConsumerTest {
   }
 
   @Test
-  def shouldLimitReadsToMaxMessageLimit() {
+  def shouldLimitReadsToMaxMessageLimit(): Unit = {
     //Mocks
     val consumer = EasyMock.createNiceMock(classOf[BaseConsumer])
     val formatter = EasyMock.createNiceMock(classOf[MessageFormatter])
@@ -99,7 +99,7 @@ class ConsoleConsumerTest {
   }
 
   @Test
-  def shouldStopWhenOutputCheckErrorFails() {
+  def shouldStopWhenOutputCheckErrorFails(): Unit = {
     //Mocks
     val consumer = EasyMock.createNiceMock(classOf[BaseConsumer])
     val formatter = EasyMock.createNiceMock(classOf[MessageFormatter])
@@ -126,7 +126,7 @@ class ConsoleConsumerTest {
   }
 
   @Test
-  def shouldParseValidOldConsumerValidConfig() {
+  def shouldParseValidOldConsumerValidConfig(): Unit = {
     //Given
     val args: Array[String] = Array(
       "--zookeeper", "localhost:2181",
@@ -144,7 +144,7 @@ class ConsoleConsumerTest {
   }
 
   @Test
-  def shouldParseValidNewConsumerValidConfig() {
+  def shouldParseValidNewConsumerValidConfig(): Unit = {
     //Given
     val args: Array[String] = Array(
       "--bootstrap-server", "localhost:9092",
@@ -186,7 +186,7 @@ class ConsoleConsumerTest {
   }
 
   @Test
-  def testDefaultConsumer() {
+  def testDefaultConsumer(): Unit = {
     //Given
     val args: Array[String] = Array(
       "--bootstrap-server", "localhost:9092",
@@ -201,7 +201,7 @@ class ConsoleConsumerTest {
   }
 
   @Test
-  def shouldParseValidNewSimpleConsumerValidConfigWithStringOffset() {
+  def shouldParseValidNewSimpleConsumerValidConfigWithStringOffset(): Unit = {
     //Given
     val args: Array[String] = Array(
       "--bootstrap-server", "localhost:9092",
@@ -225,7 +225,7 @@ class ConsoleConsumerTest {
   }
 
   @Test
-  def shouldParseValidOldConsumerConfigWithAutoOffsetResetSmallest() {
+  def shouldParseValidOldConsumerConfigWithAutoOffsetResetSmallest(): Unit = {
     //Given
     val args: Array[String] = Array(
       "--zookeeper", "localhost:2181",
@@ -245,7 +245,7 @@ class ConsoleConsumerTest {
   }
 
   @Test
-  def shouldParseValidOldConsumerConfigWithAutoOffsetResetLargest() {
+  def shouldParseValidOldConsumerConfigWithAutoOffsetResetLargest(): Unit = {
     //Given
     val args: Array[String] = Array(
       "--zookeeper", "localhost:2181",
@@ -265,7 +265,7 @@ class ConsoleConsumerTest {
   }
 
   @Test
-  def shouldSetAutoResetToSmallestWhenFromBeginningConfigured() {
+  def shouldSetAutoResetToSmallestWhenFromBeginningConfigured(): Unit = {
     //Given
     val args = Array(
       "--zookeeper", "localhost:2181",
@@ -285,7 +285,7 @@ class ConsoleConsumerTest {
   }
 
   @Test
-  def shouldParseValidNewConsumerConfigWithAutoOffsetResetLatest() {
+  def shouldParseValidNewConsumerConfigWithAutoOffsetResetLatest(): Unit = {
     //Given
     val args: Array[String] = Array(
       "--bootstrap-server", "localhost:9092",
@@ -305,7 +305,7 @@ class ConsoleConsumerTest {
   }
 
   @Test
-  def shouldParseValidNewConsumerConfigWithAutoOffsetResetEarliest() {
+  def shouldParseValidNewConsumerConfigWithAutoOffsetResetEarliest(): Unit = {
     //Given
     val args: Array[String] = Array(
       "--bootstrap-server", "localhost:9092",
@@ -325,7 +325,7 @@ class ConsoleConsumerTest {
   }
 
   @Test
-  def shouldParseValidNewConsumerConfigWithAutoOffsetResetAndMatchingFromBeginning() {
+  def shouldParseValidNewConsumerConfigWithAutoOffsetResetAndMatchingFromBeginning(): Unit = {
     //Given
     val args: Array[String] = Array(
       "--bootstrap-server", "localhost:9092",
@@ -346,7 +346,7 @@ class ConsoleConsumerTest {
   }
 
   @Test
-  def shouldParseValidNewConsumerConfigWithNoOffsetReset() {
+  def shouldParseValidNewConsumerConfigWithNoOffsetReset(): Unit = {
     //Given
     val args: Array[String] = Array(
       "--bootstrap-server", "localhost:9092",
@@ -365,7 +365,7 @@ class ConsoleConsumerTest {
   }
 
   @Test(expected = classOf[IllegalArgumentException])
-  def shouldExitOnInvalidConfigWithAutoOffsetResetAndConflictingFromBeginningNewConsumer() {
+  def shouldExitOnInvalidConfigWithAutoOffsetResetAndConflictingFromBeginningNewConsumer(): Unit = {
 
     // Override exit procedure to throw an exception instead of exiting, so we can catch the exit
     // properly for this test case
@@ -389,7 +389,7 @@ class ConsoleConsumerTest {
   }
 
   @Test(expected = classOf[IllegalArgumentException])
-  def shouldExitOnInvalidConfigWithAutoOffsetResetAndConflictingFromBeginningOldConsumer() {
+  def shouldExitOnInvalidConfigWithAutoOffsetResetAndConflictingFromBeginningOldConsumer(): Unit = {
 
     // Override exit procedure to throw an exception instead of exiting, so we can catch the exit
     // properly for this test case
@@ -413,7 +413,7 @@ class ConsoleConsumerTest {
   }
 
   @Test
-  def shouldParseConfigsFromFile() {
+  def shouldParseConfigsFromFile(): Unit = {
     val propsFile = TestUtils.tempFile()
     val propsStream = new FileOutputStream(propsFile)
     propsStream.write("request.timeout.ms=1000\n".getBytes())
@@ -432,7 +432,7 @@ class ConsoleConsumerTest {
   }
 
   @Test
-  def groupIdsProvidedInDifferentPlacesMustMatch() {
+  def groupIdsProvidedInDifferentPlacesMustMatch(): Unit = {
     Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
 
     // different in all three places

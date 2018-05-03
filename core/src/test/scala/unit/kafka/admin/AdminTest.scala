@@ -50,13 +50,13 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
   var zkUtils: ZkUtils = null
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
     zkUtils = ZkUtils(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled))
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     if (zkUtils != null)
      CoreUtils.swallow(zkUtils.close(), this)
     TestUtils.shutdownServers(servers)
@@ -64,7 +64,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
   }
 
   @Test
-  def testReplicaAssignment() {
+  def testReplicaAssignment(): Unit = {
     val brokerMetadatas = (0 to 4).map(new BrokerMetadata(_, None))
 
     // test 0 replication factor
@@ -95,7 +95,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
   }
 
   @Test
-  def testManualReplicaAssignment() {
+  def testManualReplicaAssignment(): Unit = {
     val brokers = List(0, 1, 2, 3, 4)
     TestUtils.createBrokersInZk(zkClient, brokers)
 
@@ -118,7 +118,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
   }
 
   @Test
-  def testTopicCreationInZK() {
+  def testTopicCreationInZK(): Unit = {
     val expectedReplicaAssignment = Map(
       0  -> List(0, 1, 2),
       1  -> List(1, 2, 3),
@@ -165,7 +165,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
   }
 
   @Test
-  def testTopicCreationWithCollision() {
+  def testTopicCreationWithCollision(): Unit = {
     val topic = "test.topic"
     val collidingTopic = "test_topic"
     TestUtils.createBrokersInZk(zkClient, List(0, 1, 2, 3, 4))
@@ -179,7 +179,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
   }
 
   @Test
-  def testConcurrentTopicCreation() {
+  def testConcurrentTopicCreation(): Unit = {
     val topic = "test.topic"
 
     // simulate the ZK interactions that can happen when a topic is concurrently created by multiple processes
@@ -200,7 +200,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
   }
 
   @Test
-  def testPartitionReassignmentWithLeaderInNewReplicas() {
+  def testPartitionReassignmentWithLeaderInNewReplicas(): Unit = {
     val expectedReplicaAssignment = Map(0  -> List(0, 1, 2))
     val topic = "test"
     // create brokers
@@ -230,7 +230,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
   }
 
   @Test
-  def testPartitionReassignmentWithLeaderNotInNewReplicas() {
+  def testPartitionReassignmentWithLeaderNotInNewReplicas(): Unit = {
     val expectedReplicaAssignment = Map(0  -> List(0, 1, 2))
     val topic = "test"
     // create brokers
@@ -259,7 +259,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
   }
 
   @Test
-  def testPartitionReassignmentNonOverlappingReplicas() {
+  def testPartitionReassignmentNonOverlappingReplicas(): Unit = {
     val expectedReplicaAssignment = Map(0  -> List(0, 1))
     val topic = "test"
     // create brokers
@@ -288,7 +288,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
   }
 
   @Test
-  def testReassigningNonExistingPartition() {
+  def testReassigningNonExistingPartition(): Unit = {
     val topic = "test"
     // create brokers
     servers = TestUtils.createBrokerConfigs(4, zkConnect, false).map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
@@ -303,7 +303,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
   }
 
   @Test
-  def testResumePartitionReassignmentThatWasCompleted() {
+  def testResumePartitionReassignmentThatWasCompleted(): Unit = {
     val expectedReplicaAssignment = Map(0  -> List(0, 1))
     val topic = "test"
     // create the topic
@@ -331,7 +331,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
   }
 
   @Test
-  def testPreferredReplicaJsonData() {
+  def testPreferredReplicaJsonData(): Unit = {
     // write preferred replica json data to zk path
     val partitionsForPreferredReplicaElection = Set(new TopicPartition("test", 1), new TopicPartition("test2", 1))
     PreferredReplicaLeaderElectionCommand.writePreferredReplicaElectionData(zkClient, partitionsForPreferredReplicaElection)
@@ -344,7 +344,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
   }
 
   @Test
-  def testBasicPreferredReplicaElection() {
+  def testBasicPreferredReplicaElection(): Unit = {
     val expectedReplicaAssignment = Map(1  -> List(0, 1, 2))
     val topic = "test"
     val partition = 1
@@ -365,7 +365,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
   }
 
   @Test
-  def testControlledShutdown() {
+  def testControlledShutdown(): Unit = {
     val expectedReplicaAssignment = Map(1  -> List(0, 1, 2))
     val topic = "test"
     val partition = 1
@@ -414,7 +414,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
    * then changes the config and checks that the new values take effect.
    */
   @Test
-  def testTopicConfigChange() {
+  def testTopicConfigChange(): Unit = {
     val partitions = 3
     val topic = "my-topic"
     val server = TestUtils.createServer(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnect)))
@@ -429,7 +429,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
       props
     }
 
-    def checkConfig(messageSize: Int, retentionMs: Long, throttledLeaders: String, throttledFollowers: String, quotaManagerIsThrottled: Boolean) {
+    def checkConfig(messageSize: Int, retentionMs: Long, throttledLeaders: String, throttledFollowers: String, quotaManagerIsThrottled: Boolean): Unit = {
       def checkList(actual: util.List[String], expected: String): Unit = {
         assertNotNull(actual)
         if (expected == "")
@@ -487,11 +487,11 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
   }
 
   @Test
-  def shouldPropagateDynamicBrokerConfigs() {
+  def shouldPropagateDynamicBrokerConfigs(): Unit = {
     val brokerIds = Seq(0, 1, 2)
     servers = createBrokerConfigs(3, zkConnect).map(fromProps).map(createServer(_))
 
-    def checkConfig(limit: Long) {
+    def checkConfig(limit: Long): Unit = {
       retry(10000) {
         for (server <- servers) {
           assertEquals("Leader Quota Manager was not updated", limit, server.quotaManagers.leader.upperBound)
@@ -532,7 +532,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
    * Basically, it asserts that notifications are bootstrapped from ZK
    */
   @Test
-  def testBootstrapClientIdConfig() {
+  def testBootstrapClientIdConfig(): Unit = {
     val clientId = "my-client"
     val props = new Properties()
     props.setProperty("producer_byte_rate", "1000")
@@ -555,7 +555,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
   }
 
   @Test
-  def testGetBrokerMetadatas() {
+  def testGetBrokerMetadatas(): Unit = {
     // broker 4 has no rack information
     val brokerList = 0 to 5
     val rackInfo = Map(0 -> "rack1", 1 -> "rack2", 2 -> "rack2", 3 -> "rack1", 5 -> "rack3")

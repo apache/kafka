@@ -50,7 +50,7 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
   val numPartitions = 1
   val tp = new TopicPartition(topic, 0)
 
-  override def configureSecurityBeforeServersStart() {
+  override def configureSecurityBeforeServersStart(): Unit = {
     super.configureSecurityBeforeServersStart()
     zkClient.makeSurePersistentPathExists(ConfigEntityChangeNotificationZNode.path)
     // Create broker credentials before starting brokers
@@ -72,7 +72,7 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
   }
 
   @Test
-  def testProducerWithAuthenticationFailure() {
+  def testProducerWithAuthenticationFailure(): Unit = {
     verifyAuthenticationException(sendOneRecord(10000))
     verifyAuthenticationException(producers.head.partitionsFor(topic))
 
@@ -81,7 +81,7 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
   }
 
   @Test
-  def testTransactionalProducerWithAuthenticationFailure() {
+  def testTransactionalProducerWithAuthenticationFailure(): Unit = {
     val txProducer = createTransactionalProducer()
     verifyAuthenticationException(txProducer.initTransactions())
 
@@ -95,21 +95,21 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
   }
 
   @Test
-  def testConsumerWithAuthenticationFailure() {
+  def testConsumerWithAuthenticationFailure(): Unit = {
     val consumer = this.consumers.head
     consumer.subscribe(List(topic).asJava)
     verifyConsumerWithAuthenticationFailure(consumer)
   }
 
   @Test
-  def testManualAssignmentConsumerWithAuthenticationFailure() {
+  def testManualAssignmentConsumerWithAuthenticationFailure(): Unit = {
     val consumer = this.consumers.head
     consumer.assign(List(tp).asJava)
     verifyConsumerWithAuthenticationFailure(consumer)
   }
 
   @Test
-  def testManualAssignmentConsumerWithAutoCommitDisabledWithAuthenticationFailure() {
+  def testManualAssignmentConsumerWithAutoCommitDisabledWithAuthenticationFailure(): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false.toString)
     val consumer = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
     consumers += consumer
@@ -119,7 +119,7 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
     verifyConsumerWithAuthenticationFailure(consumer)
   }
 
-  private def verifyConsumerWithAuthenticationFailure(consumer: KafkaConsumer[Array[Byte], Array[Byte]]) {
+  private def verifyConsumerWithAuthenticationFailure(consumer: KafkaConsumer[Array[Byte], Array[Byte]]): Unit = {
     verifyAuthenticationException(consumer.poll(10000))
     verifyAuthenticationException(consumer.partitionsFor(topic))
 
@@ -129,7 +129,7 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
   }
 
   @Test
-  def testKafkaAdminClientWithAuthenticationFailure() {
+  def testKafkaAdminClientWithAuthenticationFailure(): Unit = {
     val props = TestUtils.adminClientSecurityConfigs(securityProtocol, trustStoreFile, clientSaslProperties)
     props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     val adminClient = AdminClient.create(props)
@@ -157,7 +157,7 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
   }
 
   @Test
-  def testConsumerGroupServiceWithAuthenticationFailure() {
+  def testConsumerGroupServiceWithAuthenticationFailure(): Unit = {
     val propsFile = TestUtils.tempFile()
     val propsStream = new FileOutputStream(propsFile)
     propsStream.write("security.protocol=SASL_PLAINTEXT\n".getBytes())

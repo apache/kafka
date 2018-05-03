@@ -25,7 +25,7 @@ import kafka.server.epoch.EpochEntry
 import scala.collection._
 
 trait LeaderEpochCheckpoint {
-  def write(epochs: Seq[EpochEntry])
+  def write(epochs: Seq[EpochEntry]): Unit
   def read(): Seq[EpochEntry]
 }
 

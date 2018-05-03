@@ -142,7 +142,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
    *
    * @throws IOException if rename fails
    */
-  def renameTo(f: File) {
+  def renameTo(f: File): Unit = {
     try Utils.atomicMoveWithFallback(file.toPath, f.toPath)
     finally file = f
   }
@@ -150,7 +150,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
   /**
    * Flush the data in the index to disk
    */
-  def flush() {
+  def flush(): Unit = {
     inLock(lock) {
       mmap.force()
     }
@@ -178,7 +178,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
    * Trim this segment to fit just the valid entries, deleting all trailing unwritten bytes from
    * the file.
    */
-  def trimToValidSize() {
+  def trimToValidSize(): Unit = {
     inLock(lock) {
       resize(entrySize * _entries)
     }
@@ -190,7 +190,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
   def sizeInBytes = entrySize * _entries
 
   /** Close the index */
-  def close() {
+  def close(): Unit = {
     trimToValidSize()
   }
 
@@ -236,7 +236,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
   /**
    * Forcefully free the buffer's mmap.
    */
-  protected[log] def forceUnmap() {
+  protected[log] def forceUnmap(): Unit = {
     try MappedByteBuffers.unmap(file.getAbsolutePath, mmap)
     finally mmap = null // Accessing unmapped mmap crashes JVM by SEGV so we null it out to be safe
   }

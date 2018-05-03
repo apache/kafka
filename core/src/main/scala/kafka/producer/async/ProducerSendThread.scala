@@ -43,7 +43,7 @@ class ProducerSendThread[K,V](val threadName: String,
           },
           Map("clientId" -> clientId))
 
-  override def run {
+  override def run: Unit = {
     try {
       processEvents
     }catch {
@@ -60,7 +60,7 @@ class ProducerSendThread[K,V](val threadName: String,
     info("Shutdown ProducerSendThread complete")
   }
 
-  private def processEvents() {
+  private def processEvents(): Unit = {
     var lastSend = Time.SYSTEM.milliseconds
     var events = new ArrayBuffer[KeyedMessage[K,V]]
     var full: Boolean = false
@@ -100,7 +100,7 @@ class ProducerSendThread[K,V](val threadName: String,
         .format(queue.size))
   }
 
-  def tryToHandle(events: Seq[KeyedMessage[K,V]]) {
+  def tryToHandle(events: Seq[KeyedMessage[K,V]]): Unit = {
     val size = events.size
     try {
       debug("Handling " + size + " events")

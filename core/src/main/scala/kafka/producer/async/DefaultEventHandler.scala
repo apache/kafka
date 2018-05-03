@@ -57,7 +57,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
   private val producerStats = ProducerStatsRegistry.getProducerStats(config.clientId)
   private val producerTopicStats = ProducerTopicStatsRegistry.getProducerTopicStats(config.clientId)
 
-  def handle(events: Seq[KeyedMessage[K,V]]) {
+  def handle(events: Seq[KeyedMessage[K,V]]): Unit = {
     val serializedData = serialize(events)
     serializedData.foreach {
       keyed =>
@@ -352,7 +352,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
     }
   }
 
-  def close() {
+  def close(): Unit = {
     if (producerPool != null)
       producerPool.close
   }

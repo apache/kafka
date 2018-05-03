@@ -49,7 +49,7 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
   var producer: KafkaProducer[Array[Byte], Array[Byte]] = null
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     producer.close()
     shutdownServers(brokers)
     super.tearDown()

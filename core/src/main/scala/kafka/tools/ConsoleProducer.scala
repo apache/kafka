@@ -35,7 +35,7 @@ import scala.collection.JavaConverters._
 
 object ConsoleProducer {
 
-  def main(args: Array[String]) {
+  def main(args: Array[String]): Unit = {
 
     try {
         val config = new ProducerConfig(args)
@@ -50,7 +50,7 @@ object ConsoleProducer {
           }
 
         Runtime.getRuntime.addShutdownHook(new Thread() {
-          override def run() {
+          override def run(): Unit = {
             producer.close()
           }
         })
@@ -295,7 +295,7 @@ object ConsoleProducer {
     var ignoreError = false
     var lineNumber = 0
 
-    override def init(inputStream: InputStream, props: Properties) {
+    override def init(inputStream: InputStream, props: Properties): Unit = {
       topic = props.getProperty("topic")
       if (props.containsKey("parse.key"))
         parseKey = props.getProperty("parse.key").trim.equalsIgnoreCase("true")

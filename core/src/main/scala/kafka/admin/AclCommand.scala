@@ -38,7 +38,7 @@ object AclCommand extends Logging {
     DelegationToken -> Set(Describe, All)
   )
 
-  def main(args: Array[String]) {
+  def main(args: Array[String]): Unit = {
 
     val opts = new AclCommandOptions(args)
 
@@ -62,7 +62,7 @@ object AclCommand extends Logging {
     }
   }
 
-  def withAuthorizer(opts: AclCommandOptions)(f: Authorizer => Unit) {
+  def withAuthorizer(opts: AclCommandOptions)(f: Authorizer => Unit): Unit = {
     val defaultProps = Map(KafkaConfig.ZkEnableSecureAclsProp -> JaasUtils.isZkSecurityEnabled)
     val authorizerProperties =
       if (opts.options.has(opts.authorizerPropertiesOpt)) {
@@ -81,7 +81,7 @@ object AclCommand extends Logging {
     finally CoreUtils.swallow(authZ.close(), this)
   }
 
-  private def addAcl(opts: AclCommandOptions) {
+  private def addAcl(opts: AclCommandOptions): Unit = {
     withAuthorizer(opts) { authorizer =>
       val resourceToAcl = getResourceToAcls(opts)
 
@@ -97,7 +97,7 @@ object AclCommand extends Logging {
     }
   }
 
-  private def removeAcl(opts: AclCommandOptions) {
+  private def removeAcl(opts: AclCommandOptions): Unit = {
     withAuthorizer(opts) { authorizer =>
       val resourceToAcl = getResourceToAcls(opts)
 
@@ -115,7 +115,7 @@ object AclCommand extends Logging {
     }
   }
 
-  private def listAcl(opts: AclCommandOptions) {
+  private def listAcl(opts: AclCommandOptions): Unit = {
     withAuthorizer(opts) { authorizer =>
       val resources = getResource(opts, dieIfNoResourceFound = false)
 
@@ -366,7 +366,7 @@ object AclCommand extends Logging {
 
     val options = parser.parse(args: _*)
 
-    def checkArgs() {
+    def checkArgs(): Unit = {
       CommandLineUtils.checkRequiredArgs(parser, options, authorizerPropertiesOpt)
 
       val actions = Seq(addOpt, removeOpt, listOpt).count(options.has)

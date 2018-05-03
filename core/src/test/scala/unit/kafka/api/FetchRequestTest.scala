@@ -23,7 +23,7 @@ import org.junit.Test
 class FetchRequestTest {
 
   @Test
-  def testShuffle() {
+  def testShuffle(): Unit = {
     val seq = (0 to 100).map { i =>
       val topic = s"topic${i % 10}"
       (TopicAndPartition(topic, i / 10), PartitionFetchInfo(i, 50))
@@ -53,7 +53,7 @@ class FetchRequestTest {
   }
 
   @Test
-  def testShuffleWithSingleTopic() {
+  def testShuffleWithSingleTopic(): Unit = {
     val seq = (0 to 50).map(i => (TopicAndPartition("topic", i), PartitionFetchInfo(i, 70)))
     val shuffled = FetchRequest.shuffle(seq)
     assertEquals(seq.size, shuffled.size)

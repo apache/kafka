@@ -31,20 +31,20 @@ class ReplicaFetchTest extends ZooKeeperTestHarness  {
   val topic2 = "bar"
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
     val props = createBrokerConfigs(2, zkConnect)
     brokers = props.map(KafkaConfig.fromProps).map(TestUtils.createServer(_))
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     TestUtils.shutdownServers(brokers)
     super.tearDown()
   }
 
   @Test
-  def testReplicaFetcherThread() {
+  def testReplicaFetcherThread(): Unit = {
     val partition = 0
     val testMessageList1 = List("test1", "test2", "test3", "test4")
     val testMessageList2 = List("test5", "test6", "test7", "test8")

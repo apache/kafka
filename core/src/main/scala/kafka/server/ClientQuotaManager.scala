@@ -179,7 +179,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
     quotaType.toString,
     "Tracks the size of the delay queue"), new Total())
   start() // Use start method to keep findbugs happy
-  private def start() {
+  private def start(): Unit = {
     throttledRequestReaper.start()
   }
 
@@ -260,7 +260,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
    * quota violation. The aggregate value will subsequently be used for throttling when the
    * next request is processed.
    */
-  def recordNoThrottle(clientSensors: ClientSensors, value: Double) {
+  def recordNoThrottle(clientSensors: ClientSensors, value: Double): Unit = {
     clientSensors.quotaSensor.record(value, time.milliseconds(), false)
   }
 
@@ -385,7 +385,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
    * @param sanitizedClientId sanitized client ID to override if quota applies to <client-id> or <user, client-id>
    * @param quota             custom quota to apply or None if quota override is being removed
    */
-  def updateQuota(sanitizedUser: Option[String], clientId: Option[String], sanitizedClientId: Option[String], quota: Option[Quota]) {
+  def updateQuota(sanitizedUser: Option[String], clientId: Option[String], sanitizedClientId: Option[String], quota: Option[Quota]): Unit = {
     /*
      * Acquire the write lock to apply changes in the quota objects.
      * This method changes the quota in the overriddenQuota map and applies the update on the actual KafkaMetric object (if it exists).

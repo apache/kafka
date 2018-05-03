@@ -26,22 +26,22 @@ import kafka.common.{InvalidConfigException, Config}
 @deprecated("This object has been deprecated and will be removed in a future release. " +
             "Please use org.apache.kafka.clients.producer.ProducerConfig instead.", "0.10.0.0")
 object ProducerConfig extends Config {
-  def validate(config: ProducerConfig) {
+  def validate(config: ProducerConfig): Unit = {
     validateClientId(config.clientId)
     validateBatchSize(config.batchNumMessages, config.queueBufferingMaxMessages)
     validateProducerType(config.producerType)
   }
 
-  def validateClientId(clientId: String) {
+  def validateClientId(clientId: String): Unit = {
     validateChars("client.id", clientId)
   }
 
-  def validateBatchSize(batchSize: Int, queueSize: Int) {
+  def validateBatchSize(batchSize: Int, queueSize: Int): Unit = {
     if (batchSize > queueSize)
       throw new InvalidConfigException("Batch size = " + batchSize + " can't be larger than queue size = " + queueSize)
   }
 
-  def validateProducerType(producerType: String) {
+  def validateProducerType(producerType: String): Unit = {
     producerType match {
       case "sync" =>
       case "async"=>

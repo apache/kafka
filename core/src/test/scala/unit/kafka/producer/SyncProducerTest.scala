@@ -49,7 +49,7 @@ class SyncProducerTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def testReachableServer() {
+  def testReachableServer(): Unit = {
     val server = servers.head
     val props = TestUtils.getSyncProducerConfig(boundPort(server))
 
@@ -73,7 +73,7 @@ class SyncProducerTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def testEmptyProduceRequest() {
+  def testEmptyProduceRequest(): Unit = {
     val server = servers.head
     val props = TestUtils.getSyncProducerConfig(boundPort(server))
 
@@ -91,7 +91,7 @@ class SyncProducerTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def testMessageSizeTooLarge() {
+  def testMessageSizeTooLarge(): Unit = {
     val server = servers.head
     val props = TestUtils.getSyncProducerConfig(boundPort(server))
 
@@ -117,7 +117,7 @@ class SyncProducerTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def testMessageSizeTooLargeWithAckZero() {
+  def testMessageSizeTooLargeWithAckZero(): Unit = {
     val server = servers.head
     val props = TestUtils.getSyncProducerConfig(boundPort(server))
 
@@ -143,7 +143,7 @@ class SyncProducerTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def testProduceCorrectlyReceivesResponse() {
+  def testProduceCorrectlyReceivesResponse(): Unit = {
     val server = servers.head
     val props = TestUtils.getSyncProducerConfig(boundPort(server))
 
@@ -189,7 +189,7 @@ class SyncProducerTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def testProducerCanTimeout() {
+  def testProducerCanTimeout(): Unit = {
     val timeoutMs = 500
 
     val server = servers.head
@@ -216,7 +216,7 @@ class SyncProducerTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def testProduceRequestWithNoResponse() {
+  def testProduceRequestWithNoResponse(): Unit = {
     val server = servers.head
 
     val port = TestUtils.boundPort(server)
@@ -232,7 +232,7 @@ class SyncProducerTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def testNotEnoughReplicas()  {
+  def testNotEnoughReplicas(): Unit =  {
     val topicName = "minisrtest"
     val server = servers.head
     val props = TestUtils.getSyncProducerConfig(boundPort(server))

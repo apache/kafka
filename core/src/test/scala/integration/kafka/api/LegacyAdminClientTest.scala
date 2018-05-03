@@ -66,20 +66,20 @@ class LegacyAdminClientTest extends IntegrationTestHarness with Logging {
   this.consumerConfig.setProperty(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "100")
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
     client = AdminClient.createSimplePlaintext(this.brokerList)
     createTopic(topic, 2, serverCount)
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     client.close()
     super.tearDown()
   }
 
   @Test
-  def testSeekToBeginningAfterDeleteRecords() {
+  def testSeekToBeginningAfterDeleteRecords(): Unit = {
     val consumer = consumers.head
     subscribeAndWaitForAssignment(topic, consumer)
 
@@ -97,7 +97,7 @@ class LegacyAdminClientTest extends IntegrationTestHarness with Logging {
   }
 
   @Test
-  def testConsumeAfterDeleteRecords() {
+  def testConsumeAfterDeleteRecords(): Unit = {
     val consumer = consumers.head
     subscribeAndWaitForAssignment(topic, consumer)
 
@@ -126,7 +126,7 @@ class LegacyAdminClientTest extends IntegrationTestHarness with Logging {
   }
 
   @Test
-  def testLogStartOffsetCheckpoint() {
+  def testLogStartOffsetCheckpoint(): Unit = {
     subscribeAndWaitForAssignment(topic, consumers.head)
 
     sendRecords(producers.head, 10, tp)
@@ -147,7 +147,7 @@ class LegacyAdminClientTest extends IntegrationTestHarness with Logging {
   }
 
   @Test
-  def testLogStartOffsetAfterDeleteRecords() {
+  def testLogStartOffsetAfterDeleteRecords(): Unit = {
     subscribeAndWaitForAssignment(topic, consumers.head)
 
     sendRecords(producers.head, 10, tp)
@@ -158,13 +158,13 @@ class LegacyAdminClientTest extends IntegrationTestHarness with Logging {
   }
 
   @Test
-  def testOffsetsForTimesWhenOffsetNotFound() {
+  def testOffsetsForTimesWhenOffsetNotFound(): Unit = {
     val consumer = consumers.head
     assertNull(consumer.offsetsForTimes(Map(tp -> JLong.valueOf(0L)).asJava).get(tp))
   }
 
   @Test
-  def testOffsetsForTimesAfterDeleteRecords() {
+  def testOffsetsForTimesAfterDeleteRecords(): Unit = {
     val consumer = consumers.head
     subscribeAndWaitForAssignment(topic, consumer)
 
@@ -179,7 +179,7 @@ class LegacyAdminClientTest extends IntegrationTestHarness with Logging {
   }
 
   @Test
-  def testDeleteRecordsWithException() {
+  def testDeleteRecordsWithException(): Unit = {
     subscribeAndWaitForAssignment(topic, consumers.head)
 
     sendRecords(producers.head, 10, tp)
@@ -195,7 +195,7 @@ class LegacyAdminClientTest extends IntegrationTestHarness with Logging {
   }
 
   @Test
-  def testListGroups() {
+  def testListGroups(): Unit = {
     subscribeAndWaitForAssignment(topic, consumers.head)
 
     val groups = client.listAllGroupsFlattened
@@ -206,7 +206,7 @@ class LegacyAdminClientTest extends IntegrationTestHarness with Logging {
   }
 
   @Test
-  def testListAllBrokerVersionInfo() {
+  def testListAllBrokerVersionInfo(): Unit = {
     subscribeAndWaitForAssignment(topic, consumers.head)
 
     val brokerVersionInfos = client.listAllBrokerVersionInfo
@@ -221,7 +221,7 @@ class LegacyAdminClientTest extends IntegrationTestHarness with Logging {
   }
 
   @Test
-  def testGetConsumerGroupSummary() {
+  def testGetConsumerGroupSummary(): Unit = {
     subscribeAndWaitForAssignment(topic, consumers.head)
 
     val group = client.describeConsumerGroup(groupId)
@@ -236,7 +236,7 @@ class LegacyAdminClientTest extends IntegrationTestHarness with Logging {
   }
 
   @Test
-  def testDescribeConsumerGroup() {
+  def testDescribeConsumerGroup(): Unit = {
     subscribeAndWaitForAssignment(topic, consumers.head)
 
     val consumerGroupSummary = client.describeConsumerGroup(groupId)
@@ -245,12 +245,12 @@ class LegacyAdminClientTest extends IntegrationTestHarness with Logging {
   }
 
   @Test
-  def testDescribeConsumerGroupForNonExistentGroup() {
+  def testDescribeConsumerGroupForNonExistentGroup(): Unit = {
     val nonExistentGroup = "non" + groupId
     assertTrue("Expected empty ConsumerSummary list", client.describeConsumerGroup(nonExistentGroup).consumers.get.isEmpty)
   }
 
-  private def subscribeAndWaitForAssignment(topic: String, consumer: KafkaConsumer[Array[Byte], Array[Byte]]) {
+  private def subscribeAndWaitForAssignment(topic: String, consumer: KafkaConsumer[Array[Byte], Array[Byte]]): Unit = {
     consumer.subscribe(Collections.singletonList(topic))
     TestUtils.waitUntilTrue(() => {
       consumer.poll(0)
@@ -260,7 +260,7 @@ class LegacyAdminClientTest extends IntegrationTestHarness with Logging {
 
   private def sendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]],
                           numRecords: Int,
-                          tp: TopicPartition) {
+                          tp: TopicPartition): Unit = {
     val futures = (0 until numRecords).map { i =>
       val record = new ProducerRecord(tp.topic(), tp.partition(), s"$i".getBytes, s"$i".getBytes)
       debug(s"Sending this record: $record")

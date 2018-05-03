@@ -24,28 +24,28 @@ class CommandLineUtilsTest {
 
 
   @Test(expected = classOf[java.lang.IllegalArgumentException])
-  def testParseEmptyArg() {
+  def testParseEmptyArg(): Unit = {
     val argArray = Array("my.empty.property=")
     CommandLineUtils.parseKeyValueArgs(argArray, false)
   }
 
 
   @Test
-  def testParseEmptyArgAsValid() {
+  def testParseEmptyArgAsValid(): Unit = {
     val argArray = Array("my.empty.property=")
     val props = CommandLineUtils.parseKeyValueArgs(argArray)
     assertEquals("Value of a key with missing value should be an empty string",props.getProperty("my.empty.property"),"")
   }
 
   @Test
-  def testParseSingleArg() {
+  def testParseSingleArg(): Unit = {
     val argArray = Array("my.property=value")
     val props = CommandLineUtils.parseKeyValueArgs(argArray)
     assertEquals("Value of a single property should be 'value' ",props.getProperty("my.property"),"value")
   }
 
   @Test
-  def testParseArgs() {
+  def testParseArgs(): Unit = {
     val argArray = Array("first.property=first","second.property=second")
     val props = CommandLineUtils.parseKeyValueArgs(argArray, false)
     assertEquals("Value of first property should be 'first'",props.getProperty("first.property"),"first")

@@ -44,7 +44,7 @@ class PrimitiveApiTest extends ProducerConsumerTestHarness {
   def generateConfigs = List(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnect)))
 
   @Test
-  def testFetchRequestCanProperlySerialize() {
+  def testFetchRequestCanProperlySerialize(): Unit = {
     val request = new FetchRequestBuilder()
       .clientId("test-client")
       .maxWait(10001)
@@ -61,7 +61,7 @@ class PrimitiveApiTest extends ProducerConsumerTestHarness {
   }
 
   @Test
-  def testEmptyFetchRequest() {
+  def testEmptyFetchRequest(): Unit = {
     val partitionRequests = immutable.Map[TopicAndPartition, PartitionFetchInfo]()
     val request = new FetchRequest(requestInfo = partitionRequests.toVector)
     val fetched = consumer.fetch(request)
@@ -69,7 +69,7 @@ class PrimitiveApiTest extends ProducerConsumerTestHarness {
   }
 
   @Test
-  def testDefaultEncoderProducerAndFetch() {
+  def testDefaultEncoderProducerAndFetch(): Unit = {
     val topic = "test-topic"
 
     producer.send(new KeyedMessage[String, String](topic, "test-message"))
@@ -93,7 +93,7 @@ class PrimitiveApiTest extends ProducerConsumerTestHarness {
   }
 
   @Test
-  def testDefaultEncoderProducerAndFetchWithCompression() {
+  def testDefaultEncoderProducerAndFetchWithCompression(): Unit = {
     val topic = "test-topic"
     val props = new Properties()
     props.put("compression.codec", "gzip")
@@ -115,7 +115,7 @@ class PrimitiveApiTest extends ProducerConsumerTestHarness {
     assertEquals("test-message", TestUtils.readString(fetchedMessageAndOffset.message.payload, "UTF-8"))
   }
 
-  private def produceAndMultiFetch(producer: Producer[String, String]) {
+  private def produceAndMultiFetch(producer: Producer[String, String]): Unit = {
     for(topic <- List("test1", "test2", "test3", "test4"))
       createTopic(topic)
 
@@ -180,11 +180,11 @@ class PrimitiveApiTest extends ProducerConsumerTestHarness {
   }
 
   @Test
-  def testProduceAndMultiFetch() {
+  def testProduceAndMultiFetch(): Unit = {
     produceAndMultiFetch(producer)
   }
 
-  private def multiProduce(producer: Producer[String, String]) {
+  private def multiProduce(producer: Producer[String, String]): Unit = {
     val topics = Map("test4" -> 0, "test1" -> 0, "test2" -> 0, "test3" -> 0)
     topics.keys.map(topic => createTopic(topic))
 
@@ -207,12 +207,12 @@ class PrimitiveApiTest extends ProducerConsumerTestHarness {
   }
 
   @Test
-  def testMultiProduce() {
+  def testMultiProduce(): Unit = {
     multiProduce(producer)
   }
 
   @Test
-  def testConsumerEmptyTopic() {
+  def testConsumerEmptyTopic(): Unit = {
     val newTopic = "new-topic"
     createTopic(newTopic, numPartitions = 1, replicationFactor = 1)
 
@@ -221,7 +221,7 @@ class PrimitiveApiTest extends ProducerConsumerTestHarness {
   }
 
   @Test
-  def testPipelinedProduceRequests() {
+  def testPipelinedProduceRequests(): Unit = {
     val topics = Map("test4" -> 0, "test1" -> 0, "test2" -> 0, "test3" -> 0)
     topics.keys.map(topic => createTopic(topic))
     val props = new Properties()

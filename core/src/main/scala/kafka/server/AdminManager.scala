@@ -61,7 +61,7 @@ class AdminManager(val config: KafkaConfig,
   /**
     * Try to complete delayed topic operations with the request key
     */
-  def tryCompleteDelayedTopicOperations(topic: String) {
+  def tryCompleteDelayedTopicOperations(topic: String): Unit = {
     val key = TopicKey(topic)
     val completed = topicPurgatory.checkAndComplete(key)
     debug(s"Request key ${key.keyLabel} unblocked $completed topic requests.")
@@ -74,7 +74,7 @@ class AdminManager(val config: KafkaConfig,
   def createTopics(timeout: Int,
                    validateOnly: Boolean,
                    createInfo: Map[String, TopicDetails],
-                   responseCallback: Map[String, ApiError] => Unit) {
+                   responseCallback: Map[String, ApiError] => Unit): Unit = {
 
     // 1. map over topics creating assignment and calling zookeeper
     val brokers = metadataCache.getAliveBrokers.map { b => kafka.admin.BrokerMetadata(b.id, b.rack) }
@@ -163,7 +163,7 @@ class AdminManager(val config: KafkaConfig,
     */
   def deleteTopics(timeout: Int,
                    topics: Set[String],
-                   responseCallback: Map[String, Errors] => Unit) {
+                   responseCallback: Map[String, Errors] => Unit): Unit = {
 
     // 1. map over topics calling the asynchronous delete
     val metadata = topics.map { topic =>
@@ -411,7 +411,7 @@ class AdminManager(val config: KafkaConfig,
     }.toMap
   }
 
-  def shutdown() {
+  def shutdown(): Unit = {
     topicPurgatory.shutdown()
     CoreUtils.swallow(createTopicPolicy.foreach(_.close()), this)
     CoreUtils.swallow(alterConfigPolicy.foreach(_.close()), this)

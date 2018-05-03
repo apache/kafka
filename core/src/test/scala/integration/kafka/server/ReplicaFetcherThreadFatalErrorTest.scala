@@ -42,7 +42,7 @@ class ReplicaFetcherThreadFatalErrorTest extends ZooKeeperTestHarness {
   @volatile private var shutdownCompleted = false
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     Exit.resetExitProcedure()
     TestUtils.shutdownServers(brokers)
     super.tearDown()

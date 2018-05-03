@@ -27,7 +27,7 @@ import org.junit.Test
 class TopicFilterTest extends JUnitSuite {
 
   @Test
-  def testWhitelists() {
+  def testWhitelists(): Unit = {
 
     val topicFilter1 = Whitelist("white1,white2")
     assertTrue(topicFilter1.isTopicAllowed("white2", excludeInternalTopics = true))
@@ -50,7 +50,7 @@ class TopicFilterTest extends JUnitSuite {
   }
 
   @Test
-  def testBlacklists() {
+  def testBlacklists(): Unit = {
     val topicFilter1 = Blacklist("black1")
     assertTrue(topicFilter1.isTopicAllowed("white2", excludeInternalTopics = true))
     assertTrue(topicFilter1.isTopicAllowed("white2", excludeInternalTopics = false))
@@ -62,7 +62,7 @@ class TopicFilterTest extends JUnitSuite {
   }
 
   @Test
-  def testWildcardTopicCountGetTopicCountMapEscapeJson() {
+  def testWildcardTopicCountGetTopicCountMapEscapeJson(): Unit = {
     def getTopicCountMapKey(regex: String): String = {
       val topicCount = new WildcardTopicCount(null, "consumerId", new Whitelist(regex), 1, true)
       topicCount.getTopicCountMap.head._1

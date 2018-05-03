@@ -46,7 +46,7 @@ import scala.collection.JavaConverters._
 @deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
 object ExportZkOffsets extends Logging {
 
-  def main(args: Array[String]) {
+  def main(args: Array[String]): Unit = {
     val parser = new OptionParser(false)
     warn("WARNING: ExportZkOffsets is deprecated and will be dropped in a future release following 0.11.0.0.")
 

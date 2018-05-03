@@ -53,19 +53,19 @@ class LogDirFailureTest extends IntegrationTestHarness {
   this.serverConfig.setProperty(KafkaConfig.NumReplicaFetchersProp, "1")
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
     createTopic(topic, partitionNum, serverCount)
   }
 
   @Test
-  def testIOExceptionDuringLogRoll() {
+  def testIOExceptionDuringLogRoll(): Unit = {
     testProduceAfterLogDirFailureOnLeader(Roll)
   }
 
   @Test
   // Broker should halt on any log directory failure if inter-broker protocol < 1.0
-  def brokerWithOldInterBrokerProtocolShouldHaltOnLogDirFailure() {
+  def brokerWithOldInterBrokerProtocolShouldHaltOnLogDirFailure(): Unit = {
     @volatile var statusCodeOption: Option[Int] = None
     Exit.setHaltProcedure { (statusCode, _) =>
       statusCodeOption = Some(statusCode)
@@ -94,12 +94,12 @@ class LogDirFailureTest extends IntegrationTestHarness {
   }
 
   @Test
-  def testIOExceptionDuringCheckpoint() {
+  def testIOExceptionDuringCheckpoint(): Unit = {
     testProduceAfterLogDirFailureOnLeader(Checkpoint)
   }
 
   @Test
-  def testReplicaFetcherThreadAfterLogDirFailureOnFollower() {
+  def testReplicaFetcherThreadAfterLogDirFailureOnFollower(): Unit = {
     val producer = producers.head
     val partition = new TopicPartition(topic, 0)
 
@@ -126,7 +126,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
     }
   }
 
-  def testProduceAfterLogDirFailureOnLeader(failureType: LogDirFailureType) {
+  def testProduceAfterLogDirFailureOnLeader(failureType: LogDirFailureType): Unit = {
     val consumer = consumers.head
     subscribeAndWaitForAssignment(topic, consumer)
     val producer = producers.head
@@ -199,7 +199,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
     assertTrue(offlineReplicas.contains(PartitionAndReplica(new TopicPartition(topic, 0), leaderServerId)))
   }
 
-  private def subscribeAndWaitForAssignment(topic: String, consumer: KafkaConsumer[Array[Byte], Array[Byte]]) {
+  private def subscribeAndWaitForAssignment(topic: String, consumer: KafkaConsumer[Array[Byte], Array[Byte]]): Unit = {
     consumer.subscribe(Collections.singletonList(topic))
     TestUtils.waitUntilTrue(() => {
       consumer.poll(0)

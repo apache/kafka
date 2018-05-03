@@ -37,7 +37,7 @@ class IteratorTemplateTest extends Assertions {
   }
 
   @Test
-  def testIterator() {
+  def testIterator(): Unit = {
     for(i <- 0 until 10) {
       assertEquals("We should have an item to read.", true, iterator.hasNext)
       assertEquals("Checking again shouldn't change anything.", true, iterator.hasNext)

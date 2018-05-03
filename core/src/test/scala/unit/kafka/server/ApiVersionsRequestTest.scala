@@ -26,7 +26,7 @@ import org.junit.Test
 import scala.collection.JavaConverters._
 
 object ApiVersionsRequestTest {
-  def validateApiVersionsResponse(apiVersionsResponse: ApiVersionsResponse) {
+  def validateApiVersionsResponse(apiVersionsResponse: ApiVersionsResponse): Unit = {
     assertEquals("API keys in ApiVersionsResponse must match API keys supported by broker.", ApiKeys.values.length, apiVersionsResponse.apiVersions.size)
     for (expectedApiVersion: ApiVersion <- ApiVersionsResponse.defaultApiVersionsResponse().apiVersions.asScala) {
       val actualApiVersion = apiVersionsResponse.apiVersion(expectedApiVersion.apiKey)
@@ -43,13 +43,13 @@ class ApiVersionsRequestTest extends BaseRequestTest {
   override def numBrokers: Int = 1
 
   @Test
-  def testApiVersionsRequest() {
+  def testApiVersionsRequest(): Unit = {
     val apiVersionsResponse = sendApiVersionsRequest(new ApiVersionsRequest.Builder().build())
     ApiVersionsRequestTest.validateApiVersionsResponse(apiVersionsResponse)
   }
 
   @Test
-  def testApiVersionsRequestWithUnsupportedVersion() {
+  def testApiVersionsRequestWithUnsupportedVersion(): Unit = {
     val apiVersionsRequest = new ApiVersionsRequest(0)
     val apiVersionsResponse = sendApiVersionsRequest(apiVersionsRequest, Some(Short.MaxValue), 0)
     assertEquals(Errors.UNSUPPORTED_VERSION, apiVersionsResponse.error)

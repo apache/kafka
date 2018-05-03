@@ -30,10 +30,10 @@ import org.apache.kafka.clients.producer.ProducerRecord
   */
 trait MessageReader {
 
-  def init(inputStream: InputStream, props: Properties) {}
+  def init(inputStream: InputStream, props: Properties): Unit = {}
 
   def readMessage(): ProducerRecord[Array[Byte], Array[Byte]]
 
-  def close() {}
+  def close(): Unit = {}
 
 }

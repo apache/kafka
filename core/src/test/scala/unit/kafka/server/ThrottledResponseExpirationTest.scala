@@ -32,17 +32,17 @@ class ThrottledResponseExpirationTest {
                                                                     Collections.emptyList(),
                                                                     time)
 
-  def callback(delayTimeMs: Int) {
+  def callback(delayTimeMs: Int): Unit = {
     numCallbacks += 1
   }
 
   @Before
-  def beforeMethod() {
+  def beforeMethod(): Unit = {
     numCallbacks = 0
   }
 
   @Test
-  def testExpire() {
+  def testExpire(): Unit = {
     val clientMetrics = new ClientQuotaManager(ClientQuotaManagerConfig(), metrics, QuotaType.Produce, time, "")
 
     val delayQueue = new DelayQueue[ThrottledResponse]()
@@ -71,7 +71,7 @@ class ThrottledResponseExpirationTest {
   }
 
   @Test
-  def testThrottledRequest() {
+  def testThrottledRequest(): Unit = {
     val t1: ThrottledResponse = new ThrottledResponse(time, 10, callback)
     val t2: ThrottledResponse = new ThrottledResponse(time, 20, callback)
     val t3: ThrottledResponse = new ThrottledResponse(time, 20, callback)

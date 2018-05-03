@@ -64,7 +64,7 @@ class ProducerBounceTest extends KafkaServerTestHarness {
    */
   @Ignore // To be re-enabled once we can make it less flaky (KAFKA-2837)
   @Test
-  def testBrokerFailure() {
+  def testBrokerFailure(): Unit = {
     val numPartitions = 3
     val topicConfig = new Properties()
     topicConfig.put(KafkaConfig.MinInSyncReplicasProp, 2.toString)
@@ -160,7 +160,7 @@ class ProducerBounceTest extends KafkaServerTestHarness {
       }
     }
 
-    override def shutdown(){
+    override def shutdown(): Unit ={
       super.shutdown()
       for (producer <- producers) {
         producer.close()

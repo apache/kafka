@@ -106,7 +106,7 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
    * @param skipFullCheck To skip checking whether the segment is full or not. We only skip the check when the segment
    *                      gets rolled or the segment is closed.
    */
-  def maybeAppend(timestamp: Long, offset: Long, skipFullCheck: Boolean = false) {
+  def maybeAppend(timestamp: Long, offset: Long, skipFullCheck: Boolean = false): Unit = {
     inLock(lock) {
       if (!skipFullCheck)
         require(!isFull, "Attempt to append to a full time index (size = " + _entries + ").")
@@ -163,7 +163,7 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
    * Remove all entries from the index which have an offset greater than or equal to the given offset.
    * Truncating to an offset larger than the largest in the index has no effect.
    */
-  override def truncateTo(offset: Long) {
+  override def truncateTo(offset: Long): Unit = {
     inLock(lock) {
       val idx = mmap.duplicate
       val slot = largestLowerBoundSlotFor(idx, offset, IndexSearchType.VALUE)
@@ -197,7 +197,7 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
   /**
    * Truncates index to a known number of entries.
    */
-  private def truncateToEntries(entries: Int) {
+  private def truncateToEntries(entries: Int): Unit = {
     inLock(lock) {
       _entries = entries
       mmap.position(_entries * entrySize)
@@ -205,7 +205,7 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
     }
   }
 
-  override def sanityCheck() {
+  override def sanityCheck(): Unit = {
     val lastTimestamp = lastEntry.timestamp
     val lastOffset = lastEntry.offset
     if (_entries != 0 && lastTimestamp < timestamp(mmap, 0))

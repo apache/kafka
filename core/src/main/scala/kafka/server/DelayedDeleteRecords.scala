@@ -103,7 +103,7 @@ class DelayedDeleteRecords(delayMs: Long,
       false
   }
 
-  override def onExpiration() {
+  override def onExpiration(): Unit = {
     deleteRecordsStatus.foreach { case (topicPartition, status) =>
       if (status.acksPending) {
         DelayedDeleteRecordsMetrics.recordExpiration(topicPartition)
@@ -114,7 +114,7 @@ class DelayedDeleteRecords(delayMs: Long,
   /**
    * Upon completion, return the current response status along with the error code per partition
    */
-  override def onComplete() {
+  override def onComplete(): Unit = {
     val responseStatus = deleteRecordsStatus.mapValues(status => status.responseStatus)
     responseCallback(responseStatus)
   }
@@ -124,7 +124,7 @@ object DelayedDeleteRecordsMetrics extends KafkaMetricsGroup {
 
   private val aggregateExpirationMeter = newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS)
 
-  def recordExpiration(partition: TopicPartition) {
+  def recordExpiration(partition: TopicPartition): Unit = {
     aggregateExpirationMeter.mark()
   }
 }

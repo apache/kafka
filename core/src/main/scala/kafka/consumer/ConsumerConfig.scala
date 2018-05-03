@@ -57,7 +57,7 @@ object ConsumerConfig extends Config {
   val MirrorConsumerNumThreadsProp = "mirror.consumer.numthreads"
   val DefaultClientId = ""
 
-  def validate(config: ConsumerConfig) {
+  def validate(config: ConsumerConfig): Unit = {
     validateClientId(config.clientId)
     validateGroupId(config.groupId)
     validateAutoOffsetReset(config.autoOffsetReset)
@@ -65,15 +65,15 @@ object ConsumerConfig extends Config {
     validatePartitionAssignmentStrategy(config.partitionAssignmentStrategy)
   }
 
-  def validateClientId(clientId: String) {
+  def validateClientId(clientId: String): Unit = {
     validateChars("client.id", clientId)
   }
 
-  def validateGroupId(groupId: String) {
+  def validateGroupId(groupId: String): Unit = {
     validateChars("group.id", groupId)
   }
 
-  def validateAutoOffsetReset(autoOffsetReset: String) {
+  def validateAutoOffsetReset(autoOffsetReset: String): Unit = {
     autoOffsetReset match {
       case OffsetRequest.SmallestTimeString =>
       case OffsetRequest.LargestTimeString =>
@@ -82,7 +82,7 @@ object ConsumerConfig extends Config {
     }
   }
 
-  def validateOffsetsStorage(storage: String) {
+  def validateOffsetsStorage(storage: String): Unit = {
     storage match {
       case "zookeeper" =>
       case "kafka" =>
@@ -91,7 +91,7 @@ object ConsumerConfig extends Config {
     }
   }
 
-  def validatePartitionAssignmentStrategy(strategy: String) {
+  def validatePartitionAssignmentStrategy(strategy: String): Unit = {
     strategy match {
       case "range" =>
       case "roundrobin" =>

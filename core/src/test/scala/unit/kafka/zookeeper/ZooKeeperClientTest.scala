@@ -42,7 +42,7 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
   private var zooKeeperClient: ZooKeeperClient = _
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     cleanMetricsRegistry()
     super.setUp()
     zooKeeperClient = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkMaxInFlightRequests,
@@ -50,7 +50,7 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     if (zooKeeperClient != null)
       zooKeeperClient.close()
     super.tearDown()
@@ -512,8 +512,8 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
     metricName.getName == name && metricName.getGroup == "testMetricGroup" && metricName.getType == "testMetricType"
 
   @Test
-  def testZooKeeperStateChangeRateMetrics() {
-    def checkMeterCount(name: String, expected: Long) {
+  def testZooKeeperStateChangeRateMetrics(): Unit = {
+    def checkMeterCount(name: String, expected: Long): Unit = {
       val meter = Metrics.defaultRegistry.allMetrics.asScala.collectFirst {
         case (metricName, meter: Meter) if isExpectedMetricName(metricName, name) => meter
       }.getOrElse(sys.error(s"Unable to find meter with name $name"))
@@ -551,7 +551,7 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
     assertEquals(States.CLOSED, zooKeeperClient.connectionState)
   }
 
-  private def cleanMetricsRegistry() {
+  private def cleanMetricsRegistry(): Unit = {
     val metrics = Metrics.defaultRegistry
     metrics.allMetrics.keySet.asScala.foreach(metrics.removeMetric)
   }

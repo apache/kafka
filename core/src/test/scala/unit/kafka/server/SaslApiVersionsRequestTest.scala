@@ -50,7 +50,7 @@ class SaslApiVersionsRequestTest extends BaseRequestTest with SaslSetup {
   }
 
   @Test
-  def testApiVersionsRequestBeforeSaslHandshakeRequest() {
+  def testApiVersionsRequestBeforeSaslHandshakeRequest(): Unit = {
     val plaintextSocket = connect(protocol = securityProtocol)
     try {
       val apiVersionsResponse = sendApiVersionsRequest(plaintextSocket, new ApiVersionsRequest.Builder().build(0))
@@ -62,7 +62,7 @@ class SaslApiVersionsRequestTest extends BaseRequestTest with SaslSetup {
   }
 
   @Test
-  def testApiVersionsRequestAfterSaslHandshakeRequest() {
+  def testApiVersionsRequestAfterSaslHandshakeRequest(): Unit = {
     val plaintextSocket = connect(protocol = securityProtocol)
     try {
       sendSaslHandshakeRequestValidateResponse(plaintextSocket)
@@ -74,7 +74,7 @@ class SaslApiVersionsRequestTest extends BaseRequestTest with SaslSetup {
   }
 
   @Test
-  def testApiVersionsRequestWithUnsupportedVersion() {
+  def testApiVersionsRequestWithUnsupportedVersion(): Unit = {
     val plaintextSocket = connect(protocol = securityProtocol)
     try {
       val apiVersionsRequest = new ApiVersionsRequest(0)
@@ -94,7 +94,7 @@ class SaslApiVersionsRequestTest extends BaseRequestTest with SaslSetup {
     ApiVersionsResponse.parse(response, request.version)
   }
 
-  private def sendSaslHandshakeRequestValidateResponse(socket: Socket) {
+  private def sendSaslHandshakeRequestValidateResponse(socket: Socket): Unit = {
     val request = new SaslHandshakeRequest("PLAIN")
     val response = sendAndReceive(request, ApiKeys.SASL_HANDSHAKE, socket)
     val handshakeResponse = SaslHandshakeResponse.parse(response, request.version)

@@ -69,7 +69,7 @@ class Producer[K,V](val config: ProducerConfig,
    * synchronous or the asynchronous producer
    * @param messages the producer data object that encapsulates the topic, key and message data
    */
-  def send(messages: KeyedMessage[K,V]*) {
+  def send(messages: KeyedMessage[K,V]*): Unit = {
     lock synchronized {
       if (hasShutdown.get)
         throw new ProducerClosedException
@@ -82,14 +82,14 @@ class Producer[K,V](val config: ProducerConfig,
   }
 
 
-  private def recordStats(messages: Seq[KeyedMessage[K,V]]) {
+  private def recordStats(messages: Seq[KeyedMessage[K,V]]): Unit = {
     for (message <- messages) {
       producerTopicStats.getProducerTopicStats(message.topic).messageRate.mark()
       producerTopicStats.getProducerAllTopicsStats.messageRate.mark()
     }
   }
 
-  private def asyncSend(messages: Seq[KeyedMessage[K,V]]) {
+  private def asyncSend(messages: Seq[KeyedMessage[K,V]]): Unit = {
     for (message <- messages) {
       val added = config.queueEnqueueTimeoutMs match {
         case 0  =>

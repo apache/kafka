@@ -103,7 +103,7 @@ case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] 
 
 object LogConfig {
 
-  def main(args: Array[String]) {
+  def main(args: Array[String]): Unit = {
     println(configDef.toHtmlTable)
   }
 
@@ -284,7 +284,7 @@ object LogConfig {
   /**
    * Check that property names are valid
    */
-  def validateNames(props: Properties) {
+  def validateNames(props: Properties): Unit = {
     val names = configNames
     for(name <- props.asScala.keys)
       if (!names.contains(name))
@@ -294,7 +294,7 @@ object LogConfig {
   /**
    * Check that the given properties contain only valid log config names and that all values can be parsed and are valid
    */
-  def validate(props: Properties) {
+  def validate(props: Properties): Unit = {
     validateNames(props)
     configDef.parse(props)
   }

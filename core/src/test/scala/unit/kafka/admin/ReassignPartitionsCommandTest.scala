@@ -39,7 +39,7 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
   var calls = 0
 
   @Test
-  def shouldFindMovingReplicas() {
+  def shouldFindMovingReplicas(): Unit = {
     val control = new TopicPartition("topic1", 1) -> Seq(100, 102)
     val assigner = new ReassignPartitionsCommand(null, null, null, null, null)
 
@@ -62,7 +62,7 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
-  def shouldFindMovingReplicasWhenProposedIsSubsetOfExisting() {
+  def shouldFindMovingReplicasWhenProposedIsSubsetOfExisting(): Unit = {
     val assigner = new ReassignPartitionsCommand(null, null, null, null, null)
 
     //Given we have more existing partitions than we are proposing
@@ -97,7 +97,7 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
-  def shouldFindMovingReplicasMultiplePartitions() {
+  def shouldFindMovingReplicasMultiplePartitions(): Unit = {
     val control = new TopicPartition("topic1", 2) -> Seq(100, 102)
     val assigner = new ReassignPartitionsCommand(null, null, null, null, null)
 
@@ -122,7 +122,7 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
-  def shouldFindMovingReplicasMultipleTopics() {
+  def shouldFindMovingReplicasMultipleTopics(): Unit = {
     val control = new TopicPartition("topic1", 1) -> Seq(100, 102)
     val assigner = new ReassignPartitionsCommand(null, null, null, null, null)
 
@@ -154,7 +154,7 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
-  def shouldFindMovingReplicasMultipleTopicsAndPartitions() {
+  def shouldFindMovingReplicasMultipleTopicsAndPartitions(): Unit = {
     val assigner = new ReassignPartitionsCommand(null, null, null, null, null)
 
     //Given
@@ -197,7 +197,7 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
-  def shouldFindTwoMovingReplicasInSamePartition() {
+  def shouldFindTwoMovingReplicasInSamePartition(): Unit = {
     val control = new TopicPartition("topic1", 1) -> Seq(100, 102)
     val assigner = new ReassignPartitionsCommand(null, null, null, null, null)
 

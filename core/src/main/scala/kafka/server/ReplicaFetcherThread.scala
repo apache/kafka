@@ -93,7 +93,7 @@ class ReplicaFetcherThread(name: String,
   }
 
   // process fetched data
-  def processPartitionData(topicPartition: TopicPartition, fetchOffset: Long, partitionData: PartitionData) {
+  def processPartitionData(topicPartition: TopicPartition, fetchOffset: Long, partitionData: PartitionData): Unit = {
     val replica = replicaMgr.getReplicaOrException(topicPartition)
     val partition = replicaMgr.getPartition(topicPartition).get
     val records = partitionData.toRecords
@@ -210,7 +210,7 @@ class ReplicaFetcherThread(name: String,
   }
 
   // any logic for partitions whose leader has changed
-  def handlePartitionsWithErrors(partitions: Iterable[TopicPartition]) {
+  def handlePartitionsWithErrors(partitions: Iterable[TopicPartition]): Unit = {
     if (partitions.nonEmpty)
       delayPartitions(partitions, brokerConfig.replicaFetchBackoffMs.toLong)
   }

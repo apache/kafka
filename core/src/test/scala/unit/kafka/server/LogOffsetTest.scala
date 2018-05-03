@@ -45,7 +45,7 @@ class LogOffsetTest extends ZooKeeperTestHarness {
   var time: Time = new MockTime()
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
     val config: Properties = createBrokerConfig(1)
     config.put(KafkaConfig.LogMessageTimestampDifferenceMaxMsProp, Long.MaxValue.toString)
@@ -57,14 +57,14 @@ class LogOffsetTest extends ZooKeeperTestHarness {
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     simpleConsumer.close
     TestUtils.shutdownServers(Seq(server))
     super.tearDown()
   }
 
   @Test
-  def testGetOffsetsForUnknownTopic() {
+  def testGetOffsetsForUnknownTopic(): Unit = {
     val topicAndPartition = TopicAndPartition("foo", 0)
     val request = OffsetRequest(
       Map(topicAndPartition -> PartitionOffsetRequestInfo(OffsetRequest.LatestTime, 10)))
@@ -74,7 +74,7 @@ class LogOffsetTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testGetOffsetsAfterDeleteRecords() {
+  def testGetOffsetsAfterDeleteRecords(): Unit = {
     val topicPartition = "kafka-" + 0
     val topic = topicPartition.split("-").head
     val part = Integer.valueOf(topicPartition.split("-").last).intValue
@@ -109,7 +109,7 @@ class LogOffsetTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testGetOffsetsBeforeLatestTime() {
+  def testGetOffsetsBeforeLatestTime(): Unit = {
     val topicPartition = "kafka-" + 0
     val topic = topicPartition.split("-").head
     val part = Integer.valueOf(topicPartition.split("-").last).intValue
@@ -145,7 +145,7 @@ class LogOffsetTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testEmptyLogsGetOffsets() {
+  def testEmptyLogsGetOffsets(): Unit = {
     val topicPartition = "kafka-" + random.nextInt(10)
     val topicPartitionPath = TestUtils.tempDir().getAbsolutePath + "/" + topicPartition
     topicLogDir = new File(topicPartitionPath)
@@ -172,7 +172,7 @@ class LogOffsetTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testGetOffsetsBeforeNow() {
+  def testGetOffsetsBeforeNow(): Unit = {
     val topicPartition = "kafka-" + random.nextInt(3)
     val topic = topicPartition.split("-").head
     val part = Integer.valueOf(topicPartition.split("-").last).intValue
@@ -201,7 +201,7 @@ class LogOffsetTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testGetOffsetsBeforeEarliestTime() {
+  def testGetOffsetsBeforeEarliestTime(): Unit = {
     val topicPartition = "kafka-" + random.nextInt(3)
     val topic = topicPartition.split("-").head
     val part = Integer.valueOf(topicPartition.split("-").last).intValue
@@ -231,7 +231,7 @@ class LogOffsetTest extends ZooKeeperTestHarness {
   /* We test that `fetchOffsetsBefore` works correctly if `LogSegment.size` changes after each invocation (simulating
    * a race condition) */
   @Test
-  def testFetchOffsetsBeforeWithChangingSegmentSize() {
+  def testFetchOffsetsBeforeWithChangingSegmentSize(): Unit = {
     val log = EasyMock.niceMock(classOf[Log])
     val logSegment = EasyMock.niceMock(classOf[LogSegment])
     EasyMock.expect(logSegment.size).andStubAnswer(new IAnswer[Int] {
@@ -248,7 +248,7 @@ class LogOffsetTest extends ZooKeeperTestHarness {
   /* We test that `fetchOffsetsBefore` works correctly if `Log.logSegments` content and size are
    * different (simulating a race condition) */
   @Test
-  def testFetchOffsetsBeforeWithChangingSegments() {
+  def testFetchOffsetsBeforeWithChangingSegments(): Unit = {
     val log = EasyMock.niceMock(classOf[Log])
     val logSegment = EasyMock.niceMock(classOf[LogSegment])
     EasyMock.expect(log.logSegments).andStubAnswer {

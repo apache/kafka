@@ -62,7 +62,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     (0 until numPartitions).map { i => (i, mutable.ArrayBuffer[SimpleRecord]()) }.toMap
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
 
     EasyMock.expect(zkClient.getTopicPartitionCount(TRANSACTION_STATE_TOPIC_NAME))
@@ -116,7 +116,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     try {
       EasyMock.reset(zkClient, replicaManager)
       transactionCoordinator.shutdown()

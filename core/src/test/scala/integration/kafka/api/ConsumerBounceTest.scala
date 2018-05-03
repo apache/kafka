@@ -65,7 +65,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
   }
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
 
     // create the test topic with all the brokers as replicas
@@ -73,7 +73,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     try {
       executor.shutdownNow()
       // Wait for any active tasks to terminate to ensure consumer is not closed while being used from another thread
@@ -91,7 +91,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
    * 1. Produce a bunch of messages
    * 2. Then consume the messages while killing and restarting brokers at random
    */
-  def consumeWithBrokerFailures(numIters: Int) {
+  def consumeWithBrokerFailures(numIters: Int): Unit = {
     val numRecords = 1000
     sendRecords(numRecords)
     this.producers.foreach(_.close)
@@ -129,7 +129,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
   @Test
   def testSeekAndCommitWithBrokerFailures() = seekAndCommitWithBrokerFailures(5)
 
-  def seekAndCommitWithBrokerFailures(numIters: Int) {
+  def seekAndCommitWithBrokerFailures(numIters: Int): Unit = {
     val numRecords = 1000
     sendRecords(numRecords)
     this.producers.foreach(_.close)
@@ -166,7 +166,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
   }
 
   @Test
-  def testSubscribeWhenTopicUnavailable() {
+  def testSubscribeWhenTopicUnavailable(): Unit = {
     val numRecords = 1000
     val newtopic = "newtopic"
 
@@ -177,7 +177,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
       }, 2, TimeUnit.SECONDS)
     consumer.poll(0)
 
-    def sendRecords(numRecords: Int, topic: String) {
+    def sendRecords(numRecords: Int, topic: String): Unit = {
       var remainingRecords = numRecords
       val endTimeMs = System.currentTimeMillis + 20000
       while (remainingRecords > 0 && System.currentTimeMillis < endTimeMs) {
@@ -212,7 +212,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
 
 
   @Test
-  def testClose() {
+  def testClose(): Unit = {
     val numRecords = 10
     sendRecords(numRecords)
 
@@ -226,7 +226,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
    * and leave group. New consumer instance should be able join group and start consuming from
    * last committed offset.
    */
-  private def checkCloseGoodPath(numRecords: Int, groupId: String) {
+  private def checkCloseGoodPath(numRecords: Int, groupId: String): Unit = {
     val consumer = createConsumerAndReceive(groupId, false, numRecords)
     val future = submitCloseAndValidate(consumer, Long.MaxValue, None, Some(gracefulCloseTimeMs))
     future.get
@@ -239,7 +239,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
    * Close of consumers using manual assignment should complete with successful commits since a
    * broker is available.
    */
-  private def checkCloseWithCoordinatorFailure(numRecords: Int, dynamicGroup: String, manualGroup: String) {
+  private def checkCloseWithCoordinatorFailure(numRecords: Int, dynamicGroup: String, manualGroup: String): Unit = {
     val consumer1 = createConsumerAndReceive(dynamicGroup, false, numRecords)
     val consumer2 = createConsumerAndReceive(manualGroup, true, numRecords)
 
@@ -263,7 +263,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
    * there is no coordinator, but close should timeout and return. If close is invoked with a very
    * large timeout, close should timeout after request timeout.
    */
-  private def checkCloseWithClusterFailure(numRecords: Int, group1: String, group2: String) {
+  private def checkCloseWithClusterFailure(numRecords: Int, group1: String, group2: String): Unit = {
     val consumer1 = createConsumerAndReceive(group1, false, numRecords)
 
     val requestTimeout = 6000
@@ -286,7 +286,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
    * close should terminate immediately without sending leave group.
    */
   @Test
-  def testCloseDuringRebalance() {
+  def testCloseDuringRebalance(): Unit = {
     val topic = "closetest"
     createTopic(topic, 10, serverCount)
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "60000")
@@ -295,14 +295,14 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     checkCloseDuringRebalance("group1", topic, executor, true)
   }
 
-  private def checkCloseDuringRebalance(groupId: String, topic: String, executor: ExecutorService, brokersAvailableDuringClose: Boolean) {
+  private def checkCloseDuringRebalance(groupId: String, topic: String, executor: ExecutorService, brokersAvailableDuringClose: Boolean): Unit = {
 
     def subscribeAndPoll(consumer: KafkaConsumer[Array[Byte], Array[Byte]], revokeSemaphore: Option[Semaphore] = None): Future[Any] = {
       executor.submit(CoreUtils.runnable {
           consumer.subscribe(Collections.singletonList(topic), new ConsumerRebalanceListener {
-            def onPartitionsAssigned(partitions: Collection[TopicPartition]) {
+            def onPartitionsAssigned(partitions: Collection[TopicPartition]): Unit = {
             }
-            def onPartitionsRevoked(partitions: Collection[TopicPartition]) {
+            def onPartitionsRevoked(partitions: Collection[TopicPartition]): Unit = {
               revokeSemaphore.foreach(s => s.release())
             }
           })
@@ -310,7 +310,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
         }, 0)
     }
 
-    def waitForRebalance(timeoutMs: Long, future: Future[Any], otherConsumers: KafkaConsumer[Array[Byte], Array[Byte]]*) {
+    def waitForRebalance(timeoutMs: Long, future: Future[Any], otherConsumers: KafkaConsumer[Array[Byte], Array[Byte]]*): Unit = {
       val startMs = System.currentTimeMillis
       while (System.currentTimeMillis < startMs + timeoutMs && !future.isDone)
           otherConsumers.foreach(consumer => consumer.poll(100))
@@ -370,7 +370,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     consumer
   }
 
-  private def receiveRecords(consumer: KafkaConsumer[Array[Byte], Array[Byte]], numRecords: Int, topic: String = this.topic, timeoutMs: Long = 60000) {
+  private def receiveRecords(consumer: KafkaConsumer[Array[Byte], Array[Byte]], numRecords: Int, topic: String = this.topic, timeoutMs: Long = 60000): Unit = {
     var received = 0L
     val endTimeMs = System.currentTimeMillis + timeoutMs
     while (received < numRecords && System.currentTimeMillis < endTimeMs)
@@ -396,16 +396,16 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     }, 0)
   }
 
-  private def checkClosedState(groupId: String, committedRecords: Int) {
+  private def checkClosedState(groupId: String, committedRecords: Int): Unit = {
     // Check that close was graceful with offsets committed and leave group sent.
     // New instance of consumer should be assigned partitions immediately and should see committed offsets.
     val assignSemaphore = new Semaphore(0)
     val consumer = createConsumer(groupId)
     consumer.subscribe(Collections.singletonList(topic),  new ConsumerRebalanceListener {
-      def onPartitionsAssigned(partitions: Collection[TopicPartition]) {
+      def onPartitionsAssigned(partitions: Collection[TopicPartition]): Unit = {
         assignSemaphore.release()
       }
-      def onPartitionsRevoked(partitions: Collection[TopicPartition]) {
+      def onPartitionsRevoked(partitions: Collection[TopicPartition]): Unit = {
       }})
     consumer.poll(3000)
     assertTrue("Assigment did not complete on time", assignSemaphore.tryAcquire(1, TimeUnit.SECONDS))
@@ -431,7 +431,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     }
   }
 
-  private def sendRecords(numRecords: Int, topic: String = this.topic) {
+  private def sendRecords(numRecords: Int, topic: String = this.topic): Unit = {
     val futures = (0 until numRecords).map { i =>
       this.producers.head.send(new ProducerRecord(topic, part, i.toString.getBytes, i.toString.getBytes))
     }

@@ -83,7 +83,7 @@ case class ProducerResponse(correlationId: Int,
     throttleTimeSize
   }
 
-  def writeTo(buffer: ByteBuffer) {
+  def writeTo(buffer: ByteBuffer): Unit = {
     val groupedStatus = statusGroupedByTopic
     buffer.putInt(correlationId)
     buffer.putInt(groupedStatus.size) // topic count

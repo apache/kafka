@@ -39,30 +39,30 @@ class GroupMetadataTest extends JUnitSuite {
   private var group: GroupMetadata = null
 
   @Before
-  def setUp() {
+  def setUp(): Unit = {
     group = new GroupMetadata("groupId", initialState = Empty)
   }
 
   @Test
-  def testCanRebalanceWhenStable() {
+  def testCanRebalanceWhenStable(): Unit = {
     assertTrue(group.canRebalance)
   }
 
   @Test
-  def testCanRebalanceWhenCompletingRebalance() {
+  def testCanRebalanceWhenCompletingRebalance(): Unit = {
     group.transitionTo(PreparingRebalance)
     group.transitionTo(CompletingRebalance)
     assertTrue(group.canRebalance)
   }
 
   @Test
-  def testCannotRebalanceWhenPreparingRebalance() {
+  def testCannotRebalanceWhenPreparingRebalance(): Unit = {
     group.transitionTo(PreparingRebalance)
     assertFalse(group.canRebalance)
   }
 
   @Test
-  def testCannotRebalanceWhenDead() {
+  def testCannotRebalanceWhenDead(): Unit = {
     group.transitionTo(PreparingRebalance)
     group.transitionTo(Empty)
     group.transitionTo(Dead)
@@ -70,19 +70,19 @@ class GroupMetadataTest extends JUnitSuite {
   }
 
   @Test
-  def testStableToPreparingRebalanceTransition() {
+  def testStableToPreparingRebalanceTransition(): Unit = {
     group.transitionTo(PreparingRebalance)
     assertState(group, PreparingRebalance)
   }
 
   @Test
-  def testStableToDeadTransition() {
+  def testStableToDeadTransition(): Unit = {
     group.transitionTo(Dead)
     assertState(group, Dead)
   }
 
   @Test
-  def testAwaitingRebalanceToPreparingRebalanceTransition() {
+  def testAwaitingRebalanceToPreparingRebalanceTransition(): Unit = {
     group.transitionTo(PreparingRebalance)
     group.transitionTo(CompletingRebalance)
     group.transitionTo(PreparingRebalance)
@@ -90,21 +90,21 @@ class GroupMetadataTest extends JUnitSuite {
   }
 
   @Test
-  def testPreparingRebalanceToDeadTransition() {
+  def testPreparingRebalanceToDeadTransition(): Unit = {
     group.transitionTo(PreparingRebalance)
     group.transitionTo(Dead)
     assertState(group, Dead)
   }
 
   @Test
-  def testPreparingRebalanceToEmptyTransition() {
+  def testPreparingRebalanceToEmptyTransition(): Unit = {
     group.transitionTo(PreparingRebalance)
     group.transitionTo(Empty)
     assertState(group, Empty)
   }
 
   @Test
-  def testEmptyToDeadTransition() {
+  def testEmptyToDeadTransition(): Unit = {
     group.transitionTo(PreparingRebalance)
     group.transitionTo(Empty)
     group.transitionTo(Dead)
@@ -112,7 +112,7 @@ class GroupMetadataTest extends JUnitSuite {
   }
 
   @Test
-  def testAwaitingRebalanceToStableTransition() {
+  def testAwaitingRebalanceToStableTransition(): Unit = {
     group.transitionTo(PreparingRebalance)
     group.transitionTo(CompletingRebalance)
     group.transitionTo(Stable)
@@ -120,12 +120,12 @@ class GroupMetadataTest extends JUnitSuite {
   }
 
   @Test(expected = classOf[IllegalStateException])
-  def testEmptyToStableIllegalTransition() {
+  def testEmptyToStableIllegalTransition(): Unit = {
     group.transitionTo(Stable)
   }
 
   @Test
-  def testStableToStableIllegalTransition() {
+  def testStableToStableIllegalTransition(): Unit = {
     group.transitionTo(PreparingRebalance)
     group.transitionTo(CompletingRebalance)
     group.transitionTo(Stable)
@@ -138,30 +138,30 @@ class GroupMetadataTest extends JUnitSuite {
   }
 
   @Test(expected = classOf[IllegalStateException])
-  def testEmptyToAwaitingRebalanceIllegalTransition() {
+  def testEmptyToAwaitingRebalanceIllegalTransition(): Unit = {
     group.transitionTo(CompletingRebalance)
   }
 
   @Test(expected = classOf[IllegalStateException])
-  def testPreparingRebalanceToPreparingRebalanceIllegalTransition() {
+  def testPreparingRebalanceToPreparingRebalanceIllegalTransition(): Unit = {
     group.transitionTo(PreparingRebalance)
     group.transitionTo(PreparingRebalance)
   }
 
   @Test(expected = classOf[IllegalStateException])
-  def testPreparingRebalanceToStableIllegalTransition() {
+  def testPreparingRebalanceToStableIllegalTransition(): Unit = {
     group.transitionTo(PreparingRebalance)
     group.transitionTo(Stable)
   }
 
   @Test(expected = classOf[IllegalStateException])
-  def testAwaitingRebalanceToAwaitingRebalanceIllegalTransition() {
+  def testAwaitingRebalanceToAwaitingRebalanceIllegalTransition(): Unit = {
     group.transitionTo(PreparingRebalance)
     group.transitionTo(CompletingRebalance)
     group.transitionTo(CompletingRebalance)
   }
 
-  def testDeadToDeadIllegalTransition() {
+  def testDeadToDeadIllegalTransition(): Unit = {
     group.transitionTo(PreparingRebalance)
     group.transitionTo(Dead)
     group.transitionTo(Dead)
@@ -169,28 +169,28 @@ class GroupMetadataTest extends JUnitSuite {
   }
 
   @Test(expected = classOf[IllegalStateException])
-  def testDeadToStableIllegalTransition() {
+  def testDeadToStableIllegalTransition(): Unit = {
     group.transitionTo(PreparingRebalance)
     group.transitionTo(Dead)
     group.transitionTo(Stable)
   }
 
   @Test(expected = classOf[IllegalStateException])
-  def testDeadToPreparingRebalanceIllegalTransition() {
+  def testDeadToPreparingRebalanceIllegalTransition(): Unit = {
     group.transitionTo(PreparingRebalance)
     group.transitionTo(Dead)
     group.transitionTo(PreparingRebalance)
   }
 
   @Test(expected = classOf[IllegalStateException])
-  def testDeadToAwaitingRebalanceIllegalTransition() {
+  def testDeadToAwaitingRebalanceIllegalTransition(): Unit = {
     group.transitionTo(PreparingRebalance)
     group.transitionTo(Dead)
     group.transitionTo(CompletingRebalance)
   }
 
   @Test
-  def testSelectProtocol() {
+  def testSelectProtocol(): Unit = {
     val memberId = "memberId"
     val member = new MemberMetadata(memberId, groupId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
       protocolType, List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte])))
@@ -216,13 +216,13 @@ class GroupMetadataTest extends JUnitSuite {
   }
 
   @Test(expected = classOf[IllegalStateException])
-  def testSelectProtocolRaisesIfNoMembers() {
+  def testSelectProtocolRaisesIfNoMembers(): Unit = {
     group.selectProtocol
     fail()
   }
 
   @Test
-  def testSelectProtocolChoosesCompatibleProtocol() {
+  def testSelectProtocolChoosesCompatibleProtocol(): Unit = {
     val memberId = "memberId"
     val member = new MemberMetadata(memberId, groupId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
       protocolType, List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte])))
@@ -237,7 +237,7 @@ class GroupMetadataTest extends JUnitSuite {
   }
 
   @Test
-  def testSupportsProtocols() {
+  def testSupportsProtocols(): Unit = {
     // by default, the group supports everything
     assertTrue(group.supportsProtocols(Set("roundrobin", "range")))
 
@@ -261,7 +261,7 @@ class GroupMetadataTest extends JUnitSuite {
   }
 
   @Test
-  def testInitNextGeneration() {
+  def testInitNextGeneration(): Unit = {
     val memberId = "memberId"
     val member = new MemberMetadata(memberId, groupId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
       protocolType, List(("roundrobin", Array.empty[Byte])))
@@ -280,7 +280,7 @@ class GroupMetadataTest extends JUnitSuite {
   }
 
   @Test
-  def testInitNextGenerationEmptyGroup() {
+  def testInitNextGenerationEmptyGroup(): Unit = {
     assertEquals(Empty, group.currentState)
     assertEquals(0, group.generationId)
     assertNull(group.protocolOrNull)
@@ -465,7 +465,7 @@ class GroupMetadataTest extends JUnitSuite {
     assertFalse(group.hasPendingOffsetCommitsFromProducer(producerId))
   }
 
-  private def assertState(group: GroupMetadata, targetState: GroupState) {
+  private def assertState(group: GroupMetadata, targetState: GroupState): Unit = {
     val states: Set[GroupState] = Set(Stable, PreparingRebalance, CompletingRebalance, Dead)
     val otherStates = states - targetState
     otherStates.foreach { otherState =>

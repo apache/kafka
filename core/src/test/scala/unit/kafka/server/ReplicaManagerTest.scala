@@ -52,7 +52,7 @@ class ReplicaManagerTest {
   var kafkaZkClient: KafkaZkClient = _
 
   @Before
-  def setUp() {
+  def setUp(): Unit = {
     zkClient = EasyMock.createMock(classOf[ZkClient])
     kafkaZkClient = EasyMock.createMock(classOf[KafkaZkClient])
     EasyMock.expect(kafkaZkClient.getEntityConfigs(EasyMock.anyString(), EasyMock.anyString())).andReturn(new Properties()).anyTimes()
@@ -62,12 +62,12 @@ class ReplicaManagerTest {
   }
 
   @After
-  def tearDown() {
+  def tearDown(): Unit = {
     metrics.close()
   }
 
   @Test
-  def testHighWaterMarkDirectoryMapping() {
+  def testHighWaterMarkDirectoryMapping(): Unit = {
     val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
     val config = KafkaConfig.fromProps(props)
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)))
@@ -85,7 +85,7 @@ class ReplicaManagerTest {
   }
 
   @Test
-  def testHighwaterMarkRelativeDirectoryMapping() {
+  def testHighwaterMarkRelativeDirectoryMapping(): Unit = {
     val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
     props.put("log.dir", TestUtils.tempRelativeDir("data").getAbsolutePath)
     val config = KafkaConfig.fromProps(props)
@@ -104,7 +104,7 @@ class ReplicaManagerTest {
   }
 
   @Test
-  def testIllegalRequiredAcks() {
+  def testIllegalRequiredAcks(): Unit = {
     val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
     val config = KafkaConfig.fromProps(props)
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)))
@@ -131,7 +131,7 @@ class ReplicaManagerTest {
   }
 
   @Test
-  def testClearPurgatoryOnBecomingFollower() {
+  def testClearPurgatoryOnBecomingFollower(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
     props.put("log.dir", TestUtils.tempRelativeDir("data").getAbsolutePath)
     val config = KafkaConfig.fromProps(props)
@@ -383,7 +383,7 @@ class ReplicaManagerTest {
   }
 
   @Test
-  def testFetchBeyondHighWatermarkReturnEmptyResponse() {
+  def testFetchBeyondHighWatermarkReturnEmptyResponse(): Unit = {
     val rm = setupReplicaManagerWithMockedPurgatories(new MockTimer, aliveBrokerIds = Seq(0, 1, 2))
     try {
       val brokerList = Seq[Integer](0, 1, 2).asJava
@@ -427,7 +427,7 @@ class ReplicaManagerTest {
    * partition should not be affected.
    */
   @Test
-  def testFetchMessagesWhenNotFollowerForOnePartition() {
+  def testFetchMessagesWhenNotFollowerForOnePartition(): Unit = {
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer, aliveBrokerIds = Seq(0, 1, 2))
 
     try {

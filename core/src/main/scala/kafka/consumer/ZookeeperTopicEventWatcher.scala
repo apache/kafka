@@ -30,7 +30,7 @@ class ZookeeperTopicEventWatcher(val zkUtils: ZkUtils,
 
   startWatchingTopicEvents()
 
-  private def startWatchingTopicEvents() {
+  private def startWatchingTopicEvents(): Unit = {
     val topicEventListener = new ZkTopicEventListener()
     zkUtils.makeSurePersistentPathExists(ZkUtils.BrokerTopicsPath)
 
@@ -44,9 +44,9 @@ class ZookeeperTopicEventWatcher(val zkUtils: ZkUtils,
     topicEventListener.handleChildChange(ZkUtils.BrokerTopicsPath, topics.asJava)
   }
 
-  private def stopWatchingTopicEvents() { zkUtils.unsubscribeAll() }
+  private def stopWatchingTopicEvents(): Unit = { zkUtils.unsubscribeAll() }
 
-  def shutdown() {
+  def shutdown(): Unit = {
     lock.synchronized {
       info("Shutting down topic event watcher.")
       if (zkUtils != null) {
@@ -61,7 +61,7 @@ class ZookeeperTopicEventWatcher(val zkUtils: ZkUtils,
   class ZkTopicEventListener extends IZkChildListener {
 
     @throws[Exception]
-    def handleChildChange(parent: String, children: java.util.List[String]) {
+    def handleChildChange(parent: String, children: java.util.List[String]): Unit = {
       lock.synchronized {
         try {
           if (zkUtils != null) {
@@ -83,10 +83,10 @@ class ZookeeperTopicEventWatcher(val zkUtils: ZkUtils,
     extends IZkStateListener {
 
     @throws[Exception]
-    def handleStateChanged(state: KeeperState) { }
+    def handleStateChanged(state: KeeperState): Unit = { }
 
     @throws[Exception]
-    def handleNewSession() {
+    def handleNewSession(): Unit = {
       lock.synchronized {
         if (zkUtils != null) {
           info("ZK expired: resubscribing topic event listener to topic registry")

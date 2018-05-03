@@ -34,10 +34,10 @@ import org.apache.kafka.common.internals.Topic
 
 @deprecated("This class is deprecated and will be replaced by kafka.zk.AdminZkClient.", "1.1.0")
 trait AdminUtilities {
-  def changeTopicConfig(zkUtils: ZkUtils, topic: String, configs: Properties)
-  def changeClientIdConfig(zkUtils: ZkUtils, clientId: String, configs: Properties)
-  def changeUserOrUserClientIdConfig(zkUtils: ZkUtils, sanitizedEntityName: String, configs: Properties)
-  def changeBrokerConfig(zkUtils: ZkUtils, brokerIds: Seq[Int], configs: Properties)
+  def changeTopicConfig(zkUtils: ZkUtils, topic: String, configs: Properties): Unit
+  def changeClientIdConfig(zkUtils: ZkUtils, clientId: String, configs: Properties): Unit
+  def changeUserOrUserClientIdConfig(zkUtils: ZkUtils, sanitizedEntityName: String, configs: Properties): Unit
+  def changeBrokerConfig(zkUtils: ZkUtils, brokerIds: Seq[Int], configs: Properties): Unit
 
   def changeConfigs(zkUtils: ZkUtils, entityType: String, entityName: String, configs: Properties): Unit = {
 
@@ -362,7 +362,7 @@ object AdminUtils extends Logging with AdminUtilities {
   }
 
   @deprecated("This method is deprecated and will be replaced by kafka.zk.AdminZkClient.", "1.1.0")
-  def deleteTopic(zkUtils: ZkUtils, topic: String) {
+  def deleteTopic(zkUtils: ZkUtils, topic: String): Unit = {
       if (topicExists(zkUtils, topic)) {
         try {
           zkUtils.createPersistentPath(getDeleteTopicPath(topic))
@@ -463,7 +463,7 @@ object AdminUtils extends Logging with AdminUtilities {
                   partitions: Int,
                   replicationFactor: Int,
                   topicConfig: Properties = new Properties,
-                  rackAwareMode: RackAwareMode = RackAwareMode.Enforced) {
+                  rackAwareMode: RackAwareMode = RackAwareMode.Enforced): Unit = {
     val brokerMetadatas = getBrokerMetadatas(zkUtils, rackAwareMode)
     val replicaAssignment = AdminUtils.assignReplicasToBrokers(brokerMetadatas, partitions, replicationFactor)
     AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, replicaAssignment, topicConfig)
@@ -513,7 +513,7 @@ object AdminUtils extends Logging with AdminUtilities {
                                                      topic: String,
                                                      partitionReplicaAssignment: Map[Int, Seq[Int]],
                                                      config: Properties = new Properties,
-                                                     update: Boolean = false) {
+                                                     update: Boolean = false): Unit = {
     validateCreateOrUpdateTopic(zkUtils, topic, partitionReplicaAssignment, config, update)
 
     // Configs only matter if a topic is being created. Changing configs via AlterTopic is not supported
@@ -526,7 +526,7 @@ object AdminUtils extends Logging with AdminUtilities {
     writeTopicPartitionAssignment(zkUtils, topic, partitionReplicaAssignment, update)
   }
 
-  private def writeTopicPartitionAssignment(zkUtils: ZkUtils, topic: String, replicaAssignment: Map[Int, Seq[Int]], update: Boolean) {
+  private def writeTopicPartitionAssignment(zkUtils: ZkUtils, topic: String, replicaAssignment: Map[Int, Seq[Int]], update: Boolean): Unit = {
     try {
       val zkPath = getTopicPath(topic)
       val jsonPartitionData = zkUtils.replicaAssignmentZkData(replicaAssignment.map(e => e._1.toString -> e._2))
@@ -557,7 +557,7 @@ object AdminUtils extends Logging with AdminUtilities {
    *
    */
    @deprecated("This method is deprecated and will be replaced by kafka.zk.AdminZkClient.", "1.1.0")
-  def changeClientIdConfig(zkUtils: ZkUtils, sanitizedClientId: String, configs: Properties) {
+  def changeClientIdConfig(zkUtils: ZkUtils, sanitizedClientId: String, configs: Properties): Unit = {
     DynamicConfig.Client.validate(configs)
     changeEntityConfig(zkUtils, ConfigType.Client, sanitizedClientId, configs)
   }
@@ -574,7 +574,7 @@ object AdminUtils extends Logging with AdminUtilities {
    *
    */
    @deprecated("This method is deprecated and will be replaced by kafka.zk.AdminZkClient.", "1.1.0")
-  def changeUserOrUserClientIdConfig(zkUtils: ZkUtils, sanitizedEntityName: String, configs: Properties) {
+  def changeUserOrUserClientIdConfig(zkUtils: ZkUtils, sanitizedEntityName: String, configs: Properties): Unit = {
     if (sanitizedEntityName == ConfigEntityName.Default || sanitizedEntityName.contains("/clients"))
       DynamicConfig.Client.validate(configs)
     else
@@ -600,7 +600,7 @@ object AdminUtils extends Logging with AdminUtilities {
    *
    */
    @deprecated("This method is deprecated and will be replaced by kafka.zk.AdminZkClient.", "1.1.0")
-  def changeTopicConfig(zkUtils: ZkUtils, topic: String, configs: Properties) {
+  def changeTopicConfig(zkUtils: ZkUtils, topic: String, configs: Properties): Unit = {
     validateTopicConfig(zkUtils, topic, configs)
     changeEntityConfig(zkUtils, ConfigType.Topic, topic, configs)
   }
@@ -621,7 +621,7 @@ object AdminUtils extends Logging with AdminUtilities {
     }
   }
 
-  private def changeEntityConfig(zkUtils: ZkUtils, rootEntityType: String, fullSanitizedEntityName: String, configs: Properties) {
+  private def changeEntityConfig(zkUtils: ZkUtils, rootEntityType: String, fullSanitizedEntityName: String, configs: Properties): Unit = {
     val sanitizedEntityPath = rootEntityType + '/' + fullSanitizedEntityName
     val entityConfigPath = getEntityConfigPath(rootEntityType, fullSanitizedEntityName)
     // write the new config--may not exist if there were previously no overrides
@@ -640,7 +640,7 @@ object AdminUtils extends Logging with AdminUtilities {
   /**
    * Write out the entity config to zk, if there is any
    */
-  private def writeEntityConfig(zkUtils: ZkUtils, entityPath: String, config: Properties) {
+  private def writeEntityConfig(zkUtils: ZkUtils, entityPath: String, config: Properties): Unit = {
     val map = Map("version" -> 1, "config" -> config.asScala)
     zkUtils.updatePersistentPath(entityPath, Json.legacyEncodeAsString(map))
   }

@@ -59,12 +59,12 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
   val KIP_101_ENABLED = true
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     producer.close()
     TestUtils.shutdownServers(brokers)
     super.tearDown()

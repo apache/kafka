@@ -50,7 +50,7 @@ class AddPartitionsTest extends ZooKeeperTestHarness {
   val topic5Assignment = Map(1->Seq(0,1))
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
 
     configs = (0 until 4).map(i => KafkaConfig.fromProps(TestUtils.createBrokerConfig(i, zkConnect, enableControlledShutdown = false)))
@@ -66,7 +66,7 @@ class AddPartitionsTest extends ZooKeeperTestHarness {
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     TestUtils.shutdownServers(servers)
     super.tearDown()
   }

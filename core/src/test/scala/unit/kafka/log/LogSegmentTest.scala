@@ -62,7 +62,7 @@ class LogSegmentTest {
   }
 
   @After
-  def teardown() {
+  def teardown(): Unit = {
     segments.foreach(_.close())
     Utils.delete(logDir)
   }
@@ -71,7 +71,7 @@ class LogSegmentTest {
    * A read on an empty log segment should return null
    */
   @Test
-  def testReadOnEmptySegment() {
+  def testReadOnEmptySegment(): Unit = {
     val seg = createSegment(40)
     val read = seg.read(startOffset = 40, maxSize = 300, maxOffset = None)
     assertNull("Read beyond the last offset in the segment should be null", read)
@@ -82,7 +82,7 @@ class LogSegmentTest {
    * beginning with the first message in the segment
    */
   @Test
-  def testReadBeforeFirstOffset() {
+  def testReadBeforeFirstOffset(): Unit = {
     val seg = createSegment(40)
     val ms = records(50, "hello", "there", "little", "bee")
     seg.append(53, RecordBatch.NO_TIMESTAMP, -1L, ms)
@@ -95,7 +95,7 @@ class LogSegmentTest {
    * we should get only the first message in the log
    */
   @Test
-  def testMaxOffset() {
+  def testMaxOffset(): Unit = {
     val baseOffset = 50
     val seg = createSegment(baseOffset)
     val ms = records(baseOffset, "hello", "there", "beautiful")
@@ -112,7 +112,7 @@ class LogSegmentTest {
    * If we read from an offset beyond the last offset in the segment we should get null
    */
   @Test
-  def testReadAfterLast() {
+  def testReadAfterLast(): Unit = {
     val seg = createSegment(40)
     val ms = records(50, "hello", "there")
     seg.append(51, RecordBatch.NO_TIMESTAMP, -1L, ms)
@@ -125,7 +125,7 @@ class LogSegmentTest {
    * with the least offset greater than the given startOffset.
    */
   @Test
-  def testReadFromGap() {
+  def testReadFromGap(): Unit = {
     val seg = createSegment(40)
     val ms = records(50, "hello", "there")
     seg.append(51, RecordBatch.NO_TIMESTAMP, -1L, ms)
@@ -140,7 +140,7 @@ class LogSegmentTest {
    * the first but not the second message.
    */
   @Test
-  def testTruncate() {
+  def testTruncate(): Unit = {
     val seg = createSegment(40)
     var offset = 40
     for (_ <- 0 until 30) {
@@ -161,7 +161,7 @@ class LogSegmentTest {
   }
 
   @Test
-  def testTruncateEmptySegment() {
+  def testTruncateEmptySegment(): Unit = {
     // This tests the scenario in which the follower truncates to an empty segment. In this
     // case we must ensure that the index is resized so that the log segment is not mistakenly
     // rolled due to a full index
@@ -202,7 +202,7 @@ class LogSegmentTest {
   }
 
   @Test
-  def testReloadLargestTimestampAndNextOffsetAfterTruncation() {
+  def testReloadLargestTimestampAndNextOffsetAfterTruncation(): Unit = {
     val numMessages = 30
     val seg = createSegment(40, 2 * records(0, "hello").sizeInBytes - 1)
     var offset = 40
@@ -225,7 +225,7 @@ class LogSegmentTest {
    * Test truncating the whole segment, and check that we can reappend with the original offset.
    */
   @Test
-  def testTruncateFull() {
+  def testTruncateFull(): Unit = {
     // test the case where we fully truncate the log
     val time = new MockTime
     val seg = createSegment(40, time = time)
@@ -248,7 +248,7 @@ class LogSegmentTest {
    * Append messages with timestamp and search message by timestamp.
    */
   @Test
-  def testFindOffsetByTimestamp() {
+  def testFindOffsetByTimestamp(): Unit = {
     val messageSize = records(0, s"msg00").sizeInBytes
     val seg = createSegment(40, messageSize * 2 - 1)
     // Produce some messages
@@ -274,7 +274,7 @@ class LogSegmentTest {
    * Test that offsets are assigned sequentially and that the nextOffset variable is incremented
    */
   @Test
-  def testNextOffsetCalculation() {
+  def testNextOffsetCalculation(): Unit = {
     val seg = createSegment(40)
     assertEquals(40, seg.readNextOffset)
     seg.append(52, RecordBatch.NO_TIMESTAMP, -1L, records(50, "hello", "there", "you"))
@@ -285,7 +285,7 @@ class LogSegmentTest {
    * Test that we can change the file suffixes for the log and index files
    */
   @Test
-  def testChangeFileSuffixes() {
+  def testChangeFileSuffixes(): Unit = {
     val seg = createSegment(40)
     val logFile = seg.log.file
     val indexFile = seg.offsetIndex.file
@@ -301,7 +301,7 @@ class LogSegmentTest {
    * and recover the segment, the entries should all be readable.
    */
   @Test
-  def testRecoveryFixesCorruptIndex() {
+  def testRecoveryFixesCorruptIndex(): Unit = {
     val seg = createSegment(0)
     for(i <- 0 until 100)
       seg.append(i, RecordBatch.NO_TIMESTAMP, -1L, records(i, i.toString))
@@ -390,7 +390,7 @@ class LogSegmentTest {
    * and recover the segment, the entries should all be readable.
    */
   @Test
-  def testRecoveryFixesCorruptTimeIndex() {
+  def testRecoveryFixesCorruptTimeIndex(): Unit = {
     val seg = createSegment(0)
     for(i <- 0 until 100)
       seg.append(i, i * 10, i, records(i, i.toString))
@@ -408,7 +408,7 @@ class LogSegmentTest {
    * Randomly corrupt a log a number of times and attempt recovery.
    */
   @Test
-  def testRecoveryWithCorruptMessage() {
+  def testRecoveryWithCorruptMessage(): Unit = {
     val messagesAppended = 20
     for (_ <- 0 until 10) {
       val seg = createSegment(0)
@@ -442,7 +442,7 @@ class LogSegmentTest {
 
   /* create a segment with   pre allocate, put message to it and verify */
   @Test
-  def testCreateWithInitFileSizeAppendMessage() {
+  def testCreateWithInitFileSizeAppendMessage(): Unit = {
     val seg = createSegment(40, false, 512*1024*1024, true)
     val ms = records(50, "hello", "there")
     seg.append(51, RecordBatch.NO_TIMESTAMP, -1L, ms)
@@ -454,7 +454,7 @@ class LogSegmentTest {
 
   /* create a segment with   pre allocate and clearly shut down*/
   @Test
-  def testCreateWithInitFileSizeClearShutdown() {
+  def testCreateWithInitFileSizeClearShutdown(): Unit = {
     val tempDir = TestUtils.tempDir()
     val logConfig = LogConfig(Map(
       LogConfig.IndexIntervalBytesProp -> 10,
@@ -494,7 +494,7 @@ class LogSegmentTest {
   }
 
   @Test
-  def shouldTruncateEvenIfOffsetPointsToAGapInTheLog() {
+  def shouldTruncateEvenIfOffsetPointsToAGapInTheLog(): Unit = {
     val seg = createSegment(40)
     val offset = 40
 

@@ -57,7 +57,7 @@ class DelayedDeleteTopics(delayMs: Long,
   /**
     * Check for partitions that still exist, update their error code and call the responseCallback
     */
-  override def onComplete() {
+  override def onComplete(): Unit = {
     trace(s"Completing operation for $deleteMetadata")
     val results = deleteMetadata.map { metadata =>
       // ignore topics that already have errors

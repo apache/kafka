@@ -55,7 +55,7 @@ class PartitionStateMachine(config: KafkaConfig,
   /**
    * Invoked on successful controller election.
    */
-  def startup() {
+  def startup(): Unit = {
     info("Initializing partition state")
     initializePartitionState()
     info("Triggering online partition state changes")
@@ -66,7 +66,7 @@ class PartitionStateMachine(config: KafkaConfig,
   /**
    * Invoked on controller shutdown.
    */
-  def shutdown() {
+  def shutdown(): Unit = {
     partitionState.clear()
     info("Stopped partition state machine")
   }
@@ -75,7 +75,7 @@ class PartitionStateMachine(config: KafkaConfig,
    * Invoked on startup of the partition's state machine to set the initial state for all existing partitions in
    * zookeeper
    */
-  private def initializePartitionState() {
+  private def initializePartitionState(): Unit = {
     for (topicPartition <- controllerContext.allPartitions) {
       // check if leader and isr path exists for partition. If not, then it is in NEW state
       controllerContext.partitionLeadershipInfo.get(topicPartition) match {
@@ -96,7 +96,7 @@ class PartitionStateMachine(config: KafkaConfig,
    * This API invokes the OnlinePartition state change on all partitions in either the NewPartition or OfflinePartition
    * state. This is called on a successful controller election and on broker changes
    */
-  def triggerOnlinePartitionStateChange() {
+  def triggerOnlinePartitionStateChange(): Unit = {
     // try to move all partitions in NewPartition or OfflinePartition state to OnlinePartition state except partitions
     // that belong to topics to be deleted
     val partitionsToTrigger = partitionState.filter { case (partition, partitionState) =>

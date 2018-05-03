@@ -34,7 +34,7 @@ object UpdateOffsetsInZK extends Logging {
   val Earliest = "earliest"
   val Latest = "latest"
 
-  def main(args: Array[String]) {
+  def main(args: Array[String]): Unit = {
     warn("WARNING: UpdateOffsetsInZK is deprecated and will be dropped in releases following 0.11.0.0.")
 
     if(args.length < 3)

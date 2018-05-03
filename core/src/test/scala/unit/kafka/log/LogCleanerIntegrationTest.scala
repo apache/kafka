@@ -49,7 +49,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) extends AbstractLogCle
   val topicPartitions = Array(new TopicPartition("log", 0), new TopicPartition("log", 1), new TopicPartition("log", 2))
 
   @Test
-  def cleanerTest() {
+  def cleanerTest(): Unit = {
     val largeMessageKey = 20
     val (largeMessageValue, largeMessageSet) = createLargeSingleMessageSet(largeMessageKey, RecordBatch.CURRENT_MAGIC_VALUE)
     val maxMessageSize = largeMessageSet.sizeInBytes
@@ -229,7 +229,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) extends AbstractLogCle
   }
 
   @Test
-  def cleanerConfigUpdateTest() {
+  def cleanerConfigUpdateTest(): Unit = {
     val largeMessageKey = 20
     val (largeMessageValue, largeMessageSet) = createLargeSingleMessageSet(largeMessageKey, RecordBatch.CURRENT_MAGIC_VALUE)
     val maxMessageSize = largeMessageSet.sizeInBytes
@@ -278,7 +278,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) extends AbstractLogCle
     assertTrue(s"log should have been compacted: startSize=$startSize compactedSize=$compactedSize", startSize > compactedSize)
   }
 
-  private def checkLastCleaned(topic: String, partitionId: Int, firstDirty: Long) {
+  private def checkLastCleaned(topic: String, partitionId: Int, firstDirty: Long): Unit = {
     // wait until cleaning up to base_offset, note that cleaning happens only when "log dirty ratio" is higher than
     // LogConfig.MinCleanableDirtyRatioProp
     val topicPartition = new TopicPartition(topic, partitionId)
@@ -288,7 +288,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) extends AbstractLogCle
       lastCleaned >= firstDirty)
   }
 
-  private def checkLogAfterAppendingDups(log: Log, startSize: Long, appends: Seq[(Int, String, Long)]) {
+  private def checkLogAfterAppendingDups(log: Log, startSize: Long, appends: Seq[(Int, String, Long)]): Unit = {
     val read = readFromLog(log)
     assertEquals("Contents of the map shouldn't change", toMap(appends), toMap(read))
     assertTrue(startSize > log.size)

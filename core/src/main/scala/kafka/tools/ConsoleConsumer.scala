@@ -49,7 +49,7 @@ object ConsoleConsumer extends Logging {
 
   private val shutdownLatch = new CountDownLatch(1)
 
-  def main(args: Array[String]) {
+  def main(args: Array[String]): Unit = {
     val conf = new ConsumerConfig(args)
     try {
       run(conf)
@@ -63,7 +63,7 @@ object ConsoleConsumer extends Logging {
     }
   }
 
-  def run(conf: ConsumerConfig) {
+  def run(conf: ConsumerConfig): Unit = {
 
     val consumer =
       if (conf.useOldConsumer) {
@@ -97,7 +97,7 @@ object ConsoleConsumer extends Logging {
     }
   }
 
-  def checkZk(config: ConsumerConfig) {
+  def checkZk(config: ConsumerConfig): Unit = {
     if (!checkZkPathExists(config.options.valueOf(config.zkConnectOpt), "/brokers/ids")) {
       System.err.println("No brokers found in ZK.")
       Exit.exit(1)
@@ -111,9 +111,9 @@ object ConsoleConsumer extends Logging {
     }
   }
 
-  def addShutdownHook(consumer: BaseConsumer, conf: ConsumerConfig) {
+  def addShutdownHook(consumer: BaseConsumer, conf: ConsumerConfig): Unit = {
     Runtime.getRuntime.addShutdownHook(new Thread() {
-      override def run() {
+      override def run(): Unit = {
         consumer.stop()
 
         shutdownLatch.await()
@@ -125,7 +125,7 @@ object ConsoleConsumer extends Logging {
     })
   }
 
-  def process(maxMessages: Integer, formatter: MessageFormatter, consumer: BaseConsumer, output: PrintStream, skipMessageOnError: Boolean) {
+  def process(maxMessages: Integer, formatter: MessageFormatter, consumer: BaseConsumer, output: PrintStream, skipMessageOnError: Boolean): Unit = {
     while (messageCount < maxMessages || maxMessages == -1) {
       val msg: BaseConsumerRecord = try {
         consumer.receive()
@@ -163,7 +163,7 @@ object ConsoleConsumer extends Logging {
     }
   }
 
-  def reportRecordCount() {
+  def reportRecordCount(): Unit = {
     System.err.println(s"Processed a total of $messageCount messages")
   }
 
@@ -225,7 +225,7 @@ object ConsoleConsumer extends Logging {
     * In case both --from-beginning and an explicit value are specified an error is thrown if these
     * are conflicting.
     */
-  def setAutoOffsetResetValue(config: ConsumerConfig, props: Properties) {
+  def setAutoOffsetResetValue(config: ConsumerConfig, props: Properties): Unit = {
     val (earliestConfigValue, latestConfigValue) = if (config.useOldConsumer)
       (OffsetRequest.SmallestTimeString, OffsetRequest.LargestTimeString)
     else
@@ -521,7 +521,7 @@ class DefaultMessageFormatter extends MessageFormatter {
   var keyDeserializer: Option[Deserializer[_]] = None
   var valueDeserializer: Option[Deserializer[_]] = None
 
-  override def init(props: Properties) {
+  override def init(props: Properties): Unit = {
     if (props.containsKey("print.timestamp"))
       printTimestamp = props.getProperty("print.timestamp").trim.equalsIgnoreCase("true")
     if (props.containsKey("print.key"))
@@ -553,7 +553,7 @@ class DefaultMessageFormatter extends MessageFormatter {
     newProps
   }
 
-  def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream) {
+  def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream): Unit = {
 
     def writeSeparator(columnSeparator: Boolean): Unit = {
       if (columnSeparator)
@@ -562,7 +562,7 @@ class DefaultMessageFormatter extends MessageFormatter {
         output.write(lineSeparator)
     }
 
-    def write(deserializer: Option[Deserializer[_]], sourceBytes: Array[Byte]) {
+    def write(deserializer: Option[Deserializer[_]], sourceBytes: Array[Byte]): Unit = {
       val nonNullBytes = Option(sourceBytes).getOrElse("null".getBytes(StandardCharsets.UTF_8))
       val convertedBytes = deserializer.map(_.deserialize(null, nonNullBytes).toString.
         getBytes(StandardCharsets.UTF_8)).getOrElse(nonNullBytes)
@@ -606,15 +606,15 @@ class LoggingMessageFormatter extends MessageFormatter with LazyLogging {
 }
 
 class NoOpMessageFormatter extends MessageFormatter {
-  override def init(props: Properties) {}
+  override def init(props: Properties): Unit = {}
 
-  def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream){}
+  def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream): Unit ={}
 }
 
 class ChecksumMessageFormatter extends MessageFormatter {
   private var topicStr: String = _
 
-  override def init(props: Properties) {
+  override def init(props: Properties): Unit = {
     topicStr = props.getProperty("topic")
     if (topicStr != null)
       topicStr = topicStr + ":"
@@ -622,7 +622,7 @@ class ChecksumMessageFormatter extends MessageFormatter {
       topicStr = ""
   }
 
-  def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream) {
+  def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream): Unit = {
     import consumerRecord._
     val chksum =
       if (timestampType != TimestampType.NO_TIMESTAMP_TYPE)

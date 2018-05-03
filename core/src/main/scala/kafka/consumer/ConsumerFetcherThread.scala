@@ -79,7 +79,7 @@ class ConsumerFetcherThread(consumerIdString: String,
   }
 
   // process fetched data
-  def processPartitionData(topicPartition: TopicPartition, fetchOffset: Long, partitionData: PartitionData) {
+  def processPartitionData(topicPartition: TopicPartition, fetchOffset: Long, partitionData: PartitionData): Unit = {
     val pti = partitionMap(topicPartition)
     if (pti.getFetchOffset != fetchOffset)
       throw new RuntimeException("Offset doesn't match for partition [%s,%d] pti offset: %d fetch offset: %d"
@@ -102,7 +102,7 @@ class ConsumerFetcherThread(consumerIdString: String,
   }
 
   // any logic for partitions whose leader has changed
-  def handlePartitionsWithErrors(partitions: Iterable[TopicPartition]) {
+  def handlePartitionsWithErrors(partitions: Iterable[TopicPartition]): Unit = {
     if (partitions.nonEmpty) {
       removePartitions(partitions.toSet)
       consumerFetcherManager.addPartitionsWithError(partitions)
