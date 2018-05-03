@@ -25,6 +25,8 @@ import kafka.utils.CommandLineUtils;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.DeleteTopicsResult;
 import org.apache.kafka.clients.admin.KafkaAdminClient;
+import org.apache.kafka.clients.admin.DescribeConsumerGroupsOptions;
+import org.apache.kafka.clients.admin.DescribeConsumerGroupsResult;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -42,6 +44,7 @@ import javax.xml.datatype.Duration;
 import java.io.IOException;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
@@ -51,6 +54,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -120,8 +124,8 @@ public class StreamsResetter {
             }
             properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, options.valueOf(bootstrapServerOption));
 
-            validateNoActiveConsumers(groupId, properties);
-            kafkaAdminClient = (KafkaAdminClient) AdminClient.create(properties);
+            kafkaAdminClient = (KafkaAdminClient) KafkaAdminClient.create(properties);
+            validateNoActiveConsumers(groupId, kafkaAdminClient);
 
             allTopics.clear();
             allTopics.addAll(kafkaAdminClient.listTopics().names().get(60, TimeUnit.SECONDS));
@@ -149,18 +153,12 @@ public class StreamsResetter {
     }
 
     private void validateNoActiveConsumers(final String groupId,
-                                           final Properties properties) {
-        kafka.admin.AdminClient olderAdminClient = null;
-        try {
-            olderAdminClient = kafka.admin.AdminClient.create(properties);
-            if (!olderAdminClient.describeConsumerGroup(groupId, 0).consumers().get().isEmpty()) {
-                throw new IllegalStateException("Consumer group '" + groupId + "' is still active. "
-                                                + "Make sure to stop all running application instances before running the reset tool.");
-            }
-        } finally {
-            if (olderAdminClient != null) {
-                olderAdminClient.close();
-            }
+                                           final AdminClient adminClient) throws ExecutionException, InterruptedException {
+        DescribeConsumerGroupsResult describeResult = adminClient.describeConsumerGroups(Arrays.asList(groupId),
+                (new DescribeConsumerGroupsOptions()).timeoutMs(0));
+        if (!describeResult.describedGroups().get(groupId).get().members().isEmpty()) {
+            throw new IllegalStateException("Consumer group '" + groupId + "' is still active. "
+                    + "Make sure to stop all running application instances before running the reset tool.");
         }
     }
 
