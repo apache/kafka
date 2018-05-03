@@ -590,7 +590,6 @@ private[log] class Cleaner(val id: Int,
       }
     }
 
-    var checkCrc = false
     var position = 0
     while (position < sourceRecords.sizeInBytes) {
       checkDone(topicPartition)
@@ -607,20 +606,6 @@ private[log] class Cleaner(val id: Int,
 
       position += result.bytesRead
 
-      // Validate CRC if buffer was grown beyond max.message.bytes to read this batch.
-      // Note that we don't check every batch > max.message.bytes, just one batch is validated
-      // as a sanity check when the buffer is grown beyond max.message.bytes.
-      if (checkCrc && result.messagesRead > 0) {
-        checkCrc = false
-        val batches = records.batches.iterator
-        if (batches.hasNext) {
-          val batch = batches.next
-          if (!batch.isValid) {
-            throw new CorruptRecordException(s"Log ${sourceRecords.file} contains corrupt data at base offset ${batch.baseOffset}")
-          }
-        }
-      }
-
       // if any messages are to be retained, write them out
       val outputBuffer = result.output
       if (outputBuffer.position() > 0) {
@@ -636,25 +621,44 @@ private[log] class Cleaner(val id: Int,
       }
 
       // if we read bytes but didn't get even one complete batch, our I/O buffer is too small, grow it and try again
-      // `result.bytesRead` contains bytes from the `messagesRead` and any discarded batches.
-      if (readBuffer.limit() > 0 && result.bytesRead == 0) {
-        // In some scenarios, a record could be bigger than the current maximum size configured for the log
-        //   1. A compacted topic using compression may contain a message set slightly larger than max.message.bytes
-        //   2. max.message.bytes of a topic could have been reduced after writing larger messages
-        // In these cases, grow the buffer to hold the next batch.
-        val maxSize = if (readBuffer.capacity >= maxLogMessageSize) {
-          checkCrc = true
-          val nextBatchSize = records.firstBatchSize
-          if (nextBatchSize == null)
-            throw new IllegalStateException(s"Could not determine next batch size for log ${sourceRecords.file} at position $position")
-          nextBatchSize.intValue
-        } else
-          maxLogMessageSize
-
-        growBuffers(maxSize)
-      }
+      // `result.bytesRead` contains bytes from `messagesRead` and any discarded batches.
+      if (readBuffer.limit() > 0 && result.bytesRead == 0)
+        growBuffersOrFail(sourceRecords, position, maxLogMessageSize, records)
     }
     restoreBuffers()
+  }
+
+
+  /**
+   * Grow buffers to process next batch of records from `sourceRecords.` Buffers are doubled in size
+   * up to a maximum of `maxLogMessageSize`. In some scenarios, a record could be bigger than the
+   * current maximum size configured for the log. For example:
+   *   1. A compacted topic using compression may contain a message set slightly larger than max.message.bytes
+   *   2. max.message.bytes of a topic could have been reduced after writing larger messages
+   * In these cases, grow the buffer to hold the next batch.
+   */
+  private def growBuffersOrFail(sourceRecords: FileRecords,
+                                position: Int,
+                                maxLogMessageSize: Int,
+                                memoryRecords: MemoryRecords): Unit = {
+
+    val maxSize = if (readBuffer.capacity >= maxLogMessageSize) {
+      val nextBatchSize = memoryRecords.firstBatchSize
+      val logDesc = s"log segment ${sourceRecords.file} at position $position"
+      if (nextBatchSize == null)
+        throw new IllegalStateException(s"Could not determine next batch size for $logDesc")
+      if (nextBatchSize <= 0)
+        throw new IllegalStateException(s"Invalid batch size $nextBatchSize for $logDesc")
+      if (nextBatchSize <= readBuffer.capacity)
+        throw new IllegalStateException(s"Batch size $nextBatchSize < buffer size ${readBuffer.capacity}, but not processed for $logDesc")
+      val bytesLeft = sourceRecords.channel.size - position
+      if (nextBatchSize > bytesLeft)
+        throw new CorruptRecordException(s"Log segment may be corrupt, batch size $nextBatchSize > $bytesLeft bytes left in segment for $logDesc")
+      nextBatchSize.intValue
+    } else
+      maxLogMessageSize
+
+    growBuffers(maxSize)
   }
 
   private def shouldDiscardBatch(batch: RecordBatch,
@@ -873,7 +877,7 @@ private[log] class Cleaner(val id: Int,
 
       // if we didn't read even one complete message, our read buffer may be too small
       if(position == startPosition)
-        growBuffers(maxLogMessageSize)
+        growBuffersOrFail(segment.log, position, maxLogMessageSize, records)
     }
     restoreBuffers()
     false

@@ -534,14 +534,13 @@ class LogCleanerTest extends JUnitSuite {
 
   /**
    * Test log cleaning with logs containing messages larger than topic's max message size
-   * where payload is corrupt
+   * where message size is corrupt and larger than bytes available in log segment.
    */
   @Test
-  def testMessageLargerThanMaxMessageSizeWithCorruptPayload() {
+  def testCorruptMessageSizeLargerThanBytesAvailable() {
     val (log, offsetMap) = createLogWithMessagesLargerThanMaxSize(largeMessageSize = 1024 * 1024)
     val file = new RandomAccessFile(log.logSegments.head.log.file, "rw")
-    file.seek(Records.LOG_OVERHEAD + 100)
-    file.write(0xff)
+    file.setLength(1024)
     file.close()
 
     val cleaner = makeCleaner(Int.MaxValue, maxMessageSize=1024)
