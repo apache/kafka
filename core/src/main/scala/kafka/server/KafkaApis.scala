@@ -534,8 +534,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     def convertedPartitionData(tp: TopicPartition,
-                               data: AbstractFetchResponse.PartitionData,
-                               doLazyConversion: Boolean): AbstractFetchResponse.SerializablePartitionData = {
+                               data: AbstractFetchResponse.PartitionData): AbstractFetchResponse.SerializablePartitionData = {
       // Down-conversion of the fetched records is needed when the stored magic version is
       // greater than that supported by the client (as indicated by the fetch request version). If the
       // configured magic version for the topic is less than or equal to that supported by the version of the
@@ -557,19 +556,10 @@ class KafkaApis(val requestChannel: RequestChannel,
           trace(s"Down converting records from partition $tp to message format version $magic for fetch request from $clientId")
 
           // Because down-conversion is extremely memory intensive, we want to try and delay the down-conversion as much
-          // as possible. With KIP-283, we have the ability to lazily down-convert in a chunked manner. Because lazy
-          // down-conversion does not guarantee how many messages are actually sent out, we fully down-convert the first
-          // topic-partition here, and lazily down-convert the rest.
-          val converted = {
-            if (doLazyConversion) {
-              new LazyDownConversionRecords(tp, data.records, magic, fetchContext.getFetchOffset(tp).get)
-            }
-            else {
-              val convertedRecords = data.records.downConvert(magic, fetchContext.getFetchOffset(tp).get, time)
-              updateRecordsProcessingStats(request, tp, convertedRecords.recordsProcessingStats)
-              convertedRecords.records()
-            }
-          }
+          // as possible. With KIP-283, we have the ability to lazily down-convert in a chunked manner. The lazy, chunked
+          // down-conversion always guarantees that at least one batch of messages is down-converted and sent out to the
+          // client.
+          val converted = new LazyDownConversionRecords(tp, data.records, magic, fetchContext.getFetchOffset(tp).get)
           new AbstractFetchResponse.SerializablePartitionData(data.error, data.highWatermark, AbstractFetchResponse.INVALID_LAST_STABLE_OFFSET,
             data.logStartOffset, data.abortedTransactions, converted)
         }
@@ -593,13 +583,11 @@ class KafkaApis(val requestChannel: RequestChannel,
       def fetchResponseCallback(bandwidthThrottleTimeMs: Int) {
         def createResponse(requestThrottleTimeMs: Int): SerializableFetchResponse = {
           val convertedData = new util.LinkedHashMap[TopicPartition, AbstractFetchResponse.SerializablePartitionData]
-          var isFirstPartition = true
           unconvertedFetchResponse.responseData().asScala.foreach { case (tp, partitionData) =>
             if (partitionData.error != Errors.NONE)
               debug(s"Fetch request with correlation id ${request.header.correlationId} from client $clientId " +
                 s"on partition $tp failed due to ${partitionData.error.exceptionName}")
-            convertedData.put(tp, convertedPartitionData(tp, partitionData, !isFirstPartition))
-            isFirstPartition = false
+            convertedData.put(tp, convertedPartitionData(tp, partitionData))
           }
           val response = new SerializableFetchResponse(unconvertedFetchResponse.error(), convertedData,
             bandwidthThrottleTimeMs + requestThrottleTimeMs, unconvertedFetchResponse.sessionId())

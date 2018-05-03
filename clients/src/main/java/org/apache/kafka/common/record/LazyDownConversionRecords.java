@@ -29,6 +29,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.GatheringByteChannel;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -46,8 +47,9 @@ public class LazyDownConversionRecords implements SerializableRecords {
     private final Records records;
     private final byte toMagic;
     private final long firstOffset;
+    private final int minimumSize;
     private RecordsWriter convertedRecordsWriter = null;
-    private LazyDownConversionRecordsIterator recordsIterator = null;
+    private LazyDownConversionRecordsIterator convertedRecordsIterator = null;
     private RecordsProcessingStats processingStats = null;
     private static final long MAX_READ_SIZE = 16L * 1024L;
 
@@ -62,6 +64,10 @@ public class LazyDownConversionRecords implements SerializableRecords {
         this.records = records;
         this.toMagic = toMagic;
         this.firstOffset = firstOffset;
+        this.minimumSize = RecordsUtil.downConvert(
+                Arrays.asList(records.batchIterator().peek()), toMagic, firstOffset, new SystemTime())
+                .records()
+                .sizeInBytes();
     }
 
     /**
@@ -71,26 +77,34 @@ public class LazyDownConversionRecords implements SerializableRecords {
      */
     @Override
     public int sizeInBytes() {
-        return records.sizeInBytes();
+        return Math.max(records.sizeInBytes(), minimumSize);
     }
 
     @Override
     public long writeTo(GatheringByteChannel channel, long position, int length) throws IOException {
         if (position == 0) {
-            log.info("Initializing lazy down-conversion for {" + topicPartition + "} with length=" + length);
-            recordsIterator = lazyDownConversionRecordsIterator(MAX_READ_SIZE);
+            log.debug("Initializing lazy down-conversion for {" + topicPartition + "} with length=" + length);
+            convertedRecordsIterator = lazyDownConversionRecordsIterator(MAX_READ_SIZE);
             processingStats = new RecordsProcessingStats(0, 0, 0);
         }
 
         if ((convertedRecordsWriter == null) || (convertedRecordsWriter.remaining() == 0)) {
             Records convertedRecords;
 
-            if (recordsIterator.hasNext()) {
+            if (convertedRecordsIterator.hasNext()) {
                 // Get next set of down-converted records
-                ConvertedRecords recordsAndStats = recordsIterator.next();
+                ConvertedRecords recordsAndStats = convertedRecordsIterator.next();
                 convertedRecords = recordsAndStats.records();
+
+                if (position == 0 && convertedRecords.batchIterator().peek().sizeInBytes() > length)
+                    throw new IllegalStateException("Not able to send first batch completely." +
+                            " batch_size: " + convertedRecords.batchIterator().peek().sizeInBytes() +
+                            " required_size: " + length +
+                            " minimum_size: " + minimumSize +
+                            " records_size: " + records.sizeInBytes());
+
                 processingStats.addToProcessingStats(recordsAndStats.recordsProcessingStats());
-                log.info("Got lazy converted records for {" + topicPartition + "} with length=" + convertedRecords.sizeInBytes());
+                log.debug("Got lazy converted records for {" + topicPartition + "} with length=" + convertedRecords.sizeInBytes());
             } else {
                 // We do not have any records left to down-convert. Construct a "fake" message for the length remaining.
                 // This message will be ignored by the consumer because its length will be past the length of maximum
@@ -99,17 +113,11 @@ public class LazyDownConversionRecords implements SerializableRecords {
                 //      BaseOffset => Int64
                 //      Length => Int32
                 //      ...
-                log.info("Constructing fake message batch for topic-partition {" + topicPartition + "} for remaining length " + length);
-                ByteBuffer fakeMessageBatch = ByteBuffer.allocate(length);
-
-                if (length >= ((Long.SIZE / Byte.SIZE) + (Integer.SIZE / Byte.SIZE))) {
-                    log.info("Fake batch length: " + (length + 1));
-                    fakeMessageBatch.putLong(-1L);
-                    fakeMessageBatch.putInt(length + 1);
-                } else {
-                    log.info("Batch not long enough to insert length");
-                }
-                fakeMessageBatch.clear();
+                log.error("Constructing fake message batch for topic-partition {" + topicPartition + "} for remaining length " + length);
+                int minLength = 8 + 4;
+                ByteBuffer fakeMessageBatch = ByteBuffer.allocate(length + 1 + minLength);
+                fakeMessageBatch.putLong(-1L);
+                fakeMessageBatch.putInt(length + 1);
                 convertedRecords = MemoryRecords.readableRecords(fakeMessageBatch);
             }
             convertedRecordsWriter = new RecordsWriter(convertedRecords);
