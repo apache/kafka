@@ -28,13 +28,29 @@ import unit.kafka.log.FakeRecord
 class CleanerCacheTest extends JUnitSuite {
 
   @Test
-  def testBasicValidation() {
+  def testBasicValidationWithDefaultStrategy() {
     validateMap(10)
     validateMap(100)
     validateMap(1000)
     validateMap(5000)
   }
 
+  @Test
+  def testBasicValidationWithTimestampStrategy() {
+    validateMap(10, strategy = Constants.TimestampStrategy)
+    validateMap(100, strategy = Constants.TimestampStrategy)
+    validateMap(1000, strategy = Constants.TimestampStrategy)
+    validateMap(5000, strategy = Constants.TimestampStrategy)
+  }
+  
+  @Test
+  def testBasicValidationWithHeaderStrategy() {
+    validateMap(10, strategy = "version")
+    validateMap(100, strategy = "version")
+    validateMap(1000, strategy = "version")
+    validateMap(5000, strategy = "version")
+  }
+  
   @Test
   def testClearWithDefaultStrategy() {
     val cache = new SkimpyCleanerCache(4000)
@@ -53,11 +69,11 @@ class CleanerCacheTest extends JUnitSuite {
 
   @Test
   def testClearWithTimestampStrategy() {
-    val cache = new SkimpyCleanerCache(4000, strategy = "timestamp")
+    val cache = new SkimpyCleanerCache(4000, strategy = Constants.TimestampStrategy)
     for (i <- 0 until 10)
       cache.putIfGreater(new FakeRecord(key(i), 100 + i, 200 + i, 300 + i))
     for (i <- 0 until 10) {
-      assertEquals(100 + i, cache.offset(key(i)))
+      assertEquals(-1L, cache.offset(key(i)))
       assertEquals(300 + i, cache.version(key(i)))
     }
     cache.clear()
@@ -99,7 +115,7 @@ class CleanerCacheTest extends JUnitSuite {
 
   @Test
   def testGetWhenFullWithTimestampStrategy() {
-    val cache = new SkimpyCleanerCache(4096, strategy = "timestamp")
+    val cache = new SkimpyCleanerCache(4096, strategy = Constants.TimestampStrategy)
     var i = 37L //any value would do
     while (cache.size < cache.slots) {
       cache.putIfGreater(new FakeRecord(key(i), 100 + i, 200 + i, 300 + i))
@@ -107,7 +123,7 @@ class CleanerCacheTest extends JUnitSuite {
     }
     assertEquals(-1L, cache.offset(key(i)))
     assertEquals(-1L, cache.version(key(i)))
-    assertEquals(100 + (i - 1), cache.offset(key(i - 1L)))
+    assertEquals(-1L, cache.offset(key(i - 1L)))
     assertEquals(300 + (i - 1), cache.version(key(i - 1L)))
   }
 
@@ -141,14 +157,14 @@ class CleanerCacheTest extends JUnitSuite {
 
   @Test
   def testPutAndGetWithTimestampStrategy() {
-    val cache = new SkimpyCleanerCache(4096, strategy = "timestamp")
+    val cache = new SkimpyCleanerCache(4096, strategy = Constants.TimestampStrategy)
     val size = 16
     for (i <- 1 to size) {
       cache.putIfGreater(new FakeRecord(key(i), 100 + i, 200 + i, 300 + i))
     }
     assertEquals(size, cache.size)
     for (i <- 1 to size) {
-      assertEquals(100 + i, cache.offset(key(i)))
+      assertEquals(-1L, cache.offset(key(i)))
       assertEquals(300 + i, cache.version(key(i)))
     }
   }
@@ -189,21 +205,21 @@ class CleanerCacheTest extends JUnitSuite {
 
   @Test
   def testPutIfGreaterWithTimestampStrategy() {
-    val cache = new SkimpyCleanerCache(4096, strategy = "timestamp")
+    val cache = new SkimpyCleanerCache(4096, strategy = Constants.TimestampStrategy)
 
     cache.putIfGreater(new FakeRecord(key(1), 1, 2, 3))
     assertEquals(1, cache.size)
-    assertEquals(1, cache.offset(key(1)))
+    assertEquals(-1, cache.offset(key(1)))
     assertEquals(3, cache.version(key(1)))
 
     cache.putIfGreater(new FakeRecord(key(1), 1, 1, 2))
     assertEquals(1, cache.size)
-    assertEquals(1, cache.offset(key(1)))
+    assertEquals(-1, cache.offset(key(1)))
     assertEquals(3, cache.version(key(1)))
 
     cache.putIfGreater(new FakeRecord(key(1), 1, 3, 4))
     assertEquals(1, cache.size)
-    assertEquals(1, cache.offset(key(1)))
+    assertEquals(-1, cache.offset(key(1)))
     assertEquals(4, cache.version(key(1)))
   }
 
@@ -259,13 +275,13 @@ class CleanerCacheTest extends JUnitSuite {
 
   @Test
   def testGreaterWithTimestampStrategy() {
-    val cache = new SkimpyCleanerCache(4096, strategy = "timestamp")
+    val cache = new SkimpyCleanerCache(4096, strategy = Constants.TimestampStrategy)
 
     cache.putIfGreater(new FakeRecord(key(1), 2, 2, 2))
     assertEquals(false, cache.greater(new FakeRecord(key(1), 3, 3, 1)))
     assertEquals(true, cache.greater(new FakeRecord(key(1), 1, 1, 3)))
     // check when version is the same as cached value
-    assertEquals(false, cache.greater(new FakeRecord(key(1), 1, 3, 2)))
+    assertEquals(true, cache.greater(new FakeRecord(key(1), 1, 3, 2)))
     assertEquals(true, cache.greater(new FakeRecord(key(1), 2, 1, 2)))
     assertEquals(true, cache.greater(new FakeRecord(key(1), 3, 1, 2)))
   }
@@ -285,13 +301,22 @@ class CleanerCacheTest extends JUnitSuite {
 
   private def key(key: Long): ByteBuffer = ByteBuffer.wrap(key.toString.getBytes)
 
-  def validateMap(items: Int, loadFactor: Double = 0.5): SkimpyCleanerCache = {
-    val cache = new SkimpyCleanerCache((items / loadFactor * 24).toInt, strategy = "version")
+  def validateMap(items: Int, loadFactor: Double = 0.5, strategy: String = Constants.OffsetStrategy): SkimpyCleanerCache = {
+    val cache = new SkimpyCleanerCache((items / loadFactor * 24).toInt, strategy = strategy)
     for (i <- 0 until items)
-      cache.putIfGreater(new FakeRecord(key(i), 100 + i, 200 + i))
+      cache.putIfGreater(new FakeRecord(key(i), 100 + i, 200 + i, 300 + i))
     for (i <- 0 until items) {
-      assertEquals(100 + i, cache.offset(key(i)))
-      assertEquals(200 + i, cache.version(key(i)))
+      strategy match {
+        case Constants.OffsetStrategy =>
+          assertEquals(100 + i, cache.offset(key(i)))
+          assertEquals(-1, cache.version(key(i)))
+        case Constants.TimestampStrategy =>
+          assertEquals(-1, cache.offset(key(i)))
+          assertEquals(300 + i, cache.version(key(i)))
+        case _ =>
+          assertEquals(100 + i, cache.offset(key(i)))
+          assertEquals(200 + i, cache.version(key(i)))
+      }
     }
     cache
   }
