@@ -621,7 +621,7 @@ private[log] class Cleaner(val id: Int,
       }
 
       // if we read bytes but didn't get even one complete message, our I/O buffer is too small, grow it and try again
-      if (readBuffer.limit() > 0 && result.messagesRead == 0)
+      if (readBuffer.limit() > 0 && result.messagesRead == 0 && result.batchesDeleted == 0)
         growBuffers(maxLogMessageSize)
     }
     restoreBuffers()
