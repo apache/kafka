@@ -75,6 +75,7 @@
         updated to aggregate across different versions.
     </li>
     <li> New Kafka Streams configuration parameter <code>upgrade.from</code> added that allows rolling bounce upgrade from older version. </li>
+    <li><a href="https://cwiki.apache.org/confluence/x/DVyHB">KIP-284</a> changed the retention time for repartition topics by setting its default value to <code>Long.MAX_VALUE</code>.</li>
 </ul>
 
 <h5><a id="upgrade_120_new_protocols" href="#upgrade_120_new_protocols">New Protocol Versions</a></h5>
@@ -86,7 +87,6 @@
          A Kafka Streams 1.2.0 application can connect to 1.2, 1.1, 1.0, 0.11.0, 0.10.2 and 0.10.1 brokers (it is not possible to connect to 0.10.0 brokers though). </li>
     <li> See <a href="/{{version}}/documentation/streams/upgrade-guide#streams_api_changes_120">Streams API changes in 1.2.0</a> for more details. </li>
 </ul>
-
 
 <h4><a id="upgrade_1_1_0" href="#upgrade_1_1_0">Upgrading from 0.8.x, 0.9.x, 0.10.0.x, 0.10.1.x, 0.10.2.x, 0.11.0.x or 1.0.x to 1.1.x</a></h4>
 <p>Kafka 1.1.0 introduces wire protocol changes. By following the recommended rolling upgrade plan below,
@@ -131,6 +131,7 @@
     <li>If you are using Java8 method references in your Kafka Streams code you might need to update your code to resolve method ambiguties.
         Hot-swaping the jar-file only might not work.</li>
 </ol>
+
 
 <!-- TODO add if 1.1.1 gets release
 <h5><a id="upgrade_111_notable" href="#upgrade_111_notable">Notable changes in 1.1.1</a></h5>

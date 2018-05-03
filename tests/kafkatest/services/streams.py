@@ -397,12 +397,6 @@ class StreamsStandbyTaskService(StreamsTestBaseService):
                                                         configs)
 
 
-class StreamsRepeatingIntegerKeyProducerService(StreamsTestBaseService):
-    def __init__(self, test_context, kafka, configs):
-        super(StreamsRepeatingIntegerKeyProducerService, self).__init__(test_context,
-                                                                        kafka,
-                                                                        "org.apache.kafka.streams.tests.StreamsRepeatingIntegerKeyProducer",
-                                                                        configs)
 class StreamsUpgradeTestJobRunnerService(StreamsTestBaseService):
     def __init__(self, test_context, kafka):
         super(StreamsUpgradeTestJobRunnerService, self).__init__(test_context,

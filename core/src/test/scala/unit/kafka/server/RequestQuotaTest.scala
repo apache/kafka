@@ -14,7 +14,6 @@
 
 package kafka.server
 
-import java.net.Socket
 import java.nio.ByteBuffer
 import java.util.{Collections, LinkedHashMap, Properties}
 import java.util.concurrent.{Executors, Future, TimeUnit}
@@ -329,15 +328,6 @@ class RequestQuotaTest extends BaseRequestTest {
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)
     }
-  }
-
-  private def requestResponse(socket: Socket, clientId: String, correlationId: Int, requestBuilder: AbstractRequest.Builder[_ <: AbstractRequest]): Struct = {
-    val apiKey = requestBuilder.apiKey
-    val request = requestBuilder.build()
-    val header = new RequestHeader(apiKey, request.version, clientId, correlationId)
-    val response = requestAndReceive(socket, request.serialize(header).array)
-    val responseBuffer = skipResponseHeader(response)
-    apiKey.parseResponse(request.version, responseBuffer)
   }
 
   case class Client(clientId: String, apiKey: ApiKeys) {
