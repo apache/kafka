@@ -33,7 +33,7 @@ import scala.collection.JavaConverters._
 class MetadataCacheTest {
 
   @Test
-  def getTopicMetadataNonExistingTopics() {
+  def getTopicMetadataNonExistingTopics(): Unit = {
     val topic = "topic"
     val cache = new MetadataCache(1)
     val topicMetadata = cache.getTopicMetadata(Set(topic), ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))
@@ -41,7 +41,7 @@ class MetadataCacheTest {
   }
 
   @Test
-  def getTopicMetadata() {
+  def getTopicMetadata(): Unit = {
     val topic0 = "topic-0"
     val topic1 = "topic-1"
 
@@ -110,7 +110,7 @@ class MetadataCacheTest {
   }
 
   @Test
-  def getTopicMetadataPartitionLeaderNotAvailable() {
+  def getTopicMetadataPartitionLeaderNotAvailable(): Unit = {
     val topic = "topic"
 
     val cache = new MetadataCache(1)
@@ -150,7 +150,7 @@ class MetadataCacheTest {
   }
 
   @Test
-  def getTopicMetadataReplicaNotAvailable() {
+  def getTopicMetadataReplicaNotAvailable(): Unit = {
     val topic = "topic"
 
     val cache = new MetadataCache(1)
@@ -210,7 +210,7 @@ class MetadataCacheTest {
   }
 
   @Test
-  def getTopicMetadataIsrNotAvailable() {
+  def getTopicMetadataIsrNotAvailable(): Unit = {
     val topic = "topic"
 
     val cache = new MetadataCache(1)
@@ -270,7 +270,7 @@ class MetadataCacheTest {
   }
 
   @Test
-  def getTopicMetadataWithNonSupportedSecurityProtocol() {
+  def getTopicMetadataWithNonSupportedSecurityProtocol(): Unit = {
     val topic = "topic"
     val cache = new MetadataCache(1)
     val securityProtocol = SecurityProtocol.PLAINTEXT
@@ -295,11 +295,11 @@ class MetadataCacheTest {
   }
 
   @Test
-  def getAliveBrokersShouldNotBeMutatedByUpdateCache() {
+  def getAliveBrokersShouldNotBeMutatedByUpdateCache(): Unit = {
     val topic = "topic"
     val cache = new MetadataCache(1)
 
-    def updateCache(brokerIds: Set[Int]) {
+    def updateCache(brokerIds: Set[Int]): Unit = {
       val brokers = brokerIds.map { brokerId =>
         val securityProtocol = SecurityProtocol.PLAINTEXT
         new Broker(brokerId, Seq(

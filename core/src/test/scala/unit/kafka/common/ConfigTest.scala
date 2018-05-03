@@ -27,7 +27,7 @@ class ConfigTest {
 
   @Test
   @deprecated("This test is deprecated and it will be removed in a future release.", "0.10.0.0")
-  def testInvalidClientIds() {
+  def testInvalidClientIds(): Unit = {
     val invalidClientIds = new ArrayBuffer[String]()
     val badChars = Array('/', '\\', ',', '\u0000', ':', "\"", '\'', ';', '*', '?', ' ', '\t', '\r', '\n', '=')
     for (weirdChar <- badChars) {
@@ -57,7 +57,7 @@ class ConfigTest {
   }
 
   @Test
-  def testInvalidGroupIds() {
+  def testInvalidGroupIds(): Unit = {
     val invalidGroupIds = new ArrayBuffer[String]()
     val badChars = Array('/', '\\', ',', '\u0000', ':', "\"", '\'', ';', '*', '?', ' ', '\t', '\r', '\n', '=')
     for (weirdChar <- badChars) {

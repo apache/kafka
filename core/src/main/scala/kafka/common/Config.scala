@@ -22,7 +22,7 @@ import kafka.utils.Logging
 
 trait Config extends Logging {
 
-  def validateChars(prop: String, value: String) {
+  def validateChars(prop: String, value: String): Unit = {
     val legalChars = "[a-zA-Z0-9\\._\\-]"
     val rgx = new Regex(legalChars + "*")
 

@@ -62,7 +62,7 @@ class ReplicaAlterLogDirsThread(name: String,
     var partitionData: Seq[(TopicPartition, FetchResponse.PartitionData)] = null
     val request = fetchRequest.underlying.build()
 
-    def processResponseCallback(responsePartitionData: Seq[(TopicPartition, FetchPartitionData)]) {
+    def processResponseCallback(responsePartitionData: Seq[(TopicPartition, FetchPartitionData)]): Unit = {
       partitionData = responsePartitionData.map { case (tp, data) =>
         val abortedTransactions = data.abortedTransactions.map(_.asJava).orNull
         val lastStableOffset = data.lastStableOffset.getOrElse(FetchResponse.INVALID_LAST_STABLE_OFFSET)
@@ -91,7 +91,7 @@ class ReplicaAlterLogDirsThread(name: String,
   }
 
   // process fetched data
-  def processPartitionData(topicPartition: TopicPartition, fetchOffset: Long, partitionData: PartitionData) {
+  def processPartitionData(topicPartition: TopicPartition, fetchOffset: Long, partitionData: PartitionData): Unit = {
     val futureReplica = replicaMgr.getReplicaOrException(topicPartition, Request.FutureLocalReplicaId)
     val partition = replicaMgr.getPartition(topicPartition).get
     val records = partitionData.toRecords
@@ -134,7 +134,7 @@ class ReplicaAlterLogDirsThread(name: String,
     }
   }
 
-  def handlePartitionsWithErrors(partitions: Iterable[TopicPartition]) {
+  def handlePartitionsWithErrors(partitions: Iterable[TopicPartition]): Unit = {
     if (partitions.nonEmpty)
       delayPartitions(partitions, brokerConfig.replicaFetchBackoffMs.toLong)
   }

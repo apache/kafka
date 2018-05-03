@@ -43,14 +43,14 @@ class AutoOffsetResetTest extends KafkaServerTestHarness with Logging {
   val requestHandlerLogger = Logger.getLogger(classOf[kafka.server.KafkaRequestHandler])
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
     // temporarily set request handler logger to a higher level
     requestHandlerLogger.setLevel(Level.FATAL)
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     // restore set request handler logger to a higher level
     requestHandlerLogger.setLevel(Level.ERROR)
     super.tearDown

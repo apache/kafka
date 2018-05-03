@@ -58,7 +58,7 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
   val eventHandlerLogger = Logger.getLogger(classOf[kafka.producer.async.DefaultEventHandler[Object, Object]])
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
 
     configProps1 = createBrokerConfig(brokerId1, zkConnect)
@@ -78,7 +78,7 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     servers.foreach(server => shutdownServer(server))
     servers.foreach(server => CoreUtils.delete(server.config.logDirs))
 
@@ -91,7 +91,7 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
     super.tearDown()
   }
 
-  private def startBrokers(cluster: Seq[Properties]) {
+  private def startBrokers(cluster: Seq[Properties]): Unit = {
     for (props <- cluster) {
       val config = KafkaConfig.fromProps(props)
       val server = createServer(config)

@@ -442,7 +442,7 @@ class Log(@volatile var dir: File,
     } else 0
   }
 
-  private def updateLogEndOffset(messageOffset: Long) {
+  private def updateLogEndOffset(messageOffset: Long): Unit = {
     nextOffsetMetadata = new LogOffsetMetadata(messageOffset, activeSegment.baseOffset, activeSegment.size)
   }
 
@@ -570,7 +570,7 @@ class Log(@volatile var dir: File,
    * Close this log.
    * The memory mapped buffer for index files of this log will be left open until the log is deleted.
    */
-  def close() {
+  def close(): Unit = {
     debug("Closing log")
     lock synchronized {
       checkIfMemoryMappedBufferClosed()
@@ -589,7 +589,7 @@ class Log(@volatile var dir: File,
     *
     * @throws KafkaStorageException if rename fails
     */
-  def renameDir(name: String) {
+  def renameDir(name: String): Unit = {
     lock synchronized {
       maybeHandleIOException(s"Error while renaming dir for $topicPartition in log dir ${dir.getParent}") {
         val renamedDir = new File(dir.getParent, name)
@@ -609,7 +609,7 @@ class Log(@volatile var dir: File,
   /**
    * Close file handlers used by log but don't write to disk. This is called if the log directory is offline
    */
-  def closeHandlers() {
+  def closeHandlers(): Unit = {
     debug("Closing handlers")
     lock synchronized {
       logSegments.foreach(_.closeHandlers())
@@ -818,7 +818,7 @@ class Log(@volatile var dir: File,
   /**
    * Increment the log start offset if the provided offset is larger.
    */
-  def maybeIncrementLogStartOffset(newLogStartOffset: Long) {
+  def maybeIncrementLogStartOffset(newLogStartOffset: Long): Unit = {
     // We don't have to write the log start offset to log-start-offset-checkpoint immediately.
     // The deleteRecordsOffset may be lost only if all in-sync replicas of this broker are shutdown
     // in an unclean manner within log.flush.start.offset.checkpoint.interval.ms. The chance of this happening is low.
@@ -1468,7 +1468,7 @@ class Log(@volatile var dir: File,
   /**
    * Completely delete this log directory and all contents from the file system with no delay
    */
-  private[log] def delete() {
+  private[log] def delete(): Unit = {
     maybeHandleIOException(s"Error while deleting log for $topicPartition in dir ${dir.getParent}") {
       lock synchronized {
         checkIfMemoryMappedBufferClosed()
@@ -1544,7 +1544,7 @@ class Log(@volatile var dir: File,
    *
    *  @param newOffset The new offset to start the log with
    */
-  private[log] def truncateFullyAndStartAt(newOffset: Long) {
+  private[log] def truncateFullyAndStartAt(newOffset: Long): Unit = {
     maybeHandleIOException(s"Error while truncating the entire log for $topicPartition in dir ${dir.getParent}") {
       debug(s"Truncate and start at offset $newOffset")
       lock synchronized {
@@ -1616,7 +1616,7 @@ class Log(@volatile var dir: File,
    *
    * @param segment The log segment to schedule for deletion
    */
-  private def deleteSegment(segment: LogSegment) {
+  private def deleteSegment(segment: LogSegment): Unit = {
     info(s"Scheduling log segment [baseOffset ${segment.baseOffset}, size ${segment.size}] for deletion.")
     lock synchronized {
       segments.remove(segment.baseOffset)
@@ -1632,9 +1632,9 @@ class Log(@volatile var dir: File,
    *
    * @throws IOException if the file can't be renamed and still exists
    */
-  private def asyncDeleteSegment(segment: LogSegment) {
+  private def asyncDeleteSegment(segment: LogSegment): Unit = {
     segment.changeFileSuffixes("", Log.DeletedFileSuffix)
-    def deleteSeg() {
+    def deleteSeg(): Unit = {
       info(s"Deleting segment ${segment.baseOffset}")
       maybeHandleIOException(s"Error while deleting segments for $topicPartition in dir ${dir.getParent}") {
         segment.deleteIfExists()
@@ -1670,7 +1670,7 @@ class Log(@volatile var dir: File,
    * @param oldSegments The old log segments to delete from the log
    * @param isRecoveredSwapFile true if the new segment was created from a swap file during recovery after a crash
    */
-  private[log] def replaceSegments(newSegment: LogSegment, oldSegments: Seq[LogSegment], isRecoveredSwapFile: Boolean = false) {
+  private[log] def replaceSegments(newSegment: LogSegment, oldSegments: Seq[LogSegment], isRecoveredSwapFile: Boolean = false): Unit = {
     lock synchronized {
       checkIfMemoryMappedBufferClosed()
       // need to do this in two phases to be crash safe AND do the delete asynchronously

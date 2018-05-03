@@ -50,7 +50,7 @@ class ZKEphemeralTest(val secure: Boolean) extends ZooKeeperTestHarness {
   var zkUtils: ZkUtils = null
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     if (secure) {
       System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, jaasFile.getAbsolutePath)
       Configuration.setConfiguration(null)
@@ -63,7 +63,7 @@ class ZKEphemeralTest(val secure: Boolean) extends ZooKeeperTestHarness {
   }
   
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     if (zkUtils != null)
      CoreUtils.swallow(zkUtils.close(), this)
     super.tearDown
@@ -106,13 +106,13 @@ class ZKEphemeralTest(val secure: Boolean) extends ZooKeeperTestHarness {
     testCreation("/zwe-test-parent/zwe-test")
   }
  
-  private def testCreation(path: String) {
+  private def testCreation(path: String): Unit = {
     val zk = zkUtils.zkConnection.getZookeeper
     val zwe = new ZKCheckedEphemeral(path, "", zk, JaasUtils.isZkSecurityEnabled())
     var created = false
 
     zk.exists(path, new Watcher() {
-      def process(event: WatchedEvent) {
+      def process(event: WatchedEvent): Unit = {
         if(event.getType == Watcher.Event.EventType.NodeCreated) {
           created = true
         }

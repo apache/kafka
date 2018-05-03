@@ -101,7 +101,7 @@ class SimpleConsumer(val host: String,
     underlying.fetchOffsets(request.underlying)
   }
 
-  def close() {
+  def close(): Unit = {
     underlying.close
   }
 }

@@ -20,6 +20,6 @@ package kafka.consumer
 @deprecated("This trait has been deprecated and will be removed in a future release.", "0.11.0.0")
 trait TopicEventHandler[T] {
 
-  def handleTopicEvent(allTopics: Seq[T])
+  def handleTopicEvent(allTopics: Seq[T]): Unit
 
 }

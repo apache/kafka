@@ -38,7 +38,7 @@ import org.apache.kafka.common.utils.Utils
 @deprecated("This class will be replaced by org.apache.kafka.tools.ProducerPerformance after the old producer client is removed", "0.9.0.0")
 object ProducerPerformance extends Logging {
 
-  def main(args: Array[String]) {
+  def main(args: Array[String]): Unit = {
     val config = new ProducerPerfConfig(args)
     if (!config.isFixedSize)
       logger.info("WARN: Throughput will be slower due to changing message size per request")
@@ -273,7 +273,7 @@ object ProducerPerformance extends Logging {
       }
     }
 
-    override def run {
+    override def run: Unit = {
       var bytesSent = 0L
       var nSends = 0
       var i: Long = 0L

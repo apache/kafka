@@ -24,8 +24,8 @@ import java.util.Properties
 @deprecated("This trait has been deprecated and will be removed in a future release. " +
             "Please use org.apache.kafka.clients.producer.KafkaProducer instead.", "0.10.0.0")
 trait BaseProducer {
-  def send(topic: String, key: Array[Byte], value: Array[Byte])
-  def close()
+  def send(topic: String, key: Array[Byte], value: Array[Byte]): Unit
+  def close(): Unit
 }
 
 @deprecated("This class has been deprecated and will be removed in a future release. " +
@@ -39,7 +39,7 @@ class NewShinyProducer(producerProps: Properties) extends BaseProducer {
 
   val producer = new KafkaProducer[Array[Byte],Array[Byte]](producerProps)
 
-  override def send(topic: String, key: Array[Byte], value: Array[Byte]) {
+  override def send(topic: String, key: Array[Byte], value: Array[Byte]): Unit = {
     val record = new ProducerRecord[Array[Byte],Array[Byte]](topic, key, value)
     if(sync) {
       this.producer.send(record).get()
@@ -49,7 +49,7 @@ class NewShinyProducer(producerProps: Properties) extends BaseProducer {
     }
   }
 
-  override def close() {
+  override def close(): Unit = {
     this.producer.close()
   }
 }
@@ -63,11 +63,11 @@ class OldProducer(producerProps: Properties) extends BaseProducer {
     producerProps.setProperty("partitioner.class", classOf[kafka.producer.ByteArrayPartitioner].getName)
   val producer = new kafka.producer.Producer[Array[Byte], Array[Byte]](new ProducerConfig(producerProps))
 
-  override def send(topic: String, key: Array[Byte], value: Array[Byte]) {
+  override def send(topic: String, key: Array[Byte], value: Array[Byte]): Unit = {
     this.producer.send(new KeyedMessage[Array[Byte], Array[Byte]](topic, key, value))
   }
 
-  override def close() {
+  override def close(): Unit = {
     this.producer.close()
   }
 }

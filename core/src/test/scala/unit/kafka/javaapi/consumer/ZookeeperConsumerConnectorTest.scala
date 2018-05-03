@@ -52,7 +52,7 @@ class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with Logging
   val nMessages = 2
 
   @Test
-  def testBasic() {
+  def testBasic(): Unit = {
     val requestHandlerLogger = Logger.getLogger(classOf[KafkaRequestHandler])
     requestHandlerLogger.setLevel(Level.FATAL)
 

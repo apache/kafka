@@ -136,7 +136,7 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
    * Disconnect from current channel, closing connection.
    * Side effect: channel field is set to null on successful disconnect
    */
-  private def disconnect() {
+  private def disconnect(): Unit = {
     try {
       info("Disconnecting from " + formatAddress(config.host, config.port))
       blockingChannel.disconnect()
@@ -161,7 +161,7 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
     blockingChannel
   }
 
-  private def getOrMakeConnection() {
+  private def getOrMakeConnection(): Unit = {
     if(!blockingChannel.isConnected) {
       connect()
     }

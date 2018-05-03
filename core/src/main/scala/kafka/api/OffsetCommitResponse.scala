@@ -52,7 +52,7 @@ case class OffsetCommitResponse(commitStatus: Map[TopicAndPartition, Errors],
 
   def hasError = commitStatus.values.exists(_ != Errors.NONE)
 
-  def writeTo(buffer: ByteBuffer) {
+  def writeTo(buffer: ByteBuffer): Unit = {
     buffer.putInt(correlationId)
     buffer.putInt(commitStatusGroupedByTopic.size)
     commitStatusGroupedByTopic.foreach { case(topic, statusMap) =>

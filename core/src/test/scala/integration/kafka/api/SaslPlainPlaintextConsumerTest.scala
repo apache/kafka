@@ -51,7 +51,7 @@ class SaslPlainPlaintextConsumerTest extends BaseConsumerTest with SaslSetup {
    * when zookeeper.set.acl=false, even if ZooKeeper is SASL-enabled.
    */
   @Test
-  def testZkAclsDisabled() {
+  def testZkAclsDisabled(): Unit = {
     val zkUtils = ZkUtils(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled))
     TestUtils.verifyUnsecureZkAcls(zkUtils)
     CoreUtils.swallow(zkUtils.close(), this)

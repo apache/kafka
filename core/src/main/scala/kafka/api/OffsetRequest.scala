@@ -67,7 +67,7 @@ case class OffsetRequest(requestInfo: Map[TopicAndPartition, PartitionOffsetRequ
 
   lazy val requestInfoGroupedByTopic = requestInfo.groupBy(_._1.topic)
 
-  def writeTo(buffer: ByteBuffer) {
+  def writeTo(buffer: ByteBuffer): Unit = {
     buffer.putShort(versionId)
     buffer.putInt(correlationId)
     writeShortString(buffer, clientId)

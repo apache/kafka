@@ -52,7 +52,7 @@ case class GroupCoordinatorRequest(group: String,
     ApiUtils.shortStringLength(clientId) +
     ApiUtils.shortStringLength(group)
 
-  def writeTo(buffer: ByteBuffer) {
+  def writeTo(buffer: ByteBuffer): Unit = {
     // envelope
     buffer.putShort(versionId)
     buffer.putInt(correlationId)

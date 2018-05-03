@@ -75,7 +75,7 @@ case class ProducerRequest(versionId: Short = ProducerRequest.CurrentVersion,
            data: collection.mutable.Map[TopicAndPartition, ByteBufferMessageSet]) =
     this(ProducerRequest.CurrentVersion, correlationId, clientId, requiredAcks, ackTimeoutMs, data)
 
-  def writeTo(buffer: ByteBuffer) {
+  def writeTo(buffer: ByteBuffer): Unit = {
     buffer.putShort(versionId)
     buffer.putInt(correlationId)
     writeShortString(buffer, clientId)
@@ -141,7 +141,7 @@ case class ProducerRequest(versionId: Short = ProducerRequest.CurrentVersion,
     producerRequest.toString()
   }
 
-  def emptyData(){
+  def emptyData(): Unit ={
     data.clear()
   }
 }

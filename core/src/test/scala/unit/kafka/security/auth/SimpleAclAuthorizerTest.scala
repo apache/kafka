@@ -41,7 +41,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
   var config: KafkaConfig = null
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
 
     // Increase maxUpdateRetries to avoid transient failures
@@ -65,7 +65,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testTopicAcl() {
+  def testTopicAcl(): Unit = {
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
     val user2 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "rob")
     val user3 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "batman")
@@ -117,7 +117,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testDenyTakesPrecedence() {
+  def testDenyTakesPrecedence(): Unit = {
     val user = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
     val host = InetAddress.getByName("192.168.2.1")
     val session = Session(user, host)
@@ -132,7 +132,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testAllowAllAccess() {
+  def testAllowAllAccess(): Unit = {
     val allowAllAcl = Acl.AllowAllAcl
 
     changeAclAndVerify(Set.empty[Acl], Set[Acl](allowAllAcl), Set.empty[Acl])
@@ -142,7 +142,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testSuperUserHasAccess() {
+  def testSuperUserHasAccess(): Unit = {
     val denyAllAcl = new Acl(Acl.WildCardPrincipal, Deny, WildCardHost, All)
 
     changeAclAndVerify(Set.empty[Acl], Set[Acl](denyAllAcl), Set.empty[Acl])
@@ -180,12 +180,12 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testNoAclFound() {
+  def testNoAclFound(): Unit = {
     assertFalse("when acls = [],  authorizer should fail close.", simpleAclAuthorizer.authorize(session, Read, resource))
   }
 
   @Test
-  def testNoAclFoundOverride() {
+  def testNoAclFoundOverride(): Unit = {
     val props = TestUtils.createBrokerConfig(1, zkConnect)
     props.put(SimpleAclAuthorizer.AllowEveryoneIfNoAclIsFoundProp, "true")
 
@@ -200,7 +200,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testAclManagementAPIs() {
+  def testAclManagementAPIs(): Unit = {
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
     val user2 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob")
     val host1 = "host1"
@@ -246,7 +246,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testLoadCache() {
+  def testLoadCache(): Unit = {
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
     val acl1 = new Acl(user1, Allow, "host-1", Read)
     val acls = Set[Acl](acl1)
@@ -271,7 +271,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testLocalConcurrentModificationOfResourceAcls() {
+  def testLocalConcurrentModificationOfResourceAcls(): Unit = {
     val commonResource = new Resource(Topic, "test")
 
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
@@ -287,7 +287,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testDistributedConcurrentModificationOfResourceAcls() {
+  def testDistributedConcurrentModificationOfResourceAcls(): Unit = {
     val commonResource = new Resource(Topic, "test")
 
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
@@ -317,7 +317,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testHighConcurrencyModificationOfResourceAcls() {
+  def testHighConcurrencyModificationOfResourceAcls(): Unit = {
     val commonResource = new Resource(Topic, "test")
 
     val acls = (0 to 50).map { i =>
@@ -402,7 +402,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testHighConcurrencyDeletionOfResourceAcls() {
+  def testHighConcurrencyDeletionOfResourceAcls(): Unit = {
     val acl = new Acl(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username), Allow, WildCardHost, All)
 
     // Alternate authorizer to keep adding and removing ZooKeeper path

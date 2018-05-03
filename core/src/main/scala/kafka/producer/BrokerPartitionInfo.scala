@@ -78,7 +78,7 @@ class BrokerPartitionInfo(producerConfig: ProducerConfig,
    * It updates the cache by issuing a get topic metadata request to a random broker.
    * @param topics the topics for which the metadata is to be fetched
    */
-  def updateInfo(topics: Set[String], correlationId: Int) {
+  def updateInfo(topics: Set[String], correlationId: Int): Unit = {
     var topicsMetadata: Seq[TopicMetadata] = Nil
     val topicMetadataResponse = ClientUtils.fetchTopicMetadata(topics, brokers, producerConfig, correlationId)
     topicsMetadata = topicMetadataResponse.topicsMetadata

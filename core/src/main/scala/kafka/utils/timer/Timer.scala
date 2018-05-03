@@ -122,7 +122,7 @@ class SystemTimer(executorName: String,
 
   def size: Int = taskCounter.get
 
-  override def shutdown() {
+  override def shutdown(): Unit = {
     taskExecutor.shutdown()
   }
 

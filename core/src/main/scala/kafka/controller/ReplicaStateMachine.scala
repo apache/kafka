@@ -59,7 +59,7 @@ class ReplicaStateMachine(config: KafkaConfig,
   /**
    * Invoked on successful controller election.
    */
-  def startup() {
+  def startup(): Unit = {
     info("Initializing replica state")
     initializeReplicaState()
     info("Triggering online replica state changes")
@@ -70,7 +70,7 @@ class ReplicaStateMachine(config: KafkaConfig,
   /**
    * Invoked on controller shutdown.
    */
-  def shutdown() {
+  def shutdown(): Unit = {
     replicaState.clear()
     info("Stopped replica state machine")
   }
@@ -79,7 +79,7 @@ class ReplicaStateMachine(config: KafkaConfig,
    * Invoked on startup of the replica's state machine to set the initial state for replicas of all existing partitions
    * in zookeeper
    */
-  private def initializeReplicaState() {
+  private def initializeReplicaState(): Unit = {
     controllerContext.allPartitions.foreach { partition =>
       val replicas = controllerContext.partitionReplicaAssignment(partition)
       replicas.foreach { replicaId =>

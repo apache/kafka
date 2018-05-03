@@ -36,7 +36,7 @@ class TopicMetadataTest extends ZooKeeperTestHarness {
   val numConfigs: Int = 4
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
     val props = createBrokerConfigs(numConfigs, zkConnect)
     val configs: Seq[KafkaConfig] = props.map(KafkaConfig.fromProps)
@@ -50,7 +50,7 @@ class TopicMetadataTest extends ZooKeeperTestHarness {
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     TestUtils.shutdownServers(adHocServers :+ server1)
     super.tearDown()
   }

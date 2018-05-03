@@ -184,7 +184,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
    * Start up API for bringing up a single instance of the Kafka server.
    * Instantiates the LogManager, the SocketServer and the request handlers - KafkaRequestHandlers
    */
-  def startup() {
+  def startup(): Unit = {
     try {
       info("starting")
 
@@ -399,7 +399,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
   /**
    * Performs controlled shutdown
    */
-  private def controlledShutdown() {
+  private def controlledShutdown(): Unit = {
 
     def node(broker: Broker): Node = broker.node(config.interBrokerListenerName)
 
@@ -545,7 +545,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
    * Shutdown API for shutting down a single instance of the Kafka server.
    * Shuts down the LogManager, the SocketServer and the log cleaner scheduler thread
    */
-  def shutdown() {
+  def shutdown(): Unit = {
     try {
       info("shutting down")
 
@@ -684,7 +684,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
     (brokerId, offlineDirs)
   }
 
-  private def checkpointBrokerId(brokerId: Int) {
+  private def checkpointBrokerId(brokerId: Int): Unit = {
     var logDirsWithoutMetaProps: List[String] = List()
 
     for (logDir <- config.logDirs if logManager.isLogDirOnline(new File(logDir).getAbsolutePath)) {

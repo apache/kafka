@@ -51,7 +51,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
 
   @Test
   @deprecated("This test has been deprecated and it will be removed in a future release", "0.10.0.0")
-  def testMetricsLeak() {
+  def testMetricsLeak(): Unit = {
     val topic = "test-metrics-leak"
     // create topic topic1 with 1 partition on broker 0
     createTopic(topic, numPartitions = 1, replicationFactor = 1)
@@ -70,7 +70,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
   }
 
   @Test
-  def testMetricsReporterAfterDeletingTopic() {
+  def testMetricsReporterAfterDeletingTopic(): Unit = {
     val topic = "test-topic-metric"
     adminZkClient.createTopic(topic, 1, 1)
     adminZkClient.deleteTopic(topic)
@@ -79,7 +79,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
   }
 
   @Test
-  def testBrokerTopicMetricsUnregisteredAfterDeletingTopic() {
+  def testBrokerTopicMetricsUnregisteredAfterDeletingTopic(): Unit = {
     val topic = "test-broker-topic-metric"
     adminZkClient.createTopic(topic, 2, 1)
     // Produce a few messages to create the metrics

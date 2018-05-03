@@ -148,7 +148,7 @@ class ReplicaManagerQuotasTest {
       fetch.find(_._1 == topicPartition2).get._2.info.records.batches.asScala.size)
   }
 
-  def setUpMocks(fetchInfo: Seq[(TopicPartition, PartitionData)], record: SimpleRecord = this.record, bothReplicasInSync: Boolean = false) {
+  def setUpMocks(fetchInfo: Seq[(TopicPartition, PartitionData)], record: SimpleRecord = this.record, bothReplicasInSync: Boolean = false): Unit = {
     val zkClient = EasyMock.createMock(classOf[KafkaZkClient])
     val scheduler = createNiceMock(classOf[KafkaScheduler])
 
@@ -207,7 +207,7 @@ class ReplicaManagerQuotasTest {
   }
 
   @After
-  def tearDown() {
+  def tearDown(): Unit = {
     replicaManager.shutdown(false)
     metrics.close()
   }

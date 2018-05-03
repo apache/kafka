@@ -47,13 +47,13 @@ class HighwatermarkPersistenceTest {
   }
 
   @After
-  def teardown() {
+  def teardown(): Unit = {
     for (manager <- logManagers; dir <- manager.liveLogDirs)
       Utils.delete(dir)
   }
 
   @Test
-  def testHighWatermarkPersistenceSinglePartition() {
+  def testHighWatermarkPersistenceSinglePartition(): Unit = {
     // mock zkclient
     EasyMock.replay(zkClient)
 
@@ -97,7 +97,7 @@ class HighwatermarkPersistenceTest {
   }
 
   @Test
-  def testHighWatermarkPersistenceMultiplePartitions() {
+  def testHighWatermarkPersistenceMultiplePartitions(): Unit = {
     val topic1 = "foo1"
     val topic2 = "foo2"
     // mock zkclient

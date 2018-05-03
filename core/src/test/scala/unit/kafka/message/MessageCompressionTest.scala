@@ -25,7 +25,7 @@ import org.junit.Assert._
 class MessageCompressionTest {
 
   @Test
-  def testSimpleCompressDecompress() {
+  def testSimpleCompressDecompress(): Unit = {
     val codecs = mutable.ArrayBuffer[CompressionCodec](GZIPCompressionCodec)
     if (isSnappyAvailable)
       codecs += SnappyCompressionCodec
@@ -37,7 +37,7 @@ class MessageCompressionTest {
 
   //  A quick test to ensure any growth or increase in compression size is known when upgrading libraries
   @Test
-  def testCompressSize() {
+  def testCompressSize(): Unit = {
     val bytes1k: Array[Byte] = (0 until 1000).map(_.toByte).toArray
     val bytes2k: Array[Byte] = (1000 until 2000).map(_.toByte).toArray
     val bytes3k: Array[Byte] = (3000 until 4000).map(_.toByte).toArray
@@ -54,7 +54,7 @@ class MessageCompressionTest {
       testCompressSize(LZ4CompressionCodec, messages, 387)
   }
 
-  def testSimpleCompressDecompress(compressionCodec: CompressionCodec) {
+  def testSimpleCompressDecompress(compressionCodec: CompressionCodec): Unit = {
     val messages = List[Message](new Message("hi there".getBytes), new Message("I am fine".getBytes), new Message("I am not so well today".getBytes))
     val messageSet = new ByteBufferMessageSet(compressionCodec = compressionCodec, messages = messages:_*)
     assertEquals(compressionCodec, messageSet.shallowIterator.next().message.compressionCodec)
@@ -62,7 +62,7 @@ class MessageCompressionTest {
     assertEquals(messages, decompressed)
   }
 
-  def testCompressSize(compressionCodec: CompressionCodec, messages: List[Message], expectedSize: Int) {
+  def testCompressSize(compressionCodec: CompressionCodec, messages: List[Message], expectedSize: Int): Unit = {
     val messageSet = new ByteBufferMessageSet(compressionCodec = compressionCodec, messages = messages:_*)
     assertEquals(s"$compressionCodec size has changed.", expectedSize, messageSet.sizeInBytes)
   }

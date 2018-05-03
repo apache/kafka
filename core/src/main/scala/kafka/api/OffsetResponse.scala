@@ -80,7 +80,7 @@ case class OffsetResponse(correlationId: Int,
     })
   }
 
-  def writeTo(buffer: ByteBuffer) {
+  def writeTo(buffer: ByteBuffer): Unit = {
     buffer.putInt(correlationId)
     buffer.putInt(offsetsGroupedByTopic.size) // topic count
     offsetsGroupedByTopic.foreach {

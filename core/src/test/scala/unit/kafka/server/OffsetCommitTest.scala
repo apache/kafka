@@ -44,7 +44,7 @@ class OffsetCommitTest extends ZooKeeperTestHarness {
   var simpleConsumer: SimpleConsumer = null
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
     val config: Properties = createBrokerConfig(1, zkConnect,  enableDeleteTopic = true)
     config.setProperty(KafkaConfig.OffsetsTopicReplicationFactorProp, "1")
@@ -64,14 +64,14 @@ class OffsetCommitTest extends ZooKeeperTestHarness {
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     simpleConsumer.close
     TestUtils.shutdownServers(Seq(server))
     super.tearDown()
   }
 
   @Test
-  def testUpdateOffsets() {
+  def testUpdateOffsets(): Unit = {
     val topic = "topic"
 
     // Commit an offset
@@ -120,7 +120,7 @@ class OffsetCommitTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testCommitAndFetchOffsets() {
+  def testCommitAndFetchOffsets(): Unit = {
     val topic1 = "topic-1"
     val topic2 = "topic-2"
     val topic3 = "topic-3"
@@ -190,7 +190,7 @@ class OffsetCommitTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testLargeMetadataPayload() {
+  def testLargeMetadataPayload(): Unit = {
     val topicAndPartition = TopicAndPartition("large-metadata", 0)
     val expectedReplicaAssignment = Map(0  -> List(1))
     createTopic(zkClient, topicAndPartition.topic, partitionReplicaAssignment = expectedReplicaAssignment,
@@ -214,7 +214,7 @@ class OffsetCommitTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testOffsetExpiration() {
+  def testOffsetExpiration(): Unit = {
     // set up topic partition
     val topic = "topic"
     val topicPartition = TopicAndPartition(topic, 0)
@@ -287,7 +287,7 @@ class OffsetCommitTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testNonExistingTopicOffsetCommit() {
+  def testNonExistingTopicOffsetCommit(): Unit = {
     val topic1 = "topicDoesNotExists"
     val topic2 = "topic-2"
 
@@ -305,7 +305,7 @@ class OffsetCommitTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testOffsetsDeleteAfterTopicDeletion() {
+  def testOffsetsDeleteAfterTopicDeletion(): Unit = {
     // set up topic partition
     val topic = "topic"
     val topicPartition = TopicAndPartition(topic, 0)

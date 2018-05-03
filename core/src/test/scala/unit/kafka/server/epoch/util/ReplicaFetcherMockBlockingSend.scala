@@ -35,7 +35,7 @@ class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, Epoc
   var epochFetchCount = 0
   var callback: Option[() => Unit] = None
 
-  def setEpochRequestCallback(postEpochFunction: () => Unit){
+  def setEpochRequestCallback(postEpochFunction: () => Unit): Unit ={
     callback = Some(postEpochFunction)
   }
 

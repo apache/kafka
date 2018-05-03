@@ -103,7 +103,7 @@ object ZkUtils {
 
   def defaultAcls(isSecure: Boolean, path: String): java.util.List[ACL] = ZkData.defaultAcls(isSecure, path).asJava
 
-  def maybeDeletePath(zkUrl: String, dir: String) {
+  def maybeDeletePath(zkUrl: String, dir: String): Unit = {
     try {
       val zk = createZkClient(zkUrl, 30*1000, 30*1000)
       zk.deleteRecursive(dir)
@@ -293,7 +293,7 @@ class ZkUtils(val zkClient: ZkClient,
       Some(LeaderIsrAndControllerEpoch(LeaderAndIsr(leader, epoch, isr, zkPathVersion), controllerEpoch))}
   }
 
-  def setupCommonPaths() {
+  def setupCommonPaths(): Unit = {
     for(path <- persistentZkPaths)
       makeSurePersistentPathExists(path)
   }
@@ -380,7 +380,7 @@ class ZkUtils(val zkClient: ZkClient,
                          advertisedEndpoints: Seq[EndPoint],
                          jmxPort: Int,
                          rack: Option[String],
-                         apiVersion: ApiVersion) {
+                         apiVersion: ApiVersion): Unit = {
     val brokerIdPath = BrokerIdsPath + "/" + id
     // see method documentation for reason why we do this
     val version = if (apiVersion >= KAFKA_0_10_0_IV1) 4 else 2
@@ -391,7 +391,7 @@ class ZkUtils(val zkClient: ZkClient,
     info("Registered broker %d at path %s with addresses: %s".format(id, brokerIdPath, advertisedEndpoints.mkString(",")))
   }
 
-  private def registerBrokerInZk(brokerIdPath: String, brokerInfo: String) {
+  private def registerBrokerInZk(brokerIdPath: String, brokerInfo: String): Unit = {
     try {
       val zkCheckedEphemeral = new ZKCheckedEphemeral(brokerIdPath,
                                                       brokerInfo,
@@ -428,7 +428,7 @@ class ZkUtils(val zkClient: ZkClient,
   /**
    *  make sure a persistent path exists in ZK. Create the path if not exist.
    */
-  def makeSurePersistentPathExists(path: String, acls: java.util.List[ACL] = UseDefaultAcls) {
+  def makeSurePersistentPathExists(path: String, acls: java.util.List[ACL] = UseDefaultAcls): Unit = {
     //Consumer path is kept open as different consumers will write under this node.
     val acl = if (path == null || path.isEmpty || path.equals(ConsumersPath)) {
       ZooDefs.Ids.OPEN_ACL_UNSAFE
@@ -617,7 +617,7 @@ class ZkUtils(val zkClient: ZkClient,
     }
   }
 
-  def deletePathRecursive(path: String) {
+  def deletePathRecursive(path: String): Unit = {
     zkClient.deleteRecursive(path)
   }
 
@@ -781,7 +781,7 @@ class ZkUtils(val zkClient: ZkClient,
     }
   }
 
-  def updatePartitionReassignmentData(partitionsToBeReassigned: Map[TopicAndPartition, Seq[Int]]) {
+  def updatePartitionReassignmentData(partitionsToBeReassigned: Map[TopicAndPartition, Seq[Int]]): Unit = {
     val zkPath = ZkUtils.ReassignPartitionsPath
     partitionsToBeReassigned.size match {
       case 0 => // need to delete the /admin/reassign_partitions path
@@ -810,7 +810,7 @@ class ZkUtils(val zkClient: ZkClient,
     }
   }
 
-  def deletePartition(brokerId: Int, topic: String) {
+  def deletePartition(brokerId: Int, topic: String): Unit = {
     val brokerIdPath = BrokerIdsPath + "/" + brokerId
     zkClient.delete(brokerIdPath)
     val brokerPartTopicPath = ZkUtils.BrokerTopicsPath + "/" + topic + "/" + brokerId
@@ -937,7 +937,7 @@ class ZkUtils(val zkClient: ZkClient,
     }
   }
 
-  def close() {
+  def close(): Unit = {
     zkClient.close()
   }
 }
@@ -998,7 +998,7 @@ class ZkPath(zkClient: ZkClient) {
 
   @volatile private var isNamespacePresent: Boolean = false
 
-  def checkNamespace() {
+  def checkNamespace(): Unit = {
     if (isNamespacePresent)
       return
 
@@ -1008,21 +1008,21 @@ class ZkPath(zkClient: ZkClient) {
     isNamespacePresent = true
   }
 
-  def resetNamespaceCheckedState() {
+  def resetNamespaceCheckedState(): Unit = {
     isNamespacePresent = false
   }
 
-  def createPersistent(path: String, data: Object, acls: java.util.List[ACL]) {
+  def createPersistent(path: String, data: Object, acls: java.util.List[ACL]): Unit = {
     checkNamespace()
     zkClient.createPersistent(path, data, acls)
   }
 
-  def createPersistent(path: String, createParents: Boolean, acls: java.util.List[ACL]) {
+  def createPersistent(path: String, createParents: Boolean, acls: java.util.List[ACL]): Unit = {
     checkNamespace()
     zkClient.createPersistent(path, createParents, acls)
   }
 
-  def createEphemeral(path: String, data: Object, acls: java.util.List[ACL]) {
+  def createEphemeral(path: String, data: Object, acls: java.util.List[ACL]): Unit = {
     checkNamespace()
     zkClient.createEphemeral(path, data, acls)
   }
@@ -1056,7 +1056,7 @@ class ZKCheckedEphemeral(path: String,
     def processResult(rc: Int,
                       path: String,
                       ctx: Object,
-                      name: String) {
+                      name: String): Unit = {
       Code.get(rc) match {
         case Code.OK =>
            setResult(Code.OK)
@@ -1086,7 +1086,7 @@ class ZKCheckedEphemeral(path: String,
                         path: String,
                         ctx: Object,
                         readData: Array[Byte],
-                        stat: Stat) {
+                        stat: Stat): Unit = {
         Code.get(rc) match {
           case Code.OK =>
                 if (stat.getEphemeralOwner != zkHandle.getSessionId)
@@ -1109,7 +1109,7 @@ class ZKCheckedEphemeral(path: String,
       }
   }
 
-  private def createEphemeral() {
+  private def createEphemeral(): Unit = {
     zkHandle.create(path,
                     ZKStringSerializer.serialize(data),
                     defaultAcls,
@@ -1118,7 +1118,7 @@ class ZKCheckedEphemeral(path: String,
                     null)
   }
 
-  private def createRecursive(prefix: String, suffix: String) {
+  private def createRecursive(prefix: String, suffix: String): Unit = {
     debug("Path: %s, Prefix: %s, Suffix: %s".format(path, prefix, suffix))
     if(suffix.isEmpty()) {
       createEphemeral
@@ -1131,7 +1131,7 @@ class ZKCheckedEphemeral(path: String,
                         def processResult(rc : Int,
                                           path : String,
                                           ctx : Object,
-                                          name : String) {
+                                          name : String): Unit = {
                           Code.get(rc) match {
                             case Code.OK | Code.NODEEXISTS =>
                               // Nothing to do
@@ -1168,7 +1168,7 @@ class ZKCheckedEphemeral(path: String,
     }
   }
 
-  private def setResult(code: Code) {
+  private def setResult(code: Code): Unit = {
     result = code
     latch.countDown()
   }
@@ -1178,7 +1178,7 @@ class ZKCheckedEphemeral(path: String,
     result
   }
 
-  def create() {
+  def create(): Unit = {
     val index = path.indexOf('/', 1) match {
         case -1 => path.length
         case x : Int => x

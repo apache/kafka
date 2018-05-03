@@ -237,7 +237,7 @@ class Message(val buffer: ByteBuffer,
   /**
    * Throw an InvalidMessageException if isValid is false for this message
    */
-  def ensureValid() {
+  def ensureValid(): Unit = {
     if(!isValid)
       throw new InvalidMessageException(s"Message is corrupt (stored crc = ${checksum}, computed crc = ${computeChecksum})")
   }
@@ -351,7 +351,7 @@ class Message(val buffer: ByteBuffer,
   /**
    * Validate the timestamp and "magic" value
    */
-  private def validateTimestampAndMagicValue(timestamp: Long, magic: Byte) {
+  private def validateTimestampAndMagicValue(timestamp: Long, magic: Byte): Unit = {
     if (magic != MagicValue_V0 && magic != MagicValue_V1)
       throw new IllegalArgumentException(s"Invalid magic value $magic")
     if (timestamp < 0 && timestamp != NoTimestamp)

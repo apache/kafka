@@ -56,7 +56,7 @@ class AdminClient(val time: Time,
   val pendingFutures = new ConcurrentLinkedQueue[RequestFuture[ClientResponse]]()
 
   val networkThread = new KafkaThread("admin-client-network-thread", new Runnable {
-    override def run() {
+    override def run(): Unit = {
       try {
         while (running)
           client.poll(Long.MaxValue)
@@ -149,7 +149,7 @@ class AdminClient(val time: Time,
   /**
    * Wait until there is a non-empty list of brokers in the cluster.
    */
-  def awaitBrokers() {
+  def awaitBrokers(): Unit = {
     var nodes = List[Node]()
     do {
       nodes = findAllBrokers()
@@ -260,14 +260,14 @@ class AdminClient(val time: Time,
       val future = client.send(node, new DeleteRecordsRequest.Builder(requestTimeoutMs, convertedMap))
       pendingFutures.add(future)
       future.compose(new RequestFutureAdapter[ClientResponse, Map[TopicPartition, DeleteRecordsResult]]() {
-          override def onSuccess(response: ClientResponse, future: RequestFuture[Map[TopicPartition, DeleteRecordsResult]]) {
+          override def onSuccess(response: ClientResponse, future: RequestFuture[Map[TopicPartition, DeleteRecordsResult]]): Unit = {
             val deleteRecordsResponse = response.responseBody().asInstanceOf[DeleteRecordsResponse]
             val result = deleteRecordsResponse.responses().asScala.mapValues(v => DeleteRecordsResult(v.lowWatermark, v.error.exception())).toMap
             future.complete(result)
             pendingFutures.remove(future)
           }
 
-          override def onFailure(e: RuntimeException, future: RequestFuture[Map[TopicPartition, DeleteRecordsResult]]) {
+          override def onFailure(e: RuntimeException, future: RequestFuture[Map[TopicPartition, DeleteRecordsResult]]): Unit = {
             val result = partitionAndOffsets.mapValues(_ => DeleteRecordsResult(DeleteRecordsResponse.INVALID_LOW_WATERMARK, e))
             future.complete(result)
             pendingFutures.remove(future)
@@ -384,7 +384,7 @@ class AdminClient(val time: Time,
     errors
   }
 
-  def close() {
+  def close(): Unit = {
     running = false
     try {
       client.close()

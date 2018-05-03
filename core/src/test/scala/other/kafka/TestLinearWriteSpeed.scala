@@ -173,7 +173,7 @@ object TestLinearWriteSpeed {
 
   trait Writable {
     def write(): Int
-    def close()
+    def close(): Unit
   }
 
   class MmapWritable(val file: File, size: Long, val content: ByteBuffer) extends Writable {
@@ -186,7 +186,7 @@ object TestLinearWriteSpeed {
       content.rewind()
       content.limit()
     }
-    def close() {
+    def close(): Unit = {
       raf.close()
     }
   }
@@ -200,7 +200,7 @@ object TestLinearWriteSpeed {
       content.rewind()
       content.limit()
     }
-    def close() {
+    def close(): Unit = {
       raf.close()
     }
   }
@@ -213,7 +213,7 @@ object TestLinearWriteSpeed {
       log.appendAsLeader(messages, leaderEpoch = 0)
       messages.sizeInBytes
     }
-    def close() {
+    def close(): Unit = {
       log.close()
       Utils.delete(log.dir)
     }

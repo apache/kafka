@@ -47,7 +47,7 @@ case class TopicMetadata(topic: String, partitionsMetadata: Seq[PartitionMetadat
     4 + partitionsMetadata.map(_.sizeInBytes).sum /* size and partition data array */
   }
 
-  def writeTo(buffer: ByteBuffer) {
+  def writeTo(buffer: ByteBuffer): Unit = {
     /* error code */
     buffer.putShort(error.code)
     /* topic */
@@ -121,7 +121,7 @@ case class PartitionMetadata(partitionId: Int,
     4 + 4 * isr.size /* isr array */
   }
 
-  def writeTo(buffer: ByteBuffer) {
+  def writeTo(buffer: ByteBuffer): Unit = {
     buffer.putShort(error.code)
     buffer.putInt(partitionId)
 

@@ -29,7 +29,7 @@ class ByteBufferMessageSetTest extends kafka.javaapi.message.BaseMessageSetTestC
   val msgSeq: Seq[Message] = Seq(new Message("hello".getBytes()), new Message("there".getBytes()))
 
   @Test
-  def testEquals() {
+  def testEquals(): Unit = {
     val messageList = createMessageSet(msgSeq, NoCompressionCodec)
     val moreMessages = createMessageSet(msgSeq, NoCompressionCodec)
     assertEquals(messageList, moreMessages)
@@ -37,7 +37,7 @@ class ByteBufferMessageSetTest extends kafka.javaapi.message.BaseMessageSetTestC
   }
 
   @Test
-  def testEqualsWithCompression () {
+  def testEqualsWithCompression (): Unit = {
     val messageList = createMessageSet(msgSeq, DefaultCompressionCodec)
     val moreMessages = createMessageSet(msgSeq, DefaultCompressionCodec)
     assertEquals(messageList, moreMessages)

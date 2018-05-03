@@ -44,7 +44,7 @@ object TestOffsetManager {
   class StatsThread(reportingIntervalMs: Long, commitThreads: Seq[CommitThread], fetchThread: FetchThread)
         extends ShutdownableThread("stats-thread") {
 
-    def printStats() {
+    def printStats(): Unit = {
       println("--------------------------------------------------------------------------------")
       println("Aggregate stats for commits:")
       println("Error count: %d; Max:%f; Min: %f; Mean: %f; Commit count: %d".format(
@@ -58,7 +58,7 @@ object TestOffsetManager {
       println(fetchThread.stats)
     }
 
-    override def doWork() {
+    override def doWork(): Unit = {
       printStats()
       Thread.sleep(reportingIntervalMs)
     }
@@ -79,12 +79,12 @@ object TestOffsetManager {
     private val commitTimer = new KafkaTimer(timer)
     val shutdownLock = new Object
 
-    private def ensureConnected() {
+    private def ensureConnected(): Unit = {
       if (!offsetsChannel.isConnected)
         offsetsChannel = ClientUtils.channelToOffsetManager(groupId, zkUtils, SocketTimeoutMs)
     }
 
-    override def doWork() {
+    override def doWork(): Unit = {
       val commitRequest = OffsetCommitRequest(groupId, immutable.Map((1 to partitionCount).map(TopicAndPartition("topic-" + id, _) -> OffsetAndMetadata(offset, metadata)):_*))
       try {
         ensureConnected()
@@ -108,7 +108,7 @@ object TestOffsetManager {
       }
     }
 
-    override def shutdown() {
+    override def shutdown(): Unit = {
       super.shutdown()
       awaitShutdown()
       offsetsChannel.disconnect()
@@ -133,7 +133,7 @@ object TestOffsetManager {
 
     private val numErrors = new AtomicInteger(0)
 
-    override def doWork() {
+    override def doWork(): Unit = {
       val id = random.nextInt().abs % numGroups
       val group = "group-" + id
       try {
@@ -183,7 +183,7 @@ object TestOffsetManager {
 
     }
 
-    override def shutdown() {
+    override def shutdown(): Unit = {
       super.shutdown()
       awaitShutdown()
       channels.foreach(_._2.disconnect())
@@ -196,7 +196,7 @@ object TestOffsetManager {
     }
   }
 
-  def main(args: Array[String]) {
+  def main(args: Array[String]): Unit = {
     val parser = new OptionParser(false)
     val zookeeperOpt = parser.accepts("zookeeper", "The ZooKeeper connection URL.")
       .withRequiredArg
@@ -266,7 +266,7 @@ object TestOffsetManager {
       statsThread = new StatsThread(reportingIntervalMs, commitThreads, fetchThread)
 
       Runtime.getRuntime.addShutdownHook(new Thread() {
-        override def run() {
+        override def run(): Unit = {
           cleanShutdown()
           statsThread.printStats()
         }
@@ -290,7 +290,7 @@ object TestOffsetManager {
       cleanShutdown()
     }
 
-    def cleanShutdown() {
+    def cleanShutdown(): Unit = {
       commitThreads.foreach(_.shutdown())
       commitThreads.foreach(_.join())
       if (fetchThread != null) {

@@ -43,7 +43,7 @@ case class TopicMetadataResponse(brokers: Seq[BrokerEndPoint],
     4 + 4 + brokers.map(_.sizeInBytes).sum + 4 + topicsMetadata.map(_.sizeInBytes).sum
   }
 
-  def writeTo(buffer: ByteBuffer) {
+  def writeTo(buffer: ByteBuffer): Unit = {
     buffer.putInt(correlationId)
     /* brokers */
     buffer.putInt(brokers.size)

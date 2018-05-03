@@ -135,7 +135,7 @@ class GroupMetadataManager(brokerId: Int,
       })
     })
 
-  def enableMetadataExpiration() {
+  def enableMetadataExpiration(): Unit = {
     scheduler.startup()
 
     scheduler.schedule(name = "delete-expired-group-metadata",
@@ -222,7 +222,7 @@ class GroupMetadataManager(brokerId: Int,
         val generationId = group.generationId
 
         // set the callback function to insert the created group into cache after log append completed
-        def putCacheCallback(responseStatus: Map[TopicPartition, PartitionResponse]) {
+        def putCacheCallback(responseStatus: Map[TopicPartition, PartitionResponse]): Unit = {
           // the append response should only contain the topics partition
           if (responseStatus.size != 1 || !responseStatus.contains(groupMetadataPartition))
             throw new IllegalStateException("Append status %s should only have one partition %s"
@@ -345,7 +345,7 @@ class GroupMetadataManager(brokerId: Int,
           val entries = Map(offsetTopicPartition -> builder.build())
 
           // set the callback function to insert offsets into cache after log append completed
-          def putCacheCallback(responseStatus: Map[TopicPartition, PartitionResponse]) {
+          def putCacheCallback(responseStatus: Map[TopicPartition, PartitionResponse]): Unit = {
             // the append response should only contain the topics partition
             if (responseStatus.size != 1 || !responseStatus.contains(offsetTopicPartition))
               throw new IllegalStateException("Append status %s should only have one partition %s"
@@ -482,7 +482,7 @@ class GroupMetadataManager(brokerId: Int,
   /**
    * Asynchronously read the partition from the offsets topic and populate the cache
    */
-  def scheduleLoadGroupAndOffsets(offsetsPartition: Int, onGroupLoaded: GroupMetadata => Unit) {
+  def scheduleLoadGroupAndOffsets(offsetsPartition: Int, onGroupLoaded: GroupMetadata => Unit): Unit = {
     val topicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, offsetsPartition)
     if (addLoadingPartition(offsetsPartition)) {
       info(s"Scheduling loading of offsets and group metadata from $topicPartition")
@@ -492,7 +492,7 @@ class GroupMetadataManager(brokerId: Int,
     }
   }
 
-  private[group] def loadGroupsAndOffsets(topicPartition: TopicPartition, onGroupLoaded: GroupMetadata => Unit) {
+  private[group] def loadGroupsAndOffsets(topicPartition: TopicPartition, onGroupLoaded: GroupMetadata => Unit): Unit = {
     try {
       val startMs = time.milliseconds()
       doLoadGroupsAndOffsets(topicPartition, onGroupLoaded)
@@ -507,7 +507,7 @@ class GroupMetadataManager(brokerId: Int,
     }
   }
 
-  private def doLoadGroupsAndOffsets(topicPartition: TopicPartition, onGroupLoaded: GroupMetadata => Unit) {
+  private def doLoadGroupsAndOffsets(topicPartition: TopicPartition, onGroupLoaded: GroupMetadata => Unit): Unit = {
     def highWaterMark = replicaManager.getLogEndOffset(topicPartition).getOrElse(-1L)
 
     replicaManager.getLog(topicPartition) match {
@@ -678,12 +678,12 @@ class GroupMetadataManager(brokerId: Int,
    * @param offsetsPartition Groups belonging to this partition of the offsets topic will be deleted from the cache.
    */
   def removeGroupsForPartition(offsetsPartition: Int,
-                               onGroupUnloaded: GroupMetadata => Unit) {
+                               onGroupUnloaded: GroupMetadata => Unit): Unit = {
     val topicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, offsetsPartition)
     info(s"Scheduling unloading of offsets and group metadata from $topicPartition")
     scheduler.schedule(topicPartition.toString, removeGroupsAndOffsets)
 
-    def removeGroupsAndOffsets() {
+    def removeGroupsAndOffsets(): Unit = {
       var numOffsetsRemoved = 0
       var numGroupsRemoved = 0
 
@@ -793,7 +793,7 @@ class GroupMetadataManager(brokerId: Int,
     offsetsRemoved
   }
 
-  def handleTxnCompletion(producerId: Long, completedPartitions: Set[Int], isCommit: Boolean) {
+  def handleTxnCompletion(producerId: Long, completedPartitions: Set[Int], isCommit: Boolean): Unit = {
     val pendingGroups = groupsBelongingToPartitions(producerId, completedPartitions)
     pendingGroups.foreach { case (groupId) =>
       getGroup(groupId) match {
@@ -840,7 +840,7 @@ class GroupMetadataManager(brokerId: Int,
   }
 
 
-  def shutdown() {
+  def shutdown(): Unit = {
     shuttingDown.set(true)
     if (scheduler.isStarted)
       scheduler.shutdown()
@@ -870,7 +870,7 @@ class GroupMetadataManager(brokerId: Int,
    *
    * NOTE: this is for test only
    */
-  private[group] def addPartitionOwnership(partition: Int) {
+  private[group] def addPartitionOwnership(partition: Int): Unit = {
     inLock(partitionLock) {
       ownedPartitions.add(partition)
     }
@@ -1243,7 +1243,7 @@ object GroupMetadataManager {
   // Formatter for use with tools such as console consumer: Consumer should also set exclude.internal.topics to false.
   // (specify --formatter "kafka.coordinator.group.GroupMetadataManager\$OffsetsMessageFormatter" when consuming __consumer_offsets)
   class OffsetsMessageFormatter extends MessageFormatter {
-    def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream) {
+    def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream): Unit = {
       Option(consumerRecord.key).map(key => GroupMetadataManager.readMessageKey(ByteBuffer.wrap(key))).foreach {
         // Only print if the message is an offset record.
         // We ignore the timestamp of the message because GroupMetadataMessage has its own timestamp.
@@ -1264,7 +1264,7 @@ object GroupMetadataManager {
 
   // Formatter for use with tools to read group metadata history
   class GroupMetadataMessageFormatter extends MessageFormatter {
-    def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream) {
+    def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream): Unit = {
       Option(consumerRecord.key).map(key => GroupMetadataManager.readMessageKey(ByteBuffer.wrap(key))).foreach {
         // Only print if the message is a group metadata record.
         // We ignore the timestamp of the message because GroupMetadataMessage has its own timestamp.

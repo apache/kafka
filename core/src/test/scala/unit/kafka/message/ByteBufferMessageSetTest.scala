@@ -29,7 +29,7 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
     new ByteBufferMessageSet(NoCompressionCodec, messages: _*)
 
   @Test
-  def testValidBytes() {
+  def testValidBytes(): Unit = {
     {
       val messages = new ByteBufferMessageSet(NoCompressionCodec, new Message("hello".getBytes), new Message("there".getBytes))
       val buffer = ByteBuffer.allocate(messages.sizeInBytes + 2)
@@ -47,7 +47,7 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
   }
 
   @Test
-  def testValidBytesWithCompression() {
+  def testValidBytesWithCompression(): Unit = {
     val messages = new ByteBufferMessageSet(DefaultCompressionCodec, new Message("hello".getBytes), new Message("there".getBytes))
     val buffer = ByteBuffer.allocate(messages.sizeInBytes + 2)
     buffer.put(messages.buffer)
@@ -57,7 +57,7 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
   }
 
   @Test
-  def testEquals() {
+  def testEquals(): Unit = {
     var messages = new ByteBufferMessageSet(DefaultCompressionCodec, new Message("hello".getBytes), new Message("there".getBytes))
     var moreMessages = new ByteBufferMessageSet(DefaultCompressionCodec, new Message("hello".getBytes), new Message("there".getBytes))
 
@@ -71,7 +71,7 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
   
 
   @Test
-  def testIterator() {
+  def testIterator(): Unit = {
     val messageList = List(
         new Message("msg1".getBytes),
         new Message("msg2".getBytes),
@@ -135,7 +135,7 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
   }
 
   @Test
-  def testMessageWithProvidedOffsetSeq() {
+  def testMessageWithProvidedOffsetSeq(): Unit = {
     val offsets = Seq(0L, 2L)
     val messages = new ByteBufferMessageSet(
       compressionCodec = NoCompressionCodec,
@@ -148,7 +148,7 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
   }
 
   /* check that offsets are assigned based on byte offset from the given base offset */
-  def checkOffsets(messages: ByteBufferMessageSet, baseOffset: Long) {
+  def checkOffsets(messages: ByteBufferMessageSet, baseOffset: Long): Unit = {
     assertTrue("Message set should not be empty", messages.nonEmpty)
     var offset = baseOffset
     for(entry <- messages) {
@@ -157,7 +157,7 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
     }
   }
 
-  def verifyShallowIterator(messageSet: ByteBufferMessageSet) {
+  def verifyShallowIterator(messageSet: ByteBufferMessageSet): Unit = {
     //make sure the offsets returned by a shallow iterator is a subset of that of a deep iterator
     val shallowOffsets = messageSet.shallowIterator.map(msgAndOff => msgAndOff.offset).toSet
     val deepOffsets = messageSet.iterator.map(msgAndOff => msgAndOff.offset).toSet

@@ -36,7 +36,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
   var zkUtils: ZkUtils = null
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, jaasFile.getAbsolutePath)
     Configuration.setConfiguration(null)
     System.setProperty(authProvider, "org.apache.zookeeper.server.auth.SASLAuthenticationProvider")
@@ -45,7 +45,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     if (zkUtils != null)
      CoreUtils.swallow(zkUtils.close(), this)
     super.tearDown()
@@ -59,7 +59,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
    * secure ACLs and authentication with ZooKeeper.
    */
   @Test
-  def testIsZkSecurityEnabled() {
+  def testIsZkSecurityEnabled(): Unit = {
     assertTrue(JaasUtils.isZkSecurityEnabled())
     Configuration.setConfiguration(null)
     System.clearProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
@@ -80,7 +80,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
    * when isSecure is set to true.
    */
   @Test
-  def testZkUtils() {
+  def testZkUtils(): Unit = {
     assertTrue(zkUtils.isSecure)
     for (path <- zkUtils.persistentZkPaths) {
       zkUtils.makeSurePersistentPathExists(path)
@@ -122,7 +122,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
    * cluster secure.
    */
   @Test
-  def testZkMigration() {
+  def testZkMigration(): Unit = {
     val unsecureZkUtils = ZkUtils(zkConnect, 6000, 6000, false) 
     try {
       testMigration(zkConnect, unsecureZkUtils, zkUtils)
@@ -136,7 +136,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
    * cluster unsecure.
    */
   @Test
-  def testZkAntiMigration() {
+  def testZkAntiMigration(): Unit = {
     val unsecureZkUtils = ZkUtils(zkConnect, 6000, 6000, false)
     try {
       testMigration(zkConnect, zkUtils, unsecureZkUtils)
@@ -149,7 +149,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
    * Tests that the persistent paths cannot be deleted.
    */
   @Test
-  def testDelete() {
+  def testDelete(): Unit = {
     info(s"zkConnect string: $zkConnect")
     ZkSecurityMigrator.run(Array("--zookeeper.acl=secure", s"--zookeeper.connect=$zkConnect"))
     deleteAllUnsecure()
@@ -160,7 +160,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
    * persistent paths have children.
    */
   @Test
-  def testDeleteRecursive() {
+  def testDeleteRecursive(): Unit = {
     info(s"zkConnect string: $zkConnect")
     for (path <- ZkUtils.SecureZkRootPaths) {
       info(s"Creating $path")
@@ -192,7 +192,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
    * Exercises the migration tool. It is used in these test cases:
    * testZkMigration, testZkAntiMigration, testChroot.
    */
-  private def testMigration(zkUrl: String, firstZk: ZkUtils, secondZk: ZkUtils) {
+  private def testMigration(zkUrl: String, firstZk: ZkUtils, secondZk: ZkUtils): Unit = {
     info(s"zkConnect string: $zkUrl")
     for (path <- ZkUtils.SecureZkRootPaths ++ ZkUtils.SensitiveZkRootPaths) {
       info(s"Creating $path")
@@ -260,7 +260,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
    * This is used in the testDelete and testDeleteRecursive
    * test cases.
    */
-  private def deleteAllUnsecure() {
+  private def deleteAllUnsecure(): Unit = {
     System.setProperty(JaasUtils.ZK_SASL_CLIENT, "false")
     val unsecureZkUtils = ZkUtils(zkConnect, 6000, 6000, false)
     val result: Try[Boolean] = {

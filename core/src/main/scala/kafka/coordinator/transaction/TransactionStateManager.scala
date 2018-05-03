@@ -135,7 +135,7 @@ class TransactionStateManager(brokerId: Int,
     }
   }
 
-  def enableTransactionalIdExpiration() {
+  def enableTransactionalIdExpiration(): Unit = {
     scheduler.schedule("transactionalId-expiration", () => {
       val now = time.milliseconds()
       inReadLock(stateLock) {
@@ -367,7 +367,7 @@ class TransactionStateManager(brokerId: Int,
    * When this broker becomes a leader for a transaction log partition, load this partition and
    * populate the transaction metadata cache with the transactional ids.
    */
-  def loadTransactionsForTxnTopicPartition(partitionId: Int, coordinatorEpoch: Int, sendTxnMarkers: SendTxnMarkersCallback) {
+  def loadTransactionsForTxnTopicPartition(partitionId: Int, coordinatorEpoch: Int, sendTxnMarkers: SendTxnMarkersCallback): Unit = {
     validateTransactionTopicPartitionCountIsStable()
 
     val topicPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionId)
@@ -378,7 +378,7 @@ class TransactionStateManager(brokerId: Int,
       loadingPartitions.add(partitionAndLeaderEpoch)
     }
 
-    def loadTransactions() {
+    def loadTransactions(): Unit = {
       info(s"Loading transaction metadata from $topicPartition")
       val loadedTransactions = loadTransactionMetadata(topicPartition, coordinatorEpoch)
 
@@ -423,7 +423,7 @@ class TransactionStateManager(brokerId: Int,
    * When this broker becomes a follower for a transaction log partition, clear out the cache for corresponding transactional ids
    * that belong to that partition.
    */
-  def removeTransactionsForTxnTopicPartition(partitionId: Int, coordinatorEpoch: Int) {
+  def removeTransactionsForTxnTopicPartition(partitionId: Int, coordinatorEpoch: Int): Unit = {
     validateTransactionTopicPartitionCountIsStable()
 
     val topicPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionId)
@@ -434,7 +434,7 @@ class TransactionStateManager(brokerId: Int,
       leavingPartitions.add(partitionAndLeaderEpoch)
     }
 
-    def removeTransactions() {
+    def removeTransactions(): Unit = {
       inWriteLock(stateLock) {
         if (leavingPartitions.contains(partitionAndLeaderEpoch)) {
           transactionMetadataCache.remove(partitionId) match {
@@ -626,7 +626,7 @@ class TransactionStateManager(brokerId: Int,
     }
   }
 
-  def shutdown() {
+  def shutdown(): Unit = {
     shuttingDown.set(true)
     loadingPartitions.clear()
     transactionMetadataCache.clear()

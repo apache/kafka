@@ -38,9 +38,9 @@ import org.apache.kafka.common.header.internals.RecordHeaders
             "Please use org.apache.kafka.clients.consumer.KafkaConsumer instead.", "0.11.0.0")
 trait BaseConsumer {
   def receive(): BaseConsumerRecord
-  def stop()
-  def cleanup()
-  def commit()
+  def stop(): Unit
+  def cleanup(): Unit
+  def commit(): Unit
 }
 
 @deprecated("This class has been deprecated and will be removed in a future release. " +
@@ -61,7 +61,7 @@ class NewShinyConsumer(topic: Option[String], partitionId: Option[Int], offset: 
   consumerInit()
   var recordIter = consumer.poll(0).iterator
 
-  def consumerInit() {
+  def consumerInit(): Unit = {
     (topic, partitionId, offset, whitelist) match {
       case (Some(topic), Some(partitionId), Some(offset), None) =>
         seek(topic, partitionId, offset)
@@ -80,7 +80,7 @@ class NewShinyConsumer(topic: Option[String], partitionId: Option[Int], offset: 
     }
   }
 
-  def seek(topic: String, partitionId: Int, offset: Long) {
+  def seek(topic: String, partitionId: Int, offset: Long): Unit = {
     val topicPartition = new TopicPartition(topic, partitionId)
     consumer.assign(Collections.singletonList(topicPartition))
     offset match {
@@ -90,7 +90,7 @@ class NewShinyConsumer(topic: Option[String], partitionId: Option[Int], offset: 
     }
   }
 
-  def resetUnconsumedOffsets() {
+  def resetUnconsumedOffsets(): Unit = {
     val smallestUnconsumedOffsets = collection.mutable.Map[TopicPartition, Long]()
     while (recordIter.hasNext) {
       val record = recordIter.next()
@@ -119,16 +119,16 @@ class NewShinyConsumer(topic: Option[String], partitionId: Option[Int], offset: 
                        record.headers)
   }
 
-  override def stop() {
+  override def stop(): Unit = {
     this.consumer.wakeup()
   }
 
-  override def cleanup() {
+  override def cleanup(): Unit = {
     resetUnconsumedOffsets()
     this.consumer.close()
   }
 
-  override def commit() {
+  override def commit(): Unit = {
     this.consumer.commitSync()
   }
 }
@@ -158,15 +158,15 @@ class OldConsumer(topicFilter: TopicFilter, consumerProps: Properties) extends B
                        new RecordHeaders())
   }
 
-  override def stop() {
+  override def stop(): Unit = {
     this.consumerConnector.shutdown()
   }
 
-  override def cleanup() {
+  override def cleanup(): Unit = {
     this.consumerConnector.shutdown()
   }
 
-  override def commit() {
+  override def commit(): Unit = {
     this.consumerConnector.commitOffsets
   }
 }

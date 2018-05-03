@@ -25,7 +25,7 @@ import org.junit.Test
 class ZkNodeChangeNotificationListenerTest extends ZooKeeperTestHarness {
 
   @Test
-  def testProcessNotification() {
+  def testProcessNotification(): Unit = {
     @volatile var notification: String = null
     @volatile var invocationCount = 0
     val notificationHandler = new NotificationHandler {

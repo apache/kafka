@@ -55,11 +55,11 @@ class AsyncProducerTest {
   }.mkString(",")
 
   @Test
-  def testProducerQueueSize() {
+  def testProducerQueueSize(): Unit = {
     // a mock event handler that blocks
     val mockEventHandler = new EventHandler[String,String] {
 
-      def handle(events: Seq[KeyedMessage[String,String]]) {
+      def handle(events: Seq[KeyedMessage[String,String]]): Unit = {
         Thread.sleep(500)
       }
 
@@ -90,7 +90,7 @@ class AsyncProducerTest {
   }
 
   @Test
-  def testProduceAfterClosed() {
+  def testProduceAfterClosed(): Unit = {
     val produceData = getProduceData(10)
     val producer = createProducer[String, String](
       brokerList,
@@ -108,7 +108,7 @@ class AsyncProducerTest {
   }
 
   @Test
-  def testBatchSize() {
+  def testBatchSize(): Unit = {
     /**
      *  Send a total of 10 messages with batch size of 5. Expect 2 calls to the handler, one for each batch.
      */
@@ -133,7 +133,7 @@ class AsyncProducerTest {
   }
 
   @Test
-  def testQueueTimeExpired() {
+  def testQueueTimeExpired(): Unit = {
     /**
      *  Send a total of 2 messages with batch size of 5 and queue time of 200ms.
      *  Expect 1 calls to the handler after 200ms.
@@ -159,7 +159,7 @@ class AsyncProducerTest {
   }
 
   @Test
-  def testPartitionAndCollateEvents() {
+  def testPartitionAndCollateEvents(): Unit = {
     val producerDataList = new ArrayBuffer[KeyedMessage[Int,Message]]
     // use bogus key and partition key override for some messages
     producerDataList.append(new KeyedMessage[Int,Message]("topic1", key = 0, message = new Message("msg1".getBytes)))
@@ -216,7 +216,7 @@ class AsyncProducerTest {
   }
 
   @Test
-  def testSerializeEvents() {
+  def testSerializeEvents(): Unit = {
     val produceData = TestUtils.getMsgStrings(5).map(m => new KeyedMessage[String,String]("topic1",m))
     val props = new Properties()
     props.put("metadata.broker.list", brokerList)
@@ -247,7 +247,7 @@ class AsyncProducerTest {
   }
 
   @Test
-  def testInvalidPartition() {
+  def testInvalidPartition(): Unit = {
     val producerDataList = new ArrayBuffer[KeyedMessage[String,Message]]
     producerDataList.append(new KeyedMessage[String,Message]("topic1", "key1", new Message("msg1".getBytes)))
     val props = new Properties()
@@ -279,7 +279,7 @@ class AsyncProducerTest {
   }
 
   @Test
-  def testNoBroker() {
+  def testNoBroker(): Unit = {
     val props = new Properties()
     props.put("metadata.broker.list", brokerList)
 
@@ -310,7 +310,7 @@ class AsyncProducerTest {
   }
 
   @Test
-  def testIncompatibleEncoder() {
+  def testIncompatibleEncoder(): Unit = {
     val props = new Properties()
     // no need to retry since the send will always fail
     props.put("message.send.max.retries", "0")
@@ -331,7 +331,7 @@ class AsyncProducerTest {
   }
 
   @Test
-  def testRandomPartitioner() {
+  def testRandomPartitioner(): Unit = {
     val props = new Properties()
     props.put("metadata.broker.list", brokerList)
     val config = new ProducerConfig(props)
@@ -369,7 +369,7 @@ class AsyncProducerTest {
   }
 
   @Test
-  def testFailedSendRetryLogic() {
+  def testFailedSendRetryLogic(): Unit = {
     val props = new Properties()
     props.put("metadata.broker.list", brokerList)
     props.put("request.required.acks", "1")
@@ -440,7 +440,7 @@ class AsyncProducerTest {
   }
 
   @Test
-  def testJavaProducer() {
+  def testJavaProducer(): Unit = {
     val topic = "topic1"
     val msgs = TestUtils.getMsgStrings(5)
     val scalaProducerData = msgs.map(m => new KeyedMessage[String, String](topic, m))
@@ -464,7 +464,7 @@ class AsyncProducerTest {
   }
 
   @Test
-  def testInvalidConfiguration() {
+  def testInvalidConfiguration(): Unit = {
     val props = new Properties()
     props.put("serializer.class", "kafka.serializer.StringEncoder")
     props.put("producer.type", "async")

@@ -58,12 +58,12 @@ object Kafka extends Logging {
   private def registerLoggingSignalHandler(): Unit = {
     val jvmSignalHandlers = new ConcurrentHashMap[String, SignalHandler]().asScala
     val handler = new SignalHandler() {
-      override def handle(signal: Signal) {
+      override def handle(signal: Signal): Unit = {
         info(s"Terminating process due to signal $signal")
         jvmSignalHandlers.get(signal.getName).foreach(_.handle(signal))
       }
     }
-    def registerHandler(signalName: String) {
+    def registerHandler(signalName: String): Unit = {
       val oldHandler = Signal.handle(new Signal(signalName), handler)
       if (oldHandler != null)
         jvmSignalHandlers.put(signalName, oldHandler)

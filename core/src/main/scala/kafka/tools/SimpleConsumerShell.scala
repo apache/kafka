@@ -202,7 +202,7 @@ object SimpleConsumerShell extends Logging {
                                             fetchTargetBroker.port,
                                             10000, 64*1024, clientId)
     val thread = KafkaThread.nonDaemon("kafka-simpleconsumer-shell", new Runnable() {
-      def run() {
+      def run(): Unit = {
         var offset = startingOffset
         var numMessagesConsumed = 0
         try {

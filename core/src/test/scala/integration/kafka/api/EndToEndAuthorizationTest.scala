@@ -59,7 +59,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   override val consumerCount = 2
   override val serverCount = 3
 
-  override def configureSecurityBeforeServersStart() {
+  override def configureSecurityBeforeServersStart(): Unit = {
     AclCommand.main(clusterAclArgs)
     AclCommand.main(topicBrokerReadAclArgs)
   }
@@ -155,7 +155,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     * Starts MiniKDC and only then sets up the parent trait.
     */
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
     servers.foreach { s =>
       TestUtils.waitAndVerifyAcls(ClusterActionAcl, s.apis.authorizer.get, Resource.ClusterResource)
@@ -178,7 +178,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     * Closes MiniKDC last when tearing down.
     */
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     consumers.foreach(_.wakeup())
     super.tearDown()
     closeSasl()
@@ -201,7 +201,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     consumeRecords(this.consumers.head, numRecords)
   }
 
-  protected def setAclsAndProduce() {
+  protected def setAclsAndProduce(): Unit = {
     AclCommand.main(produceAclArgs)
     AclCommand.main(consumeAclArgs)
     servers.foreach { s =>
@@ -331,7 +331,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     }
   }
 
-  private def sendRecords(numRecords: Int, tp: TopicPartition) {
+  private def sendRecords(numRecords: Int, tp: TopicPartition): Unit = {
     val futures = (0 until numRecords).map { i =>
       val record = new ProducerRecord(tp.topic(), tp.partition(), s"$i".getBytes, s"$i".getBytes)
       debug(s"Sending this record: $record")
@@ -349,7 +349,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
                              startingOffset: Int = 0,
                              topic: String = topic,
                              part: Int = part,
-                             timeout: Long = 10000) {
+                             timeout: Long = 10000): Unit = {
     val records = new ArrayList[ConsumerRecord[Array[Byte], Array[Byte]]]()
 
     val deadlineMs = System.currentTimeMillis() + timeout

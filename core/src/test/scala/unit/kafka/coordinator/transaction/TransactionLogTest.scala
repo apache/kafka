@@ -38,7 +38,7 @@ class TransactionLogTest extends JUnitSuite {
     new TopicPartition("topic2", 2))
 
   @Test
-  def shouldThrowExceptionWriteInvalidTxn() {
+  def shouldThrowExceptionWriteInvalidTxn(): Unit = {
     val transactionalId = "transactionalId"
     val producerId = 23423L
 
@@ -51,7 +51,7 @@ class TransactionLogTest extends JUnitSuite {
   }
 
   @Test
-  def shouldReadWriteMessages() {
+  def shouldReadWriteMessages(): Unit = {
     val pidMappings = Map[String, Long]("zero" -> 0L,
       "one" -> 1L,
       "two" -> 2L,

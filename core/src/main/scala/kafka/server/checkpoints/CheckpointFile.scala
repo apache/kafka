@@ -45,7 +45,7 @@ class CheckpointFile[T](val file: File,
   try Files.createFile(file.toPath) // create the file if it doesn't exist
   catch { case _: FileAlreadyExistsException => }
 
-  def write(entries: Seq[T]) {
+  def write(entries: Seq[T]): Unit = {
     lock synchronized {
       try {
         // write to temp file and then swap with the existing file

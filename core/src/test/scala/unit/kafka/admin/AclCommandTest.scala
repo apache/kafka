@@ -83,7 +83,7 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
   )
 
   @Test
-  def testAclCli() {
+  def testAclCli(): Unit = {
     val brokerProps = TestUtils.createBrokerConfig(0, zkConnect)
     brokerProps.put(KafkaConfig.AuthorizerClassNameProp, "kafka.security.auth.SimpleAclAuthorizer")
     val args = Array("--authorizer-properties", "zookeeper.connect=" + zkConnect)
@@ -105,7 +105,7 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
-  def testProducerConsumerCli() {
+  def testProducerConsumerCli(): Unit = {
     val brokerProps = TestUtils.createBrokerConfig(0, zkConnect)
     brokerProps.put(KafkaConfig.AuthorizerClassNameProp, "kafka.security.auth.SimpleAclAuthorizer")
     val args = Array("--authorizer-properties", "zookeeper.connect=" + zkConnect)
@@ -125,12 +125,12 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test(expected = classOf[IllegalArgumentException])
-  def testInvalidAuthorizerProperty() {
+  def testInvalidAuthorizerProperty(): Unit = {
     val args = Array("--authorizer-properties", "zookeeper.connect " + zkConnect)
     AclCommand.withAuthorizer(new AclCommandOptions(args))(null)
   }
 
-  private def testRemove(resources: Set[Resource], resourceCmd: Array[String], args: Array[String], brokerProps: Properties) {
+  private def testRemove(resources: Set[Resource], resourceCmd: Array[String], args: Array[String], brokerProps: Properties): Unit = {
     for (resource <- resources) {
       AclCommand.main(args ++ resourceCmd :+ "--remove" :+ "--force")
       withAuthorizer(brokerProps) { authorizer =>
@@ -150,7 +150,7 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
     Users.foldLeft(cmd) ((cmd, user) => cmd ++ Array(principalCmd, user.toString))
   }
 
-  def withAuthorizer(props: Properties)(f: Authorizer => Unit) {
+  def withAuthorizer(props: Properties)(f: Authorizer => Unit): Unit = {
     val kafkaConfig = KafkaConfig.fromProps(props, doLog = false)
     val authZ = new SimpleAclAuthorizer
     try {

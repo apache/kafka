@@ -185,7 +185,7 @@ object ReplicaVerificationTool extends Logging {
     }
 
     Runtime.getRuntime.addShutdownHook(new Thread() {
-      override def run() {
+      override def run(): Unit = {
         info("Stopping all fetchers")
         fetcherThreads.foreach(_.shutdown())
       }
@@ -216,19 +216,19 @@ private class ReplicaBuffer(expectedReplicasPerTopicAndPartition: Map[TopicAndPa
   private var maxLagTopicAndPartition: TopicAndPartition = null
   initialize()
 
-  def createNewFetcherBarrier() {
+  def createNewFetcherBarrier(): Unit = {
     fetcherBarrier.set(new CountDownLatch(expectedNumFetchers))
   }
 
   def getFetcherBarrier() = fetcherBarrier.get()
 
-  def createNewVerificationBarrier() {
+  def createNewVerificationBarrier(): Unit = {
     verificationBarrier.set(new CountDownLatch(1))
   }
 
   def getVerificationBarrier() = verificationBarrier.get()
 
-  private def initialize() {
+  private def initialize(): Unit = {
     for (topicAndPartition <- expectedReplicasPerTopicAndPartition.keySet)
       messageSetCache.put(topicAndPartition, new Pool[Int, FetchResponsePartitionData])
     setInitialOffsets()
@@ -240,7 +240,7 @@ private class ReplicaBuffer(expectedReplicasPerTopicAndPartition: Map[TopicAndPa
     }.mkString
   }
 
-  private def setInitialOffsets() {
+  private def setInitialOffsets(): Unit = {
     for ((brokerId, topicAndPartitions) <- leadersPerBroker) {
       val broker = brokerMap(brokerId)
       val consumer = new SimpleConsumer(broker.host, broker.port, 10000, 100000, ReplicaVerificationTool.clientId)
@@ -255,7 +255,7 @@ private class ReplicaBuffer(expectedReplicasPerTopicAndPartition: Map[TopicAndPa
     }
   }
 
-  def addFetchedData(topicAndPartition: TopicAndPartition, replicaId: Int, partitionData: FetchResponsePartitionData) {
+  def addFetchedData(topicAndPartition: TopicAndPartition, replicaId: Int, partitionData: FetchResponsePartitionData): Unit = {
     messageSetCache.get(topicAndPartition).put(replicaId, partitionData)
   }
 
@@ -263,7 +263,7 @@ private class ReplicaBuffer(expectedReplicasPerTopicAndPartition: Map[TopicAndPa
     fetchOffsetMap.get(topicAndPartition)
   }
 
-  def verifyCheckSum(println: String => Unit) {
+  def verifyCheckSum(println: String => Unit): Unit = {
     debug("Begin verification")
     maxLag = -1L
     for ((topicAndPartition, fetchResponsePerReplica) <- messageSetCache) {
@@ -351,7 +351,7 @@ private class ReplicaFetcher(name: String, sourceBroker: BrokerEndPoint, topicAn
           maxWait(maxWait).
           minBytes(minBytes)
 
-  override def doWork() {
+  override def doWork(): Unit = {
 
     val fetcherBarrier = replicaBuffer.getFetcherBarrier()
     val verificationBarrier = replicaBuffer.getVerificationBarrier()

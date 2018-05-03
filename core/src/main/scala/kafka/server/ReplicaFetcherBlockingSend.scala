@@ -35,7 +35,7 @@ trait BlockingSend {
 
   def sendRequest(requestBuilder: AbstractRequest.Builder[_ <: AbstractRequest]): ClientResponse
 
-  def close()
+  def close(): Unit
 }
 
 class ReplicaFetcherBlockingSend(sourceBroker: BrokerEndPoint,

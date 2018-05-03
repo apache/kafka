@@ -33,13 +33,13 @@ class DeleteConsumerGroupTest extends KafkaServerTestHarness {
   var zkUtils: ZkUtils = null
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
     zkUtils = ZkUtils(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled))
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     if (zkUtils != null)
      CoreUtils.swallow(zkUtils.close(), this)
     super.tearDown()
@@ -47,7 +47,7 @@ class DeleteConsumerGroupTest extends KafkaServerTestHarness {
 
 
   @Test
-  def testGroupWideDeleteInZK() {
+  def testGroupWideDeleteInZK(): Unit = {
     val topic = "test"
     val groupToDelete = "groupToDelete"
     val otherGroup = "otherGroup"
@@ -65,7 +65,7 @@ class DeleteConsumerGroupTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def testGroupWideDeleteInZKDoesNothingForActiveConsumerGroup() {
+  def testGroupWideDeleteInZKDoesNothingForActiveConsumerGroup(): Unit = {
     val topic = "test"
     val groupToDelete = "groupToDelete"
     val otherGroup = "otherGroup"
@@ -83,7 +83,7 @@ class DeleteConsumerGroupTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def testGroupTopicWideDeleteInZKForGroupConsumingOneTopic() {
+  def testGroupTopicWideDeleteInZKForGroupConsumingOneTopic(): Unit = {
     val topic = "test"
     val groupToDelete = "groupToDelete"
     val otherGroup = "otherGroup"
@@ -100,7 +100,7 @@ class DeleteConsumerGroupTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def testGroupTopicWideDeleteInZKForGroupConsumingMultipleTopics() {
+  def testGroupTopicWideDeleteInZKForGroupConsumingMultipleTopics(): Unit = {
     val topicToDelete = "topicToDelete"
     val otherTopic = "otherTopic"
     val groupToDelete = "groupToDelete"
@@ -123,7 +123,7 @@ class DeleteConsumerGroupTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def testGroupTopicWideDeleteInZKDoesNothingForActiveGroupConsumingMultipleTopics() {
+  def testGroupTopicWideDeleteInZKDoesNothingForActiveGroupConsumingMultipleTopics(): Unit = {
     val topicToDelete = "topicToDelete"
     val otherTopic = "otherTopic"
     val group = "group"
@@ -142,7 +142,7 @@ class DeleteConsumerGroupTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def testTopicWideDeleteInZK() {
+  def testTopicWideDeleteInZK(): Unit = {
     val topicToDelete = "topicToDelete"
     val otherTopic = "otherTopic"
     val groups = Seq("group1", "group2")
@@ -163,7 +163,7 @@ class DeleteConsumerGroupTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def testConsumptionOnRecreatedTopicAfterTopicWideDeleteInZK() {
+  def testConsumptionOnRecreatedTopicAfterTopicWideDeleteInZK(): Unit = {
     val topic = "topic"
     val group = "group"
 
@@ -205,7 +205,7 @@ class DeleteConsumerGroupTest extends KafkaServerTestHarness {
       "Consumer group info should exist after consuming from a recreated topic")
   }
 
-  private def fillInConsumerGroupInfo(topic: String, group: String, consumerId: String, partition: Int, offset: Int, registerConsumer: Boolean) {
+  private def fillInConsumerGroupInfo(topic: String, group: String, consumerId: String, partition: Int, offset: Int, registerConsumer: Boolean): Unit = {
     val consumerProps = TestUtils.createConsumerProperties(zkConnect, group, consumerId)
     val consumerConfig = new ConsumerConfig(consumerProps)
     val dir = new ZKGroupTopicDirs(group, topic)
@@ -225,11 +225,11 @@ class DeleteConsumerGroupTest extends KafkaServerTestHarness {
     zkUtils.pathExists(dir.consumerOffsetDir) && zkUtils.pathExists(dir.consumerOwnerDir)
   }
 
-  private def produceEvents(producer: KafkaProducer[Array[Byte], Array[Byte]], topic: String, messages: List[String]) {
+  private def produceEvents(producer: KafkaProducer[Array[Byte], Array[Byte]], topic: String, messages: List[String]): Unit = {
     messages.foreach(message => producer.send(new ProducerRecord(topic, message.getBytes(StandardCharsets.UTF_8))))
   }
 
-  private def consumeEvents(messageStream: KafkaStream[Array[Byte], Array[Byte]], n: Int) {
+  private def consumeEvents(messageStream: KafkaStream[Array[Byte], Array[Byte]], n: Int): Unit = {
     val iter = messageStream.iterator
     (0 until n).foreach(_ => iter.next)
   }

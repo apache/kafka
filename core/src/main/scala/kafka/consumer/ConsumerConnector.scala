@@ -74,29 +74,29 @@ trait ConsumerConnector {
   /**
    *  Commit the offsets of all broker partitions connected by this connector.
    */
-  def commitOffsets(retryOnFailure: Boolean)
+  def commitOffsets(retryOnFailure: Boolean): Unit
 
   /**
    * KAFKA-1743: This method added for backward compatibility.
    */
-  def commitOffsets()
+  def commitOffsets(): Unit
 
   /**
    * Commit offsets from an external offsets map.
    * @param offsetsToCommit the offsets to be committed.
    */
-  def commitOffsets(offsetsToCommit: immutable.Map[TopicAndPartition, OffsetAndMetadata], retryOnFailure: Boolean)
+  def commitOffsets(offsetsToCommit: immutable.Map[TopicAndPartition, OffsetAndMetadata], retryOnFailure: Boolean): Unit
 
   /**
    * Wire in a consumer rebalance listener to be executed when consumer rebalance occurs.
    * @param listener The consumer rebalance listener to wire in
    */
-  def setConsumerRebalanceListener(listener: ConsumerRebalanceListener)
+  def setConsumerRebalanceListener(listener: ConsumerRebalanceListener): Unit
 
   /**
    *  Shut down the connector
    */
-  def shutdown()
+  def shutdown(): Unit
 }
 
 @deprecated("This object has been deprecated and will be removed in a future release. " +

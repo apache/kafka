@@ -68,7 +68,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
   }
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     val producerSecurityProps = clientSecurityProps("producer")
     val consumerSecurityProps = clientSecurityProps("consumer")
     super.setUp()
@@ -109,7 +109,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     producers.foreach(_.close())
     consumers.foreach(_.close())
     super.tearDown()

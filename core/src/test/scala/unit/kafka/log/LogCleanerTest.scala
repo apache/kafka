@@ -473,7 +473,7 @@ class LogCleanerTest extends JUnitSuite {
    * Test log cleaning with logs containing messages larger than default message size
    */
   @Test
-  def testLargeMessage() {
+  def testLargeMessage(): Unit = {
     val largeMessageSize = 1024 * 1024
     // Create cleaner with very small default max message size
     val cleaner = makeCleaner(Int.MaxValue, maxMessageSize=1024)
@@ -973,7 +973,7 @@ class LogCleanerTest extends JUnitSuite {
     val end = 500
     writeToLog(log, (start until end) zip (start until end))
 
-    def checkRange(map: FakeOffsetMap, start: Int, end: Int) {
+    def checkRange(map: FakeOffsetMap, start: Int, end: Int): Unit = {
       val stats = new CleanerStats()
       cleaner.buildOffsetMap(log, start, end, map, stats)
       val endOffset = map.latestOffset + 1
@@ -1159,7 +1159,7 @@ class LogCleanerTest extends JUnitSuite {
    * This test verifies that messages corrupted by KAFKA-4298 are fixed by the cleaner
    */
   @Test
-  def testCleanCorruptMessageSet() {
+  def testCleanCorruptMessageSet(): Unit = {
     val codec = CompressionType.GZIP
 
     val logProps = new Properties()

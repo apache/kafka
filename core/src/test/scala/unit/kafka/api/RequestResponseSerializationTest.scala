@@ -179,7 +179,7 @@ class RequestResponseSerializationTest extends JUnitSuite {
   private val consumerMetadataResponseNoCoordinator = GroupCoordinatorResponse(None, Errors.COORDINATOR_NOT_AVAILABLE, 0)
 
   @Test
-  def testSerializationAndDeserialization() {
+  def testSerializationAndDeserialization(): Unit = {
 
     val requestsAndResponses =
       collection.immutable.Seq(producerRequest, producerResponse,
@@ -202,7 +202,7 @@ class RequestResponseSerializationTest extends JUnitSuite {
   }
 
   @Test
-  def testProduceResponseVersion() {
+  def testProduceResponseVersion(): Unit = {
     val oldClientResponse = ProducerResponse(1, Map(
       TopicAndPartition("t1", 0) -> ProducerResponseStatus(Errors.NONE, 10001),
       TopicAndPartition("t2", 0) -> ProducerResponseStatus(Errors.NONE, 20001)
@@ -223,7 +223,7 @@ class RequestResponseSerializationTest extends JUnitSuite {
   }
 
   @Test
-  def testFetchResponseVersion() {
+  def testFetchResponseVersion(): Unit = {
     val oldClientResponse = FetchResponse(1, Map(
       TopicAndPartition("t1", 0) -> new FetchResponsePartitionData(messages = new ByteBufferMessageSet(new Message("first message".getBytes)))
     ).toVector, 0)

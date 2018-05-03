@@ -42,7 +42,7 @@ import org.apache.kafka.common.security.JaasUtils
  */
 object ImportZkOffsets extends Logging {
 
-  def main(args: Array[String]) {
+  def main(args: Array[String]): Unit = {
     val parser = new OptionParser(false)
     
     val zkConnectOpt = parser.accepts("zkconnect", "ZooKeeper connect string.")

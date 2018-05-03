@@ -30,7 +30,7 @@ trait ProducerConsumerTestHarness extends KafkaServerTestHarness {
   var consumer: SimpleConsumer = null
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp
     producer = TestUtils.createProducer[String, String](TestUtils.getBrokerListStrFromServers(servers),
       encoder = classOf[StringEncoder].getName,
@@ -40,7 +40,7 @@ trait ProducerConsumerTestHarness extends KafkaServerTestHarness {
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     producer.close()
     consumer.close()
     super.tearDown

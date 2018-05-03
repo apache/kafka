@@ -111,7 +111,7 @@ class ConsumerIterator[K, V](private val channel: BlockingQueue[FetchedDataChunk
                            item.message.timestampType)
   }
 
-  def clearCurrentChunk() {
+  def clearCurrentChunk(): Unit = {
     debug("Clearing the current data chunk for this consumer iterator")
     current.set(null)
   }

@@ -46,7 +46,7 @@ class ProducerPool(val config: ProducerConfig) extends Logging {
   private val syncProducers = new HashMap[Int, SyncProducer]
   private val lock = new Object()
 
-  def updateProducer(topicMetadata: Seq[TopicMetadata]) {
+  def updateProducer(topicMetadata: Seq[TopicMetadata]): Unit = {
     val newBrokers = new collection.mutable.HashSet[BrokerEndPoint]
     topicMetadata.foreach(tmd => {
       tmd.partitionsMetadata.foreach(pmd => {

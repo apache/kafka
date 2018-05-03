@@ -28,7 +28,7 @@ trait RackAwareTest {
                                replicationFactor: Int,
                                verifyRackAware: Boolean = true,
                                verifyLeaderDistribution: Boolean = true,
-                               verifyReplicasDistribution: Boolean = true) {
+                               verifyReplicasDistribution: Boolean = true): Unit = {
     // always verify that no broker will be assigned for more than one replica
     for ((_, brokerList) <- assignment) {
       assertEquals("More than one replica is assigned to same broker for the same partition", brokerList.toSet.size, brokerList.size)

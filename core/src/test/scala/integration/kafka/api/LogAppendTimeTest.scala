@@ -46,13 +46,13 @@ class LogAppendTimeTest extends IntegrationTestHarness {
   private val topic = "topic"
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
     createTopic(topic)
   }
 
   @Test
-  def testProduceConsume() {
+  def testProduceConsume(): Unit = {
     val producer = producers.head
     val now = System.currentTimeMillis()
     val createTime = now - TimeUnit.DAYS.toMillis(1)

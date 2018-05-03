@@ -37,21 +37,21 @@ trait BaseMessageSetTestCases extends JUnitSuite {
   }
 
   @Test
-  def testIteratorIsConsistent() {
+  def testIteratorIsConsistent(): Unit = {
     val m = createMessageSet(messages)
     // two iterators over the same set should give the same results
     TestUtils.checkEquals(m, m)
   }
 
   @Test
-  def testIteratorIsConsistentWithCompression() {
+  def testIteratorIsConsistentWithCompression(): Unit = {
     val m = createMessageSet(messages, DefaultCompressionCodec)
     // two iterators over the same set should give the same results
     TestUtils.checkEquals(m, m)
   }
 
   @Test
-  def testSizeInBytes() {
+  def testSizeInBytes(): Unit = {
     assertEquals("Empty message set should have 0 bytes.",
                  0,
                  createMessageSet(Array[Message]()).sizeInBytes)
@@ -61,7 +61,7 @@ trait BaseMessageSetTestCases extends JUnitSuite {
   }
 
   @Test
-  def testSizeInBytesWithCompression () {
+  def testSizeInBytesWithCompression (): Unit = {
     assertEquals("Empty message set should have 0 bytes.",
                  0,           // overhead of the GZIP output stream
                  createMessageSet(Array[Message](), DefaultCompressionCodec).sizeInBytes)

@@ -43,7 +43,7 @@ import scala.util.Random
 object EndToEndLatency {
   private val timeout: Long = 60000
 
-  def main(args: Array[String]) {
+  def main(args: Array[String]): Unit = {
     if (args.length != 5 && args.length != 6) {
       System.err.println("USAGE: java " + getClass.getName + " broker_list topic num_messages producer_acks message_size_bytes [optional] properties_file")
       Exit.exit(1)
@@ -82,7 +82,7 @@ object EndToEndLatency {
     producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
     val producer = new KafkaProducer[Array[Byte], Array[Byte]](producerProps)
 
-    def finalise() {
+    def finalise(): Unit = {
       consumer.commitSync()
       producer.close()
       consumer.close()

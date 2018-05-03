@@ -98,7 +98,7 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
   }
 
   def writePreferredReplicaElectionData(zkClient: KafkaZkClient,
-                                        partitionsUndergoingPreferredReplicaElection: Set[TopicPartition]) {
+                                        partitionsUndergoingPreferredReplicaElection: Set[TopicPartition]): Unit = {
     try {
       zkClient.createPreferredReplicaElection(partitionsUndergoingPreferredReplicaElection.toSet)
       println("Created preferred replica election path with %s".format(partitionsUndergoingPreferredReplicaElection.mkString(",")))

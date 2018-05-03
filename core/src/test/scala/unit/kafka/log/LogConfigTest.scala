@@ -36,7 +36,7 @@ class LogConfigTest {
    * keys from LogConfig to KafkaConfig are not missing values.
    */
   @Test
-  def ensureNoStaticInitializationOrderDependency() {
+  def ensureNoStaticInitializationOrderDependency(): Unit = {
     // Access any KafkaConfig val to load KafkaConfig object before LogConfig.
     assertTrue(KafkaConfig.LogRetentionTimeMillisProp != null)
     assertTrue(LogConfig.configNames.forall { config =>
@@ -46,7 +46,7 @@ class LogConfigTest {
   }
 
   @Test
-  def testKafkaConfigToProps() {
+  def testKafkaConfigToProps(): Unit = {
     val millisInHour = 60L * 60L * 1000L
     val kafkaProps = TestUtils.createBrokerConfig(nodeId = 0, zkConnect = "")
     kafkaProps.put(KafkaConfig.LogRollTimeHoursProp, "2")
@@ -61,14 +61,14 @@ class LogConfigTest {
   }
 
   @Test
-  def testFromPropsEmpty() {
+  def testFromPropsEmpty(): Unit = {
     val p = new Properties()
     val config = LogConfig(p)
     Assert.assertEquals(LogConfig(), config)
   }
 
   @Test
-  def testFromPropsInvalid() {
+  def testFromPropsInvalid(): Unit = {
     LogConfig.configNames.foreach(name => name match {
       case LogConfig.UncleanLeaderElectionEnableProp => assertPropertyInvalid(name, "not a boolean")
       case LogConfig.RetentionBytesProp => assertPropertyInvalid(name, "not_a_number")
@@ -82,7 +82,7 @@ class LogConfigTest {
   }
 
   @Test
-  def shouldValidateThrottledReplicasConfig() {
+  def shouldValidateThrottledReplicasConfig(): Unit = {
     assertTrue(isValid("*"))
     assertTrue(isValid("* "))
     assertTrue(isValid(""))
@@ -112,7 +112,7 @@ class LogConfigTest {
     }
   }
 
-  private def assertPropertyInvalid(name: String, values: AnyRef*) {
+  private def assertPropertyInvalid(name: String, values: AnyRef*): Unit = {
     values.foreach((value) => {
       val props = new Properties
       props.setProperty(name, value.toString)

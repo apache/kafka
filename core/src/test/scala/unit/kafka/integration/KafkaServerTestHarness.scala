@@ -59,13 +59,13 @@ abstract class KafkaServerTestHarness extends ZooKeeperTestHarness {
    *
    * The default implementation of this method is a no-op.
    */
-  def configureSecurityBeforeServersStart() {}
+  def configureSecurityBeforeServersStart(): Unit = {}
 
   /**
    * Override this in case Tokens or security credentials needs to be created after `servers` are started.
    * The default implementation of this method is a no-op.
    */
-  def configureSecurityAfterServersStart() {}
+  def configureSecurityAfterServersStart(): Unit = {}
 
   def configs: Seq[KafkaConfig] = {
     if (instanceConfigs == null)
@@ -84,7 +84,7 @@ abstract class KafkaServerTestHarness extends ZooKeeperTestHarness {
   protected def clientSaslProperties: Option[Properties] = None
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
 
     if (configs.isEmpty)
@@ -106,7 +106,7 @@ abstract class KafkaServerTestHarness extends ZooKeeperTestHarness {
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     if (servers != null) {
       TestUtils.shutdownServers(servers)
     }
@@ -140,7 +140,7 @@ abstract class KafkaServerTestHarness extends ZooKeeperTestHarness {
     index
   }
 
-  def killBroker(index: Int) {
+  def killBroker(index: Int): Unit = {
     if(alive(index)) {
       servers(index).shutdown()
       servers(index).awaitShutdown()
@@ -151,7 +151,7 @@ abstract class KafkaServerTestHarness extends ZooKeeperTestHarness {
   /**
    * Restart any dead brokers
    */
-  def restartDeadBrokers() {
+  def restartDeadBrokers(): Unit = {
     for(i <- servers.indices if !alive(i)) {
       servers(i).startup()
       alive(i) = true

@@ -53,7 +53,7 @@ class PartitionTopicInfo(val topic: String,
   /**
    * Enqueue a message set for processing.
    */
-  def enqueue(messages: ByteBufferMessageSet) {
+  def enqueue(messages: ByteBufferMessageSet): Unit = {
     val size = messages.validBytes
     if(size > 0) {
       val next = messages.shallowIterator.toSeq.last.nextOffset

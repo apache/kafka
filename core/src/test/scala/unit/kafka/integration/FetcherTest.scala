@@ -43,7 +43,7 @@ class FetcherTest extends KafkaServerTestHarness {
   var zkUtils: ZkUtils = null
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp
     zkUtils = ZkUtils(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled))
 
@@ -67,7 +67,7 @@ class FetcherTest extends KafkaServerTestHarness {
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     fetcher.stopConnections()
     if (zkUtils != null)
      CoreUtils.swallow(zkUtils.close(), this)
@@ -75,7 +75,7 @@ class FetcherTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def testFetcher() {
+  def testFetcher(): Unit = {
     val perNode = 2
     var count = TestUtils.produceMessages(servers, topic, perNode).size
 
@@ -88,7 +88,7 @@ class FetcherTest extends KafkaServerTestHarness {
 
   def assertQueueEmpty(): Unit = assertEquals(0, queue.size)
 
-  def fetch(expected: Int) {
+  def fetch(expected: Int): Unit = {
     var count = 0
     while (count < expected) {
       val chunk = queue.poll(2L, TimeUnit.SECONDS)

@@ -51,7 +51,7 @@ trait BaseMessageSetTestCases extends JUnitSuite {
 
     def isOpen: Boolean = true
 
-    def close() {}
+    def close(): Unit = {}
 
   }
 
@@ -61,20 +61,20 @@ trait BaseMessageSetTestCases extends JUnitSuite {
   def createMessageSet(messages: Seq[Message]): MessageSet
 
   @Test
-  def testWrittenEqualsRead() {
+  def testWrittenEqualsRead(): Unit = {
     val messageSet = createMessageSet(messages)
     assertEquals(messages.toVector, messageSet.toVector.map(m => m.message))
   }
 
   @Test
-  def testIteratorIsConsistent() {
+  def testIteratorIsConsistent(): Unit = {
     val m = createMessageSet(messages)
     // two iterators over the same set should give the same results
     checkEquals(m.iterator, m.iterator)
   }
 
   @Test
-  def testSizeInBytes() {
+  def testSizeInBytes(): Unit = {
     assertEquals("Empty message set should have 0 bytes.",
                  0,
                  createMessageSet(Array[Message]()).sizeInBytes)
@@ -84,7 +84,7 @@ trait BaseMessageSetTestCases extends JUnitSuite {
   }
 
   @Test
-  def testWriteTo() {
+  def testWriteTo(): Unit = {
     // test empty message set
     checkWriteToWithMessageSet(createMessageSet(Array[Message]()))
     checkWriteToWithMessageSet(createMessageSet(messages))
@@ -92,7 +92,7 @@ trait BaseMessageSetTestCases extends JUnitSuite {
 
   /* Tests that writing to a channel that doesn't consume all the bytes in the buffer works correctly */
   @Test
-  def testWriteToChannelThatConsumesPartially() {
+  def testWriteToChannelThatConsumesPartially(): Unit = {
     val bytesToConsumePerBuffer = 50
     val messages = (0 until 10).map(_ => new Message(randomString(100).getBytes))
     val messageSet = createMessageSet(messages)
@@ -111,11 +111,11 @@ trait BaseMessageSetTestCases extends JUnitSuite {
     checkEquals(new ByteBufferMessageSet(ByteBuffer.wrap(channel.data.toArray)).iterator, messageSet.iterator)
   }
 
-  def checkWriteToWithMessageSet(messageSet: MessageSet) {
+  def checkWriteToWithMessageSet(messageSet: MessageSet): Unit = {
     checkWriteWithMessageSet(messageSet, messageSet.asRecords.writeTo(_, 0, messageSet.sizeInBytes))
   }
 
-  def checkWriteWithMessageSet(set: MessageSet, write: GatheringByteChannel => Long) {
+  def checkWriteWithMessageSet(set: MessageSet, write: GatheringByteChannel => Long): Unit = {
     // do the write twice to ensure the message set is restored to its original state
     for (_ <- 0 to 1) {
       val file = tempFile()

@@ -75,20 +75,20 @@ class TransactionStateManagerTest {
   var expectedError: Errors = Errors.NONE
 
   @Before
-  def setUp() {
+  def setUp(): Unit = {
     // make sure the transactional id hashes to the assigning partition id
     assertEquals(partitionId, transactionManager.partitionFor(transactionalId1))
     assertEquals(partitionId, transactionManager.partitionFor(transactionalId2))
   }
 
   @After
-  def tearDown() {
+  def tearDown(): Unit = {
     EasyMock.reset(zkClient, replicaManager)
     transactionManager.shutdown()
   }
 
   @Test
-  def testValidateTransactionTimeout() {
+  def testValidateTransactionTimeout(): Unit = {
     assertTrue(transactionManager.validateTransactionTimeoutMs(1))
     assertFalse(transactionManager.validateTransactionTimeoutMs(-1))
     assertFalse(transactionManager.validateTransactionTimeoutMs(0))
@@ -97,7 +97,7 @@ class TransactionStateManagerTest {
   }
 
   @Test
-  def testAddGetPids() {
+  def testAddGetPids(): Unit = {
     transactionManager.addLoadedTransactionsToCache(partitionId, coordinatorEpoch, new Pool[String, TransactionMetadata]())
 
     assertEquals(Right(None), transactionManager.getTransactionState(transactionalId1))
@@ -110,7 +110,7 @@ class TransactionStateManagerTest {
   }
 
   @Test
-  def testLoadAndRemoveTransactionsForPartition() {
+  def testLoadAndRemoveTransactionsForPartition(): Unit = {
     // generate transaction log messages for two pids traces:
 
     // pid1's transaction started with two partitions
@@ -307,7 +307,7 @@ class TransactionStateManagerTest {
   }
 
   @Test
-  def testAppendFailToUnknownError() {
+  def testAppendFailToUnknownError(): Unit = {
     transactionManager.addLoadedTransactionsToCache(partitionId, coordinatorEpoch, new Pool[String, TransactionMetadata]())
     transactionManager.putTransactionStateIfNotExists(transactionalId1, txnMetadata1)
 
@@ -327,7 +327,7 @@ class TransactionStateManagerTest {
   }
 
   @Test
-  def testPendingStateNotResetOnRetryAppend() {
+  def testPendingStateNotResetOnRetryAppend(): Unit = {
     transactionManager.addLoadedTransactionsToCache(partitionId, coordinatorEpoch, new Pool[String, TransactionMetadata]())
     transactionManager.putTransactionStateIfNotExists(transactionalId1, txnMetadata1)
 

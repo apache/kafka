@@ -196,7 +196,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   def leaderOrNull: String = leaderId.orNull
   def protocolOrNull: String = protocol.orNull
 
-  def add(member: MemberMetadata) {
+  def add(member: MemberMetadata): Unit = {
     if (members.isEmpty)
       this.protocolType = Some(member.protocolType)
 
@@ -209,7 +209,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     members.put(member.memberId, member)
   }
 
-  def remove(memberId: String) {
+  def remove(memberId: String): Unit = {
     members.remove(memberId)
     if (isLeader(memberId)) {
       leaderId = if (members.isEmpty) {
@@ -237,7 +237,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
   def canRebalance = GroupMetadata.validPreviousStates(PreparingRebalance).contains(state)
 
-  def transitionTo(groupState: GroupState) {
+  def transitionTo(groupState: GroupState): Unit = {
     assertValidTransition(groupState)
     state = groupState
   }
@@ -310,12 +310,12 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   }
 
   def initializeOffsets(offsets: collection.Map[TopicPartition, CommitRecordMetadataAndOffset],
-                        pendingTxnOffsets: Map[Long, mutable.Map[TopicPartition, CommitRecordMetadataAndOffset]]) {
+                        pendingTxnOffsets: Map[Long, mutable.Map[TopicPartition, CommitRecordMetadataAndOffset]]): Unit = {
     this.offsets ++= offsets
     this.pendingTransactionalOffsetCommits ++= pendingTxnOffsets
   }
 
-  def onOffsetCommitAppend(topicPartition: TopicPartition, offsetWithCommitRecordMetadata: CommitRecordMetadataAndOffset) {
+  def onOffsetCommitAppend(topicPartition: TopicPartition, offsetWithCommitRecordMetadata: CommitRecordMetadataAndOffset): Unit = {
     if (pendingOffsetCommits.contains(topicPartition)) {
       if (offsetWithCommitRecordMetadata.appendedBatchOffset.isEmpty)
         throw new IllegalStateException("Cannot complete offset commit write without providing the metadata of the record " +
@@ -340,12 +340,12 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     }
   }
 
-  def prepareOffsetCommit(offsets: Map[TopicPartition, OffsetAndMetadata]) {
+  def prepareOffsetCommit(offsets: Map[TopicPartition, OffsetAndMetadata]): Unit = {
     receivedConsumerOffsetCommits = true
     pendingOffsetCommits ++= offsets
   }
 
-  def prepareTxnOffsetCommit(producerId: Long, offsets: Map[TopicPartition, OffsetAndMetadata]) {
+  def prepareTxnOffsetCommit(producerId: Long, offsets: Map[TopicPartition, OffsetAndMetadata]): Unit = {
     trace(s"TxnOffsetCommit for producer $producerId and group $groupId with offsets $offsets is pending")
     receivedTransactionalOffsetCommits = true
     val producerOffsets = pendingTransactionalOffsetCommits.getOrElseUpdate(producerId,
@@ -377,7 +377,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   }
 
   def onTxnOffsetCommitAppend(producerId: Long, topicPartition: TopicPartition,
-                              commitRecordMetadataAndOffset: CommitRecordMetadataAndOffset) {
+                              commitRecordMetadataAndOffset: CommitRecordMetadataAndOffset): Unit = {
     pendingTransactionalOffsetCommits.get(producerId) match {
       case Some(pendingOffset) =>
         if (pendingOffset.contains(topicPartition)
@@ -461,7 +461,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
   def hasOffsets = offsets.nonEmpty || pendingOffsetCommits.nonEmpty || pendingTransactionalOffsetCommits.nonEmpty
 
-  private def assertValidTransition(targetState: GroupState) {
+  private def assertValidTransition(targetState: GroupState): Unit = {
     if (!GroupMetadata.validPreviousStates(targetState).contains(state))
       throw new IllegalStateException("Group %s should be in the %s states before moving to %s state. Instead it is in %s state"
         .format(groupId, GroupMetadata.validPreviousStates(targetState).mkString(","), targetState, state))

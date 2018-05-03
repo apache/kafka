@@ -43,7 +43,7 @@ class KafkaStream[K,V](private val queue: BlockingQueue[FetchedDataChunk],
    * This method clears the queue being iterated during the consumer rebalancing. This is mainly
    * to reduce the number of duplicates received by the consumer
    */
-  def clear() {
+  def clear(): Unit = {
     iter.clearCurrentChunk()
   }
 

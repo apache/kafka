@@ -32,7 +32,7 @@ import org.junit.Test
 class PartitionAssignorTest extends Logging {
 
   @Test
-  def testRoundRobinPartitionAssignor() {
+  def testRoundRobinPartitionAssignor(): Unit = {
     val assignor = new RoundRobinAssignor
 
     /** various scenarios with only wildcard consumers */
@@ -56,7 +56,7 @@ class PartitionAssignorTest extends Logging {
   }
 
   @Test
-  def testRoundRobinPartitionAssignorStaticSubscriptions() {
+  def testRoundRobinPartitionAssignorStaticSubscriptions(): Unit = {
     val assignor = new RoundRobinAssignor
 
     /** test static subscription scenarios */
@@ -82,7 +82,7 @@ class PartitionAssignorTest extends Logging {
   }
 
   @Test
-  def testRoundRobinPartitionAssignorUnbalancedStaticSubscriptions() {
+  def testRoundRobinPartitionAssignorUnbalancedStaticSubscriptions(): Unit = {
     val assignor = new RoundRobinAssignor
     val minConsumerCount = 5
 
@@ -111,7 +111,7 @@ class PartitionAssignorTest extends Logging {
   }
 
   @Test
-  def testRangePartitionAssignor() {
+  def testRangePartitionAssignor(): Unit = {
     val assignor = new RangeAssignor
     (1 to PartitionAssignorTest.TestCaseCount).foreach { _ =>
       val consumerCount = 1.max(TestUtils.random.nextInt(PartitionAssignorTest.MaxConsumerCount + 1))
@@ -218,7 +218,7 @@ private object PartitionAssignorTest extends Logging {
   }
 
   private def assignAndVerify(scenario: Scenario, assignor: PartitionAssignor, zkUtils: ZkUtils,
-                              verifyAssignmentIsUniform: Boolean = false) {
+                              verifyAssignmentIsUniform: Boolean = false): Unit = {
     val assignments = scenario.subscriptions.map { case (consumer, _)  =>
       val ctx = new AssignmentContext("g1", consumer, excludeInternalTopics = true, zkUtils)
       assignor.assign(ctx).get(consumer)

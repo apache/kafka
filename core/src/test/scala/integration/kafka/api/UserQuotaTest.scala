@@ -33,7 +33,7 @@ class UserQuotaTest extends BaseQuotaTest with SaslSetup {
   override protected val clientSaslProperties = Some(kafkaClientSaslProperties(kafkaClientSaslMechanism))
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     startSasl(jaasSections(kafkaServerSaslMechanisms, Some("GSSAPI"), KafkaSasl, JaasTestUtils.KafkaServerContextName))
     this.serverConfig.setProperty(KafkaConfig.ProducerQuotaBytesPerSecondDefaultProp, Long.MaxValue.toString)
     this.serverConfig.setProperty(KafkaConfig.ConsumerQuotaBytesPerSecondDefaultProp, Long.MaxValue.toString)
@@ -56,18 +56,18 @@ class UserQuotaTest extends BaseQuotaTest with SaslSetup {
         Map("user" -> userPrincipal.getName, "client-id" -> "")
       }
 
-      override def overrideQuotas(producerQuota: Long, consumerQuota: Long, requestQuota: Double) {
+      override def overrideQuotas(producerQuota: Long, consumerQuota: Long, requestQuota: Double): Unit = {
         val props = quotaProperties(producerQuota, consumerQuota, requestQuota)
         updateQuotaOverride(props)
       }
 
-      override def removeQuotaOverrides() {
+      override def removeQuotaOverrides(): Unit = {
         val emptyProps = new Properties
         updateQuotaOverride(emptyProps)
         updateQuotaOverride(emptyProps)
       }
 
-      private def updateQuotaOverride(properties: Properties) {
+      private def updateQuotaOverride(properties: Properties): Unit = {
         adminZkClient.changeUserOrUserClientIdConfig(Sanitizer.sanitize(userPrincipal.getName), properties)
       }
     }

@@ -72,7 +72,7 @@ class ControllerContext {
   }
 
   // setter
-  def liveBrokers_=(brokers: Set[Broker]) {
+  def liveBrokers_=(brokers: Set[Broker]): Unit = {
     liveBrokersUnderlying = brokers
     liveBrokerIdsUnderlying = liveBrokersUnderlying.map(_.id)
   }

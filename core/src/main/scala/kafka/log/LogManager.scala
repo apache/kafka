@@ -182,7 +182,7 @@ class LogManager(logDirs: Seq[File],
   }
 
   // dir should be an absolute path
-  def handleLogDirFailure(dir: String) {
+  def handleLogDirFailure(dir: String): Unit = {
     info(s"Stopping serving logs in dir $dir")
     logCreationOrDeletionLock synchronized {
       _liveLogDirs.remove(new File(dir))
@@ -382,7 +382,7 @@ class LogManager(logDirs: Seq[File],
   /**
    *  Start the background threads to flush logs and do log cleanup
    */
-  def startup() {
+  def startup(): Unit = {
     /* Schedule the cleanup task to delete old logs */
     if (scheduler != null) {
       info("Starting log cleanup with a period of %d ms.".format(retentionCheckMs))
@@ -419,7 +419,7 @@ class LogManager(logDirs: Seq[File],
   /**
    * Close all the logs
    */
-  def shutdown() {
+  def shutdown(): Unit = {
     info("Shutting down.")
 
     removeMetric("OfflineLogDirectoryCount")
@@ -489,7 +489,7 @@ class LogManager(logDirs: Seq[File],
    * @param partitionOffsets Partition logs that need to be truncated
    * @param isFuture True iff the truncation should be performed on the future log of the specified partitions
    */
-  def truncateTo(partitionOffsets: Map[TopicPartition, Long], isFuture: Boolean) {
+  def truncateTo(partitionOffsets: Map[TopicPartition, Long], isFuture: Boolean): Unit = {
     var truncated = false
     for ((topicPartition, truncateOffset) <- partitionOffsets) {
       val log = {
@@ -527,7 +527,7 @@ class LogManager(logDirs: Seq[File],
    * @param newOffset The new offset to start the log with
    * @param isFuture True iff the truncation should be performed on the future log of the specified partition
    */
-  def truncateFullyAndStartAt(topicPartition: TopicPartition, newOffset: Long, isFuture: Boolean) {
+  def truncateFullyAndStartAt(topicPartition: TopicPartition, newOffset: Long, isFuture: Boolean): Unit = {
     val log = {
       if (isFuture)
         futureLogs.get(topicPartition)
@@ -552,7 +552,7 @@ class LogManager(logDirs: Seq[File],
    * Write out the current recovery point for all logs to a text file in the log directory
    * to avoid recovering the whole log on startup.
    */
-  def checkpointLogRecoveryOffsets() {
+  def checkpointLogRecoveryOffsets(): Unit = {
     liveLogDirs.foreach(checkpointLogRecoveryOffsetsInDir)
   }
 
@@ -560,7 +560,7 @@ class LogManager(logDirs: Seq[File],
    * Write out the current log start offset for all logs to a text file in the log directory
    * to avoid exposing data that have been deleted by DeleteRecordsRequest
    */
-  def checkpointLogStartOffsets() {
+  def checkpointLogStartOffsets(): Unit = {
     liveLogDirs.foreach(checkpointLogStartOffsetsInDir)
   }
 
@@ -860,7 +860,7 @@ class LogManager(logDirs: Seq[File],
    * Delete any eligible logs. Return the number of segments deleted.
    * Only consider logs that are not compacted.
    */
-  def cleanupLogs() {
+  def cleanupLogs(): Unit = {
     debug("Beginning log cleanup...")
     var total = 0
     val startMs = time.milliseconds

@@ -53,7 +53,7 @@ class ConsumerFetcherManager(private val consumerIdString: String,
 
   private class LeaderFinderThread(name: String) extends ShutdownableThread(name) {
     // thread responsible for adding the fetcher to the right broker when leader is available
-    override def doWork() {
+    override def doWork(): Unit = {
       val leaderForPartitionsMap = new HashMap[TopicPartition, BrokerEndPoint]
       lock.lock()
       try {
@@ -117,7 +117,7 @@ class ConsumerFetcherManager(private val consumerIdString: String,
     new ConsumerFetcherThread(consumerIdString, fetcherId, config, sourceBroker, partitionMap, this)
   }
 
-  def startConnections(topicInfos: Iterable[PartitionTopicInfo], cluster: Cluster) {
+  def startConnections(topicInfos: Iterable[PartitionTopicInfo], cluster: Cluster): Unit = {
     leaderFinderThread = new LeaderFinderThread(consumerIdString + "-leader-finder-thread")
     leaderFinderThread.start()
 
@@ -128,7 +128,7 @@ class ConsumerFetcherManager(private val consumerIdString: String,
     }
   }
 
-  def stopConnections() {
+  def stopConnections(): Unit = {
     /*
      * Stop the leader finder thread first before stopping fetchers. Otherwise, if there are more partitions without
      * leader, then the leader finder thread will process these partitions (before shutting down) and add fetchers for
@@ -150,7 +150,7 @@ class ConsumerFetcherManager(private val consumerIdString: String,
     info("All connections stopped")
   }
 
-  def addPartitionsWithError(partitionList: Iterable[TopicPartition]) {
+  def addPartitionsWithError(partitionList: Iterable[TopicPartition]): Unit = {
     debug("adding partitions with error %s".format(partitionList))
     inLock(lock) {
       if (partitionMap != null) {

@@ -133,7 +133,7 @@ class LeaderEpochFileCacheTest {
   }
 
   @Test
-  def shouldReturnUnsupportedIfNoEpochRecorded(){
+  def shouldReturnUnsupportedIfNoEpochRecorded(): Unit ={
     def leoFinder() = new LogOffsetMetadata(0)
 
     //Given
@@ -144,7 +144,7 @@ class LeaderEpochFileCacheTest {
   }
 
   @Test
-  def shouldReturnUnsupportedIfRequestedEpochLessThanFirstEpoch(){
+  def shouldReturnUnsupportedIfRequestedEpochLessThanFirstEpoch(): Unit ={
     def leoFinder() = new LogOffsetMetadata(0)
 
     //Given
@@ -183,7 +183,7 @@ class LeaderEpochFileCacheTest {
   }
 
   @Test
-  def shouldReturnNextAvailableEpochIfThereIsNoExactEpochForTheOneRequested(){
+  def shouldReturnNextAvailableEpochIfThereIsNoExactEpochForTheOneRequested(): Unit ={
     def leoFinder() = new LogOffsetMetadata(0)
 
     //Given
@@ -249,7 +249,7 @@ class LeaderEpochFileCacheTest {
   }
 
   @Test
-  def shouldPersistEpochsBetweenInstances(){
+  def shouldPersistEpochsBetweenInstances(): Unit ={
     def leoFinder() = new LogOffsetMetadata(0)
     val checkpointPath = TestUtils.tempFile().getAbsolutePath
     checkpoint = new LeaderEpochCheckpointFile(new File(checkpointPath))
@@ -661,7 +661,7 @@ class LeaderEpochFileCacheTest {
   }
 
   @Before
-  def setUp() {
+  def setUp(): Unit = {
     checkpoint = new LeaderEpochCheckpointFile(TestUtils.tempFile())
   }
 }

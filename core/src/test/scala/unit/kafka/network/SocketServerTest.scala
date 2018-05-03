@@ -84,14 +84,14 @@ class SocketServerTest extends JUnitSuite {
   }
 
   @After
-  def tearDown() {
+  def tearDown(): Unit = {
     shutdownServerAndMetrics(server)
     sockets.foreach(_.close())
     sockets.clear()
     kafkaLogger.setLevel(logLevelToRestore)
   }
 
-  def sendRequest(socket: Socket, request: Array[Byte], id: Option[Short] = None, flush: Boolean = true) {
+  def sendRequest(socket: Socket, request: Array[Byte], id: Option[Short] = None, flush: Boolean = true): Unit = {
     val outgoing = new DataOutputStream(socket.getOutputStream)
     id match {
       case Some(id) =>
@@ -122,11 +122,11 @@ class SocketServerTest extends JUnitSuite {
   }
 
   /* A simple request handler that just echos back the response */
-  def processRequest(channel: RequestChannel) {
+  def processRequest(channel: RequestChannel): Unit = {
     processRequest(channel, receiveRequest(channel))
   }
 
-  def processRequest(channel: RequestChannel, request: RequestChannel.Request) {
+  def processRequest(channel: RequestChannel, request: RequestChannel.Request): Unit = {
     val byteBuffer = request.body[AbstractRequest].serialize(request.header)
     byteBuffer.rewind()
 
@@ -175,7 +175,7 @@ class SocketServerTest extends JUnitSuite {
   }
 
   @Test
-  def simpleRequest() {
+  def simpleRequest(): Unit = {
     val plainSocket = connect(protocol = SecurityProtocol.PLAINTEXT)
     val serializedBytes = producerRequestBytes()
 
@@ -186,7 +186,7 @@ class SocketServerTest extends JUnitSuite {
   }
 
   @Test
-  def tooBigRequestIsRejected() {
+  def tooBigRequestIsRejected(): Unit = {
     val tooManyBytes = new Array[Byte](server.config.socketRequestMaxBytes + 1)
     new Random().nextBytes(tooManyBytes)
     val socket = connect()
@@ -204,7 +204,7 @@ class SocketServerTest extends JUnitSuite {
   }
 
   @Test
-  def testGracefulClose() {
+  def testGracefulClose(): Unit = {
     val plainSocket = connect(protocol = SecurityProtocol.PLAINTEXT)
     val serializedBytes = producerRequestBytes()
 
@@ -233,7 +233,7 @@ class SocketServerTest extends JUnitSuite {
   }
 
   @Test
-  def testConnectionId() {
+  def testConnectionId(): Unit = {
     val sockets = (1 to 5).map(_ => connect(protocol = SecurityProtocol.PLAINTEXT))
     val serializedBytes = producerRequestBytes()
 
@@ -250,7 +250,7 @@ class SocketServerTest extends JUnitSuite {
   }
 
   @Test
-  def testIdleConnection() {
+  def testIdleConnection(): Unit = {
     val idleTimeMs = 60000
     val time = new MockTime()
     props.put(KafkaConfig.ConnectionsMaxIdleMsProp, idleTimeMs.toString)
@@ -295,7 +295,7 @@ class SocketServerTest extends JUnitSuite {
   }
 
   @Test
-  def testConnectionIdReuse() {
+  def testConnectionIdReuse(): Unit = {
     val idleTimeMs = 60000
     val time = new MockTime()
     props.put(KafkaConfig.ConnectionsMaxIdleMsProp, idleTimeMs.toString)
@@ -395,7 +395,7 @@ class SocketServerTest extends JUnitSuite {
   }
 
   @Test
-  def testSocketsCloseOnShutdown() {
+  def testSocketsCloseOnShutdown(): Unit = {
     // open a connection
     val plainSocket = connect(protocol = SecurityProtocol.PLAINTEXT)
     plainSocket.setTcpNoDelay(true)
@@ -422,7 +422,7 @@ class SocketServerTest extends JUnitSuite {
   }
 
   @Test
-  def testMaxConnectionsPerIp() {
+  def testMaxConnectionsPerIp(): Unit = {
     // make the maximum allowable number of connections
     val conns = (0 until server.config.maxConnectionsPerIp).map(_ => connect())
     // now try one more (should fail)
@@ -444,7 +444,7 @@ class SocketServerTest extends JUnitSuite {
   }
 
   @Test
-  def testZeroMaxConnectionsPerIp() {
+  def testZeroMaxConnectionsPerIp(): Unit = {
     val newProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
     newProps.setProperty(KafkaConfig.MaxConnectionsPerIpProp, "0")
     newProps.setProperty(KafkaConfig.MaxConnectionsPerIpOverridesProp, "%s:%s".format("127.0.0.1", "5"))
@@ -481,7 +481,7 @@ class SocketServerTest extends JUnitSuite {
   }
 
   @Test
-  def testMaxConnectionsPerIpOverrides() {
+  def testMaxConnectionsPerIpOverrides(): Unit = {
     val overrideNum = server.config.maxConnectionsPerIp + 1
     val overrideProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
     overrideProps.put(KafkaConfig.MaxConnectionsPerIpOverridesProp, s"localhost:$overrideNum")
@@ -508,7 +508,7 @@ class SocketServerTest extends JUnitSuite {
   }
 
   @Test
-  def testSslSocketServer() {
+  def testSslSocketServer(): Unit = {
     val trustStoreFile = File.createTempFile("truststore", ".jks")
     val overrideProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, interBrokerSecurityProtocol = Some(SecurityProtocol.SSL),
       trustStoreFile = Some(trustStoreFile))
@@ -548,7 +548,7 @@ class SocketServerTest extends JUnitSuite {
   }
 
   @Test
-  def testSessionPrincipal() {
+  def testSessionPrincipal(): Unit = {
     val socket = connect()
     val bytes = new Array[Byte](40)
     sendRequest(socket, bytes, Some(0))
@@ -557,7 +557,7 @@ class SocketServerTest extends JUnitSuite {
 
   /* Test that we update request metrics if the client closes the connection while the broker response is in flight. */
   @Test
-  def testClientDisconnectionUpdatesRequestMetrics() {
+  def testClientDisconnectionUpdatesRequestMetrics(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
     val serverMetrics = new Metrics
     var conn: Socket = null
@@ -566,7 +566,7 @@ class SocketServerTest extends JUnitSuite {
                                 protocol: SecurityProtocol, memoryPool: MemoryPool): Processor = {
         new Processor(id, time, config.socketRequestMaxBytes, requestChannel, connectionQuotas,
           config.connectionsMaxIdleMs, listenerName, protocol, config, metrics, credentialProvider, MemoryPool.NONE, new LogContext()) {
-          override protected[network] def sendResponse(response: RequestChannel.Response, responseSend: Send) {
+          override protected[network] def sendResponse(response: RequestChannel.Response, responseSend: Send): Unit = {
             conn.close()
             super.sendResponse(response, responseSend)
           }
@@ -602,7 +602,7 @@ class SocketServerTest extends JUnitSuite {
   }
 
   @Test
-  def testClientDisconnectionWithStagedReceivesFullyProcessed() {
+  def testClientDisconnectionWithStagedReceivesFullyProcessed(): Unit = {
     val serverMetrics = new Metrics
     @volatile var selector: TestableSelector = null
     val overrideConnectionId = "127.0.0.1:1-127.0.0.1:2-0"
@@ -654,7 +654,7 @@ class SocketServerTest extends JUnitSuite {
    * `selector.send` (selector closes old connections, for example).
    */
   @Test
-  def testBrokerSendAfterChannelClosedUpdatesRequestMetrics() {
+  def testBrokerSendAfterChannelClosedUpdatesRequestMetrics(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
     props.setProperty(KafkaConfig.ConnectionsMaxIdleMsProp, "100")
     val serverMetrics = new Metrics
@@ -1100,7 +1100,7 @@ class SocketServerTest extends JUnitSuite {
     @volatile var minWakeupCount = 0
     @volatile var pollTimeoutOverride: Option[Long] = None
 
-    def addFailure(operation: SelectorOperation, exception: Option[Exception] = None) {
+    def addFailure(operation: SelectorOperation, exception: Option[Exception] = None): Unit = {
       failures += operation ->
         exception.getOrElse(new IllegalStateException(s"Test exception during $operation"))
     }

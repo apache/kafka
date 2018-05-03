@@ -104,23 +104,23 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
   def createMessageStreamsByFilter(topicFilter: TopicFilter) =
     createMessageStreamsByFilter(topicFilter, 1, new DefaultDecoder(), new DefaultDecoder())
 
-  def commitOffsets() {
+  def commitOffsets(): Unit = {
     underlying.commitOffsets(true)
   }
 
-  def commitOffsets(retryOnFailure: Boolean) {
+  def commitOffsets(retryOnFailure: Boolean): Unit = {
     underlying.commitOffsets(retryOnFailure)
   }
 
-  def commitOffsets(offsetsToCommit: java.util.Map[TopicAndPartition, OffsetAndMetadata], retryOnFailure: Boolean) {
+  def commitOffsets(offsetsToCommit: java.util.Map[TopicAndPartition, OffsetAndMetadata], retryOnFailure: Boolean): Unit = {
     underlying.commitOffsets(offsetsToCommit.asScala.toMap, retryOnFailure)
   }
 
-  def setConsumerRebalanceListener(consumerRebalanceListener: ConsumerRebalanceListener) {
+  def setConsumerRebalanceListener(consumerRebalanceListener: ConsumerRebalanceListener): Unit = {
     underlying.setConsumerRebalanceListener(consumerRebalanceListener)
   }
 
-  def shutdown() {
+  def shutdown(): Unit = {
     underlying.shutdown
   }
 }

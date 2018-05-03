@@ -75,7 +75,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
   private val topicPartition = new TopicPartition("topic", 0)
 
   @Test
-  def testSetAndGetConsumerOffset() {
+  def testSetAndGetConsumerOffset(): Unit = {
     val offset = 123L
     // None if no committed offsets
     assertTrue(zkClient.getConsumerOffset(group, topicPartition).isEmpty)
@@ -88,13 +88,13 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testGetConsumerOffsetNoData() {
+  def testGetConsumerOffsetNoData(): Unit = {
     zkClient.createRecursive(ConsumerOffset.path(group, topicPartition.topic, topicPartition.partition))
     assertTrue(zkClient.getConsumerOffset(group, topicPartition).isEmpty)
   }
 
   @Test
-  def testDeleteRecursive() {
+  def testDeleteRecursive(): Unit = {
     zkClient.deleteRecursive("/delete/does-not-exist")
 
     zkClient.createRecursive("/delete/some/random/path")
@@ -109,7 +109,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testCreateRecursive() {
+  def testCreateRecursive(): Unit = {
     zkClient.createRecursive("/create-newrootpath")
     assertTrue(zkClient.pathExists("/create-newrootpath"))
 
@@ -121,7 +121,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testTopicAssignmentMethods() {
+  def testTopicAssignmentMethods(): Unit = {
     assertTrue(zkClient.getAllTopicsInCluster.isEmpty)
 
     // test with non-existing topic
@@ -170,7 +170,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testGetDataAndVersion() {
+  def testGetDataAndVersion(): Unit = {
     val path = "/testpath"
 
     // test with non-existing path
@@ -194,7 +194,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testConditionalUpdatePath() {
+  def testConditionalUpdatePath(): Unit = {
     val path = "/testconditionalpath"
 
     // test with non-existing path
@@ -357,7 +357,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testSetGetAndDeletePartitionReassignment() {
+  def testSetGetAndDeletePartitionReassignment(): Unit = {
     zkClient.createRecursive(AdminZNode.path)
 
     assertEquals(Map.empty, zkClient.getPartitionReassignment)
@@ -383,7 +383,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testGetDataAndStat() {
+  def testGetDataAndStat(): Unit = {
     val path = "/testpath"
 
     // test with non-existing path
@@ -407,7 +407,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testGetChildren() {
+  def testGetChildren(): Unit = {
     val path = "/testpath"
 
     // test with non-existing path
@@ -425,7 +425,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testAclManagementMethods() {
+  def testAclManagementMethods(): Unit = {
 
     assertFalse(zkClient.pathExists(AclZNode.path))
     assertFalse(zkClient.pathExists(AclChangeNotificationZNode.path))
@@ -512,7 +512,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testDeleteTopicPathMethods() {
+  def testDeleteTopicPathMethods(): Unit = {
     assertFalse(zkClient.isTopicMarkedForDeletion(topic1))
     assertTrue(zkClient.getTopicDeletions.isEmpty)
 
@@ -543,7 +543,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testEntityConfigManagementMethods() {
+  def testEntityConfigManagementMethods(): Unit = {
     assertTrue(zkClient.getEntityConfigs(ConfigType.Topic, topic1).isEmpty)
 
     zkClient.setOrCreateEntityConfigs(ConfigType.Topic, topic1, logProps)
@@ -960,7 +960,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testClusterIdMethods() {
+  def testClusterIdMethods(): Unit = {
     val clusterId = CoreUtils.generateUuidAsBase64
 
     zkClient.createOrGetClusterId(clusterId)
@@ -968,20 +968,20 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
    }
 
   @Test
-  def testBrokerSequenceIdMethods() {
+  def testBrokerSequenceIdMethods(): Unit = {
     val sequenceId = zkClient.generateBrokerSequenceId()
     assertEquals(sequenceId + 1, zkClient.generateBrokerSequenceId)
   }
 
   @Test
-  def testCreateTopLevelPaths() {
+  def testCreateTopLevelPaths(): Unit = {
     zkClient.createTopLevelPaths()
 
     ZkData.PersistentZkPaths.foreach(path => assertTrue(zkClient.pathExists(path)))
   }
 
   @Test
-  def testPreferredReplicaElectionMethods() {
+  def testPreferredReplicaElectionMethods(): Unit = {
 
     assertTrue(zkClient.getPreferredReplicaElection.isEmpty)
 
@@ -1004,7 +1004,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testDelegationTokenMethods() {
+  def testDelegationTokenMethods(): Unit = {
     assertFalse(zkClient.pathExists(DelegationTokensZNode.path))
     assertFalse(zkClient.pathExists(DelegationTokenChangeNotificationZNode.path))
 

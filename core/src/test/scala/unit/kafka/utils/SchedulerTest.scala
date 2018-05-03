@@ -29,17 +29,17 @@ class SchedulerTest {
   val counter2 = new AtomicInteger(0)
   
   @Before
-  def setup() {
+  def setup(): Unit = {
     scheduler.startup()
   }
   
   @After
-  def teardown() {
+  def teardown(): Unit = {
     scheduler.shutdown()
   }
 
   @Test
-  def testMockSchedulerNonPeriodicTask() {
+  def testMockSchedulerNonPeriodicTask(): Unit = {
     mockTime.scheduler.schedule("test1", counter1.getAndIncrement _, delay=1)
     mockTime.scheduler.schedule("test2", counter2.getAndIncrement _, delay=100)
     assertEquals("Counter1 should not be incremented prior to task running.", 0, counter1.get)
@@ -53,7 +53,7 @@ class SchedulerTest {
   }
 
   @Test
-  def testMockSchedulerPeriodicTask() {
+  def testMockSchedulerPeriodicTask(): Unit = {
     mockTime.scheduler.schedule("test1", counter1.getAndIncrement _, delay=1, period=1)
     mockTime.scheduler.schedule("test2", counter2.getAndIncrement _, delay=100, period=100)
     assertEquals("Counter1 should not be incremented prior to task running.", 0, counter1.get)
@@ -67,14 +67,14 @@ class SchedulerTest {
   }
 
   @Test
-  def testReentrantTaskInMockScheduler() {
+  def testReentrantTaskInMockScheduler(): Unit = {
     mockTime.scheduler.schedule("test1", () => mockTime.scheduler.schedule("test2", counter2.getAndIncrement _, delay=0), delay=1)
     mockTime.sleep(1)
     assertEquals(1, counter2.get)
   }
 
   @Test
-  def testNonPeriodicTask() {
+  def testNonPeriodicTask(): Unit = {
     scheduler.schedule("test", counter1.getAndIncrement _, delay = 0)
     retry(30000) {
       assertEquals(counter1.get, 1)
@@ -84,7 +84,7 @@ class SchedulerTest {
   }
 
   @Test
-  def testPeriodicTask() {
+  def testPeriodicTask(): Unit = {
     scheduler.schedule("test", counter1.getAndIncrement _, delay = 0, period = 5)
     retry(30000){
       assertTrue("Should count to 20", counter1.get >= 20)
@@ -92,7 +92,7 @@ class SchedulerTest {
   }
 
   @Test
-  def testRestart() {
+  def testRestart(): Unit = {
     // schedule a task to increment a counter
     mockTime.scheduler.schedule("test1", counter1.getAndIncrement _, delay=1)
     mockTime.sleep(1)

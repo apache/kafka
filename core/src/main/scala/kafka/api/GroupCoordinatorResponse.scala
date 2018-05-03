@@ -50,7 +50,7 @@ case class GroupCoordinatorResponse (coordinatorOpt: Option[BrokerEndPoint], err
     2 + /* error code */
     coordinatorOpt.orElse(GroupCoordinatorResponse.NoBrokerEndpointOpt).get.sizeInBytes
 
-  def writeTo(buffer: ByteBuffer) {
+  def writeTo(buffer: ByteBuffer): Unit = {
     buffer.putInt(correlationId)
     buffer.putShort(error.code)
     coordinatorOpt.orElse(GroupCoordinatorResponse.NoBrokerEndpointOpt).foreach(_.writeTo(buffer))

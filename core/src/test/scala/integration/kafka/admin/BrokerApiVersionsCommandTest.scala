@@ -33,7 +33,7 @@ class BrokerApiVersionsCommandTest extends KafkaServerTestHarness {
   def generateConfigs: Seq[KafkaConfig] = TestUtils.createBrokerConfigs(1, zkConnect).map(KafkaConfig.fromProps)
 
   @Test(timeout=120000)
-  def checkBrokerApiVersionCommandOutput() {
+  def checkBrokerApiVersionCommandOutput(): Unit = {
     val byteArrayOutputStream = new ByteArrayOutputStream
     val printStream = new PrintStream(byteArrayOutputStream, false, StandardCharsets.UTF_8.name())
     BrokerApiVersionsCommand.execute(Array("--bootstrap-server", brokerList), printStream)

@@ -67,7 +67,7 @@ object FetchRequestAndResponseStatsRegistry {
     globalStats.getAndMaybePut(clientId)
   }
 
-  def removeConsumerFetchRequestAndResponseStats(clientId: String) {
+  def removeConsumerFetchRequestAndResponseStats(clientId: String): Unit = {
     val pattern = (".*" + clientId + ".*").r
     val keys = globalStats.keys
     for (key <- keys) {

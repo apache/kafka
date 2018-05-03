@@ -197,7 +197,7 @@ class DelegationTokenManager(val config: KafkaConfig,
     }
   }
 
-  private def loadCache() {
+  private def loadCache(): Unit = {
     lock.synchronized {
       val tokens = zkClient.getChildren(DelegationTokensZNode.path)
       info(s"Loading the token cache. Total token count : " + tokens.size)
@@ -260,7 +260,7 @@ class DelegationTokenManager(val config: KafkaConfig,
   def createToken(owner: KafkaPrincipal,
                   renewers: List[KafkaPrincipal],
                   maxLifeTimeMs: Long,
-                  responseCallback: CreateResponseCallback) {
+                  responseCallback: CreateResponseCallback): Unit = {
 
     if (!config.tokenAuthEnabled) {
       responseCallback(CreateTokenResult(-1, -1, -1, "", Array[Byte](), Errors.DELEGATION_TOKEN_AUTH_DISABLED))
@@ -294,7 +294,7 @@ class DelegationTokenManager(val config: KafkaConfig,
   def renewToken(principal: KafkaPrincipal,
                  hmac: ByteBuffer,
                  renewLifeTimeMs: Long,
-                 renewCallback: RenewResponseCallback) {
+                 renewCallback: RenewResponseCallback): Unit = {
 
     if (!config.tokenAuthEnabled) {
       renewCallback(Errors.DELEGATION_TOKEN_AUTH_DISABLED, -1)
@@ -394,7 +394,7 @@ class DelegationTokenManager(val config: KafkaConfig,
   def expireToken(principal: KafkaPrincipal,
                   hmac: ByteBuffer,
                   expireLifeTimeMs: Long,
-                  expireResponseCallback: ExpireResponseCallback) {
+                  expireResponseCallback: ExpireResponseCallback): Unit = {
 
     if (!config.tokenAuthEnabled) {
       expireResponseCallback(Errors.DELEGATION_TOKEN_AUTH_DISABLED, -1)
@@ -476,7 +476,7 @@ class DelegationTokenManager(val config: KafkaConfig,
   }
 
   object TokenChangedNotificationHandler extends NotificationHandler {
-    override def processNotification(tokenIdBytes: Array[Byte]) {
+    override def processNotification(tokenIdBytes: Array[Byte]): Unit = {
       lock.synchronized {
         val tokenId = new String(tokenIdBytes, StandardCharsets.UTF_8)
         info(s"Processing Token Notification for tokenId : $tokenId")

@@ -34,7 +34,7 @@ class KafkaServerStartable(val staticServerConfig: KafkaConfig, reporters: Seq[K
 
   def this(serverConfig: KafkaConfig) = this(serverConfig, Seq.empty)
 
-  def startup() {
+  def startup(): Unit = {
     try server.startup()
     catch {
       case _: Throwable =>
@@ -44,7 +44,7 @@ class KafkaServerStartable(val staticServerConfig: KafkaConfig, reporters: Seq[K
     }
   }
 
-  def shutdown() {
+  def shutdown(): Unit = {
     try server.shutdown()
     catch {
       case _: Throwable =>
@@ -58,7 +58,7 @@ class KafkaServerStartable(val staticServerConfig: KafkaConfig, reporters: Seq[K
    * Allow setting broker state from the startable.
    * This is needed when a custom kafka server startable want to emit new states that it introduces.
    */
-  def setServerState(newState: Byte) {
+  def setServerState(newState: Byte): Unit = {
     server.brokerState.newState(newState)
   }
 
