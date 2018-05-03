@@ -19,7 +19,6 @@ package org.apache.kafka.common.record;
 import org.apache.kafka.common.RecordsProcessingStats;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionRecordsStats;
-import org.apache.kafka.common.requests.RecordsSend;
 import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
@@ -38,7 +37,7 @@ import java.util.List;
  * Encapsulation for holding down-converted records with implementation for being able to "lazily" down-convert records.
  * Records are down-converted in batches and on-demand when {@link #writeTo} method is called. The implementation ensures
  * that we are able to send out at least one full batch of messages after down-conversion if {@link #writeTo} is used in
- * conjunction with {@link #sizeInBytes} - see {@link RecordsSend#writeTo} for an example.
+ * conjunction with {@link #sizeInBytes} - see {@link org.apache.kafka.common.requests.RecordsSend#writeTo} for an example.
  * <p> Because we do not have a full view of the underlying down-converted records, lot of methods typically associated
  * with {@link Records} are unsupported and not implemented. Specifically, this class provides implementations for
  * {@link #sizeInBytes() sizeInBytes} and {@link #writeTo(GatheringByteChannel, long, int) writeTo} methods only. </p>
@@ -96,7 +95,7 @@ public class LazyDownConversionRecords implements SerializableRecords {
      *     while (remaining > 0)
      *         remaining -= records.writeTo(channel, length - remaining, remaining);
      * </pre>
-     * Also see {@link RecordsSend#writeTo} for example usage.
+     * Also see {@link org.apache.kafka.common.requests.RecordsSend#writeTo} for example usage.
      */
     @Override
     public long writeTo(GatheringByteChannel channel, long position, int length) throws IOException {
