@@ -145,7 +145,7 @@ public class MemoryRecords extends AbstractRecords {
         long maxOffset = -1L;
         long shallowOffsetOfMaxTimestamp = -1L;
         int messagesRead = 0;
-        int bytesRead = 0;
+        int bytesRead = 0; // bytes processed from `batches`
         int messagesRetained = 0;
         int bytesRetained = 0;
 
@@ -359,6 +359,8 @@ public class MemoryRecords extends AbstractRecords {
         public final long maxTimestamp;
         public final long shallowOffsetOfMaxTimestamp;
 
+        // Note that `bytesRead` should contain only bytes from batches that have been processed,
+        // i.e. bytes from `messagesRead` and any discarded batches.
         public FilterResult(ByteBuffer output,
                             int messagesRead,
                             int bytesRead,
