@@ -67,6 +67,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -377,12 +378,20 @@ public class KafkaStreams {
     }
 
     /**
-     * Get read-only handle on global metrics registry.
+     * Get read-only handle on global metrics registry, including streams client's own metrics plus
+     * its embedded consumer clients' metrics.
      *
      * @return Map of all metrics.
      */
+    // TODO: we can add metrics for producer and admin client as well
     public Map<MetricName, ? extends Metric> metrics() {
-        return Collections.unmodifiableMap(metrics.metrics());
+        final Map<MetricName, Metric> result = new LinkedHashMap<>();
+        for (final StreamThread thread : threads) {
+            result.putAll(thread.consumerMetrics());
+        }
+        if (globalStreamThread != null) result.putAll(globalStreamThread.consumerMetrics());
+        result.putAll(metrics.metrics());
+        return Collections.unmodifiableMap(result);
     }
 
     /**

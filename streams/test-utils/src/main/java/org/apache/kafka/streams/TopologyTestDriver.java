@@ -309,7 +309,13 @@ public class TopologyTestDriver implements Closeable {
                 consumer,
                 stateDirectory,
                 stateRestoreListener,
-                streamsConfig);
+                streamsConfig,
+                new GlobalStateManagerImpl.IsRunning() {
+                    @Override
+                    public boolean check() {
+                        return true;
+                    }
+                });
 
             final GlobalProcessorContextImpl globalProcessorContext
                 = new GlobalProcessorContextImpl(streamsConfig, globalStateManager, streamsMetrics, cache);
