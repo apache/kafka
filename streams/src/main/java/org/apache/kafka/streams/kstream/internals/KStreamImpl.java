@@ -726,7 +726,14 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         Objects.requireNonNull(selector, "selector can't be null");
         Objects.requireNonNull(serialized, "serialized can't be null");
         final SerializedInternal<KR, V> serializedInternal = new SerializedInternal<>(serialized);
-        String selectName = internalSelectKey(selector);
+        final String selectName = internalSelectKey(selector);
+
+        final StatelessProcessorNode<KR, V> graphNode = new StatelessProcessorNode<>(this.name,
+                                                                                     this.name + "GROUP_BY",
+                                                                                     repartitionRequired,
+                                                                                     null,
+                                                                                     Collections.<String>emptyList());
+        builder.addNode(graphNode);
         return new KGroupedStreamImpl<>(builder,
                                         selectName,
                                         sourceNodes,
@@ -743,6 +750,14 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     @Override
     public KGroupedStream<K, V> groupByKey(final Serialized<K, V> serialized) {
         final SerializedInternal<K, V> serializedInternal = new SerializedInternal<>(serialized);
+
+        final StatelessProcessorNode<K, V> graphNode = new StatelessProcessorNode<>(this.name,
+                                                                                     this.name + "GROUP_BY_KEY",
+                                                                                     repartitionRequired,
+                                                                                     null,
+                                                                                     Collections.<String>emptyList());
+        builder.addNode(graphNode);
+
         return new KGroupedStreamImpl<>(builder,
                                         this.name,
                                         sourceNodes,
