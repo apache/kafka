@@ -31,7 +31,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 class StreamsTopologyGraph {
 
     private static final Logger LOG = LoggerFactory.getLogger(StreamsTopologyGraph.class);
-    public static final String TOPOLOGY_ROOT = "root";
+    static final String TOPOLOGY_ROOT = "root";
 
     protected final StreamsGraphNode root = new StreamsGraphNode(null, TOPOLOGY_ROOT, false) {
         @Override
