@@ -54,7 +54,6 @@ public class OffsetsForLeaderEpochResponse extends AbstractResponse {
             new Field(TOPICS_KEY_NAME, new ArrayOf(OFFSET_FOR_LEADER_EPOCH_RESPONSE_TOPIC_V0),
                     "An array of topics for which we have leader offsets for some requested Partition Leader Epoch"));
 
-
     // OFFSET_FOR_LEADER_EPOCH_RESPONSE_PARTITION_V1 added a per-partition leader epoch field,
     // which specifies which leader epoch the end offset belongs to
     private static final Schema OFFSET_FOR_LEADER_EPOCH_RESPONSE_PARTITION_V1 = new Schema(
@@ -69,8 +68,14 @@ public class OffsetsForLeaderEpochResponse extends AbstractResponse {
             new Field(TOPICS_KEY_NAME, new ArrayOf(OFFSET_FOR_LEADER_EPOCH_RESPONSE_TOPIC_V1),
                   "An array of topics for which we have leader offsets for some requested Partition Leader Epoch"));
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema OFFSET_FOR_LEADER_EPOCH_RESPONSE_V2 = OFFSET_FOR_LEADER_EPOCH_RESPONSE_V1;
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{OFFSET_FOR_LEADER_EPOCH_RESPONSE_V0, OFFSET_FOR_LEADER_EPOCH_RESPONSE_V1};
+        return new Schema[]{OFFSET_FOR_LEADER_EPOCH_RESPONSE_V0, OFFSET_FOR_LEADER_EPOCH_RESPONSE_V1,
+            OFFSET_FOR_LEADER_EPOCH_RESPONSE_V2};
     }
 
     private Map<TopicPartition, EpochEndOffset> epochEndOffsetsByPartition;
@@ -137,5 +142,10 @@ public class OffsetsForLeaderEpochResponse extends AbstractResponse {
         }
         responseStruct.set(TOPICS_KEY_NAME, topics.toArray());
         return responseStruct;
+    }
+
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 2;
     }
 }

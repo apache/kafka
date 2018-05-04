@@ -33,6 +33,7 @@ import java.util.Map;
 
 import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
 import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
+import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
 import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
 
 public class LeaderAndIsrResponse extends AbstractResponse {
@@ -49,8 +50,17 @@ public class LeaderAndIsrResponse extends AbstractResponse {
     // LeaderAndIsrResponse V1 may receive KAFKA_STORAGE_ERROR in the response
     private static final Schema LEADER_AND_ISR_RESPONSE_V1 = LEADER_AND_ISR_RESPONSE_V0;
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     * THROTTLE_TIME_MS is also added to the response for client-side throttling for error responses.
+     */
+    private static final Schema LEADER_AND_ISR_RESPONSE_V2 = new Schema(
+        THROTTLE_TIME_MS,
+        ERROR_CODE,
+        new Field(PARTITIONS_KEY_NAME, new ArrayOf(LEADER_AND_ISR_RESPONSE_PARTITION_V0)));
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{LEADER_AND_ISR_RESPONSE_V0, LEADER_AND_ISR_RESPONSE_V1};
+        return new Schema[]{LEADER_AND_ISR_RESPONSE_V0, LEADER_AND_ISR_RESPONSE_V1, LEADER_AND_ISR_RESPONSE_V2};
     }
 
     /**
@@ -62,9 +72,16 @@ public class LeaderAndIsrResponse extends AbstractResponse {
 
     private final Map<TopicPartition, Errors> responses;
 
+    private final int throttleTimeMs;
+
     public LeaderAndIsrResponse(Errors error, Map<TopicPartition, Errors> responses) {
+        this(error, responses, 0);
+    }
+
+    public LeaderAndIsrResponse(Errors error, Map<TopicPartition, Errors> responses, int throttleTimeMs) {
         this.responses = responses;
         this.error = error;
+        this.throttleTimeMs = throttleTimeMs;
     }
 
     public LeaderAndIsrResponse(Struct struct) {
@@ -78,6 +95,7 @@ public class LeaderAndIsrResponse extends AbstractResponse {
         }
 
         error = Errors.forCode(struct.get(ERROR_CODE));
+        throttleTimeMs = struct.getOrElse(THROTTLE_TIME_MS, DEFAULT_THROTTLE_TIME);
     }
 
     public Map<TopicPartition, Errors> responses() {
@@ -86,6 +104,10 @@ public class LeaderAndIsrResponse extends AbstractResponse {
 
     public Errors error() {
         return error;
+    }
+
+    public int throttleTimeMs() {
+        return throttleTimeMs;
     }
 
     @Override
@@ -116,7 +138,13 @@ public class LeaderAndIsrResponse extends AbstractResponse {
 
         struct.set(PARTITIONS_KEY_NAME, responseDatas.toArray());
         struct.set(ERROR_CODE, error.code());
+        struct.setIfExists(THROTTLE_TIME_MS, throttleTimeMs);
 
         return struct;
+    }
+
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 2;
     }
 }

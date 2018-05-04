@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.clients;
 
-import java.util.HashSet;
-import java.util.Set;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
@@ -110,16 +108,6 @@ public class NetworkClient implements KafkaClient {
     private final List<ClientResponse> abortedSends = new LinkedList<>();
 
     private final Sensor throttleTimeSensor;
-
-    /**
-     *  When communicating with the nodes contained in this set, if a response with a non-zero throttle time is
-     *  received, block the connection to the node for the specified throttle time. The broker had not throttled before
-     *  it sent out the response.
-     *
-     *  This client-side throttling is enabled for the nodes which returned the max protocol version of
-     *  APIVersionResponse >= 2.
-     */
-    private final Set<String> nodesWithClientSideThrottlingEnabled = new HashSet<>();
 
     public NetworkClient(Selectable selector,
                          Metadata metadata,
@@ -631,7 +619,6 @@ public class NetworkClient implements KafkaClient {
         connectionStates.disconnected(nodeId, now);
         apiVersions.remove(nodeId);
         nodesNeedingApiVersionsFetch.remove(nodeId);
-        nodesWithClientSideThrottlingEnabled.remove(nodeId);
         switch (disconnectState.state()) {
             case AUTHENTICATION_FAILED:
                 AuthenticationException exception = disconnectState.exception();
@@ -707,13 +694,15 @@ public class NetworkClient implements KafkaClient {
      * If a response from a node includes a non-zero throttle delay and client-side throttling has been enabled for
      * the connection to the node, throttle the connection for the specified delay.
      *
-     * @param responseStruct the response
+     * @param response the response
+     * @param throttleTimeMs throttle time
+     * @param apiVersion the API version of the response
      * @param nodeId the id of the node
      * @param now The current time
      */
-    private void maybeThrottle(Struct responseStruct, String nodeId, long now) {
-        int throttleTimeMs = responseStruct.getOrElse(CommonFields.THROTTLE_TIME_MS, 0);
-        if (nodesWithClientSideThrottlingEnabled.contains(nodeId) && throttleTimeMs > 0) {
+    private void maybeThrottle(AbstractResponse response, int throttleTimeMs, short apiVersion, String nodeId,
+        long now) {
+        if (throttleTimeMs > 0 && response.shouldClientThrottle(apiVersion)) {
             connectionStates.throttle(nodeId, now + throttleTimeMs);
             if (log.isTraceEnabled()) {
                 log.trace("Connection to node {} is throttled for {} ms until timestamp {}", nodeId, throttleTimeMs,
@@ -739,8 +728,9 @@ public class NetworkClient implements KafkaClient {
                     req.header.apiKey(), req.header.correlationId(), responseStruct);
             }
             // If the received response includes a throttle delay, throttle the connection.
-            maybeThrottle(responseStruct, req.destination, now);
             AbstractResponse body = AbstractResponse.parseResponse(req.header.apiKey(), responseStruct);
+            int throttleTimeMs = responseStruct.getOrElse(CommonFields.THROTTLE_TIME_MS, 0);
+            maybeThrottle(body, throttleTimeMs, req.header.apiVersion(), req.destination, now);
             if (req.isInternalRequest && body instanceof MetadataResponse)
                 metadataUpdater.handleCompletedMetadataResponse(req.header, now, (MetadataResponse) body);
             else if (req.isInternalRequest && body instanceof ApiVersionsResponse)
@@ -766,15 +756,6 @@ public class NetworkClient implements KafkaClient {
         }
         NodeApiVersions nodeVersionInfo = new NodeApiVersions(apiVersionsResponse.apiVersions());
         apiVersions.update(node, nodeVersionInfo);
-        // Enable client-side throttling for the connection to this node if the max version of
-        // ApiVersionsResponse supported by the node is >= 2.
-        if (apiVersionsResponse.apiVersion(ApiKeys.API_VERSIONS.id).maxVersion >= 2) {
-            nodesWithClientSideThrottlingEnabled.add(node);
-            log.debug("Client-side throttling is enabled for node {}", node);
-        } else {
-            nodesWithClientSideThrottlingEnabled.remove(node);
-            log.debug("Client-side throttling is disabled for node {}", node);
-        }
         this.connectionStates.ready(node);
         log.debug("Recorded API versions for node {}: {}", node, nodeVersionInfo);
     }

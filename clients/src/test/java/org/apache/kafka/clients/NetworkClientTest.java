@@ -239,12 +239,13 @@ public class NetworkClientTest {
         assertEquals(0, client.throttleDelayMs(node, time.milliseconds()));
     }
 
-    // Creates expected ApiVersionsResponse from the specified node, where the max protocol version for API_VERSIONS is
-    // set to the specified version.
-    private ApiVersionsResponse createExpectedApiVersionsResponse(Node node, short apiVersionsMaxProtocolVersion) {
+    // Creates expected ApiVersionsResponse from the specified node, where the max protocol version for the specified
+    // key is set to the specified version.
+    private ApiVersionsResponse createExpectedApiVersionsResponse(Node node, ApiKeys key,
+        short apiVersionsMaxProtocolVersion) {
         List<ApiVersionsResponse.ApiVersion> versionList = new ArrayList<>();
         for (ApiKeys apiKey : ApiKeys.values()) {
-            if (apiKey == ApiKeys.API_VERSIONS) {
+            if (apiKey == key) {
                 versionList.add(new ApiVersionsResponse.ApiVersion(apiKey.id, (short) 0, apiVersionsMaxProtocolVersion));
             } else {
                 versionList.add(new ApiVersionsResponse.ApiVersion(apiKey));
@@ -255,9 +256,9 @@ public class NetworkClientTest {
 
     @Test
     public void testThrottlingNotEnabledForConnectionToOlderBroker() {
-        // Instrument the test so that the max protocol version for API_VERSIONS returned from the node is 1 and thus
+        // Instrument the test so that the max protocol version for PRODUCE returned from the node is 5 and thus
         // client-side throttling is not enabled. Also, return a response with a 100ms throttle delay.
-        setExpectedApiVersionsResponse(createExpectedApiVersionsResponse(node, (short) 1));
+        setExpectedApiVersionsResponse(createExpectedApiVersionsResponse(node, ApiKeys.PRODUCE, (short) 5));
         while (!client.ready(node, time.milliseconds()))
             client.poll(1, time.milliseconds());
         selector.clear();
@@ -281,7 +282,7 @@ public class NetworkClientTest {
         selector.completeReceive(new NetworkReceive(node.idString(), buffer));
         List<ClientResponse> responses = client.poll(1, time.milliseconds());
 
-        // Since client-side throttling is disalbed, the connection is ready even though the response indicated a
+        // Since client-side throttling is disabled, the connection is ready even though the response indicated a
         // throttle delay.
         assertTrue(client.ready(node, time.milliseconds()));
         assertEquals(0, client.throttleDelayMs(node, time.milliseconds()));

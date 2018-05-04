@@ -35,8 +35,14 @@ public class HeartbeatResponse extends AbstractResponse {
             THROTTLE_TIME_MS,
             ERROR_CODE);
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema HEARTBEAT_RESPONSE_V2 = HEARTBEAT_RESPONSE_V1;
+
     public static Schema[] schemaVersions() {
-        return new Schema[] {HEARTBEAT_RESPONSE_V0, HEARTBEAT_RESPONSE_V1};
+        return new Schema[] {HEARTBEAT_RESPONSE_V0, HEARTBEAT_RESPONSE_V1,
+            HEARTBEAT_RESPONSE_V2};
     }
 
     /**
@@ -89,5 +95,10 @@ public class HeartbeatResponse extends AbstractResponse {
 
     public static HeartbeatResponse parse(ByteBuffer buffer, short version) {
         return new HeartbeatResponse(ApiKeys.HEARTBEAT.parseResponse(version, buffer));
+    }
+
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 2;
     }
 }

@@ -46,8 +46,14 @@ public class SaslHandshakeRequest extends AbstractRequest {
     // SASL_HANDSHAKE_REQUEST_V1 added to support SASL_AUTHENTICATE request to improve diagnostics
     private static final Schema SASL_HANDSHAKE_REQUEST_V1 = SASL_HANDSHAKE_REQUEST_V0;
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     * THROTTLE_TIME_MS is also added to the response for client-side throttling for error responses.
+     */
+    private static final Schema SASL_HANDSHAKE_REQUEST_V2 = SASL_HANDSHAKE_REQUEST_V1;
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{SASL_HANDSHAKE_REQUEST_V0, SASL_HANDSHAKE_REQUEST_V1};
+        return new Schema[]{SASL_HANDSHAKE_REQUEST_V0, SASL_HANDSHAKE_REQUEST_V1, SASL_HANDSHAKE_REQUEST_V2};
     }
 
     private final String mechanism;
@@ -96,11 +102,13 @@ public class SaslHandshakeRequest extends AbstractRequest {
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         short versionId = version();
+        List<String> enabledMechanisms = Collections.emptyList();
         switch (versionId) {
             case 0:
             case 1:
-                List<String> enabledMechanisms = Collections.emptyList();
                 return new SaslHandshakeResponse(Errors.forException(e), enabledMechanisms);
+            case 2:
+                return new SaslHandshakeResponse(Errors.forException(e), enabledMechanisms, throttleTimeMs);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
                         versionId, this.getClass().getSimpleName(), ApiKeys.SASL_HANDSHAKE.latestVersion()));

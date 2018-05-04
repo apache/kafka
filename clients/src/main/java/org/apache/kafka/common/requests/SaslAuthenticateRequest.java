@@ -40,8 +40,13 @@ public class SaslAuthenticateRequest extends AbstractRequest {
     private static final Schema SASL_AUTHENTICATE_REQUEST_V0 = new Schema(
             new Field(SASL_AUTH_BYTES_KEY_NAME, BYTES, "SASL authentication bytes from client as defined by the SASL mechanism."));
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema SASL_AUTHENTICATE_REQUEST_V1 = SASL_AUTHENTICATE_REQUEST_V0;
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{SASL_AUTHENTICATE_REQUEST_V0};
+        return new Schema[]{SASL_AUTHENTICATE_REQUEST_V0, SASL_AUTHENTICATE_REQUEST_V1};
     }
 
     private final ByteBuffer saslAuthBytes;
@@ -91,6 +96,8 @@ public class SaslAuthenticateRequest extends AbstractRequest {
         switch (versionId) {
             case 0:
                 return new SaslAuthenticateResponse(Errors.forException(e), e.getMessage());
+            case 1:
+                return new SaslAuthenticateResponse(Errors.forException(e), e.getMessage(), throttleTimeMs);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
                         versionId, this.getClass().getSimpleName(), ApiKeys.SASL_AUTHENTICATE.latestVersion()));

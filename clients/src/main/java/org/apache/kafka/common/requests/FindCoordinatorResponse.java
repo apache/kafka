@@ -56,8 +56,13 @@ public class FindCoordinatorResponse extends AbstractResponse {
             ERROR_MESSAGE,
             new Field(COORDINATOR_KEY_NAME, FIND_COORDINATOR_BROKER_V0, "Host and port information for the coordinator"));
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema FIND_COORDINATOR_RESPONSE_V2 = FIND_COORDINATOR_RESPONSE_V1;
+
     public static Schema[] schemaVersions() {
-        return new Schema[] {FIND_COORDINATOR_RESPONSE_V0, FIND_COORDINATOR_RESPONSE_V1};
+        return new Schema[] {FIND_COORDINATOR_RESPONSE_V0, FIND_COORDINATOR_RESPONSE_V1, FIND_COORDINATOR_RESPONSE_V2};
     }
 
     /**
@@ -141,5 +146,10 @@ public class FindCoordinatorResponse extends AbstractResponse {
                 ", error=" + error +
                 ", node=" + node +
                 ')';
+    }
+
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 2;
     }
 }

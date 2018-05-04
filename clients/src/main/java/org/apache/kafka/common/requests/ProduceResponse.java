@@ -139,10 +139,14 @@ public class ProduceResponse extends AbstractResponse {
                             LOG_START_OFFSET_FIELD)))))),
             THROTTLE_TIME_MS);
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema PRODUCE_RESPONSE_V6 = PRODUCE_RESPONSE_V5;
 
     public static Schema[] schemaVersions() {
         return new Schema[]{PRODUCE_RESPONSE_V0, PRODUCE_RESPONSE_V1, PRODUCE_RESPONSE_V2, PRODUCE_RESPONSE_V3,
-            PRODUCE_RESPONSE_V4, PRODUCE_RESPONSE_V5};
+            PRODUCE_RESPONSE_V4, PRODUCE_RESPONSE_V5, PRODUCE_RESPONSE_V6};
     }
 
     private final Map<TopicPartition, PartitionResponse> responses;
@@ -279,4 +283,8 @@ public class ProduceResponse extends AbstractResponse {
         return new ProduceResponse(ApiKeys.PRODUCE.responseSchema(version).read(buffer));
     }
 
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 6;
+    }
 }

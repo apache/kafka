@@ -197,4 +197,8 @@ public class ApiVersionsResponse extends AbstractResponse {
         return defaultApiVersionsResponse;
     }
 
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 2;
+    }
 }
