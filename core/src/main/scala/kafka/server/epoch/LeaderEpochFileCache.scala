@@ -96,10 +96,13 @@ class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetM
   override def endOffsetFor(requestedEpoch: Int): Long = {
     inReadLock(lock) {
       val offset =
-        if (requestedEpoch == latestEpoch) {
+        if (requestedEpoch == UNDEFINED_EPOCH) {
+          // this may happen if a bootstrapping follower sends a request with undefined epoch or
+          // a follower is on the older message format where leader epochs are not recorded
+          UNDEFINED_EPOCH_OFFSET
+        } else if (requestedEpoch == latestEpoch) {
           leo().messageOffset
-        }
-        else {
+        } else {
           val subsequentEpochs = epochs.filter(e => e.epoch > requestedEpoch)
           if (subsequentEpochs.isEmpty || requestedEpoch < epochs.head.epoch)
             UNDEFINED_EPOCH_OFFSET
