@@ -31,7 +31,7 @@ import java.util.List;
  */
 class StatelessProcessorNode<K, V> extends StreamsGraphNode {
 
-    private final ProcessorSupplier processorSupplier;
+    private final ProcessorSupplier<K, V> processorSupplier;
 
     // some processors need to register multiple parent names with
     // the InternalTopologyBuilder KStream#merge for example.
@@ -43,7 +43,7 @@ class StatelessProcessorNode<K, V> extends StreamsGraphNode {
 
     StatelessProcessorNode(final String parentProcessorNodeName,
                            final String processorNodeName,
-                           final ProcessorSupplier processorSupplier,
+                           final ProcessorSupplier<K, V> processorSupplier,
                            final boolean repartitionRequired) {
 
         super(parentProcessorNodeName,
@@ -56,7 +56,7 @@ class StatelessProcessorNode<K, V> extends StreamsGraphNode {
     StatelessProcessorNode(final String parentProcessorNodeName,
                            final String processorNodeName,
                            final boolean repartitionRequired,
-                           final ProcessorSupplier processorSupplier,
+                           final ProcessorSupplier<K, V> processorSupplier,
                            final List<String> multipleParentNames) {
 
         this(parentProcessorNodeName, processorNodeName, processorSupplier, repartitionRequired);
@@ -64,7 +64,7 @@ class StatelessProcessorNode<K, V> extends StreamsGraphNode {
         this.multipleParentNames = multipleParentNames;
     }
 
-    ProcessorSupplier processorSupplier() {
+    ProcessorSupplier<K, V> processorSupplier() {
         return processorSupplier;
     }
 

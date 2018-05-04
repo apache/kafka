@@ -34,7 +34,7 @@ class StatefulProcessorNode<K, V> extends StatelessProcessorNode<K, V> {
 
     StatefulProcessorNode(final String parentNodeName,
                           final String processorNodeName,
-                          final ProcessorSupplier processorSupplier,
+                          final ProcessorSupplier<K, V> processorSupplier,
                           final String[] storeNames,
                           final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier,
                           final StoreBuilder<KeyValueStore<K, V>> storeBuilder,
