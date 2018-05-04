@@ -23,6 +23,7 @@ import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.TimestampExtractor;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.slf4j.Logger;
 
 import java.util.ArrayDeque;
@@ -49,14 +50,19 @@ public class RecordQueue {
                 final SourceNode source,
                 final TimestampExtractor timestampExtractor,
                 final DeserializationExceptionHandler deserializationExceptionHandler,
-                final ProcessorContext processorContext,
+                final InternalProcessorContext processorContext,
                 final LogContext logContext) {
         this.partition = partition;
         this.source = source;
         this.timestampExtractor = timestampExtractor;
         this.fifoQueue = new ArrayDeque<>();
         this.timeTracker = new MinTimestampTracker<>();
-        this.recordDeserializer = new RecordDeserializer(source, deserializationExceptionHandler, logContext);
+        this.recordDeserializer = new RecordDeserializer(
+            source,
+            deserializationExceptionHandler,
+            logContext,
+            processorContext.metrics().skippedRecordsSensor()
+        );
         this.processorContext = processorContext;
         this.log = logContext.logger(RecordQueue.class);
     }
@@ -90,6 +96,7 @@ public class RecordQueue {
 
             final ConsumerRecord<Object, Object> record = recordDeserializer.deserialize(processorContext, rawRecord);
             if (record == null) {
+                // this only happens if the deserializer decides to skip. It has already logged the reason.
                 continue;
             }
 
@@ -107,6 +114,11 @@ public class RecordQueue {
 
             // drop message if TS is invalid, i.e., negative
             if (timestamp < 0) {
+                log.warn(
+                    "Skipping record due to negative extracted timestamp. topic=[{}] partition=[{}] offset=[{}] extractedTimestamp=[{}] extractor=[{}]",
+                    record.topic(), record.partition(), record.offset(), timestamp, timestampExtractor.getClass().getCanonicalName()
+                );
+                ((StreamsMetricsImpl) processorContext.metrics()).skippedRecordsSensor().record();
                 continue;
             }
 

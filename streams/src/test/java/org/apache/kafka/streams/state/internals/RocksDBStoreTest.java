@@ -79,7 +79,6 @@ public class RocksDBStoreTest {
     @After
     public void tearDown() {
         rocksDBStore.close();
-        context.close();
     }
 
     @Test

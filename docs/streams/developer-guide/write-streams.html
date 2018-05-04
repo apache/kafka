@@ -39,13 +39,13 @@
           <li><a class="reference internal" href="#using-kafka-streams-within-your-application-code" id="id2">Using Kafka Streams within your application code</a></li>
           <li><a class="reference internal" href="#testing-a-streams-app" id="id3">Testing a Streams application</a></li>
       </ul>
-    <p>Any Java application that makes use of the Kafka Streams library is considered a Kafka Streams application.
+    <p>Any Java or Scala application that makes use of the Kafka Streams library is considered a Kafka Streams application.
       The computational logic of a Kafka Streams application is defined as a <a class="reference internal" href="../core-concepts#streams_topology"><span class="std std-ref">processor topology</span></a>,
       which is a graph of stream processors (nodes) and streams (edges).</p>
     <p>You can define the processor topology with the Kafka Streams APIs:</p>
     <dl class="docutils">
       <dt><a class="reference internal" href="dsl-api.html#streams-developer-guide-dsl"><span class="std std-ref">Kafka Streams DSL</span></a></dt>
-      <dd>A high-level API that provides provides the most common data transformation operations such as <code class="docutils literal"><span class="pre">map</span></code>, <code class="docutils literal"><span class="pre">filter</span></code>, <code class="docutils literal"><span class="pre">join</span></code>, and <code class="docutils literal"><span class="pre">aggregations</span></code> out of the box. The DSL is the recommended starting point for developers new to Kafka Streams, and should cover many use cases and stream processing needs.</dd>
+        <dd>A high-level API that provides the most common data transformation operations such as <code class="docutils literal"><span class="pre">map</span></code>, <code class="docutils literal"><span class="pre">filter</span></code>, <code class="docutils literal"><span class="pre">join</span></code>, and <code class="docutils literal"><span class="pre">aggregations</span></code> out of the box. The DSL is the recommended starting point for developers new to Kafka Streams, and should cover many use cases and stream processing needs.  If you're writing a Scala application then you can use the <a href="dsl-api.html#scala-dsl"><span class="std std-ref">Kafka Streams DSL for Scala</span></a> library which removes much of the Java/Scala interoperability boilerplate as opposed to working directly with the Java DSL.</a></dd>
       <dt><a class="reference internal" href="processor-api.html#streams-developer-guide-processor-api"><span class="std std-ref">Processor API</span></a></dt>
       <dd>A low-level API that lets you add and connect processors as well as interact directly with state stores. The Processor API provides you with even more flexibility than the DSL but at the expense of requiring more manual work on the side of the application developer (e.g., more lines of code).</dd>
     </dl>
@@ -69,7 +69,7 @@
               </thead>
               <tbody valign="top">
               <tr class="row-even"><td><code class="docutils literal"><span class="pre">org.apache.kafka</span></code></td>
-                  <td><code>kafka-streams</code></td>
+                  <td><code class="docutils literal"><span class="pre">kafka-streams</span></code></td>
                   <td><code class="docutils literal"><span class="pre">{{fullDotVersion}}</span></code></td>
                   <td>(Required) Base library for Kafka Streams.</td>
               </tr>
@@ -78,6 +78,11 @@
                   <td><code class="docutils literal"><span class="pre">{{fullDotVersion}}</span></code></td>
                   <td>(Required) Kafka client library.  Contains built-in serializers/deserializers.</td>
               </tr>
+              <tr class="row-even"><td><code class="docutils literal"><span class="pre">org.apache.kafka</span></code></td>
+                  <td><code class="docutils literal"><span class="pre">kafka-streams-scala</span></code></td>
+                  <td><code class="docutils literal"><span class="pre">{{fullDotVersion}}</span></code></td>
+                  <td>(Optional) Kafka Streams DSL for Scala library to write Scala Kafka Streams applications.  When not using SBT you will need to suffix the artifact ID with the correct version of Scala your application is using (<code class="docutils literal"><span class="pre">_2.11</code></span>, <code class="docutils literal"><span class="pre">_2.12</code></span>)</td>
+              </tr>
               </tbody>
           </table>
           <div class="admonition tip">
@@ -85,19 +90,24 @@
               <p class="last">See the section <a class="reference internal" href="datatypes.html#streams-developer-guide-serdes"><span class="std std-ref">Data Types and Serialization</span></a> for more information about Serializers/Deserializers.</p>
           </div>
           <p>Example <code class="docutils literal"><span class="pre">pom.xml</span></code> snippet when using Maven:</p>
-          <div class="highlight-xml"><div class="highlight"><pre><span></span><span class="nt">&lt;dependency&gt;</span>
-    <span class="nt">&lt;groupId&gt;</span>org.apache.kafka<span class="nt">&lt;/groupId&gt;</span>
-    <span class="nt">&lt;artifactId&gt;</span>kafka-streams<span class="nt">&lt;/artifactId&gt;</span>
-    <span class="nt">&lt;version&gt;</span>{{fullDotVersion}}<span class="nt">&lt;/version&gt;</span>
-<span class="nt">&lt;/dependency&gt;</span>
-<span class="nt">&lt;dependency&gt;</span>
-    <span class="nt">&lt;groupId&gt;</span>org.apache.kafka<span class="nt">&lt;/groupId&gt;</span>
-    <span class="nt">&lt;artifactId&gt;</span>kafka-clients<span class="nt">&lt;/artifactId&gt;</span>
-    <span class="nt">&lt;version&gt;</span>{{fullDotVersion}}<span class="nt">&lt;/version&gt;</span>
-<span class="nt">&lt;/dependency&gt;</span>
-              
-</pre></div>
-          </div>
+          <pre class="brush: xml;">
+<dependency>
+    <groupId>org.apache.kafka</groupId>
+    <artifactId>kafka-streams</artifactId>
+    <version>{{fullDotVersion}}</version>
+</dependency>
+<dependency>
+    <groupId>org.apache.kafka</groupId>
+    <artifactId>kafka-clients</artifactId>
+    <version>{{fullDotVersion}}</version>
+</dependency>
+<!-- Optionally include Kafka Streams DSL for Scala for Scala 2.11 -->
+<dependency>
+    <groupId>org.apache.kafka</groupId>
+    <artifactId>kafka-streams-scala_2.11</artifactId>
+    <version>{{fullDotVersion}}</version>
+</dependency>
+          </pre>
       </div>
     <div class="section" id="using-kafka-streams-within-your-application-code">
       <h2>Using Kafka Streams within your application code<a class="headerlink" href="#using-kafka-streams-within-your-application-code" title="Permalink to this headline"></a></h2>

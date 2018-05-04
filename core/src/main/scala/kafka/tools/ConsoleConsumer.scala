@@ -19,9 +19,8 @@ package kafka.tools
 
 import java.io.PrintStream
 import java.nio.charset.StandardCharsets
-import java.util
 import java.util.concurrent.CountDownLatch
-import java.util.{Locale, Map, Properties, Random}
+import java.util.{Locale, Properties, Random}
 
 import com.typesafe.scalalogging.LazyLogging
 import joptsimple._
@@ -453,7 +452,7 @@ object ConsoleConsumer extends Logging {
       CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt)
 
       if (options.has(newConsumerOpt)) {
-        Console.err.println("The --new-consumer option is deprecated and will be removed in a future major release." +
+        Console.err.println("The --new-consumer option is deprecated and will be removed in a future major release. " +
           "The new consumer is used by default if the --bootstrap-server option is provided.")
       }
     }
@@ -536,25 +535,20 @@ class DefaultMessageFormatter extends MessageFormatter {
     // Note that `toString` will be called on the instance returned by `Deserializer.deserialize`
     if (props.containsKey("key.deserializer")) {
       keyDeserializer = Some(Class.forName(props.getProperty("key.deserializer")).newInstance().asInstanceOf[Deserializer[_]])
-      keyDeserializer.get.configure(JavaConversions.propertiesAsScalaMap(stripWithPrefix("key.deserializer.", props)).asJava, true)
+      keyDeserializer.get.configure(JavaConversions.propertiesAsScalaMap(propertiesWithKeyPrefixStripped("key.deserializer.", props)).asJava, true)
     }
     // Note that `toString` will be called on the instance returned by `Deserializer.deserialize`
     if (props.containsKey("value.deserializer")) {
       valueDeserializer = Some(Class.forName(props.getProperty("value.deserializer")).newInstance().asInstanceOf[Deserializer[_]])
-      valueDeserializer.get.configure(JavaConversions.propertiesAsScalaMap(stripWithPrefix("value.deserializer.", props)).asJava, false)
+      valueDeserializer.get.configure(JavaConversions.propertiesAsScalaMap(propertiesWithKeyPrefixStripped("value.deserializer.", props)).asJava, false)
     }
   }
 
-  def stripWithPrefix(prefix: String, props: Properties): Properties = {
+  private def propertiesWithKeyPrefixStripped(prefix: String, props: Properties): Properties = {
     val newProps = new Properties()
     import scala.collection.JavaConversions._
-    for (entry <- props) {
-      val key: String = entry._1
-      val value: String = entry._2
-
-      if (key.startsWith(prefix) && key.length > prefix.length)
-        newProps.put(key.substring(prefix.length), value)
-    }
+    for ((key, value) <- props if key.startsWith(prefix) && key.length > prefix.length)
+      newProps.put(key.substring(prefix.length), value)
 
     newProps
   }

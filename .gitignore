@@ -50,4 +50,4 @@ docs/generated/
 
 kafkatest.egg-info/
 systest/
-
+*.swp
