@@ -158,7 +158,6 @@ class LeaderEpochFileCacheTest {
     assertEquals(UNDEFINED_EPOCH_OFFSET, offsetFor)
   }
 
-
   @Test
   def shouldReturnUnsupportedIfRequestedEpochLessThanFirstEpoch(){
     def leoFinder() = new LogOffsetMetadata(0)
