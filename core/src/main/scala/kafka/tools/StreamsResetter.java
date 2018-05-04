@@ -124,7 +124,7 @@ public class StreamsResetter {
             }
             properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, options.valueOf(bootstrapServerOption));
 
-            kafkaAdminClient = (KafkaAdminClient) KafkaAdminClient.create(properties);
+            kafkaAdminClient = (KafkaAdminClient) AdminClient.create(properties);
             validateNoActiveConsumers(groupId, kafkaAdminClient);
 
             allTopics.clear();
