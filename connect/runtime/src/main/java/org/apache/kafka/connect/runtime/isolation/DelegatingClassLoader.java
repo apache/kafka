@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.connect.runtime.isolation;
 
-import org.apache.kafka.connect.plugins.Versionable;
+import org.apache.kafka.connect.components.Versionable;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.rest.extension.ConnectRestExtension;
 import org.apache.kafka.connect.storage.Converter;
@@ -306,10 +306,7 @@ public class DelegatingClassLoader extends URLClassLoader {
         Collection<PluginDesc<T>> result = new ArrayList<>();
         for (Class<? extends T> plugin : plugins) {
             if (PluginUtils.isConcrete(plugin)) {
-                // Temporary workaround until all the plugins are versioned.
-                String version =
-                    Versionable.class.isAssignableFrom(plugin) ? ((Connector) plugin.newInstance()).version() : "undefined";
-                result.add(new PluginDesc<>(plugin, version, loader));
+                result.add(new PluginDesc<>(plugin, versionFor(plugin.newInstance()), loader));
             } else {
                 log.debug("Skipping {} as it is not concrete implementation", plugin);
             }
@@ -322,12 +319,18 @@ public class DelegatingClassLoader extends URLClassLoader {
         ClassLoader loader
     ) throws IllegalAccessException, InstantiationException {
         Collection<PluginDesc<T>> result = new ArrayList<>();
-        for (T impl : ServiceLoader.load(klass, loader)) {
-            String version =
-                impl instanceof Versionable ? ((Versionable) impl).version() : "undefined";
-            result.add(new PluginDesc<>(klass, version, loader));
+        ServiceLoader<T> serviceLoader =
+            loader instanceof PluginClassLoader ? ServiceLoader.load(klass, loader)
+                                                : ServiceLoader.load(klass);
+        for (T impl : serviceLoader) {
+            result.add(new PluginDesc<>(klass, versionFor(impl), loader));
         }
         return result;
+    }
+
+    private <T> String versionFor(T pluginImpl) {
+        return pluginImpl instanceof Versionable ? ((Versionable) pluginImpl).version()
+                                                 : "undefined";
     }
 
     @Override

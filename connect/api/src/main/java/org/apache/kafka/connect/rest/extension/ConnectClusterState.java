@@ -17,22 +17,27 @@
 
 package org.apache.kafka.connect.rest.extension;
 
-import org.apache.kafka.connect.rest.extension.entities.ConnectorStateDetail;
+import org.apache.kafka.connect.rest.extension.entities.ConnectorHealth;
 
 import java.util.Collection;
 
+/**
+ * Provides the ability to lookup Connector metadata and its health. This is made available to
+ * the {@link ConnectRestExtension} implementations. Framework provides the implementation for
+ * this interface.
+ */
 public interface ConnectClusterState {
 
     /**
-     * Get a list of connectors currently running in this cluster. This is a full list of connectors
-     * in the cluster gathered from the current configuration.
+     * Get a list of connector names currently running in this cluster. This is a full list of
+     * connectors in the cluster gathered from the current configuration.
      */
     Collection<String> connectors();
 
     /**
-     * Lookup the current status of a connector.
+     * Lookup the current health of a connector and its tasks.
      *
      * @param connName name of the connector
      */
-    ConnectorStateDetail connectorStatus(String connName);
+    ConnectorHealth connectorHealth(String connName);
 }

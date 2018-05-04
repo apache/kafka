@@ -299,9 +299,9 @@ public class RestServer {
     }
 
     void registerRestExtensions(Herder herder, ResourceConfig resourceConfig) {
-        connectRestExtensions = herder.plugins().newConnectRestExtensions(
+        connectRestExtensions = herder.plugins().newPlugins(
             config.getList(WorkerConfig.REST_EXTENSION_CLASSES_CONFIG),
-            config);
+            config, ConnectRestExtension.class);
 
         ConnectRestExtensionContext connectRestExtensionContext =
             new ConnectRestExtensionContextImpl(

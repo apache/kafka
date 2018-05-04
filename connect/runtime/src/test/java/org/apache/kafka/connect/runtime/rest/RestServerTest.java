@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.runtime.rest;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.connect.rest.extension.ConnectRestExtension;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
@@ -164,7 +165,9 @@ public class RestServerTest {
         System.setProperty("sun.net.http.allowRestrictedHeaders", "true");
 
         EasyMock.expect(herder.plugins()).andStubReturn(plugins);
-        EasyMock.expect(plugins.newConnectRestExtensions(Collections.EMPTY_LIST, workerConfig))
+        EasyMock.expect(plugins.newPlugins(Collections.EMPTY_LIST,
+                                           workerConfig,
+                                           ConnectRestExtension.class))
             .andStubReturn(Collections.EMPTY_LIST);
 
         final Capture<Callback<Collection<String>>> connectorsCallback = EasyMock.newCapture();

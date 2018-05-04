@@ -15,11 +15,11 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.connect.plugins;
+package org.apache.kafka.connect.components;
 
 public interface Versionable {
     /**
-     * Get the version of this plugin.
+     * Get the version of this component.
      *
      * @return the version, formatted as a String
      */

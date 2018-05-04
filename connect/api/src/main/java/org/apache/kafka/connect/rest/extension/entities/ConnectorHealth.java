@@ -17,21 +17,21 @@
 package org.apache.kafka.connect.rest.extension.entities;
 
 
-import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
-public class ConnectorStateDetail {
+public class ConnectorHealth {
 
     private final String name;
     private final ConnectorState connector;
-    private final List<TaskState> tasks;
+    private final Map<Integer,TaskState> tasks;
     private final ConnectorType type;
 
 
-    public ConnectorStateDetail(String name,
-                                ConnectorState connector,
-                                List<TaskState> tasks,
-                                ConnectorType type) {
+    public ConnectorHealth(String name,
+                           ConnectorState connector,
+                           Map<Integer,TaskState> tasks,
+                           ConnectorType type) {
         this.name = name;
         this.connector = connector;
         this.tasks = tasks;
@@ -44,12 +44,12 @@ public class ConnectorStateDetail {
     }
 
 
-    public ConnectorState connector() {
+    public ConnectorState connectorState() {
         return connector;
     }
 
 
-    public List<TaskState> tasks() {
+    public Map<Integer,TaskState> tasksState() {
         return tasks;
     }
 

@@ -20,7 +20,7 @@ import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.connect.errors.ConnectException;
-import org.apache.kafka.connect.plugins.Versionable;
+import org.apache.kafka.connect.components.Versionable;
 
 import java.util.List;
 import java.util.Map;

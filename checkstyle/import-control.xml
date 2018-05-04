@@ -292,7 +292,7 @@
     <allow pkg="org.apache.kafka.connect.header" />
     <allow pkg="org.apache.kafka.clients" />
     <allow pkg="org.apache.kafka.test"/>
-    <allow pkg="org.apache.kafka.connect.plugins"/>
+    <allow pkg="org.apache.kafka.connect.components"/>
 
     <subpackage name="source">
       <allow pkg="org.apache.kafka.connect.connector" />

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime.isolation;
 
+import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.utils.Utils;
@@ -23,7 +24,6 @@ import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.errors.ConnectException;
-import org.apache.kafka.connect.rest.extension.ConnectRestExtension;
 import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.json.JsonConverterConfig;
 import org.apache.kafka.connect.runtime.WorkerConfig;
@@ -319,52 +319,55 @@ public class Plugins {
 
 
     /**
-     * If the given configurations defines a {@link ConnectRestExtension} using the provided
-     * Class Names, return a list of new configured instances.
+     * If the given Class Names are available in the classloader, return a list of new configured
+     * instances.
+     * If the instances implement {@link Configurable}, they are configured with provided {@param
+     * config}
      *
-     * @param klassNames         the list of Class Names of {@link ConnectRestExtension} that
+     * @param klassNames         the list of Class Names of plugins that
      *                           needs to instantiated and configured
      * @param config             the configuration containing the {@link org.apache.kafka.connect.runtime.Worker}'s configuration;
      *                           may not be null
-     * @return the instantiated and configured list of  {@link ConnectRestExtension}; EMPTY if
+     * @param pluginKlass        the type of the plugin class that is being instantiated
+     *
+     * @return the instantiated and configured list of  plugins of type <T>; EMPTY if
      * the {@param klassNames} is NULL or EMPTY
-     * @throws ConnectException if the {@link ConnectRestExtension} implementation class could not be found
+     * @throws ConnectException if the implementation class could not be found
      */
-    public List<ConnectRestExtension> newConnectRestExtensions(List<String> klassNames,
-                                                               AbstractConfig config) {
-
-        List<ConnectRestExtension> connectRestExtensions = new ArrayList<>();
-        if (klassNames == null || klassNames.isEmpty()) {
-            return connectRestExtensions;
-        }
-        for (String klassName : klassNames) {
-            ConnectRestExtension plugin;
-
-            Class<? extends ConnectRestExtension> klass;
-            try {
-                klass = pluginClass(
-                    delegatingLoader,
-                    klassName,
-                    ConnectRestExtension.class
-                );
-            } catch (ClassNotFoundException e) {
-                throw new ConnectException(
-                    "Failed to find any class that implements ConnectRestExtension and which name matches "
-                    + klassName
-                    + ", available Rest Extensions are: "
-                    + pluginNames(delegatingLoader.restExtensions())
-                );
+    public <T> List<T> newPlugins(List<String> klassNames,
+                                  AbstractConfig config,
+                                  Class<T> pluginKlass) {
+        List<T> plugins = new ArrayList<>();
+        if (klassNames != null) {
+            for (String klassName : klassNames) {
+                plugins.add(newPlugin(klassName, config, pluginKlass));
             }
-            plugin = newPlugin(klass);
-            if (plugin == null) {
-                throw new ConnectException(
-                    "Unable to instantiate the ConnectRestExtension '" + klassName + "'");
-            }
-            plugin.configure(config.originals());
-            connectRestExtensions.add(plugin);
         }
+        return plugins;
+    }
 
-        return connectRestExtensions;
+    public <T> T newPlugin(String klassName, AbstractConfig config, Class<T> pluginKlass) {
+        T plugin;
+        Class<? extends T> klass;
+        try {
+            klass = pluginClass(delegatingLoader, klassName, pluginKlass);
+        } catch (ClassNotFoundException e) {
+            throw new ConnectException(
+                "Failed to find any class that implements ConnectRestExtension and which name matches "
+                + klassName
+                + ", available Rest Extensions are: "
+                + pluginNames(delegatingLoader.restExtensions())
+            );
+        }
+        plugin = newPlugin(klass);
+        if (plugin == null) {
+            throw new ConnectException(
+                "Unable to instantiate the ConnectRestExtension '" + klassName + "'");
+        }
+        if (plugin instanceof Configurable) {
+            ((Configurable) plugin).configure(config.originals());
+        }
+        return plugin;
     }
 
     /**
