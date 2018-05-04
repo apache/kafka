@@ -23,11 +23,10 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.internals.SessionKeySerde;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.test.MockProcessorContext;
+import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.NoOpRecordCollector;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -52,11 +51,12 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+// TODO: this test does not cover time window serdes
 public class RocksDBSegmentedBytesStoreTest {
 
     private final long retention = 60000L;
     private final int numSegments = 3;
-    private MockProcessorContext context;
+    private InternalMockProcessorContext context;
     private final String storeName = "bytes-store";
     private RocksDBSegmentedBytesStore bytesStore;
     private File stateDir;
@@ -71,7 +71,7 @@ public class RocksDBSegmentedBytesStoreTest {
                                                     schema);
 
         stateDir = TestUtils.tempDirectory();
-        context = new MockProcessorContext(
+        context = new InternalMockProcessorContext(
             stateDir,
             Serdes.String(),
             Serdes.Long(),
@@ -82,7 +82,6 @@ public class RocksDBSegmentedBytesStoreTest {
 
     @After
     public void close() {
-        context.close();
         bytesStore.close();
     }
 
@@ -279,15 +278,17 @@ public class RocksDBSegmentedBytesStoreTest {
     }
 
     private Bytes serializeKey(final Windowed<String> key) {
-        return SessionKeySerde.toBinary(key, Serdes.String().serializer(), "dummy");
+        return Bytes.wrap(SessionKeySchema.toBinary(key, Serdes.String().serializer(), "dummy"));
     }
 
     private List<KeyValue<Windowed<String>, Long>> toList(final KeyValueIterator<Bytes, byte[]> iterator) {
         final List<KeyValue<Windowed<String>, Long>> results = new ArrayList<>();
         while (iterator.hasNext()) {
             final KeyValue<Bytes, byte[]> next = iterator.next();
-            final KeyValue<Windowed<String>, Long> deserialized
-                    = KeyValue.pair(SessionKeySerde.from(next.key.get(), Serdes.String().deserializer(), "dummy"), Serdes.Long().deserializer().deserialize("", next.value));
+            final KeyValue<Windowed<String>, Long> deserialized = KeyValue.pair(
+                    SessionKeySchema.from(next.key.get(), Serdes.String().deserializer(), "dummy"),
+                    Serdes.Long().deserializer().deserialize("dummy", next.value)
+            );
             results.add(deserialized);
         }
         return results;

@@ -31,7 +31,7 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
-import org.apache.kafka.test.MockProcessorContext;
+import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.NoOpRecordCollector;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -62,14 +62,14 @@ public class RocksDBStoreTest {
     private Serializer<String> stringSerializer = new StringSerializer();
     private Deserializer<String> stringDeserializer = new StringDeserializer();
     private RocksDBStore rocksDBStore;
-    private MockProcessorContext context;
+    private InternalMockProcessorContext context;
     private File dir;
 
     @Before
     public void setUp() {
         rocksDBStore = new RocksDBStore("test");
         dir = TestUtils.tempDirectory();
-        context = new MockProcessorContext(dir,
+        context = new InternalMockProcessorContext(dir,
             Serdes.String(),
             Serdes.String(),
             new NoOpRecordCollector(),
@@ -114,7 +114,7 @@ public class RocksDBStoreTest {
         configs.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "test-server:9092");
         configs.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, MockRocksDbConfigSetter.class);
         MockRocksDbConfigSetter.called = false;
-        rocksDBStore.openDB(new MockProcessorContext(tempDir, new StreamsConfig(configs)));
+        rocksDBStore.openDB(new InternalMockProcessorContext(tempDir, new StreamsConfig(configs)));
 
         assertTrue(MockRocksDbConfigSetter.called);
     }
@@ -122,7 +122,7 @@ public class RocksDBStoreTest {
     @Test(expected = ProcessorStateException.class)
     public void shouldThrowProcessorStateExceptionOnOpeningReadOnlyDir() throws IOException {
         final File tmpDir = TestUtils.tempDirectory();
-        MockProcessorContext tmpContext = new MockProcessorContext(tmpDir,
+        InternalMockProcessorContext tmpContext = new InternalMockProcessorContext(tmpDir,
             Serdes.String(),
             Serdes.Long(),
             new NoOpRecordCollector(),

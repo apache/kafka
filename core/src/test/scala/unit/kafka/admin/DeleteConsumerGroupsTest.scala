@@ -60,32 +60,6 @@ class DeleteConsumerGroupTest extends ConsumerGroupCommandTest {
   }
 
   @Test
-  def testDeleteCmdInvalidGroupId() {
-    TestUtils.createOffsetsTopic(zkClient, servers)
-    val invalidGroupId = ""
-
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--delete", "--group", invalidGroupId)
-    val service = getConsumerGroupService(cgcArgs)
-
-    val output = TestUtils.grabConsoleOutput(service.deleteGroups())
-    assertTrue(s"The expected error (${Errors.INVALID_GROUP_ID}) was not detected while deleting consumer group",
-      output.contains(s"Group '$invalidGroupId' could not be deleted due to: ${Errors.INVALID_GROUP_ID.toString}"))
-  }
-
-  @Test
-  def testDeleteInvalidGroupId() {
-    TestUtils.createOffsetsTopic(zkClient, servers)
-    val invalidGroupId = ""
-
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--delete", "--group", invalidGroupId)
-    val service = getConsumerGroupService(cgcArgs)
-
-    val result = service.deleteGroups()
-    assertTrue(s"The expected error (${Errors.INVALID_GROUP_ID}) was not detected while deleting consumer group",
-      result.size == 1 && result.keySet.contains(invalidGroupId) && result.get(invalidGroupId).contains(Errors.INVALID_GROUP_ID))
-  }
-
-  @Test
   def testDeleteCmdNonEmptyGroup() {
     TestUtils.createOffsetsTopic(zkClient, servers)
 
@@ -227,7 +201,7 @@ class DeleteConsumerGroupTest extends ConsumerGroupCommandTest {
   @Test
   def testDeleteCmdWithShortInitialization() {
     // run one consumer in the group
-    val executor = addConsumerGroupExecutor(numConsumers = 1)
+    addConsumerGroupExecutor(numConsumers = 1)
     val cgcArgs = Array("--bootstrap-server", brokerList, "--delete", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
 
@@ -239,7 +213,7 @@ class DeleteConsumerGroupTest extends ConsumerGroupCommandTest {
   @Test
   def testDeleteWithShortInitialization() {
     // run one consumer in the group
-    val executor = addConsumerGroupExecutor(numConsumers = 1)
+    addConsumerGroupExecutor(numConsumers = 1)
     val cgcArgs = Array("--bootstrap-server", brokerList, "--delete", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
 

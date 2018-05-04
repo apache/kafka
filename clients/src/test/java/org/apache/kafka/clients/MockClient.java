@@ -16,9 +16,11 @@
  */
 package org.apache.kafka.clients;
 
+import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
@@ -71,6 +73,7 @@ public class MockClient implements KafkaClient {
 
     }
 
+    private int correlation;
     private final Time time;
     private final Metadata metadata;
     private Set<String> unavailableTopics;
@@ -78,7 +81,7 @@ public class MockClient implements KafkaClient {
     private Node node = null;
     private final Set<String> ready = new HashSet<>();
     private final Map<Node, Long> blackedOut = new HashMap<>();
-    private final Map<Node, AuthenticationException> authenticationException = new HashMap<>();
+    private final Map<Node, AuthenticationException> authenticationErrors = new HashMap<>();
     // Use concurrent queue for requests so that requests may be queried from a different thread
     private final Queue<ClientRequest> requests = new ConcurrentLinkedDeque<>();
     // Use concurrent queue for responses so that responses may be updated during poll() from a different thread.
@@ -86,7 +89,8 @@ public class MockClient implements KafkaClient {
     private final Queue<FutureResponse> futureResponses = new ArrayDeque<>();
     private final Queue<MetadataUpdate> metadataUpdates = new ArrayDeque<>();
     private volatile NodeApiVersions nodeApiVersions = NodeApiVersions.create();
-
+    private volatile int numBlockingWakeups = 0;
+    private final AtomicInteger totalRequestCount = new AtomicInteger(0);
     public MockClient(Time time) {
         this(time, null);
     }
@@ -104,14 +108,18 @@ public class MockClient implements KafkaClient {
 
     @Override
     public boolean ready(Node node, long now) {
-        if (isBlackedOut(node) || authenticationException(node) != null)
+        if (isBlackedOut(node))
             return false;
+        authenticationErrors.remove(node);
         ready.add(node.idString());
         return true;
     }
 
     @Override
     public long connectionDelay(Node node, long now) {
+        Long blackoutExpiration = blackedOut.get(node);
+        if (blackoutExpiration != null)
+            return Math.max(0, blackoutExpiration - now);
         return 0;
     }
 
@@ -120,7 +128,7 @@ public class MockClient implements KafkaClient {
     }
 
     public void authenticationFailed(Node node, long duration) {
-        authenticationException.put(node, (AuthenticationException) Errors.SASL_AUTHENTICATION_FAILED.exception());
+        authenticationErrors.put(node, (AuthenticationException) Errors.SASL_AUTHENTICATION_FAILED.exception());
         disconnect(node.idString());
         blackout(node, duration);
     }
@@ -145,7 +153,7 @@ public class MockClient implements KafkaClient {
 
     @Override
     public AuthenticationException authenticationException(Node node) {
-        return authenticationException.get(node);
+        return authenticationErrors.get(node);
     }
 
     @Override
@@ -195,8 +203,40 @@ public class MockClient implements KafkaClient {
         this.requests.add(request);
     }
 
+    /**
+     * Simulate a blocking poll in order to test wakeup behavior.
+     *
+     * @param numBlockingWakeups The number of polls which will block until woken up
+     */
+    public synchronized void enableBlockingUntilWakeup(int numBlockingWakeups) {
+        this.numBlockingWakeups = numBlockingWakeups;
+    }
+
+    @Override
+    public synchronized void wakeup() {
+        if (numBlockingWakeups > 0) {
+            numBlockingWakeups--;
+            notify();
+        }
+    }
+
+    private synchronized void maybeAwaitWakeup() {
+        try {
+            int remainingBlockingWakeups = numBlockingWakeups;
+            if (remainingBlockingWakeups <= 0)
+                return;
+
+            while (numBlockingWakeups == remainingBlockingWakeups)
+                wait();
+        } catch (InterruptedException e) {
+            throw new InterruptException(e);
+        }
+    }
+
     @Override
     public List<ClientResponse> poll(long timeoutMs, long now) {
+        maybeAwaitWakeup();
+
         List<ClientResponse> copy = new ArrayList<>(this.responses);
 
         if (metadata != null && metadata.updateRequested()) {
@@ -355,7 +395,8 @@ public class MockClient implements KafkaClient {
         responses.clear();
         futureResponses.clear();
         metadataUpdates.clear();
-        authenticationException.clear();
+        authenticationErrors.clear();
+        totalRequestCount.set(0);
     }
 
     public boolean hasPendingMetadataUpdates() {
@@ -423,12 +464,9 @@ public class MockClient implements KafkaClient {
     @Override
     public ClientRequest newClientRequest(String nodeId, AbstractRequest.Builder<?> requestBuilder, long createdTimeMs,
                                           boolean expectResponse, RequestCompletionHandler callback) {
-        return new ClientRequest(nodeId, requestBuilder, 0, "mockClientId", createdTimeMs,
+        totalRequestCount.incrementAndGet();
+        return new ClientRequest(nodeId, requestBuilder, correlation++, "mockClientId", createdTimeMs,
                 expectResponse, callback);
-    }
-
-    @Override
-    public void wakeup() {
     }
 
     @Override
@@ -468,5 +506,10 @@ public class MockClient implements KafkaClient {
             this.unavailableTopics = unavailableTopics;
             this.expectMatchRefreshTopics = expectMatchRefreshTopics;
         }
+    }
+
+    // visible for testing
+    public int totalRequestCount() {
+        return totalRequestCount.get();
     }
 }

@@ -17,20 +17,22 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.Aggregator;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Initializer;
-import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.streams.state.WindowStoreIterator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 
 public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStreamAggProcessorSupplier<K, Windowed<K>, V, T> {
+    private static final Logger LOG = LoggerFactory.getLogger(KStreamWindowAggregate.class);
 
     private final String storeName;
     private final Windows<W> windows;
@@ -39,7 +41,10 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
 
     private boolean sendOldValues = false;
 
-    public KStreamWindowAggregate(Windows<W> windows, String storeName, Initializer<T> initializer, Aggregator<? super K, ? super V, T> aggregator) {
+    KStreamWindowAggregate(final Windows<W> windows,
+                           final String storeName,
+                           final Initializer<T> initializer,
+                           final Aggregator<? super K, ? super V, T> aggregator) {
         this.windows = windows;
         this.storeName = storeName;
         this.initializer = initializer;
@@ -60,65 +65,46 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
 
         private WindowStore<K, T> windowStore;
         private TupleForwarder<Windowed<K>, T> tupleForwarder;
+        private StreamsMetricsImpl metrics;
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(ProcessorContext context) {
+        public void init(final ProcessorContext context) {
             super.init(context);
+            metrics = (StreamsMetricsImpl) context.metrics();
 
             windowStore = (WindowStore<K, T>) context.getStateStore(storeName);
             tupleForwarder = new TupleForwarder<>(windowStore, context, new ForwardingCacheFlushListener<Windowed<K>, V>(context, sendOldValues), sendOldValues);
         }
 
         @Override
-        public void process(K key, V value) {
+        public void process(final K key, final V value) {
             // if the key is null, we do not need proceed aggregating the record
             // the record with the table
-            if (key == null)
+            if (key == null) {
+                LOG.warn(
+                    "Skipping record due to null key. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
+                    value, context().topic(), context().partition(), context().offset()
+                );
+                metrics.skippedRecordsSensor().record();
                 return;
+            }
 
             // first get the matching windows
-            long timestamp = context().timestamp();
-            Map<Long, W> matchedWindows = windows.windowsFor(timestamp);
+            final long timestamp = context().timestamp();
+            final Map<Long, W> matchedWindows = windows.windowsFor(timestamp);
 
-            long timeFrom = Long.MAX_VALUE;
-            long timeTo = Long.MIN_VALUE;
+            // try update the window, and create the new window for the rest of unmatched window that do not exist yet
+            for (final Map.Entry<Long, W> entry : matchedWindows.entrySet()) {
+                T oldAgg = windowStore.fetch(key, entry.getKey());
 
-            // use range query on window store for efficient reads
-            for (long windowStartMs : matchedWindows.keySet()) {
-                timeFrom = windowStartMs < timeFrom ? windowStartMs : timeFrom;
-                timeTo = windowStartMs > timeTo ? windowStartMs : timeTo;
-            }
-
-            try (WindowStoreIterator<T> iter = windowStore.fetch(key, timeFrom, timeTo)) {
-
-                // for each matching window, try to update the corresponding key
-                while (iter.hasNext()) {
-                    KeyValue<Long, T> entry = iter.next();
-                    W window = matchedWindows.get(entry.key);
-
-                    if (window != null) {
-
-                        T oldAgg = entry.value;
-
-                        if (oldAgg == null)
-                            oldAgg = initializer.apply();
-
-                        // try to add the new value (there will never be old value)
-                        T newAgg = aggregator.apply(key, value, oldAgg);
-
-                        // update the store with the new value
-                        windowStore.put(key, newAgg, window.start());
-                        tupleForwarder.maybeForward(new Windowed<>(key, window), newAgg, oldAgg);
-                        matchedWindows.remove(entry.key);
-                    }
+                if (oldAgg == null) {
+                    oldAgg = initializer.apply();
                 }
-            }
 
-            // create the new window for the rest of unmatched window that do not exist yet
-            for (Map.Entry<Long, W> entry : matchedWindows.entrySet()) {
-                T oldAgg = initializer.apply();
-                T newAgg = aggregator.apply(key, value, oldAgg);
+                final T newAgg = aggregator.apply(key, value, oldAgg);
+
+                // update the store with the new value
                 windowStore.put(key, newAgg, entry.getKey());
                 tupleForwarder.maybeForward(new Windowed<>(key, entry.getValue()), newAgg, oldAgg);
             }
@@ -147,20 +133,17 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(ProcessorContext context) {
+        public void init(final ProcessorContext context) {
             windowStore = (WindowStore<K, T>) context.getStateStore(storeName);
         }
 
         @SuppressWarnings("unchecked")
         @Override
-        public T get(Windowed<K> windowedKey) {
-            K key = windowedKey.key();
-            W window = (W) windowedKey.window();
+        public T get(final Windowed<K> windowedKey) {
+            final K key = windowedKey.key();
+            final W window = (W) windowedKey.window();
 
-            // this iterator should contain at most one element
-            try (WindowStoreIterator<T> iter = windowStore.fetch(key, window.start(), window.start())) {
-                return iter.hasNext() ? iter.next().value : null;
-            }
+            return windowStore.fetch(key, window.start());
         }
     }
 }

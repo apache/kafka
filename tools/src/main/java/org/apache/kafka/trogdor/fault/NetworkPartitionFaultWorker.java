@@ -17,11 +17,13 @@
 
 package org.apache.kafka.trogdor.fault;
 
+import com.fasterxml.jackson.databind.node.TextNode;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.trogdor.common.Node;
 import org.apache.kafka.trogdor.common.Platform;
 import org.apache.kafka.trogdor.common.Topology;
 import org.apache.kafka.trogdor.task.TaskWorker;
+import org.apache.kafka.trogdor.task.WorkerStatusTracker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -29,7 +31,6 @@ import java.net.InetAddress;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
-import java.util.concurrent.atomic.AtomicReference;
 
 public class NetworkPartitionFaultWorker implements TaskWorker {
     private static final Logger log = LoggerFactory.getLogger(NetworkPartitionFaultWorker.class);
@@ -38,22 +39,29 @@ public class NetworkPartitionFaultWorker implements TaskWorker {
 
     private final List<Set<String>> partitionSets;
 
+    private WorkerStatusTracker status;
+
     public NetworkPartitionFaultWorker(String id, List<Set<String>> partitionSets) {
         this.id = id;
         this.partitionSets = partitionSets;
     }
 
     @Override
-    public void start(Platform platform, AtomicReference<String> status,
+    public void start(Platform platform, WorkerStatusTracker status,
                       KafkaFutureImpl<String> errorFuture) throws Exception {
         log.info("Activating NetworkPartitionFault {}.", id);
+        this.status = status;
+        this.status.update(new TextNode("creating network partition " + id));
         runIptablesCommands(platform, "-A");
+        this.status.update(new TextNode("created network partition " + id));
     }
 
     @Override
     public void stop(Platform platform) throws Exception {
         log.info("Deactivating NetworkPartitionFault {}.", id);
+        this.status.update(new TextNode("removing network partition " + id));
         runIptablesCommands(platform, "-D");
+        this.status.update(new TextNode("removed network partition " + id));
     }
 
     private void runIptablesCommands(Platform platform, String iptablesAction) throws Exception {

@@ -152,7 +152,7 @@ public class FetchResponse extends AbstractResponse {
      */
     private static final Schema FETCH_RESPONSE_V6 = FETCH_RESPONSE_V5;
 
-    // FETCH_REESPONSE_V7 added incremental fetch responses and a top-level error code.
+    // FETCH_RESPONSE_V7 added incremental fetch responses and a top-level error code.
     public static final Field.Int32 SESSION_ID = new Field.Int32("session_id", "The fetch session ID");
 
     private static final Schema FETCH_RESPONSE_V7 = new Schema(

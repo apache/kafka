@@ -434,7 +434,7 @@ case class PartitionFetchState(fetchOffset: Long, delay: DelayedItem, truncating
 
   def this(offset: Long, truncatingLog: Boolean) = this(offset, new DelayedItem(0), truncatingLog)
 
-  def this(offset: Long, delay: DelayedItem) = this(offset, new DelayedItem(0), false)
+  def this(offset: Long, delay: DelayedItem) = this(offset, delay, false)
 
   def this(fetchOffset: Long) = this(fetchOffset, new DelayedItem(0))
 

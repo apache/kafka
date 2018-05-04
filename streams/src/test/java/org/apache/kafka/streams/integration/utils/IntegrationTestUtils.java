@@ -28,10 +28,12 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.requests.UpdateMetadataRequest;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.test.TestCondition;
@@ -48,6 +50,8 @@ import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+
+import static org.apache.kafka.streams.processor.internals.ConsumerUtils.poll;
 
 /**
  * Utility functions to make integration testing more convenient.
@@ -156,6 +160,40 @@ public class IntegrationTestUtils {
             keyedRecords.add(kv);
         }
         produceKeyValuesSynchronously(topic, keyedRecords, producerConfig, time, enableTransactions);
+    }
+
+    /**
+     * Wait for streams to "finish", based on the consumer lag metric.
+     *
+     * Caveats:
+     * - Inputs must be finite, fully loaded, and flushed before this method is called
+     * - expectedPartitions is the total number of partitions to watch the lag on, including both input and internal.
+     *   It's somewhat ok to get this wrong, as the main failure case would be an immediate return due to the clients
+     *   not being initialized, which you can avoid with any non-zero value. But it's probably better to get it right ;)
+     */
+    public static void waitForCompletion(final KafkaStreams streams,
+                                         final int expectedPartitions,
+                                         final int timeoutMilliseconds) {
+        final long start = System.currentTimeMillis();
+        while (true) {
+            int lagMetrics = 0;
+            double totalLag = 0.0;
+            for (final Metric metric : streams.metrics().values()) {
+                if (metric.metricName().name().equals("records-lag")) {
+                    lagMetrics++;
+                    totalLag += ((Number) metric.metricValue()).doubleValue();
+                }
+            }
+            if (lagMetrics >= expectedPartitions && totalLag == 0.0) {
+                return;
+            }
+            if (System.currentTimeMillis() - start >= timeoutMilliseconds) {
+                throw new RuntimeException(String.format(
+                    "Timed out waiting for completion. lagMetrics=[%s/%s] totalLag=[%s]",
+                    lagMetrics, expectedPartitions, totalLag
+                ));
+            }
+        }
     }
 
     public static <K, V> List<KeyValue<K, V>> waitUntilMinKeyValueRecordsReceived(final Properties consumerConfig,
@@ -352,7 +390,7 @@ public class IntegrationTestUtils {
         while (totalPollTimeMs < waitTime &&
             continueConsuming(consumedValues.size(), maxMessages)) {
             totalPollTimeMs += pollIntervalMs;
-            final ConsumerRecords<K, V> records = consumer.poll(pollIntervalMs);
+            final ConsumerRecords<K, V> records = poll(consumer, pollIntervalMs);
 
             for (final ConsumerRecord<K, V> record : records) {
                 consumedValues.add(new KeyValue<>(record.key(), record.value()));

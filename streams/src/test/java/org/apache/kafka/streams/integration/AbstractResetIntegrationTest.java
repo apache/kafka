@@ -16,15 +16,13 @@
  */
 package org.apache.kafka.streams.integration;
 
-import kafka.admin.AdminClient;
-import kafka.tools.StreamsResetter;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.KafkaAdminClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
@@ -64,6 +62,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
+
+import kafka.admin.AdminClient;
+import kafka.tools.StreamsResetter;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -106,11 +107,25 @@ public abstract class AbstractResetIntegrationTest {
             kafkaAdminClient = (KafkaAdminClient) org.apache.kafka.clients.admin.AdminClient.create(commonClientConfig);
         }
 
-        // we align time to seconds to get clean window boundaries and thus ensure the same result for each run
-        // otherwise, input records could fall into different windows for different runs depending on the initial mock time
-        final long alignedTime = (System.currentTimeMillis() / 1000 + 1) * 1000;
-        mockTime = cluster.time;
-        mockTime.setCurrentTimeMs(alignedTime);
+        boolean timeSet = false;
+        while (!timeSet) {
+            timeSet = setCurrentTime();
+        }
+    }
+
+    private boolean setCurrentTime() {
+        boolean currentTimeSet = false;
+        try {
+            mockTime = cluster.time;
+            // we align time to seconds to get clean window boundaries and thus ensure the same result for each run
+            // otherwise, input records could fall into different windows for different runs depending on the initial mock time
+            final long alignedTime = (System.currentTimeMillis() / 1000 + 1) * 1000;
+            mockTime.setCurrentTimeMs(alignedTime);
+            currentTimeSet = true;
+        } catch (final IllegalArgumentException e) {
+            // don't care will retry until set
+        }
+        return currentTimeSet;
     }
 
     private void prepareConfigs() {
@@ -219,7 +234,9 @@ public abstract class AbstractResetIntegrationTest {
         final String[] parameters = new String[] {
             "--application-id", appID,
             "--bootstrap-servers", cluster.bootstrapServers(),
-            "--input-topics", NON_EXISTING_TOPIC };
+            "--input-topics", NON_EXISTING_TOPIC,
+            "--execute"
+        };
         final Properties cleanUpConfig = new Properties();
         cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
         cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "" + CLEANUP_CONSUMER_TIMEOUT);
@@ -241,7 +258,9 @@ public abstract class AbstractResetIntegrationTest {
         final String[] parameters = new String[] {
             "--application-id", appID,
             "--bootstrap-servers", cluster.bootstrapServers(),
-            "--input-topics", NON_EXISTING_TOPIC };
+            "--input-topics", NON_EXISTING_TOPIC,
+            "--execute"
+        };
         final Properties cleanUpConfig = new Properties();
         cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
         cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "" + CLEANUP_CONSUMER_TIMEOUT);
@@ -255,7 +274,9 @@ public abstract class AbstractResetIntegrationTest {
         final String[] parameters = new String[] {
             "--application-id", appID,
             "--bootstrap-servers", cluster.bootstrapServers(),
-            "--input-topics", NON_EXISTING_TOPIC };
+            "--intermediate-topics", NON_EXISTING_TOPIC,
+            "--execute"
+        };
         final Properties cleanUpConfig = new Properties();
         cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
         cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "" + CLEANUP_CONSUMER_TIMEOUT);
@@ -548,8 +569,9 @@ public abstract class AbstractResetIntegrationTest {
         // leaving --zookeeper arg here to ensure tool works if users add it
         final List<String> parameterList = new ArrayList<>(
             Arrays.asList("--application-id", appID,
-                "--bootstrap-servers", cluster.bootstrapServers(),
-                "--input-topics", INPUT_TOPIC));
+                    "--bootstrap-servers", cluster.bootstrapServers(),
+                    "--input-topics", INPUT_TOPIC,
+                    "--execute"));
         if (withIntermediateTopics) {
             parameterList.add("--intermediate-topics");
             parameterList.add(INTERMEDIATE_USER_TOPIC);

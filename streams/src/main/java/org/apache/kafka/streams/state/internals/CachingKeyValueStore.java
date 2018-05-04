@@ -175,13 +175,9 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
                 cache.put(cacheName, key, new LRUCacheEntry(rawValue));
             }
             return rawValue;
+        } else {
+            return entry.value;
         }
-
-        if (entry.value == null) {
-            return null;
-        }
-
-        return entry.value;
     }
 
     @Override

@@ -20,7 +20,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
-import org.apache.kafka.test.MockProcessorContext;
+import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.NoOpRecordCollector;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -44,7 +44,7 @@ import static org.junit.Assert.assertTrue;
 public class SegmentsTest {
 
     private static final int NUM_SEGMENTS = 5;
-    private MockProcessorContext context;
+    private InternalMockProcessorContext context;
     private Segments segments;
     private long segmentInterval;
     private File stateDirectory;
@@ -54,7 +54,7 @@ public class SegmentsTest {
     @Before
     public void createContext() {
         stateDirectory = TestUtils.tempDirectory();
-        context = new MockProcessorContext(stateDirectory,
+        context = new InternalMockProcessorContext(stateDirectory,
                                            Serdes.String(),
                                            Serdes.Long(),
                                            new NoOpRecordCollector(),
@@ -65,7 +65,6 @@ public class SegmentsTest {
 
     @After
     public void close() {
-        context.close();
         segments.close();
     }
 

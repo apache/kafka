@@ -519,6 +519,6 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
         if (!repartitionRequired) {
             return this.name;
         }
-        return KStreamImpl.createReparitionedSource(builder, keySerde, valSerde, queryableStoreName, name);
+        return KStreamImpl.createRepartitionedSource(builder, keySerde, valSerde, queryableStoreName, name);
     }
 }

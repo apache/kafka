@@ -36,9 +36,13 @@ public class ProduceBenchSpec extends TaskSpec {
     private final String bootstrapServers;
     private final int targetMessagesPerSec;
     private final int maxMessages;
+    private final PayloadGenerator keyGenerator;
+    private final PayloadGenerator valueGenerator;
     private final Map<String, String> producerConf;
-    private final int totalTopics;
-    private final int activeTopics;
+    private final Map<String, String> adminClientConf;
+    private final Map<String, String> commonClientConf;
+    private final TopicsSpec activeTopics;
+    private final TopicsSpec inactiveTopics;
 
     @JsonCreator
     public ProduceBenchSpec(@JsonProperty("startMs") long startMs,
@@ -47,17 +51,29 @@ public class ProduceBenchSpec extends TaskSpec {
                          @JsonProperty("bootstrapServers") String bootstrapServers,
                          @JsonProperty("targetMessagesPerSec") int targetMessagesPerSec,
                          @JsonProperty("maxMessages") int maxMessages,
+                         @JsonProperty("keyGenerator") PayloadGenerator keyGenerator,
+                         @JsonProperty("valueGenerator") PayloadGenerator valueGenerator,
                          @JsonProperty("producerConf") Map<String, String> producerConf,
-                         @JsonProperty("totalTopics") int totalTopics,
-                         @JsonProperty("activeTopics") int activeTopics) {
+                         @JsonProperty("commonClientConf") Map<String, String> commonClientConf,
+                         @JsonProperty("adminClientConf") Map<String, String> adminClientConf,
+                         @JsonProperty("activeTopics") TopicsSpec activeTopics,
+                         @JsonProperty("inactiveTopics") TopicsSpec inactiveTopics) {
         super(startMs, durationMs);
-        this.producerNode = producerNode;
-        this.bootstrapServers = bootstrapServers;
+        this.producerNode = (producerNode == null) ? "" : producerNode;
+        this.bootstrapServers = (bootstrapServers == null) ? "" : bootstrapServers;
         this.targetMessagesPerSec = targetMessagesPerSec;
         this.maxMessages = maxMessages;
-        this.producerConf = producerConf;
-        this.totalTopics = totalTopics;
-        this.activeTopics = activeTopics;
+        this.keyGenerator = keyGenerator == null ?
+            new SequentialPayloadGenerator(4, 0) : keyGenerator;
+        this.valueGenerator = valueGenerator == null ?
+            new ConstantPayloadGenerator(512, new byte[0]) : valueGenerator;
+        this.producerConf = configOrEmptyMap(producerConf);
+        this.commonClientConf = configOrEmptyMap(commonClientConf);
+        this.adminClientConf = configOrEmptyMap(adminClientConf);
+        this.activeTopics = (activeTopics == null) ?
+            TopicsSpec.EMPTY : activeTopics.immutableCopy();
+        this.inactiveTopics = (inactiveTopics == null) ?
+            TopicsSpec.EMPTY : inactiveTopics.immutableCopy();
     }
 
     @JsonProperty
@@ -81,18 +97,38 @@ public class ProduceBenchSpec extends TaskSpec {
     }
 
     @JsonProperty
+    public PayloadGenerator keyGenerator() {
+        return keyGenerator;
+    }
+
+    @JsonProperty
+    public PayloadGenerator valueGenerator() {
+        return valueGenerator;
+    }
+
+    @JsonProperty
     public Map<String, String> producerConf() {
         return producerConf;
     }
 
     @JsonProperty
-    public int totalTopics() {
-        return totalTopics;
+    public Map<String, String> commonClientConf() {
+        return commonClientConf;
     }
 
     @JsonProperty
-    public int activeTopics() {
+    public Map<String, String> adminClientConf() {
+        return adminClientConf;
+    }
+
+    @JsonProperty
+    public TopicsSpec activeTopics() {
         return activeTopics;
+    }
+
+    @JsonProperty
+    public TopicsSpec inactiveTopics() {
+        return inactiveTopics;
     }
 
     @Override

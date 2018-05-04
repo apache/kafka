@@ -42,13 +42,15 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
+@Deprecated
 public class KStreamTestDriver extends ExternalResource {
 
-    private static final long DEFAULT_CACHE_SIZE_BYTES = 1 * 1024 * 1024L;
+    private static final long DEFAULT_CACHE_SIZE_BYTES = 1024 * 1024L;
 
     private ProcessorTopology topology;
-    private MockProcessorContext context;
+    private InternalMockProcessorContext context;
     private ProcessorTopology globalTopology;
     private final LogContext logContext = new LogContext("testCache ");
 
@@ -85,7 +87,7 @@ public class KStreamTestDriver extends ExternalResource {
         topology = builder.build(null);
         globalTopology = builder.buildGlobalStateTopology();
         final ThreadCache cache = new ThreadCache(logContext, cacheSize, new MockStreamsMetrics(new Metrics()));
-        context = new MockProcessorContext(stateDir, keySerde, valSerde, new MockRecordCollector(), cache);
+        context = new InternalMockProcessorContext(stateDir, keySerde, valSerde, new MockRecordCollector(), cache);
         context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "topic"));
         // init global topology first as it will add stores to the
         // store map that are required for joins etc.
@@ -126,7 +128,7 @@ public class KStreamTestDriver extends ExternalResource {
         globalTopology = internalTopologyBuilder.buildGlobalStateTopology();
 
         final ThreadCache cache = new ThreadCache(logContext, cacheSize, new MockStreamsMetrics(new Metrics()));
-        context = new MockProcessorContext(stateDir, keySerde, valSerde, new MockRecordCollector(), cache);
+        context = new InternalMockProcessorContext(stateDir, keySerde, valSerde, new MockRecordCollector(), cache);
         context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "topic"));
 
         // init global topology first as it will add stores to the
@@ -146,7 +148,12 @@ public class KStreamTestDriver extends ExternalResource {
 
     private void initTopology(final ProcessorTopology topology, final List<StateStore> stores) {
         for (final StateStore store : stores) {
-            store.init(context, store);
+            try {
+                store.init(context, store);
+            } catch (final RuntimeException e) {
+                new RuntimeException("Fatal exception initializing store.", e).printStackTrace();
+                throw e;
+            }
         }
 
         for (final ProcessorNode node : topology.processors()) {
@@ -172,7 +179,7 @@ public class KStreamTestDriver extends ExternalResource {
         final ProcessorNode currNode = sourceNodeByTopicName(topicName);
 
         if (currNode != null) {
-            context.setRecordContext(createRecordContext(context.timestamp()));
+            context.setRecordContext(createRecordContext(topicName, context.timestamp()));
             context.setCurrentNode(currNode);
             try {
                 context.forward(key, value);
@@ -184,27 +191,18 @@ public class KStreamTestDriver extends ExternalResource {
 
     private ProcessorNode sourceNodeByTopicName(final String topicName) {
         ProcessorNode topicNode = topology.source(topicName);
-
-        if (topicNode == null && globalTopology != null) {
-            topicNode = globalTopology.source(topicName);
+        if (topicNode == null) {
+            for (final String sourceTopic : topology.sourceTopics()) {
+                if (Pattern.compile(sourceTopic).matcher(topicName).matches()) {
+                    return topology.source(sourceTopic);
+                }
+            }
+            if (globalTopology != null) {
+                topicNode = globalTopology.source(topicName);
+            }
         }
 
         return topicNode;
-    }
-
-    public void punctuate(final long timestamp) {
-        final ProcessorNode prevNode = context.currentNode();
-        for (final ProcessorNode processor : topology.processors()) {
-            if (processor.processor() != null) {
-                context.setRecordContext(createRecordContext(timestamp));
-                context.setCurrentNode(processor);
-                try {
-                    processor.processor().punctuate(timestamp);
-                } finally {
-                    context.setCurrentNode(prevNode);
-                }
-            }
-        }
     }
 
     public void setTime(final long timestamp) {
@@ -223,7 +221,6 @@ public class KStreamTestDriver extends ExternalResource {
         }
 
         closeState();
-        context.close();
     }
 
     public Set<String> allProcessorNames() {
@@ -231,7 +228,7 @@ public class KStreamTestDriver extends ExternalResource {
 
         final List<ProcessorNode> nodes = topology.processors();
 
-        for (final ProcessorNode node: nodes) {
+        for (final ProcessorNode node : nodes) {
             names.add(node.name());
         }
 
@@ -241,7 +238,7 @@ public class KStreamTestDriver extends ExternalResource {
     public ProcessorNode processor(final String name) {
         final List<ProcessorNode> nodes = topology.processors();
 
-        for (final ProcessorNode node: nodes) {
+        for (final ProcessorNode node : nodes) {
             if (node.name().equals(name)) {
                 return node;
             }
@@ -270,13 +267,13 @@ public class KStreamTestDriver extends ExternalResource {
         }
     }
 
-    private ProcessorRecordContext createRecordContext(final long timestamp) {
-        return new ProcessorRecordContext(timestamp, -1, -1, "topic");
+    private ProcessorRecordContext createRecordContext(final String topicName, final long timestamp) {
+        return new ProcessorRecordContext(timestamp, -1, -1, topicName);
     }
 
     private class MockRecordCollector extends RecordCollectorImpl {
         MockRecordCollector() {
-            super(null, "KStreamTestDriver", new LogContext("KStreamTestDriver "), new DefaultProductionExceptionHandler());
+            super(null, "KStreamTestDriver", new LogContext("KStreamTestDriver "), new DefaultProductionExceptionHandler(), new Metrics().sensor("skipped-records"));
         }
 
         @Override

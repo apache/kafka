@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
@@ -30,18 +31,22 @@ class RecordDeserializer {
     private final SourceNode sourceNode;
     private final DeserializationExceptionHandler deserializationExceptionHandler;
     private final Logger log;
+    private final Sensor skippedRecordSensor;
 
     RecordDeserializer(final SourceNode sourceNode,
                        final DeserializationExceptionHandler deserializationExceptionHandler,
-                       final LogContext logContext) {
+                       final LogContext logContext,
+                       final Sensor skippedRecordsSensor) {
         this.sourceNode = sourceNode;
         this.deserializationExceptionHandler = deserializationExceptionHandler;
         this.log = logContext.logger(RecordDeserializer.class);
+        this.skippedRecordSensor = skippedRecordsSensor;
     }
 
     /**
      * @throws StreamsException if a deserialization error occurs and the deserialization callback returns
-     * {@link DeserializationExceptionHandler.DeserializationHandlerResponse#FAIL FAIL} or throws an exception itself
+     *                          {@link DeserializationExceptionHandler.DeserializationHandlerResponse#FAIL FAIL}
+     *                          or throws an exception itself
      */
     @SuppressWarnings("deprecation")
     ConsumerRecord<Object, Object> deserialize(final ProcessorContext processorContext,
@@ -64,9 +69,10 @@ class RecordDeserializer {
             try {
                 response = deserializationExceptionHandler.handle(processorContext, rawRecord, deserializationException);
             } catch (final Exception fatalUserException) {
-                log.error("Deserialization error callback failed after deserialization error for record {}",
-                          rawRecord,
-                          deserializationException);
+                log.error(
+                    "Deserialization error callback failed after deserialization error for record {}",
+                    rawRecord,
+                    deserializationException);
                 throw new StreamsException("Fatal user code error in deserialization error callback", fatalUserException);
             }
 
@@ -77,10 +83,17 @@ class RecordDeserializer {
                     DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG + " appropriately.",
                     deserializationException);
             } else {
-                sourceNode.nodeMetrics.sourceNodeSkippedDueToDeserializationError.record();
+                log.warn(
+                    "Skipping record due to deserialization error. topic=[{}] partition=[{}] offset=[{}]",
+                    rawRecord.topic(),
+                    rawRecord.partition(),
+                    rawRecord.offset(),
+                    deserializationException
+                );
+                skippedRecordSensor.record();
+                return null;
             }
         }
-        return null;
     }
 
     SourceNode sourceNode() {

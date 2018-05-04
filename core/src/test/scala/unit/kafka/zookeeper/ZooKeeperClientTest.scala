@@ -486,6 +486,28 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
     assertFalse("Expiry executor not shutdown", zooKeeperClient.expiryScheduler.isStarted)
   }
 
+  @Test
+  def testSessionExpiryDuringClose(): Unit = {
+    val semaphore = new Semaphore(0)
+    val closeExecutor = Executors.newSingleThreadExecutor
+    try {
+      zooKeeperClient.expiryScheduler.schedule("test", () => semaphore.acquireUninterruptibly(),
+        delay = 0, period = -1, TimeUnit.SECONDS)
+      zooKeeperClient.scheduleSessionExpiryHandler()
+      val closeFuture = closeExecutor.submit(new Runnable {
+        override def run(): Unit = {
+          zooKeeperClient.close()
+        }
+      })
+      assertFalse("Close completed without shutting down expiry scheduler gracefully", closeFuture.isDone)
+      semaphore.release()
+      closeFuture.get(10, TimeUnit.SECONDS)
+      assertFalse("Expiry executor not shutdown", zooKeeperClient.expiryScheduler.isStarted)
+    } finally {
+      closeExecutor.shutdownNow()
+    }
+  }
+
   def isExpectedMetricName(metricName: MetricName, name: String): Boolean =
     metricName.getName == name && metricName.getGroup == "testMetricGroup" && metricName.getType == "testMetricType"
 

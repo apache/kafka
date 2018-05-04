@@ -23,7 +23,11 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsBuilderTest;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.processor.MockProcessorContext;
+import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.test.KStreamTestDriver;
+import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.TestUtils;
@@ -37,6 +41,9 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
 
+import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
+import static org.hamcrest.CoreMatchers.hasItem;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -61,7 +68,7 @@ public class KTableKTableInnerJoinTest {
 
     private void doTestJoin(final StreamsBuilder builder,
                             final int[] expectedKeys,
-                            final MockProcessorSupplier<Integer, String> processor,
+                            final MockProcessorSupplier<Integer, String> supplier,
                             final KTable<Integer, String> joined) {
         final Collection<Set<String>> copartitionGroups = StreamsBuilderTest.getCopartitionedGroups(builder);
 
@@ -72,6 +79,8 @@ public class KTableKTableInnerJoinTest {
 
         driver.setUp(builder, stateDir, Serdes.Integer(), Serdes.String());
         driver.setTime(0L);
+
+        final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
 
         final KTableValueGetter<Integer, String> getter = getterSupplier.get();
         getter.init(driver.context());
@@ -101,7 +110,7 @@ public class KTableKTableInnerJoinTest {
 
         // push all four items to the primary stream. this should produce two items.
 
-        for (int expectedKey : expectedKeys) {
+        for (final int expectedKey : expectedKeys) {
             driver.process(topic1, expectedKey, "XX" + expectedKey);
         }
         driver.flushState();
@@ -110,7 +119,7 @@ public class KTableKTableInnerJoinTest {
         checkJoinedValues(getter, kv(0, "XX0+Y0"), kv(1, "XX1+Y1"));
 
         // push all items to the other stream. this should produce four items.
-        for (int expectedKey : expectedKeys) {
+        for (final int expectedKey : expectedKeys) {
             driver.process(topic2, expectedKey, "YY" + expectedKey);
         }
         driver.flushState();
@@ -120,7 +129,7 @@ public class KTableKTableInnerJoinTest {
 
         // push all four items to the primary stream. this should produce four items.
 
-        for (int expectedKey : expectedKeys) {
+        for (final int expectedKey : expectedKeys) {
             driver.process(topic1, expectedKey, "X" + expectedKey);
         }
         driver.flushState();
@@ -140,7 +149,7 @@ public class KTableKTableInnerJoinTest {
 
         // push all four items to the primary stream. this should produce two items.
 
-        for (int expectedKey : expectedKeys) {
+        for (final int expectedKey : expectedKeys) {
             driver.process(topic1, expectedKey, "XX" + expectedKey);
         }
         driver.flushState();
@@ -162,17 +171,14 @@ public class KTableKTableInnerJoinTest {
         final KTable<Integer, String> table1;
         final KTable<Integer, String> table2;
         final KTable<Integer, String> joined;
-        final MockProcessorSupplier<Integer, String> processor;
-
-        processor = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
         table1 = builder.table(topic1, consumed);
         table2 = builder.table(topic2, consumed);
         joined = table1.join(table2, MockValueJoiner.TOSTRING_JOINER);
-        joined.toStream().process(processor);
+        joined.toStream().process(supplier);
 
-        doTestJoin(builder, expectedKeys, processor, joined);
+        doTestJoin(builder, expectedKeys, supplier, joined);
     }
-
 
     @Test
     public void testQueryableJoin() {
@@ -198,12 +204,14 @@ public class KTableKTableInnerJoinTest {
                                         final int[] expectedKeys,
                                         final KTable<Integer, String> table1,
                                         final KTable<Integer, String> table2,
-                                        final MockProcessorSupplier<Integer, String> proc,
+                                        final MockProcessorSupplier<Integer, String> supplier,
                                         final KTable<Integer, String> joined,
                                         final boolean sendOldValues) {
 
         driver.setUp(builder, stateDir, Serdes.Integer(), Serdes.String());
         driver.setTime(0L);
+
+        final MockProcessor<Integer, String> proc = supplier.theCapturedProcessor();
 
         if (!sendOldValues) {
             assertFalse(((KTableImpl<?, ?, ?>) table1).sendingOldValueEnabled());
@@ -235,7 +243,7 @@ public class KTableKTableInnerJoinTest {
 
         // push all four items to the primary stream. this should produce two items.
 
-        for (int expectedKey : expectedKeys) {
+        for (final int expectedKey : expectedKeys) {
             driver.process(topic1, expectedKey, "XX" + expectedKey);
         }
         driver.flushState();
@@ -243,7 +251,7 @@ public class KTableKTableInnerJoinTest {
         proc.checkAndClearProcessResult("0:(XX0+Y0<-null)", "1:(XX1+Y1<-null)");
 
         // push all items to the other stream. this should produce four items.
-        for (int expectedKey : expectedKeys) {
+        for (final int expectedKey : expectedKeys) {
             driver.process(topic2, expectedKey, "YY" + expectedKey);
         }
         driver.flushState();
@@ -251,7 +259,7 @@ public class KTableKTableInnerJoinTest {
 
         // push all four items to the primary stream. this should produce four items.
 
-        for (int expectedKey : expectedKeys) {
+        for (final int expectedKey : expectedKeys) {
             driver.process(topic1, expectedKey, "X" + expectedKey);
         }
         driver.flushState();
@@ -267,7 +275,7 @@ public class KTableKTableInnerJoinTest {
 
         // push all four items to the primary stream. this should produce two items.
 
-        for (int expectedKey : expectedKeys) {
+        for (final int expectedKey : expectedKeys) {
             driver.process(topic1, expectedKey, "XX" + expectedKey);
         }
         driver.flushState();
@@ -283,15 +291,15 @@ public class KTableKTableInnerJoinTest {
         final KTable<Integer, String> table1;
         final KTable<Integer, String> table2;
         final KTable<Integer, String> joined;
-        final MockProcessorSupplier<Integer, String> proc;
+        final MockProcessorSupplier<Integer, String> supplier;
 
         table1 = builder.table(topic1, consumed);
         table2 = builder.table(topic2, consumed);
         joined = table1.join(table2, MockValueJoiner.TOSTRING_JOINER);
-        proc = new MockProcessorSupplier<>();
-        builder.build().addProcessor("proc", proc, ((KTableImpl<?, ?, ?>) joined).name);
+        supplier = new MockProcessorSupplier<>();
+        builder.build().addProcessor("proc", supplier, ((KTableImpl<?, ?, ?>) joined).name);
 
-        doTestSendingOldValues(builder, expectedKeys, table1, table2, proc, joined, false);
+        doTestSendingOldValues(builder, expectedKeys, table1, table2, supplier, joined, false);
 
     }
 
@@ -304,15 +312,15 @@ public class KTableKTableInnerJoinTest {
         final KTable<Integer, String> table1;
         final KTable<Integer, String> table2;
         final KTable<Integer, String> joined;
-        final MockProcessorSupplier<Integer, String> proc;
+        final MockProcessorSupplier<Integer, String> supplier;
 
         table1 = builder.table(topic1, consumed);
         table2 = builder.table(topic2, consumed);
         joined = table1.join(table2, MockValueJoiner.TOSTRING_JOINER, Serdes.String(), "anyQueryableName");
-        proc = new MockProcessorSupplier<>();
-        builder.build().addProcessor("proc", proc, ((KTableImpl<?, ?, ?>) joined).name);
+        supplier = new MockProcessorSupplier<>();
+        builder.build().addProcessor("proc", supplier, ((KTableImpl<?, ?, ?>) joined).name);
 
-        doTestSendingOldValues(builder, expectedKeys, table1, table2, proc, joined, false);
+        doTestSendingOldValues(builder, expectedKeys, table1, table2, supplier, joined, false);
 
     }
 
@@ -325,26 +333,48 @@ public class KTableKTableInnerJoinTest {
         final KTable<Integer, String> table1;
         final KTable<Integer, String> table2;
         final KTable<Integer, String> joined;
-        final MockProcessorSupplier<Integer, String> proc;
+        final MockProcessorSupplier<Integer, String> supplier;
 
         table1 = builder.table(topic1, consumed);
         table2 = builder.table(topic2, consumed);
         joined = table1.join(table2, MockValueJoiner.TOSTRING_JOINER);
 
-        proc = new MockProcessorSupplier<>();
-        builder.build().addProcessor("proc", proc, ((KTableImpl<?, ?, ?>) joined).name);
+        supplier = new MockProcessorSupplier<>();
+        builder.build().addProcessor("proc", supplier, ((KTableImpl<?, ?, ?>) joined).name);
 
-        doTestSendingOldValues(builder, expectedKeys, table1, table2, proc, joined, true);
+        doTestSendingOldValues(builder, expectedKeys, table1, table2, supplier, joined, true);
 
     }
 
-    private KeyValue<Integer, String> kv(Integer key, String value) {
+    @Test
+    public void shouldLogAndMeterSkippedRecordsDueToNullLeftKey() {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final Processor<String, Change<String>> join = new KTableKTableInnerJoin<>(
+            (KTableImpl<String, String, String>) builder.table("left", Consumed.with(stringSerde, stringSerde)),
+            (KTableImpl<String, String, String>) builder.table("right", Consumed.with(stringSerde, stringSerde)),
+            null
+        ).get();
+
+        final MockProcessorContext context = new MockProcessorContext();
+        context.setRecordMetadata("left", -1, -2, -3);
+        join.init(context);
+        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
+        join.process(null, new Change<>("new", "old"));
+        LogCaptureAppender.unregister(appender);
+
+        assertEquals(1.0, getMetricByName(context.metrics().metrics(), "skipped-records-total", "stream-metrics").metricValue());
+        assertThat(appender.getMessages(), hasItem("Skipping record due to null key. change=[(new<-old)] topic=[left] partition=[-1] offset=[-2]"));
+    }
+
+    private KeyValue<Integer, String> kv(final Integer key, final String value) {
         return new KeyValue<>(key, value);
     }
 
-    private void checkJoinedValues(KTableValueGetter<Integer, String> getter, KeyValue<Integer, String>... expected) {
-        for (KeyValue<Integer, String> kv : expected) {
-            String value = getter.get(kv.key);
+    @SafeVarargs
+    private final void checkJoinedValues(final KTableValueGetter<Integer, String> getter, final KeyValue<Integer, String>... expected) {
+        for (final KeyValue<Integer, String> kv : expected) {
+            final String value = getter.get(kv.key);
             if (kv.value == null) {
                 assertNull(value);
             } else {

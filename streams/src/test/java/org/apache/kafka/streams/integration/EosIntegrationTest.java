@@ -61,6 +61,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -78,18 +79,18 @@ public class EosIntegrationTest {
     });
 
     private static String applicationId;
+    private final static int NUM_TOPIC_PARTITIONS = 2;
     private final static String CONSUMER_GROUP_ID = "readCommitted";
     private final static String SINGLE_PARTITION_INPUT_TOPIC = "singlePartitionInputTopic";
     private final static String SINGLE_PARTITION_THROUGH_TOPIC = "singlePartitionThroughTopic";
     private final static String SINGLE_PARTITION_OUTPUT_TOPIC = "singlePartitionOutputTopic";
-    private final static int NUM_TOPIC_PARTITIONS = 2;
     private final static String MULTI_PARTITION_INPUT_TOPIC = "multiPartitionInputTopic";
     private final static String MULTI_PARTITION_THROUGH_TOPIC = "multiPartitionThroughTopic";
     private final static String MULTI_PARTITION_OUTPUT_TOPIC = "multiPartitionOutputTopic";
     private final String storeName = "store";
 
     private AtomicBoolean errorInjected;
-    private AtomicBoolean injectGC;
+    private AtomicBoolean gcInjected;
     private volatile boolean doGC = true;
     private AtomicInteger commitRequested;
     private Throwable uncaughtException;
@@ -153,7 +154,6 @@ public class EosIntegrationTest {
         output.to(outputTopic);
 
         for (int i = 0; i < numberOfRestarts; ++i) {
-            final long factor = i;
             final KafkaStreams streams = new KafkaStreams(
                 builder.build(),
                 StreamsTestUtils.getStreamsConfig(
@@ -171,7 +171,7 @@ public class EosIntegrationTest {
             try {
                 streams.start();
 
-                final List<KeyValue<Long, Long>> inputData = prepareData(factor * 100, factor * 100 + 10L, 0L, 1L);
+                final List<KeyValue<Long, Long>> inputData = prepareData(i * 100, i * 100 + 10L, 0L, 1L);
 
                 IntegrationTestUtils.produceKeyValuesSynchronously(
                     inputTopic,
@@ -510,7 +510,7 @@ public class EosIntegrationTest {
             checkResultPerKey(committedRecords, committedDataBeforeGC);
             checkResultPerKey(uncommittedRecords, dataBeforeGC);
 
-            injectGC.set(true);
+            gcInjected.set(true);
             writeInputData(dataToTriggerFirstRebalance);
 
             TestUtils.waitForCondition(new TestCondition() {
@@ -577,7 +577,7 @@ public class EosIntegrationTest {
     private KafkaStreams getKafkaStreams(final boolean withState, final String appDir, final int numberOfStreamsThreads) {
         commitRequested = new AtomicInteger(0);
         errorInjected = new AtomicBoolean(false);
-        injectGC = new AtomicBoolean(false);
+        gcInjected = new AtomicBoolean(false);
         final StreamsBuilder builder = new StreamsBuilder();
 
         String[] storeNames = null;
@@ -614,7 +614,7 @@ public class EosIntegrationTest {
                             // only tries to fail once on one of the task
                             throw new RuntimeException("Injected test exception.");
                         }
-                        if (injectGC.compareAndSet(true, false)) {
+                        if (gcInjected.compareAndSet(true, false)) {
                             while (doGC) {
                                 try {
                                     Thread.sleep(100);
@@ -641,11 +641,6 @@ public class EosIntegrationTest {
                             return null;
                         }
                         return new KeyValue<>(key, value);
-                    }
-
-                    @Override
-                    public KeyValue<Long, Long> punctuate(final long timestamp) {
-                        return null;
                     }
 
                     @Override
@@ -778,6 +773,8 @@ public class EosIntegrationTest {
                 } catch (final Exception ignore) { }
             }
         }
+
+        assertNotNull(store);
 
         final KeyValueIterator<Long, Long> it = store.all();
         while (it.hasNext()) {

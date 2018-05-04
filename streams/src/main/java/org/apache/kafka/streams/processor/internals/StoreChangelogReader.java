@@ -40,6 +40,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.apache.kafka.streams.processor.internals.ConsumerUtils.poll;
+
 public class StoreChangelogReader implements ChangelogReader {
 
     private static final int DEFAULT_MAX = 100;
@@ -86,7 +88,7 @@ public class StoreChangelogReader implements ChangelogReader {
             int totalNumberOfRecords = 0;
             final Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> allRecords = new HashMap<>();
             while (totalNumberOfRecords < DEFAULT_MAX) {
-                final ConsumerRecords<byte[], byte[]> records = restoreConsumer.poll(10);
+                final ConsumerRecords<byte[], byte[]> records = poll(restoreConsumer, 10);
                 int count = records.count();
                 if (count == 0) {
                     break;

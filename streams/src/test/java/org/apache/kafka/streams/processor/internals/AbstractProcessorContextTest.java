@@ -24,6 +24,7 @@ import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.test.MockStateStore;
@@ -176,28 +177,18 @@ public class AbstractProcessorContextTest {
         }
 
         @Override
-        public void schedule(final long interval) {
-
-        }
+        public <K, V> void forward(final K key, final V value) {}
 
         @Override
-        public <K, V> void forward(final K key, final V value) {
-
-        }
+        public <K, V> void forward(final K key, final V value, final To to) {}
 
         @Override
-        public <K, V> void forward(final K key, final V value, final int childIndex) {
-
-        }
+        public <K, V> void forward(final K key, final V value, final int childIndex) {}
 
         @Override
-        public <K, V> void forward(final K key, final V value, final String childName) {
-
-        }
+        public <K, V> void forward(final K key, final V value, final String childName) {}
 
         @Override
-        public void commit() {
-
-        }
+        public void commit() {}
     }
 }

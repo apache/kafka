@@ -162,6 +162,8 @@ public class JsonRestServer {
     }
 
     /**
+     * Make an HTTP request.
+     *
      * @param url               HTTP connection will be established with this url.
      * @param method            HTTP method ("GET", "POST", "PUT", etc.)
      * @param requestBodyData   Object to serialize as JSON and send in the request body.
@@ -170,12 +172,28 @@ public class JsonRestServer {
      * @return The deserialized response to the HTTP request, or null if no data is expected.
      */
     public static <T> HttpResponse<T> httpRequest(String url, String method, Object requestBodyData,
-                                    TypeReference<T> responseFormat) throws IOException {
+                                                  TypeReference<T> responseFormat) throws IOException {
+        return httpRequest(log, url, method, requestBodyData, responseFormat);
+    }
+
+    /**
+     * Make an HTTP request.
+     *
+     * @param logger            The logger to use.
+     * @param url               HTTP connection will be established with this url.
+     * @param method            HTTP method ("GET", "POST", "PUT", etc.)
+     * @param requestBodyData   Object to serialize as JSON and send in the request body.
+     * @param responseFormat    Expected format of the response to the HTTP request.
+     * @param <T>               The type of the deserialized response to the HTTP request.
+     * @return The deserialized response to the HTTP request, or null if no data is expected.
+     */
+    public static <T> HttpResponse<T> httpRequest(Logger logger, String url, String method,
+            Object requestBodyData, TypeReference<T> responseFormat) throws IOException {
         HttpURLConnection connection = null;
         try {
             String serializedBody = requestBodyData == null ? null :
                 JsonUtil.JSON_SERDE.writeValueAsString(requestBodyData);
-            log.debug("Sending {} with input {} to {}", method, serializedBody, url);
+            logger.debug("Sending {} with input {} to {}", method, serializedBody, url);
             connection = (HttpURLConnection) new URL(url).openConnection();
             connection.setRequestMethod(method);
             connection.setRequestProperty("User-Agent", "kafka");
@@ -225,7 +243,34 @@ public class JsonRestServer {
         }
     }
 
-    public static <T> HttpResponse<T> httpRequest(String url, String method,
+    /**
+     * Make an HTTP request with retries.
+     *
+     * @param url               HTTP connection will be established with this url.
+     * @param method            HTTP method ("GET", "POST", "PUT", etc.)
+     * @param requestBodyData   Object to serialize as JSON and send in the request body.
+     * @param responseFormat    Expected format of the response to the HTTP request.
+     * @param <T>               The type of the deserialized response to the HTTP request.
+     * @return The deserialized response to the HTTP request, or null if no data is expected.
+     */
+    public static <T> HttpResponse<T> httpRequest(String url, String method, Object requestBodyData,
+                                                  TypeReference<T> responseFormat, int maxTries)
+            throws IOException, InterruptedException {
+        return httpRequest(log, url, method, requestBodyData, responseFormat, maxTries);
+    }
+
+    /**
+     * Make an HTTP request with retries.
+     *
+     * @param logger            The logger to use.
+     * @param url               HTTP connection will be established with this url.
+     * @param method            HTTP method ("GET", "POST", "PUT", etc.)
+     * @param requestBodyData   Object to serialize as JSON and send in the request body.
+     * @param responseFormat    Expected format of the response to the HTTP request.
+     * @param <T>               The type of the deserialized response to the HTTP request.
+     * @return The deserialized response to the HTTP request, or null if no data is expected.
+     */
+    public static <T> HttpResponse<T> httpRequest(Logger logger, String url, String method,
             Object requestBodyData, TypeReference<T> responseFormat, int maxTries)
             throws IOException, InterruptedException {
         IOException exc = null;
@@ -234,9 +279,9 @@ public class JsonRestServer {
                 Thread.sleep(tries > 1 ? 10 : 2);
             }
             try {
-                return httpRequest(url, method, requestBodyData, responseFormat);
+                return httpRequest(logger, url, method, requestBodyData, responseFormat);
             } catch (IOException e) {
-                log.info("{} {}: error: {}", method, url, e.getMessage());
+                logger.info("{} {}: error: {}", method, url, e.getMessage());
                 exc = e;
             }
         }

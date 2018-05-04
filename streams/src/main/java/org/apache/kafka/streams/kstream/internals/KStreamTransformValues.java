@@ -28,6 +28,7 @@ import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.To;
 
 import java.io.File;
 import java.util.Map;
@@ -105,22 +106,23 @@ public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V> 
                         return context.schedule(interval, type, callback);
                     }
 
-                    @SuppressWarnings("deprecation")
-                    @Override
-                    public void schedule(final long interval) {
-                        context.schedule(interval);
-                    }
-
                     @Override
                     public <K, V> void forward(final K key, final V value) {
                         throw new StreamsException("ProcessorContext#forward() must not be called within TransformValues.");
                     }
 
                     @Override
+                    public <K, V> void forward(final K key, final V value, final To to) {
+                        throw new StreamsException("ProcessorContext#forward() must not be called within TransformValues.");
+                    }
+
+                    @SuppressWarnings("deprecation")
+                    @Override
                     public <K, V> void forward(final K key, final V value, final int childIndex) {
                         throw new StreamsException("ProcessorContext#forward() must not be called within TransformValues.");
                     }
 
+                    @SuppressWarnings("deprecation")
                     @Override
                     public <K, V> void forward(final K key, final V value, final String childName) {
                         throw new StreamsException("ProcessorContext#forward() must not be called within TransformValues.");
@@ -167,14 +169,6 @@ public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V> 
         @Override
         public void process(K key, V value) {
             context.forward(key, valueTransformer.transform(key, value));
-        }
-
-        @SuppressWarnings("deprecation")
-        @Override
-        public void punctuate(long timestamp) {
-            if (valueTransformer.punctuate(timestamp) != null) {
-                throw new StreamsException("ValueTransformer#punctuate must return null.");
-            }
         }
 
         @Override

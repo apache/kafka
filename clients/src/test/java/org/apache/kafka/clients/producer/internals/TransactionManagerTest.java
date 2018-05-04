@@ -133,6 +133,26 @@ public class TransactionManagerTest {
     }
 
     @Test
+    public void testSenderShutdownWithPendingAddPartitions() throws Exception {
+        long pid = 13131L;
+        short epoch = 1;
+        doInitTransactions(pid, epoch);
+        transactionManager.beginTransaction();
+
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+        FutureRecordMetadata sendFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
+                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+
+        prepareAddPartitionsToTxn(tp0, Errors.NONE);
+        prepareProduceResponse(Errors.NONE, pid, epoch);
+
+        sender.initiateClose();
+        sender.run();
+
+        assertTrue(sendFuture.isDone());
+    }
+
+    @Test
     public void testEndTxnNotSentIfIncompleteBatches() {
         long pid = 13131L;
         short epoch = 1;
@@ -2211,6 +2231,33 @@ public class TransactionManagerTest {
 
         assertTrue(transactionManager.hasFatalError());
         assertFalse(transactionManager.hasOngoingTransaction());
+    }
+
+    @Test
+    public void testShouldResetProducerStateAfterResolvingSequences() throws InterruptedException, ExecutionException {
+        // Create a TransactionManager without a transactionalId to test
+        // shouldResetProducerStateAfterResolvingSequences.
+        TransactionManager manager = new TransactionManager(logContext, null, transactionTimeoutMs,
+            DEFAULT_RETRY_BACKOFF_MS);
+        assertFalse(manager.shouldResetProducerStateAfterResolvingSequences());
+        TopicPartition tp0 = new TopicPartition("foo", 0);
+        TopicPartition tp1 = new TopicPartition("foo", 1);
+        assertEquals(Integer.valueOf(0), manager.sequenceNumber(tp0));
+        assertEquals(Integer.valueOf(0), manager.sequenceNumber(tp1));
+
+        manager.incrementSequenceNumber(tp0, 1);
+        manager.incrementSequenceNumber(tp1, 1);
+        manager.maybeUpdateLastAckedSequence(tp0, 0);
+        manager.maybeUpdateLastAckedSequence(tp1, 0);
+        manager.markSequenceUnresolved(tp0);
+        manager.markSequenceUnresolved(tp1);
+        assertFalse(manager.shouldResetProducerStateAfterResolvingSequences());
+
+        manager.maybeUpdateLastAckedSequence(tp0, 5);
+        manager.incrementSequenceNumber(tp0, 1);
+        manager.markSequenceUnresolved(tp0);
+        manager.markSequenceUnresolved(tp1);
+        assertTrue(manager.shouldResetProducerStateAfterResolvingSequences());
     }
 
     private void verifyAddPartitionsFailsWithPartitionLevelError(final Errors error) throws InterruptedException {

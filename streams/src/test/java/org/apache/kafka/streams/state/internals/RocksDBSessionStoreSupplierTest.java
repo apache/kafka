@@ -26,7 +26,7 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.state.SessionStore;
-import org.apache.kafka.test.MockProcessorContext;
+import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.NoOpRecordCollector;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -47,7 +47,7 @@ public class RocksDBSessionStoreSupplierTest {
     private static final String STORE_NAME = "name";
     private final List<ProducerRecord> logged = new ArrayList<>();
     private final ThreadCache cache = new ThreadCache(new LogContext("test "), 1024, new MockStreamsMetrics(new Metrics()));
-    private final MockProcessorContext context = new MockProcessorContext(TestUtils.tempDirectory(),
+    private final InternalMockProcessorContext context = new InternalMockProcessorContext(TestUtils.tempDirectory(),
         Serdes.String(),
         Serdes.String(),
         new NoOpRecordCollector() {
@@ -68,7 +68,6 @@ public class RocksDBSessionStoreSupplierTest {
 
     @After
     public void close() {
-        context.close();
         store.close();
     }
 

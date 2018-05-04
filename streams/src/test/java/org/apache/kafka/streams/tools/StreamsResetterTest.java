@@ -40,12 +40,10 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
+import static org.apache.kafka.streams.processor.internals.ConsumerUtils.poll;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
-/**
- *
- */
 public class StreamsResetterTest {
 
     private static final String TOPIC = "topic1";
@@ -77,7 +75,7 @@ public class StreamsResetterTest {
 
         streamsResetter.resetOffsetsTo(consumer, inputTopicPartitions, 2L);
 
-        final ConsumerRecords<byte[], byte[]> records = consumer.poll(500);
+        final ConsumerRecords<byte[], byte[]> records = poll(consumer, 500);
         assertEquals(3, records.count());
     }
 
@@ -93,7 +91,7 @@ public class StreamsResetterTest {
 
         streamsResetter.resetOffsetsTo(consumer, inputTopicPartitions, 2L);
 
-        final ConsumerRecords<byte[], byte[]> records = consumer.poll(500);
+        final ConsumerRecords<byte[], byte[]> records = poll(consumer, 500);
         assertEquals(2, records.count());
     }
 
@@ -109,7 +107,7 @@ public class StreamsResetterTest {
 
         streamsResetter.resetOffsetsTo(consumer, inputTopicPartitions, 4L);
 
-        final ConsumerRecords<byte[], byte[]> records = consumer.poll(500);
+        final ConsumerRecords<byte[], byte[]> records = poll(consumer, 500);
         assertEquals(2, records.count());
     }
 
@@ -125,7 +123,7 @@ public class StreamsResetterTest {
 
         streamsResetter.shiftOffsetsBy(consumer, inputTopicPartitions, 3L);
 
-        final ConsumerRecords<byte[], byte[]> records = consumer.poll(500);
+        final ConsumerRecords<byte[], byte[]> records = poll(consumer, 500);
         assertEquals(2, records.count());
     }
 
@@ -141,7 +139,7 @@ public class StreamsResetterTest {
 
         streamsResetter.shiftOffsetsBy(consumer, inputTopicPartitions, -3L);
 
-        final ConsumerRecords<byte[], byte[]> records = consumer.poll(500);
+        final ConsumerRecords<byte[], byte[]> records = poll(consumer, 500);
         assertEquals(5, records.count());
     }
 
@@ -157,7 +155,7 @@ public class StreamsResetterTest {
 
         streamsResetter.shiftOffsetsBy(consumer, inputTopicPartitions, 5L);
 
-        final ConsumerRecords<byte[], byte[]> records = consumer.poll(500);
+        final ConsumerRecords<byte[], byte[]> records = poll(consumer, 500);
         assertEquals(2, records.count());
     }
 
@@ -175,7 +173,7 @@ public class StreamsResetterTest {
         topicPartitionsAndOffset.put(topicPartition, 3L);
         streamsResetter.resetOffsetsFromResetPlan(consumer, inputTopicPartitions, topicPartitionsAndOffset);
 
-        final ConsumerRecords<byte[], byte[]> records = consumer.poll(500);
+        final ConsumerRecords<byte[], byte[]> records = poll(consumer, 500);
         assertEquals(2, records.count());
     }
 
@@ -193,7 +191,7 @@ public class StreamsResetterTest {
         topicPartitionsAndOffset.put(topicPartition, 1L);
         streamsResetter.resetOffsetsFromResetPlan(consumer, inputTopicPartitions, topicPartitionsAndOffset);
 
-        final ConsumerRecords<byte[], byte[]> records = consumer.poll(500);
+        final ConsumerRecords<byte[], byte[]> records = poll(consumer, 500);
         assertEquals(2, records.count());
     }
 
@@ -211,7 +209,7 @@ public class StreamsResetterTest {
         topicPartitionsAndOffset.put(topicPartition, 5L);
         streamsResetter.resetOffsetsFromResetPlan(consumer, inputTopicPartitions, topicPartitionsAndOffset);
 
-        final ConsumerRecords<byte[], byte[]> records = consumer.poll(500);
+        final ConsumerRecords<byte[], byte[]> records = poll(consumer, 500);
         assertEquals(2, records.count());
     }
 
@@ -229,7 +227,7 @@ public class StreamsResetterTest {
         intermediateTopicPartitions.add(topicPartition);
         streamsResetter.maybeSeekToEnd("g1", consumer, intermediateTopicPartitions);
 
-        final ConsumerRecords<byte[], byte[]> records = consumer.poll(500);
+        final ConsumerRecords<byte[], byte[]> records = poll(consumer, 500);
         assertEquals(2, records.count());
     }
 

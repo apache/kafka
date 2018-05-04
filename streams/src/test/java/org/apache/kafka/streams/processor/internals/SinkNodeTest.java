@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.producer.MockProducer;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
@@ -24,8 +25,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.state.StateSerdes;
-import org.apache.kafka.test.MockProcessorContext;
-import org.junit.After;
+import org.apache.kafka.test.InternalMockProcessorContext;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -35,20 +35,23 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.fail;
 
 public class SinkNodeTest {
-    private final Serializer anySerializer = Serdes.Bytes().serializer();
-    private final StateSerdes anyStateSerde = StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class);
-    private final MockProcessorContext context = new MockProcessorContext(anyStateSerde,
-        new RecordCollectorImpl(new MockProducer<byte[], byte[]>(true, anySerializer, anySerializer), null, new LogContext("sinknode-test "), new DefaultProductionExceptionHandler()));
+    private final Serializer<byte[]> anySerializer = Serdes.ByteArray().serializer();
+    private final StateSerdes<Bytes, Bytes> anyStateSerde = StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class);
+    private final InternalMockProcessorContext context = new InternalMockProcessorContext(
+        anyStateSerde,
+        new RecordCollectorImpl(
+            new MockProducer<>(true, anySerializer, anySerializer),
+            null,
+            new LogContext("sinknode-test "),
+            new DefaultProductionExceptionHandler(),
+            new Metrics().sensor("skipped-records")
+        )
+    );
     private final SinkNode sink = new SinkNode<>("anyNodeName", "any-output-topic", anySerializer, anySerializer, null);
 
     @Before
     public void before() {
         sink.init(context);
-    }
-
-    @After
-    public void after() {
-        context.close();
     }
 
     @Test

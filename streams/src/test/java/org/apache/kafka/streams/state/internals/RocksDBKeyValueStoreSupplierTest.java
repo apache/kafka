@@ -24,7 +24,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.test.MockProcessorContext;
+import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.NoOpRecordCollector;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -44,7 +44,7 @@ public class RocksDBKeyValueStoreSupplierTest {
 
     private static final String STORE_NAME = "name";
     private final ThreadCache cache = new ThreadCache(new LogContext("test "), 1024, new MockStreamsMetrics(new Metrics()));
-    private final MockProcessorContext context = new MockProcessorContext(TestUtils.tempDirectory(),
+    private final InternalMockProcessorContext context = new InternalMockProcessorContext(TestUtils.tempDirectory(),
                                                                           Serdes.String(),
                                                                           Serdes.String(),
                                                                           new NoOpRecordCollector(),
@@ -53,7 +53,6 @@ public class RocksDBKeyValueStoreSupplierTest {
 
     @After
     public void close() {
-        context.close();
         store.close();
     }
 
@@ -73,7 +72,7 @@ public class RocksDBKeyValueStoreSupplierTest {
                 logged.add(new ProducerRecord<K, V>(topic, partition, timestamp, key, value));
             }
         };
-        final MockProcessorContext context = new MockProcessorContext(TestUtils.tempDirectory(),
+        final InternalMockProcessorContext context = new InternalMockProcessorContext(TestUtils.tempDirectory(),
                                                                       Serdes.String(),
                                                                       Serdes.String(),
                                                                       collector,
@@ -100,7 +99,7 @@ public class RocksDBKeyValueStoreSupplierTest {
                 logged.add(new ProducerRecord<>(topic, partition, timestamp, key, value));
             }
         };
-        final MockProcessorContext context = new MockProcessorContext(TestUtils.tempDirectory(),
+        final InternalMockProcessorContext context = new InternalMockProcessorContext(TestUtils.tempDirectory(),
                                                                       Serdes.String(),
                                                                       Serdes.String(),
                                                                       collector,
