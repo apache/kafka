@@ -80,7 +80,7 @@ public class GlobalStateManagerImplTest {
     private final TopicPartition t3 = new TopicPartition("t3", 1);
     private final TopicPartition t4 = new TopicPartition("t4", 1);
 
-    private final GlobalStateManagerImpl.IsRunning ALWAYS_RUNNING = new GlobalStateManagerImpl.IsRunning() {
+    private final GlobalStateManagerImpl.IsRunning alwaysRunning = new GlobalStateManagerImpl.IsRunning() {
         @Override
         public boolean check() {
             return true;
@@ -128,7 +128,7 @@ public class GlobalStateManagerImplTest {
             stateDirectory,
             stateRestoreListener,
             streamsConfig,
-            ALWAYS_RUNNING);
+            alwaysRunning);
         processorContext = new InternalMockProcessorContext(stateDirectory.globalStateDir(), streamsConfig);
         stateManager.setGlobalProcessorContext(processorContext);
         checkpointFile = new File(stateManager.baseDir(), ProcessorStateManager.CHECKPOINT_FILE_NAME);
@@ -517,7 +517,7 @@ public class GlobalStateManagerImplTest {
             },
             stateRestoreListener,
             streamsConfig,
-            ALWAYS_RUNNING
+            alwaysRunning
         );
 
         try {
@@ -556,7 +556,7 @@ public class GlobalStateManagerImplTest {
                 stateDirectory,
                 stateRestoreListener,
                 streamsConfig,
-                ALWAYS_RUNNING);
+                alwaysRunning);
         } catch (final StreamsException expected) {
             assertEquals(numberOfCalls.get(), retries);
         }
@@ -590,7 +590,7 @@ public class GlobalStateManagerImplTest {
                 stateDirectory,
                 stateRestoreListener,
                 streamsConfig,
-                ALWAYS_RUNNING);
+                alwaysRunning);
         } catch (final StreamsException expected) {
             assertEquals(numberOfCalls.get(), retries);
         }
