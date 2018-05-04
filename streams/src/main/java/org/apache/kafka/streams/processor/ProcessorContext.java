@@ -132,18 +132,6 @@ public interface ProcessorContext {
                          final Punctuator callback);
 
     /**
-     * Schedules a periodic operation for processors. A processor may call this method during
-     * {@link Processor#init(ProcessorContext) initialization} to
-     * schedule a periodic call - called a punctuation - to {@link Processor#punctuate(long)}.
-     *
-     * @deprecated Please use {@link #schedule(long, PunctuationType, Punctuator)} instead.
-     *
-     * @param interval the time interval between punctuations
-     */
-    @Deprecated
-    void schedule(final long interval);
-
-    /**
      * Forwards a key/value pair to all downstream processors.
      * Used the input record's timestamp as timestamp for the output record.
      *

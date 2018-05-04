@@ -198,9 +198,6 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
     }
 
     @Override
-    public void schedule(final long interval) { }
-
-    @Override
     public void commit() { }
 
     @Override

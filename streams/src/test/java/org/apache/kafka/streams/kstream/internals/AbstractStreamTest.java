@@ -76,12 +76,12 @@ public class AbstractStreamTest {
     public void testShouldBeExtensible() {
         final StreamsBuilder builder = new StreamsBuilder();
         final int[] expectedKeys = new int[]{1, 2, 3, 4, 5, 6, 7};
-        final MockProcessorSupplier<Integer, String> processor = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
         final String topicName = "topic";
 
         ExtendedKStream<Integer, String> stream = new ExtendedKStream<>(builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String())));
 
-        stream.randomFilter().process(processor);
+        stream.randomFilter().process(supplier);
 
         final Properties props = new Properties();
         props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "abstract-stream-test");
@@ -94,7 +94,7 @@ public class AbstractStreamTest {
             driver.pipeInput(recordFactory.create(topicName, expectedKey, "V" + expectedKey));
         }
 
-        assertTrue(processor.processed.size() <= expectedKeys.length);
+        assertTrue(supplier.theCapturedProcessor().processed.size() <= expectedKeys.length);
     }
 
     private class ExtendedKStream<K, V> extends AbstractStream<K> {

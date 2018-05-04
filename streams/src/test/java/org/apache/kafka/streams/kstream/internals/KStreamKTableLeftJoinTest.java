@@ -28,6 +28,7 @@ import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
+import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.TestUtils;
@@ -51,7 +52,8 @@ public class KStreamKTableLeftJoinTest {
     final private Serde<String> stringSerde = Serdes.String();
     private final ConsumerRecordFactory<Integer, String> recordFactory = new ConsumerRecordFactory<>(new IntegerSerializer(), new StringSerializer());
     private TopologyTestDriver driver;
-    private MockProcessorSupplier<Integer, String> processor;
+    private MockProcessor<Integer, String> processor;
+
     private final int[] expectedKeys = {0, 1, 2, 3};
     private StreamsBuilder builder;
 
@@ -63,11 +65,11 @@ public class KStreamKTableLeftJoinTest {
         final KStream<Integer, String> stream;
         final KTable<Integer, String> table;
 
-        processor = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
         final Consumed<Integer, String> consumed = Consumed.with(intSerde, stringSerde);
         stream = builder.stream(streamTopic, consumed);
         table = builder.table(tableTopic, consumed);
-        stream.leftJoin(table, MockValueJoiner.TOSTRING_JOINER).process(processor);
+        stream.leftJoin(table, MockValueJoiner.TOSTRING_JOINER).process(supplier);
 
         final Properties props = new Properties();
         props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "kstream-ktable-left-join-test");
@@ -77,6 +79,8 @@ public class KStreamKTableLeftJoinTest {
         props.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
 
         driver = new TopologyTestDriver(builder.build(), props, 0L);
+
+        processor = supplier.theCapturedProcessor();
     }
 
     private void pushToStream(final int messageCount, final String valuePrefix) {

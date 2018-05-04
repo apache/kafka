@@ -74,18 +74,18 @@ public class KStreamFilterTest {
         final int[] expectedKeys = new int[]{1, 2, 3, 4, 5, 6, 7};
 
         KStream<Integer, String> stream;
-        MockProcessorSupplier<Integer, String> processor;
+        MockProcessorSupplier<Integer, String> supplier;
 
-        processor = new MockProcessorSupplier<>();
+        supplier = new MockProcessorSupplier<>();
         stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String()));
-        stream.filter(isMultipleOfThree).process(processor);
+        stream.filter(isMultipleOfThree).process(supplier);
 
         driver = new TopologyTestDriver(builder.build(), props);
         for (int expectedKey : expectedKeys) {
             driver.pipeInput(recordFactory.create(topicName, expectedKey, "V" + expectedKey));
         }
 
-        assertEquals(2, processor.processed.size());
+        assertEquals(2, supplier.theCapturedProcessor().processed.size());
     }
 
     @Test
@@ -94,18 +94,18 @@ public class KStreamFilterTest {
         final int[] expectedKeys = new int[]{1, 2, 3, 4, 5, 6, 7};
 
         KStream<Integer, String> stream;
-        MockProcessorSupplier<Integer, String> processor;
+        MockProcessorSupplier<Integer, String> supplier;
 
-        processor = new MockProcessorSupplier<>();
+        supplier = new MockProcessorSupplier<>();
         stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String()));
-        stream.filterNot(isMultipleOfThree).process(processor);
+        stream.filterNot(isMultipleOfThree).process(supplier);
 
         driver = new TopologyTestDriver(builder.build(), props);
         for (int expectedKey : expectedKeys) {
             driver.pipeInput(recordFactory.create(topicName, expectedKey, "V" + expectedKey));
         }
 
-        assertEquals(5, processor.processed.size());
+        assertEquals(5, supplier.theCapturedProcessor().processed.size());
     }
 
     @Test

@@ -52,6 +52,8 @@ import java.util.Properties;
 import java.util.Random;
 import java.util.Set;
 
+import static org.apache.kafka.streams.processor.internals.ConsumerUtils.poll;
+
 public class EosTestDriver extends SmokeTestUtil {
 
     private static final int MAX_NUMBER_OF_KEYS = 100;
@@ -254,7 +256,7 @@ public class EosTestDriver extends SmokeTestUtil {
                 topics.add("repartition");
             }
             consumer.subscribe(topics);
-            consumer.poll(0);
+            poll(consumer, 0);
 
             final Set<TopicPartition> partitions = new HashSet<>();
             for (final String topic : topics) {
@@ -284,7 +286,7 @@ public class EosTestDriver extends SmokeTestUtil {
         long maxWaitTime = System.currentTimeMillis() + MAX_IDLE_TIME_MS;
         boolean allRecordsReceived = false;
         while (!allRecordsReceived && System.currentTimeMillis() < maxWaitTime) {
-            final ConsumerRecords<byte[], byte[]> receivedRecords = consumer.poll(100);
+            final ConsumerRecords<byte[], byte[]> receivedRecords = poll(consumer, 100);
 
             for (final ConsumerRecord<byte[], byte[]> record : receivedRecords) {
                 maxWaitTime = System.currentTimeMillis() + MAX_IDLE_TIME_MS;
@@ -591,7 +593,7 @@ public class EosTestDriver extends SmokeTestUtil {
 
         long maxWaitTime = System.currentTimeMillis() + MAX_IDLE_TIME_MS;
         while (!partitions.isEmpty() && System.currentTimeMillis() < maxWaitTime) {
-            final ConsumerRecords<byte[], byte[]> records = consumer.poll(100);
+            final ConsumerRecords<byte[], byte[]> records = poll(consumer, 100);
             if (records.isEmpty()) {
                 System.out.println("No data received.");
                 for (final TopicPartition tp : partitions) {

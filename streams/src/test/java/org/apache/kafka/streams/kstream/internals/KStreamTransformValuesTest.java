@@ -49,6 +49,8 @@ public class KStreamTransformValuesTest {
     private String topicName = "topic";
 
     final private Serde<Integer> intSerde = Serdes.Integer();
+    final private MockProcessorSupplier<Integer, Integer> supplier = new MockProcessorSupplier<>();
+
     private final ConsumerRecordFactory<Integer, Integer> recordFactory = new ConsumerRecordFactory<>(new IntegerSerializer(), new IntegerSerializer());
     private TopologyTestDriver driver;
     private final Properties props = new Properties();
@@ -107,9 +109,8 @@ public class KStreamTransformValuesTest {
         final int[] expectedKeys = {1, 10, 100, 1000};
 
         KStream<Integer, Integer> stream;
-        MockProcessorSupplier<Integer, Integer> processor = new MockProcessorSupplier<>();
         stream = builder.stream(topicName, Consumed.with(intSerde, intSerde));
-        stream.transformValues(valueTransformerSupplier).process(processor);
+        stream.transformValues(valueTransformerSupplier).process(supplier);
 
         driver = new TopologyTestDriver(builder.build(), props);
 
@@ -118,7 +119,7 @@ public class KStreamTransformValuesTest {
         }
         String[] expected = {"1:10", "10:110", "100:1110", "1000:11110"};
 
-        assertArrayEquals(expected, processor.processed.toArray());
+        assertArrayEquals(expected, supplier.theCapturedProcessor().processed.toArray());
     }
 
     @Test
@@ -151,9 +152,8 @@ public class KStreamTransformValuesTest {
         final int[] expectedKeys = {1, 10, 100, 1000};
 
         KStream<Integer, Integer> stream;
-        MockProcessorSupplier<Integer, Integer> processor = new MockProcessorSupplier<>();
         stream = builder.stream(topicName, Consumed.with(intSerde, intSerde));
-        stream.transformValues(valueTransformerSupplier).process(processor);
+        stream.transformValues(valueTransformerSupplier).process(supplier);
 
         driver = new TopologyTestDriver(builder.build(), props);
 
@@ -162,7 +162,7 @@ public class KStreamTransformValuesTest {
         }
         String[] expected = {"1:11", "10:121", "100:1221", "1000:12221"};
 
-        assertArrayEquals(expected, processor.processed.toArray());
+        assertArrayEquals(expected, supplier.theCapturedProcessor().processed.toArray());
     }
 
 
@@ -223,13 +223,6 @@ public class KStreamTransformValuesTest {
         try {
             transformValueProcessor.process(null, 3);
             fail("should not allow call to context.forward() within ValueTransformer");
-        } catch (final StreamsException e) {
-            // expected
-        }
-
-        try {
-            transformValueProcessor.punctuate(0);
-            fail("should not allow ValueTransformer#puntuate() to return not-null value");
         } catch (final StreamsException e) {
             // expected
         }

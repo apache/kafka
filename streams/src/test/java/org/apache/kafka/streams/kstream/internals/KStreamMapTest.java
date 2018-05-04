@@ -81,22 +81,22 @@ public class KStreamMapTest {
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
         KStream<Integer, String> stream = builder.stream(topicName, Consumed.with(intSerde, stringSerde));
-        MockProcessorSupplier<String, Integer> processor;
+        MockProcessorSupplier<String, Integer> supplier;
 
-        processor = new MockProcessorSupplier<>();
-        stream.map(mapper).process(processor);
+        supplier = new MockProcessorSupplier<>();
+        stream.map(mapper).process(supplier);
 
         driver = new TopologyTestDriver(builder.build(), props);
         for (int expectedKey : expectedKeys) {
             driver.pipeInput(recordFactory.create(topicName, expectedKey, "V" + expectedKey));
         }
 
-        assertEquals(4, processor.processed.size());
+        assertEquals(4, supplier.theCapturedProcessor().processed.size());
 
         String[] expected = new String[]{"V0:0", "V1:1", "V2:2", "V3:3"};
 
         for (int i = 0; i < expected.length; i++) {
-            assertEquals(expected[i], processor.processed.get(i));
+            assertEquals(expected[i], supplier.theCapturedProcessor().processed.get(i));
         }
     }
 
