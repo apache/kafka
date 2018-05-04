@@ -24,6 +24,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TopologyTestDriverWrapper;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -36,8 +37,8 @@ import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockProcessorSupplier;
-import org.apache.kafka.test.ProcessorTopologyTestDriver;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -66,26 +67,26 @@ public class ProcessorTopologyTest {
 
     private final TopologyBuilder builder = new TopologyBuilder();
     private final MockProcessorSupplier mockProcessorSupplier = new MockProcessorSupplier();
+    private final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(STRING_SERIALIZER, STRING_SERIALIZER, 0L);
 
-    private ProcessorTopologyTestDriver driver;
-    private StreamsConfig config;
+    private TopologyTestDriverWrapper driver;
+    private final Properties props = new Properties();
 
     @Before
     public void setup() {
         // Create a new directory in which we'll put all of the state for this test, enabling running tests in parallel ...
         final File localState = TestUtils.tempDirectory();
-        final Properties props = new Properties();
         props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "processor-topology-test");
         props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9091");
         props.setProperty(StreamsConfig.STATE_DIR_CONFIG, localState.getAbsolutePath());
         props.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         props.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         props.setProperty(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, CustomTimestampExtractor.class.getName());
-        this.config = new StreamsConfig(props);
     }
 
     @After
     public void cleanup() {
+        props.clear();
         if (driver != null) {
             driver.close();
         }
@@ -122,19 +123,19 @@ public class ProcessorTopologyTest {
 
     @Test
     public void testDrivingSimpleTopology() {
-        final int partition = 10;
-        driver = new ProcessorTopologyTestDriver(config, createSimpleTopology(partition).internalTopologyBuilder);
-        driver.process(INPUT_TOPIC_1, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER);
+        int partition = 10;
+        driver = new TopologyTestDriverWrapper(createSimpleTopology(partition).internalTopologyBuilder, props);
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key1", "value1"));
         assertNextOutputRecord(OUTPUT_TOPIC_1, "key1", "value1", partition);
         assertNoOutputRecord(OUTPUT_TOPIC_2);
 
-        driver.process(INPUT_TOPIC_1, "key2", "value2", STRING_SERIALIZER, STRING_SERIALIZER);
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key2", "value2"));
         assertNextOutputRecord(OUTPUT_TOPIC_1, "key2", "value2", partition);
         assertNoOutputRecord(OUTPUT_TOPIC_2);
 
-        driver.process(INPUT_TOPIC_1, "key3", "value3", STRING_SERIALIZER, STRING_SERIALIZER);
-        driver.process(INPUT_TOPIC_1, "key4", "value4", STRING_SERIALIZER, STRING_SERIALIZER);
-        driver.process(INPUT_TOPIC_1, "key5", "value5", STRING_SERIALIZER, STRING_SERIALIZER);
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key3", "value3"));
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key4", "value4"));
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key5", "value5"));
         assertNoOutputRecord(OUTPUT_TOPIC_2);
         assertNextOutputRecord(OUTPUT_TOPIC_1, "key3", "value3", partition);
         assertNextOutputRecord(OUTPUT_TOPIC_1, "key4", "value4", partition);
@@ -144,18 +145,18 @@ public class ProcessorTopologyTest {
 
     @Test
     public void testDrivingMultiplexingTopology() {
-        driver = new ProcessorTopologyTestDriver(config, createMultiplexingTopology().internalTopologyBuilder);
-        driver.process(INPUT_TOPIC_1, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER);
+        driver = new TopologyTestDriverWrapper(createMultiplexingTopology().internalTopologyBuilder, props);
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key1", "value1"));
         assertNextOutputRecord(OUTPUT_TOPIC_1, "key1", "value1(1)");
         assertNextOutputRecord(OUTPUT_TOPIC_2, "key1", "value1(2)");
 
-        driver.process(INPUT_TOPIC_1, "key2", "value2", STRING_SERIALIZER, STRING_SERIALIZER);
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key2", "value2"));
         assertNextOutputRecord(OUTPUT_TOPIC_1, "key2", "value2(1)");
         assertNextOutputRecord(OUTPUT_TOPIC_2, "key2", "value2(2)");
 
-        driver.process(INPUT_TOPIC_1, "key3", "value3", STRING_SERIALIZER, STRING_SERIALIZER);
-        driver.process(INPUT_TOPIC_1, "key4", "value4", STRING_SERIALIZER, STRING_SERIALIZER);
-        driver.process(INPUT_TOPIC_1, "key5", "value5", STRING_SERIALIZER, STRING_SERIALIZER);
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key3", "value3"));
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key4", "value4"));
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key5", "value5"));
         assertNextOutputRecord(OUTPUT_TOPIC_1, "key3", "value3(1)");
         assertNextOutputRecord(OUTPUT_TOPIC_1, "key4", "value4(1)");
         assertNextOutputRecord(OUTPUT_TOPIC_1, "key5", "value5(1)");
@@ -166,18 +167,18 @@ public class ProcessorTopologyTest {
 
     @Test
     public void testDrivingMultiplexByNameTopology() {
-        driver = new ProcessorTopologyTestDriver(config, createMultiplexByNameTopology().internalTopologyBuilder);
-        driver.process(INPUT_TOPIC_1, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER);
+        driver = new TopologyTestDriverWrapper(createMultiplexByNameTopology().internalTopologyBuilder, props);
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key1", "value1"));
         assertNextOutputRecord(OUTPUT_TOPIC_1, "key1", "value1(1)");
         assertNextOutputRecord(OUTPUT_TOPIC_2, "key1", "value1(2)");
 
-        driver.process(INPUT_TOPIC_1, "key2", "value2", STRING_SERIALIZER, STRING_SERIALIZER);
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key2", "value2"));
         assertNextOutputRecord(OUTPUT_TOPIC_1, "key2", "value2(1)");
         assertNextOutputRecord(OUTPUT_TOPIC_2, "key2", "value2(2)");
 
-        driver.process(INPUT_TOPIC_1, "key3", "value3", STRING_SERIALIZER, STRING_SERIALIZER);
-        driver.process(INPUT_TOPIC_1, "key4", "value4", STRING_SERIALIZER, STRING_SERIALIZER);
-        driver.process(INPUT_TOPIC_1, "key5", "value5", STRING_SERIALIZER, STRING_SERIALIZER);
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key3", "value3"));
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key4", "value4"));
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key5", "value5"));
         assertNextOutputRecord(OUTPUT_TOPIC_1, "key3", "value3(1)");
         assertNextOutputRecord(OUTPUT_TOPIC_1, "key4", "value4(1)");
         assertNextOutputRecord(OUTPUT_TOPIC_1, "key5", "value5(1)");
@@ -188,12 +189,12 @@ public class ProcessorTopologyTest {
 
     @Test
     public void testDrivingStatefulTopology() {
-        final String storeName = "entries";
-        driver = new ProcessorTopologyTestDriver(config, createStatefulTopology(storeName).internalTopologyBuilder);
-        driver.process(INPUT_TOPIC_1, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER);
-        driver.process(INPUT_TOPIC_1, "key2", "value2", STRING_SERIALIZER, STRING_SERIALIZER);
-        driver.process(INPUT_TOPIC_1, "key3", "value3", STRING_SERIALIZER, STRING_SERIALIZER);
-        driver.process(INPUT_TOPIC_1, "key1", "value4", STRING_SERIALIZER, STRING_SERIALIZER);
+        String storeName = "entries";
+        driver = new TopologyTestDriverWrapper(createStatefulTopology(storeName).internalTopologyBuilder, props);
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key1", "value1"));
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key2", "value2"));
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key3", "value3"));
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key1", "value4"));
         assertNoOutputRecord(OUTPUT_TOPIC_1);
 
         final KeyValueStore<String, String> store = driver.getKeyValueStore(storeName);
@@ -214,10 +215,10 @@ public class ProcessorTopologyTest {
         final TopologyBuilder topologyBuilder = this.builder
                 .addGlobalStore(storeSupplier, global, STRING_DESERIALIZER, STRING_DESERIALIZER, topic, "processor", define(new StatefulProcessor(storeName)));
 
-        driver = new ProcessorTopologyTestDriver(config, topologyBuilder.internalTopologyBuilder);
-        final KeyValueStore<String, String> globalStore = (KeyValueStore<String, String>) topologyBuilder.globalStateStores().get(storeName);
-        driver.process(topic, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER);
-        driver.process(topic, "key2", "value2", STRING_SERIALIZER, STRING_SERIALIZER);
+        driver = new TopologyTestDriverWrapper(topologyBuilder.internalTopologyBuilder, props);
+        final KeyValueStore<String, String> globalStore = (KeyValueStore<String, String>) topologyBuilder.globalStateStores().get("my-store");
+        driver.pipeInput(recordFactory.create(topic, "key1", "value1"));
+        driver.pipeInput(recordFactory.create(topic, "key2", "value2"));
         assertEquals("value1", globalStore.get("key1"));
         assertEquals("value2", globalStore.get("key2"));
     }
@@ -225,23 +226,23 @@ public class ProcessorTopologyTest {
     @Test
     public void testDrivingSimpleMultiSourceTopology() {
         final int partition = 10;
-        driver = new ProcessorTopologyTestDriver(config, createSimpleMultiSourceTopology(partition).internalTopologyBuilder);
+        driver = new TopologyTestDriverWrapper(createSimpleMultiSourceTopology(partition).internalTopologyBuilder, props);
 
-        driver.process(INPUT_TOPIC_1, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER);
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key1", "value1"));
         assertNextOutputRecord(OUTPUT_TOPIC_1, "key1", "value1", partition);
         assertNoOutputRecord(OUTPUT_TOPIC_2);
 
-        driver.process(INPUT_TOPIC_2, "key2", "value2", STRING_SERIALIZER, STRING_SERIALIZER);
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC_2, "key2", "value2"));
         assertNextOutputRecord(OUTPUT_TOPIC_2, "key2", "value2", partition);
         assertNoOutputRecord(OUTPUT_TOPIC_1);
     }
 
     @Test
     public void testDrivingForwardToSourceTopology() {
-        driver = new ProcessorTopologyTestDriver(config, createForwardToSourceTopology().internalTopologyBuilder);
-        driver.process(INPUT_TOPIC_1, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER);
-        driver.process(INPUT_TOPIC_1, "key2", "value2", STRING_SERIALIZER, STRING_SERIALIZER);
-        driver.process(INPUT_TOPIC_1, "key3", "value3", STRING_SERIALIZER, STRING_SERIALIZER);
+        driver = new TopologyTestDriverWrapper(createForwardToSourceTopology().internalTopologyBuilder, props);
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key1", "value1"));
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key2", "value2"));
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key3", "value3"));
         assertNextOutputRecord(OUTPUT_TOPIC_2, "key1", "value1");
         assertNextOutputRecord(OUTPUT_TOPIC_2, "key2", "value2");
         assertNextOutputRecord(OUTPUT_TOPIC_2, "key3", "value3");
@@ -249,10 +250,10 @@ public class ProcessorTopologyTest {
 
     @Test
     public void testDrivingInternalRepartitioningTopology() {
-        driver = new ProcessorTopologyTestDriver(config, createInternalRepartitioningTopology().internalTopologyBuilder);
-        driver.process(INPUT_TOPIC_1, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER);
-        driver.process(INPUT_TOPIC_1, "key2", "value2", STRING_SERIALIZER, STRING_SERIALIZER);
-        driver.process(INPUT_TOPIC_1, "key3", "value3", STRING_SERIALIZER, STRING_SERIALIZER);
+        driver = new TopologyTestDriverWrapper(createInternalRepartitioningTopology().internalTopologyBuilder, props);
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key1", "value1"));
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key2", "value2"));
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key3", "value3"));
         assertNextOutputRecord(OUTPUT_TOPIC_1, "key1", "value1");
         assertNextOutputRecord(OUTPUT_TOPIC_1, "key2", "value2");
         assertNextOutputRecord(OUTPUT_TOPIC_1, "key3", "value3");
@@ -260,10 +261,10 @@ public class ProcessorTopologyTest {
 
     @Test
     public void testDrivingInternalRepartitioningForwardingTimestampTopology() {
-        driver = new ProcessorTopologyTestDriver(config, createInternalRepartitioningWithValueTimestampTopology().internalTopologyBuilder);
-        driver.process(INPUT_TOPIC_1, "key1", "value1@1000", STRING_SERIALIZER, STRING_SERIALIZER);
-        driver.process(INPUT_TOPIC_1, "key2", "value2@2000", STRING_SERIALIZER, STRING_SERIALIZER);
-        driver.process(INPUT_TOPIC_1, "key3", "value3@3000", STRING_SERIALIZER, STRING_SERIALIZER);
+        driver = new TopologyTestDriverWrapper(createInternalRepartitioningWithValueTimestampTopology().internalTopologyBuilder, props);
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key1", "value1@1000"));
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key2", "value2@2000"));
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key3", "value3@3000"));
         assertThat(driver.readOutput(OUTPUT_TOPIC_1, STRING_DESERIALIZER, STRING_DESERIALIZER),
                 equalTo(new ProducerRecord<>(OUTPUT_TOPIC_1, null, 1000L, "key1", "value1")));
         assertThat(driver.readOutput(OUTPUT_TOPIC_1, STRING_DESERIALIZER, STRING_DESERIALIZER),
@@ -319,10 +320,10 @@ public class ProcessorTopologyTest {
     @Test
     public void shouldConsiderTimeStamps() {
         final int partition = 10;
-        driver = new ProcessorTopologyTestDriver(config, createSimpleTopology(partition).internalTopologyBuilder);
-        driver.process(INPUT_TOPIC_1, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER, 10L);
-        driver.process(INPUT_TOPIC_1, "key2", "value2", STRING_SERIALIZER, STRING_SERIALIZER, 20L);
-        driver.process(INPUT_TOPIC_1, "key3", "value3", STRING_SERIALIZER, STRING_SERIALIZER, 30L);
+        driver = new TopologyTestDriverWrapper(createSimpleTopology(partition).internalTopologyBuilder, props);
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key1", "value1", 10L));
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key2", "value2", 20L));
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key3", "value3", 30L));
         assertNextOutputRecord(OUTPUT_TOPIC_1, "key1", "value1", partition, 10L);
         assertNextOutputRecord(OUTPUT_TOPIC_1, "key2", "value2", partition, 20L);
         assertNextOutputRecord(OUTPUT_TOPIC_1, "key3", "value3", partition, 30L);
@@ -331,10 +332,10 @@ public class ProcessorTopologyTest {
     @Test
     public void shouldConsiderModifiedTimeStamps() {
         final int partition = 10;
-        driver = new ProcessorTopologyTestDriver(config, createTimestampTopology(partition).internalTopologyBuilder);
-        driver.process(INPUT_TOPIC_1, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER, 10L);
-        driver.process(INPUT_TOPIC_1, "key2", "value2", STRING_SERIALIZER, STRING_SERIALIZER, 20L);
-        driver.process(INPUT_TOPIC_1, "key3", "value3", STRING_SERIALIZER, STRING_SERIALIZER, 30L);
+        driver = new TopologyTestDriverWrapper(createTimestampTopology(partition).internalTopologyBuilder, props);
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key1", "value1", 10L));
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key2", "value2", 20L));
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key3", "value3", 30L));
         assertNextOutputRecord(OUTPUT_TOPIC_1, "key1", "value1", partition, 20L);
         assertNextOutputRecord(OUTPUT_TOPIC_1, "key2", "value2", partition, 30L);
         assertNextOutputRecord(OUTPUT_TOPIC_1, "key3", "value3", partition, 40L);

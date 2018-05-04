@@ -16,27 +16,31 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.test.KStreamTestDriver;
+import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.TestUtils;
+import org.junit.After;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
 
-import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.Properties;
 
 import static org.junit.Assert.assertEquals;
 
@@ -44,15 +48,28 @@ import static org.junit.Assert.assertEquals;
 public class KTableForeachTest {
 
     final private String topicName = "topic";
-    private File stateDir = null;
     final private Serde<Integer> intSerde = Serdes.Integer();
     final private Serde<String> stringSerde = Serdes.String();
-    @Rule
-    public final KStreamTestDriver driver = new KStreamTestDriver();
+    private final ConsumerRecordFactory<Integer, String> recordFactory = new ConsumerRecordFactory<>(new IntegerSerializer(), new StringSerializer());
+    private TopologyTestDriver driver;
+    private final Properties props = new Properties();
 
     @Before
-    public void setUp() {
-        stateDir = TestUtils.tempDirectory("kafka-test");
+    public void setup() {
+        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "ktable-foreach-test");
+        props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9091");
+        props.setProperty(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
+        props.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass().getName());
+        props.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+    }
+
+    @After
+    public void cleanup() {
+        props.clear();
+        if (driver != null) {
+            driver.close();
+        }
+        driver = null;
     }
 
     @Test
@@ -91,11 +108,11 @@ public class KTableForeachTest {
         table.foreach(action);
 
         // Then
-        driver.setUp(builder, stateDir);
+        driver = new TopologyTestDriver(builder.build(), props);
+
         for (KeyValue<Integer, String> record: inputRecords) {
-            driver.process(topicName, record.key, record.value);
+            driver.pipeInput(recordFactory.create(topicName, record.key, record.value));
         }
-        driver.flushState();
 
         assertEquals(expectedRecords.size(), actualRecords.size());
         for (int i = 0; i < expectedRecords.size(); i++) {

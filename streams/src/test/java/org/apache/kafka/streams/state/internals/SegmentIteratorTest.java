@@ -76,7 +76,6 @@ public class SegmentIteratorTest {
         }
         segmentOne.close();
         segmentTwo.close();
-        context.close();
     }
 
     @Test

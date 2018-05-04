@@ -82,7 +82,6 @@ public class RocksDBSegmentedBytesStoreTest {
 
     @After
     public void close() {
-        context.close();
         bytesStore.close();
     }
 

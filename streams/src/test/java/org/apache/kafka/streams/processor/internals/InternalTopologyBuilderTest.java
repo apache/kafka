@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.TopologyTestDriverWrapper;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyDescription;
@@ -34,7 +35,6 @@ import org.apache.kafka.streams.state.internals.RocksDBWindowStoreSupplier;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockStateStoreSupplier;
 import org.apache.kafka.test.MockTimestampExtractor;
-import org.apache.kafka.test.ProcessorTopologyTestDriver;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
@@ -554,7 +554,8 @@ public class InternalTopologyBuilderTest {
         final InternalTopologyBuilder.TopicsInfo topicsInfo = builder.topicGroups().values().iterator().next();
         final InternalTopicConfig topicConfig = topicsInfo.repartitionSourceTopics.get("appId-foo");
         final Map<String, String> properties = topicConfig.getProperties(Collections.<String, String>emptyMap(), 10000);
-        assertEquals(4, properties.size());
+        assertEquals(5, properties.size());
+        assertEquals(String.valueOf(Long.MAX_VALUE), properties.get(TopicConfig.RETENTION_MS_CONFIG));
         assertEquals(TopicConfig.CLEANUP_POLICY_DELETE, properties.get(TopicConfig.CLEANUP_POLICY_CONFIG));
         assertEquals("appId-foo", topicConfig.name());
         assertTrue(topicConfig instanceof RepartitionTopicConfig);
@@ -581,7 +582,7 @@ public class InternalTopologyBuilderTest {
         builder.addProcessor(badNodeName, new LocalMockProcessorSupplier(), sourceNodeName);
         
         try {
-            new ProcessorTopologyTestDriver(streamsConfig, builder);
+            new TopologyTestDriverWrapper(builder, config);
             fail("Should have throw StreamsException");
         } catch (final StreamsException e) {
             final String error = e.toString();

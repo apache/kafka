@@ -16,9 +16,11 @@
  */
 package org.apache.kafka.streams.processor;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.TopologyTestDriverWrapper;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TopologyBuilderException;
@@ -34,7 +36,6 @@ import org.apache.kafka.streams.state.internals.RocksDBWindowStoreSupplier;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockStateStoreSupplier;
 import org.apache.kafka.test.MockTimestampExtractor;
-import org.apache.kafka.test.ProcessorTopologyTestDriver;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
@@ -587,7 +588,8 @@ public class TopologyBuilderTest {
         final TopicsInfo topicsInfo = builder.topicGroups().values().iterator().next();
         final InternalTopicConfig topicConfig = topicsInfo.repartitionSourceTopics.get("appId-foo");
         final Map<String, String> properties = topicConfig.getProperties(Collections.<String, String>emptyMap(), 10000);
-        assertEquals(4, properties.size());
+        assertEquals(5, properties.size());
+        assertEquals(String.valueOf(Long.MAX_VALUE), properties.get(TopicConfig.RETENTION_MS_CONFIG));
         assertEquals("appId-foo", topicConfig.name());
     }
 
@@ -605,16 +607,12 @@ public class TopologyBuilderTest {
 
         final TopologyBuilder builder = new TopologyBuilder();
         builder.addSource(sourceNodeName, "topic")
-                .addProcessor(goodNodeName, new LocalMockProcessorSupplier(),
-                        sourceNodeName)
-                .addStateStore(
-                        Stores.create(LocalMockProcessorSupplier.STORE_NAME)
-                                .withStringKeys().withStringValues().inMemory()
-                                .build(), goodNodeName)
-                .addProcessor(badNodeName, new LocalMockProcessorSupplier(),
-                        sourceNodeName);     
+                .addProcessor(goodNodeName, new LocalMockProcessorSupplier(), sourceNodeName)
+                .addStateStore(Stores.create(LocalMockProcessorSupplier.STORE_NAME).withStringKeys().withStringValues().inMemory().build(), goodNodeName)
+                .addProcessor(badNodeName, new LocalMockProcessorSupplier(), sourceNodeName);
         try {
-            final ProcessorTopologyTestDriver driver = new ProcessorTopologyTestDriver(streamsConfig, builder.internalTopologyBuilder);
+            final TopologyTestDriverWrapper driver = new TopologyTestDriverWrapper(builder.internalTopologyBuilder, config);
+            driver.pipeInput(new ConsumerRecord<>("topic", 0, 0L, new byte[] {}, new byte[] {}));
             fail("Should have thrown StreamsException");
         } catch (final StreamsException e) {
             final String error = e.toString();

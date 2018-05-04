@@ -232,7 +232,6 @@ public class StreamTaskTest {
     public void testMetrics() {
         task = createStatelessTask(createConfig(false));
 
-        assertNotNull(metrics.getSensor("commit"));
         assertNotNull(getMetric("%s-latency-avg", "The average latency of %s operation.", task.id().toString()));
         assertNotNull(getMetric("%s-latency-max", "The max latency of %s operation.", task.id().toString()));
         assertNotNull(getMetric("%s-rate", "The average number of occurrence of %s operation per second.", task.id().toString()));

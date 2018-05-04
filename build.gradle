@@ -120,6 +120,7 @@ if (new File('.git').exists()) {
         'PULL_REQUEST_TEMPLATE.md',
         'gradlew',
         'gradlew.bat',
+        'TROGDOR.md',
         '**/README.md',
         '**/id_rsa',
         '**/id_rsa.pub',

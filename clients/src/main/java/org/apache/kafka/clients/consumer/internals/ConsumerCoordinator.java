@@ -757,7 +757,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                         // raise the error to the user
                         future.raise(error);
                         return;
-                    } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS) {
+                    } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS
+                            || error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
                         // just retry
                         future.raise(error);
                         return;
@@ -773,9 +774,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                         // need to re-join group
                         resetGeneration();
                         future.raise(new CommitFailedException());
-                        return;
-                    } else if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
-                        future.raise(new KafkaException("Topic or Partition " + tp + " does not exist"));
                         return;
                     } else {
                         future.raise(new KafkaException("Unexpected error in commit: " + error.message()));
