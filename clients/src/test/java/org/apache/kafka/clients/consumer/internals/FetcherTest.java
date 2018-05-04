@@ -316,6 +316,30 @@ public class FetcherTest {
     }
 
     @Test
+    public void testKeyAndValueDeserializerCalledForNullValues() {
+        CallTrackingDeserializer<byte[]> keyDeserializer = new CallTrackingDeserializer<>();
+        CallTrackingDeserializer<byte[]> valueDeserializer = new CallTrackingDeserializer<>();
+
+        Fetcher<byte[], byte[]> fetcher = createFetcher(subscriptions, new Metrics(time), keyDeserializer, valueDeserializer);
+
+        subscriptions.assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 1);
+
+        MemoryRecordsBuilder nullValueRecordBuilder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME, 1L);
+        byte[] nullBytes = null;
+        nullValueRecordBuilder.append(0L, nullBytes, nullBytes);
+
+        client.prepareResponse(matchesOffset(tp0, 1), fullFetchResponse(tp0, nullValueRecordBuilder.build(), Errors.NONE, 100L, 0));
+
+        assertEquals(1, fetcher.sendFetches());
+        consumerClient.poll(0);
+
+        fetcher.fetchedRecords();
+        assertEquals(1, keyDeserializer.numberOfDeserializations);
+        assertEquals(1, valueDeserializer.numberOfDeserializations);
+    }
+
+    @Test
     public void testParseCorruptedRecord() throws Exception {
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         DataOutputStream out = new DataOutputStream(new ByteBufferOutputStream(buffer));
