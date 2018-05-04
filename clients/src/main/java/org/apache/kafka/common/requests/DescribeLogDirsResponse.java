@@ -77,8 +77,13 @@ public class DescribeLogDirsResponse extends AbstractResponse {
                                             "AlterReplicaLogDirsRequest and will replace the current log of the replica " +
                                             "in the future.")))))))))));
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema DESCRIBE_LOG_DIRS_RESPONSE_V1 = DESCRIBE_LOG_DIRS_RESPONSE_V0;
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{DESCRIBE_LOG_DIRS_RESPONSE_V0};
+        return new Schema[]{DESCRIBE_LOG_DIRS_RESPONSE_V0, DESCRIBE_LOG_DIRS_RESPONSE_V1};
     }
 
     private final int throttleTimeMs;
@@ -229,5 +234,10 @@ public class DescribeLogDirsResponse extends AbstractResponse {
                 .append(")");
             return builder.toString();
         }
+    }
+
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 1;
     }
 }

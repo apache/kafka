@@ -240,7 +240,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
       sendResponseExemptThrottle(request, new UpdateMetadataResponse(Errors.NONE))
     } else {
-      sendResponseMaybeThrottle(request, _ => new UpdateMetadataResponse(Errors.CLUSTER_AUTHORIZATION_FAILED))
+      sendResponseMaybeThrottle(request,
+        throttleTimeMs => new UpdateMetadataResponse(Errors.CLUSTER_AUTHORIZATION_FAILED, throttleTimeMs))
     }
   }
 
@@ -1359,12 +1360,13 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleSaslHandshakeRequest(request: RequestChannel.Request) {
-    sendResponseMaybeThrottle(request, _ => new SaslHandshakeResponse(Errors.ILLEGAL_SASL_STATE, Collections.emptySet()))
+    sendResponseMaybeThrottle(request, requestThrottleMs => new SaslHandshakeResponse(
+      Errors.ILLEGAL_SASL_STATE, Collections.emptySet(), requestThrottleMs))
   }
 
   def handleSaslAuthenticateRequest(request: RequestChannel.Request) {
-    sendResponseMaybeThrottle(request, _ => new SaslAuthenticateResponse(Errors.ILLEGAL_SASL_STATE,
-        "SaslAuthenticate request received after successful authentication"))
+    sendResponseMaybeThrottle(request, requestThrottleMs => new SaslAuthenticateResponse(Errors.ILLEGAL_SASL_STATE,
+        "SaslAuthenticate request received after successful authentication", requestThrottleMs))
   }
 
   def handleApiVersionsRequest(request: RequestChannel.Request) {

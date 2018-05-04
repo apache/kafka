@@ -27,6 +27,7 @@ import java.util.Map;
 
 import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
 import static org.apache.kafka.common.protocol.CommonFields.ERROR_MESSAGE;
+import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
 import static org.apache.kafka.common.protocol.types.Type.BYTES;
 
 
@@ -42,8 +43,18 @@ public class SaslAuthenticateResponse extends AbstractResponse {
             ERROR_MESSAGE,
             new Field(SASL_AUTH_BYTES_KEY_NAME, BYTES, "SASL authentication bytes from server as defined by the SASL mechanism."));
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     * THROTTLE_TIME_MS is also added to the response for client-side throttling for error responses.
+     */
+    private static final Schema SASL_AUTHENTICATE_RESPONSE_V1 = new Schema(
+        THROTTLE_TIME_MS,
+        ERROR_CODE,
+        ERROR_MESSAGE,
+        new Field(SASL_AUTH_BYTES_KEY_NAME, BYTES, "SASL authentication bytes from server as defined by the SASL mechanism."));
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{SASL_AUTHENTICATE_RESPONSE_V0};
+        return new Schema[]{SASL_AUTHENTICATE_RESPONSE_V0, SASL_AUTHENTICATE_RESPONSE_V1};
     }
 
     private static final ByteBuffer EMPTY_BUFFER = ByteBuffer.allocate(0);
@@ -56,21 +67,32 @@ public class SaslAuthenticateResponse extends AbstractResponse {
      */
     private final Errors error;
     private final String errorMessage;
+    private final int throttleTimeMs;
 
     public SaslAuthenticateResponse(Errors error, String errorMessage) {
-        this(error, errorMessage, EMPTY_BUFFER);
+        this(error, errorMessage, 0);
+    }
+
+    public SaslAuthenticateResponse(Errors error, String errorMessage, int throttleTimeMs) {
+        this(error, errorMessage, EMPTY_BUFFER, throttleTimeMs);
     }
 
     public SaslAuthenticateResponse(Errors error, String errorMessage, ByteBuffer saslAuthBytes) {
+        this(error, errorMessage, saslAuthBytes, 0);
+    }
+
+    public SaslAuthenticateResponse(Errors error, String errorMessage, ByteBuffer saslAuthBytes, int throttleTimeMs) {
         this.error = error;
         this.errorMessage = errorMessage;
         this.saslAuthBytes = saslAuthBytes;
+        this.throttleTimeMs = throttleTimeMs;
     }
 
     public SaslAuthenticateResponse(Struct struct) {
         error = Errors.forCode(struct.get(ERROR_CODE));
         errorMessage = struct.get(ERROR_MESSAGE);
         saslAuthBytes = struct.getBytes(SASL_AUTH_BYTES_KEY_NAME);
+        throttleTimeMs = struct.getOrElse(THROTTLE_TIME_MS, DEFAULT_THROTTLE_TIME);
     }
 
     public Errors error() {
@@ -85,6 +107,10 @@ public class SaslAuthenticateResponse extends AbstractResponse {
         return saslAuthBytes;
     }
 
+    public int throttleTimeMs() {
+        return throttleTimeMs;
+    }
+
     @Override
     public Map<Errors, Integer> errorCounts() {
         return errorCounts(error);
@@ -96,11 +122,17 @@ public class SaslAuthenticateResponse extends AbstractResponse {
         struct.set(ERROR_CODE, error.code());
         struct.set(ERROR_MESSAGE, errorMessage);
         struct.set(SASL_AUTH_BYTES_KEY_NAME, saslAuthBytes);
+        struct.setIfExists(THROTTLE_TIME_MS, throttleTimeMs);
         return struct;
     }
 
     public static SaslAuthenticateResponse parse(ByteBuffer buffer, short version) {
         return new SaslAuthenticateResponse(ApiKeys.SASL_AUTHENTICATE.parseResponse(version, buffer));
+    }
+
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 1;
     }
 }
 

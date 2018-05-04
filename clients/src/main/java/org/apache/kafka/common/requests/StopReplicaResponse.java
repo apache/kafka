@@ -46,8 +46,13 @@ public class StopReplicaResponse extends AbstractResponse {
             ERROR_CODE,
             new Field(PARTITIONS_KEY_NAME, new ArrayOf(STOP_REPLICA_RESPONSE_PARTITION_V0)));
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema STOP_REPLICA_RESPONSE_V1 = STOP_REPLICA_RESPONSE_V0;
+
     public static Schema[] schemaVersions() {
-        return new Schema[] {STOP_REPLICA_RESPONSE_V0};
+        return new Schema[] {STOP_REPLICA_RESPONSE_V0, STOP_REPLICA_RESPONSE_V1};
     }
 
     private final Map<TopicPartition, Errors> responses;
@@ -114,5 +119,10 @@ public class StopReplicaResponse extends AbstractResponse {
         struct.set(PARTITIONS_KEY_NAME, responseDatas.toArray());
         struct.set(ERROR_CODE, error.code());
         return struct;
+    }
+
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 1;
     }
 }

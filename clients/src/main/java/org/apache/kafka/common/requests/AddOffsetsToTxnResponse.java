@@ -32,8 +32,13 @@ public class AddOffsetsToTxnResponse extends AbstractResponse {
             THROTTLE_TIME_MS,
             ERROR_CODE);
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema ADD_OFFSETS_TO_TXN_RESPONSE_V1 = ADD_OFFSETS_TO_TXN_RESPONSE_V0;
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{ADD_OFFSETS_TO_TXN_RESPONSE_V0};
+        return new Schema[]{ADD_OFFSETS_TO_TXN_RESPONSE_V0, ADD_OFFSETS_TO_TXN_RESPONSE_V1};
     }
 
     // Possible error codes:
@@ -92,4 +97,8 @@ public class AddOffsetsToTxnResponse extends AbstractResponse {
                 ')';
     }
 
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 1;
+    }
 }

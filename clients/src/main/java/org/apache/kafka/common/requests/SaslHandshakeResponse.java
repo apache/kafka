@@ -31,6 +31,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
+import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
 
 
 /**
@@ -46,8 +47,17 @@ public class SaslHandshakeResponse extends AbstractResponse {
 
     private static final Schema SASL_HANDSHAKE_RESPONSE_V1 = SASL_HANDSHAKE_RESPONSE_V0;
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     * THROTTLE_TIME_MS is also added to the response for client-side throttling for error responses.
+     */
+    private static final Schema SASL_HANDSHAKE_RESPONSE_V2 = new Schema(
+        THROTTLE_TIME_MS,
+        ERROR_CODE,
+        new Field(ENABLED_MECHANISMS_KEY_NAME, new ArrayOf(Type.STRING), "Array of mechanisms enabled in the server."));
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{SASL_HANDSHAKE_RESPONSE_V0, SASL_HANDSHAKE_RESPONSE_V1};
+        return new Schema[]{SASL_HANDSHAKE_RESPONSE_V0, SASL_HANDSHAKE_RESPONSE_V1, SASL_HANDSHAKE_RESPONSE_V2};
     }
 
     /**
@@ -57,10 +67,16 @@ public class SaslHandshakeResponse extends AbstractResponse {
      */
     private final Errors error;
     private final List<String> enabledMechanisms;
+    private final int throttleTimeMs;
 
     public SaslHandshakeResponse(Errors error, Collection<String> enabledMechanisms) {
+        this(error, enabledMechanisms, 0);
+    }
+
+    public SaslHandshakeResponse(Errors error, Collection<String> enabledMechanisms, int throttleTimeMs) {
         this.error = error;
         this.enabledMechanisms = new ArrayList<>(enabledMechanisms);
+        this.throttleTimeMs = throttleTimeMs;
     }
 
     public SaslHandshakeResponse(Struct struct) {
@@ -70,10 +86,15 @@ public class SaslHandshakeResponse extends AbstractResponse {
         for (Object mechanism : mechanisms)
             enabledMechanisms.add((String) mechanism);
         this.enabledMechanisms = enabledMechanisms;
+        throttleTimeMs = struct.getOrElse(THROTTLE_TIME_MS, DEFAULT_THROTTLE_TIME);
     }
 
     public Errors error() {
         return error;
+    }
+
+    public int throttleTimeMs() {
+        return throttleTimeMs;
     }
 
     @Override
@@ -86,6 +107,7 @@ public class SaslHandshakeResponse extends AbstractResponse {
         Struct struct = new Struct(ApiKeys.SASL_HANDSHAKE.responseSchema(version));
         struct.set(ERROR_CODE, error.code());
         struct.set(ENABLED_MECHANISMS_KEY_NAME, enabledMechanisms.toArray());
+        struct.setIfExists(THROTTLE_TIME_MS, throttleTimeMs);
         return struct;
     }
 
@@ -96,5 +118,9 @@ public class SaslHandshakeResponse extends AbstractResponse {
     public static SaslHandshakeResponse parse(ByteBuffer buffer, short version) {
         return new SaslHandshakeResponse(ApiKeys.SASL_HANDSHAKE.parseResponse(version, buffer));
     }
-}
 
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 2;
+    }
+}
