@@ -500,19 +500,6 @@ public class KafkaStreamsTest {
         }
     }
 
-    @SuppressWarnings("deprecation")
-    @Test
-    public void testToString() {
-        streams.start();
-        final String streamString = streams.toString();
-        streams.close();
-        final String appId = streamString.split("\\n")[1].split(":")[1].trim();
-        Assert.assertNotEquals("streamString should not be empty", "", streamString);
-        Assert.assertNotNull("streamString should not be null", streamString);
-        Assert.assertNotEquals("streamString contains non-empty appId", "", appId);
-        Assert.assertNotNull("streamString contains non-null appId", appId);
-    }
-
     @Test
     public void shouldCleanupOldStateDirs() throws InterruptedException {
         props.setProperty(StreamsConfig.STATE_CLEANUP_DELAY_MS_CONFIG, "1");

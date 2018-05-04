@@ -922,46 +922,6 @@ public class KafkaStreams {
     }
 
     /**
-     * Produce a string representation containing useful information about this {@code KafkaStream} instance such as
-     * thread IDs, task IDs, and a representation of the topology DAG including {@link StateStore}s (cf.
-     * {@link Topology} and {@link StreamsBuilder}).
-     *
-     * @return A string representation of the Kafka Streams instance.
-     *
-     * @deprecated Use {@link #localThreadsMetadata()} to retrieve runtime information.
-     */
-    @Override
-    @Deprecated
-    public String toString() {
-        return toString("");
-    }
-
-    /**
-     * Produce a string representation containing useful information about this {@code KafkaStream} instance such as
-     * thread IDs, task IDs, and a representation of the topology DAG including {@link StateStore}s (cf.
-     * {@link Topology} and {@link StreamsBuilder}).
-     *
-     * @param indent the top-level indent for each line
-     * @return A string representation of the Kafka Streams instance.
-     *
-     * @deprecated Use {@link #localThreadsMetadata()} to retrieve runtime information.
-     */
-    @Deprecated
-    public String toString(final String indent) {
-        final StringBuilder sb = new StringBuilder()
-            .append(indent)
-            .append("KafkaStreams processID: ")
-            .append(processId)
-            .append("\n");
-        for (final StreamThread thread : threads) {
-            sb.append(thread.toString(indent + "\t"));
-        }
-        sb.append("\n");
-
-        return sb.toString();
-    }
-
-    /**
      * Do a clean up of the local {@link StateStore} directory ({@link StreamsConfig#STATE_DIR_CONFIG}) by deleting all
      * data with regard to the {@link StreamsConfig#APPLICATION_ID_CONFIG application ID}.
      * <p>
