@@ -177,9 +177,6 @@ public class AbstractProcessorContextTest {
         }
 
         @Override
-        public void schedule(final long interval) {}
-
-        @Override
         public <K, V> void forward(final K key, final V value) {}
 
         @Override

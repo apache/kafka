@@ -607,9 +607,6 @@ public class InternalTopologyBuilderTest {
                 public void process(final Object key, final Object value) { }
 
                 @Override
-                public void punctuate(final long timestamp) { }
-
-                @Override
                 public void close() {
                 }
             };

@@ -24,6 +24,7 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.test.KStreamTestDriver;
+import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
@@ -61,8 +62,8 @@ public class KTableSourceTest {
 
         final KTable<String, Integer> table1 = builder.table(topic1, Consumed.with(stringSerde, intSerde));
 
-        final MockProcessorSupplier<String, Integer> proc1 = new MockProcessorSupplier<>();
-        table1.toStream().process(proc1);
+        final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
+        table1.toStream().process(supplier);
 
         driver.setUp(builder, stateDir);
         driver.process(topic1, "A", 1);
@@ -74,7 +75,7 @@ public class KTableSourceTest {
         driver.process(topic1, "B", null);
         driver.flushState();
 
-        assertEquals(Utils.mkList("A:1", "B:2", "C:3", "D:4", "A:null", "B:null"), proc1.processed);
+        assertEquals(Utils.mkList("A:1", "B:2", "C:3", "D:4", "A:null", "B:null"), supplier.theCapturedProcessor().processed);
     }
 
     @Test
@@ -145,11 +146,14 @@ public class KTableSourceTest {
 
         final KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>) builder.table(topic1, stringConsumed);
 
-        final MockProcessorSupplier<String, Integer> proc1 = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
 
-        builder.build().addProcessor("proc1", proc1, table1.name);
+        builder.build().addProcessor("proc1", supplier, table1.name);
 
         driver.setUp(builder, stateDir);
+
+        final MockProcessor<String, Integer> proc1 = supplier.theCapturedProcessor();
+
         driver.process(topic1, "A", "01");
         driver.process(topic1, "B", "01");
         driver.process(topic1, "C", "01");
@@ -187,11 +191,13 @@ public class KTableSourceTest {
 
         assertTrue(table1.sendingOldValueEnabled());
 
-        final MockProcessorSupplier<String, Integer> proc1 = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
 
-        builder.build().addProcessor("proc1", proc1, table1.name);
+        builder.build().addProcessor("proc1", supplier, table1.name);
 
         driver.setUp(builder, stateDir);
+
+        final MockProcessor<String, Integer> proc1 = supplier.theCapturedProcessor();
 
         driver.process(topic1, "A", "01");
         driver.process(topic1, "B", "01");

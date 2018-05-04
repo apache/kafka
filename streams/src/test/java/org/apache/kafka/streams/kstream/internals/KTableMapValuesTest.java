@@ -28,6 +28,7 @@ import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.KStreamTestDriver;
+import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
@@ -54,7 +55,7 @@ public class KTableMapValuesTest {
         stateDir = TestUtils.tempDirectory("kafka-test");
     }
 
-    private void doTestKTable(final StreamsBuilder builder, final String topic1, final MockProcessorSupplier<String, Integer> proc2) {
+    private void doTestKTable(final StreamsBuilder builder, final String topic1, final MockProcessorSupplier<String, Integer> supplier) {
         driver.setUp(builder, stateDir, Serdes.String(), Serdes.String());
 
         driver.process(topic1, "A", "1");
@@ -62,7 +63,7 @@ public class KTableMapValuesTest {
         driver.process(topic1, "C", "3");
         driver.process(topic1, "D", "4");
         driver.flushState();
-        assertEquals(Utils.mkList("A:1", "B:2", "C:3", "D:4"), proc2.processed);
+        assertEquals(Utils.mkList("A:1", "B:2", "C:3", "D:4"), supplier.theCapturedProcessor().processed);
     }
 
     @Test
@@ -79,10 +80,10 @@ public class KTableMapValuesTest {
             }
         });
 
-        MockProcessorSupplier<String, Integer> proc2 = new MockProcessorSupplier<>();
-        table2.toStream().process(proc2);
+        MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
+        table2.toStream().process(supplier);
 
-        doTestKTable(builder, topic1, proc2);
+        doTestKTable(builder, topic1, supplier);
     }
 
     @Test
@@ -99,10 +100,10 @@ public class KTableMapValuesTest {
             }
         }, Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("anyName").withValueSerde(Serdes.Integer()));
 
-        MockProcessorSupplier<String, Integer> proc2 = new MockProcessorSupplier<>();
-        table2.toStream().process(proc2);
+        MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
+        table2.toStream().process(supplier);
 
-        doTestKTable(builder, topic1, proc2);
+        doTestKTable(builder, topic1, supplier);
     }
 
     private void doTestValueGetter(final StreamsBuilder builder,
@@ -282,11 +283,14 @@ public class KTableMapValuesTest {
                     }
                 });
 
-        MockProcessorSupplier<String, Integer> proc = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
 
-        builder.build().addProcessor("proc", proc, table2.name);
+        builder.build().addProcessor("proc", supplier, table2.name);
 
         driver.setUp(builder, stateDir);
+
+        final MockProcessor<String, Integer> proc = supplier.theCapturedProcessor();
+
         assertFalse(table1.sendingOldValueEnabled());
         assertFalse(table2.sendingOldValueEnabled());
 
@@ -332,11 +336,14 @@ public class KTableMapValuesTest {
 
         table2.enableSendingOldValues();
 
-        MockProcessorSupplier<String, Integer> proc = new MockProcessorSupplier<>();
+        MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
 
-        builder.build().addProcessor("proc", proc, table2.name);
+        builder.build().addProcessor("proc", supplier, table2.name);
 
         driver.setUp(builder, stateDir);
+
+        final MockProcessor<String, Integer> proc = supplier.theCapturedProcessor();
+
         assertTrue(table1.sendingOldValueEnabled());
         assertTrue(table2.sendingOldValueEnabled());
 

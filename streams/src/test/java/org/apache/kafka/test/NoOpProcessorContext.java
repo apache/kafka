@@ -57,10 +57,6 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
     }
 
     @Override
-    public void schedule(final long interval) {
-    }
-
-    @Override
     public <K, V> void forward(final K key, final V value) {
         forwardedValues.put(key, value);
     }

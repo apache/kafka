@@ -361,14 +361,6 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         };
     }
 
-    @Override
-    public void schedule(final long interval) {
-        throw new UnsupportedOperationException(
-            "schedule() is deprecated and not supported in Mock. " +
-                "Use schedule(final long intervalMs, final PunctuationType type, final Punctuator callback) instead."
-        );
-    }
-
     /**
      * Get the punctuators scheduled so far. The returned list is not affected by subsequent calls to {@code schedule(...)}.
      *

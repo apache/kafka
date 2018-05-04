@@ -90,9 +90,9 @@ public class KStreamSelectKeyTest {
 
         KStream<String, Integer>  stream = builder.stream(topicName, Consumed.with(stringSerde, integerSerde));
 
-        MockProcessorSupplier<String, Integer> processor = new MockProcessorSupplier<>();
+        MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
 
-        stream.selectKey(selector).process(processor);
+        stream.selectKey(selector).process(supplier);
 
         driver = new TopologyTestDriver(builder.build(), props);
 
@@ -100,10 +100,10 @@ public class KStreamSelectKeyTest {
             driver.pipeInput(recordFactory.create(expectedValue));
         }
 
-        assertEquals(3, processor.processed.size());
+        assertEquals(3, supplier.theCapturedProcessor().processed.size());
 
         for (int i = 0; i < expected.length; i++) {
-            assertEquals(expected[i], processor.processed.get(i));
+            assertEquals(expected[i], supplier.theCapturedProcessor().processed.get(i));
         }
 
     }

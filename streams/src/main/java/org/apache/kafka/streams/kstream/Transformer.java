@@ -21,7 +21,6 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.To;
 
 /**
@@ -80,26 +79,6 @@ public interface Transformer<K, V, R> {
      * be forwarded to down stream
      */
     R transform(final K key, final V value);
-
-    /**
-     * Perform any periodic operations and possibly generate new {@link KeyValue} pairs if this processor
-     * {@link ProcessorContext#schedule(long) schedules itself} with the context during
-     * {@link #init(ProcessorContext) initialization}.
-     * <p>
-     * To generate new {@link KeyValue} pairs {@link ProcessorContext#forward(Object, Object)} and
-     * {@link ProcessorContext#forward(Object, Object, To)} can be used.
-     * <p>
-     * Note that {@code punctuate} is called based on <it>stream time</it> (i.e., time progresses with regard to
-     * timestamps return by the used {@link TimestampExtractor})
-     * and not based on wall-clock time.
-     *
-     * @deprecated Please use {@link Punctuator} functional interface instead.
-     *
-     * @param timestamp the stream time when {@code punctuate} is being called
-     * @return new {@link KeyValue} pair to be forwarded to down stream&mdash;if {@code null} will not be forwarded
-     */
-    @Deprecated
-    R punctuate(final long timestamp);
 
     /**
      * Close this processor and clean up any resources.

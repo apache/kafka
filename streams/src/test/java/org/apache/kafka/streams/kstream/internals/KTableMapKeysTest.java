@@ -78,9 +78,9 @@ public class KTableMapKeysTest {
         final int[] originalKeys = new int[]{1, 2, 3};
         final String[] values = new String[]{"V_ONE", "V_TWO", "V_THREE"};
 
-        MockProcessorSupplier<String, String> processor = new MockProcessorSupplier<>();
+        MockProcessorSupplier<String, String> supplier = new MockProcessorSupplier<>();
 
-        convertedStream.process(processor);
+        convertedStream.process(supplier);
 
         driver.setUp(builder, stateDir);
         for (int i = 0;  i < originalKeys.length; i++) {
@@ -88,10 +88,10 @@ public class KTableMapKeysTest {
         }
         driver.flushState();
 
-        assertEquals(3, processor.processed.size());
+        assertEquals(3, supplier.theCapturedProcessor().processed.size());
 
         for (int i = 0; i < expected.length; i++) {
-            assertEquals(expected[i], processor.processed.get(i));
+            assertEquals(expected[i], supplier.theCapturedProcessor().processed.get(i));
         }
     }
 }

@@ -34,7 +34,6 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.TopologyBuilder;
-import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
@@ -465,11 +464,6 @@ public class ProcessorTopologyTest {
         public void process(final String key, final String value) {
             context().forward(key, value);
         }
-
-        @Override
-        public void punctuate(final long streamTime) {
-            context().forward(Long.toString(streamTime), "punctuate");
-        }
     }
 
     /**
@@ -510,14 +504,6 @@ public class ProcessorTopologyTest {
                 context().forward(key, value + "(" + (i + 1) + ")", i);
             }
         }
-
-        @SuppressWarnings("deprecation")
-        @Override
-        public void punctuate(final long streamTime) {
-            for (int i = 0; i != numChildren; ++i) {
-                context().forward(Long.toString(streamTime), "punctuate(" + (i + 1) + ")", i);
-            }
-        }
     }
 
     /**
@@ -538,19 +524,10 @@ public class ProcessorTopologyTest {
                 context().forward(key, value + "(" + (i + 1) + ")",  "sink" + i);
             }
         }
-
-        @SuppressWarnings("deprecation")
-        @Override
-        public void punctuate(final long streamTime) {
-            for (int i = 0; i != numChildren; ++i) {
-                context().forward(Long.toString(streamTime), "punctuate(" + (i + 1) + ")", "sink" + i);
-            }
-        }
     }
 
     /**
-     * A processor that stores each key-value pair in an in-memory key-value store registered with the context. When
-     * {@link #punctuate(long)} is called, it outputs the total number of entries in the store.
+     * A processor that stores each key-value pair in an in-memory key-value store registered with the context.
      */
     protected static class StatefulProcessor extends AbstractProcessor<String, String> {
         private KeyValueStore<String, String> store;
@@ -570,18 +547,6 @@ public class ProcessorTopologyTest {
         @Override
         public void process(final String key, final String value) {
             store.put(key, value);
-        }
-
-        @Override
-        public void punctuate(final long streamTime) {
-            int count = 0;
-            try (KeyValueIterator<String, String> iter = store.all()) {
-                while (iter.hasNext()) {
-                    iter.next();
-                    ++count;
-                }
-            }
-            context().forward(Long.toString(streamTime), count);
         }
 
         @Override

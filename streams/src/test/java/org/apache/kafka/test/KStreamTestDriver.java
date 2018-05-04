@@ -205,21 +205,6 @@ public class KStreamTestDriver extends ExternalResource {
         return topicNode;
     }
 
-    public void punctuate(final long timestamp) {
-        final ProcessorNode prevNode = context.currentNode();
-        for (final ProcessorNode processor : topology.processors()) {
-            if (processor.processor() != null) {
-                context.setRecordContext(createRecordContext(context.topic(), timestamp));
-                context.setCurrentNode(processor);
-                try {
-                    processor.processor().punctuate(timestamp);
-                } finally {
-                    context.setCurrentNode(prevNode);
-                }
-            }
-        }
-    }
-
     public void setTime(final long timestamp) {
         context.setTime(timestamp);
     }
