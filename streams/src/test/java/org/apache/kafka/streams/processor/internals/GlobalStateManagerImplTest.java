@@ -79,6 +79,14 @@ public class GlobalStateManagerImplTest {
     private final TopicPartition t2 = new TopicPartition("t2", 1);
     private final TopicPartition t3 = new TopicPartition("t3", 1);
     private final TopicPartition t4 = new TopicPartition("t4", 1);
+
+    private final GlobalStateManagerImpl.IsRunning ALWAYS_RUNNING = new GlobalStateManagerImpl.IsRunning() {
+        @Override
+        public boolean check() {
+            return true;
+        }
+    };
+
     private GlobalStateManagerImpl stateManager;
     private StateDirectory stateDirectory;
     private StreamsConfig streamsConfig;
@@ -120,12 +128,7 @@ public class GlobalStateManagerImplTest {
             stateDirectory,
             stateRestoreListener,
             streamsConfig,
-            new GlobalStateManagerImpl.IsRunning() {
-                @Override
-                public boolean check() {
-                    return true;
-                }
-            });
+            ALWAYS_RUNNING);
         processorContext = new InternalMockProcessorContext(stateDirectory.globalStateDir(), streamsConfig);
         stateManager.setGlobalProcessorContext(processorContext);
         checkpointFile = new File(stateManager.baseDir(), ProcessorStateManager.CHECKPOINT_FILE_NAME);
@@ -514,12 +517,7 @@ public class GlobalStateManagerImplTest {
             },
             stateRestoreListener,
             streamsConfig,
-            new GlobalStateManagerImpl.IsRunning() {
-                @Override
-                public boolean check() {
-                    return true;
-                }
-            }
+            ALWAYS_RUNNING
         );
 
         try {
@@ -558,12 +556,7 @@ public class GlobalStateManagerImplTest {
                 stateDirectory,
                 stateRestoreListener,
                 streamsConfig,
-                new GlobalStateManagerImpl.IsRunning() {
-                    @Override
-                    public boolean check() {
-                        return true;
-                    }
-                });
+                ALWAYS_RUNNING);
         } catch (final StreamsException expected) {
             assertEquals(numberOfCalls.get(), retries);
         }
@@ -597,12 +590,7 @@ public class GlobalStateManagerImplTest {
                 stateDirectory,
                 stateRestoreListener,
                 streamsConfig,
-                new GlobalStateManagerImpl.IsRunning() {
-                    @Override
-                    public boolean check() {
-                        return true;
-                    }
-                });
+                ALWAYS_RUNNING);
         } catch (final StreamsException expected) {
             assertEquals(numberOfCalls.get(), retries);
         }
