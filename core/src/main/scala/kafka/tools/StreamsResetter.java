@@ -156,7 +156,7 @@ public class StreamsResetter {
                                            final AdminClient adminClient) throws ExecutionException, InterruptedException {
         DescribeConsumerGroupsResult describeResult = adminClient.describeConsumerGroups(Arrays.asList(groupId),
                 (new DescribeConsumerGroupsOptions()).timeoutMs(0));
-        if (!describeResult.describedGroups().get(groupId).get().members().isEmpty()) {
+        if (!describeResult.describedGroups().get(groupId).get().members().isEmpty()) { 
             throw new IllegalStateException("Consumer group '" + groupId + "' is still active. "
                     + "Make sure to stop all running application instances before running the reset tool.");
         }
