@@ -202,10 +202,6 @@ public class GlobalThreadShutDownOrderTest {
             firstRecordProcessed = true;
         }
 
-        @Override
-        public void punctuate(final long streamTime) {
-            //no-op
-        }
 
         @Override
         public void close() {
