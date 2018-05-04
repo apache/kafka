@@ -83,6 +83,7 @@ public class GlobalThreadShutDownOrderTest {
     private String streamTopic;
     private KStream<String, Long> stream;
     private List<Long> retrievedValuesList = new ArrayList<>();
+    private boolean firstRecordProcessed;
 
     @Before
     public void before() throws InterruptedException {
@@ -143,9 +144,9 @@ public class GlobalThreadShutDownOrderTest {
         TestUtils.waitForCondition(new TestCondition() {
             @Override
             public boolean conditionMet() {
-                return retrievedValuesList.size() > 0;
+                return firstRecordProcessed;
             }
-        }, 5000L, "Did not retrieve any values");
+        }, 5000L, "Has not processed record within 5 seconds");
 
         kafkaStreams.close(30, TimeUnit.SECONDS);
 
@@ -198,9 +199,7 @@ public class GlobalThreadShutDownOrderTest {
 
         @Override
         public void process(final String key, final Long value) {
-            // need to simulate slow processing
-            Utils.sleep(1000);
-            retrievedValuesList.add(store.get(key));
+            firstRecordProcessed = true;
         }
 
         @Override
@@ -210,7 +209,12 @@ public class GlobalThreadShutDownOrderTest {
 
         @Override
         public void close() {
-
+            List<String> keys = Arrays.asList("A", "B", "C", "D");
+            for (String key : keys) {
+                // need to simulate thread slow in closing
+                Utils.sleep(1000);
+                retrievedValuesList.add(store.get(key));
+            }
         }
     }
 
