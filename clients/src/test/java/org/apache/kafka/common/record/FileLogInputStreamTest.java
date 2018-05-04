@@ -206,14 +206,18 @@ public class FileLogInputStreamTest {
 
     @Test
     public void testNextBatchSelectionWithMaxedParams() throws IOException {
-        FileLogInputStream logInputStream = new FileLogInputStream(null, Integer.MAX_VALUE, Integer.MAX_VALUE);
-        assertNull(logInputStream.nextBatch());
+        try (FileRecords fileRecords = FileRecords.open(tempFile())) {
+            FileLogInputStream logInputStream = new FileLogInputStream(fileRecords, Integer.MAX_VALUE, Integer.MAX_VALUE);
+            assertNull(logInputStream.nextBatch());
+        }
     }
 
     @Test
     public void testNextBatchSelectionWithZeroedParams() throws IOException {
-        FileLogInputStream logInputStream = new FileLogInputStream(null, 0, 0);
-        assertNull(logInputStream.nextBatch());
+        try (FileRecords fileRecords = FileRecords.open(tempFile())) {
+            FileLogInputStream logInputStream = new FileLogInputStream(fileRecords, 0, 0);
+            assertNull(logInputStream.nextBatch());
+        }
     }
 
     private void assertProducerData(RecordBatch batch, long producerId, short producerEpoch, int baseSequence,
