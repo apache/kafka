@@ -40,9 +40,9 @@ abstract class BaseJoinProcessorNode<K, V1, V2, VR> extends StreamsGraphNode {
     BaseJoinProcessorNode(final String parentProcessorNodeName,
                           final String processorNodeName,
                           final ValueJoiner<? super V1, ? super V2, ? extends VR> valueJoiner,
-                          final JoinProcessorParameters<K, V1> joinThisProcessorDetails,
-                          final JoinProcessorParameters<K, V2> joinOtherProcessDetails,
-                          final JoinProcessorParameters<K, VR> joinMergeProcessorDetails,
+                          final ProcessorParameters<K, V1> joinThisProcessorDetails,
+                          final ProcessorParameters<K, V2> joinOtherProcessDetails,
+                          final ProcessorParameters<K, VR> joinMergeProcessorDetails,
                           final String thisJoinSide,
                           final String otherJoinSide) {
 

@@ -26,12 +26,12 @@ import org.apache.kafka.streams.processor.ProcessorSupplier;
  * Used by the Join nodes as there are several parameters, this abstraction helps
  * keep the number of arguments more reasonable.
  */
-class JoinProcessorParameters<K, V> {
+class ProcessorParameters<K, V> {
 
     private final ProcessorSupplier<K, V> processorSupplier;
     private final String processorName;
 
-    JoinProcessorParameters(final ProcessorSupplier<K, V> processorSupplier, final String processorName) {
+    ProcessorParameters(final ProcessorSupplier<K, V> processorSupplier, final String processorName) {
         this.processorSupplier = processorSupplier;
         this.processorName = processorName;
     }

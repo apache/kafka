@@ -34,9 +34,9 @@ class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K, V1, V
     KTableKTableJoinNode(final String parentProcessorNodeName,
                          final String processorNodeName,
                          final ValueJoiner<? super V1, ? super V2, ? extends VR> valueJoiner,
-                         final JoinProcessorParameters<K, V1> joinThisProcessorParameters,
-                         final JoinProcessorParameters<K, V2> joinOtherProcessorParameters,
-                         final JoinProcessorParameters<K, VR> joinMergeProcessorParameters,
+                         final ProcessorParameters<K, V1> joinThisProcessorParameters,
+                         final ProcessorParameters<K, V2> joinOtherProcessorParameters,
+                         final ProcessorParameters<K, VR> joinMergeProcessorParameters,
                          final String thisJoinSide,
                          final String otherJoinSide,
                          final String[] joinThisStoreNames,
@@ -77,10 +77,10 @@ class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K, V1, V
         private String processorNodeName;
         private String parentProcessorNodeName;
         private String[] joinThisStoreNames;
-        private JoinProcessorParameters<K, V1> joinThisProcessorParameters;
+        private ProcessorParameters<K, V1> joinThisProcessorParameters;
         private String[] joinOtherStoreNames;
-        private JoinProcessorParameters<K, V2> joinOtherProcessorParameters;
-        private JoinProcessorParameters<K, VR> joinMergeProcessorParameters;
+        private ProcessorParameters<K, V2> joinOtherProcessorParameters;
+        private ProcessorParameters<K, VR> joinMergeProcessorParameters;
         private ValueJoiner<? super V1, ? super V2, ? extends VR> valueJoiner;
         private String thisJoinSide;
         private String otherJoinSide;
@@ -93,7 +93,7 @@ class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K, V1, V
             return this;
         }
 
-        KTableKTableJoinNodeBuilder<K, V1, V2, VR>  withJoinThisProcessorParameters(final JoinProcessorParameters<K, V1> joinThisProcessorParameters) {
+        KTableKTableJoinNodeBuilder<K, V1, V2, VR>  withJoinThisProcessorParameters(final ProcessorParameters<K, V1> joinThisProcessorParameters) {
             this.joinThisProcessorParameters = joinThisProcessorParameters;
             return this;
         }
@@ -113,12 +113,12 @@ class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K, V1, V
             return this;
         }
 
-        KTableKTableJoinNodeBuilder<K, V1, V2, VR>  withJoinOtherProcessorParameters(final JoinProcessorParameters<K, V2> joinOtherProcessorParameters) {
+        KTableKTableJoinNodeBuilder<K, V1, V2, VR>  withJoinOtherProcessorParameters(final ProcessorParameters<K, V2> joinOtherProcessorParameters) {
             this.joinOtherProcessorParameters = joinOtherProcessorParameters;
             return this;
         }
 
-        KTableKTableJoinNodeBuilder<K, V1, V2, VR>  withJoinMergeProcessorParameters(final JoinProcessorParameters<K, VR> joinMergeProcessorParameters) {
+        KTableKTableJoinNodeBuilder<K, V1, V2, VR>  withJoinMergeProcessorParameters(final ProcessorParameters<K, VR> joinMergeProcessorParameters) {
             this.joinMergeProcessorParameters = joinMergeProcessorParameters;
             return this;
         }
