@@ -144,6 +144,21 @@ class LeaderEpochFileCacheTest {
   }
 
   @Test
+  def shouldReturnUnsupportedIfNoEpochRecordedAndUndefinedEpochRequested(){
+    val leo = 73
+    def leoFinder() = new LogOffsetMetadata(leo)
+
+    //Given
+    val cache = new LeaderEpochFileCache(tp, () => leoFinder, checkpoint)
+
+    //When (say a follower on older message format version) sends request for UNDEFINED_EPOCH
+    val offsetFor = cache.endOffsetFor(UNDEFINED_EPOCH)
+
+    //Then
+    assertEquals(UNDEFINED_EPOCH_OFFSET, offsetFor)
+  }
+
+  @Test
   def shouldReturnUnsupportedIfRequestedEpochLessThanFirstEpoch(){
     def leoFinder() = new LogOffsetMetadata(0)
 
