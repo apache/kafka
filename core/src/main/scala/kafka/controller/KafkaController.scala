@@ -195,6 +195,10 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     zkClient.updateBrokerInfoInZk(newBrokerInfo)
   }
 
+  private[kafka] def enableDefaultUncleanLeaderElection(): Unit = {
+    eventManager.put(UncleanLeaderElectionEnable)
+  }
+
   private def state: ControllerState = eventManager.state
 
   /**
@@ -1006,6 +1010,16 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
       } finally {
         scheduleAutoLeaderRebalanceTask(delay = config.leaderImbalanceCheckIntervalSeconds, unit = TimeUnit.SECONDS)
       }
+    }
+  }
+
+  case object UncleanLeaderElectionEnable extends ControllerEvent {
+
+    def state = ControllerState.UncleanLeaderElectionEnable
+
+    override def process(): Unit = {
+      if (!isActive) return
+      partitionStateMachine.triggerOnlinePartitionStateChange()
     }
   }
 

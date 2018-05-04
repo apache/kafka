@@ -20,16 +20,19 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.LockException;
+import org.apache.kafka.streams.errors.ShutdownException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateRestoreListener;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.slf4j.Logger;
 
@@ -40,6 +43,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
+import static org.apache.kafka.streams.processor.internals.ConsumerUtils.poll;
 import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.DEAD;
 import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.PENDING_SHUTDOWN;
 
@@ -56,7 +60,7 @@ public class GlobalStreamThread extends Thread {
     private final StateDirectory stateDirectory;
     private final Time time;
     private final ThreadCache cache;
-    private final StreamsMetrics streamsMetrics;
+    private final StreamsMetricsImpl streamsMetrics;
     private final ProcessorTopology topology;
     private volatile StreamsException startupException;
 
@@ -102,6 +106,10 @@ public class GlobalStreamThread extends Thread {
 
         public boolean isRunning() {
             return equals(RUNNING);
+        }
+
+        public boolean isStarting() {
+            return equals(CREATED);
         }
 
         @Override
@@ -171,6 +179,12 @@ public class GlobalStreamThread extends Thread {
         }
     }
 
+    private boolean stillStarting() {
+        synchronized (stateLock) {
+            return state.isStarting();
+        }
+    }
+
     public GlobalStreamThread(final ProcessorTopology topology,
                               final StreamsConfig config,
                               final Consumer<byte[], byte[]> globalConsumer,
@@ -186,7 +200,7 @@ public class GlobalStreamThread extends Thread {
         this.topology = topology;
         this.globalConsumer = globalConsumer;
         this.stateDirectory = stateDirectory;
-        this.streamsMetrics = new StreamsMetricsImpl(metrics, threadClientId, Collections.singletonMap("client-id", threadClientId));
+        this.streamsMetrics = new StreamsMetricsImpl(metrics, threadClientId);
         this.logPrefix = String.format("global-stream-thread [%s] ", threadClientId);
         this.logContext = new LogContext(logPrefix);
         this.log = logContext.logger(getClass());
@@ -233,7 +247,7 @@ public class GlobalStreamThread extends Thread {
 
         void pollAndUpdate() {
             try {
-                final ConsumerRecords<byte[], byte[]> received = globalConsumer.poll(pollMs);
+                final ConsumerRecords<byte[], byte[]> received = poll(globalConsumer, pollMs);
                 for (final ConsumerRecord<byte[], byte[]> record : received) {
                     stateMaintainer.update(record);
                 }
@@ -264,7 +278,19 @@ public class GlobalStreamThread extends Thread {
 
     @Override
     public void run() {
-        final StateConsumer stateConsumer = initialize();
+        final StateConsumer stateConsumer;
+        try {
+            stateConsumer = initialize();
+        } catch (final ShutdownException e) {
+            log.info("Shutting down from initialization");
+            // Almost certainly, we arrived here because the state is already PENDING_SHUTDOWN, but it's harmless to
+            // just make sure
+            setState(State.PENDING_SHUTDOWN);
+            setState(State.DEAD);
+            streamsMetrics.removeAllThreadLevelSensors();
+            log.info("Shutdown complete");
+            return;
+        }
 
         if (stateConsumer == null) {
             // during initialization, the caller thread would wait for the state consumer
@@ -276,6 +302,7 @@ public class GlobalStreamThread extends Thread {
             setState(State.DEAD);
 
             log.warn("Error happened during initialization of the global state store; this thread has shutdown");
+            streamsMetrics.removeAllThreadLevelSensors();
 
             return;
         }
@@ -298,6 +325,9 @@ public class GlobalStreamThread extends Thread {
             } catch (final IOException e) {
                 log.error("Failed to close state maintainer due to the following error:", e);
             }
+
+            streamsMetrics.removeAllThreadLevelSensors();
+
             setState(DEAD);
 
             log.info("Shutdown complete");
@@ -312,7 +342,14 @@ public class GlobalStreamThread extends Thread {
                 globalConsumer,
                 stateDirectory,
                 stateRestoreListener,
-                config);
+                config,
+                new GlobalStateManagerImpl.IsRunning() {
+                    @Override
+                    public boolean check() {
+                        return stillStarting() || stillRunning();
+                    }
+                }
+            );
 
             final GlobalProcessorContextImpl globalProcessorContext = new GlobalProcessorContextImpl(
                 config,
@@ -365,5 +402,10 @@ public class GlobalStreamThread extends Thread {
         // one could call shutdown() multiple times, so ignore subsequent calls
         // if already shutting down or dead
         setState(PENDING_SHUTDOWN);
+        globalConsumer.wakeup();
+    }
+
+    public Map<MetricName, Metric> consumerMetrics() {
+        return Collections.unmodifiableMap(globalConsumer.metrics());
     }
 }

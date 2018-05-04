@@ -361,10 +361,6 @@ public class MockProcessorContextTest {
             }
 
             @Override
-            public void punctuate(final long timestamp) {
-            }
-
-            @Override
             public void close() {
             }
         };

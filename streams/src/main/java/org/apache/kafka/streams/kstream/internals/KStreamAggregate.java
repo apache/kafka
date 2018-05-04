@@ -21,10 +21,13 @@ import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K, K, V, T> {
-
+    private static final Logger LOG = LoggerFactory.getLogger(KStreamAggregate.class);
     private final String storeName;
     private final Initializer<T> initializer;
     private final Aggregator<? super K, ? super V, T> aggregator;
@@ -52,11 +55,13 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
 
         private KeyValueStore<K, T> store;
         private TupleForwarder<K, T> tupleForwarder;
+        private StreamsMetricsImpl metrics;
 
         @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
             super.init(context);
+            metrics = (StreamsMetricsImpl) context.metrics();
             store = (KeyValueStore<K, T>) context.getStateStore(storeName);
             tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context, sendOldValues), sendOldValues);
         }
@@ -66,6 +71,11 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
         public void process(final K key, final V value) {
             // If the key or value is null we don't need to proceed
             if (key == null || value == null) {
+                LOG.warn(
+                    "Skipping record due to null key or value. key=[{}] value=[{}] topic=[{}] partition=[{}] offset=[{}]",
+                    key, value, context().topic(), context().partition(), context().offset()
+                );
+                metrics.skippedRecordsSensor().record();
                 return;
             }
 

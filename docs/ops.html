@@ -1353,7 +1353,12 @@ All the following metrics have a recording level of ``info``:
       </tr>
       <tr>
         <td>skipped-records-rate</td>
-        <td>The average number of skipped records per second. </td>
+        <td>The average number of skipped records per second.</td>
+        <td>kafka.streams:type=stream-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>skipped-records-total</td>
+        <td>The total number of skipped records.</td>
         <td>kafka.streams:type=stream-metrics,client-id=([-.\w]+)</td>
       </tr>
  </tbody>

@@ -59,15 +59,6 @@ public class KStreamTransform<K, V, K1, V1> implements ProcessorSupplier<K, V> {
                 context().forward(pair.key, pair.value);
         }
 
-        @SuppressWarnings("deprecation")
-        @Override
-        public void punctuate(long timestamp) {
-            KeyValue<? extends K2, ? extends V2> pair = transformer.punctuate(timestamp);
-
-            if (pair != null)
-                context().forward(pair.key, pair.value);
-        }
-
         @Override
         public void close() {
             transformer.close();

@@ -249,6 +249,10 @@
         <allow pkg="org.I0Itec.zkclient" />
         <allow pkg="com.fasterxml.jackson" />
         <allow pkg="org.apache.zookeeper" />
+        <allow pkg="org.apache.zookeeper" />
+        <subpackage name="testutil">
+          <allow pkg="org.apache.log4j" />
+        </subpackage>
       </subpackage>
     </subpackage>
   </subpackage>

@@ -476,7 +476,7 @@ sealed abstract class AsyncResponse {
 }
 
 case class ResponseMetadata(sendTimeMs: Long, receivedTimeMs: Long) {
-  def responseTimeMs: Long = sendTimeMs - receivedTimeMs
+  def responseTimeMs: Long = receivedTimeMs - sendTimeMs
 }
 
 case class CreateResponse(resultCode: Code, path: String, ctx: Option[Any], name: String, metadata: ResponseMetadata) extends AsyncResponse

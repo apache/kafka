@@ -17,14 +17,27 @@
 package org.apache.kafka.common.network;
 
 import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestSslUtils;
 
 import java.io.File;
 import java.net.InetAddress;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 public class CertStores {
+
+    public static final Set<String> KEYSTORE_PROPS = Utils.mkSet(
+            SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG,
+            SslConfigs.SSL_KEYSTORE_TYPE_CONFIG,
+            SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG,
+            SslConfigs.SSL_KEY_PASSWORD_CONFIG);
+
+    public static final Set<String> TRUSTSTORE_PROPS = Utils.mkSet(
+            SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG,
+            SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG,
+            SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG);
 
     private final Map<String, Object> sslConfig;
 
@@ -49,13 +62,29 @@ public class CertStores {
 
     public Map<String, Object> getTrustingConfig(CertStores truststoreConfig) {
         Map<String, Object> config = new HashMap<>(sslConfig);
-        config.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, truststoreConfig.sslConfig.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
-        config.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, truststoreConfig.sslConfig.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG));
-        config.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, truststoreConfig.sslConfig.get(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG));
+        for (String propName : TRUSTSTORE_PROPS) {
+            config.put(propName, truststoreConfig.sslConfig.get(propName));
+        }
         return config;
     }
 
     public Map<String, Object> getUntrustingConfig() {
         return sslConfig;
+    }
+
+    public Map<String, Object> keyStoreProps() {
+        Map<String, Object> props = new HashMap<>();
+        for (String propName : KEYSTORE_PROPS) {
+            props.put(propName, sslConfig.get(propName));
+        }
+        return props;
+    }
+
+    public Map<String, Object> trustStoreProps() {
+        Map<String, Object> props = new HashMap<>();
+        for (String propName : TRUSTSTORE_PROPS) {
+            props.put(propName, sslConfig.get(propName));
+        }
+        return props;
     }
 }

@@ -58,8 +58,6 @@ class ReplicaAlterLogDirsThread(name: String,
   private val maxBytes = brokerConfig.replicaFetchResponseMaxBytes
   private val fetchSize = brokerConfig.replicaFetchMaxBytes
 
-  private def epochCacheOpt(tp: TopicPartition): Option[LeaderEpochCache] =  replicaMgr.getReplica(tp).map(_.epochs.get)
-
   def fetch(fetchRequest: FetchRequest): Seq[(TopicPartition, PartitionData)] = {
     var partitionData: Seq[(TopicPartition, FetchResponse.PartitionData)] = null
     val request = fetchRequest.underlying.build()
@@ -141,7 +139,13 @@ class ReplicaAlterLogDirsThread(name: String,
       delayPartitions(partitions, brokerConfig.replicaFetchBackoffMs.toLong)
   }
 
+  /**
+   * Builds offset for leader epoch requests for partitions that are in the truncating phase based
+   * on latest epochs of the future replicas (the one that is fetching)
+   */
   def buildLeaderEpochRequest(allPartitions: Seq[(TopicPartition, PartitionFetchState)]): ResultWithPartitions[Map[TopicPartition, Int]] = {
+    def epochCacheOpt(tp: TopicPartition): Option[LeaderEpochCache] = replicaMgr.getReplica(tp, Request.FutureLocalReplicaId).map(_.epochs.get)
+
     val partitionEpochOpts = allPartitions
       .filter { case (_, state) => state.isTruncatingLog }
       .map { case (tp, _) => tp -> epochCacheOpt(tp) }.toMap
@@ -152,6 +156,11 @@ class ReplicaAlterLogDirsThread(name: String,
     ResultWithPartitions(result, partitionsWithoutEpoch.keys.toSet)
   }
 
+  /**
+   * Fetches offset for leader epoch from local replica for each given topic partitions
+   * @param partitions map of topic partition -> leader epoch of the future replica
+   * @return map of topic partition -> end offset for a requested leader epoch
+   */
   def fetchEpochsFromLeader(partitions: Map[TopicPartition, Int]): Map[TopicPartition, EpochEndOffset] = {
     partitions.map { case (tp, epoch) =>
       try {
