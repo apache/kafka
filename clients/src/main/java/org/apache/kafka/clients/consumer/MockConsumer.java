@@ -268,7 +268,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public synchronized OffsetAndMetadata committed(TopicPartition partition) {
-        return committed(partition);
+        return committed(partition, Duration.ZERO);
     }
 
     @Override

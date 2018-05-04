@@ -549,12 +549,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     // Since we're universally extracting timeout durations to milliseconds, this is the maximum duration we can accept.
     // (2^63)-1 milliseconds is 24.86 days.
-    private final Duration A_MONTH = Duration.ofMillis(Long.MAX_VALUE);
+    private static final Duration A_MONTH = Duration.ofMillis(Long.MAX_VALUE);
 
     private static final long NO_CURRENT_THREAD = -1L;
     private static final AtomicInteger CONSUMER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
     private static final String JMX_PREFIX = "kafka.consumer";
-    static final long DEFAULT_CLOSE_TIMEOUT_MS = 30 * 1000;
+    private static final long DEFAULT_CLOSE_TIMEOUT_MS = 30 * 1000;
 
     // Visible for testing
     final Metrics metrics;
