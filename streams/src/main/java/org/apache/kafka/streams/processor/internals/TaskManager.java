@@ -459,7 +459,8 @@ class TaskManager {
     public String toString(final String indent) {
         final StringBuilder builder = new StringBuilder();
         builder.append("TaskManager\n");
-        builder.append(indent).append("\tMetadataState: " + streamsMetadataState);
+        builder.append(indent).append("\tMetadataState:\n");
+        builder.append(streamsMetadataState.toString(indent + "\t\t"));
         builder.append(indent).append("\tActive tasks:\n");
         builder.append(active.toString(indent + "\t\t"));
         builder.append(indent).append("\tStandby tasks:\n");

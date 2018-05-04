@@ -58,11 +58,15 @@ public class StreamsMetadataState {
 
     @Override
     public String toString() {
+        return toString("");
+    }
+
+    public String toString(final String indent) {
         final StringBuilder builder = new StringBuilder();
-        builder.append("GlobalMetadata: " + allMetadata + "\n");
-        builder.append("GlobalStores: " + globalStores + "\n");
-        builder.append("My HostInfo: " + thisHost + "\n");
-        builder.append(clusterMetadata + "\n");
+        builder.append(indent).append("GlobalMetadata: ").append(allMetadata).append("\n");
+        builder.append(indent).append("GlobalStores: ").append(globalStores).append("\n");
+        builder.append(indent).append("My HostInfo: ").append(thisHost).append("\n");
+        builder.append(indent).append(clusterMetadata).append("\n");
 
         return builder.toString();
     }
