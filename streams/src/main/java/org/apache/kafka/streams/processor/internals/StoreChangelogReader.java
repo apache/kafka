@@ -44,8 +44,6 @@ import static org.apache.kafka.streams.processor.internals.ConsumerUtils.poll;
 
 public class StoreChangelogReader implements ChangelogReader {
 
-    private static final int DEFAULT_MAX = 100;
-
     private final Logger log;
     private final Consumer<byte[], byte[]> restoreConsumer;
     private final StateRestoreListener userStateRestoreListener;
@@ -85,15 +83,13 @@ public class StoreChangelogReader implements ChangelogReader {
 
         final Set<TopicPartition> restoringPartitions = new HashSet<>(needsRestoring.keySet());
         try {
-            int totalNumberOfRecords = 0;
             final Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> allRecords = new HashMap<>();
-            while (totalNumberOfRecords < DEFAULT_MAX) {
+            while (true) {
                 final ConsumerRecords<byte[], byte[]> records = poll(restoreConsumer, 10);
                 int count = records.count();
                 if (count == 0) {
                     break;
                 }
-                totalNumberOfRecords += count;
                 for (TopicPartition partition : records.partitions()) {
                     allRecords.put(partition, records.records(partition));
                 }
@@ -102,19 +98,10 @@ public class StoreChangelogReader implements ChangelogReader {
             for (final TopicPartition partition : restoringPartitions) {
                 final Task task = active.restoringTaskFor(partition);
                 final StateRestorer restorer = stateRestorers.get(partition);
-                final Long endOffset = endOffsets.get(partition);
+                final Long endOffset = restoreConsumer.endOffsets(Collections.singleton(partition)).get(partition);
                 final long pos = processNext(mergedRecords.records(partition), restorer, endOffset);
                 restorer.setRestoredOffset(pos);
                 if (restorer.hasCompleted(pos, endOffset)) {
-                    if (pos > endOffset) {
-                        throw new TaskMigratedException(task, partition, endOffset, pos);
-                    }
-                    if (restorer.offsetLimit() == Long.MAX_VALUE) {
-                        final Long updatedEndOffset = restoreConsumer.endOffsets(Collections.singletonList(partition)).get(partition);
-                        if (!restorer.hasCompleted(pos, updatedEndOffset)) {
-                            throw new TaskMigratedException(task, partition, updatedEndOffset, pos);
-                        }
-                    }
                     log.debug("Completed restoring state from changelog {} with {} records ranging from offset {} to {}",
                             partition,
                             restorer.restoredNumRecords(),
@@ -123,6 +110,8 @@ public class StoreChangelogReader implements ChangelogReader {
 
                     restorer.restoreDone();
                     needsRestoring.remove(partition);
+                } else {
+                    throw new TaskMigratedException(task, partition, endOffset, pos);
                 }
             }
         } catch (final InvalidOffsetException recoverableException) {
