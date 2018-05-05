@@ -576,6 +576,12 @@ public class StreamThread extends Thread {
     final Consumer<byte[], byte[]> consumer;
     final InternalTopologyBuilder builder;
 
+    /**
+     * @TODO Currently, the parameter commitTime is used as a mechanism by 
+     * which the user can input a set time to StoreChangeLogReader to block
+     * for position(). We might need to change the way by which timeout is passed
+     * to StoreChangeLogReader.
+     */
     public static StreamThread create(final InternalTopologyBuilder builder,
                                       final StreamsConfig config,
                                       final KafkaClientSupplier clientSupplier,

@@ -43,6 +43,11 @@ import java.util.concurrent.TimeUnit;
 
 public class StoreChangelogReader implements ChangelogReader {
 
+    /**
+     * @TODO Currently, for position() in StoreChangelogReader,
+     * position is called with 20000L as blocking time. This is 
+     * not acceptable to most users, and needs to be changed.
+     */
     private final Logger log;
     private final Consumer<byte[], byte[]> restoreConsumer;
     private final StateRestoreListener userStateRestoreListener;

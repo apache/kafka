@@ -125,6 +125,12 @@ public class KafkaStreams {
 
     private static final String JMX_PREFIX = "kafka.streams";
     private static final int DEFAULT_CLOSE_TIMEOUT = 0;
+    /**
+     * @TODO This only exists to allow us to pass tests in Kafka Streams
+     * We will need to fix this in a future pull request, particularly 
+     * since how much time one would need to block for Kafka Streams is 
+     * still unknown
+     */
     private static final int DEFAULT_BLOCKING_TIME = 20000;
 
     // processId is expected to be unique across JVMs and to be used
@@ -132,7 +138,6 @@ public class KafkaStreams {
     // of the co-location of stream thread's consumers. It is for internal
     // usage only and should not be exposed to users at all.
     private final Time time;
-    private final long maxCommitMs;
     private final Logger log;
     private final UUID processId;
     private final String clientId;
@@ -658,7 +663,6 @@ public class KafkaStreams {
                          final long maxCommitMs) throws StreamsException {
         this.config = config;
         this.time = time;
-        this.maxCommitMs = maxCommitMs;
 
         // The application ID is a required config and hence should always have value
         processId = UUID.randomUUID();

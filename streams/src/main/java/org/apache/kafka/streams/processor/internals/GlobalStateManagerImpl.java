@@ -52,6 +52,12 @@ import java.util.concurrent.TimeUnit;
  * of Global State Stores. There is only ever 1 instance of this class per Application Instance.
  */
 public class GlobalStateManagerImpl extends AbstractStateManager implements GlobalStateManager {
+    /**
+     * @TODO Currently, this is a temporary marker from which 
+     * we could pass tests. GlobalStateManageImpl will have to 
+     * be updated so that the amount of time for which we wait
+     * could be controlled through user input or a set configuration.
+     */
     private static final long DEFAULT_WAIT_TIME = 20000L;
 
     private final Logger log;
