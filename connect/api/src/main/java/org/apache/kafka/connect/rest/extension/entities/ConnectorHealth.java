@@ -24,13 +24,13 @@ public class ConnectorHealth {
 
     private final String name;
     private final ConnectorState connector;
-    private final Map<Integer,TaskState> tasks;
+    private final Map<Integer, TaskState> tasks;
     private final ConnectorType type;
 
 
     public ConnectorHealth(String name,
                            ConnectorState connector,
-                           Map<Integer,TaskState> tasks,
+                           Map<Integer, TaskState> tasks,
                            ConnectorType type) {
         this.name = name;
         this.connector = connector;
@@ -49,7 +49,7 @@ public class ConnectorHealth {
     }
 
 
-    public Map<Integer,TaskState> tasksState() {
+    public Map<Integer, TaskState> tasksState() {
         return tasks;
     }
 
@@ -59,6 +59,7 @@ public class ConnectorHealth {
     }
 
     public abstract static class AbstractState {
+
         private final String state;
         private final String trace;
         private final String workerId;
@@ -84,12 +85,14 @@ public class ConnectorHealth {
     }
 
     public static class ConnectorState extends AbstractState {
+
         public ConnectorState(String state, String worker, String msg) {
             super(state, worker, msg);
         }
     }
 
     public static class TaskState extends AbstractState implements Comparable<TaskState> {
+
         private final int id;
 
         public TaskState(int id, String state, String worker, String msg) {
@@ -108,10 +111,12 @@ public class ConnectorHealth {
 
         @Override
         public boolean equals(Object o) {
-            if (o == this)
+            if (o == this) {
                 return true;
-            if (!(o instanceof TaskState))
+            }
+            if (!(o instanceof TaskState)) {
                 return false;
+            }
             TaskState other = (TaskState) o;
             return compareTo(other) == 0;
         }
