@@ -25,6 +25,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -245,7 +246,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
-    public void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets, long timeout, TimeUnit timeunit) {
+    public void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets, final Duration duration) {
         commitSync(offsets);
     }
 
@@ -265,7 +266,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
-    public OffsetAndMetadata committed(TopicPartition partition, long timeout, TimeUnit timeunit) {
+    public OffsetAndMetadata committed(TopicPartition partition, final Duration duration) {
         return committed(partition);
     }
 
@@ -283,7 +284,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
-    public synchronized long position(TopicPartition partition, long timeout, TimeUnit timeunit) {
+    public synchronized long position(TopicPartition partition, final Duration duration) {
         return position(partition);
     }
 

@@ -56,6 +56,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
 import java.net.InetSocketAddress;
+import java.time.Duration;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.ConcurrentModificationException;
@@ -1279,8 +1280,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     * (or similar) are guaranteed to have their callbacks invoked prior to completion of this method.
     *
     * @param offsets A map of offsets by partition with associated metadata
-    * @param timeout   The maximum duration of the method
-    * @param timeunit  The unit of time timeout refers to
+    * @param duration The amount of time the user would like to block
     * @throws org.apache.kafka.clients.consumer.CommitFailedException if the commit failed and cannot be retried.
     *             This can only occur if you are using automatic group management with {@link #subscribe(Collection)},
     *             or if there is an active group with the same groupId which is using group management.
@@ -1297,9 +1297,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     * @throws TimeoutException if method duration exceeds maximum given time
     */
     @Override
-    public void commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets, final long timeout, final TimeUnit timeunit) {
+    public void commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets, final Duration duration) {
         acquireAndEnsureOpen();
-        final long totalWaitTime = timeunit.toMillis(timeout);
+        final long totalWaitTime = duration.toMillis();
         try {
             if (!coordinator.commitOffsetsSync(new HashMap<>(offsets), totalWaitTime)) {
                 throw new TimeoutException("Commiting offsets synchronously took too long.");
@@ -1495,7 +1495,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *
      * @param partition The partition to get the position for
      * @param duration  The maximum duration in which the method can block
-     * @param timeunit  The unit of time which duration refers to
      * @return The current position of the consumer (that is, the offset of the next record to be fetched)
      * @throws IllegalArgumentException if the provided TopicPartition is not assigned to this consumer
      * @throws org.apache.kafka.clients.consumer.InvalidOffsetException if no offset is currently defined for
@@ -1510,8 +1509,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *             configured groupId. See the exception for more details
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors
      */
-    public long position(TopicPartition partition, final long duration, final TimeUnit timeunit) {
-        final long timeout = timeunit.toMillis(duration);
+    public long position(TopicPartition partition, final Duration duration) {
+        final long timeout = duration.toMillis();
         acquireAndEnsureOpen();
         try {
             if (!this.subscriptions.isAssigned(partition))
@@ -1575,6 +1574,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * This call will block to do a remote call to get the latest committed offsets from the server.
      *
      * @param partition The partition to check
+     * @param duration  The duration we would want to block
      * @return The last committed offset and metadata or null if there was no prior commit
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
      *             function is called
@@ -1586,9 +1586,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors
      */
     @Override
-    public OffsetAndMetadata committed(TopicPartition partition, final long timeout, final TimeUnit timeunit) {
+    public OffsetAndMetadata committed(TopicPartition partition, final Duration duration) {
         acquireAndEnsureOpen();
-        final long totalWaitTime = timeunit.toMillis(timeout);
+        final long totalWaitTime = duration.toMillis();
         try {
             Map<TopicPartition, OffsetAndMetadata> offsets = coordinator.fetchCommittedOffsets(Collections.singleton(partition), 
                                                                                                time.milliseconds(), 
