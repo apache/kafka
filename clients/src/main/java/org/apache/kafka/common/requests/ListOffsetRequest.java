@@ -60,11 +60,16 @@ public class ListOffsetRequest extends AbstractRequest {
 
     private static final Schema LIST_OFFSET_REQUEST_PARTITION_V0 = new Schema(
             PARTITION_ID,
-            new Field(TIMESTAMP_KEY_NAME, INT64, "Timestamp."),
-            new Field(MAX_NUM_OFFSETS_KEY_NAME, INT32, "Maximum offsets to return."));
+            new Field(TIMESTAMP_KEY_NAME, INT64, "Target timestamp for partition. Used to ask for all messages before a certain time." +
+                    " There are two special values: specify -1 to receive the latest offset (i.e offset of the next message)" +
+                    " and -2 to receive the earliest available offset."),
+            new Field(MAX_NUM_OFFSETS_KEY_NAME, INT32, "Maximum number of offsets to return. " +
+                    "Note that because offsets are puled in descending order, asking for the earliest offset will always return a single element."));
     private static final Schema LIST_OFFSET_REQUEST_PARTITION_V1 = new Schema(
             PARTITION_ID,
-            new Field(TIMESTAMP_KEY_NAME, INT64, "The target timestamp for the partition."));
+            new Field(TIMESTAMP_KEY_NAME, INT64, "The target timestamp for the partition. Used to ask for all messages before a certain time." +
+                    " There are two special values: specify -1 to receive the latest offset (i.e offset of the next message)" +
+                    " and -2 to receive the earliest available offset."));
 
     private static final Schema LIST_OFFSET_REQUEST_TOPIC_V0 = new Schema(
             TOPIC_NAME,

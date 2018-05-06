@@ -55,7 +55,8 @@ public class JoinGroupRequest extends AbstractRequest {
             MEMBER_ID,
             new Field(PROTOCOL_TYPE_KEY_NAME, STRING, "Unique name for class of protocols implemented by group"),
             new Field(GROUP_PROTOCOLS_KEY_NAME, new ArrayOf(JOIN_GROUP_REQUEST_PROTOCOL_V0), "List of protocols " +
-                    "that the member supports"));
+                    "that the member supports. Coordinator chooses a single protocol supported by all members. " +
+                    "This enables for e.g. rolling upgrades without downtime."));
 
     private static final Schema JOIN_GROUP_REQUEST_V1 = new Schema(
             GROUP_ID,
@@ -66,7 +67,8 @@ public class JoinGroupRequest extends AbstractRequest {
             MEMBER_ID,
             new Field(PROTOCOL_TYPE_KEY_NAME, STRING, "Unique name for class of protocols implemented by group"),
             new Field(GROUP_PROTOCOLS_KEY_NAME, new ArrayOf(JOIN_GROUP_REQUEST_PROTOCOL_V0), "List of protocols " +
-                    "that the member supports"));
+                    "that the member supports. Coordinator chooses a single protocol supported by all members. " +
+                    "This enables for e.g. rolling upgrades without downtime."));
 
     /* v2 request is the same as v1. Throttle time has been added to response */
     private static final Schema JOIN_GROUP_REQUEST_V2 = JOIN_GROUP_REQUEST_V1;

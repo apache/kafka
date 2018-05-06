@@ -104,7 +104,8 @@ public class ProduceResponse extends AbstractResponse {
                     new Field(PARTITION_RESPONSES_KEY_NAME, new ArrayOf(new Schema(
                             PARTITION_ID,
                             ERROR_CODE,
-                            new Field(BASE_OFFSET_KEY_NAME, INT64),
+                            new Field(BASE_OFFSET_KEY_NAME, INT64,
+                                    "Offset assigned to the first record in the record set appended to the partition."),
                             new Field(LOG_APPEND_TIME_KEY_NAME, INT64, "The timestamp returned by broker after appending " +
                                     "the messages. If CreateTime is used for the topic, the timestamp will be -1. " +
                                     "If LogAppendTime is used for the topic, the timestamp will be " +
@@ -131,7 +132,8 @@ public class ProduceResponse extends AbstractResponse {
                     new Field(PARTITION_RESPONSES_KEY_NAME, new ArrayOf(new Schema(
                             PARTITION_ID,
                             ERROR_CODE,
-                            new Field(BASE_OFFSET_KEY_NAME, INT64),
+                            new Field(BASE_OFFSET_KEY_NAME, INT64,
+                                    "Offset assigned to the first record in the record set appended to the partition."),
                             new Field(LOG_APPEND_TIME_KEY_NAME, INT64, "The timestamp returned by broker after appending " +
                                     "the messages. If CreateTime is used for the topic, the timestamp will be -1. " +
                                     "If LogAppendTime is used for the topic, the timestamp will be the broker local " +

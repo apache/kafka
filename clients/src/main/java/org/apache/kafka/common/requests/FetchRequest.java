@@ -66,7 +66,7 @@ public class FetchRequest extends AbstractRequest {
 
     private static final Schema FETCH_REQUEST_PARTITION_V0 = new Schema(
             PARTITION_ID,
-            new Field(FETCH_OFFSET_KEY_NAME, INT64, "Message offset."),
+            new Field(FETCH_OFFSET_KEY_NAME, INT64, "Message offset to begin this fetch from."),
             new Field(MAX_BYTES_KEY_NAME, INT32, "Maximum bytes to fetch."));
 
     // FETCH_REQUEST_PARTITION_V5 added log_start_offset field - the earliest available offset of partition data that can be consumed.
@@ -87,8 +87,14 @@ public class FetchRequest extends AbstractRequest {
 
     private static final Schema FETCH_REQUEST_V0 = new Schema(
             new Field(REPLICA_ID_KEY_NAME, INT32, "Broker id of the follower. For normal consumers, use -1."),
-            new Field(MAX_WAIT_KEY_NAME, INT32, "Maximum time in ms to wait for the response."),
-            new Field(MIN_BYTES_KEY_NAME, INT32, "Minimum bytes to accumulate in the response."),
+            new Field(MAX_WAIT_KEY_NAME, INT32, "Maximum time in ms to wait for the response " +
+                    "if insufficient data is available at the time the request is issued."),
+            new Field(MIN_BYTES_KEY_NAME, INT32, "Minimum bytes to accumulate in the response. " +
+                    "If client sets this to 0 the server will always respond immediately. " +
+                    "However, if there is no new data since the last request broker will respond with empty record sets." +
+                    " If set to 1, the server will respond as soon at least one partition has at least" +
+                    " one byte of data or the specified timeout occurs. By setting higher values in combination" +
+                    " with the timeout consumer can tune for throughput trade a little additional latency for reading only large chunks of data. "),
             new Field(TOPICS_KEY_NAME, new ArrayOf(FETCH_REQUEST_TOPIC_V0), "Topics to fetch."));
 
     // The V1 Fetch Request body is the same as V0.
@@ -102,8 +108,14 @@ public class FetchRequest extends AbstractRequest {
     // The partition ordering is now relevant - partitions will be processed in order they appear in request.
     private static final Schema FETCH_REQUEST_V3 = new Schema(
             new Field(REPLICA_ID_KEY_NAME, INT32, "Broker id of the follower. For normal consumers, use -1."),
-            new Field(MAX_WAIT_KEY_NAME, INT32, "Maximum time in ms to wait for the response."),
-            new Field(MIN_BYTES_KEY_NAME, INT32, "Minimum bytes to accumulate in the response."),
+            new Field(MAX_WAIT_KEY_NAME, INT32, "Maximum time in ms to wait for the response " +
+                    "if insufficient data is available at the time the request is issued."),
+            new Field(MIN_BYTES_KEY_NAME, INT32, "Minimum bytes to accumulate in the response." +
+                    " If client sets this to 0 the server will always respond immediately." +
+                    " However, if there is no new data since the last request broker will respond with empty record sets." +
+                    " If set to 1, the server will respond as soon at least one partition has at least" +
+                    " one byte of data or the specified timeout occurs. By setting higher values in combination" +
+                    " with the timeout consumer can tune for throughput trade a little additional latency for reading only large chunks of data."),
             new Field(MAX_BYTES_KEY_NAME, INT32, "Maximum bytes to accumulate in the response. Note that this is not an absolute maximum, " +
                     "if the first message in the first non-empty partition of the fetch is larger than this " +
                     "value, the message will still be returned to ensure that progress can be made."),
@@ -112,8 +124,14 @@ public class FetchRequest extends AbstractRequest {
     // The V4 Fetch Request adds the fetch isolation level and exposes magic v2 (via the response).
     private static final Schema FETCH_REQUEST_V4 = new Schema(
             new Field(REPLICA_ID_KEY_NAME, INT32, "Broker id of the follower. For normal consumers, use -1."),
-            new Field(MAX_WAIT_KEY_NAME, INT32, "Maximum time in ms to wait for the response."),
-            new Field(MIN_BYTES_KEY_NAME, INT32, "Minimum bytes to accumulate in the response."),
+            new Field(MAX_WAIT_KEY_NAME, INT32, "Maximum time in ms to wait for the response " +
+                    "if insufficient data is available at the time the request is issued."),
+            new Field(MIN_BYTES_KEY_NAME, INT32, "Minimum bytes to accumulate in the response." +
+                    " If client sets this to 0 the server will always respond immediately." +
+                    " However, if there is no new data since the last request broker will respond with empty record sets." +
+                    " If set to 1, the server will respond as soon at least one partition has at least" +
+                    " one byte of data or the specified timeout occurs. By setting higher values in combination" +
+                    " with the timeout consumer can tune for throughput trade a little additional latency for reading only large chunks of data."),
             new Field(MAX_BYTES_KEY_NAME, INT32, "Maximum bytes to accumulate in the response. Note that this is not an absolute maximum, " +
                     "if the first message in the first non-empty partition of the fetch is larger than this " +
                     "value, the message will still be returned to ensure that progress can be made."),
@@ -128,8 +146,14 @@ public class FetchRequest extends AbstractRequest {
     // FETCH_REQUEST_V5 added a per-partition log_start_offset field - the earliest available offset of partition data that can be consumed.
     private static final Schema FETCH_REQUEST_V5 = new Schema(
             new Field(REPLICA_ID_KEY_NAME, INT32, "Broker id of the follower. For normal consumers, use -1."),
-            new Field(MAX_WAIT_KEY_NAME, INT32, "Maximum time in ms to wait for the response."),
-            new Field(MIN_BYTES_KEY_NAME, INT32, "Minimum bytes to accumulate in the response."),
+            new Field(MAX_WAIT_KEY_NAME, INT32, "Maximum time in ms to wait for the response " +
+                     "if insufficient data is available at the time the request is issued."),
+            new Field(MIN_BYTES_KEY_NAME, INT32, "Minimum bytes to accumulate in the response." +
+                    " If client sets this to 0 the server will always respond immediately." +
+                    " However, if there is no new data since the last request broker will respond with empty record sets." +
+                    " If set to 1, the server will respond as soon at least one partition has at least" +
+                    " one byte of data or the specified timeout occurs. By setting higher values in combination" +
+                    " with the timeout consumer can tune for throughput trade a little additional latency for reading only large chunks of data."),
             new Field(MAX_BYTES_KEY_NAME, INT32, "Maximum bytes to accumulate in the response. Note that this is not an absolute maximum, " +
                     "if the first message in the first non-empty partition of the fetch is larger than this " +
                     "value, the message will still be returned to ensure that progress can be made."),
@@ -159,8 +183,14 @@ public class FetchRequest extends AbstractRequest {
 
     private static final Schema FETCH_REQUEST_V7 = new Schema(
         new Field(REPLICA_ID_KEY_NAME, INT32, "Broker id of the follower. For normal consumers, use -1."),
-        new Field(MAX_WAIT_KEY_NAME, INT32, "Maximum time in ms to wait for the response."),
-        new Field(MIN_BYTES_KEY_NAME, INT32, "Minimum bytes to accumulate in the response."),
+        new Field(MAX_WAIT_KEY_NAME, INT32, "Maximum time in ms to wait for the response " +
+                "if insufficient data is available at the time the request is issued."),
+        new Field(MIN_BYTES_KEY_NAME, INT32, "Minimum bytes to accumulate in the response." +
+            " If client sets this to 0 the server will always respond immediately." +
+            " However, if there is no new data since the last request broker will respond with empty record sets." +
+            " If set to 1, the server will respond as soon at least one partition has at least" +
+            " one byte of data or the specified timeout occurs. By setting higher values in combination" +
+            " with the timeout consumer can tune for throughput trade a little additional latency for reading only large chunks of data."),
         new Field(MAX_BYTES_KEY_NAME, INT32, "Maximum bytes to accumulate in the response. Note that this is not an absolute maximum, " +
             "if the first message in the first non-empty partition of the fetch is larger than this " +
             "value, the message will still be returned to ensure that progress can be made."),

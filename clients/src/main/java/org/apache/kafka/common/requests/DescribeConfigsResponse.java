@@ -59,11 +59,11 @@ public class DescribeConfigsResponse extends AbstractResponse {
     private static final String CONFIG_SOURCE_KEY_NAME = "config_source";
 
     private static final Schema DESCRIBE_CONFIGS_RESPONSE_ENTRY_V0 = new Schema(
-                    new Field(CONFIG_NAME_KEY_NAME, STRING),
-                    new Field(CONFIG_VALUE_KEY_NAME, NULLABLE_STRING),
-                    new Field(READ_ONLY_KEY_NAME, BOOLEAN),
-                    new Field(IS_DEFAULT_KEY_NAME, BOOLEAN),
-                    new Field(IS_SENSITIVE_KEY_NAME, BOOLEAN));
+                    new Field(CONFIG_NAME_KEY_NAME, STRING, "Name of config requested."),
+                    new Field(CONFIG_VALUE_KEY_NAME, NULLABLE_STRING, "Value of config requested."),
+                    new Field(READ_ONLY_KEY_NAME, BOOLEAN, "True if configuration is read-only, false otherwise."),
+                    new Field(IS_DEFAULT_KEY_NAME, BOOLEAN, "True if configuration is not overridden, false otherwise."),
+                    new Field(IS_SENSITIVE_KEY_NAME, BOOLEAN, "True if configuration is a password, false otherwise."));
 
     private static final Schema DESCRIBE_CONFIGS_RESPONSE_SYNONYM_V1 = new Schema(
             new Field(CONFIG_NAME_KEY_NAME, STRING),
@@ -81,8 +81,8 @@ public class DescribeConfigsResponse extends AbstractResponse {
     private static final Schema DESCRIBE_CONFIGS_RESPONSE_ENTITY_V0 = new Schema(
             ERROR_CODE,
             ERROR_MESSAGE,
-            new Field(RESOURCE_TYPE_KEY_NAME, INT8),
-            new Field(RESOURCE_NAME_KEY_NAME, STRING),
+            new Field(RESOURCE_TYPE_KEY_NAME, INT8, "Type of  the resource this response entity is for."),
+            new Field(RESOURCE_NAME_KEY_NAME, STRING, "Name of the resource this response entity is for."),
             new Field(CONFIG_ENTRIES_KEY_NAME, new ArrayOf(DESCRIBE_CONFIGS_RESPONSE_ENTRY_V0)));
 
     private static final Schema DESCRIBE_CONFIGS_RESPONSE_ENTITY_V1 = new Schema(

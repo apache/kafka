@@ -43,9 +43,9 @@ public class DescribeConfigsRequest extends AbstractRequest {
     private static final String CONFIG_NAMES_KEY_NAME = "config_names";
 
     private static final Schema DESCRIBE_CONFIGS_REQUEST_RESOURCE_V0 = new Schema(
-            new Field(RESOURCE_TYPE_KEY_NAME, INT8),
-            new Field(RESOURCE_NAME_KEY_NAME, STRING),
-            new Field(CONFIG_NAMES_KEY_NAME, ArrayOf.nullable(STRING)));
+            new Field(RESOURCE_TYPE_KEY_NAME, INT8, "Id of resource type to fetch configuration of. Value 2 means topic, 4 means broker."),
+            new Field(RESOURCE_NAME_KEY_NAME, STRING, "Name of the resource to fetch configuration of."),
+            new Field(CONFIG_NAMES_KEY_NAME, ArrayOf.nullable(STRING), "Configuration names requested. Null for all configurations."));
 
     private static final Schema DESCRIBE_CONFIGS_REQUEST_V0 = new Schema(
             new Field(RESOURCES_KEY_NAME, new ArrayOf(DESCRIBE_CONFIGS_REQUEST_RESOURCE_V0), "An array of config resources to be returned."));

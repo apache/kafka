@@ -53,27 +53,30 @@ public class OffsetFetchResponse extends AbstractResponse {
 
     private static final Schema OFFSET_FETCH_RESPONSE_PARTITION_V0 = new Schema(
             PARTITION_ID,
-            new Field(COMMIT_OFFSET_KEY_NAME, INT64, "Last committed message offset."),
-            new Field(METADATA_KEY_NAME, NULLABLE_STRING, "Any associated metadata the client wants to keep."),
+            new Field(COMMIT_OFFSET_KEY_NAME, INT64, "Last committed message offset. " +
+                    "Note that if there is no offset associated with a topicpartition for given consumer group. " +
+                    "The broker does not set an error code (since it is not really an error), " +
+                    "but sets the offset field to -1 and returns empty metadata. "),
+            new Field(METADATA_KEY_NAME, NULLABLE_STRING, "Associated metadata the client set when committing offset."),
             ERROR_CODE);
 
     private static final Schema OFFSET_FETCH_RESPONSE_TOPIC_V0 = new Schema(
             TOPIC_NAME,
-            new Field(PARTITIONS_KEY_NAME, new ArrayOf(OFFSET_FETCH_RESPONSE_PARTITION_V0)));
+            new Field(PARTITIONS_KEY_NAME, new ArrayOf(OFFSET_FETCH_RESPONSE_PARTITION_V0), "List of per-partition offset metadata."));
 
     private static final Schema OFFSET_FETCH_RESPONSE_V0 = new Schema(
-            new Field(RESPONSES_KEY_NAME, new ArrayOf(OFFSET_FETCH_RESPONSE_TOPIC_V0)));
+            new Field(RESPONSES_KEY_NAME, new ArrayOf(OFFSET_FETCH_RESPONSE_TOPIC_V0), "List of per-topic offset metadata."));
 
     private static final Schema OFFSET_FETCH_RESPONSE_V1 = OFFSET_FETCH_RESPONSE_V0;
 
     private static final Schema OFFSET_FETCH_RESPONSE_V2 = new Schema(
-            new Field(RESPONSES_KEY_NAME, new ArrayOf(OFFSET_FETCH_RESPONSE_TOPIC_V0)),
+            new Field(RESPONSES_KEY_NAME, new ArrayOf(OFFSET_FETCH_RESPONSE_TOPIC_V0), "List of per-topic offset metadata."),
             ERROR_CODE);
 
     /* v3 request is the same as v2. Throttle time has been added to v3 response */
     private static final Schema OFFSET_FETCH_RESPONSE_V3 = new Schema(
             THROTTLE_TIME_MS,
-            new Field(RESPONSES_KEY_NAME, new ArrayOf(OFFSET_FETCH_RESPONSE_TOPIC_V0)),
+            new Field(RESPONSES_KEY_NAME, new ArrayOf(OFFSET_FETCH_RESPONSE_TOPIC_V0), "List of per-topic offset metadata."),
             ERROR_CODE);
 
     public static Schema[] schemaVersions() {

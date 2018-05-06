@@ -75,7 +75,9 @@ public class FetchResponse extends AbstractResponse {
             new Field(HIGH_WATERMARK_KEY_NAME, INT64, "Last committed offset."));
     private static final Schema FETCH_RESPONSE_PARTITION_V0 = new Schema(
             new Field(PARTITION_HEADER_KEY_NAME, FETCH_RESPONSE_PARTITION_HEADER_V0),
-            new Field(RECORD_SET_KEY_NAME, RECORDS));
+            new Field(RECORD_SET_KEY_NAME, RECORDS, "Data fetch from the partition. " +
+                    "In version 1 record set only includes messages of v0 (magic byte 0). " +
+                    "In version 2 and 3, record set can include messages of v0 and v1 (magic byte 0 and 1)"));
 
     private static final Schema FETCH_RESPONSE_TOPIC_V0 = new Schema(
             TOPIC_NAME,
@@ -123,11 +125,11 @@ public class FetchResponse extends AbstractResponse {
 
     private static final Schema FETCH_RESPONSE_PARTITION_V4 = new Schema(
             new Field(PARTITION_HEADER_KEY_NAME, FETCH_RESPONSE_PARTITION_HEADER_V4),
-            new Field(RECORD_SET_KEY_NAME, RECORDS));
+            new Field(RECORD_SET_KEY_NAME, RECORDS, "Data fetched from this partition."));
 
     private static final Schema FETCH_RESPONSE_PARTITION_V5 = new Schema(
             new Field(PARTITION_HEADER_KEY_NAME, FETCH_RESPONSE_PARTITION_HEADER_V5),
-            new Field(RECORD_SET_KEY_NAME, RECORDS));
+            new Field(RECORD_SET_KEY_NAME, RECORDS, "Data fetched from this partition."));
 
     private static final Schema FETCH_RESPONSE_TOPIC_V4 = new Schema(
             TOPIC_NAME,

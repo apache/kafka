@@ -34,11 +34,11 @@ public class SyncGroupResponse extends AbstractResponse {
 
     private static final Schema SYNC_GROUP_RESPONSE_V0 = new Schema(
             ERROR_CODE,
-            new Field(MEMBER_ASSIGNMENT_KEY_NAME, BYTES));
+            new Field(MEMBER_ASSIGNMENT_KEY_NAME, BYTES, "State assigned by group leader to this member."));
     private static final Schema SYNC_GROUP_RESPONSE_V1 = new Schema(
             THROTTLE_TIME_MS,
             ERROR_CODE,
-            new Field(MEMBER_ASSIGNMENT_KEY_NAME, BYTES));
+            new Field(MEMBER_ASSIGNMENT_KEY_NAME, BYTES, "State assigned by group leader to this member."));
 
     public static Schema[] schemaVersions() {
         return new Schema[] {SYNC_GROUP_RESPONSE_V0, SYNC_GROUP_RESPONSE_V1};

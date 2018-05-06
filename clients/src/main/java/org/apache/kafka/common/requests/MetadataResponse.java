@@ -139,20 +139,20 @@ public class MetadataResponse extends AbstractResponse {
     private static final Schema METADATA_RESPONSE_V1 = new Schema(
             new Field(BROKERS_KEY_NAME, new ArrayOf(METADATA_BROKER_V1), "Host and port information for all brokers."),
             new Field(CONTROLLER_ID_KEY_NAME, INT32, "The broker id of the controller broker."),
-            new Field(TOPIC_METADATA_KEY_NAME, new ArrayOf(TOPIC_METADATA_V1)));
+            new Field(TOPIC_METADATA_KEY_NAME, new ArrayOf(TOPIC_METADATA_V1), "Metadata for each topic requested."));
 
     private static final Schema METADATA_RESPONSE_V2 = new Schema(
             new Field(BROKERS_KEY_NAME, new ArrayOf(METADATA_BROKER_V1), "Host and port information for all brokers."),
             new Field(CLUSTER_ID_KEY_NAME, NULLABLE_STRING, "The cluster id that this broker belongs to."),
             new Field(CONTROLLER_ID_KEY_NAME, INT32, "The broker id of the controller broker."),
-            new Field(TOPIC_METADATA_KEY_NAME, new ArrayOf(TOPIC_METADATA_V1)));
+            new Field(TOPIC_METADATA_KEY_NAME, new ArrayOf(TOPIC_METADATA_V1), "Metadata for each topic requested."));
 
     private static final Schema METADATA_RESPONSE_V3 = new Schema(
             THROTTLE_TIME_MS,
             new Field(BROKERS_KEY_NAME, new ArrayOf(METADATA_BROKER_V1), "Host and port information for all brokers."),
             new Field(CLUSTER_ID_KEY_NAME, NULLABLE_STRING, "The cluster id that this broker belongs to."),
             new Field(CONTROLLER_ID_KEY_NAME, INT32, "The broker id of the controller broker."),
-            new Field(TOPIC_METADATA_KEY_NAME, new ArrayOf(TOPIC_METADATA_V1)));
+            new Field(TOPIC_METADATA_KEY_NAME, new ArrayOf(TOPIC_METADATA_V1), "Metadata for each topic requested."));
 
     private static final Schema METADATA_RESPONSE_V4 = METADATA_RESPONSE_V3;
 
@@ -162,7 +162,7 @@ public class MetadataResponse extends AbstractResponse {
             new Field(BROKERS_KEY_NAME, new ArrayOf(METADATA_BROKER_V1), "Host and port information for all brokers."),
             new Field(CLUSTER_ID_KEY_NAME, NULLABLE_STRING, "The cluster id that this broker belongs to."),
             new Field(CONTROLLER_ID_KEY_NAME, INT32, "The broker id of the controller broker."),
-            new Field(TOPIC_METADATA_KEY_NAME, new ArrayOf(TOPIC_METADATA_V2)));
+            new Field(TOPIC_METADATA_KEY_NAME, new ArrayOf(TOPIC_METADATA_V2), "Metadata for each topic requested."));
 
     public static Schema[] schemaVersions() {
         return new Schema[] {METADATA_RESPONSE_V0, METADATA_RESPONSE_V1, METADATA_RESPONSE_V2, METADATA_RESPONSE_V3,

@@ -66,7 +66,9 @@ public class OffsetCommitRequest extends AbstractRequest {
     private static final Schema OFFSET_COMMIT_REQUEST_PARTITION_V1 = new Schema(
             PARTITION_ID,
             new Field(COMMIT_OFFSET_KEY_NAME, INT64, "Message offset to be committed."),
-            new Field(TIMESTAMP_KEY_NAME, INT64, "Timestamp of the commit"),
+            new Field(TIMESTAMP_KEY_NAME, INT64, "Timestamp of the commit. If the time stamp field is not set (-1)," +
+                    " brokers will set commit time to receive time before committing offset. Users can explicitly set commit timestamp " +
+                    "if they want to retain committed offset longer on the broker than configured offset retention time."),
             new Field(METADATA_KEY_NAME, NULLABLE_STRING, "Any associated metadata the client wants to keep."));
 
     private static final Schema OFFSET_COMMIT_REQUEST_PARTITION_V2 = new Schema(
@@ -100,7 +102,9 @@ public class OffsetCommitRequest extends AbstractRequest {
             GROUP_ID,
             GENERATION_ID,
             MEMBER_ID,
-            new Field(RETENTION_TIME_KEY_NAME, INT64, "Time period in ms to retain the offset."),
+            new Field(RETENTION_TIME_KEY_NAME, INT64, "Time period in ms to retain the offset." +
+                    " Brokers will always retain offsets until its commit timestamp + user specified retetntion time in the commit request. " +
+                    "I retention time is not set (-1), broker offset retention time will be used as default."),
             new Field(TOPICS_KEY_NAME, new ArrayOf(OFFSET_COMMIT_REQUEST_TOPIC_V2), "Topics to commit offsets."));
 
     /* v3 request is same as v2. Throttle time has been added to response */

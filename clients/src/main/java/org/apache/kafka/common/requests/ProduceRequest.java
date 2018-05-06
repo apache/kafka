@@ -63,14 +63,16 @@ public class ProduceRequest extends AbstractRequest {
             TOPIC_NAME,
             new Field(PARTITION_DATA_KEY_NAME, new ArrayOf(new Schema(
                     PARTITION_ID,
-                    new Field(RECORD_SET_KEY_NAME, RECORDS)))));
+                    new Field(RECORD_SET_KEY_NAME, RECORDS,
+                            "A set of records in the format described in <a href=\"#protocol_messages\">The messages</a> section"))),
+                    "Data being published to a particular partition of the topic."));
 
     private static final Schema PRODUCE_REQUEST_V0 = new Schema(
             new Field(ACKS_KEY_NAME, INT16, "The number of acknowledgments the producer requires the leader to have " +
                     "received before considering a request complete. Allowed values: 0 for no acknowledgments, 1 for " +
                     "only the leader and -1 for the full ISR."),
             new Field(TIMEOUT_KEY_NAME, INT32, "The time to await a response in ms."),
-            new Field(TOPIC_DATA_KEY_NAME, new ArrayOf(TOPIC_PRODUCE_DATA_V0)));
+            new Field(TOPIC_DATA_KEY_NAME, new ArrayOf(TOPIC_PRODUCE_DATA_V0), "Data being produced to a particular topic."));
 
     /**
      * The body of PRODUCE_REQUEST_V1 is the same as PRODUCE_REQUEST_V0.

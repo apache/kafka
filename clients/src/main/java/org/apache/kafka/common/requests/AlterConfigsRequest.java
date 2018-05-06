@@ -51,14 +51,14 @@ public class AlterConfigsRequest extends AbstractRequest {
             new Field(CONFIG_VALUE, NULLABLE_STRING, "Configuration value"));
 
     private static final Schema ALTER_CONFIGS_REQUEST_RESOURCE_V0 = new Schema(
-            new Field(RESOURCE_TYPE_KEY_NAME, INT8),
-            new Field(RESOURCE_NAME_KEY_NAME, STRING),
-            new Field(CONFIG_ENTRIES_KEY_NAME, new ArrayOf(CONFIG_ENTRY)));
+            new Field(RESOURCE_TYPE_KEY_NAME, INT8, "Id of the resource type to alter configuration of. Value 2 means topic, 4 means broker."),
+            new Field(RESOURCE_NAME_KEY_NAME, STRING, "Name of the resource to alter configuration of."),
+            new Field(CONFIG_ENTRIES_KEY_NAME, new ArrayOf(CONFIG_ENTRY), "Configuration entries to alter."));
 
     private static final Schema ALTER_CONFIGS_REQUEST_V0 = new Schema(
             new Field(RESOURCES_KEY_NAME, new ArrayOf(ALTER_CONFIGS_REQUEST_RESOURCE_V0),
                     "An array of resources to update with the provided configs."),
-            new Field(VALIDATE_ONLY_KEY_NAME, BOOLEAN));
+            new Field(VALIDATE_ONLY_KEY_NAME, BOOLEAN, "If true, only validation takes place and the changes are not applied."));
 
     public static Schema[] schemaVersions() {
         return new Schema[] {ALTER_CONFIGS_REQUEST_V0};
