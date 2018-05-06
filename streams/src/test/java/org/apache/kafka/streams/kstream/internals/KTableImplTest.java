@@ -81,12 +81,12 @@ public class KTableImplTest {
         String topic1 = "topic1";
         String topic2 = "topic2";
 
-        KTable<String, String> table1 = builder.table(topic1, consumed);
+        final KTable<String, String> table1 = builder.table(topic1, consumed);
 
-        MockProcessorSupplier<String, Object> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<String, Object> supplier = new MockProcessorSupplier<>();
         table1.toStream().process(supplier);
 
-        KTable<String, Integer> table2 = table1.mapValues(new ValueMapper<String, Integer>() {
+        final KTable<String, Integer> table2 = table1.mapValues(new ValueMapper<String, Integer>() {
             @Override
             public Integer apply(String value) {
                 return new Integer(value);
@@ -95,7 +95,7 @@ public class KTableImplTest {
 
         table2.toStream().process(supplier);
 
-        KTable<String, Integer> table3 = table2.filter(new Predicate<String, Integer>() {
+        final KTable<String, Integer> table3 = table2.filter(new Predicate<String, Integer>() {
             @Override
             public boolean test(String key, Integer value) {
                 return (value % 2) == 0;
@@ -105,7 +105,7 @@ public class KTableImplTest {
         table3.toStream().process(supplier);
 
         table1.toStream().to(topic2, produced);
-        KTable<String, String> table4 = builder.table(topic2, consumed);
+        final KTable<String, String> table4 = builder.table(topic2, consumed);
 
         table4.toStream().process(supplier);
 
@@ -132,19 +132,19 @@ public class KTableImplTest {
     public void testValueGetter() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        String topic1 = "topic1";
-        String topic2 = "topic2";
+        final String topic1 = "topic1";
+        final String topic2 = "topic2";
 
-        KTableImpl<String, String, String> table1 =
+        final KTableImpl<String, String, String> table1 =
                 (KTableImpl<String, String, String>) builder.table(topic1, consumed);
-        KTableImpl<String, String, Integer> table2 = (KTableImpl<String, String, Integer>) table1.mapValues(
+        final KTableImpl<String, String, Integer> table2 = (KTableImpl<String, String, Integer>) table1.mapValues(
                 new ValueMapper<String, Integer>() {
                     @Override
                     public Integer apply(String value) {
                         return new Integer(value);
                     }
                 });
-        KTableImpl<String, Integer, Integer> table3 = (KTableImpl<String, Integer, Integer>) table2.filter(
+        final KTableImpl<String, Integer, Integer> table3 = (KTableImpl<String, Integer, Integer>) table2.filter(
                 new Predicate<String, Integer>() {
                     @Override
                     public boolean test(String key, Integer value) {
@@ -153,25 +153,25 @@ public class KTableImplTest {
                 });
 
         table1.toStream().to(topic2, produced);
-        KTableImpl<String, String, String> table4 = (KTableImpl<String, String, String>) builder.table(topic2, consumed);
+        final KTableImpl<String, String, String> table4 = (KTableImpl<String, String, String>) builder.table(topic2, consumed);
 
-        KTableValueGetterSupplier<String, String> getterSupplier1 = table1.valueGetterSupplier();
-        KTableValueGetterSupplier<String, Integer> getterSupplier2 = table2.valueGetterSupplier();
-        KTableValueGetterSupplier<String, Integer> getterSupplier3 = table3.valueGetterSupplier();
-        KTableValueGetterSupplier<String, String> getterSupplier4 = table4.valueGetterSupplier();
+        final KTableValueGetterSupplier<String, String> getterSupplier1 = table1.valueGetterSupplier();
+        final KTableValueGetterSupplier<String, Integer> getterSupplier2 = table2.valueGetterSupplier();
+        final KTableValueGetterSupplier<String, Integer> getterSupplier3 = table3.valueGetterSupplier();
+        final KTableValueGetterSupplier<String, String> getterSupplier4 = table4.valueGetterSupplier();
 
         driver.setUp(builder, stateDir, null, null);
 
         // two state store should be created
         assertEquals(2, driver.allStateStores().size());
 
-        KTableValueGetter<String, String> getter1 = getterSupplier1.get();
+        final KTableValueGetter<String, String> getter1 = getterSupplier1.get();
         getter1.init(driver.context());
-        KTableValueGetter<String, Integer> getter2 = getterSupplier2.get();
+        final KTableValueGetter<String, Integer> getter2 = getterSupplier2.get();
         getter2.init(driver.context());
-        KTableValueGetter<String, Integer> getter3 = getterSupplier3.get();
+        final KTableValueGetter<String, Integer> getter3 = getterSupplier3.get();
         getter3.init(driver.context());
-        KTableValueGetter<String, String> getter4 = getterSupplier4.get();
+        final KTableValueGetter<String, String> getter4 = getterSupplier4.get();
         getter4.init(driver.context());
 
         driver.process(topic1, "A", "01");
@@ -257,16 +257,16 @@ public class KTableImplTest {
 
     @Test
     public void testStateStoreLazyEval() {
-        String topic1 = "topic1";
-        String topic2 = "topic2";
+        final String topic1 = "topic1";
+        final String topic2 = "topic2";
 
         final StreamsBuilder builder = new StreamsBuilder();
 
-        KTableImpl<String, String, String> table1 =
+        final KTableImpl<String, String, String> table1 =
                 (KTableImpl<String, String, String>) builder.table(topic1, consumed);
         builder.table(topic2, consumed);
 
-        KTableImpl<String, String, Integer> table1Mapped = (KTableImpl<String, String, Integer>) table1.mapValues(
+        final KTableImpl<String, String, Integer> table1Mapped = (KTableImpl<String, String, Integer>) table1.mapValues(
                 new ValueMapper<String, Integer>() {
                     @Override
                     public Integer apply(String value) {
@@ -290,24 +290,24 @@ public class KTableImplTest {
 
     @Test
     public void testStateStore() {
-        String topic1 = "topic1";
-        String topic2 = "topic2";
+        final String topic1 = "topic1";
+        final String topic2 = "topic2";
 
         final StreamsBuilder builder = new StreamsBuilder();
 
-        KTableImpl<String, String, String> table1 =
+        final KTableImpl<String, String, String> table1 =
                 (KTableImpl<String, String, String>) builder.table(topic1, consumed);
-        KTableImpl<String, String, String> table2 =
+        final KTableImpl<String, String, String> table2 =
                 (KTableImpl<String, String, String>) builder.table(topic2, consumed);
 
-        KTableImpl<String, String, Integer> table1Mapped = (KTableImpl<String, String, Integer>) table1.mapValues(
+        final KTableImpl<String, String, Integer> table1Mapped = (KTableImpl<String, String, Integer>) table1.mapValues(
                 new ValueMapper<String, Integer>() {
                     @Override
                     public Integer apply(String value) {
                         return new Integer(value);
                     }
                 });
-        KTableImpl<String, Integer, Integer> table1MappedFiltered = (KTableImpl<String, Integer, Integer>) table1Mapped.filter(
+        final KTableImpl<String, Integer, Integer> table1MappedFiltered = (KTableImpl<String, Integer, Integer>) table1Mapped.filter(
                 new Predicate<String, Integer>() {
                     @Override
                     public boolean test(String key, Integer value) {
@@ -331,12 +331,12 @@ public class KTableImplTest {
 
     @Test
     public void testRepartition() throws NoSuchFieldException, IllegalAccessException {
-        String topic1 = "topic1";
-        String storeName1 = "storeName1";
+        final String topic1 = "topic1";
+        final String storeName1 = "storeName1";
 
         final StreamsBuilder builder = new StreamsBuilder();
 
-        KTableImpl<String, String, String> table1 =
+        final KTableImpl<String, String, String> table1 =
                 (KTableImpl<String, String, String>) builder.table(topic1,
                                                                    consumed,
                                                                    Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as(storeName1)
