@@ -275,7 +275,7 @@ object WordCountApplication extends App {
   val wordCounts: KTable[String, Long] = textLines
     .flatMapValues(textLine => textLine.toLowerCase.split("\\W+"))
     .groupBy((_, word) => word)
-    .count(Materialized.as("counts-store").withKeySerde(DefaultSerdes.stringSerde))
+    .count(Materialized.as("counts-store"))
   wordCounts.toStream.to("WordsWithCountsTopic")
 
   val streams: KafkaStreams = new KafkaStreams(builder.build(), config)
