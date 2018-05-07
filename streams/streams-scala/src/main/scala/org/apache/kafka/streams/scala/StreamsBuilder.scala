@@ -48,7 +48,7 @@ class StreamsBuilder(inner: StreamsBuilderJ = new StreamsBuilderJ) {
    * import ImplicitConversions._
    *
    * // Bring implicit default serdes in scope
-   * import DefaultSerdes._
+   * import Serdes._
    *
    * val builder = new StreamsBuilder()
    *
@@ -98,7 +98,7 @@ class StreamsBuilder(inner: StreamsBuilderJ = new StreamsBuilderJ) {
    * import ImplicitConversions._
    *
    * // Bring implicit default serdes in scope
-   * import DefaultSerdes._
+   * import Serdes._
    *
    * val builder = new StreamsBuilder()
    *
