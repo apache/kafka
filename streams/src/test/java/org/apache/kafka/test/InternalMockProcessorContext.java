@@ -181,7 +181,6 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
 
     @Override
     public void register(final StateStore store,
-                         final boolean deprecatedAndIgnoredLoggingEnabled,
                          final StateRestoreCallback func) {
         storeMap.put(store.name(), store);
         restoreFuncs.put(store.name(), func);

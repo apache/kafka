@@ -126,7 +126,7 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
         segments.openExisting(context);
 
         // register and possibly restore the state from the logs
-        context.register(root, false, new StateRestoreCallback() {
+        context.register(root, new StateRestoreCallback() {
             @Override
             public void restore(byte[] key, byte[] value) {
                 put(Bytes.wrap(key), value);
