@@ -647,8 +647,9 @@ class Partition(val topic: String,
 
   /**
     * @param leaderEpoch Requested leader epoch
-    * @return The last offset of messages published under this leader epoch, or if the requested
-    *          leader epoch is unknown, the last offset of the largest epoch less than requested epoch
+    * @return The requested leader epoch and the last offset of messages published under this
+    *         leader epoch, or if the requested leader epoch is unknown, the leader epoch less
+    *         than requested leader epoch and the last offset of messages published under this leader epoch.
     */
   def lastOffsetForLeaderEpoch(leaderEpoch: Int): EpochEndOffset = {
     inReadLock(leaderIsrUpdateLock) {

@@ -298,7 +298,7 @@ class ReplicaFetcherThread(name: String,
    *  end offset of the largest epoch that is smaller than the epoch the leader replied with, and
    *  send OffsetsForLeaderEpochRequest with that leader epoch. In a more rare case, where the
    *  follower was not tracking epochs smaller than the epoch the leader replied with, we
-   *  truncate the leader's offset (and do not send any more leader epoch requesrs).
+   *  truncate the leader's offset (and do not send any more leader epoch requests).
    *  -- Otherwise, truncate to min(leader's offset, end offset on the follower for epoch that
    *  leader replied with, follower's Log End Offset).
    */
