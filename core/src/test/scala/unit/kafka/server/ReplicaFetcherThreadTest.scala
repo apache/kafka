@@ -360,8 +360,9 @@ class ReplicaFetcherThreadTest {
 
     replay(leaderEpochs, replicaManager, logManager, quota, replica, partition)
 
-    // Define the offsets for the OffsetsForLeaderEpochResponse
-    val offsets = Map(t1p0 -> new EpochEndOffset(4, 155), t1p1 -> new EpochEndOffset(4, 143)).asJava
+    // Define the offsets for the OffsetsForLeaderEpochResponse with undefined epoch to simulate
+    // older protocol version
+    val offsets = Map(t1p0 -> new EpochEndOffset(EpochEndOffset.UNDEFINED_EPOCH, 155), t1p1 -> new EpochEndOffset(EpochEndOffset.UNDEFINED_EPOCH, 143)).asJava
 
     // Create the fetcher thread
     val mockNetwork = new ReplicaFetcherMockBlockingSend(offsets, brokerEndPoint, new SystemTime())
