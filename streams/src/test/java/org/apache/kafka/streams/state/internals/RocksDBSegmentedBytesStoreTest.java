@@ -38,8 +38,8 @@ import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameters;
 import org.junit.runners.Parameterized.Parameter;
-import static org.apache.kafka.streams.state.internals.WindowKeySchema.timeWindowForSize;
 
+import static org.apache.kafka.streams.state.internals.WindowKeySchema.timeWindowForSize;
 
 
 import java.io.File;
@@ -64,13 +64,14 @@ import static org.junit.Assert.assertTrue;
 @RunWith(Parameterized.class)
 public class RocksDBSegmentedBytesStoreTest {
 
-    private final long retention = 60000L;
+    private final long retention = 1000;
     private final int numSegments = 3;
     private InternalMockProcessorContext context;
     private final String storeName = "bytes-store";
     private RocksDBSegmentedBytesStore bytesStore;
     private File stateDir;
-    private final long windowSizeForTimeWindow = 500L;
+    private long windowSizeForTimeWindow = 500;
+    private final Window[] windows = new Window[4];
 
     @Parameter
     public SegmentedBytesStore.KeySchema schema;
@@ -83,6 +84,22 @@ public class RocksDBSegmentedBytesStoreTest {
     @Before
     public void before() {
         schema.init("topic");
+
+        if (schema instanceof SessionKeySchema) {
+            windows[0] = new SessionWindow(10, 10);
+            windows[1] = new SessionWindow(500, 1000);
+            windows[2] = new SessionWindow(1000, 1500);
+            windows[3] = new SessionWindow(30000, 60000);
+        }
+        if (schema instanceof WindowKeySchema) {
+
+            windows[0] = timeWindowForSize(10, windowSizeForTimeWindow);
+            windows[1] = timeWindowForSize(500, windowSizeForTimeWindow);
+            windows[2] = timeWindowForSize(1000, windowSizeForTimeWindow);
+            windows[3] = timeWindowForSize(60000, windowSizeForTimeWindow);
+        }
+
+
         bytesStore = new RocksDBSegmentedBytesStore(storeName,
                 retention,
                 numSegments,
@@ -106,20 +123,14 @@ public class RocksDBSegmentedBytesStoreTest {
     @Test
     public void shouldPutAndFetch() {
         final String key = "a";
-        final Window window1 = schema instanceof SessionKeySchema ? new SessionWindow(10, 10L) : timeWindowForSize(100L, windowSizeForTimeWindow);
-        final Window window2 = schema instanceof SessionKeySchema ? new SessionWindow(500L, 1000L) : timeWindowForSize(500L, windowSizeForTimeWindow);
-        final Window window3 = schema instanceof SessionKeySchema ? new SessionWindow(1500L, 2000L) : timeWindowForSize(1500L, windowSizeForTimeWindow);
-        final Window window4 = schema instanceof SessionKeySchema ? new SessionWindow(2500L, 3000L) : timeWindowForSize(2500L, windowSizeForTimeWindow);
+        bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(10));
+        bytesStore.put(serializeKey(new Windowed<>(key, windows[1])), serializeValue(50));
+        bytesStore.put(serializeKey(new Windowed<>(key, windows[2])), serializeValue(100));
 
-        bytesStore.put(serializeKey(new Windowed<>(key, window1)), serializeValue(10L));
-        bytesStore.put(serializeKey(new Windowed<>(key, window2)), serializeValue(50L));
-        bytesStore.put(serializeKey(new Windowed<>(key, window3)), serializeValue(100L));
-        bytesStore.put(serializeKey(new Windowed<>(key, window4)), serializeValue(200L));
+        final KeyValueIterator<Bytes, byte[]> values = bytesStore.fetch(Bytes.wrap(key.getBytes()), 0, 500);
 
-        final KeyValueIterator<Bytes, byte[]> values = bytesStore.fetch(Bytes.wrap(key.getBytes()), 0, 1000L);
-
-        final List<KeyValue<Windowed<String>, Long>> expected = Arrays.asList(KeyValue.pair(new Windowed<>(key, window1), 10L),
-                KeyValue.pair(new Windowed<>(key, window2), 50L));
+        final List<KeyValue<Windowed<String>, Long>> expected = Arrays.asList(KeyValue.pair(new Windowed<>(key, windows[0]), 10L),
+                KeyValue.pair(new Windowed<>(key, windows[1]), 50L));
 
         assertEquals(expected, toList(values));
     }
@@ -127,91 +138,68 @@ public class RocksDBSegmentedBytesStoreTest {
     @Test
     public void shouldFindValuesWithinRange() {
         final String key = "a";
-        final Window window1 = schema instanceof SessionKeySchema ? new SessionWindow(0L, 0L) : timeWindowForSize(0L, windowSizeForTimeWindow);
-        final Window window2 = schema instanceof SessionKeySchema ? new SessionWindow(1000L, 1000L) : timeWindowForSize(1000L, windowSizeForTimeWindow);
-        bytesStore.put(serializeKey(new Windowed<>(key, window1)), serializeValue(50L));
-        bytesStore.put(serializeKey(new Windowed<>(key, window2)), serializeValue(10L));
-        final KeyValueIterator<Bytes, byte[]> results = bytesStore.fetch(Bytes.wrap(key.getBytes()), 1L, 1999L);
-        assertEquals(Collections.singletonList(KeyValue.pair(new Windowed<>(key, window2), 10L)), toList(results));
+        bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(10));
+        bytesStore.put(serializeKey(new Windowed<>(key, windows[1])), serializeValue(50));
+        bytesStore.put(serializeKey(new Windowed<>(key, windows[2])), serializeValue(100));
+        final KeyValueIterator<Bytes, byte[]> results = bytesStore.fetch(Bytes.wrap(key.getBytes()), 1, 999);
+        final List<KeyValue<Windowed<String>, Long>> expected = Arrays.asList(KeyValue.pair(new Windowed<>(key, windows[0]), 10L),
+                KeyValue.pair(new Windowed<>(key, windows[1]), 50L));
+
+        assertEquals(expected, toList(results));
     }
+
 
     @Test
     public void shouldRemove() {
-        final Window window1 = schema instanceof SessionKeySchema ? new SessionWindow(0, 1000) : timeWindowForSize(100L, windowSizeForTimeWindow);
-        final Window window2 = schema instanceof SessionKeySchema ? new SessionWindow(1500, 2500) : timeWindowForSize(1500L, windowSizeForTimeWindow);
-        bytesStore.put(serializeKey(new Windowed<>("a", window1)), serializeValue(30L));
-        bytesStore.put(serializeKey(new Windowed<>("a", window2)), serializeValue(50L));
+        bytesStore.put(serializeKey(new Windowed<>("a", windows[0])), serializeValue(30));
+        bytesStore.put(serializeKey(new Windowed<>("a", windows[1])), serializeValue(50));
 
-        bytesStore.remove(serializeKey(new Windowed<>("a", window1)));
-        final KeyValueIterator<Bytes, byte[]> value = bytesStore.fetch(Bytes.wrap("a".getBytes()), 0, 1000L);
+        bytesStore.remove(serializeKey(new Windowed<>("a", windows[0])));
+        final KeyValueIterator<Bytes, byte[]> value = bytesStore.fetch(Bytes.wrap("a".getBytes()), 0, 100);
         assertFalse(value.hasNext());
     }
+
 
     @Test
     public void shouldRollSegments() {
         // just to validate directories
         final Segments segments = new Segments(storeName, retention, numSegments);
         final String key = "a";
-        final Window window1 = schema instanceof SessionKeySchema ? new SessionWindow(0L, 0L) : timeWindowForSize(0L, windowSizeForTimeWindow);
-        bytesStore.put(serializeKey(new Windowed<>(key, window1)), serializeValue(50L));
+
+        bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(50));
+        bytesStore.put(serializeKey(new Windowed<>(key, windows[1])), serializeValue(100));
+        bytesStore.put(serializeKey(new Windowed<>(key, windows[2])), serializeValue(500));
         assertEquals(Collections.singleton(segments.segmentName(0)), segmentDirs());
 
-        final Window window2 = schema instanceof SessionKeySchema ? new SessionWindow(30000L, 60000L) : timeWindowForSize(60000L, windowSizeForTimeWindow);
-        bytesStore.put(serializeKey(new Windowed<>(key, window2)), serializeValue(100L));
-        assertEquals(Utils.mkSet(segments.segmentName(0),
-                segments.segmentName(1)), segmentDirs());
+        bytesStore.put(serializeKey(new Windowed<>(key, windows[3])), serializeValue(1000));
+        assertEquals(Utils.mkSet(segments.segmentName(0), segments.segmentName(1)), segmentDirs());
 
-        final Window window3 = schema instanceof SessionKeySchema ? new SessionWindow(61000L, 120000L) : timeWindowForSize(120000L, windowSizeForTimeWindow);
-        bytesStore.put(serializeKey(new Windowed<>(key, window3)), serializeValue(200L));
-        assertEquals(Utils.mkSet(segments.segmentName(0),
-                segments.segmentName(1),
-                segments.segmentName(2)), segmentDirs());
+        final List<KeyValue<Windowed<String>, Long>> results = toList(bytesStore.fetch(Bytes.wrap(key.getBytes()), 0, 1500));
 
-        final Window window4 = schema instanceof SessionKeySchema ? new SessionWindow(121000L, 180000L) : timeWindowForSize(180000L, windowSizeForTimeWindow);
-        bytesStore.put(serializeKey(new Windowed<>(key, window4)), serializeValue(300L));
-        assertEquals(Utils.mkSet(segments.segmentName(1),
-                segments.segmentName(2),
-                segments.segmentName(3)), segmentDirs());
-
-        final Window window5 = schema instanceof SessionKeySchema ? new SessionWindow(181000L, 240000L) : timeWindowForSize(240000L, windowSizeForTimeWindow);
-        bytesStore.put(serializeKey(new Windowed<>(key, window5)), serializeValue(400L));
-        assertEquals(Utils.mkSet(segments.segmentName(2),
-                segments.segmentName(3),
-                segments.segmentName(4)), segmentDirs());
-
-
-        final List<KeyValue<Windowed<String>, Long>> results = toList(bytesStore.fetch(Bytes.wrap(key.getBytes()), 0, 240000));
-        assertEquals(Arrays.asList(KeyValue.pair(new Windowed<>(key, window3), 200L),
-                KeyValue.pair(new Windowed<>(key, window4), 300L),
-                KeyValue.pair(new Windowed<>(key, window5), 400L)
-        ), results);
+        assertEquals(Arrays.asList(KeyValue.pair(new Windowed<>(key, windows[0]), 50L),
+                KeyValue.pair(new Windowed<>(key, windows[1]), 100L),
+                KeyValue.pair(new Windowed<>(key, windows[2]), 500L))
+                , results);
 
     }
+
 
     @Test
     public void shouldGetAllSegments() {
         // just to validate directories
         final Segments segments = new Segments(storeName, retention, numSegments);
         final String key = "a";
-        final Window window1 = schema instanceof SessionKeySchema ? new SessionWindow(0L, 0L) : timeWindowForSize(0L, windowSizeForTimeWindow);
-        bytesStore.put(serializeKey(new Windowed<>(key, window1)), serializeValue(50L));
+
+        bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(50L));
         assertEquals(Collections.singleton(segments.segmentName(0)), segmentDirs());
 
-        final Window window2 = schema instanceof SessionKeySchema ? new SessionWindow(30000L, 60000L) : timeWindowForSize(60000L, windowSizeForTimeWindow);
-        bytesStore.put(serializeKey(new Windowed<>(key, window2)), serializeValue(100L));
+        bytesStore.put(serializeKey(new Windowed<>(key, windows[3])), serializeValue(100L));
         assertEquals(Utils.mkSet(segments.segmentName(0),
                 segments.segmentName(1)), segmentDirs());
 
-        final Window window3 = schema instanceof SessionKeySchema ? new SessionWindow(61000L, 120000L) : timeWindowForSize(120000L, windowSizeForTimeWindow);
-        bytesStore.put(serializeKey(new Windowed<>(key, window3)), serializeValue(200L));
-        assertEquals(Utils.mkSet(segments.segmentName(0),
-                segments.segmentName(1),
-                segments.segmentName(2)), segmentDirs());
-
         final List<KeyValue<Windowed<String>, Long>> results = toList(bytesStore.all());
-        assertEquals(Arrays.asList(KeyValue.pair(new Windowed<>(key, window1), 50L),
-                KeyValue.pair(new Windowed<>(key, window2), 100L),
-                KeyValue.pair(new Windowed<>(key, window3), 200L)
+        assertEquals(Arrays.asList(KeyValue.pair(new Windowed<>(key, windows[0]), 50L),
+                KeyValue.pair(new Windowed<>(key, windows[3]), 100L)
         ), results);
 
     }
@@ -222,24 +210,16 @@ public class RocksDBSegmentedBytesStoreTest {
         final Segments segments = new Segments(storeName, retention, numSegments);
         final String key = "a";
 
-        final Window window1 = schema instanceof SessionKeySchema ? new SessionWindow(0L, 0L) : timeWindowForSize(0L, windowSizeForTimeWindow);
-        bytesStore.put(serializeKey(new Windowed<>(key, window1)), serializeValue(50L));
+        bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(50L));
         assertEquals(Collections.singleton(segments.segmentName(0)), segmentDirs());
 
-        final Window window2 = schema instanceof SessionKeySchema ? new SessionWindow(30000L, 60000L) : timeWindowForSize(60000L, windowSizeForTimeWindow);
-        bytesStore.put(serializeKey(new Windowed<>(key, window2)), serializeValue(100L));
+        bytesStore.put(serializeKey(new Windowed<>(key, windows[3])), serializeValue(100L));
         assertEquals(Utils.mkSet(segments.segmentName(0),
                 segments.segmentName(1)), segmentDirs());
 
-        final Window window3 = schema instanceof SessionKeySchema ? new SessionWindow(61000L, 120000L) : timeWindowForSize(120000L, windowSizeForTimeWindow);
-        bytesStore.put(serializeKey(new Windowed<>(key, window3)), serializeValue(200L));
-        assertEquals(Utils.mkSet(segments.segmentName(0),
-                segments.segmentName(1),
-                segments.segmentName(2)), segmentDirs());
-
         final List<KeyValue<Windowed<String>, Long>> results = toList(bytesStore.fetchAll(0L, 60000L));
-        assertEquals(Arrays.asList(KeyValue.pair(new Windowed<>(key, window1), 50L),
-                KeyValue.pair(new Windowed<>(key, window2), 100L)
+        assertEquals(Arrays.asList(KeyValue.pair(new Windowed<>(key, windows[0]), 50L),
+                KeyValue.pair(new Windowed<>(key, windows[3]), 100L)
         ), results);
 
     }
@@ -249,11 +229,8 @@ public class RocksDBSegmentedBytesStoreTest {
         final Segments segments = new Segments(storeName, retention, numSegments);
         final String key = "a";
 
-        final Window window1 = schema instanceof SessionKeySchema ? new SessionWindow(0L, 0L) : timeWindowForSize(0L, windowSizeForTimeWindow);
-        final Window window2 = schema instanceof SessionKeySchema ? new SessionWindow(30000L, 60000L) : timeWindowForSize(60000L, windowSizeForTimeWindow);
-
-        bytesStore.put(serializeKey(new Windowed<>(key, window1)), serializeValue(50L));
-        bytesStore.put(serializeKey(new Windowed<>(key, window2)), serializeValue(100L));
+        bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(50L));
+        bytesStore.put(serializeKey(new Windowed<>(key, windows[3])), serializeValue(100L));
         bytesStore.close();
 
         final String firstSegmentName = segments.segmentName(0);
@@ -273,19 +250,18 @@ public class RocksDBSegmentedBytesStoreTest {
 
         bytesStore.init(context, bytesStore);
         final List<KeyValue<Windowed<String>, Long>> results = toList(bytesStore.fetch(Bytes.wrap(key.getBytes()), 0L, 60000L));
-        assertThat(results, equalTo(Arrays.asList(KeyValue.pair(new Windowed<>(key, window1), 50L),
-                KeyValue.pair(new Windowed<>(key, window2), 100L))));
+        assertThat(results, equalTo(Arrays.asList(KeyValue.pair(new Windowed<>(key, windows[0]), 50L),
+                KeyValue.pair(new Windowed<>(key, windows[3]), 100L))));
     }
+
 
     @Test
     public void shouldLoadSegementsWithOldStyleColonFormattedName() {
         final Segments segments = new Segments(storeName, retention, numSegments);
         final String key = "a";
 
-        final Window window1 = schema instanceof SessionKeySchema ? new SessionWindow(0L, 0L) : timeWindowForSize(0L, windowSizeForTimeWindow);
-        final Window window2 = schema instanceof SessionKeySchema ? new SessionWindow(30000L, 60000L) : timeWindowForSize(60000L, windowSizeForTimeWindow);
-        bytesStore.put(serializeKey(new Windowed<>(key, window1)), serializeValue(50L));
-        bytesStore.put(serializeKey(new Windowed<>(key, window2)), serializeValue(100L));
+        bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(50L));
+        bytesStore.put(serializeKey(new Windowed<>(key, windows[3])), serializeValue(100L));
         bytesStore.close();
 
         final String firstSegmentName = segments.segmentName(0);
@@ -301,19 +277,19 @@ public class RocksDBSegmentedBytesStoreTest {
 
         bytesStore.init(context, bytesStore);
         final List<KeyValue<Windowed<String>, Long>> results = toList(bytesStore.fetch(Bytes.wrap(key.getBytes()), 0L, 60000L));
-        assertThat(results, equalTo(Arrays.asList(KeyValue.pair(new Windowed<>(key, window1), 50L),
-                KeyValue.pair(new Windowed<>(key, window2), 100L))));
+        assertThat(results, equalTo(Arrays.asList(KeyValue.pair(new Windowed<>(key, windows[0]), 50L),
+                KeyValue.pair(new Windowed<>(key, windows[3]), 100L))));
     }
+
 
     @Test
     public void shouldBeAbleToWriteToReInitializedStore() {
         final String key = "a";
         // need to create a segment so we can attempt to write to it again.
-        final Window window = schema instanceof SessionKeySchema ? new SessionWindow(0L, 0L) : timeWindowForSize(0L, windowSizeForTimeWindow);
-        bytesStore.put(serializeKey(new Windowed<>(key, window)), serializeValue(50L));
+        bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(50));
         bytesStore.close();
         bytesStore.init(context, bytesStore);
-        bytesStore.put(serializeKey(new Windowed<>(key, window)), serializeValue(50L));
+        bytesStore.put(serializeKey(new Windowed<>(key, windows[1])), serializeValue(100));
     }
 
     private Set<String> segmentDirs() {
