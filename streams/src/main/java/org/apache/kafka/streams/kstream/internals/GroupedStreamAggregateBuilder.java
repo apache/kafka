@@ -75,8 +75,18 @@ class GroupedStreamAggregateBuilder<K, V> {
                            final boolean isQueryable) {
         final String aggFunctionName = builder.newProcessorName(functionName);
         final String sourceName = repartitionIfRequired(storeBuilder.name());
-        builder.internalTopologyBuilder.addProcessor(aggFunctionName, aggregateSupplier, sourceName);
-        builder.internalTopologyBuilder.addStateStore(storeBuilder, aggFunctionName);
+
+        StatefulProcessorNode.StatefulProcessorNodeBuilder<K, V> statefulProcessorNodeBuilder = StatefulProcessorNode.statefulProcessorNodeBuilder();
+
+        statefulProcessorNodeBuilder.withParentProcessorNodeName(name)
+            .withProcessorSupplier(aggregateSupplier)
+            .withProcessorNodeName(aggFunctionName)
+            .withRepartitionRequired(repartitionRequired)
+            .withStoreBuilder(storeBuilder)
+            .withMaybeRepartitionedSourceName(sourceName);
+
+        builder.addNode(statefulProcessorNodeBuilder.build());
+
 
         return new KTableImpl<>(
                 builder,

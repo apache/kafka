@@ -18,7 +18,6 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.processor.ProcessorSupplier;
-import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -28,15 +27,15 @@ import java.util.Arrays;
 class StatefulProcessorNode<K, V> extends StatelessProcessorNode<K, V> {
 
     private final String[] storeNames;
-    private final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier;
     private final StoreBuilder<KeyValueStore<K, V>> storeBuilder;
+    private final String maybeRepartitionedSourceName;
 
 
     StatefulProcessorNode(final String parentNodeName,
                           final String processorNodeName,
                           final ProcessorSupplier processorSupplier,
                           final String[] storeNames,
-                          final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier,
+                          final String maybeRepartitionedSourceName,
                           final StoreBuilder<KeyValueStore<K, V>> storeBuilder,
                           final boolean repartitionRequired) {
         super(parentNodeName,
@@ -45,17 +44,13 @@ class StatefulProcessorNode<K, V> extends StatelessProcessorNode<K, V> {
               repartitionRequired);
 
         this.storeNames = storeNames;
-        this.storeSupplier = storeSupplier;
         this.storeBuilder = storeBuilder;
+        this.maybeRepartitionedSourceName = maybeRepartitionedSourceName;
     }
 
 
     String[] storeNames() {
         return Arrays.copyOf(storeNames, storeNames.length);
-    }
-
-    org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier() {
-        return storeSupplier;
     }
 
     StoreBuilder<KeyValueStore<K, V>> storeBuilder() {
@@ -77,8 +72,8 @@ class StatefulProcessorNode<K, V> extends StatelessProcessorNode<K, V> {
         private String processorNodeName;
         private String parentProcessorNodeName;
         private boolean repartitionRequired;
+        private String maybeRepartitionedSourceName;
         private String[] storeNames;
-        private org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier;
         private StoreBuilder<KeyValueStore<K, V>> storeBuilder;
 
         private StatefulProcessorNodeBuilder() {
@@ -109,13 +104,13 @@ class StatefulProcessorNode<K, V> extends StatelessProcessorNode<K, V> {
             return this;
         }
 
-        StatefulProcessorNodeBuilder<K, V> withStoreSupplier(final StateStoreSupplier<KeyValueStore> storeSupplier) {
-            this.storeSupplier = storeSupplier;
+        StatefulProcessorNodeBuilder<K, V> withStoreBuilder(final StoreBuilder<KeyValueStore<K, V>> storeBuilder) {
+            this.storeBuilder = storeBuilder;
             return this;
         }
 
-        StatefulProcessorNodeBuilder<K, V> withStoreBuilder(final StoreBuilder<KeyValueStore<K, V>> storeBuilder) {
-            this.storeBuilder = storeBuilder;
+        StatefulProcessorNodeBuilder<K, V> withMaybeRepartitionedSourceName(String maybeRepartitionedSourceName) {
+            this.maybeRepartitionedSourceName = maybeRepartitionedSourceName;
             return this;
         }
 
@@ -124,7 +119,7 @@ class StatefulProcessorNode<K, V> extends StatelessProcessorNode<K, V> {
                                                processorNodeName,
                                                processorSupplier,
                                                storeNames,
-                                               storeSupplier,
+                                               maybeRepartitionedSourceName,
                                                storeBuilder,
                                                repartitionRequired);
 
