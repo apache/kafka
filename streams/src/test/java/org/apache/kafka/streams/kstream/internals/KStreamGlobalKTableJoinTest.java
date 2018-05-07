@@ -17,22 +17,20 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.IntegerSerializer;
-import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsBuilderTest;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
-import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
+import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
-import org.apache.kafka.test.TestUtils;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -47,8 +45,6 @@ public class KStreamGlobalKTableJoinTest {
 
     private final String streamTopic = "streamTopic";
     private final String globalTableTopic = "globalTableTopic";
-    private final Serde<Integer> intSerde = Serdes.Integer();
-    private final Serde<String> stringSerde = Serdes.String();
     private TopologyTestDriver driver;
     private MockProcessor<Integer, String> processor;
     private final int[] expectedKeys = {0, 1, 2, 3};
@@ -63,8 +59,8 @@ public class KStreamGlobalKTableJoinTest {
         final KeyValueMapper<Integer, String, String> keyMapper;
 
         final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
-        final Consumed<Integer, String> streamConsumed = Consumed.with(intSerde, stringSerde);
-        final Consumed<String, String> tableConsumed = Consumed.with(stringSerde, stringSerde);
+        final Consumed<Integer, String> streamConsumed = Consumed.with(Serdes.Integer(), Serdes.String());
+        final Consumed<String, String> tableConsumed = Consumed.with(Serdes.String(), Serdes.String());
         stream = builder.stream(streamTopic, streamConsumed);
         table = builder.globalTable(globalTableTopic, tableConsumed);
         keyMapper = new KeyValueMapper<Integer, String, String>() {
@@ -78,13 +74,7 @@ public class KStreamGlobalKTableJoinTest {
         };
         stream.join(table, keyMapper, MockValueJoiner.TOSTRING_JOINER).process(supplier);
 
-        final Properties props = new Properties();
-        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "kstream-global-ktable-join-test");
-        props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9091");
-        props.setProperty(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
-        props.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass().getName());
-        props.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
-
+        final Properties props = StreamsTestUtils.topologyTestConfig(Serdes.Integer(), Serdes.String());
         driver = new TopologyTestDriver(builder.build(), props);
 
         processor = supplier.theCapturedProcessor();
@@ -92,10 +82,7 @@ public class KStreamGlobalKTableJoinTest {
 
     @After
     public void cleanup() {
-        if (driver != null) {
-            driver.close();
-        }
-        driver = null;
+        driver.close();
     }
 
     private void pushToStream(final int messageCount, final String valuePrefix, final boolean includeForeignKey) {

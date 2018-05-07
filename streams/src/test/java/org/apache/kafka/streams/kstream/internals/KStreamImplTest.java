@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Utils;
@@ -24,7 +23,6 @@ import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsBuilderTest;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.GlobalKTable;
@@ -49,8 +47,7 @@ import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
-import org.apache.kafka.test.TestUtils;
-import org.junit.After;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -69,48 +66,28 @@ import static org.junit.Assert.fail;
 
 public class KStreamImplTest {
 
-    private final Serde<String> stringSerde = Serdes.String();
-    private final Serde<Integer> intSerde = Serdes.Integer();
-    private final Consumed<String, String> consumed = Consumed.with(stringSerde, stringSerde);
     private final Consumed<String, String> stringConsumed = Consumed.with(Serdes.String(), Serdes.String());
-
     private final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
 
     private KStream<String, String> testStream;
     private StreamsBuilder builder;
 
     private final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
-    private TopologyTestDriver driver;
-    private final Properties props = new Properties();
+    private final Properties props = StreamsTestUtils.topologyTestConfig(Serdes.String(), Serdes.String());
 
     @Before
     public void before() {
         builder = new StreamsBuilder();
         testStream = builder.stream("source");
-
-        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "kstream-impl-test");
-        props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9091");
-        props.setProperty(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
-        props.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
-        props.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
-    }
-
-    @After
-    public void cleanup() {
-        props.clear();
-        if (driver != null) {
-            driver.close();
-        }
-        driver = null;
     }
 
     @Test
     public void testNumProcesses() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        KStream<String, String> source1 = builder.stream(Arrays.asList("topic-1", "topic-2"), consumed);
+        KStream<String, String> source1 = builder.stream(Arrays.asList("topic-1", "topic-2"), stringConsumed);
 
-        KStream<String, String> source2 = builder.stream(Arrays.asList("topic-3", "topic-4"), consumed);
+        KStream<String, String> source2 = builder.stream(Arrays.asList("topic-3", "topic-4"), stringConsumed);
 
         KStream<String, String> stream1 =
             source1.filter(new Predicate<String, String>() {
@@ -170,7 +147,7 @@ public class KStreamImplTest {
         );
 
         final int anyWindowSize = 1;
-        final Joined<String, Integer, Integer> joined = Joined.with(stringSerde, intSerde, intSerde);
+        final Joined<String, Integer, Integer> joined = Joined.with(Serdes.String(), Serdes.Integer(), Serdes.Integer());
         KStream<String, Integer> stream4 = streams2[0].join(streams3[0], new ValueJoiner<Integer, Integer, Integer>() {
             @Override
             public Integer apply(Integer value1, Integer value2) {
@@ -205,9 +182,8 @@ public class KStreamImplTest {
     @Test
     public void shouldUseRecordMetadataTimestampExtractorWithThrough() {
         final StreamsBuilder builder = new StreamsBuilder();
-        final Consumed<String, String> consumed = Consumed.with(stringSerde, stringSerde);
-        KStream<String, String> stream1 = builder.stream(Arrays.asList("topic-1", "topic-2"), consumed);
-        KStream<String, String> stream2 = builder.stream(Arrays.asList("topic-3", "topic-4"), consumed);
+        KStream<String, String> stream1 = builder.stream(Arrays.asList("topic-1", "topic-2"), stringConsumed);
+        KStream<String, String> stream2 = builder.stream(Arrays.asList("topic-3", "topic-4"), stringConsumed);
 
         stream1.to("topic-5");
         stream2.through("topic-6");
@@ -224,11 +200,12 @@ public class KStreamImplTest {
     public void shouldSendDataThroughTopicUsingProduced() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String input = "topic";
-        final KStream<String, String> stream = builder.stream(input, consumed);
-        stream.through("through-topic", Produced.with(stringSerde, stringSerde)).process(processorSupplier);
+        final KStream<String, String> stream = builder.stream(input, stringConsumed);
+        stream.through("through-topic", Produced.with(Serdes.String(), Serdes.String())).process(processorSupplier);
 
-        driver = new TopologyTestDriver(builder.build(), props);
-        driver.pipeInput(recordFactory.create(input, "a", "b"));
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            driver.pipeInput(recordFactory.create(input, "a", "b"));
+        }
         assertThat(processorSupplier.theCapturedProcessor().processed, equalTo(Collections.singletonList("a:b")));
     }
 
@@ -236,12 +213,13 @@ public class KStreamImplTest {
     public void shouldSendDataToTopicUsingProduced() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String input = "topic";
-        final KStream<String, String> stream = builder.stream(input, consumed);
-        stream.to("to-topic", Produced.with(stringSerde, stringSerde));
-        builder.stream("to-topic", consumed).process(processorSupplier);
+        final KStream<String, String> stream = builder.stream(input, stringConsumed);
+        stream.to("to-topic", Produced.with(Serdes.String(), Serdes.String()));
+        builder.stream("to-topic", stringConsumed).process(processorSupplier);
 
-        driver = new TopologyTestDriver(builder.build(), props);
-        driver.pipeInput(recordFactory.create(input, "e", "f"));
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            driver.pipeInput(recordFactory.create(input, "e", "f"));
+        }
         assertThat(processorSupplier.theCapturedProcessor().processed, equalTo(Collections.singletonList("e:f")));
     }
 
@@ -249,7 +227,7 @@ public class KStreamImplTest {
     // TODO: this test should be refactored when we removed KStreamBuilder so that the created Topology contains internal topics as well
     public void shouldUseRecordMetadataTimestampExtractorWhenInternalRepartitioningTopicCreated() {
         final KStreamBuilder builder = new KStreamBuilder();
-        KStream<String, String> kStream = builder.stream(stringSerde, stringSerde, "topic-1");
+        KStream<String, String> kStream = builder.stream(Serdes.String(), Serdes.String(), "topic-1");
         ValueJoiner<String, String, String> valueJoiner = MockValueJoiner.instance(":");
         long windowSize = TimeUnit.MILLISECONDS.convert(1, TimeUnit.DAYS);
         final KStream<String, String> stream = kStream
@@ -282,9 +260,8 @@ public class KStreamImplTest {
     @Test
     public void testToWithNullValueSerdeDoesntNPE() {
         final StreamsBuilder builder = new StreamsBuilder();
-        final Consumed<String, String> consumed = Consumed.with(stringSerde, stringSerde);
-        final KStream<String, String> inputStream = builder.stream(Collections.singleton("input"), consumed);
-        inputStream.to(stringSerde, null, "output");
+        final KStream<String, String> inputStream = builder.stream(Collections.singleton("input"), stringConsumed);
+        inputStream.to(Serdes.String(), null, "output");
     }
 
     @Test(expected = NullPointerException.class)
@@ -477,7 +454,7 @@ public class KStreamImplTest {
 
     @Test
     public void shouldThrowNullPointerOnLeftJoinWithTableWhenJoinedIsNull() {
-        final KTable<String, String> table = builder.table("blah", consumed);
+        final KTable<String, String> table = builder.table("blah", stringConsumed);
         try {
             testStream.leftJoin(table,
                                 MockValueJoiner.TOSTRING_JOINER,
@@ -490,7 +467,7 @@ public class KStreamImplTest {
 
     @Test
     public void shouldThrowNullPointerOnJoinWithTableWhenJoinedIsNull() {
-        final KTable<String, String> table = builder.table("blah", consumed);
+        final KTable<String, String> table = builder.table("blah", stringConsumed);
         try {
             testStream.join(table,
                             MockValueJoiner.TOSTRING_JOINER,
@@ -522,12 +499,12 @@ public class KStreamImplTest {
 
         merged.process(processorSupplier);
 
-        driver = new TopologyTestDriver(builder.build(), props);
-
-        driver.pipeInput(recordFactory.create(topic1, "A", "aa"));
-        driver.pipeInput(recordFactory.create(topic2, "B", "bb"));
-        driver.pipeInput(recordFactory.create(topic2, "C", "cc"));
-        driver.pipeInput(recordFactory.create(topic1, "D", "dd"));
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            driver.pipeInput(recordFactory.create(topic1, "A", "aa"));
+            driver.pipeInput(recordFactory.create(topic2, "B", "bb"));
+            driver.pipeInput(recordFactory.create(topic2, "C", "cc"));
+            driver.pipeInput(recordFactory.create(topic1, "D", "dd"));
+        }
 
         assertEquals(Utils.mkList("A:aa", "B:bb", "C:cc", "D:dd"), processorSupplier.theCapturedProcessor().processed);
     }
@@ -547,16 +524,16 @@ public class KStreamImplTest {
 
         merged.process(processorSupplier);
 
-        driver = new TopologyTestDriver(builder.build(), props);
-
-        driver.pipeInput(recordFactory.create(topic1, "A", "aa"));
-        driver.pipeInput(recordFactory.create(topic2, "B", "bb"));
-        driver.pipeInput(recordFactory.create(topic3, "C", "cc"));
-        driver.pipeInput(recordFactory.create(topic4, "D", "dd"));
-        driver.pipeInput(recordFactory.create(topic4, "E", "ee"));
-        driver.pipeInput(recordFactory.create(topic3, "F", "ff"));
-        driver.pipeInput(recordFactory.create(topic2, "G", "gg"));
-        driver.pipeInput(recordFactory.create(topic1, "H", "hh"));
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            driver.pipeInput(recordFactory.create(topic1, "A", "aa"));
+            driver.pipeInput(recordFactory.create(topic2, "B", "bb"));
+            driver.pipeInput(recordFactory.create(topic3, "C", "cc"));
+            driver.pipeInput(recordFactory.create(topic4, "D", "dd"));
+            driver.pipeInput(recordFactory.create(topic4, "E", "ee"));
+            driver.pipeInput(recordFactory.create(topic3, "F", "ff"));
+            driver.pipeInput(recordFactory.create(topic2, "G", "gg"));
+            driver.pipeInput(recordFactory.create(topic1, "H", "hh"));
+        }
 
         assertEquals(Utils.mkList("A:aa", "B:bb", "C:cc", "D:dd", "E:ee", "F:ff", "G:gg", "H:hh"),
                      processorSupplier.theCapturedProcessor().processed);
@@ -568,13 +545,13 @@ public class KStreamImplTest {
 
         pattern2Source.process(processorSupplier);
 
-        driver = new TopologyTestDriver(builder.build(), props);
-
-        driver.pipeInput(recordFactory.create("topic-3", "A", "aa"));
-        driver.pipeInput(recordFactory.create("topic-4", "B", "bb"));
-        driver.pipeInput(recordFactory.create("topic-5", "C", "cc"));
-        driver.pipeInput(recordFactory.create("topic-6", "D", "dd"));
-        driver.pipeInput(recordFactory.create("topic-7", "E", "ee"));
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            driver.pipeInput(recordFactory.create("topic-3", "A", "aa"));
+            driver.pipeInput(recordFactory.create("topic-4", "B", "bb"));
+            driver.pipeInput(recordFactory.create("topic-5", "C", "cc"));
+            driver.pipeInput(recordFactory.create("topic-6", "D", "dd"));
+            driver.pipeInput(recordFactory.create("topic-7", "E", "ee"));
+        }
 
         assertEquals(Utils.mkList("A:aa", "B:bb", "C:cc", "D:dd", "E:ee"),
                 processorSupplier.theCapturedProcessor().processed);
@@ -591,13 +568,13 @@ public class KStreamImplTest {
 
         merged.process(processorSupplier);
 
-        driver = new TopologyTestDriver(builder.build(), props);
-
-        driver.pipeInput(recordFactory.create("topic-3", "A", "aa"));
-        driver.pipeInput(recordFactory.create("topic-4", "B", "bb"));
-        driver.pipeInput(recordFactory.create("topic-A", "C", "cc"));
-        driver.pipeInput(recordFactory.create("topic-Z", "D", "dd"));
-        driver.pipeInput(recordFactory.create(topic3, "E", "ee"));
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            driver.pipeInput(recordFactory.create("topic-3", "A", "aa"));
+            driver.pipeInput(recordFactory.create("topic-4", "B", "bb"));
+            driver.pipeInput(recordFactory.create("topic-A", "C", "cc"));
+            driver.pipeInput(recordFactory.create("topic-Z", "D", "dd"));
+            driver.pipeInput(recordFactory.create(topic3, "E", "ee"));
+        }
 
         assertEquals(Utils.mkList("A:aa", "B:bb", "C:cc", "D:dd", "E:ee"),
                 processorSupplier.theCapturedProcessor().processed);

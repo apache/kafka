@@ -226,7 +226,7 @@ public class TopologyTestDriver implements Closeable {
      * @param builder builder for the topology to be tested
      * @param config the configuration for the topology
      */
-    protected TopologyTestDriver(final InternalTopologyBuilder builder,
+    TopologyTestDriver(final InternalTopologyBuilder builder,
                               final Properties config) {
         this(builder, config,  System.currentTimeMillis());
 

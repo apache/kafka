@@ -17,21 +17,17 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.IntegerSerializer;
-import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockProcessorSupplier;
-import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.Before;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
 
 import java.util.HashMap;
@@ -44,29 +40,8 @@ public class KStreamSelectKeyTest {
 
     private String topicName = "topic_key_select";
 
-    final private Serde<Integer> integerSerde = Serdes.Integer();
-    final private Serde<String> stringSerde = Serdes.String();
     private final ConsumerRecordFactory<String, Integer> recordFactory = new ConsumerRecordFactory<>(topicName, new StringSerializer(), new IntegerSerializer());
-    private TopologyTestDriver driver;
-    private final Properties props = new Properties();
-
-    @Before
-    public void setup() {
-        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "kstream-select-key-test");
-        props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9091");
-        props.setProperty(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
-        props.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
-        props.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass().getName());
-    }
-
-    @After
-    public void cleanup() {
-        props.clear();
-        if (driver != null) {
-            driver.close();
-        }
-        driver = null;
-    }
+    private final Properties props = StreamsTestUtils.topologyTestConfig(Serdes.String(), Serdes.Integer());
 
     @Test
     public void testSelectKey() {
@@ -88,16 +63,16 @@ public class KStreamSelectKeyTest {
         final String[] expected = new String[]{"ONE:1", "TWO:2", "THREE:3"};
         final int[] expectedValues = new int[]{1, 2, 3};
 
-        KStream<String, Integer>  stream = builder.stream(topicName, Consumed.with(stringSerde, integerSerde));
+        KStream<String, Integer>  stream = builder.stream(topicName, Consumed.with(Serdes.String(), Serdes.Integer()));
 
         MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
 
         stream.selectKey(selector).process(supplier);
 
-        driver = new TopologyTestDriver(builder.build(), props);
-
-        for (int expectedValue : expectedValues) {
-            driver.pipeInput(recordFactory.create(expectedValue));
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            for (int expectedValue : expectedValues) {
+                driver.pipeInput(recordFactory.create(expectedValue));
+            }
         }
 
         assertEquals(3, supplier.theCapturedProcessor().processed.size());
