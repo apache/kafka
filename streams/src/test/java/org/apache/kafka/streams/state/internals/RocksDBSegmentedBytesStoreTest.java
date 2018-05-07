@@ -178,8 +178,7 @@ public class RocksDBSegmentedBytesStoreTest {
 
         assertEquals(Arrays.asList(KeyValue.pair(new Windowed<>(key, windows[0]), 50L),
                 KeyValue.pair(new Windowed<>(key, windows[1]), 100L),
-                KeyValue.pair(new Windowed<>(key, windows[2]), 500L))
-                , results);
+                KeyValue.pair(new Windowed<>(key, windows[2]), 500L)), results);
 
     }
 
