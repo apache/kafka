@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.clients.admin;
+package org.apache.kafka.clients.admin.internal;
 
 import org.apache.kafka.clients.MetadataUpdater;
 import org.apache.kafka.common.Cluster;
@@ -38,9 +38,6 @@ import java.util.List;
  * service thread (which also uses the NetworkClient).
  */
 public class AdminMetadataManager {
-    /**
-     * The slf4 logger.
-     */
     private Logger log;
 
     /**
@@ -152,7 +149,7 @@ public class AdminMetadataManager {
         return updater;
     }
 
-    boolean isReady() {
+    public boolean isReady() {
         if (authException != null) {
             log.trace("Metadata is ready: got authentication exception.");
             throw authException;
@@ -171,26 +168,24 @@ public class AdminMetadataManager {
         return true;
     }
 
-    Node controller() {
+    public Node controller() {
         return cluster.controller();
     }
 
-    Node nodeById(int nodeId) {
+    public Node nodeById(int nodeId) {
         return cluster.nodeById(nodeId);
     }
 
-    void requestUpdate() {
+    public void requestUpdate() {
         if (state == State.QUIESCENT) {
             state = State.UPDATE_REQUESTED;
             log.trace("Requesting metadata update.");
         }
     }
 
-    void clearController() {
+    public void clearController() {
         if (cluster.controller() != null) {
-            if (log.isTraceEnabled()) {
-                log.trace("Clearing cached controller node {}.", cluster.controller());
-            }
+            log.trace("Clearing cached controller node {}.", cluster.controller());
             this.cluster = new Cluster(cluster.clusterResource().clusterId(),
                 cluster.nodes(),
                 Collections.<PartitionInfo>emptySet(),
@@ -203,26 +198,30 @@ public class AdminMetadataManager {
     /**
      * Determine if the AdminClient should fetch new metadata.
      */
-    boolean shouldFetchMetadata(long now) {
+    public long metadataFetchDelayMs(long now) {
         switch (state) {
             case QUIESCENT:
-                if (now > lastMetadataUpdateMs + metadataExpireMs) {
-                    if (now > lastMetadataFetchAttemptMs + refreshBackoffMs) {
-                        return true;
-                    }
-                }
-                return false;
+                // Calculate the time remaining until the next periodic update.
+                // We want to avoid making many metadata requests in a short amount of time,
+                // so there is a metadata refresh backoff period.
+                long timeSinceUpdate = now - lastMetadataUpdateMs;
+                long timeRemainingUntilUpdate = metadataExpireMs - timeSinceUpdate;
+                long timeSinceAttempt = now - lastMetadataFetchAttemptMs;
+                long timeRemainingUntilAttempt = refreshBackoffMs - timeSinceAttempt;
+                return Math.max(Math.max(0L, timeRemainingUntilUpdate), timeRemainingUntilAttempt);
             case UPDATE_REQUESTED:
-                return true;
+                // An update has been explicitly requested.  Do it as soon as possible.
+                return 0;
             default:
-                return false;
+                // An update is already pending, so we don't need to initiate another one.
+                return Long.MAX_VALUE;
         }
     }
 
     /**
      * Transition into the UPDATE_PENDING state.  Updates lastMetadataFetchAttemptMs.
      */
-    void transitionToUpdatePending(long now) {
+    public void transitionToUpdatePending(long now) {
         this.state = State.UPDATE_PENDING;
         this.lastMetadataFetchAttemptMs = now;
     }
@@ -231,7 +230,7 @@ public class AdminMetadataManager {
      * Receive new metadata, and transition into the QUIESCENT state.
      * Updates lastMetadataUpdateMs, cluster, and authException.
      */
-    void update(Cluster cluster, long now, AuthenticationException authException) {
+    public void update(Cluster cluster, long now, AuthenticationException authException) {
         if (cluster.isBootstrapConfigured()) {
             log.debug("Setting bootstrap cluster metadata {}.", cluster);
         } else {

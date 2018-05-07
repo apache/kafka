@@ -135,8 +135,8 @@ public class MockClient implements KafkaClient {
         blackout(node, duration);
     }
 
-    public void createPendingAuthenticationError(Node node, long timeoutMs) {
-        pendingAuthenticationErrors.put(node, timeoutMs);
+    public void createPendingAuthenticationError(Node node, long blackoutMs) {
+        pendingAuthenticationErrors.put(node, blackoutMs);
     }
 
     private boolean isBlackedOut(Node node) {
@@ -185,12 +185,12 @@ public class MockClient implements KafkaClient {
              pendingAuthenticationErrors.entrySet().iterator(); authErrorIter.hasNext(); ) {
             Map.Entry<Node, Long> entry = authErrorIter.next();
             Node node = entry.getKey();
-            long timeoutMs = entry.getValue();
+            long blackoutMs = entry.getValue();
             if (node.idString().equals(request.destination())) {
                 authErrorIter.remove();
                 // Set up a disconnected ClientResponse and create an authentication error
                 // for the affected node.
-                authenticationFailed(node, timeoutMs);
+                authenticationFailed(node, blackoutMs);
                 AbstractRequest.Builder<?> builder = request.requestBuilder();
                 short version = nodeApiVersions.latestUsableVersion(request.apiKey(), builder.oldestAllowedVersion(),
                     builder.latestAllowedVersion());

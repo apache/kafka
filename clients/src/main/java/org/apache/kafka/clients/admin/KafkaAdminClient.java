@@ -26,6 +26,7 @@ import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResult;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResults;
 import org.apache.kafka.clients.admin.DescribeReplicaLogDirsResult.ReplicaLogDirInfo;
+import org.apache.kafka.clients.admin.internal.AdminMetadataManager;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
@@ -542,10 +543,7 @@ public class KafkaAdminClient extends AdminClient {
         }
 
         Call(String callName, long deadlineMs, NodeProvider nodeProvider) {
-            this.internal = false;
-            this.callName = callName;
-            this.deadlineMs = deadlineMs;
-            this.nodeProvider = nodeProvider;
+            this(false, callName, deadlineMs, nodeProvider);
         }
 
         protected Node curNode() {
@@ -1077,7 +1075,8 @@ public class KafkaAdminClient extends AdminClient {
 
                 // Choose nodes for our pending calls.
                 chooseNodesForPendingCalls(now, pendingCalls.iterator(), callsToSend);
-                if (metadataManager.shouldFetchMetadata(now)) {
+                long metadataFetchDelayMs = metadataManager.metadataFetchDelayMs(now);
+                if (metadataFetchDelayMs == 0) {
                     metadataManager.transitionToUpdatePending(now);
                     Call metadataCall = makeMetadataCall(now);
                     // Create a new metadata fetch call and add it to the end of pendingCalls.
@@ -1088,6 +1087,9 @@ public class KafkaAdminClient extends AdminClient {
                 }
                 pollTimeout = Math.min(pollTimeout,
                     sendEligibleCalls(now, callsToSend, correlationIdToCalls, callsInFlight));
+                if (metadataFetchDelayMs > 0) {
+                    pollTimeout = Math.min(pollTimeout, metadataFetchDelayMs);
+                }
 
                 // Wait for network responses.
                 log.trace("Entering KafkaClient#poll(timeout={})", pollTimeout);
