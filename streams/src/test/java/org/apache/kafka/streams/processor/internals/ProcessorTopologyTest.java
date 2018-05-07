@@ -414,7 +414,7 @@ public class ProcessorTopologyTest {
         return ((TopologyWrapper) topology
             .addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
             .addProcessor("processor", define(new StatefulProcessor(storeName)), "source")
-            .addStateStore(Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore(storeName), Serdes.String(), Serdes.String()),"processor")
+            .addStateStore(Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore(storeName), Serdes.String(), Serdes.String()), "processor")
             .addSink("counts", OUTPUT_TOPIC_1, "processor"))
             .getInternalBuilder();
     }
