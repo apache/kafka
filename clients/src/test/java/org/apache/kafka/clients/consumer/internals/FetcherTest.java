@@ -140,6 +140,7 @@ public class FetcherTest {
     private MemoryRecords records;
     private MemoryRecords nextRecords;
     private MemoryRecords emptyRecords;
+    private MemoryRecords outOfOrderRecords;
     private Fetcher<byte[], byte[]> fetcher = createFetcher(subscriptions, metrics);
     private Metrics fetcherMetrics = new Metrics(time);
     private Fetcher<byte[], byte[]> fetcherNoAutoReset = createFetcher(subscriptionsNoAutoReset, fetcherMetrics);
@@ -162,6 +163,10 @@ public class FetcherTest {
 
         builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
         emptyRecords = builder.build();
+
+        builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME, 42L);
+        builder.append(0L, "key".getBytes(), "value-1".getBytes());
+        outOfOrderRecords = builder.build();
     }
 
     @After
@@ -821,8 +826,8 @@ public class FetcherTest {
 
     @Test
     public void testFetchPositionAfterException() {
-        // verify the advancement in the next fetch offset equals to the number of fetched records when
-        // some fetched partitions cause Exception. This ensures that consumer won't lose record upon exception
+        // verify the advancement in the next fetch offset equals to the number of fetched records when some fetched
+        // partitions with non-empty records cause Exception. This ensures that consumer won't lose record upon exception
         subscriptionsNoAutoReset.assignFromUser(Utils.mkSet(tp0, tp1));
         subscriptionsNoAutoReset.seek(tp0, 1);
         subscriptionsNoAutoReset.seek(tp1, 1);
@@ -833,7 +838,7 @@ public class FetcherTest {
         partitions.put(tp1, new FetchResponse.PartitionData(Errors.NONE, 100,
             FetchResponse.INVALID_LAST_STABLE_OFFSET, FetchResponse.INVALID_LOG_START_OFFSET, null, records));
         partitions.put(tp0, new FetchResponse.PartitionData(Errors.OFFSET_OUT_OF_RANGE, 100,
-                FetchResponse.INVALID_LAST_STABLE_OFFSET, FetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY));
+            FetchResponse.INVALID_LAST_STABLE_OFFSET, FetchResponse.INVALID_LOG_START_OFFSET, null, outOfOrderRecords));
         client.prepareResponse(new FetchResponse(Errors.NONE, new LinkedHashMap<>(partitions),
             0, INVALID_SESSION_ID));
         consumerClient.poll(0);
@@ -861,6 +866,42 @@ public class FetcherTest {
         OffsetOutOfRangeException e = exceptions.get(0);
         assertTrue(e.offsetOutOfRangePartitions().containsKey(tp0));
         assertEquals(e.offsetOutOfRangePartitions().size(), 1);
+    }
+
+    @Test
+    public void testEmptyRecordsRemoval() {
+        // Ensure the removal of completed fetches with empty records that cause Exception.
+        subscriptionsNoAutoReset.assignFromUser(Utils.mkSet(tp0, tp1));
+        subscriptionsNoAutoReset.seek(tp0, 1);
+        subscriptionsNoAutoReset.seek(tp1, 1);
+
+        assertEquals(1, fetcherNoAutoReset.sendFetches());
+
+        Map<TopicPartition, FetchResponse.PartitionData> partitions = new LinkedHashMap<>();
+        partitions.put(tp1, new FetchResponse.PartitionData(Errors.NONE, 100, FetchResponse.INVALID_LAST_STABLE_OFFSET,
+            FetchResponse.INVALID_LOG_START_OFFSET, null, records));
+        partitions.put(tp0, new FetchResponse.PartitionData(Errors.OFFSET_OUT_OF_RANGE, 100,
+            FetchResponse.INVALID_LAST_STABLE_OFFSET, FetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY));
+        client.prepareResponse(new FetchResponse(Errors.NONE, new LinkedHashMap<>(partitions),
+                                                 0, INVALID_SESSION_ID));
+        consumerClient.poll(0);
+
+        List<ConsumerRecord<byte[], byte[]>> fetchedRecords = new ArrayList<>();
+
+        for (List<ConsumerRecord<byte[], byte[]>> records: fetcherNoAutoReset.fetchedRecords().values())
+            fetchedRecords.addAll(records);
+
+        assertEquals(fetchedRecords.size(), subscriptionsNoAutoReset.position(tp1) - 1);
+
+        try {
+            for (List<ConsumerRecord<byte[], byte[]>> records: fetcherNoAutoReset.fetchedRecords().values())
+                fetchedRecords.addAll(records);
+        } catch (OffsetOutOfRangeException e) {
+            fail("Should not have received an OffsetOutOfRangeException.");
+        }
+
+        assertEquals(4, subscriptionsNoAutoReset.position(tp1).longValue());
+        assertEquals(3, fetchedRecords.size());
     }
 
     @Test
