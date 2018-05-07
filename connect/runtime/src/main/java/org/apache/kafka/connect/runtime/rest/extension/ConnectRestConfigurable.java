@@ -25,7 +25,7 @@ import java.util.Objects;
 import javax.ws.rs.core.Configurable;
 import javax.ws.rs.core.Configuration;
 
-public class ConnectRestConfigurable implements Configurable {
+public class ConnectRestConfigurable implements Configurable<ResourceConfig> {
 
     private ResourceConfig resourceConfig;
 
@@ -41,72 +41,72 @@ public class ConnectRestConfigurable implements Configurable {
     }
 
     @Override
-    public Configurable property(String name, Object value) {
+    public ResourceConfig property(String name, Object value) {
         return resourceConfig.property(name, value);
     }
 
     @Override
-    public Configurable register(Object component) {
+    public ResourceConfig register(Object component) {
         if (allowedToRegister(component)) {
             resourceConfig.register(component);
         }
-        return this;
+        return resourceConfig;
     }
 
     @Override
-    public Configurable register(Object component, int priority) {
+    public ResourceConfig register(Object component, int priority) {
         if (allowedToRegister(component)) {
             resourceConfig.register(component, priority);
         }
-        return this;
+        return resourceConfig;
     }
 
     @Override
-    public Configurable register(Object component, Map contracts) {
+    public ResourceConfig register(Object component, Map contracts) {
         if (allowedToRegister(component)) {
             resourceConfig.register(component, contracts);
         }
-        return this;
+        return resourceConfig;
     }
 
     @Override
-    public Configurable register(Object component, Class[] contracts) {
+    public ResourceConfig register(Object component, Class[] contracts) {
         if (allowedToRegister(component)) {
             resourceConfig.register(component, contracts);
         }
-        return this;
+        return resourceConfig;
     }
 
     @Override
-    public Configurable register(Class componentClass, Map contracts) {
+    public ResourceConfig register(Class componentClass, Map contracts) {
         if (allowedToRegister(componentClass)) {
             resourceConfig.register(componentClass, contracts);
         }
-        return this;
+        return resourceConfig;
     }
 
     @Override
-    public Configurable register(Class componentClass, Class[] contracts) {
+    public ResourceConfig register(Class componentClass, Class[] contracts) {
         if (allowedToRegister(componentClass)) {
             resourceConfig.register(componentClass, contracts);
         }
-        return this;
+        return resourceConfig;
     }
 
     @Override
-    public Configurable register(Class componentClass, int priority) {
+    public ResourceConfig register(Class componentClass, int priority) {
         if (allowedToRegister(componentClass)) {
             resourceConfig.register(componentClass, priority);
         }
-        return this;
+        return resourceConfig;
     }
 
     @Override
-    public Configurable register(Class componentClass) {
+    public ResourceConfig register(Class componentClass) {
         if (allowedToRegister(componentClass)) {
             resourceConfig.register(componentClass);
         }
-        return this;
+        return resourceConfig;
     }
 
     private boolean allowedToRegister(Object component) {

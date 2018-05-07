@@ -312,6 +312,7 @@
     <subpackage name="rest.extension">
       <allow pkg="org.apache.kafka.connect.rest.extension.entities" />
       <allow pkg="javax.ws.rs" />
+      <allow pkg= "javax.security.auth"/>
     </subpackage>
 
     <subpackage name="runtime">

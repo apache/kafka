@@ -31,7 +31,7 @@ public interface ConnectRestExtensionContext {
      * @return return a  implementation of {@link javax.ws.rs.core.Configurable} that be used ot
      * register JAX-RS resources
      */
-    Configurable configurable();
+    Configurable<? extends Configurable> configurable();
 
     /**
      * Provides meta data about connector's and its health
