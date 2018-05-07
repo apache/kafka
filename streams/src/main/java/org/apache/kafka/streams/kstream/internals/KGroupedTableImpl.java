@@ -16,10 +16,8 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
@@ -84,14 +82,6 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
                                 final String sourceName,
                                 final String sinkName,
                                 final StatefulRepartitionNode.StatefulRepartitionNodeBuilder<K, V, T> statefulRepartitionNodeBuilder) {
-
-        final Serializer<? extends K> keySerializer = keySerde == null ? null : keySerde.serializer();
-        final Deserializer<? extends K> keyDeserializer = keySerde == null ? null : keySerde.deserializer();
-        final Serializer<? extends V> valueSerializer = valSerde == null ? null : valSerde.serializer();
-        final Deserializer<? extends V> valueDeserializer = valSerde == null ? null : valSerde.deserializer();
-
-        final ChangedSerializer<? extends V> changedValueSerializer = new ChangedSerializer<>(valueSerializer);
-        final ChangedDeserializer<? extends V> changedValueDeserializer = new ChangedDeserializer<>(valueDeserializer);
 
         statefulRepartitionNodeBuilder.withRepartitionTopic(topic)
             .withSinkName(sinkName)
