@@ -25,6 +25,10 @@ import java.util.Objects;
 import javax.ws.rs.core.Configurable;
 import javax.ws.rs.core.Configuration;
 
+/**
+ * The implementation delegates to {@link ResourceConfig} so that we can handle duplicate
+ * registrations deterministically by no re-registering them again.
+ */
 public class ConnectRestConfigurable implements Configurable<ResourceConfig> {
 
     private ResourceConfig resourceConfig;

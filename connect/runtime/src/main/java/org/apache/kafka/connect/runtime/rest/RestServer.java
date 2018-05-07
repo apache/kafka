@@ -224,11 +224,9 @@ public class RestServer {
         log.info("Stopping REST server");
 
         try {
-
             for (ConnectRestExtension connectRestExtension : connectRestExtensions) {
                 connectRestExtension.close();
             }
-
             jettyServer.stop();
             jettyServer.join();
         } catch (Exception e) {
