@@ -19,6 +19,7 @@ package org.apache.kafka.test;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
@@ -56,6 +57,28 @@ public final class StreamsTestUtils {
         streamsConfiguration.putAll(additional);
         return streamsConfiguration;
 
+    }
+
+    public static Properties topologyTestConfig(final String applicationId,
+                                                final String bootstrapServers,
+                                                final String keyDeserializer,
+                                                final String valueDeserializer) {
+        final Properties props = new Properties();
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
+        props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        props.setProperty(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
+        props.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, keyDeserializer);
+        props.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, valueDeserializer);
+        return props;
+    }
+
+    public static Properties topologyTestConfig(final Serde keyDeserializer,
+                                                final Serde valueDeserializer) {
+        return topologyTestConfig(
+                UUID.randomUUID().toString(),
+                "localhost:9091",
+                keyDeserializer.getClass().getName(),
+                valueDeserializer.getClass().getName());
     }
 
     public static Properties minimalStreamsConfig() {

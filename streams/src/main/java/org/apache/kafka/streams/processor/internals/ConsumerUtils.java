@@ -14,26 +14,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor.internals.metrics;
+package org.apache.kafka.streams.processor.internals;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
+import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.WakeupException;
 
-public final class StreamsMetricsConventions {
-    private StreamsMetricsConventions() {
-    }
+import java.util.Collections;
+import java.util.List;
 
-    public static String threadLevelSensorName(final String threadName, final String sensorName) {
-        return "thread." + threadName + "." + sensorName;
-    }
+public final class ConsumerUtils {
+    private ConsumerUtils() {}
 
-    static Map<String, String> threadLevelTags(final String threadName, final Map<String, String> tags) {
-        if (tags.containsKey("client-id")) {
-            return tags;
-        } else {
-            final LinkedHashMap<String, String> newTags = new LinkedHashMap<>(tags);
-            newTags.put("client-id", threadName);
-            return newTags;
+    public static <K, V> ConsumerRecords<K, V> poll(final Consumer<K, V> consumer, final long maxDurationMs) {
+        try {
+            return consumer.poll(maxDurationMs);
+        } catch (final WakeupException e) {
+            return new ConsumerRecords<>(Collections.<TopicPartition, List<ConsumerRecord<K, V>>>emptyMap());
         }
     }
 }

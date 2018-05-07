@@ -56,6 +56,21 @@ public class StreamsMetadataState {
         this.thisHost = thisHost;
     }
 
+    @Override
+    public String toString() {
+        return toString("");
+    }
+
+    public String toString(final String indent) {
+        final StringBuilder builder = new StringBuilder();
+        builder.append(indent).append("GlobalMetadata: ").append(allMetadata).append("\n");
+        builder.append(indent).append("GlobalStores: ").append(globalStores).append("\n");
+        builder.append(indent).append("My HostInfo: ").append(thisHost).append("\n");
+        builder.append(indent).append(clusterMetadata).append("\n");
+
+        return builder.toString();
+    }
+
     /**
      * Find all of the {@link StreamsMetadata}s in a
      * {@link KafkaStreams application}

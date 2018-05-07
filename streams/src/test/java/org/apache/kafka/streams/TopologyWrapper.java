@@ -14,19 +14,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams;
 
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
-
 /**
- * This class is meant for testing purposes only and allows the testing of
- * topologies by using the  {@link org.apache.kafka.test.ProcessorTopologyTestDriver}
+ *  This class allows to access the {@link InternalTopologyBuilder} a {@link Topology} object.
+ *
  */
-public class InternalTopologyAccessor {
+public class TopologyWrapper extends Topology {
 
-    public static InternalTopologyBuilder getInternalTopologyBuilder(final Topology topology) {
+    static public InternalTopologyBuilder getInternalTopologyBuilder(final Topology topology) {
         return topology.internalTopologyBuilder;
+    }
+
+    public InternalTopologyBuilder getInternalBuilder() {
+        return internalTopologyBuilder;
+    }
+
+    public void setApplicationId(String applicationId) {
+        internalTopologyBuilder.setApplicationId(applicationId);
     }
 }

@@ -40,7 +40,6 @@ import org.apache.kafka.common.utils.MockTime
 import org.apache.kafka.test.TestUtils
 
 import ImplicitConversions._
-import com.typesafe.scalalogging.LazyLogging
 
 /**
  * Test suite that does a classic word count example.
@@ -51,7 +50,7 @@ import com.typesafe.scalalogging.LazyLogging
  * Note: In the current project settings SAM type conversion is turned off as it's experimental in Scala 2.11.
  * Hence the native Java API based version is more verbose.
  */ 
-class WordCountTest extends JUnitSuite with WordCountTestData with LazyLogging {
+class WordCountTest extends JUnitSuite with WordCountTestData {
 
   private val privateCluster: EmbeddedKafkaCluster = new EmbeddedKafkaCluster(1)
 

@@ -121,7 +121,6 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
     @After
     public void closeStore() {
-        context.close();
         sessionStore.close();
     }
 

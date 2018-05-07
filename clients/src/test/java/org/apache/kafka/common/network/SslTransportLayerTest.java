@@ -825,12 +825,12 @@ public class SslTransportLayerTest {
         NetworkTestUtils.checkClientConnection(selector, oldNode, 100, 10);
 
         CertStores newServerCertStores = new CertStores(true, "server", "localhost");
-        sslServerConfigs = newServerCertStores.getTrustingConfig(clientCertStores);
+        Map<String, Object> newKeystoreConfigs = newServerCertStores.keyStoreProps();
         assertTrue("SslChannelBuilder not reconfigurable", serverChannelBuilder instanceof ListenerReconfigurable);
         ListenerReconfigurable reconfigurableBuilder = (ListenerReconfigurable) serverChannelBuilder;
         assertEquals(listenerName, reconfigurableBuilder.listenerName());
-        reconfigurableBuilder.validateReconfiguration(sslServerConfigs);
-        reconfigurableBuilder.reconfigure(sslServerConfigs);
+        reconfigurableBuilder.validateReconfiguration(newKeystoreConfigs);
+        reconfigurableBuilder.reconfigure(newKeystoreConfigs);
 
         // Verify that new client with old truststore fails
         oldClientSelector.connect("1", addr, BUFFER_SIZE, BUFFER_SIZE);
@@ -856,6 +856,70 @@ public class SslTransportLayerTest {
         try {
             reconfigurableBuilder.reconfigure(invalidConfigs);
             fail("Should have failed to reconfigure with different SubjectAltName");
+        } catch (KafkaException e) {
+            // expected exception
+        }
+
+        // Verify that new connections continue to work with the server with previously configured keystore after failed reconfiguration
+        newClientSelector.connect("3", addr, BUFFER_SIZE, BUFFER_SIZE);
+        NetworkTestUtils.checkClientConnection(newClientSelector, "3", 100, 10);
+    }
+
+    /**
+     * Tests reconfiguration of server truststore. Verifies that existing connections continue
+     * to work with old truststore and new connections work with new truststore.
+     */
+    @Test
+    public void testServerTruststoreDynamicUpdate() throws Exception {
+        SecurityProtocol securityProtocol = SecurityProtocol.SSL;
+        sslServerConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required");
+        TestSecurityConfig config = new TestSecurityConfig(sslServerConfigs);
+        ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
+        ChannelBuilder serverChannelBuilder = ChannelBuilders.serverChannelBuilder(listenerName,
+                false, securityProtocol, config, null, null);
+        server = new NioEchoServer(listenerName, securityProtocol, config,
+                "localhost", serverChannelBuilder, null);
+        server.start();
+        InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
+
+        // Verify that client with matching keystore can authenticate, send and receive
+        String oldNode = "0";
+        Selector oldClientSelector = createSelector(sslClientConfigs);
+        oldClientSelector.connect(oldNode, addr, BUFFER_SIZE, BUFFER_SIZE);
+        NetworkTestUtils.checkClientConnection(selector, oldNode, 100, 10);
+
+        CertStores newClientCertStores = new CertStores(true, "client", "localhost");
+        sslClientConfigs = newClientCertStores.getTrustingConfig(serverCertStores);
+        Map<String, Object> newTruststoreConfigs = newClientCertStores.trustStoreProps();
+        assertTrue("SslChannelBuilder not reconfigurable", serverChannelBuilder instanceof ListenerReconfigurable);
+        ListenerReconfigurable reconfigurableBuilder = (ListenerReconfigurable) serverChannelBuilder;
+        assertEquals(listenerName, reconfigurableBuilder.listenerName());
+        reconfigurableBuilder.validateReconfiguration(newTruststoreConfigs);
+        reconfigurableBuilder.reconfigure(newTruststoreConfigs);
+
+        // Verify that new client with old truststore fails
+        oldClientSelector.connect("1", addr, BUFFER_SIZE, BUFFER_SIZE);
+        NetworkTestUtils.waitForChannelClose(oldClientSelector, "1", ChannelState.State.AUTHENTICATION_FAILED);
+
+        // Verify that new client with new truststore can authenticate, send and receive
+        Selector newClientSelector = createSelector(sslClientConfigs);
+        newClientSelector.connect("2", addr, BUFFER_SIZE, BUFFER_SIZE);
+        NetworkTestUtils.checkClientConnection(newClientSelector, "2", 100, 10);
+
+        // Verify that old client continues to work
+        NetworkTestUtils.checkClientConnection(oldClientSelector, oldNode, 100, 10);
+
+        Map<String, Object>  invalidConfigs = new HashMap<>(newTruststoreConfigs);
+        invalidConfigs.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, "INVALID_TYPE");
+        try {
+            reconfigurableBuilder.validateReconfiguration(invalidConfigs);
+            fail("Should have failed validation with an exception with invalid truststore type");
+        } catch (KafkaException e) {
+            // expected exception
+        }
+        try {
+            reconfigurableBuilder.reconfigure(invalidConfigs);
+            fail("Should have failed to reconfigure with with invalid truststore type");
         } catch (KafkaException e) {
             // expected exception
         }

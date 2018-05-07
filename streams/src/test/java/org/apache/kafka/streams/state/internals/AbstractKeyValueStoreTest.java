@@ -63,7 +63,6 @@ public abstract class AbstractKeyValueStoreTest {
     @After
     public void after() {
         store.close();
-        context.close();
         driver.clear();
     }
 

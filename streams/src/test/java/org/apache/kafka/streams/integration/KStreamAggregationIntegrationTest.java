@@ -169,7 +169,8 @@ public class KStreamAggregationIntegrationTest {
         produceMessages(mockTime.milliseconds());
         groupedStream
             .reduce(reducer, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("reduce-by-key"))
-            .to(Serdes.String(), Serdes.String(), outputTopic);
+            .toStream()
+            .to(outputTopic, Produced.with(Serdes.String(), Serdes.String()));
 
         startStreams();
 
@@ -293,7 +294,8 @@ public class KStreamAggregationIntegrationTest {
             initializer,
             aggregator,
             Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("aggregate-by-selected-key"))
-            .to(Serdes.String(), Serdes.Integer(), outputTopic);
+            .toStream()
+            .to(outputTopic, Produced.with(Serdes.String(), Serdes.Integer()));
 
         startStreams();
 
@@ -443,7 +445,8 @@ public class KStreamAggregationIntegrationTest {
         produceMessages(mockTime.milliseconds());
 
         groupedStream.count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("count-by-key"))
-            .to(Serdes.String(), Serdes.Long(), outputTopic);
+                .toStream()
+                .to(outputTopic, Produced.with(Serdes.String(), Serdes.Long()));
 
         shouldCountHelper();
     }
@@ -453,7 +456,8 @@ public class KStreamAggregationIntegrationTest {
         produceMessages(mockTime.milliseconds());
 
         groupedStream.count()
-            .to(Serdes.String(), Serdes.Long(), outputTopic);
+                .toStream()
+                .to(outputTopic, Produced.with(Serdes.String(), Serdes.Long()));
 
         shouldCountHelper();
     }
@@ -664,6 +668,7 @@ public class KStreamAggregationIntegrationTest {
                         return value1 + ":" + value2;
                     }
                 }, Materialized.<String, String, SessionStore<Bytes, byte[]>>as(userSessionsStore))
+                .toStream()
                 .foreach(new ForeachAction<Windowed<String>, String>() {
                     @Override
                     public void apply(final Windowed<String> key, final String value) {
@@ -726,10 +731,8 @@ public class KStreamAggregationIntegrationTest {
         kafkaStreams.start();
     }
 
-    private <K, V> List<KeyValue<K, V>> receiveMessages(final Deserializer<K>
-                                                            keyDeserializer,
-                                                        final Deserializer<V>
-                                                            valueDeserializer,
+    private <K, V> List<KeyValue<K, V>> receiveMessages(final Deserializer<K> keyDeserializer,
+                                                        final Deserializer<V> valueDeserializer,
                                                         final int numMessages)
         throws InterruptedException {
         return receiveMessages(keyDeserializer, valueDeserializer, null, numMessages);
@@ -759,9 +762,9 @@ public class KStreamAggregationIntegrationTest {
     }
 
     private <K, V> String readWindowedKeyedMessagesViaConsoleConsumer(final Deserializer<K> keyDeserializer,
-                                                  final Deserializer<V> valueDeserializer,
-                                                  final Class innerClass,
-                                                  final int numMessages) {
+                                                                      final Deserializer<V> valueDeserializer,
+                                                                      final Class innerClass,
+                                                                      final int numMessages) {
         ByteArrayOutputStream newConsole = new ByteArrayOutputStream();
         PrintStream originalStream = System.out;
         try (PrintStream newStream = new PrintStream(newConsole)) {

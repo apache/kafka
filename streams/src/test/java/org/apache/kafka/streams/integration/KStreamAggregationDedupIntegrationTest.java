@@ -63,7 +63,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
 
 /**
- * Similar to KStreamAggregationIntegrationTest but with de dupping enabled
+ * Similar to KStreamAggregationIntegrationTest but with dedupping enabled
  * by virtue of having a large commit interval
  */
 @Category({IntegrationTest.class})
@@ -132,9 +132,9 @@ public class KStreamAggregationDedupIntegrationTest {
     public void shouldReduce() throws Exception {
         produceMessages(System.currentTimeMillis());
         groupedStream
-            .reduce(reducer, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("reduce-by-key"))
-            .toStream()
-            .to(outputTopic, Produced.with(Serdes.String(), Serdes.String()));
+                .reduce(reducer, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("reduce-by-key"))
+                .toStream()
+                .to(outputTopic, Produced.with(Serdes.String(), Serdes.String()));
 
         startStreams();
 

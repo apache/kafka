@@ -686,7 +686,8 @@ class Log(@volatile var dir: File,
               leaderEpoch,
               isFromClient)
           } catch {
-            case e: IOException => throw new KafkaException("Error in validating messages while appending to log '%s'".format(name), e)
+            case e: IOException =>
+              throw new KafkaException(s"Error validating messages while appending to log $name", e)
           }
           validRecords = validateAndOffsetAssignResult.validatedRecords
           appendInfo.maxTimestamp = validateAndOffsetAssignResult.maxTimestamp
@@ -705,15 +706,16 @@ class Log(@volatile var dir: File,
                 // to be consistent with pre-compression bytesRejectedRate recording
                 brokerTopicStats.topicStats(topicPartition.topic).bytesRejectedRate.mark(records.sizeInBytes)
                 brokerTopicStats.allTopicsStats.bytesRejectedRate.mark(records.sizeInBytes)
-                throw new RecordTooLargeException("Message batch size is %d bytes which exceeds the maximum configured size of %d."
-                  .format(batch.sizeInBytes, config.maxMessageSize))
+                throw new RecordTooLargeException(s"Message batch size is ${batch.sizeInBytes} bytes in append to" +
+                  s"partition $topicPartition which exceeds the maximum configured size of ${config.maxMessageSize}.")
               }
             }
           }
         } else {
           // we are taking the offsets we are given
           if (!appendInfo.offsetsMonotonic || appendInfo.firstOrLastOffset < nextOffsetMetadata.messageOffset)
-            throw new IllegalArgumentException("Out of order offsets found in " + records.records.asScala.map(_.offset))
+            throw new IllegalArgumentException(s"Out of order offsets found in append to $topicPartition: " +
+              records.records.asScala.map(_.offset))
         }
 
         // update the epoch cache with the epoch stamped onto the message by the leader
@@ -724,8 +726,8 @@ class Log(@volatile var dir: File,
 
         // check messages set size may be exceed config.segmentSize
         if (validRecords.sizeInBytes > config.segmentSize) {
-          throw new RecordBatchTooLargeException("Message batch size is %d bytes which exceeds the maximum configured segment size of %d."
-            .format(validRecords.sizeInBytes, config.segmentSize))
+          throw new RecordBatchTooLargeException(s"Message batch size is ${validRecords.sizeInBytes} bytes in append " +
+            s"to partition $topicPartition, which exceeds the maximum configured segment size of ${config.segmentSize}.")
         }
 
         // now that we have valid records, offsets assigned, and timestamps updated, we need to
@@ -887,7 +889,8 @@ class Log(@volatile var dir: File,
     for (batch <- records.batches.asScala) {
       // we only validate V2 and higher to avoid potential compatibility issues with older clients
       if (batch.magic >= RecordBatch.MAGIC_VALUE_V2 && isFromClient && batch.baseOffset != 0)
-        throw new InvalidRecordException(s"The baseOffset of the record batch should be 0, but it is ${batch.baseOffset}")
+        throw new InvalidRecordException(s"The baseOffset of the record batch in the append to $topicPartition should " +
+          s"be 0, but it is ${batch.baseOffset}")
 
       // update the first offset if on the first message. For magic versions older than 2, we use the last offset
       // to avoid the need to decompress the data (the last offset can be obtained directly from the wrapper message).
@@ -913,8 +916,8 @@ class Log(@volatile var dir: File,
       if (batchSize > config.maxMessageSize) {
         brokerTopicStats.topicStats(topicPartition.topic).bytesRejectedRate.mark(records.sizeInBytes)
         brokerTopicStats.allTopicsStats.bytesRejectedRate.mark(records.sizeInBytes)
-        throw new RecordTooLargeException(s"The record batch size is $batchSize bytes which exceeds the maximum configured " +
-          s"value of ${config.maxMessageSize}.")
+        throw new RecordTooLargeException(s"The record batch size in the append to $topicPartition is $batchSize bytes " +
+          s"which exceeds the maximum configured value of ${config.maxMessageSize}.")
       }
 
       // check the validity of the message by checking CRC
@@ -957,7 +960,8 @@ class Log(@volatile var dir: File,
   private def trimInvalidBytes(records: MemoryRecords, info: LogAppendInfo): MemoryRecords = {
     val validBytes = info.validBytes
     if (validBytes < 0)
-      throw new CorruptRecordException("Illegal length of message set " + validBytes + " Message set cannot be appended to log. Possible causes are corrupted produce requests")
+      throw new CorruptRecordException(s"Cannot append record batch with illegal length $validBytes to " +
+        s"log for $topicPartition. A possible cause is a corrupted produce request.")
     if (validBytes == records.sizeInBytes) {
       records
     } else {
@@ -1011,7 +1015,8 @@ class Log(@volatile var dir: File,
 
       // return error on attempt to read beyond the log end offset or read below log start offset
       if (startOffset > next || segmentEntry == null || startOffset < logStartOffset)
-        throw new OffsetOutOfRangeException("Request for offset %d but we only have log segments in the range %d to %d.".format(startOffset, logStartOffset, next))
+        throw new OffsetOutOfRangeException(s"Received request for offset $startOffset for partition $topicPartition, " +
+          s"but we only have log segments in the range $logStartOffset to $next.")
 
       // Do the read on the segment with a base offset less than the target offset
       // but if that segment doesn't contain any messages with an offset greater than that
@@ -1375,7 +1380,8 @@ class Log(@volatile var dir: File,
           preallocate = config.preallocate)
         val prev = addSegment(segment)
         if (prev != null)
-          throw new KafkaException("Trying to roll a new log segment for topic partition %s with start offset %d while it already exists.".format(name, newOffset))
+          throw new KafkaException(s"Trying to roll a new log segment for topic partition $topicPartition with " +
+            s"start offset $newOffset while it already exists.")
         // We need to update the segment base offset and append position data of the metadata when log rolls.
         // The next offset should not change.
         updateLogEndOffset(nextOffsetMetadata.messageOffset)

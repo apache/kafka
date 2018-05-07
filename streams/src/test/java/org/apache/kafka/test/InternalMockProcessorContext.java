@@ -51,7 +51,6 @@ import java.util.Map;
 public class InternalMockProcessorContext extends AbstractProcessorContext implements RecordCollector.Supplier {
 
     private final File stateDir;
-    private final Metrics metrics;
     private final RecordCollector.Supplier recordCollectorSupplier;
     private final Map<String, StateStore> storeMap = new LinkedHashMap<>();
     private final Map<String, StateRestoreCallback> restoreFuncs = new HashMap<>();
@@ -135,7 +134,6 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
         this.stateDir = stateDir;
         this.keySerde = keySerde;
         this.valSerde = valSerde;
-        this.metrics = metrics.registry();
         this.recordCollectorSupplier = collectorSupplier;
     }
 
@@ -183,7 +181,6 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
 
     @Override
     public void register(final StateStore store,
-                         final boolean deprecatedAndIgnoredLoggingEnabled,
                          final StateRestoreCallback func) {
         storeMap.put(store.name(), store);
         restoreFuncs.put(store.name(), func);
@@ -198,9 +195,6 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
     public Cancellable schedule(long interval, PunctuationType type, Punctuator callback) {
         throw new UnsupportedOperationException("schedule() not supported.");
     }
-
-    @Override
-    public void schedule(final long interval) { }
 
     @Override
     public void commit() { }
@@ -304,10 +298,6 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
         restoreCallback.restoreAll(records);
 
         restoreListener.onRestoreEnd(null, storeName, 0L);
-    }
-
-    public void close() {
-        metrics.close();
     }
 
     private StateRestoreListener getStateRestoreListener(StateRestoreCallback restoreCallback) {
