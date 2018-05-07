@@ -130,7 +130,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * @param size The number of bytes after the start position to include
      * @return A sliced wrapper on this message set limited based on the given position and size
      */
-    public FileRecords read(int position, int size) throws IOException {
+    public FileRecords slice(int position, int size) throws IOException {
         if (position < 0)
             throw new IllegalArgumentException("Invalid position: " + position + " in read from " + file);
         if (size < 0)

@@ -128,7 +128,7 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
       if (timestamp > lastEntry.timestamp) {
         debug("Adding index entry %d => %d to %s.".format(timestamp, offset, file.getName))
         mmap.putLong(timestamp)
-        mmap.putInt((offset - baseOffset).toInt)
+        mmap.putInt(relativeOffset(offset))
         _entries += 1
         _lastEntry = TimestampOffset(timestamp, offset)
         require(_entries * entrySize == mmap.position(), _entries + " entries but file position in index is " + mmap.position() + ".")

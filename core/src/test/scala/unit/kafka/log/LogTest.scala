@@ -40,6 +40,7 @@ import org.apache.kafka.common.utils.{Time, Utils}
 import org.easymock.EasyMock
 
 import scala.collection.JavaConverters._
+import scala.collection.{SortedMap, mutable}
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 
 class LogTest {
@@ -2054,6 +2055,115 @@ class LogTest {
   }
 
   @Test
+  def testSplitOnOffsetOverflow(): Unit = {
+    def getRecords(baseOffset: Long): List[MemoryRecords] = {
+
+      def toBytes(value: Long): Array[Byte] = value.toString.getBytes
+
+      val set1 = MemoryRecords.withRecords(baseOffset, CompressionType.NONE, 0,
+        new SimpleRecord(toBytes(baseOffset), toBytes(baseOffset)))
+      val set2 = MemoryRecords.withRecords(baseOffset + 1, CompressionType.NONE, 0,
+        new SimpleRecord(toBytes(baseOffset + 1), toBytes(baseOffset + 1)),
+        new SimpleRecord(toBytes(baseOffset + 2), toBytes(baseOffset + 2)));
+      val set3 = MemoryRecords.withRecords(baseOffset + Int.MaxValue - 1, CompressionType.NONE, 0,
+        new SimpleRecord(toBytes(baseOffset + Int.MaxValue - 1), toBytes(baseOffset + Int.MaxValue - 1)));
+
+      List(set1, set2, set3)
+    }
+
+    def verifyRecords(log: Log, records: List[Record]): Boolean = {
+      val recordsFound = ListBuffer[Record]()
+
+      for (log <- log.logSegments) {
+        for (batch <- log.log.batches.asScala) {
+          val it = batch.iterator()
+          while (it.hasNext())
+            recordsFound += it.next()
+        }
+      }
+
+      return recordsFound.equals(records)
+    }
+
+    def createLogWithOffsetOverflow(): (Log, LogSegment, List[Record]) = {
+      val logConfig = createLogConfig(indexIntervalBytes = 1)
+      var log = createLog(logDir, logConfig)
+      var inputRecords = ListBuffer[Record]()
+
+      // References to files we want to "merge" to emulate offset overflow
+      val toMerge = ListBuffer[File]()
+
+      // Append some messages to the log. This will create four log segments.
+      var firstOffset = 0L
+      for (i <- 0 until 4) {
+        val recordsToAppend = getRecords(firstOffset)
+        for (records <- recordsToAppend)
+          log.appendAsFollower(records)
+
+        if (i == 1 || i == 2)
+          toMerge += log.activeSegment.log.file
+
+        firstOffset += Int.MaxValue + 1L
+      }
+
+      // assert that we have the correct number of segments
+      assertEquals(log.numberOfSegments, 4)
+
+      // assert number of batches
+      for (log <- log.logSegments) {
+        var numBatches = 0
+        for (_ <- log.log.batches.asScala)
+          numBatches += 1
+        assertEquals(numBatches, 3)
+      }
+
+      // create a list of appended records
+      for (log <- log.logSegments) {
+        for (batch <- log.log.batches.asScala) {
+          val it = batch.iterator()
+          while (it.hasNext())
+            inputRecords += it.next()
+        }
+      }
+
+      log.flush()
+      log.close()
+
+      // We want to "merge" log segments 1 and 2. This is where the offset overflow will be.
+      var dest: FileOutputStream = null
+      var source: FileInputStream = null
+      try {
+        dest = new FileOutputStream(toMerge(0), true)
+        source = new FileInputStream(toMerge(1))
+        val sourceBytes = new Array[Byte](toMerge(1).length.toInt)
+        source.read(sourceBytes)
+        dest.write(sourceBytes)
+      } finally {
+        dest.close()
+        source.close()
+      }
+
+      // Delete segment 2 including any index, etc.
+      toMerge(1).delete()
+      log = createLog(logDir, logConfig, recoveryPoint = Long.MaxValue)
+
+      // assert that there is now one less segment than before, and that the records in the log are same as before
+      assertEquals(log.numberOfSegments, 3)
+      assertTrue(verifyRecords(log, inputRecords.toList))
+
+      (log, log.logSegments.toList(1), inputRecords.toList)
+    }
+
+    // create a log such that one log segment has offsets that overflow, and call the split API on that segment
+    val (log, segmentWithOverflow, inputRecords) = createLogWithOffsetOverflow
+    Log.splitSegmentOnOffsetOverflow(log, segmentWithOverflow)
+
+    // assert we were successfully able to split the segment
+    assertEquals(log.numberOfSegments, 4)
+    assertTrue(verifyRecords(log, inputRecords))
+  }
+
+  @Test
   def testCleanShutdownFile() {
     // append some messages to create some segments
     val logConfig = createLogConfig(segmentBytes = 1000, indexIntervalBytes = 1, maxMessageBytes = 64 * 1024)
@@ -2602,12 +2712,12 @@ class LogTest {
     * Wrap a single record log buffer with leader epoch.
     */
   private def singletonRecordsWithLeaderEpoch(value: Array[Byte],
-                                      key: Array[Byte] = null,
-                                      leaderEpoch: Int,
-                                      offset: Long,
-                                      codec: CompressionType = CompressionType.NONE,
-                                      timestamp: Long = RecordBatch.NO_TIMESTAMP,
-                                      magicValue: Byte = RecordBatch.CURRENT_MAGIC_VALUE): MemoryRecords = {
+                                       key: Array[Byte] = null,
+                                       leaderEpoch: Int,
+                                       offset: Long,
+                                       codec: CompressionType = CompressionType.NONE,
+                                       timestamp: Long = RecordBatch.NO_TIMESTAMP,
+                                       magicValue: Byte = RecordBatch.CURRENT_MAGIC_VALUE): MemoryRecords = {
     val records = Seq(new SimpleRecord(timestamp, key, value))
 
     val buf = ByteBuffer.allocate(DefaultRecordBatch.sizeInBytes(records.asJava))

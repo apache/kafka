@@ -382,6 +382,12 @@ object LogCleaner {
       enableCleaner = config.logCleanerEnable)
 
   }
+
+  def createNewCleanedSegment(log: Log, baseOffset: Long): LogSegment = {
+    LogSegment.deleteIfExists(log.dir, baseOffset, fileSuffix = Log.CleanedFileSuffix)
+    LogSegment.open(log.dir, baseOffset, log.config, Time.SYSTEM, fileAlreadyExists = false,
+      fileSuffix = Log.CleanedFileSuffix, initFileSize = log.initFileSize, preallocate = log.config.preallocate)
+  }
 }
 
 /**
@@ -454,7 +460,6 @@ private[log] class Cleaner(val id: Int,
     // this is the lower of the last active segment and the compaction lag
     val cleanableHorizonMs = log.logSegments(0, cleanable.firstUncleanableOffset).lastOption.map(_.lastModified).getOrElse(0L)
 
-
     // group the segments and clean the groups
     info("Cleaning log %s (cleaning prior to %s, discarding tombstones prior to %s)...".format(log.name, new Date(cleanableHorizonMs), new Date(deleteHorizonMs)))
     for (group <- groupSegmentsBySize(log.logSegments(0, endOffset), log.config.segmentSize, log.config.maxIndexSize, cleanable.firstUncleanableOffset))
@@ -482,21 +487,8 @@ private[log] class Cleaner(val id: Int,
                                  map: OffsetMap,
                                  deleteHorizonMs: Long,
                                  stats: CleanerStats) {
-
-    def deleteCleanedFileIfExists(file: File): Unit = {
-      Files.deleteIfExists(new File(file.getPath + Log.CleanedFileSuffix).toPath)
-    }
-
     // create a new segment with a suffix appended to the name of the log and indexes
-    val firstSegment = segments.head
-    deleteCleanedFileIfExists(firstSegment.log.file)
-    deleteCleanedFileIfExists(firstSegment.offsetIndex.file)
-    deleteCleanedFileIfExists(firstSegment.timeIndex.file)
-    deleteCleanedFileIfExists(firstSegment.txnIndex.file)
-
-    val baseOffset = firstSegment.baseOffset
-    val cleaned = LogSegment.open(log.dir, baseOffset, log.config, time, fileSuffix = Log.CleanedFileSuffix,
-      initFileSize = log.initFileSize, preallocate = log.config.preallocate)
+    val cleaned = LogCleaner.createNewCleanedSegment(log, segments.head.baseOffset)
 
     try {
       // clean segments into the new destination segment
@@ -514,8 +506,11 @@ private[log] class Cleaner(val id: Int,
         val retainDeletes = currentSegment.lastModified > deleteHorizonMs
         info(s"Cleaning segment $startOffset in log ${log.name} (largest timestamp ${new Date(currentSegment.largestTimestamp)}) " +
           s"into ${cleaned.baseOffset}, ${if(retainDeletes) "retaining" else "discarding"} deletes.")
-        cleanInto(log.topicPartition, currentSegment.log, cleaned, map, retainDeletes, log.config.maxMessageSize,
-          transactionMetadata, log.activeProducersWithLastSequence, stats)
+
+        Log.maybeHandleOffsetOverflow(log, currentSegment) {
+          cleanInto(log.topicPartition, currentSegment.log, cleaned, map, retainDeletes, log.config.maxMessageSize,
+            transactionMetadata, log.activeProducersWithLastSequence, stats)
+        }
 
         currentSegmentOpt = nextSegmentOpt
       }
@@ -531,7 +526,7 @@ private[log] class Cleaner(val id: Int,
       // swap in new segment
       info(s"Swapping in cleaned segment ${cleaned.baseOffset} for segment(s) ${segments.map(_.baseOffset).mkString(",")} " +
         s"in log ${log.name}")
-      log.replaceSegments(cleaned, segments)
+      log.replaceSegments(List(cleaned), segments)
     } catch {
       case e: LogCleaningAbortedException =>
         try cleaned.deleteIfExists()

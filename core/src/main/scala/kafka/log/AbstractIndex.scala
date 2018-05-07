@@ -23,6 +23,7 @@ import java.nio.channels.FileChannel
 import java.nio.file.Files
 import java.util.concurrent.locks.{Lock, ReentrantLock}
 
+import kafka.common.{InvalidOffsetException, OffsetOverflowException}
 import kafka.log.IndexSearchType.IndexSearchEntity
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.{CoreUtils, Logging}
@@ -224,6 +225,17 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
   def reset(): Unit = {
     truncate()
     resize(maxIndexSize)
+  }
+
+  /**
+   * Get offset relative to base offset of this index
+   * @throws OffsetOverflowException
+   */
+  def relativeOffset(offset: Long): Int = {
+    val relativeOffset = offset - baseOffset
+    if ((relativeOffset < 0) || (relativeOffset > Int.MaxValue))
+      throw new OffsetOverflowException(s"Integer overflow for offset: $offset baseOffset: $baseOffset")
+    relativeOffset.toInt
   }
 
   protected def safeForceUnmap(): Unit = {
