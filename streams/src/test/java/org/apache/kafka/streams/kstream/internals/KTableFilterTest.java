@@ -506,6 +506,7 @@ public class KTableFilterTest {
             .<Integer, String>table("empty")
             .filter(numberKeyPredicate)
             .filterNot(numberKeyPredicate)
+            .toStream()
             .to("nirvana");
     }
 }

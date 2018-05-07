@@ -168,6 +168,7 @@ public class KStreamAggregationIntegrationTest {
         produceMessages(mockTime.milliseconds());
         groupedStream
             .reduce(reducer, "reduce-by-key")
+            .toStream()
             .to(Serdes.String(), Serdes.String(), outputTopic);
 
         startStreams();
@@ -294,6 +295,7 @@ public class KStreamAggregationIntegrationTest {
             aggregator,
             Serdes.Integer(),
             "aggregate-by-selected-key")
+            .toStream()
             .to(Serdes.String(), Serdes.Integer(), outputTopic);
 
         startStreams();
@@ -445,7 +447,8 @@ public class KStreamAggregationIntegrationTest {
         produceMessages(mockTime.milliseconds());
 
         groupedStream.count("count-by-key")
-            .to(Serdes.String(), Serdes.Long(), outputTopic);
+                .toStream()
+                .to(Serdes.String(), Serdes.Long(), outputTopic);
 
         shouldCountHelper();
     }
@@ -456,7 +459,8 @@ public class KStreamAggregationIntegrationTest {
         produceMessages(mockTime.milliseconds());
 
         groupedStream.count()
-            .to(Serdes.String(), Serdes.Long(), outputTopic);
+                .toStream()
+                .to(Serdes.String(), Serdes.Long(), outputTopic);
 
         shouldCountHelper();
     }
@@ -667,6 +671,7 @@ public class KStreamAggregationIntegrationTest {
                         return value1 + ":" + value2;
                     }
                 }, SessionWindows.with(sessionGap).until(maintainMillis), userSessionsStore)
+                .toStream()
                 .foreach(new ForeachAction<Windowed<String>, String>() {
                     @Override
                     public void apply(final Windowed<String> key, final String value) {

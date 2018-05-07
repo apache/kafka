@@ -124,7 +124,7 @@ public class KGroupedTableImplTest {
 
     private Map<String, Integer> getReducedResults(final KTable<String, Integer> inputKTable) {
         final Map<String, Integer> reducedResults = new HashMap<>();
-        inputKTable.foreach(new ForeachAction<String, Integer>() {
+        inputKTable.toStream().foreach(new ForeachAction<String, Integer>() {
             @Override
             public void apply(final String key, final Integer value) {
                 reducedResults.put(key, value);
