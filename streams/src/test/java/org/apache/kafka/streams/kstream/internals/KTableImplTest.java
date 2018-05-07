@@ -37,6 +37,7 @@ import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockMapper;
+import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockReducer;
 import org.apache.kafka.test.MockValueJoiner;
@@ -47,6 +48,7 @@ import org.junit.Test;
 
 import java.io.File;
 import java.lang.reflect.Field;
+import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -80,8 +82,8 @@ public class KTableImplTest {
 
         KTable<String, String> table1 = builder.table(topic1, consumed);
 
-        MockProcessorSupplier<String, String> proc1 = new MockProcessorSupplier<>();
-        table1.toStream().process(proc1);
+        MockProcessorSupplier<String, Object> supplier = new MockProcessorSupplier<>();
+        table1.toStream().process(supplier);
 
         KTable<String, Integer> table2 = table1.mapValues(new ValueMapper<String, Integer>() {
             @Override
@@ -90,8 +92,7 @@ public class KTableImplTest {
             }
         });
 
-        MockProcessorSupplier<String, Integer> proc2 = new MockProcessorSupplier<>();
-        table2.toStream().process(proc2);
+        table2.toStream().process(supplier);
 
         KTable<String, Integer> table3 = table2.filter(new Predicate<String, Integer>() {
             @Override
@@ -100,13 +101,11 @@ public class KTableImplTest {
             }
         });
 
-        MockProcessorSupplier<String, Integer> proc3 = new MockProcessorSupplier<>();
-        table3.toStream().process(proc3);
+        table3.toStream().process(supplier);
 
         KTable<String, String> table4 = table1.through(stringSerde, stringSerde, topic2, storeName2);
 
-        MockProcessorSupplier<String, String> proc4 = new MockProcessorSupplier<>();
-        table4.toStream().process(proc4);
+        table4.toStream().process(supplier);
 
         driver.setUp(builder, stateDir);
 
@@ -120,10 +119,11 @@ public class KTableImplTest {
         driver.flushState();
         driver.flushState();
 
-        assertEquals(Utils.mkList("A:01", "B:02", "C:03", "D:04"), proc1.processed);
-        assertEquals(Utils.mkList("A:1", "B:2", "C:3", "D:4"), proc2.processed);
-        assertEquals(Utils.mkList("A:null", "B:2", "C:null", "D:4"), proc3.processed);
-        assertEquals(Utils.mkList("A:01", "B:02", "C:03", "D:04"), proc4.processed);
+        final List<MockProcessor<String, Object>> processors = supplier.capturedProcessors(4);
+        assertEquals(Utils.mkList("A:01", "B:02", "C:03", "D:04"), processors.get(0).processed);
+        assertEquals(Utils.mkList("A:1", "B:2", "C:3", "D:4"), processors.get(1).processed);
+        assertEquals(Utils.mkList("A:null", "B:2", "C:null", "D:4"), processors.get(2).processed);
+        assertEquals(Utils.mkList("A:01", "B:02", "C:03", "D:04"), processors.get(3).processed);
     }
 
     @Test

@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.LogContext;
 import org.junit.Test;
@@ -44,7 +45,15 @@ public class RecordDeserializerTest {
     @Test
     public void shouldReturnNewConsumerRecordWithDeserializedValueWhenNoExceptions() {
         final RecordDeserializer recordDeserializer = new RecordDeserializer(
-            new TheSourceNode(false, false, "key", "value"), null, new LogContext());
+            new TheSourceNode(
+                false,
+                false,
+                "key", "value"
+            ),
+            null,
+            new LogContext(),
+            new Metrics().sensor("skipped-records")
+        );
         final ConsumerRecord<Object, Object> record = recordDeserializer.deserialize(null, rawRecord);
         assertEquals(rawRecord.topic(), record.topic());
         assertEquals(rawRecord.partition(), record.partition());
@@ -56,22 +65,17 @@ public class RecordDeserializerTest {
         assertEquals(TimestampType.CREATE_TIME, record.timestampType());
     }
 
-    static class TheSourceNode extends SourceNode {
+    static class TheSourceNode extends SourceNode<Object, Object> {
         private final boolean keyThrowsException;
         private final boolean valueThrowsException;
         private final Object key;
         private final Object value;
 
-        TheSourceNode(final boolean keyThrowsException, final boolean valueThrowsException) {
-            this(keyThrowsException, valueThrowsException, null, null);
-        }
-
-        @SuppressWarnings("unchecked")
         TheSourceNode(final boolean keyThrowsException,
                       final boolean valueThrowsException,
                       final Object key,
                       final Object value) {
-            super("", Collections.EMPTY_LIST, null, null);
+            super("", Collections.<String>emptyList(), null, null);
             this.keyThrowsException = keyThrowsException;
             this.valueThrowsException = valueThrowsException;
             this.key = key;

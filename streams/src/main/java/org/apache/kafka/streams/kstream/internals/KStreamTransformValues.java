@@ -106,12 +106,6 @@ public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V> 
                         return context.schedule(interval, type, callback);
                     }
 
-                    @SuppressWarnings("deprecation")
-                    @Override
-                    public void schedule(final long interval) {
-                        context.schedule(interval);
-                    }
-
                     @Override
                     public <K, V> void forward(final K key, final V value) {
                         throw new StreamsException("ProcessorContext#forward() must not be called within TransformValues.");
@@ -175,14 +169,6 @@ public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V> 
         @Override
         public void process(K key, V value) {
             context.forward(key, valueTransformer.transform(key, value));
-        }
-
-        @SuppressWarnings("deprecation")
-        @Override
-        public void punctuate(long timestamp) {
-            if (valueTransformer.punctuate(timestamp) != null) {
-                throw new StreamsException("ValueTransformer#punctuate must return null.");
-            }
         }
 
         @Override

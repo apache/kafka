@@ -14,7 +14,6 @@
 
 package kafka.server
 
-import java.net.Socket
 import java.nio.ByteBuffer
 import java.util.{Collections, LinkedHashMap, Properties}
 import java.util.concurrent.{Executors, Future, TimeUnit}
@@ -23,6 +22,7 @@ import kafka.log.LogConfig
 import kafka.network.RequestChannel.Session
 import kafka.security.auth._
 import kafka.utils.TestUtils
+
 import org.apache.kafka.clients.admin.NewPartitions
 import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
 import org.apache.kafka.common.resource.{ResourceFilter, Resource => AdminResource, ResourceType => AdminResourceType}
@@ -132,13 +132,16 @@ class RequestQuotaTest extends BaseRequestTest {
     waitAndCheckResults()
   }
 
+  def session(user: String): Session = Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, user), null)
+
   private def throttleTimeMetricValue(clientId: String): Double = {
     val metricName = leaderNode.metrics.metricName("throttle-time",
                                   QuotaType.Request.toString,
                                   "",
                                   "user", "",
                                   "client-id", clientId)
-    val sensor = leaderNode.quotaManagers.request.getOrCreateQuotaSensors("ANONYMOUS", clientId).throttleTimeSensor
+    val sensor = leaderNode.quotaManagers.request.getOrCreateQuotaSensors(session("ANONYMOUS"),
+      clientId).throttleTimeSensor
     metricValue(leaderNode.metrics.metrics.get(metricName), sensor)
   }
 
@@ -148,7 +151,8 @@ class RequestQuotaTest extends BaseRequestTest {
                                   "",
                                   "user", "",
                                   "client-id", clientId)
-    val sensor = leaderNode.quotaManagers.request.getOrCreateQuotaSensors("ANONYMOUS", clientId).quotaSensor
+    val sensor = leaderNode.quotaManagers.request.getOrCreateQuotaSensors(session("ANONYMOUS"),
+      clientId).quotaSensor
     metricValue(leaderNode.metrics.metrics.get(metricName), sensor)
   }
 
@@ -310,13 +314,13 @@ class RequestQuotaTest extends BaseRequestTest {
           new CreateDelegationTokenRequest.Builder(Collections.singletonList(SecurityUtils.parseKafkaPrincipal("User:test")), 1000)
 
         case ApiKeys.EXPIRE_DELEGATION_TOKEN =>
-          new ExpireDelegationTokenRequest.Builder(ByteBuffer.allocate(10), 1000)
+          new ExpireDelegationTokenRequest.Builder("".getBytes, 1000)
 
         case ApiKeys.DESCRIBE_DELEGATION_TOKEN =>
           new DescribeDelegationTokenRequest.Builder(Collections.singletonList(SecurityUtils.parseKafkaPrincipal("User:test")))
 
         case ApiKeys.RENEW_DELEGATION_TOKEN =>
-          new RenewDelegationTokenRequest.Builder(ByteBuffer.allocate(10), 1000)
+          new RenewDelegationTokenRequest.Builder("".getBytes, 1000)
 
         case ApiKeys.DELETE_GROUPS =>
           new DeleteGroupsRequest.Builder(Collections.singleton("test-group"))
@@ -324,15 +328,6 @@ class RequestQuotaTest extends BaseRequestTest {
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)
     }
-  }
-
-  private def requestResponse(socket: Socket, clientId: String, correlationId: Int, requestBuilder: AbstractRequest.Builder[_ <: AbstractRequest]): Struct = {
-    val apiKey = requestBuilder.apiKey
-    val request = requestBuilder.build()
-    val header = new RequestHeader(apiKey, request.version, clientId, correlationId)
-    val response = requestAndReceive(socket, request.serialize(header).array)
-    val responseBuffer = skipResponseHeader(response)
-    apiKey.parseResponse(request.version, responseBuffer)
   }
 
   case class Client(clientId: String, apiKey: ApiKeys) {

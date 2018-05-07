@@ -34,14 +34,14 @@ import scala.collection.JavaConverters._
 import scala.math._
 
 /**
- * A segment of the log. Each segment has two components: a log and an index. The log is a FileMessageSet containing
+ * A segment of the log. Each segment has two components: a log and an index. The log is a FileRecords containing
  * the actual messages. The index is an OffsetIndex that maps from logical offsets to physical file positions. Each
  * segment has a base offset which is an offset <= the least offset of any message in this segment and > any offset in
  * any previous segment.
  *
  * A segment with a base offset of [base_offset] would be stored in two files, a [base_offset].index and a [base_offset].log file.
  *
- * @param log The message set containing log entries
+ * @param log The file records containing log entries
  * @param offsetIndex The offset index
  * @param timeIndex The timestamp index
  * @param baseOffset A lower bound on the offsets in this segment
@@ -205,7 +205,7 @@ class LogSegment private[log] (val log: FileRecords,
   def read(startOffset: Long, maxOffset: Option[Long], maxSize: Int, maxPosition: Long = size,
            minOneMessage: Boolean = false): FetchDataInfo = {
     if (maxSize < 0)
-      throw new IllegalArgumentException("Invalid max size for log read (%d)".format(maxSize))
+      throw new IllegalArgumentException(s"Invalid max size $maxSize for log read from segment $log")
 
     val logSize = log.sizeInBytes // this may change, need to save a consistent copy
     val startOffsetAndSize = translateOffset(startOffset)

@@ -60,8 +60,7 @@ public class FileLogInputStreamTest {
             fileRecords.append(MemoryRecords.withRecords(magic, compression, new SimpleRecord("foo".getBytes())));
             fileRecords.flush();
 
-            FileLogInputStream logInputStream = new FileLogInputStream(fileRecords.channel(), 0,
-                    fileRecords.sizeInBytes());
+            FileLogInputStream logInputStream = new FileLogInputStream(fileRecords, 0, fileRecords.sizeInBytes());
 
             FileChannelRecordBatch batch = logInputStream.nextBatch();
             assertNotNull(batch);
@@ -90,8 +89,7 @@ public class FileLogInputStreamTest {
             fileRecords.append(MemoryRecords.withRecords(magic, 1L, compression, CREATE_TIME, secondBatchRecord));
             fileRecords.flush();
 
-            FileLogInputStream logInputStream = new FileLogInputStream(fileRecords.channel(), 0,
-                    fileRecords.sizeInBytes());
+            FileLogInputStream logInputStream = new FileLogInputStream(fileRecords, 0, fileRecords.sizeInBytes());
 
             FileChannelRecordBatch firstBatch = logInputStream.nextBatch();
             assertGenericRecordBatchData(firstBatch, 0L, 3241324L, firstBatchRecord);
@@ -126,8 +124,7 @@ public class FileLogInputStreamTest {
             fileRecords.append(MemoryRecords.withRecords(magic, 1L, compression, CREATE_TIME, secondBatchRecords));
             fileRecords.flush();
 
-            FileLogInputStream logInputStream = new FileLogInputStream(fileRecords.channel(), 0,
-                    fileRecords.sizeInBytes());
+            FileLogInputStream logInputStream = new FileLogInputStream(fileRecords, 0, fileRecords.sizeInBytes());
 
             FileChannelRecordBatch firstBatch = logInputStream.nextBatch();
             assertNoProducerData(firstBatch);
@@ -169,8 +166,7 @@ public class FileLogInputStreamTest {
                     producerEpoch, baseSequence + firstBatchRecords.length, partitionLeaderEpoch, secondBatchRecords));
             fileRecords.flush();
 
-            FileLogInputStream logInputStream = new FileLogInputStream(fileRecords.channel(), 0,
-                    fileRecords.sizeInBytes());
+            FileLogInputStream logInputStream = new FileLogInputStream(fileRecords, 0, fileRecords.sizeInBytes());
 
             FileChannelRecordBatch firstBatch = logInputStream.nextBatch();
             assertProducerData(firstBatch, producerId, producerEpoch, baseSequence, false, firstBatchRecords);
@@ -198,8 +194,7 @@ public class FileLogInputStreamTest {
             fileRecords.flush();
             fileRecords.truncateTo(fileRecords.sizeInBytes() - 13);
 
-            FileLogInputStream logInputStream = new FileLogInputStream(fileRecords.channel(), 0,
-                    fileRecords.sizeInBytes());
+            FileLogInputStream logInputStream = new FileLogInputStream(fileRecords, 0, fileRecords.sizeInBytes());
 
             FileChannelRecordBatch firstBatch = logInputStream.nextBatch();
             assertNoProducerData(firstBatch);

@@ -18,7 +18,7 @@ package org.apache.kafka.streams.processor;
 
 /**
  * An abstract implementation of {@link Processor} that manages the {@link ProcessorContext} instance and provides default no-op
- * implementations of {@link #punctuate(long)} and {@link #close()}.
+ * implementation of {@link #close()}.
  *
  * @param <K> the type of keys
  * @param <V> the type of values
@@ -33,21 +33,6 @@ public abstract class AbstractProcessor<K, V> implements Processor<K, V> {
     @Override
     public void init(final ProcessorContext context) {
         this.context = context;
-    }
-
-    /**
-     * Perform any periodic operations, if this processor {@link ProcessorContext#schedule(long) schedule itself} with the context
-     * during {@link #init(ProcessorContext) initialization}.
-     * <p>
-     * This method does nothing by default; if desired, subclasses should override it with custom functionality.
-     * </p>
-     *
-     * @param timestamp the wallclock time when this method is being called
-     */
-    @SuppressWarnings("deprecation")
-    @Override
-    public void punctuate(final long timestamp) {
-        // do nothing
     }
 
     /**

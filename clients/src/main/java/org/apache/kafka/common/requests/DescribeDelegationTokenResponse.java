@@ -184,4 +184,8 @@ public class DescribeDelegationTokenResponse extends AbstractResponse {
     public List<DelegationToken> tokens() {
         return tokens;
     }
+
+    public boolean hasError() {
+        return this.error != Errors.NONE;
+    }
 }

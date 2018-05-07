@@ -54,7 +54,7 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
 
     /**
      * @throws IllegalStateException If store gets registered after initialized is already finished
-     * @throws StreamsException if the store's change log does not contain the partition
+     * @throws StreamsException      If the store's change log does not contain the partition
      */
     @Override
     public Map<TopicPartition, Long> initialize() {
@@ -63,7 +63,15 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
         for (final String storeName : storeNames) {
             final String sourceTopic = storeNameToTopic.get(storeName);
             final SourceNode source = topology.source(sourceTopic);
-            deserializers.put(sourceTopic, new RecordDeserializer(source, deserializationExceptionHandler, logContext));
+            deserializers.put(
+                sourceTopic,
+                new RecordDeserializer(
+                    source,
+                    deserializationExceptionHandler,
+                    logContext,
+                    processorContext.metrics().skippedRecordsSensor()
+                )
+            );
         }
         initTopology();
         processorContext.initialized();
@@ -100,7 +108,7 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
     }
 
     private void initTopology() {
-        for (ProcessorNode node : this.topology.processors()) {
+        for (final ProcessorNode node : this.topology.processors()) {
             processorContext.setCurrentNode(node);
             try {
                 node.init(this.processorContext);

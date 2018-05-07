@@ -20,6 +20,7 @@ package org.apache.kafka.trogdor.rest;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
+import com.fasterxml.jackson.databind.JsonNode;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.trogdor.task.TaskSpec;
 
@@ -37,10 +38,17 @@ import org.apache.kafka.trogdor.task.TaskSpec;
     @JsonSubTypes.Type(value = WorkerDone.class, name = "DONE")
     })
 public abstract class WorkerState extends Message {
+    private final String taskId;
     private final TaskSpec spec;
 
-    public WorkerState(TaskSpec spec) {
+    public WorkerState(String taskId, TaskSpec spec) {
+        this.taskId = taskId;
         this.spec = spec;
+    }
+
+    @JsonProperty
+    public String taskId() {
+        return taskId;
     }
 
     @JsonProperty
@@ -60,9 +68,7 @@ public abstract class WorkerState extends Message {
         throw new KafkaException("invalid state");
     }
 
-    public String status() {
-        throw new KafkaException("invalid state");
-    }
+    public abstract JsonNode status();
 
     public boolean running() {
         return false;
