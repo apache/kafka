@@ -34,7 +34,6 @@ import org.apache.kafka.streams._
 import org.apache.kafka.streams.scala.kstream._
 
 import ImplicitConversions._
-import com.typesafe.scalalogging.LazyLogging
 
 /**
  * Test suite that does an example to demonstrate stream-table joins in Kafka Streams
@@ -46,7 +45,7 @@ import com.typesafe.scalalogging.LazyLogging
  * Hence the native Java API based version is more verbose.
  */ 
 class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends JUnitSuite
-  with StreamToTableJoinTestData with LazyLogging {
+  with StreamToTableJoinTestData {
 
   private val privateCluster: EmbeddedKafkaCluster = new EmbeddedKafkaCluster(1)
 

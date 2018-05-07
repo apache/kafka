@@ -16,14 +16,12 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
@@ -39,9 +37,7 @@ import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
-import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.Before;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
 
 import java.util.List;
@@ -54,28 +50,8 @@ import static org.junit.Assert.assertEquals;
 
 public class KStreamWindowAggregateTest {
 
-    final private Serde<String> strSerde = Serdes.String();
     private final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
-    private TopologyTestDriver driver;
-    private final Properties props = new Properties();
-
-    @Before
-    public void setup() {
-        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "kstream-window-aggregate-test");
-        props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9091");
-        props.setProperty(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
-        props.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass().getName());
-        props.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass().getName());
-    }
-
-    @After
-    public void cleanup() {
-        props.clear();
-        if (driver != null) {
-            driver.close();
-        }
-        driver = null;
-    }
+    private final Properties props = StreamsTestUtils.topologyTestConfig(Serdes.String(), Serdes.String());
 
     @Test
     public void testAggBasic() {
@@ -83,31 +59,31 @@ public class KStreamWindowAggregateTest {
         final String topic1 = "topic1";
 
         final KTable<Windowed<String>, String> table2 = builder
-            .stream(topic1, Consumed.with(strSerde, strSerde))
-            .groupByKey(Serialized.with(strSerde, strSerde))
-            .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, TimeWindows.of(10).advanceBy(5), strSerde, "topic1-Canonized");
+            .stream(topic1, Consumed.with(Serdes.String(), Serdes.String()))
+            .groupByKey(Serialized.with(Serdes.String(), Serdes.String()))
+            .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, TimeWindows.of(10).advanceBy(5), Serdes.String(), "topic1-Canonized");
 
         final MockProcessorSupplier<Windowed<String>, String> supplier = new MockProcessorSupplier<>();
         table2.toStream().process(supplier);
 
-        driver = new TopologyTestDriver(builder.build(), props, 0L);
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props, 0L)) {
+            driver.pipeInput(recordFactory.create(topic1, "A", "1", 0L));
+            driver.pipeInput(recordFactory.create(topic1, "B", "2", 1L));
+            driver.pipeInput(recordFactory.create(topic1, "C", "3", 2L));
+            driver.pipeInput(recordFactory.create(topic1, "D", "4", 3L));
+            driver.pipeInput(recordFactory.create(topic1, "A", "1", 4L));
 
-        driver.pipeInput(recordFactory.create(topic1, "A", "1", 0L));
-        driver.pipeInput(recordFactory.create(topic1, "B", "2", 1L));
-        driver.pipeInput(recordFactory.create(topic1, "C", "3", 2L));
-        driver.pipeInput(recordFactory.create(topic1, "D", "4", 3L));
-        driver.pipeInput(recordFactory.create(topic1, "A", "1", 4L));
-
-        driver.pipeInput(recordFactory.create(topic1, "A", "1", 5L));
-        driver.pipeInput(recordFactory.create(topic1, "B", "2", 6L));
-        driver.pipeInput(recordFactory.create(topic1, "D", "4", 7L));
-        driver.pipeInput(recordFactory.create(topic1, "B", "2", 8L));
-        driver.pipeInput(recordFactory.create(topic1, "C", "3", 9L));
-        driver.pipeInput(recordFactory.create(topic1, "A", "1", 10L));
-        driver.pipeInput(recordFactory.create(topic1, "B", "2", 11L));
-        driver.pipeInput(recordFactory.create(topic1, "D", "4", 12L));
-        driver.pipeInput(recordFactory.create(topic1, "B", "2", 13L));
-        driver.pipeInput(recordFactory.create(topic1, "C", "3", 14L));
+            driver.pipeInput(recordFactory.create(topic1, "A", "1", 5L));
+            driver.pipeInput(recordFactory.create(topic1, "B", "2", 6L));
+            driver.pipeInput(recordFactory.create(topic1, "D", "4", 7L));
+            driver.pipeInput(recordFactory.create(topic1, "B", "2", 8L));
+            driver.pipeInput(recordFactory.create(topic1, "C", "3", 9L));
+            driver.pipeInput(recordFactory.create(topic1, "A", "1", 10L));
+            driver.pipeInput(recordFactory.create(topic1, "B", "2", 11L));
+            driver.pipeInput(recordFactory.create(topic1, "D", "4", 12L));
+            driver.pipeInput(recordFactory.create(topic1, "B", "2", 13L));
+            driver.pipeInput(recordFactory.create(topic1, "C", "3", 14L));
+        }
 
 
         assertEquals(
@@ -141,16 +117,16 @@ public class KStreamWindowAggregateTest {
         final String topic2 = "topic2";
 
         final KTable<Windowed<String>, String> table1 = builder
-            .stream(topic1, Consumed.with(strSerde, strSerde))
-            .groupByKey(Serialized.with(strSerde, strSerde))
-            .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, TimeWindows.of(10).advanceBy(5), strSerde, "topic1-Canonized");
+            .stream(topic1, Consumed.with(Serdes.String(), Serdes.String()))
+            .groupByKey(Serialized.with(Serdes.String(), Serdes.String()))
+            .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, TimeWindows.of(10).advanceBy(5), Serdes.String(), "topic1-Canonized");
 
         final MockProcessorSupplier<Windowed<String>, String> supplier = new MockProcessorSupplier<>();
         table1.toStream().process(supplier);
 
         final KTable<Windowed<String>, String> table2 = builder
-            .stream(topic2, Consumed.with(strSerde, strSerde)).groupByKey(Serialized.with(strSerde, strSerde))
-            .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, TimeWindows.of(10).advanceBy(5), strSerde, "topic2-Canonized");
+            .stream(topic2, Consumed.with(Serdes.String(), Serdes.String())).groupByKey(Serialized.with(Serdes.String(), Serdes.String()))
+            .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, TimeWindows.of(10).advanceBy(5), Serdes.String(), "topic2-Canonized");
 
         table2.toStream().process(supplier);
 
@@ -162,84 +138,84 @@ public class KStreamWindowAggregateTest {
             }
         }).toStream().process(supplier);
 
-        driver = new TopologyTestDriver(builder.build(), props, 0L);
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props, 0L)) {
+            driver.pipeInput(recordFactory.create(topic1, "A", "1", 0L));
+            driver.pipeInput(recordFactory.create(topic1, "B", "2", 1L));
+            driver.pipeInput(recordFactory.create(topic1, "C", "3", 2L));
+            driver.pipeInput(recordFactory.create(topic1, "D", "4", 3L));
+            driver.pipeInput(recordFactory.create(topic1, "A", "1", 4L));
 
-        driver.pipeInput(recordFactory.create(topic1, "A", "1", 0L));
-        driver.pipeInput(recordFactory.create(topic1, "B", "2", 1L));
-        driver.pipeInput(recordFactory.create(topic1, "C", "3", 2L));
-        driver.pipeInput(recordFactory.create(topic1, "D", "4", 3L));
-        driver.pipeInput(recordFactory.create(topic1, "A", "1", 4L));
+            final List<MockProcessor<Windowed<String>, String>> processors = supplier.capturedProcessors(3);
 
-        final List<MockProcessor<Windowed<String>, String>> processors = supplier.capturedProcessors(3);
+            processors.get(0).checkAndClearProcessResult(
+                    "[A@0/10]:0+1",
+                    "[B@0/10]:0+2",
+                    "[C@0/10]:0+3",
+                    "[D@0/10]:0+4",
+                    "[A@0/10]:0+1+1"
+            );
+            processors.get(1).checkAndClearProcessResult();
+            processors.get(2).checkAndClearProcessResult();
 
-        processors.get(0).checkAndClearProcessResult(
-            "[A@0/10]:0+1",
-            "[B@0/10]:0+2",
-            "[C@0/10]:0+3",
-            "[D@0/10]:0+4",
-            "[A@0/10]:0+1+1"
-        );
-        processors.get(1).checkAndClearProcessResult();
-        processors.get(2).checkAndClearProcessResult();
+            driver.pipeInput(recordFactory.create(topic1, "A", "1", 5L));
+            driver.pipeInput(recordFactory.create(topic1, "B", "2", 6L));
+            driver.pipeInput(recordFactory.create(topic1, "D", "4", 7L));
+            driver.pipeInput(recordFactory.create(topic1, "B", "2", 8L));
+            driver.pipeInput(recordFactory.create(topic1, "C", "3", 9L));
 
-        driver.pipeInput(recordFactory.create(topic1, "A", "1", 5L));
-        driver.pipeInput(recordFactory.create(topic1, "B", "2", 6L));
-        driver.pipeInput(recordFactory.create(topic1, "D", "4", 7L));
-        driver.pipeInput(recordFactory.create(topic1, "B", "2", 8L));
-        driver.pipeInput(recordFactory.create(topic1, "C", "3", 9L));
+            processors.get(0).checkAndClearProcessResult(
+                    "[A@0/10]:0+1+1+1", "[A@5/15]:0+1",
+                    "[B@0/10]:0+2+2", "[B@5/15]:0+2",
+                    "[D@0/10]:0+4+4", "[D@5/15]:0+4",
+                    "[B@0/10]:0+2+2+2", "[B@5/15]:0+2+2",
+                    "[C@0/10]:0+3+3", "[C@5/15]:0+3"
+            );
+            processors.get(1).checkAndClearProcessResult();
+            processors.get(2).checkAndClearProcessResult();
 
-        processors.get(0).checkAndClearProcessResult(
-            "[A@0/10]:0+1+1+1", "[A@5/15]:0+1",
-            "[B@0/10]:0+2+2", "[B@5/15]:0+2",
-            "[D@0/10]:0+4+4", "[D@5/15]:0+4",
-            "[B@0/10]:0+2+2+2", "[B@5/15]:0+2+2",
-            "[C@0/10]:0+3+3", "[C@5/15]:0+3"
-        );
-        processors.get(1).checkAndClearProcessResult();
-        processors.get(2).checkAndClearProcessResult();
+            driver.pipeInput(recordFactory.create(topic2, "A", "a", 0L));
+            driver.pipeInput(recordFactory.create(topic2, "B", "b", 1L));
+            driver.pipeInput(recordFactory.create(topic2, "C", "c", 2L));
+            driver.pipeInput(recordFactory.create(topic2, "D", "d", 3L));
+            driver.pipeInput(recordFactory.create(topic2, "A", "a", 4L));
 
-        driver.pipeInput(recordFactory.create(topic2, "A", "a", 0L));
-        driver.pipeInput(recordFactory.create(topic2, "B", "b", 1L));
-        driver.pipeInput(recordFactory.create(topic2, "C", "c", 2L));
-        driver.pipeInput(recordFactory.create(topic2, "D", "d", 3L));
-        driver.pipeInput(recordFactory.create(topic2, "A", "a", 4L));
+            processors.get(0).checkAndClearProcessResult();
+            processors.get(1).checkAndClearProcessResult(
+                    "[A@0/10]:0+a",
+                    "[B@0/10]:0+b",
+                    "[C@0/10]:0+c",
+                    "[D@0/10]:0+d",
+                    "[A@0/10]:0+a+a"
+            );
+            processors.get(2).checkAndClearProcessResult(
+                    "[A@0/10]:0+1+1+1%0+a",
+                    "[B@0/10]:0+2+2+2%0+b",
+                    "[C@0/10]:0+3+3%0+c",
+                    "[D@0/10]:0+4+4%0+d",
+                    "[A@0/10]:0+1+1+1%0+a+a");
 
-        processors.get(0).checkAndClearProcessResult();
-        processors.get(1).checkAndClearProcessResult(
-            "[A@0/10]:0+a",
-            "[B@0/10]:0+b",
-            "[C@0/10]:0+c",
-            "[D@0/10]:0+d",
-            "[A@0/10]:0+a+a"
-        );
-        processors.get(2).checkAndClearProcessResult(
-            "[A@0/10]:0+1+1+1%0+a",
-            "[B@0/10]:0+2+2+2%0+b",
-            "[C@0/10]:0+3+3%0+c",
-            "[D@0/10]:0+4+4%0+d",
-            "[A@0/10]:0+1+1+1%0+a+a");
+            driver.pipeInput(recordFactory.create(topic2, "A", "a", 5L));
+            driver.pipeInput(recordFactory.create(topic2, "B", "b", 6L));
+            driver.pipeInput(recordFactory.create(topic2, "D", "d", 7L));
+            driver.pipeInput(recordFactory.create(topic2, "B", "b", 8L));
+            driver.pipeInput(recordFactory.create(topic2, "C", "c", 9L));
 
-        driver.pipeInput(recordFactory.create(topic2, "A", "a", 5L));
-        driver.pipeInput(recordFactory.create(topic2, "B", "b", 6L));
-        driver.pipeInput(recordFactory.create(topic2, "D", "d", 7L));
-        driver.pipeInput(recordFactory.create(topic2, "B", "b", 8L));
-        driver.pipeInput(recordFactory.create(topic2, "C", "c", 9L));
-
-        processors.get(0).checkAndClearProcessResult();
-        processors.get(1).checkAndClearProcessResult(
-            "[A@0/10]:0+a+a+a", "[A@5/15]:0+a",
-            "[B@0/10]:0+b+b", "[B@5/15]:0+b",
-            "[D@0/10]:0+d+d", "[D@5/15]:0+d",
-            "[B@0/10]:0+b+b+b", "[B@5/15]:0+b+b",
-            "[C@0/10]:0+c+c", "[C@5/15]:0+c"
-        );
-        processors.get(2).checkAndClearProcessResult(
-            "[A@0/10]:0+1+1+1%0+a+a+a", "[A@5/15]:0+1%0+a",
-            "[B@0/10]:0+2+2+2%0+b+b", "[B@5/15]:0+2+2%0+b",
-            "[D@0/10]:0+4+4%0+d+d", "[D@5/15]:0+4%0+d",
-            "[B@0/10]:0+2+2+2%0+b+b+b", "[B@5/15]:0+2+2%0+b+b",
-            "[C@0/10]:0+3+3%0+c+c", "[C@5/15]:0+3%0+c"
-        );
+            processors.get(0).checkAndClearProcessResult();
+            processors.get(1).checkAndClearProcessResult(
+                    "[A@0/10]:0+a+a+a", "[A@5/15]:0+a",
+                    "[B@0/10]:0+b+b", "[B@5/15]:0+b",
+                    "[D@0/10]:0+d+d", "[D@5/15]:0+d",
+                    "[B@0/10]:0+b+b+b", "[B@5/15]:0+b+b",
+                    "[C@0/10]:0+c+c", "[C@5/15]:0+c"
+            );
+            processors.get(2).checkAndClearProcessResult(
+                    "[A@0/10]:0+1+1+1%0+a+a+a", "[A@5/15]:0+1%0+a",
+                    "[B@0/10]:0+2+2+2%0+b+b", "[B@5/15]:0+2+2%0+b",
+                    "[D@0/10]:0+4+4%0+d+d", "[D@5/15]:0+4%0+d",
+                    "[B@0/10]:0+2+2+2%0+b+b+b", "[B@5/15]:0+2+2%0+b+b",
+                    "[C@0/10]:0+3+3%0+c+c", "[C@5/15]:0+3%0+c"
+            );
+        }
     }
 
     @Test
@@ -247,22 +223,22 @@ public class KStreamWindowAggregateTest {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
 
-        final KStream<String, String> stream1 = builder.stream(topic, Consumed.with(strSerde, strSerde));
-        stream1.groupByKey(Serialized.with(strSerde, strSerde))
+        final KStream<String, String> stream1 = builder.stream(topic, Consumed.with(Serdes.String(), Serdes.String()));
+        stream1.groupByKey(Serialized.with(Serdes.String(), Serdes.String()))
             .windowedBy(TimeWindows.of(10).advanceBy(5))
             .aggregate(
                 MockInitializer.STRING_INIT,
                 MockAggregator.<String, String>toStringInstance("+"),
-                Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic1-Canonicalized").withValueSerde(strSerde)
+                Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic1-Canonicalized").withValueSerde(Serdes.String())
             );
 
-        driver = new TopologyTestDriver(builder.build(), props, 0L);
-
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-        driver.pipeInput(recordFactory.create(topic, null, "1"));
-        LogCaptureAppender.unregister(appender);
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props, 0L)) {
+            driver.pipeInput(recordFactory.create(topic, null, "1"));
+            LogCaptureAppender.unregister(appender);
 
-        assertEquals(1.0, getMetricByName(driver.metrics(), "skipped-records-total", "stream-metrics").metricValue());
-        assertThat(appender.getMessages(), hasItem("Skipping record due to null key. value=[1] topic=[topic] partition=[0] offset=[0]"));
+            assertEquals(1.0, getMetricByName(driver.metrics(), "skipped-records-total", "stream-metrics").metricValue());
+            assertThat(appender.getMessages(), hasItem("Skipping record due to null key. value=[1] topic=[topic] partition=[0] offset=[0]"));
+        }
     }
 }

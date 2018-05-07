@@ -21,15 +21,12 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockProcessorSupplier;
-import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.Before;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
 
 import java.util.Properties;
@@ -40,28 +37,9 @@ public class KStreamFilterTest {
 
     private final String topicName = "topic";
     private final ConsumerRecordFactory<Integer, String> recordFactory = new ConsumerRecordFactory<>(new IntegerSerializer(), new StringSerializer());
-    private TopologyTestDriver driver;
-    private final Properties props = new Properties();
+    private final Properties props = StreamsTestUtils.topologyTestConfig(Serdes.Integer(), Serdes.String());
 
-    @Before
-    public void before() {
-        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "kstream-filter-test");
-        props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9091");
-        props.setProperty(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
-        props.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass().getName());
-        props.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
-    }
-
-    @After
-    public void cleanup() {
-        props.clear();
-        if (driver != null) {
-            driver.close();
-        }
-        driver = null;
-    }
-  
-    private Predicate<Integer, String> isMultipleOfThree = new Predicate<Integer, String>() {
+    private final Predicate<Integer, String> isMultipleOfThree = new Predicate<Integer, String>() {
         @Override
         public boolean test(Integer key, String value) {
             return (key % 3) == 0;
@@ -80,9 +58,10 @@ public class KStreamFilterTest {
         stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String()));
         stream.filter(isMultipleOfThree).process(supplier);
 
-        driver = new TopologyTestDriver(builder.build(), props);
-        for (int expectedKey : expectedKeys) {
-            driver.pipeInput(recordFactory.create(topicName, expectedKey, "V" + expectedKey));
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            for (int expectedKey : expectedKeys) {
+                driver.pipeInput(recordFactory.create(topicName, expectedKey, "V" + expectedKey));
+            }
         }
 
         assertEquals(2, supplier.theCapturedProcessor().processed.size());
@@ -100,9 +79,10 @@ public class KStreamFilterTest {
         stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String()));
         stream.filterNot(isMultipleOfThree).process(supplier);
 
-        driver = new TopologyTestDriver(builder.build(), props);
-        for (int expectedKey : expectedKeys) {
-            driver.pipeInput(recordFactory.create(topicName, expectedKey, "V" + expectedKey));
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            for (int expectedKey : expectedKeys) {
+                driver.pipeInput(recordFactory.create(topicName, expectedKey, "V" + expectedKey));
+            }
         }
 
         assertEquals(5, supplier.theCapturedProcessor().processed.size());

@@ -34,28 +34,28 @@
     </div>
 
     <p>
-        If you want to upgrade from 1.1.x to 1.2.0 and you have customized window store implementations on the <code>ReadOnlyWindowStore</code> interface
+        If you want to upgrade from 1.1.x to 2.0.0 and you have customized window store implementations on the <code>ReadOnlyWindowStore</code> interface
         you'd need to update your code to incorporate the newly added public APIs; otherwise you don't need to make any code changes.
-        See <a href="#streams_api_changes_120">below</a> for a complete list of 1.2.0 API and semantic changes that allow you to advance your application and/or simplify your code base.
+        See <a href="#streams_api_changes_200">below</a> for a complete list of 2.0.0 API and semantic changes that allow you to advance your application and/or simplify your code base.
     </p>
 
     <p>
-        If you want to upgrade from 1.0.x to 1.2.0 and you have customized window store implementations on the <code>ReadOnlyWindowStore</code> interface
+        If you want to upgrade from 1.0.x to 2.0.0 and you have customized window store implementations on the <code>ReadOnlyWindowStore</code> interface
         you'd need to update your code to incorporate the newly added public APIs.
         Otherwise, if you are using Java 7 you don't need to make any code changes as the public API is fully backward compatible;
         but if you are using Java 8 method references in your Kafka Streams code you might need to update your code to resolve method ambiguities.
         Hot-swaping the jar-file only might not work for this case.
-        See below a complete list of <a href="#streams_api_changes_120">1.2.0</a> and <a href="#streams_api_changes_110">1.1.0</a>
+        See below a complete list of <a href="#streams_api_changes_200">2.0.0</a> and <a href="#streams_api_changes_110">1.1.0</a>
         API and semantic changes that allow you to advance your application and/or simplify your code base.
     </p>
 
     <p>
-        If you want to upgrade from 0.10.2.x or 0.11.0.x to 1.2.x and you have customized window store implementations on the <code>ReadOnlyWindowStore</code> interface
+        If you want to upgrade from 0.10.2.x or 0.11.0.x to 2.0.x and you have customized window store implementations on the <code>ReadOnlyWindowStore</code> interface
         you'd need to update your code to incorporate the newly added public APIs.
         Otherwise, if you are using Java 7 you don't need to do any code changes as the public API is fully backward compatible;
         but if you are using Java 8 method references in your Kafka Streams code you might need to update your code to resolve method ambiguities.
         However, some public APIs were deprecated and thus it is recommended to update your code eventually to allow for future upgrades.
-        See below a complete list of <a href="#streams_api_changes_120">1.2</a>, <a href="#streams_api_changes_110">1.1</a>,
+        See below a complete list of <a href="#streams_api_changes_200">2.0</a>, <a href="#streams_api_changes_110">1.1</a>,
         <a href="#streams_api_changes_100">1.0</a>, and <a href="#streams_api_changes_0110">0.11.0</a> API
         and semantic changes that allow you to advance your application and/or simplify your code base, including the usage of new features.
         Additionally, Streams API 1.1.x requires broker on-disk message format version 0.10 or higher; thus, you need to make sure that the message
@@ -63,45 +63,43 @@
     </p>
 
     <p>
-        If you want to upgrade from 0.10.1.x to 1.2.x see the Upgrade Sections for <a href="/{{version}}/documentation/#upgrade_1020_streams"><b>0.10.2</b></a>,
+        If you want to upgrade from 0.10.1.x to 2.0.x see the Upgrade Sections for <a href="/{{version}}/documentation/#upgrade_1020_streams"><b>0.10.2</b></a>,
         <a href="/{{version}}/documentation/#upgrade_1100_streams"><b>0.11.0</b></a>,
         <a href="/{{version}}/documentation/#upgrade_100_streams"><b>1.0</b></a>,
-        <a href="/{{version}}/documentation/#upgrade_100_streams"><b>1.0</b></a>, and
-        <a href="/{{version}}/documentation/#upgrade_110_streams"><b>1.2</b></a>.
-        Note, that a brokers on-disk message format must be on version 0.10 or higher to run a Kafka Streams application version 1.2 or higher.
+        <a href="/{{version}}/documentation/#upgrade_110_streams"><b>1.1</b></a>, and
+        <a href="/{{version}}/documentation/#upgrade_200_streams"><b>2.0</b></a>.
+        Note, that a brokers on-disk message format must be on version 0.10 or higher to run a Kafka Streams application version 2.0 or higher.
         See below a complete list of <a href="#streams_api_changes_0102">0.10.2</a>, <a href="#streams_api_changes_0110">0.11.0</a>,
-        <a href="#streams_api_changes_100">1.0</a>, <a href="#streams_api_changes_110">1.1</a>, and <a href="#streams_api_changes_120">1.2</a>
+        <a href="#streams_api_changes_100">1.0</a>, <a href="#streams_api_changes_110">1.1</a>, and <a href="#streams_api_changes_200">2.0</a>
         API and semantical changes that allow you to advance your application and/or simplify your code base, including the usage of new features.
     </p>
 
     <p>
-        Upgrading from 0.10.0.x to 1.2.0 directly is also possible.
+        Upgrading from 0.10.0.x to 2.0.0 directly is also possible.
         Note, that a brokers must be on version 0.10.1 or higher and on-disk message format must be on version 0.10 or higher
-        to run a Kafka Streams application version 1.2 or higher.
+        to run a Kafka Streams application version 2.0 or higher.
         See <a href="#streams_api_changes_0101">Streams API changes in 0.10.1</a>, <a href="#streams_api_changes_0102">Streams API changes in 0.10.2</a>,
         <a href="#streams_api_changes_0110">Streams API changes in 0.11.0</a>, <a href="#streams_api_changes_100">Streams API changes in 1.0</a>, and
-        <a href="#streams_api_changes_110">Streams API changes in 1.1</a>, and <a href="#streams_api_changes_120">Streams API changes in 1.2</a>
+        <a href="#streams_api_changes_110">Streams API changes in 1.1</a>, and <a href="#streams_api_changes_200">Streams API changes in 2.0</a>
         for a complete list of API changes.
-        Upgrading to 1.2.0 requires two rolling bounces with config <code>upgrade.from="0.10.0"</code> set for first upgrade phase
+        Upgrading to 2.0.0 requires two rolling bounces with config <code>upgrade.from="0.10.0"</code> set for first upgrade phase
         (cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-268%3A+Simplify+Kafka+Streams+Rebalance+Metadata+Upgrade">KIP-268</a>).
         As an alternative, an offline upgrade is also possible.
     </p>
     <ul>
-        <li> prepare your application instances for a rolling bounce and make sure that config <code>upgrade.from</code> is set to <code>"0.10.0"</code> for new version 1.2.0</li>
+        <li> prepare your application instances for a rolling bounce and make sure that config <code>upgrade.from</code> is set to <code>"0.10.0"</code> for new version 2.0.0</li>
         <li> bounce each instance of your application once </li>
-        <li> prepare your newly deployed 1.2.0 application instances for a second round of rolling bounces; make sure to remove the value for config <code>upgrade.mode</code> </li>
+        <li> prepare your newly deployed 2.0.0 application instances for a second round of rolling bounces; make sure to remove the value for config <code>upgrade.mode</code> </li>
         <li> bounce each instance of your application once more to complete the upgrade </li>
     </ul>
-    <p> Upgrading from 0.10.0.x to 1.2.0 in offline mode: </p>
+    <p> Upgrading from 0.10.0.x to 2.0.0 in offline mode: </p>
     <ul>
         <li> stop all old (0.10.0.x) application instances </li>
         <li> update your code and swap old code and jar file with new code and new jar file </li>
-        <li> restart all new (1.2.0) application instances </li>
+        <li> restart all new (2.0.0) application instances </li>
     </ul>
 
-    <!-- TODO: verify release verion and update `id` and `href` attributes (also at other places that link to this headline) -->
-    
-    <h3><a id="streams_api_changes_120" href="#streams_api_changes_120">Streams API changes in 1.2.0</a></h3>
+    <h3><a id="streams_api_changes_200" href="#streams_api_changes_200">Streams API changes in 2.0.0</a></h3>
     <p>
         We have removed the <code>skippedDueToDeserializationError-rate</code> and <code>skippedDueToDeserializationError-total</code> metrics.
         Deserialization errors, and all other causes of record skipping, are now accounted for in the pre-existing metrics
@@ -138,7 +136,6 @@
         For users who have customized window store implementations on the above interface, they'd need to update their code to implement the newly added method as well.
         For more details, see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-261%3A+Add+Single+Value+Fetch+in+Window+Stores">KIP-261</a>.
     </p>
-
     <p>
         We have added public <code>WindowedSerdes</code> to allow users to read from / write to a topic storing windowed table changelogs directly.
         In addition, in <code>StreamsConfig</code> we have also added <code>default.windowed.key.serde.inner</code> and <code>default.windowed.value.serde.inner</code>
@@ -151,22 +148,26 @@
         For more details, see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-245%3A+Use+Properties+instead+of+StreamsConfig+in+KafkaStreams+constructor">KIP-245</a>.
     </p>
     <p>
-      Kafka 1.2.0 allows to manipulate timestamps of output records using the Processor API (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-251%3A+Allow+timestamp+manipulation+in+Processor+API">KIP-251</a>).
-      To enable this new feature, <code>ProcessorContext#forward(...)</code> was modified.
-      The two existing overloads <code>#forward(Object key, Object value, String childName)</code> and <code>#forward(Object key, Object value, int childIndex)</code> were deprecated and a new overload <code>#forward(Object key, Object value, To to)</code> was added.
-      The new class <code>To</code> allows you to send records to all or specific downstream processors by name and to set the timestamp for the output record.
-      Forwarding based on child index is not supported in the new API any longer.
+        Kafka 2.0.0 allows to manipulate timestamps of output records using the Processor API (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-251%3A+Allow+timestamp+manipulation+in+Processor+API">KIP-251</a>).
+        To enable this new feature, <code>ProcessorContext#forward(...)</code> was modified.
+        The two existing overloads <code>#forward(Object key, Object value, String childName)</code> and <code>#forward(Object key, Object value, int childIndex)</code> were deprecated and a new overload <code>#forward(Object key, Object value, To to)</code> was added.
+        The new class <code>To</code> allows you to send records to all or specific downstream processors by name and to set the timestamp for the output record.
+        Forwarding based on child index is not supported in the new API any longer.
     </p>
     <p>
         <a href="https://cwiki.apache.org/confluence/x/DVyHB">KIP-284</a> changed the retention time for repartition topics by setting its default value to <code>Long.MAX_VALUE</code>.
         Instead of relying on data retention Kafka Streams uses the new purge data API to delete consumed data from those topics and to keep used storage small now.
     </p>
     <p>
-      Kafka Streams DSL for Scala is a new Kafka Streams client library available for developers authoring Kafka Streams applications in Scala.  It wraps core Kafka Streams DSL types to make it easier to call when
-      interoperating with Scala code.  For example, it includes higher order functions as parameters for transformations avoiding the need anonymous classes in Java 7 or experimental SAM type conversions in Scala 2.11, automatic conversion between Java and Scala collection types, a way
-      to implicitly provide SerDes to reduce boilerplate from your application and make it more typesafe, and more!  For more information see the
-      <a href="/{{version}}/documentation/streams/developer-guide/dsl-api.html#scala-dsl">Kafka Streams DSL for Scala documentation</a> and
-      <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-270+-+A+Scala+Wrapper+Library+for+Kafka+Streams">KIP-270</a>.
+        We have modified the <code>ProcessorStateManger#register(...)</code> signature and removed the deprecated <code>loggingEnabled</code> boolean parameter as it is specified in the <code>StoreBuilder</code>.
+        Users who used this function to register their state stores into the processor topology need to simply update their code and remove this parameter from the caller.
+    </p>
+    <p>
+        Kafka Streams DSL for Scala is a new Kafka Streams client library available for developers authoring Kafka Streams applications in Scala.  It wraps core Kafka Streams DSL types to make it easier to call when
+        interoperating with Scala code.  For example, it includes higher order functions as parameters for transformations avoiding the need anonymous classes in Java 7 or experimental SAM type conversions in Scala 2.11, automatic conversion between Java and Scala collection types, a way
+        to implicitly provide SerDes to reduce boilerplate from your application and make it more typesafe, and more!  For more information see the
+        <a href="/{{version}}/documentation/streams/developer-guide/dsl-api.html#scala-dsl">Kafka Streams DSL for Scala documentation</a> and
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-270+-+A+Scala+Wrapper+Library+for+Kafka+Streams">KIP-270</a>.
     </p>
 
     <h3><a id="streams_api_changes_110" href="#streams_api_changes_110">Streams API changes in 1.1.0</a></h3>
@@ -177,9 +178,9 @@
     </p>
 
     <p>
-	There is a new artifact <code>kafka-streams-test-utils</code> providing a <code>TopologyTestDriver</code>, <code>ConsumerRecordFactory</code>, and <code>OutputVerifier</code> class.
-	You can include the new artifact as a regular dependency to your unit tests and use the test driver to test your business logic of your Kafka Streams application.
-	For more details, see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-247%3A+Add+public+test+utils+for+Kafka+Streams">KIP-247</a>.
+	    There is a new artifact <code>kafka-streams-test-utils</code> providing a <code>TopologyTestDriver</code>, <code>ConsumerRecordFactory</code>, and <code>OutputVerifier</code> class.
+	    You can include the new artifact as a regular dependency to your unit tests and use the test driver to test your business logic of your Kafka Streams application.
+	    For more details, see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-247%3A+Add+public+test+utils+for+Kafka+Streams">KIP-247</a>.
     </p>
 
     <p>

@@ -31,7 +31,6 @@ import org.apache.kafka.streams.scala.kstream._
 import org.apache.kafka.common.serialization._
 
 import ImplicitConversions._
-import com.typesafe.scalalogging.LazyLogging
 
 import org.apache.kafka.streams.{KafkaStreams => KafkaStreamsJ, StreamsBuilder => StreamsBuilderJ, _}
 import org.apache.kafka.streams.kstream.{KTable => KTableJ, KStream => KStreamJ, KGroupedStream => KGroupedStreamJ, _}
@@ -40,7 +39,7 @@ import collection.JavaConverters._
 /**
  * Test suite that verifies that the topology built by the Java and Scala APIs match.
  */ 
-class TopologyTest extends JUnitSuite with LazyLogging {
+class TopologyTest extends JUnitSuite {
 
   val inputTopic = "input-topic"
   val userClicksTopic = "user-clicks-topic"
