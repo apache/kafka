@@ -61,7 +61,8 @@ public class KStreamWindowAggregateTest {
         final KTable<Windowed<String>, String> table2 = builder
             .stream(topic1, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey(Serialized.with(Serdes.String(), Serdes.String()))
-            .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, TimeWindows.of(10).advanceBy(5), Serdes.String(), "topic1-Canonized");
+            .windowedBy(TimeWindows.of(10).advanceBy(5))
+            .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic1-Canonized").withValueSerde(Serdes.String()));
 
         final MockProcessorSupplier<Windowed<String>, String> supplier = new MockProcessorSupplier<>();
         table2.toStream().process(supplier);
@@ -84,7 +85,6 @@ public class KStreamWindowAggregateTest {
             driver.pipeInput(recordFactory.create(topic1, "B", "2", 13L));
             driver.pipeInput(recordFactory.create(topic1, "C", "3", 14L));
         }
-
 
         assertEquals(
             Utils.mkList(
@@ -119,14 +119,17 @@ public class KStreamWindowAggregateTest {
         final KTable<Windowed<String>, String> table1 = builder
             .stream(topic1, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey(Serialized.with(Serdes.String(), Serdes.String()))
-            .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, TimeWindows.of(10).advanceBy(5), Serdes.String(), "topic1-Canonized");
+            .windowedBy(TimeWindows.of(10).advanceBy(5))
+            .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic1-Canonized").withValueSerde(Serdes.String()));
 
         final MockProcessorSupplier<Windowed<String>, String> supplier = new MockProcessorSupplier<>();
         table1.toStream().process(supplier);
 
         final KTable<Windowed<String>, String> table2 = builder
-            .stream(topic2, Consumed.with(Serdes.String(), Serdes.String())).groupByKey(Serialized.with(Serdes.String(), Serdes.String()))
-            .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, TimeWindows.of(10).advanceBy(5), Serdes.String(), "topic2-Canonized");
+            .stream(topic2, Consumed.with(Serdes.String(), Serdes.String()))
+            .groupByKey(Serialized.with(Serdes.String(), Serdes.String()))
+            .windowedBy(TimeWindows.of(10).advanceBy(5))
+            .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic2-Canonized").withValueSerde(Serdes.String()));
 
         table2.toStream().process(supplier);
 

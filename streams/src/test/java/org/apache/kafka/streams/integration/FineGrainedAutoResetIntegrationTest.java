@@ -36,7 +36,7 @@ import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
+import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestCondition;
@@ -63,7 +63,7 @@ import static org.junit.Assert.assertThat;
 import static org.junit.Assert.fail;
 
 @Category({IntegrationTest.class})
-public class KStreamsFineGrainedAutoResetIntegrationTest {
+public class FineGrainedAutoResetIntegrationTest {
 
     private static final int NUM_BROKERS = 1;
     private static final String DEFAULT_OUTPUT_TOPIC = "outputTopic";
@@ -193,9 +193,9 @@ public class KStreamsFineGrainedAutoResetIntegrationTest {
         final KStream<String, String> pattern2Stream = builder.stream(Pattern.compile("topic-[A-D]" + topicSuffix), Consumed.<String, String>with(Topology.AutoOffsetReset.LATEST));
         final KStream<String, String> namedTopicsStream = builder.stream(Arrays.asList(topicY, topicZ));
 
-        pattern1Stream.to(stringSerde, stringSerde, outputTopic);
-        pattern2Stream.to(stringSerde, stringSerde, outputTopic);
-        namedTopicsStream.to(stringSerde, stringSerde, outputTopic);
+        pattern1Stream.to(outputTopic, Produced.with(stringSerde, stringSerde));
+        pattern2Stream.to(outputTopic, Produced.with(stringSerde, stringSerde));
+        namedTopicsStream.to(outputTopic, Produced.with(stringSerde, stringSerde));
 
         final Properties producerConfig = TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, StringSerializer.class);
 
@@ -245,16 +245,13 @@ public class KStreamsFineGrainedAutoResetIntegrationTest {
     }
 
     @Test
-    public void shouldThrowExceptionOverlappingPattern() throws  Exception {
-        final KStreamBuilder builder = new KStreamBuilder();
+    public void shouldThrowExceptionOverlappingPattern() {
+        final StreamsBuilder builder = new StreamsBuilder();
         //NOTE this would realistically get caught when building topology, the test is for completeness
-        builder.stream(KStreamBuilder.AutoOffsetReset.EARLIEST, Pattern.compile("topic-[A-D]_1"));
-        builder.stream(KStreamBuilder.AutoOffsetReset.LATEST, Pattern.compile("topic-[A-D]_1"));
+        builder.stream(Pattern.compile("topic-[A-D]_1"), Consumed.with(Topology.AutoOffsetReset.EARLIEST));
 
-        // TODO: we should check regex overlap at topology construction time and then throw TopologyException
-        //       instead of at runtime. See KAFKA-5660
         try {
-            builder.earliestResetTopicsPattern();
+            builder.stream(Pattern.compile("topic-[A-D]_1"), Consumed.with(Topology.AutoOffsetReset.LATEST));
             fail("Should have thrown TopologyException");
         } catch (final TopologyException expected) {
             // do nothing
@@ -262,7 +259,7 @@ public class KStreamsFineGrainedAutoResetIntegrationTest {
     }
 
     @Test
-    public void shouldThrowExceptionOverlappingTopic() throws  Exception {
+    public void shouldThrowExceptionOverlappingTopic() {
         final StreamsBuilder builder = new StreamsBuilder();
         //NOTE this would realistically get caught when building topology, the test is for completeness
         builder.stream(Pattern.compile("topic-[A-D]_1"), Consumed.with(Topology.AutoOffsetReset.EARLIEST));
@@ -289,7 +286,7 @@ public class KStreamsFineGrainedAutoResetIntegrationTest {
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, String> exceptionStream = builder.stream(NOOP);
 
-        exceptionStream.to(stringSerde, stringSerde, DEFAULT_OUTPUT_TOPIC);
+        exceptionStream.to(DEFAULT_OUTPUT_TOPIC, Produced.with(stringSerde, stringSerde));
 
         KafkaStreams streams = new KafkaStreams(builder.build(), localConfig);
 

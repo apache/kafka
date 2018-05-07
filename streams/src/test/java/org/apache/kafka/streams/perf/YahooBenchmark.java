@@ -27,19 +27,23 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.ForeachAction;
+import org.apache.kafka.streams.kstream.Joined;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.streams.state.WindowStore;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -321,7 +325,7 @@ public class YahooBenchmark {
                 public String apply(ProjectedEvent value1, CampaignAd value2) {
                     return value2.campaignID;
                 }
-            }, Serdes.String(), Serdes.serdeFrom(projectedEventSerializer, projectedEventDeserializer));
+            }, Joined.<String, ProjectedEvent, CampaignAd>with(Serdes.String(), Serdes.serdeFrom(projectedEventSerializer, projectedEventDeserializer), null));
 
 
         // key by campaign rather than by ad as original
@@ -336,7 +340,8 @@ public class YahooBenchmark {
         // calculate windowed counts
         keyedByCampaign
             .groupByKey(Serialized.with(Serdes.String(), Serdes.String()))
-            .count(TimeWindows.of(10 * 1000), "time-windows");
+            .windowedBy(TimeWindows.of(10 * 1000))
+            .count(Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("time-windows"));
 
         return new KafkaStreams(builder.build(), streamConfig);
     }

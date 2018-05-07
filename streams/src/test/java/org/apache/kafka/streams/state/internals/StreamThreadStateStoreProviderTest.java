@@ -20,13 +20,16 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
@@ -68,21 +71,22 @@ public class StreamThreadStateStoreProviderTest {
     private StreamThread threadMock;
     private Map<TaskId, StreamTask> tasks;
 
-    @SuppressWarnings("deprecation")
     @Before
     public void before() {
-        final TopologyBuilder builder = new TopologyBuilder();
+        final Topology builder = new Topology();
         builder.addSource("the-source", topicName);
         builder.addProcessor("the-processor", new MockProcessorSupplier(), "the-source");
-        builder.addStateStore(Stores.create("kv-store")
-            .withStringKeys()
-            .withStringValues().inMemory().build(), "the-processor");
+        builder.addStateStore(new KeyValueStoreBuilder<>(
+                Stores.inMemoryKeyValueStore("kv-store"),
+                Serdes.String(),
+                Serdes.String(),
+                new SystemTime()), "the-processor");
 
-        builder.addStateStore(Stores.create("window-store")
-            .withStringKeys()
-            .withStringValues()
-            .persistent()
-            .windowed(10, 10, 2, false).build(), "the-processor");
+        builder.addStateStore(new WindowStoreBuilder<>(
+                Stores.persistentWindowStore("window-store", 10, 10, 2, false),
+                Serdes.String(),
+                Serdes.String(),
+                new SystemTime()), "the-processor");
 
         final Properties properties = new Properties();
         final String applicationId = "applicationId";
@@ -96,8 +100,7 @@ public class StreamThreadStateStoreProviderTest {
         configureRestoreConsumer(clientSupplier, "applicationId-kv-store-changelog");
         configureRestoreConsumer(clientSupplier, "applicationId-window-store-changelog");
 
-        builder.setApplicationId(applicationId);
-        final ProcessorTopology topology = builder.build(null);
+        final ProcessorTopology topology = TopologyWrapper.getInternalTopologyBuilder(builder).build();
 
         tasks = new HashMap<>();
         stateDirectory = new StateDirectory(streamsConfig, new MockTime());

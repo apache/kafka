@@ -597,34 +597,6 @@ public class KafkaStreams {
      * @deprecated use {@link #KafkaStreams(Topology, Properties)} instead
      */
     @Deprecated
-    public KafkaStreams(final org.apache.kafka.streams.processor.TopologyBuilder builder,
-                        final Properties props) {
-        this(builder.internalTopologyBuilder, new StreamsConfig(props), new DefaultKafkaClientSupplier());
-    }
-
-    /**
-     * @deprecated use {@link #KafkaStreams(Topology, Properties)} instead
-     */
-    @Deprecated
-    public KafkaStreams(final org.apache.kafka.streams.processor.TopologyBuilder builder,
-                        final StreamsConfig config) {
-        this(builder.internalTopologyBuilder, config, new DefaultKafkaClientSupplier());
-    }
-
-    /**
-     * @deprecated use {@link #KafkaStreams(Topology, Properties, KafkaClientSupplier)} instead
-     */
-    @Deprecated
-    public KafkaStreams(final org.apache.kafka.streams.processor.TopologyBuilder builder,
-                        final StreamsConfig config,
-                        final KafkaClientSupplier clientSupplier) {
-        this(builder.internalTopologyBuilder, config, clientSupplier);
-    }
-
-    /**
-     * @deprecated use {@link #KafkaStreams(Topology, Properties)} instead
-     */
-    @Deprecated
     public KafkaStreams(final Topology topology,
                         final StreamsConfig config) {
         this(topology.internalTopologyBuilder, config, new DefaultKafkaClientSupplier());

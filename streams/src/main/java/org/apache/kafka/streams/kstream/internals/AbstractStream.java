@@ -72,12 +72,6 @@ public abstract class AbstractStream<K> {
         return allSourceNodes;
     }
 
-    String getOrCreateName(final String queryableStoreName, final String prefix) {
-        final String returnName = queryableStoreName != null ? queryableStoreName : builder.newStoreName(prefix);
-        Topic.validate(returnName);
-        return returnName;
-    }
-
     static <T2, T1, R> ValueJoiner<T2, T1, R> reverseJoiner(final ValueJoiner<T1, T2, R> joiner) {
         return new ValueJoiner<T2, T1, R>() {
             @Override

@@ -54,8 +54,10 @@ import org.apache.kafka.streams.kstream.WindowedSerdes;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlySessionStore;
+import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockMapper;
@@ -162,14 +164,13 @@ public class KStreamAggregationIntegrationTest {
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void shouldReduce() throws Exception {
         produceMessages(mockTime.milliseconds());
         groupedStream
-            .reduce(reducer, "reduce-by-key")
+            .reduce(reducer, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("reduce-by-key"))
             .toStream()
-            .to(Serdes.String(), Serdes.String(), outputTopic);
+            .to(outputTopic, Produced.with(Serdes.String(), Serdes.String()));
 
         startStreams();
 
@@ -286,17 +287,15 @@ public class KStreamAggregationIntegrationTest {
         }
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void shouldAggregate() throws Exception {
         produceMessages(mockTime.milliseconds());
         groupedStream.aggregate(
             initializer,
             aggregator,
-            Serdes.Integer(),
-            "aggregate-by-selected-key")
+            Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("aggregate-by-selected-key"))
             .toStream()
-            .to(Serdes.String(), Serdes.Integer(), outputTopic);
+            .to(outputTopic, Produced.with(Serdes.String(), Serdes.Integer()));
 
         startStreams();
 
@@ -441,26 +440,24 @@ public class KStreamAggregationIntegrationTest {
         )));
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void shouldCount() throws Exception {
         produceMessages(mockTime.milliseconds());
 
-        groupedStream.count("count-by-key")
+        groupedStream.count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("count-by-key"))
                 .toStream()
-                .to(Serdes.String(), Serdes.Long(), outputTopic);
+                .to(outputTopic, Produced.with(Serdes.String(), Serdes.Long()));
 
         shouldCountHelper();
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void shouldCountWithInternalStore() throws Exception {
         produceMessages(mockTime.milliseconds());
 
         groupedStream.count()
                 .toStream()
-                .to(Serdes.String(), Serdes.Long(), outputTopic);
+                .to(outputTopic, Produced.with(Serdes.String(), Serdes.Long()));
 
         shouldCountHelper();
     }
@@ -510,7 +507,6 @@ public class KStreamAggregationIntegrationTest {
 
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void shouldCountSessionWindows() throws Exception {
         final long sessionGap = 5 * 60 * 1000L;
@@ -577,7 +573,8 @@ public class KStreamAggregationIntegrationTest {
 
         builder.stream(userSessionsStream, Consumed.with(Serdes.String(), Serdes.String()))
                 .groupByKey(Serialized.with(Serdes.String(), Serdes.String()))
-                .count(SessionWindows.with(sessionGap).until(maintainMillis))
+                .windowedBy(SessionWindows.with(sessionGap).until(maintainMillis))
+                .count()
                 .toStream()
                 .foreach(new ForeachAction<Windowed<String>, Long>() {
                     @Override
@@ -598,7 +595,6 @@ public class KStreamAggregationIntegrationTest {
         assertThat(results.get(new Windowed<>("penny", new SessionWindow(t3, t3))), equalTo(1L));
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void shouldReduceSessionWindows() throws Exception {
         final long sessionGap = 1000L; // something to do with time
@@ -665,12 +661,13 @@ public class KStreamAggregationIntegrationTest {
         final String userSessionsStore = "UserSessionsStore";
         builder.stream(userSessionsStream, Consumed.with(Serdes.String(), Serdes.String()))
                 .groupByKey(Serialized.with(Serdes.String(), Serdes.String()))
+                .windowedBy(SessionWindows.with(sessionGap).until(maintainMillis))
                 .reduce(new Reducer<String>() {
                     @Override
                     public String apply(final String value1, final String value2) {
                         return value1 + ":" + value2;
                     }
-                }, SessionWindows.with(sessionGap).until(maintainMillis), userSessionsStore)
+                }, Materialized.<String, String, SessionStore<Bytes, byte[]>>as(userSessionsStore))
                 .toStream()
                 .foreach(new ForeachAction<Windowed<String>, String>() {
                     @Override
@@ -734,10 +731,8 @@ public class KStreamAggregationIntegrationTest {
         kafkaStreams.start();
     }
 
-    private <K, V> List<KeyValue<K, V>> receiveMessages(final Deserializer<K>
-                                                            keyDeserializer,
-                                                        final Deserializer<V>
-                                                            valueDeserializer,
+    private <K, V> List<KeyValue<K, V>> receiveMessages(final Deserializer<K> keyDeserializer,
+                                                        final Deserializer<V> valueDeserializer,
                                                         final int numMessages)
         throws InterruptedException {
         return receiveMessages(keyDeserializer, valueDeserializer, null, numMessages);
@@ -767,9 +762,9 @@ public class KStreamAggregationIntegrationTest {
     }
 
     private <K, V> String readWindowedKeyedMessagesViaConsoleConsumer(final Deserializer<K> keyDeserializer,
-                                                  final Deserializer<V> valueDeserializer,
-                                                  final Class innerClass,
-                                                  final int numMessages) {
+                                                                      final Deserializer<V> valueDeserializer,
+                                                                      final Class innerClass,
+                                                                      final int numMessages) {
         ByteArrayOutputStream newConsole = new ByteArrayOutputStream();
         PrintStream originalStream = System.out;
         try (PrintStream newStream = new PrintStream(newConsole)) {

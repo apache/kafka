@@ -29,7 +29,6 @@ import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.ValueMapperWithKey;
-import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.internals.SinkNode;
 import org.apache.kafka.streams.processor.internals.SourceNode;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -345,11 +344,11 @@ public class KTableImplTest {
                 );
 
         table1.groupBy(MockMapper.<String, String>noOpKeyValueMapper())
-            .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, MockAggregator.TOSTRING_REMOVER, "mock-result1");
+            .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, MockAggregator.TOSTRING_REMOVER, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("mock-result1"));
 
 
         table1.groupBy(MockMapper.<String, String>noOpKeyValueMapper())
-            .reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, "mock-result2");
+            .reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("mock-result2"));
 
         driver.setUp(builder, stateDir, stringSerde, stringSerde);
         driver.setTime(0L);
@@ -411,24 +410,7 @@ public class KTableImplTest {
 
     @Test
     public void shouldAllowNullStoreInJoin() {
-        table.join(table, MockValueJoiner.TOSTRING_JOINER, null, null);
-    }
-
-    @SuppressWarnings("unchecked")
-    @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullStoreSupplierInJoin() {
-        table.join(table, MockValueJoiner.TOSTRING_JOINER, (StateStoreSupplier) null);
-    }
-
-    @SuppressWarnings("unchecked")
-    @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullStoreSupplierInLeftJoin() {
-        table.leftJoin(table, MockValueJoiner.TOSTRING_JOINER, (StateStoreSupplier) null);
-    }
-
-    @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullStoreSupplierInOuterJoin() {
-        table.outerJoin(table, MockValueJoiner.TOSTRING_JOINER, (StateStoreSupplier) null);
+        table.join(table, MockValueJoiner.TOSTRING_JOINER);
     }
 
     @Test(expected = NullPointerException.class)
@@ -463,7 +445,7 @@ public class KTableImplTest {
             public boolean test(final String key, final String value) {
                 return false;
             }
-        }, (Materialized<String, String, KeyValueStore<Bytes, byte[]>>) null);
+        }, (Materialized) null);
     }
 
     @Test(expected = NullPointerException.class)
@@ -473,7 +455,7 @@ public class KTableImplTest {
             public boolean test(final String key, final String value) {
                 return false;
             }
-        }, (Materialized<String, String, KeyValueStore<Bytes, byte[]>>) null);
+        }, (Materialized) null);
     }
 
     @Test(expected = NullPointerException.class)

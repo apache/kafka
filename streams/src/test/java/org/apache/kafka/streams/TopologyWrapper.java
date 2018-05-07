@@ -14,26 +14,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor;
+package org.apache.kafka.streams;
 
-import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
 /**
- * A processor supplier that can create one or more {@link Processor} instances.
+ *  This class allows to access the {@link InternalTopologyBuilder} a {@link Topology} object.
  *
- * It is used in {@link Topology} for adding new processor operators, whose generated
- * topology can then be replicated (and thus creating one or more {@link Processor} instances)
- * and distributed to multiple stream threads.
- *
- * @param <K> the type of keys
- * @param <V> the type of values
  */
-public interface ProcessorSupplier<K, V> {
+public class TopologyWrapper extends Topology {
 
-    /**
-     * Return a new {@link Processor} instance.
-     *
-     * @return  a new {@link Processor} instance
-     */
-    Processor<K, V> get();
+    static public InternalTopologyBuilder getInternalTopologyBuilder(final Topology topology) {
+        return topology.internalTopologyBuilder;
+    }
+
+    public InternalTopologyBuilder getInternalBuilder() {
+        return internalTopologyBuilder;
+    }
+
+    public void setApplicationId(String applicationId) {
+        internalTopologyBuilder.setApplicationId(applicationId);
+    }
 }
