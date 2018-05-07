@@ -78,12 +78,6 @@ class LeaderEpochFileCacheTest {
     //Given cache with some data on leader
     val cache = new LeaderEpochFileCache(tp, () => leoFinder, checkpoint)
 
-    // when requesting undefined offset from empty cache
-    val epochAndOffsetForUndefined = cache.endOffsetFor(UNDEFINED_EPOCH)
-    // should return undefined offset
-    assertEquals("Expected undefined epoch and offset if undefined epoch requested. Empty cache.",
-                 expectedEpochEndOffset, epochAndOffsetForUndefined)
-
     // assign couple of epochs
     cache.assign(epoch = 2, offset = 11)
     cache.assign(epoch = 3, offset = 12)
@@ -165,7 +159,8 @@ class LeaderEpochFileCacheTest {
     val offsetFor = cache.endOffsetFor(UNDEFINED_EPOCH)
 
     //Then
-    assertEquals(UNDEFINED_EPOCH_OFFSET, offsetFor)
+    assertEquals("Expected undefined epoch and offset if undefined epoch requested. Empty cache.",
+                 (UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET), offsetFor)
   }
 
   @Test

@@ -289,7 +289,7 @@ class ReplicaFetcherThread(name: String,
   /**
    * Truncate the log for each partition's epoch based on leader's returned epoch and offset.
    *  -- If the leader replied with undefined epoch offset, we must use the high watermark. This can
-   *  happen if 1) the leader is still using message format older than KAFKA_0_11_0_IV2; 2) the follower
+   *  happen if 1) the leader is still using message format older than KAFKA_0_11_0; 2) the follower
    *  requested leader epoch < the first leader epoch known to the leader.
    *  -- If the leader replied with the valid offset but undefined leader epoch, we truncate to
    *  leader's offset if it is lower than follower's Log End Offset. This may happen if the
