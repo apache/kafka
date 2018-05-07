@@ -27,7 +27,6 @@ import org.apache.kafka.streams.kstream.KGroupedTable;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Reducer;
-import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 
@@ -79,11 +78,13 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
         this.valSerde = valSerde;
     }
 
-    private void buildAggregate(final ProcessorSupplier<K, Change<V>> aggregateSupplier,
+    private <T> void buildAggregate(final ProcessorSupplier<K, Change<V>> aggregateSupplier,
                                 final String topic,
                                 final String funcName,
                                 final String sourceName,
-                                final String sinkName) {
+                                final String sinkName,
+                                final StatefulRepartitionNode.StatefulRepartitionNodeBuilder<K, V, T> statefulRepartitionNodeBuilder) {
+
         final Serializer<? extends K> keySerializer = keySerde == null ? null : keySerde.serializer();
         final Deserializer<? extends K> keyDeserializer = keySerde == null ? null : keySerde.deserializer();
         final Serializer<? extends V> valueSerializer = valSerde == null ? null : valSerde.serializer();
@@ -92,15 +93,13 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
         final ChangedSerializer<? extends V> changedValueSerializer = new ChangedSerializer<>(valueSerializer);
         final ChangedDeserializer<? extends V> changedValueDeserializer = new ChangedDeserializer<>(valueDeserializer);
 
-        // send the aggregate key-value pairs to the intermediate topic for partitioning
-        builder.internalTopologyBuilder.addInternalTopic(topic);
-        builder.internalTopologyBuilder.addSink(sinkName, topic, keySerializer, changedValueSerializer, null, this.name);
-
-        // read the intermediate topic with RecordMetadataTimestampExtractor
-        builder.internalTopologyBuilder.addSource(null, sourceName, new FailOnInvalidTimestamp(), keyDeserializer, changedValueDeserializer, topic);
-
-        // aggregate the values with the aggregator and local store
-        builder.internalTopologyBuilder.addProcessor(funcName, aggregateSupplier, sourceName);
+        statefulRepartitionNodeBuilder.withRepartitionTopic(topic)
+            .withSinkName(sinkName)
+            .withSourceName(sourceName)
+            .withStatefulProcessorSupplier(aggregateSupplier)
+            .withProcessorNodeName(funcName)
+            .withKeySerde(keySerde)
+            .withValueSerde(valSerde);
     }
 
     private <T> KTable<K, T> doAggregate(final ProcessorSupplier<K, Change<V>> aggregateSupplier,
@@ -110,12 +109,20 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
         final String sourceName = builder.newProcessorName(KStreamImpl.SOURCE_NAME);
         final String funcName = builder.newProcessorName(functionName);
 
+        StatefulRepartitionNode.StatefulRepartitionNodeBuilder<K, V, T> statefulRepartitionNodeBuilder = StatefulRepartitionNode.statefulRepartitionNodeBuilder();
+
         buildAggregate(aggregateSupplier,
                        materialized.storeName() + KStreamImpl.REPARTITION_TOPIC_SUFFIX,
                        funcName,
-                       sourceName, sinkName);
-        builder.internalTopologyBuilder.addStateStore(new KeyValueStoreMaterializer<>(materialized)
-                                                              .materialize(), funcName);
+                       sourceName,
+                       sinkName,
+                       statefulRepartitionNodeBuilder);
+
+        statefulRepartitionNodeBuilder.withMaterialized(materialized)
+            .withParentProcessorNodeName(this.name)
+            .withNodeName(funcName);
+
+        builder.addNode(statefulRepartitionNodeBuilder.build());
 
         // return the KTable representation with the intermediate topic as the sources
         return new KTableImpl<>(builder, funcName, aggregateSupplier, Collections.singleton(sourceName), materialized.storeName(), materialized.isQueryable());
