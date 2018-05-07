@@ -23,6 +23,7 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -395,7 +396,9 @@ public interface KTable<K, V> {
      * This topic will be named "${applicationId}-XXX-repartition", where "applicationId" is user-specified in
      * {@link  StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is
      * an internally generated name, and "-repartition" is a fixed suffix.
-     * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
+     *
+     * You can retrieve all generated internal topic names via {@link Topology#describe()}.
+     *
      * <p>
      * All data of this {@code KTable} will be redistributed through the repartitioning topic by writing all update
      * records to and rereading all updated records from it, such that the resulting {@link KGroupedTable} is partitioned
@@ -425,7 +428,9 @@ public interface KTable<K, V> {
      * This topic will be named "${applicationId}-XXX-repartition", where "applicationId" is user-specified in
      * {@link  StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is
      * an internally generated name, and "-repartition" is a fixed suffix.
-     * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
+     *
+     * You can retrieve all generated internal topic names via {@link Topology#describe()}.
+     *
      * <p>
      * All data of this {@code KTable} will be redistributed through the repartitioning topic by writing all update
      * records to and rereading all updated records from it, such that the resulting {@link KGroupedTable} is partitioned

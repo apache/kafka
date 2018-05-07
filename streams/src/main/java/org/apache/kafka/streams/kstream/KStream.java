@@ -20,7 +20,6 @@ import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.Consumed;
-import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
@@ -753,7 +752,9 @@ public interface KStream<K, V> {
      * This topic will be named "${applicationId}-XXX-repartition", where "applicationId" is user-specified in
      * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is
      * an internally generated name, and "-repartition" is a fixed suffix.
-     * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
+     *
+     * You can retrieve all generated internal topic names via {@link Topology#describe()}.
+     *
      * <p>
      * For this case, all data of this stream will be redistributed through the repartitioning topic by writing all
      * records to it, and rereading all records from it, such that the resulting {@link KGroupedStream} is partitioned
@@ -780,7 +781,9 @@ public interface KStream<K, V> {
      * This topic will be named "${applicationId}-XXX-repartition", where "applicationId" is user-specified in
      * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is
      * an internally generated name, and "-repartition" is a fixed suffix.
-     * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
+     *
+     * You can retrieve all generated internal topic names via {@link Topology#describe()}.
+     *
      * <p>
      * For this case, all data of this stream will be redistributed through the repartitioning topic by writing all
      * records to it, and rereading all records from it, such that the resulting {@link KGroupedStream} is partitioned
@@ -803,7 +806,9 @@ public interface KStream<K, V> {
      * This topic will be named "${applicationId}-XXX-repartition", where "applicationId" is user-specified in
      * {@link  StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is
      * an internally generated name, and "-repartition" is a fixed suffix.
-     * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
+     *
+     * You can retrieve all generated internal topic names via {@link Topology#describe()}.
+     *
      * <p>
      * All data of this stream will be redistributed through the repartitioning topic by writing all records to it,
      * and rereading all records from it, such that the resulting {@link KGroupedStream} is partitioned on the new key.
@@ -829,7 +834,9 @@ public interface KStream<K, V> {
      * This topic will be named "${applicationId}-XXX-repartition", where "applicationId" is user-specified in
      * {@link  StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is
      * an internally generated name, and "-repartition" is a fixed suffix.
-     * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
+     *
+     * You can retrieve all generated internal topic names via {@link Topology#describe()}.
+     *
      * <p>
      * All data of this stream will be redistributed through the repartitioning topic by writing all records to it,
      * and rereading all records from it, such that the resulting {@link KGroupedStream} is partitioned on the new key.
@@ -890,7 +897,7 @@ public interface KStream<K, V> {
      * user-specified in {@link  StreamsConfig} via parameter
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is an internally generated name, and
      * "-repartition" is a fixed suffix.
-     * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
+     *
      * <p>
      * Repartitioning can happen for one or both of the joining {@code KStream}s.
      * For this case, all data of the stream will be redistributed through the repartitioning topic by writing all
@@ -903,7 +910,8 @@ public interface KStream<K, V> {
      * in {@link StreamsConfig} via parameter
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is an
      * internally generated name, and "-changelog" is a fixed suffix.
-     * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
+     *
+     * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
      * @param otherStream the {@code KStream} to be joined with this stream
      * @param joiner      a {@link ValueJoiner} that computes the join result for a pair of matching records
@@ -966,7 +974,6 @@ public interface KStream<K, V> {
      * user-specified in {@link  StreamsConfig} via parameter
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is an internally generated name, and
      * "-repartition" is a fixed suffix.
-     * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
      * <p>
      * Repartitioning can happen for one or both of the joining {@code KStream}s.
      * For this case, all data of the stream will be redistributed through the repartitioning topic by writing all
@@ -979,7 +986,8 @@ public interface KStream<K, V> {
      * in {@link StreamsConfig} via parameter
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is an
      * internally generated name, and "-changelog" is a fixed suffix.
-     * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
+     *
+     * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
      * @param otherStream the {@code KStream} to be joined with this stream
      * @param joiner      a {@link ValueJoiner} that computes the join result for a pair of matching records
@@ -1049,7 +1057,6 @@ public interface KStream<K, V> {
      * user-specified in {@link StreamsConfig} via parameter
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is an internally generated name, and
      * "-repartition" is a fixed suffix.
-     * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
      * <p>
      * Repartitioning can happen for one or both of the joining {@code KStream}s.
      * For this case, all data of the stream will be redistributed through the repartitioning topic by writing all
@@ -1061,7 +1068,8 @@ public interface KStream<K, V> {
      * The changelog topic will be named "${applicationId}-storeName-changelog", where "applicationId" is user-specified
      * in {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
      * "storeName" is an internally generated name, and "-changelog" is a fixed suffix.
-     * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
+     *
+     * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
      * @param otherStream the {@code KStream} to be joined with this stream
      * @param joiner      a {@link ValueJoiner} that computes the join result for a pair of matching records
@@ -1129,7 +1137,6 @@ public interface KStream<K, V> {
      * user-specified in {@link StreamsConfig} via parameter
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is an internally generated name, and
      * "-repartition" is a fixed suffix.
-     * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
      * <p>
      * Repartitioning can happen for one or both of the joining {@code KStream}s.
      * For this case, all data of the stream will be redistributed through the repartitioning topic by writing all
@@ -1141,7 +1148,8 @@ public interface KStream<K, V> {
      * The changelog topic will be named "${applicationId}-storeName-changelog", where "applicationId" is user-specified
      * in {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
      * "storeName" is an internally generated name, and "-changelog" is a fixed suffix.
-     * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
+     *
+     * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
      * @param otherStream the {@code KStream} to be joined with this stream
      * @param joiner      a {@link ValueJoiner} that computes the join result for a pair of matching records
@@ -1213,7 +1221,6 @@ public interface KStream<K, V> {
      * user-specified in {@link StreamsConfig} via parameter
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is an internally generated name, and
      * "-repartition" is a fixed suffix.
-     * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
      * <p>
      * Repartitioning can happen for one or both of the joining {@code KStream}s.
      * For this case, all data of the stream will be redistributed through the repartitioning topic by writing all
@@ -1225,7 +1232,8 @@ public interface KStream<K, V> {
      * The changelog topic will be named "${applicationId}-storeName-changelog", where "applicationId" is user-specified
      * in {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
      * "storeName" is an internally generated name, and "-changelog" is a fixed suffix.
-     * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
+     *
+     * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
      * @param otherStream the {@code KStream} to be joined with this stream
      * @param joiner      a {@link ValueJoiner} that computes the join result for a pair of matching records
@@ -1256,7 +1264,7 @@ public interface KStream<K, V> {
      * a value (with arbitrary type) for the result record.
      * The key of the result record is the same as for both joining input records.
      * Furthermore, for each input record of both {@code KStream}s that does not satisfy the join predicate the provided
-     * {@link ValueJoiner} will be called with a {@code null} value for the this/other stream, respectively.
+     * {@link ValueJoiner} will be called with a {@code null} value for this/other stream, respectively.
      * If an input record key or value is {@code null} the record will not be included in the join operation and thus no
      * output record will be added to the resulting {@code KStream}.
      * <p>
@@ -1294,7 +1302,6 @@ public interface KStream<K, V> {
      * user-specified in {@link StreamsConfig} via parameter
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is an internally generated name, and
      * "-repartition" is a fixed suffix.
-     * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
      * <p>
      * Repartitioning can happen for one or both of the joining {@code KStream}s.
      * For this case, all data of the stream will be redistributed through the repartitioning topic by writing all
@@ -1306,7 +1313,8 @@ public interface KStream<K, V> {
      * The changelog topic will be named "${applicationId}-storeName-changelog", where "applicationId" is user-specified
      * in {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
      * "storeName" is an internally generated name, and "-changelog" is a fixed suffix.
-     * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
+     *
+     * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
      * @param otherStream the {@code KStream} to be joined with this stream
      * @param joiner      a {@link ValueJoiner} that computes the join result for a pair of matching records
@@ -1379,7 +1387,9 @@ public interface KStream<K, V> {
      * user-specified in {@link StreamsConfig} via parameter
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is an internally generated name, and
      * "-repartition" is a fixed suffix.
-     * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
+     *
+     * You can retrieve all generated internal topic names via {@link Topology#describe()}.
+     *
      * <p>
      * Repartitioning can happen only for this {@code KStream} but not for the provided {@link KTable}.
      * For this case, all data of the stream will be redistributed through the repartitioning topic by writing all
@@ -1453,7 +1463,9 @@ public interface KStream<K, V> {
      * user-specified in {@link StreamsConfig} via parameter
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is an internally generated name, and
      * "-repartition" is a fixed suffix.
-     * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
+     *
+     * You can retrieve all generated internal topic names via {@link Topology#describe()}.
+     *
      * <p>
      * Repartitioning can happen only for this {@code KStream} but not for the provided {@link KTable}.
      * For this case, all data of the stream will be redistributed through the repartitioning topic by writing all
@@ -1533,7 +1545,9 @@ public interface KStream<K, V> {
      * user-specified in {@link StreamsConfig} via parameter
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is an internally generated name, and
      * "-repartition" is a fixed suffix.
-     * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
+     *
+     * You can retrieve all generated internal topic names via {@link Topology#describe()}.
+     *
      * <p>
      * Repartitioning can happen only for this {@code KStream} but not for the provided {@link KTable}.
      * For this case, all data of the stream will be redistributed through the repartitioning topic by writing all
@@ -1610,7 +1624,9 @@ public interface KStream<K, V> {
      * user-specified in {@link StreamsConfig} via parameter
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is an internally generated name, and
      * "-repartition" is a fixed suffix.
-     * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
+     *
+     * You can retrieve all generated internal topic names via {@link Topology#describe()}.
+     *
      * <p>
      * Repartitioning can happen only for this {@code KStream} but not for the provided {@link KTable}.
      * For this case, all data of the stream will be redistributed through the repartitioning topic by writing all

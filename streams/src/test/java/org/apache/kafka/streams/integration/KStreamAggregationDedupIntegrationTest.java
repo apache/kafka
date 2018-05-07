@@ -63,7 +63,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
 
 /**
- * Similar to KStreamAggregationIntegrationTest but with de dupping enabled
+ * Similar to KStreamAggregationIntegrationTest but with dedupping enabled
  * by virtue of having a large commit interval
  */
 @Category({IntegrationTest.class})

@@ -20,6 +20,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.WindowStore;
@@ -67,7 +68,9 @@ public interface TimeWindowedKStream<K, V> {
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "internalStoreName" is an internal name
      * and "-changelog" is a fixed suffix.
      * Note that the internal store name may not be queriable through Interactive Queries.
-     * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
+     *
+     * You can retrieve all generated internal topic names via {@link Topology#describe()}.
+     *
      * @return a {@link KTable} that contains "update" records with unmodified keys and {@link Long} values that
      * represent the latest (rolling) count (i.e., number of records) for each key
      */
@@ -99,7 +102,19 @@ public interface TimeWindowedKStream<K, V> {
      * }</pre>
      * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
-     ** @param materialized  an instance of {@link Materialized} used to materialize a state store. Cannot be {@code null}.
+     *
+     * <p>
+     * For failure and recovery the store will be backed by an internal changelog topic that will be created in Kafka.
+     * Therefore, the store name defined by the Materialized instance must be a valid Kafka topic name and cannot contain characters other than ASCII
+     * alphanumerics, '.', '_' and '-'.
+     * The changelog topic will be named "${applicationId}-${storeName}-changelog", where "applicationId" is
+     * user-specified in {@link StreamsConfig} via parameter
+     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the
+     * provide store name defined in {@code Materialized}, and "-changelog" is a fixed suffix.
+     *
+     * You can retrieve all generated internal topic names via {@link Topology#describe()}.
+     *
+     * @param materialized  an instance of {@link Materialized} used to materialize a state store. Cannot be {@code null}.
      *                       Note: the valueSerde will be automatically set to {@link org.apache.kafka.common.serialization.Serdes#Long() Serdes#Long()}
      *                       if there is no valueSerde provided
      * @return a {@link KTable} that contains "update" records with unmodified keys and {@link Long} values that
@@ -140,7 +155,9 @@ public interface TimeWindowedKStream<K, V> {
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "internalStoreName" is an internal name
      * and "-changelog" is a fixed suffix.
      * Note that the internal store name may not be queriable through Interactive Queries.
-     * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
+     *
+     * You can retrieve all generated internal topic names via {@link Topology#describe()}.
+     *
      *
      * @param <VR>          the value type of the resulting {@link KTable}
      * @param initializer   an {@link Initializer} that computes an initial intermediate aggregation result
@@ -189,6 +206,17 @@ public interface TimeWindowedKStream<K, V> {
      * WindowStoreIterator<Long> aggregateStore = localWindowStore.fetch(key, timeFrom, timeTo); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
      *
+     * <p>
+     * For failure and recovery the store will be backed by an internal changelog topic that will be created in Kafka.
+     * Therefore, the store name defined by the Materialized instance must be a valid Kafka topic name and cannot contain characters other than ASCII
+     * alphanumerics, '.', '_' and '-'.
+     * The changelog topic will be named "${applicationId}-${storeName}-changelog", where "applicationId" is
+     * user-specified in {@link StreamsConfig} via parameter
+     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the
+     * provide store name defined in {@code Materialized}, and "-changelog" is a fixed suffix.
+     *
+     * You can retrieve all generated internal topic names via {@link Topology#describe()}.
+     *
      * @param initializer   an {@link Initializer} that computes an initial intermediate aggregation result
      * @param aggregator    an {@link Aggregator} that computes a new aggregate result
      * @param materialized  an instance of {@link Materialized} used to materialize a state store. Cannot be {@code null}.
@@ -226,7 +254,8 @@ public interface TimeWindowedKStream<K, V> {
      * user-specified in {@link StreamsConfig} via parameter
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "internalStoreName" is an internal name
      * and "-changelog" is a fixed suffix.
-     * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
+     *
+     * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
      * @param reducer   a {@link Reducer} that computes a new aggregate result
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
@@ -268,6 +297,16 @@ public interface TimeWindowedKStream<K, V> {
      * WindowStoreIterator<Long> reduceStore = localWindowStore.fetch(key, timeFrom, timeTo); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
      *
+     * <p>
+     * For failure and recovery the store will be backed by an internal changelog topic that will be created in Kafka.
+     * Therefore, the store name defined by the Materialized instance must be a valid Kafka topic name and cannot contain characters other than ASCII
+     * alphanumerics, '.', '_' and '-'.
+     * The changelog topic will be named "${applicationId}-${storeName}-changelog", where "applicationId" is
+     * user-specified in {@link StreamsConfig} via parameter
+     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the
+     * provide store name defined in {@code Materialized}, and "-changelog" is a fixed suffix.
+     *
+     * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
      * @param reducer   a {@link Reducer} that computes a new aggregate result
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
