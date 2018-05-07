@@ -181,9 +181,8 @@ class ReplicaAlterLogDirsThread(name: String,
    *
    * The logic for finding the truncation offset is the same as in ReplicaFetcherThread
    * and mainly implemented in AbstractFetcherThread.getOffsetTruncationState. One difference is
-   * that the initial fetch offset for topic partition is truncation offset of the current replica.
-   * When the current replica truncates, it forces future replica's partition state to
-   * 'truncating' and sets initial offset to its truncation offset.
+   * that the initial fetch offset for topic partition could be set to the truncation offset of
+   * the current replica if that replica truncates. Otherwise, it is high watermark as in ReplicaFetcherThread.
    *
    * The reason we have to follow the leader epoch approach for truncating a future replica is to
    * cover the case where a future replica is offline when the current replica truncates and

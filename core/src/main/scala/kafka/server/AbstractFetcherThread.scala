@@ -309,11 +309,7 @@ abstract class AbstractFetcherThread(name: String,
     def finalFetchLeaderEpochOffset(offsetToTruncateTo: Long, offsetFromLeader: Long): OffsetTruncationState = {
       val fetchOffset =
         if (offsetToTruncateTo >= replica.logEndOffset.messageOffset) {
-          val logEndOffset = replica.logEndOffset.messageOffset
-          info(
-            s"Based on $followerName's leader epoch, leader replied with an offset $offsetFromLeader. Min(leader offset, leader epoch end offset on the follower) $offsetToTruncateTo >= the " +
-            s"$followerName's log end offset $logEndOffset in ${replica.topicPartition}. No truncation needed.")
-          logEndOffset
+          replica.logEndOffset.messageOffset
         } else
           offsetToTruncateTo
       OffsetTruncationState(fetchOffset, truncationCompleted = true)
