@@ -185,10 +185,6 @@ public class TopologyTestDriverTest {
         private boolean closed = false;
         private final List<Record> processedRecords = new ArrayList<>();
 
-        MockProcessor() {
-            this(Collections.<Punctuation>emptySet());
-        }
-
         MockProcessor(final Collection<Punctuation> punctuations) {
             this.punctuations = punctuations;
         }
@@ -207,10 +203,6 @@ public class TopologyTestDriverTest {
             processedRecords.add(new Record(key, value, context.timestamp(), context.offset(), context.topic()));
             context.forward(key, value);
         }
-
-        @SuppressWarnings("deprecation")
-        @Override
-        public void punctuate(long timestamp) {} // deprecated
 
         @Override
         public void close() {
@@ -840,9 +832,6 @@ public class TopologyTestDriverTest {
         }
 
         @Override
-        public void punctuate(final long timestamp) {}
-
-        @Override
         public void close() {}
     }
 
@@ -868,9 +857,6 @@ public class TopologyTestDriverTest {
                         public void process(final String key, final Long value) {
                             store.put(key, value);
                         }
-
-                        @Override
-                        public void punctuate(final long timestamp) {}
 
                         @Override
                         public void close() {}

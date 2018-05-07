@@ -14,19 +14,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.streams.processor.internals;
 
-package org.apache.kafka.streams;
+import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.WakeupException;
 
-import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
+import java.util.Collections;
+import java.util.List;
 
+public final class ConsumerUtils {
+    private ConsumerUtils() {}
 
-/**
- * This class is meant for testing purposes only and allows the testing of
- * topologies by using the  {@link org.apache.kafka.test.ProcessorTopologyTestDriver}
- */
-public class InternalTopologyAccessor {
-
-    public static InternalTopologyBuilder getInternalTopologyBuilder(final Topology topology) {
-        return topology.internalTopologyBuilder;
+    public static <K, V> ConsumerRecords<K, V> poll(final Consumer<K, V> consumer, final long maxDurationMs) {
+        try {
+            return consumer.poll(maxDurationMs);
+        } catch (final WakeupException e) {
+            return new ConsumerRecords<>(Collections.<TopicPartition, List<ConsumerRecord<K, V>>>emptyMap());
+        }
     }
 }

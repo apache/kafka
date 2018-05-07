@@ -64,8 +64,8 @@ public class GlobalStateTaskTest {
         new String[]{topic2},
         new IntegerDeserializer(),
         new IntegerDeserializer());
-    private final MockProcessorNode processorOne = new MockProcessorNode<>(-1);
-    private final MockProcessorNode processorTwo = new MockProcessorNode<>(-1);
+    private final MockProcessorNode processorOne = new MockProcessorNode<>();
+    private final MockProcessorNode processorTwo = new MockProcessorNode<>();
 
     private final Map<TopicPartition, Long> offsets = new HashMap<>();
     private final NoOpProcessorContext context = new NoOpProcessorContext();

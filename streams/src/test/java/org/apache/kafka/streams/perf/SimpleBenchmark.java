@@ -62,6 +62,8 @@ import java.util.Random;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
+import static org.apache.kafka.streams.processor.internals.ConsumerUtils.poll;
+
 /**
  * Class that provides support for a series of benchmarks. It is usually driven by
  * tests/kafkatest/benchmarks/streams/streams_simple_benchmark_test.py.
@@ -334,7 +336,7 @@ public class SimpleBenchmark {
             consumer.seekToBeginning(partitions);
 
             while (true) {
-                final ConsumerRecords<Integer, byte[]> records = consumer.poll(POLL_MS);
+                final ConsumerRecords<Integer, byte[]> records = poll(consumer, POLL_MS);
                 if (records.isEmpty()) {
                     if (processedRecords == numRecords) {
                         break;
@@ -372,7 +374,7 @@ public class SimpleBenchmark {
             consumer.seekToBeginning(partitions);
 
             while (true) {
-                final ConsumerRecords<Integer, byte[]> records = consumer.poll(POLL_MS);
+                final ConsumerRecords<Integer, byte[]> records = poll(consumer, POLL_MS);
                 if (records.isEmpty()) {
                     if (processedRecords == numRecords) {
                         break;

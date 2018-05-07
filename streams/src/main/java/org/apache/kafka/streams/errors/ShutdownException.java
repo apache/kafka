@@ -14,26 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor.internals.metrics;
+package org.apache.kafka.streams.errors;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
-
-public final class StreamsMetricsConventions {
-    private StreamsMetricsConventions() {
+public class ShutdownException extends StreamsException {
+    public ShutdownException(final String message) {
+        super(message);
     }
 
-    public static String threadLevelSensorName(final String threadName, final String sensorName) {
-        return "thread." + threadName + "." + sensorName;
+    public ShutdownException(final String message, final Throwable throwable) {
+        super(message, throwable);
     }
 
-    static Map<String, String> threadLevelTags(final String threadName, final Map<String, String> tags) {
-        if (tags.containsKey("client-id")) {
-            return tags;
-        } else {
-            final LinkedHashMap<String, String> newTags = new LinkedHashMap<>(tags);
-            newTags.put("client-id", threadName);
-            return newTags;
-        }
+    public ShutdownException(final Throwable throwable) {
+        super(throwable);
     }
 }

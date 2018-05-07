@@ -1222,14 +1222,6 @@
                             is better to leave record caches enabled.</p>
                     </div>
                     <table border="1" class="docutils">
-                        <colgroup>
-                            <col width="11%" />
-                            <col width="17%" />
-                            <col width="15%" />
-                            <col width="17%" />
-                            <col width="18%" />
-                            <col width="22%" />
-                        </colgroup>
                         <thead valign="bottom">
                         <tr class="row-odd"><th class="head">&nbsp;</th>
                             <th class="head" colspan="2">KStream <code class="docutils literal"><span class="pre">wordCounts</span></code></th>
@@ -1352,16 +1344,6 @@
                             is better to leave record caches enabled.</p>
                     </div>
                     <table border="1" class="docutils">
-                        <colgroup>
-                            <col width="9%" />
-                            <col width="14%" />
-                            <col width="15%" />
-                            <col width="11%" />
-                            <col width="11%" />
-                            <col width="11%" />
-                            <col width="11%" />
-                            <col width="19%" />
-                        </colgroup>
                         <thead valign="bottom">
                         <tr class="row-odd"><th class="head">&nbsp;</th>
                             <th class="head" colspan="3">KTable <code class="docutils literal"><span class="pre">userProfiles</span></code></th>
@@ -1491,14 +1473,6 @@
                         Depending on the operands, joins are either <a class="reference internal" href="#streams-developer-guide-dsl-windowing"><span class="std std-ref">windowed</span></a> joins or
                         non-windowed joins.</p>
                     <table border="1" class="docutils">
-                        <colgroup>
-                            <col width="12%" />
-                            <col width="6%" />
-                            <col width="7%" />
-                            <col width="7%" />
-                            <col width="7%" />
-                            <col width="61%" />
-                        </colgroup>
                         <thead valign="bottom">
                         <tr class="row-odd"><th class="head">Join operands</th>
                             <th class="head">Type</th>
@@ -1838,14 +1812,6 @@
                             <code class="docutils literal"><span class="pre">outerJoin</span></code> methods, respectively, whenever a new input record is received on either side of the join.  An empty table
                             cell denotes that the <code class="docutils literal"><span class="pre">ValueJoiner</span></code> is not called at all.</p>
                         <table border="1" class="docutils">
-                            <colgroup>
-                                <col width="8%" />
-                                <col width="13%" />
-                                <col width="13%" />
-                                <col width="22%" />
-                                <col width="22%" />
-                                <col width="22%" />
-                            </colgroup>
                             <thead valign="bottom">
                             <tr class="row-odd"><th class="head">Timestamp</th>
                                 <th class="head">Left (KStream)</th>
@@ -3225,11 +3191,13 @@ import java.util.Properties
 import java.util.concurrent.TimeUnit
 
 import org.apache.kafka.streams.kstream.Materialized
+import org.apache.kafka.streams.scala.ImplicitConversions._
+import org.apache.kafka.streams.scala._
+import org.apache.kafka.streams.scala.kstream._
 import org.apache.kafka.streams.{KafkaStreams, StreamsConfig}
 
 object WordCountApplication extends App {
   import DefaultSerdes._
-  import ImplicitConversions._
 
   val config: Properties = {
     val p = new Properties()
@@ -3238,9 +3206,9 @@ object WordCountApplication extends App {
     p
   }
 
-  val builder = new StreamsBuilder()
-  val textLines = builder.stream[String, String]("TextLinesTopic")
-  val wordCounts = textLines
+  val builder: StreamsBuilder = new StreamsBuilder
+  val textLines: KStream[String, String] = builder.stream[String, String]("TextLinesTopic")
+  val wordCounts: KTable[String, Long] = textLines
     .flatMapValues(textLine => textLine.toLowerCase.split("\\W+"))
     .groupBy((_, word) => word)
     .count(Materialized.as("counts-store"))
@@ -3250,7 +3218,7 @@ object WordCountApplication extends App {
   streams.start()
 
   sys.ShutdownHookThread {
-    streams.close(10, TimeUnit.SECONDS)
+     streams.close(10, TimeUnit.SECONDS)
   }
 }
               </pre>
@@ -3324,7 +3292,7 @@ val clicksPerRegion: KTable[String, Long] =
    // Join the stream against the table.
    .leftJoin(userRegionsTable, (clicks: UserClicks, region: String) => (if (region == null) "UNKNOWN" else region, clicks.clicks))
 
-   // Change the stream from <user> -> <region, clicks> to <region> -> <clicks>
+   // Change the stream from &lt;user&gt; -&gt; &lt;region, clicks&gt; to &lt;region&gt; -&gt; &lt;clicks&gt;
    .map((_, regionWithClicks) => regionWithClicks)
 
    // Compute the total per region by summing the individual click counts per region.

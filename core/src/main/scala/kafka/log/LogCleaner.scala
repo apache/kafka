@@ -620,8 +620,9 @@ private[log] class Cleaner(val id: Int,
         throttler.maybeThrottle(outputBuffer.limit())
       }
 
-      // if we read bytes but didn't get even one complete message, our I/O buffer is too small, grow it and try again
-      if (readBuffer.limit() > 0 && result.messagesRead == 0)
+      // if we read bytes but didn't get even one complete batch, our I/O buffer is too small, grow it and try again
+      // `result.bytesRead` contains bytes from the `messagesRead` and any discarded batches.
+      if (readBuffer.limit() > 0 && result.bytesRead == 0)
         growBuffers(maxLogMessageSize)
     }
     restoreBuffers()
@@ -800,7 +801,13 @@ private[log] class Cleaner(val id: Int,
     while (position < segment.log.sizeInBytes) {
       checkDone(topicPartition)
       readBuffer.clear()
-      segment.log.readInto(readBuffer, position)
+      try {
+        segment.log.readInto(readBuffer, position)
+      } catch {
+        case e: Exception =>
+          throw new KafkaException(s"Failed to read from segment $segment of partition $topicPartition " +
+            "while loading offset map", e)
+      }
       val records = MemoryRecords.readableRecords(readBuffer)
       throttler.maybeThrottle(records.sizeInBytes)
 

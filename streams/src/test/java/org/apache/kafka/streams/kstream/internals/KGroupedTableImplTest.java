@@ -17,11 +17,14 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.errors.InvalidTopicException;
+import org.apache.kafka.common.serialization.DoubleSerializer;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.KGroupedTable;
 import org.apache.kafka.streams.kstream.KTable;
@@ -29,18 +32,18 @@ import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.test.KStreamTestDriver;
+import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.MockReducer;
-import org.apache.kafka.test.TestUtils;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Properties;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -53,8 +56,7 @@ public class KGroupedTableImplTest {
     private final StreamsBuilder builder = new StreamsBuilder();
     private static final String INVALID_STORE_NAME = "~foo bar~";
     private KGroupedTable<String, String> groupedTable;
-    @Rule
-    public final KStreamTestDriver driver = new KStreamTestDriver();
+    private final Properties props = StreamsTestUtils.topologyTestConfig(Serdes.String(), Serdes.Integer());
     private final String topic = "input";
 
     @Before
@@ -98,32 +100,31 @@ public class KGroupedTableImplTest {
         groupedTable.reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as(INVALID_STORE_NAME));
     }
 
-    private void doShouldReduce(final KTable<String, Integer> reduced, final String topic) {
-        final Map<String, Integer> results = new HashMap<>();
-        reduced.toStream().foreach(new ForeachAction<String, Integer>() {
+    private Map<String, Integer> getReducedResults(final KTable<String, Integer> inputKTable) {
+        final Map<String, Integer> reducedResults = new HashMap<>();
+        inputKTable.toStream().foreach(new ForeachAction<String, Integer>() {
             @Override
             public void apply(final String key, final Integer value) {
-                results.put(key, value);
+                reducedResults.put(key, value);
             }
         });
+        return reducedResults;
+    }
+    private void assertReduced(final Map<String, Integer> reducedResults, final String topic, final TopologyTestDriver driver) {
+        final ConsumerRecordFactory<String, Double> recordFactory = new ConsumerRecordFactory<>(new StringSerializer(), new DoubleSerializer());
+        driver.pipeInput(recordFactory.create(topic, "A", 1.1, 10));
+        driver.pipeInput(recordFactory.create(topic, "B", 2.2, 10));
 
-        driver.setUp(builder, TestUtils.tempDirectory(), Serdes.String(), Serdes.Integer());
-        driver.setTime(10L);
-        driver.process(topic, "A", 1.1);
-        driver.process(topic, "B", 2.2);
-        driver.flushState();
+        assertEquals(Integer.valueOf(1), reducedResults.get("A"));
+        assertEquals(Integer.valueOf(2), reducedResults.get("B"));
 
-        assertEquals(Integer.valueOf(1), results.get("A"));
-        assertEquals(Integer.valueOf(2), results.get("B"));
+        driver.pipeInput(recordFactory.create(topic, "A", 2.6, 10));
+        driver.pipeInput(recordFactory.create(topic, "B", 1.3, 10));
+        driver.pipeInput(recordFactory.create(topic, "A", 5.7, 10));
+        driver.pipeInput(recordFactory.create(topic, "B", 6.2, 10));
 
-        driver.process(topic, "A", 2.6);
-        driver.process(topic, "B", 1.3);
-        driver.process(topic, "A", 5.7);
-        driver.process(topic, "B", 6.2);
-        driver.flushState();
-
-        assertEquals(Integer.valueOf(5), results.get("A"));
-        assertEquals(Integer.valueOf(6), results.get("B"));
+        assertEquals(Integer.valueOf(5), reducedResults.get("A"));
+        assertEquals(Integer.valueOf(6), reducedResults.get("B"));
     }
 
     @Test
@@ -144,8 +145,11 @@ public class KGroupedTableImplTest {
             .groupBy(intProjection)
             .reduce(MockReducer.INTEGER_ADDER, MockReducer.INTEGER_SUBTRACTOR, Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("reduced"));
 
-        doShouldReduce(reduced, topic);
-        assertEquals(reduced.queryableStoreName(), "reduced");
+        final Map<String, Integer> results = getReducedResults(reduced);
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            assertReduced(results, topic, driver);
+            assertEquals(reduced.queryableStoreName(), "reduced");
+        }
     }
 
     @Test
@@ -166,8 +170,11 @@ public class KGroupedTableImplTest {
             .groupBy(intProjection)
             .reduce(MockReducer.INTEGER_ADDER, MockReducer.INTEGER_SUBTRACTOR);
 
-        doShouldReduce(reduced, topic);
-        assertNull(reduced.queryableStoreName());
+        final Map<String, Integer> results = getReducedResults(reduced);
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            assertReduced(results, topic, driver);
+            assertNull(reduced.queryableStoreName());
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -189,10 +196,13 @@ public class KGroupedTableImplTest {
                                 .withKeySerde(Serdes.String())
                                 .withValueSerde(Serdes.Integer()));
 
-        doShouldReduce(reduced, topic);
-        final KeyValueStore<String, Integer> reduce = (KeyValueStore<String, Integer>) driver.allStateStores().get("reduce");
-        assertThat(reduce.get("A"), equalTo(5));
-        assertThat(reduce.get("B"), equalTo(6));
+        final Map<String, Integer> results = getReducedResults(reduced);
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            assertReduced(results, topic, driver);
+            final KeyValueStore<String, Integer> reduce = (KeyValueStore<String, Integer>) driver.getStateStore("reduce");
+            assertThat(reduce.get("A"), equalTo(5));
+            assertThat(reduce.get("B"), equalTo(6));
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -206,10 +216,12 @@ public class KGroupedTableImplTest {
                                .withKeySerde(Serdes.String())
                                .withValueSerde(Serdes.Long()));
 
-        processData(topic);
-        final KeyValueStore<String, Long> counts = (KeyValueStore<String, Long>) driver.allStateStores().get("count");
-        assertThat(counts.get("1"), equalTo(3L));
-        assertThat(counts.get("2"), equalTo(2L));
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            processData(topic, driver);
+            final KeyValueStore<String, Long> counts = driver.getKeyValueStore("count");
+            assertThat(counts.get("1"), equalTo(3L));
+            assertThat(counts.get("2"), equalTo(2L));
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -226,10 +238,12 @@ public class KGroupedTableImplTest {
                                    .withValueSerde(Serdes.String())
                                    .withKeySerde(Serdes.String()));
 
-        processData(topic);
-        final KeyValueStore<String, String> aggregate = (KeyValueStore<String, String>) driver.allStateStores().get("aggregate");
-        assertThat(aggregate.get("1"), equalTo("0+1+1+1"));
-        assertThat(aggregate.get("2"), equalTo("0+2+2"));
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            processData(topic, driver);
+            final KeyValueStore<String, String> aggregate = (KeyValueStore<String, String>) driver.getStateStore("aggregate");
+            assertThat(aggregate.get("1"), equalTo("0+1+1+1"));
+            assertThat(aggregate.get("2"), equalTo("0+2+2"));
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -287,14 +301,12 @@ public class KGroupedTableImplTest {
                                (Materialized) null);
     }
 
-    private void processData(final String topic) {
-        driver.setUp(builder, TestUtils.tempDirectory(), Serdes.String(), Serdes.Integer());
-        driver.setTime(0L);
-        driver.process(topic, "A", "1");
-        driver.process(topic, "B", "1");
-        driver.process(topic, "C", "1");
-        driver.process(topic, "D", "2");
-        driver.process(topic, "E", "2");
-        driver.flushState();
+    private void processData(final String topic, final TopologyTestDriver driver) {
+        final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
+        driver.pipeInput(recordFactory.create(topic, "A", "1"));
+        driver.pipeInput(recordFactory.create(topic, "B", "1"));
+        driver.pipeInput(recordFactory.create(topic, "C", "1"));
+        driver.pipeInput(recordFactory.create(topic, "D", "2"));
+        driver.pipeInput(recordFactory.create(topic, "E", "2"));
     }
 }

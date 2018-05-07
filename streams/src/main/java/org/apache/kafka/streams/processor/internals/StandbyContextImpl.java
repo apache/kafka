@@ -188,15 +188,6 @@ class StandbyContextImpl extends AbstractProcessorContext implements RecordColle
      * @throws UnsupportedOperationException on every invocation
      */
     @Override
-    @Deprecated
-    public void schedule(final long interval) {
-        throw new UnsupportedOperationException("this should not happen: schedule() not supported in standby tasks.");
-    }
-
-    /**
-     * @throws UnsupportedOperationException on every invocation
-     */
-    @Override
     public RecordContext recordContext() {
         throw new UnsupportedOperationException("this should not happen: recordContext not supported in standby tasks.");
     }
