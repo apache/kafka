@@ -38,11 +38,11 @@ import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilder;
 import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilderTest;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.MockRestoreConsumer;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.MockStateStore;
-import org.apache.kafka.test.MockStateStoreSupplier;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -90,7 +90,8 @@ public class StandbyTaskTest {
 
     private final Set<TopicPartition> topicPartitions = Collections.emptySet();
     private final ProcessorTopology topology = ProcessorTopology.withLocalStores(
-            Utils.mkList(new MockStateStoreSupplier(storeName1, false).get(), new MockStateStoreSupplier(storeName2, true).get()),
+            Utils.<StateStore>mkList(Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore(storeName1), Serdes.ByteArray(), Serdes.ByteArray()).build(),
+                         Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore(storeName1), Serdes.ByteArray(), Serdes.ByteArray()).build()),
             new HashMap<String, String>() {
                 {
                     put(storeName1, storeChangelogTopicName1);
@@ -100,7 +101,7 @@ public class StandbyTaskTest {
     private final TopicPartition globalTopicPartition = new TopicPartition(globalStoreName, 0);
     private final Set<TopicPartition> ktablePartitions = Utils.mkSet(globalTopicPartition);
     private final ProcessorTopology ktableTopology = ProcessorTopology.withLocalStores(
-            Collections.<StateStore>singletonList(new MockStateStoreSupplier(globalTopicPartition.topic(), true, false).get()),
+            Collections.<StateStore>singletonList(Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore(storeName1), Serdes.ByteArray(), Serdes.ByteArray()).withLoggingDisabled().build()),
             new HashMap<String, String>() {
                 {
                     put(globalStoreName, globalTopicPartition.topic());

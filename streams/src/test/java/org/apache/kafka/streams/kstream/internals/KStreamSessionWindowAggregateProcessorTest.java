@@ -31,7 +31,8 @@ import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
-import org.apache.kafka.streams.state.internals.RocksDBSessionStoreSupplier;
+import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.NoOpRecordCollector;
@@ -43,7 +44,6 @@ import org.junit.Test;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
@@ -106,16 +106,16 @@ public class KStreamSessionWindowAggregateProcessorTest {
     }
 
     private void initStore(final boolean enableCaching) {
-        final RocksDBSessionStoreSupplier<String, Long> supplier =
-            new RocksDBSessionStoreSupplier<>(
-                STORE_NAME,
-                GAP_MS * 3,
+        final StoreBuilder<SessionStore<String, Long>> storeBuilder = Stores.sessionStoreBuilder(Stores.persistentSessionStore(STORE_NAME, GAP_MS * 3),
                 Serdes.String(),
-                Serdes.Long(),
-                false,
-                Collections.<String, String>emptyMap(),
-                enableCaching);
-        sessionStore = supplier.get();
+                Serdes.Long())
+                .withLoggingDisabled();
+
+        if (enableCaching) {
+            storeBuilder.withCachingEnabled();
+        }
+
+        sessionStore = storeBuilder.build();
         sessionStore.init(context, sessionStore);
     }
 
