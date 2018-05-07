@@ -20,6 +20,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
 
@@ -65,15 +66,17 @@ public interface KGroupedTable<K, V> {
      * }</pre>
      * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
+     *
      * <p>
      * For failure and recovery the store will be backed by an internal changelog topic that will be created in Kafka.
-     * The changelog topic will be named "${applicationId}-${queryableStoreName}-changelog", where "applicationId" is
+     * Therefore, the store name defined by the Materialized instance must be a valid Kafka topic name and cannot contain characters other than ASCII
+     * alphanumerics, '.', '_' and '-'.
+     * The changelog topic will be named "${applicationId}-${storeName}-changelog", where "applicationId" is
      * user-specified in {@link StreamsConfig} via parameter
-     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "queryableStoreName" is the
-     * provide {@code queryableStoreName}, and "-changelog" is a fixed suffix.
-     * The store name must be a valid Kafka topic name and cannot contain characters other than ASCII alphanumerics,
-     * '.', '_' and '-'.
-     * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
+     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the
+     * provide store name defined in {@code Materialized}, and "-changelog" is a fixed suffix.
+     *
+     * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
      * @param materialized the instance of {@link Materialized} used to materialize the state store. Cannot be {@code null}
      * @return a {@link KTable} that contains "update" records with unmodified keys and {@link Long} values that
@@ -102,7 +105,8 @@ public interface KGroupedTable<K, V> {
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "internalStoreName" is an internal name
      * and "-changelog" is a fixed suffix.
      * Note that the internal store name may not be queriable through Interactive Queries.
-     * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
+     *
+     * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
      * @return a {@link KTable} that contains "update" records with unmodified keys and {@link Long} values that
      * represent the latest (rolling) count (i.e., number of records) for each key
@@ -162,13 +166,14 @@ public interface KGroupedTable<K, V> {
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      * <p>
      * For failure and recovery the store will be backed by an internal changelog topic that will be created in Kafka.
-     * The changelog topic will be named "${applicationId}-${queryableStoreName}-changelog", where "applicationId" is
+     * Therefore, the store name defined by the Materialized instance must be a valid Kafka topic name and cannot contain characters other than ASCII
+     * alphanumerics, '.', '_' and '-'.
+     * The changelog topic will be named "${applicationId}-${storeName}-changelog", where "applicationId" is
      * user-specified in {@link StreamsConfig} via parameter
-     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "queryableStoreName" is the
-     * provide {@code queryableStoreName}, and "-changelog" is a fixed suffix.
-     * The store name must be a valid Kafka topic name and cannot contain characters other than ASCII alphanumerics,
-     * '.', '_' and '-'.
-     * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
+     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the
+     * provide store name defined in {@code Materialized}, and "-changelog" is a fixed suffix.
+     *
+     * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
      * @param adder         a {@link Reducer} that adds a new value to the aggregate result
      * @param subtractor    a {@link Reducer} that removed an old value from the aggregate result
@@ -225,7 +230,8 @@ public interface KGroupedTable<K, V> {
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "internalStoreName" is an internal name
      * and "-changelog" is a fixed suffix.
      * Note that the internal store name may not be queriable through Interactive Queries.
-     * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
+     *
+     * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
      * @param adder      a {@link Reducer} that adds a new value to the aggregate result
      * @param subtractor a {@link Reducer} that removed an old value from the aggregate result
@@ -296,11 +302,14 @@ public interface KGroupedTable<K, V> {
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      * <p>
      * For failure and recovery the store will be backed by an internal changelog topic that will be created in Kafka.
-     * The changelog topic will be named "${applicationId}-${queryableStoreName}-changelog", where "applicationId" is
+     * Therefore, the store name defined by the Materialized instance must be a valid Kafka topic name and cannot contain characters other than ASCII
+     * alphanumerics, '.', '_' and '-'.
+     * The changelog topic will be named "${applicationId}-${storeName}-changelog", where "applicationId" is
      * user-specified in {@link StreamsConfig} via parameter
-     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "queryableStoreName" is the
-     * provide {@code queryableStoreName}, and "-changelog" is a fixed suffix.
-     * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
+     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the
+     * provide store name defined in {@code Materialized}, and "-changelog" is a fixed suffix.
+     *
+     * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
      * @param initializer   an {@link Initializer} that provides an initial aggregate result value
      * @param adder         an {@link Aggregator} that adds a new record to the aggregate result
@@ -321,7 +330,7 @@ public interface KGroupedTable<K, V> {
      * Records with {@code null} key are ignored.
      * Aggregating is a generalization of {@link #reduce(Reducer, Reducer) combining via reduce(...)} as it,
      * for example, allows the result to have a different type than the input values.
-     * If the result value type does not match the {@link StreamsConfig#VALUE_SERDE_CLASS_CONFIG default value
+     * If the result value type does not match the {@link StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG default value
      * serde} you should use {@link #aggregate(Initializer, Aggregator, Aggregator, Materialized)}.
      * The result is written into a local {@link KeyValueStore} (which is basically an ever-updating materialized view)
      * provided by the given {@code storeSupplier}.
@@ -371,7 +380,8 @@ public interface KGroupedTable<K, V> {
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "internalStoreName" is an internal name
      * and "-changelog" is a fixed suffix.
      * Note that the internal store name may not be queriable through Interactive Queries.
-     * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
+     *
+     * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
      * @param initializer a {@link Initializer} that provides an initial aggregate result value
      * @param adder       a {@link Aggregator} that adds a new record to the aggregate result
@@ -383,6 +393,5 @@ public interface KGroupedTable<K, V> {
     <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,
                                  final Aggregator<? super K, ? super V, VR> adder,
                                  final Aggregator<? super K, ? super V, VR> subtractor);
-
 
 }
