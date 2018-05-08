@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime.distributed;
 
+import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
@@ -46,6 +47,7 @@ public class ClusterConfigState {
     private final Map<String, TargetState> connectorTargetStates;
     private final Map<ConnectorTaskId, Map<String, String>> taskConfigs;
     private final Set<String> inconsistentConnectors;
+    private final WorkerConfigTransformer configTransformer;
 
     public ClusterConfigState(long offset,
                               Map<String, Integer> connectorTaskCounts,
@@ -53,12 +55,29 @@ public class ClusterConfigState {
                               Map<String, TargetState> connectorTargetStates,
                               Map<ConnectorTaskId, Map<String, String>> taskConfigs,
                               Set<String> inconsistentConnectors) {
+        this(offset,
+                connectorTaskCounts,
+                connectorConfigs,
+                connectorTargetStates,
+                taskConfigs,
+                inconsistentConnectors,
+                null);
+    }
+
+    public ClusterConfigState(long offset,
+                              Map<String, Integer> connectorTaskCounts,
+                              Map<String, Map<String, String>> connectorConfigs,
+                              Map<String, TargetState> connectorTargetStates,
+                              Map<ConnectorTaskId, Map<String, String>> taskConfigs,
+                              Set<String> inconsistentConnectors,
+                              WorkerConfigTransformer configTransformer) {
         this.offset = offset;
         this.connectorTaskCounts = connectorTaskCounts;
         this.connectorConfigs = connectorConfigs;
         this.connectorTargetStates = connectorTargetStates;
         this.taskConfigs = taskConfigs;
         this.inconsistentConnectors = inconsistentConnectors;
+        this.configTransformer = configTransformer;
     }
 
     /**
@@ -92,7 +111,11 @@ public class ClusterConfigState {
      * @return a map containing configuration parameters
      */
     public Map<String, String> connectorConfig(String connector) {
-        return connectorConfigs.get(connector);
+        Map<String, String> configs = connectorConfigs.get(connector);
+        if (configTransformer != null) {
+            configs = configTransformer.transform(connector, configs);
+        }
+        return configs;
     }
 
     /**
@@ -110,7 +133,11 @@ public class ClusterConfigState {
      * @return a map containing configuration parameters
      */
     public Map<String, String> taskConfig(ConnectorTaskId task) {
-        return taskConfigs.get(task);
+        Map<String, String> configs = taskConfigs.get(task);
+        if (configTransformer != null) {
+            configs = configTransformer.transform(task.connector(), configs);
+        }
+        return configs;
     }
 
     /**

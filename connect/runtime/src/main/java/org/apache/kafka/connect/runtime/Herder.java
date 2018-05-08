@@ -149,11 +149,26 @@ public interface Herder {
     void restartTask(ConnectorTaskId id, Callback<Void> cb);
 
     /**
+     * Get the configuration reload action.
+     * @param connName name of the connector
+     */
+    String getConnectorConfigReloadAction(final String connName);
+
+    /**
      * Restart the connector.
      * @param connName name of the connector
      * @param cb callback to invoke upon completion
      */
     void restartConnector(String connName, Callback<Void> cb);
+
+    /**
+     * Restart the connector.
+     * @param delayMs delay before restart
+     * @param connName name of the connector
+     * @param cb callback to invoke upon completion
+     * @returns The id of the request
+     */
+    HerderRequestId restartConnector(long delayMs, String connName, Callback<Void> cb);
 
     /**
      * Pause the connector. This call will asynchronously suspend processing by the connector and all
@@ -168,6 +183,12 @@ public interface Herder {
      * @param connector name of the connector
      */
     void resumeConnector(String connector);
+
+    /**
+     * Cancel the given herder request.
+     * @param request id of the request
+     */
+    void cancelRequest(HerderRequestId request);
 
     /**
      * Returns a handle to the plugin factory used by this herder and its worker.

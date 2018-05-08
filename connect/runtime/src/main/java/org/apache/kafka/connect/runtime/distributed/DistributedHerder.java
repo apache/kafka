@@ -38,6 +38,7 @@ import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.ConnectMetricsRegistry;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.HerderConnectorContext;
+import org.apache.kafka.connect.runtime.HerderRequestId;
 import org.apache.kafka.connect.runtime.SinkConnectorConfig;
 import org.apache.kafka.connect.runtime.SourceConnectorConfig;
 import org.apache.kafka.connect.runtime.TargetState;
@@ -641,8 +642,18 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     @Override
+    public String getConnectorConfigReloadAction(final String connName) {
+        return configState.connectorConfig(connName).get(ConnectorConfig.CONFIG_RELOAD_ACTION_CONFIG);
+    }
+
+    @Override
     public void restartConnector(final String connName, final Callback<Void> callback) {
-        addRequest(new Callable<Void>() {
+        restartConnector(0, connName, callback);
+    }
+
+    @Override
+    public HerderRequestId restartConnector(final long delayMs, final String connName, final Callback<Void> callback) {
+        return addRequest(delayMs, new Callable<Void>() {
             @Override
             public Void call() throws Exception {
                 if (checkRebalanceNeeded(callback))
@@ -858,6 +869,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         log.info("Starting task {}", taskId);
         return worker.startTask(
                 taskId,
+                configState,
                 configState.connectorConfig(taskId.connector()),
                 configState.taskConfig(taskId),
                 this,
@@ -1053,6 +1065,11 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         return req;
     }
 
+    @Override
+    public void cancelRequest(HerderRequestId request) {
+        requests.remove(request);
+    }
+
     private HerderRequest peekWithoutException() {
         try {
             return requests.isEmpty() ? null : requests.first();
@@ -1117,7 +1134,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         }
     }
 
-    static class HerderRequest implements Comparable<HerderRequest> {
+    static class HerderRequest implements HerderRequestId, Comparable<HerderRequest> {
         private final long at;
         private final long seq;
         private final Callable<Void> action;

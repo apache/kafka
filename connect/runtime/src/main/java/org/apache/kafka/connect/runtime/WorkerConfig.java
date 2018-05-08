@@ -27,6 +27,7 @@ import org.apache.kafka.connect.storage.SimpleHeaderConverter;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -172,6 +173,9 @@ public class WorkerConfig extends AbstractConfig {
             + "Examples: plugin.path=/usr/local/share/java,/usr/local/share/kafka/plugins,"
             + "/opt/connectors";
 
+    public static final String CONFIG_PROVIDERS_CONFIG = "config.providers";
+    protected static final String CONFIG_PROVIDERS_DOC = "List of configuration providers.";
+
     public static final String METRICS_SAMPLE_WINDOW_MS_CONFIG = CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG;
     public static final String METRICS_NUM_SAMPLES_CONFIG = CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG;
     public static final String METRICS_RECORDING_LEVEL_CONFIG = CommonClientConfigs.METRICS_RECORDING_LEVEL_CONFIG;
@@ -236,7 +240,10 @@ public class WorkerConfig extends AbstractConfig {
                         ConfigDef.Type.STRING, "none", ConfigDef.Importance.LOW, BrokerSecurityConfigs.SSL_CLIENT_AUTH_DOC)
                 .define(HEADER_CONVERTER_CLASS_CONFIG, Type.CLASS,
                         HEADER_CONVERTER_CLASS_DEFAULT,
-                        Importance.LOW, HEADER_CONVERTER_CLASS_DOC);
+                        Importance.LOW, HEADER_CONVERTER_CLASS_DOC)
+                .define(CONFIG_PROVIDERS_CONFIG, Type.LIST,
+                        Collections.emptyList(),
+                        Importance.LOW, CONFIG_PROVIDERS_DOC);
     }
 
     @Override
@@ -254,4 +261,5 @@ public class WorkerConfig extends AbstractConfig {
     public WorkerConfig(ConfigDef definition, Map<String, String> props) {
         super(definition, props);
     }
+
 }
