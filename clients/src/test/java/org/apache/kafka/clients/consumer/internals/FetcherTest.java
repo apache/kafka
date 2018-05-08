@@ -59,6 +59,7 @@ import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.AbstractRequest;
@@ -118,6 +119,7 @@ public class FetcherTest {
     private TopicPartition tp0 = new TopicPartition(topicName, 0);
     private TopicPartition tp1 = new TopicPartition(topicName, 1);
     private TopicPartition tp2 = new TopicPartition(topicName, 2);
+    private TopicPartition tp3 = new TopicPartition(topicName, 3);
     private int minBytes = 1;
     private int maxBytes = Integer.MAX_VALUE;
     private int maxWaitMs = 0;
@@ -127,7 +129,7 @@ public class FetcherTest {
     private MockTime time = new MockTime(1);
     private Metadata metadata = new Metadata(0, Long.MAX_VALUE, true);
     private MockClient client = new MockClient(time, metadata);
-    private Cluster cluster = TestUtils.singletonCluster(topicName, 3);
+    private Cluster cluster = TestUtils.singletonCluster(topicName, 4);
     private Node node = cluster.nodes().get(0);
     private Metrics metrics = new Metrics(time);
     FetcherMetricsRegistry metricsRegistry = new FetcherMetricsRegistry("consumer" + groupId);
@@ -141,6 +143,7 @@ public class FetcherTest {
     private MemoryRecords records;
     private MemoryRecords nextRecords;
     private MemoryRecords emptyRecords;
+    private MemoryRecords partialRecords;
     private Fetcher<byte[], byte[]> fetcher = createFetcher(subscriptions, metrics);
     private Metrics fetcherMetrics = new Metrics(time);
     private Fetcher<byte[], byte[]> fetcherNoAutoReset = createFetcher(subscriptionsNoAutoReset, fetcherMetrics);
@@ -163,6 +166,11 @@ public class FetcherTest {
 
         builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
         emptyRecords = builder.build();
+
+        builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME, 4L);
+        builder.append(0L, "key".getBytes(), "value-0".getBytes());
+        partialRecords = builder.build();
+        partialRecords.buffer().putInt(Records.SIZE_OFFSET, 10000);
     }
 
     @After
@@ -865,12 +873,13 @@ public class FetcherTest {
     }
 
     @Test
-    public void testEmptyRecordsRemoval() {
-        // Ensure the removal of completed fetches with empty records that cause Exception.
-        subscriptionsNoAutoReset.assignFromUser(Utils.mkSet(tp0, tp1, tp2));
+    public void testCompletedFetchRemoval() {
+        // Ensure the removal of completed fetches that cause an Exception if and only if they contain empty records.
+        subscriptionsNoAutoReset.assignFromUser(Utils.mkSet(tp0, tp1, tp2, tp3));
         subscriptionsNoAutoReset.seek(tp0, 1);
         subscriptionsNoAutoReset.seek(tp1, 1);
         subscriptionsNoAutoReset.seek(tp2, 1);
+        subscriptionsNoAutoReset.seek(tp3, 1);
 
         assertEquals(1, fetcherNoAutoReset.sendFetches());
 
@@ -881,43 +890,53 @@ public class FetcherTest {
             FetchResponse.INVALID_LAST_STABLE_OFFSET, FetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY));
         partitions.put(tp2, new FetchResponse.PartitionData(Errors.NONE, 100L, 4,
             0L, null, nextRecords));
+        partitions.put(tp3, new FetchResponse.PartitionData(Errors.NONE, 100L, 4,
+            0L, null, partialRecords));
         client.prepareResponse(new FetchResponse(Errors.NONE, new LinkedHashMap<>(partitions),
                                                  0, INVALID_SESSION_ID));
         consumerClient.poll(0);
 
         List<ConsumerRecord<byte[], byte[]>> fetchedRecords = new ArrayList<>();
-
         for (List<ConsumerRecord<byte[], byte[]>> records: fetcherNoAutoReset.fetchedRecords().values())
             fetchedRecords.addAll(records);
 
         assertEquals(fetchedRecords.size(), subscriptionsNoAutoReset.position(tp1) - 1);
+        assertEquals(4, subscriptionsNoAutoReset.position(tp1).longValue());
+        assertEquals(3, fetchedRecords.size());
 
-        List<OffsetOutOfRangeException> exceptions = new ArrayList<>();
+        List<OffsetOutOfRangeException> oorExceptions = new ArrayList<>();
         try {
             for (List<ConsumerRecord<byte[], byte[]>> records: fetcherNoAutoReset.fetchedRecords().values())
                 fetchedRecords.addAll(records);
         } catch (OffsetOutOfRangeException oor) {
-            exceptions.add(oor);
+            oorExceptions.add(oor);
         }
 
         // Should have received one OffsetOutOfRangeException for partition tp1
-        assertEquals(1, exceptions.size());
-        OffsetOutOfRangeException oor = exceptions.get(0);
+        assertEquals(1, oorExceptions.size());
+        OffsetOutOfRangeException oor = oorExceptions.get(0);
         assertTrue(oor.offsetOutOfRangePartitions().containsKey(tp0));
         assertEquals(oor.offsetOutOfRangePartitions().size(), 1);
 
-        assertEquals(4, subscriptionsNoAutoReset.position(tp1).longValue());
-        assertEquals(3, fetchedRecords.size());
+        for (List<ConsumerRecord<byte[], byte[]>> records: fetcherNoAutoReset.fetchedRecords().values())
+            fetchedRecords.addAll(records);
 
-        try {
-            for (List<ConsumerRecord<byte[], byte[]>> records: fetcherNoAutoReset.fetchedRecords().values())
-                fetchedRecords.addAll(records);
-        } catch (Exception e) {
-            fail("Should not have received an Exception for tp2.");
-        }
-
+        // Should not have received an Exception for tp2.
         assertEquals(6, subscriptionsNoAutoReset.position(tp2).longValue());
         assertEquals(5, fetchedRecords.size());
+
+        int numExceptionsExpected = 3;
+        List<KafkaException> kafkaExceptions = new ArrayList<>();
+        for (int i = 1; i <= numExceptionsExpected; i++) {
+            try {
+                for (List<ConsumerRecord<byte[], byte[]>> records: fetcherNoAutoReset.fetchedRecords().values())
+                    fetchedRecords.addAll(records);
+            } catch (KafkaException e) {
+                kafkaExceptions.add(e);
+            }
+        }
+        // Should have received as much as numExceptionsExpected Kafka exceptions for tp3.
+        assertEquals(numExceptionsExpected, kafkaExceptions.size());
     }
 
     @Test
