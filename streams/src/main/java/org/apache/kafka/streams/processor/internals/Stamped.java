@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.Objects;
+
 public class Stamped<V> implements Comparable {
 
     public final V value;
@@ -38,14 +40,14 @@ public class Stamped<V> implements Comparable {
     @Override
     public boolean equals(Object other) {
 
-        if (getClass() != other.getClass()) return false;
+        if (other == null || getClass() != other.getClass()) return false;
 
         long otherTimestamp = ((Stamped<?>) other).timestamp;
-        return timestamp > otherTimestamp;
+        return Long.compare(timestamp, otherTimestamp) == 0;
     }
 
     @Override
     public int hashCode() {
-        return super.hashCode();
+        return Objects.hash(timestamp);
     }
 }

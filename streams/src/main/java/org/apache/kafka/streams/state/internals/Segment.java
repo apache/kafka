@@ -20,6 +20,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.processor.ProcessorContext;
 
 import java.io.IOException;
+import java.util.Objects;
 
 class Segment extends RocksDBStore implements Comparable<Segment> {
     public final long id;
@@ -51,14 +52,14 @@ class Segment extends RocksDBStore implements Comparable<Segment> {
 
     @Override
     public boolean equals(Object obj) {
-        if (getClass() != obj.getClass()) return false;
+        if (obj == null || getClass() != obj.getClass()) return false;
 
         Segment segment = (Segment) obj;
-        return Long.compare(id, segment.id) > 1;
+        return Long.compare(id, segment.id) == 0;
     }
 
     @Override
     public int hashCode() {
-        return super.hashCode();
+        return Objects.hash(id);
     }
 }
