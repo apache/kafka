@@ -117,6 +117,7 @@ public class FetcherTest {
     private final String metricGroup = "consumer" + groupId + "-fetch-manager-metrics";
     private TopicPartition tp0 = new TopicPartition(topicName, 0);
     private TopicPartition tp1 = new TopicPartition(topicName, 1);
+    private TopicPartition tp2 = new TopicPartition(topicName, 2);
     private int minBytes = 1;
     private int maxBytes = Integer.MAX_VALUE;
     private int maxWaitMs = 0;
@@ -126,7 +127,7 @@ public class FetcherTest {
     private MockTime time = new MockTime(1);
     private Metadata metadata = new Metadata(0, Long.MAX_VALUE, true);
     private MockClient client = new MockClient(time, metadata);
-    private Cluster cluster = TestUtils.singletonCluster(topicName, 2);
+    private Cluster cluster = TestUtils.singletonCluster(topicName, 3);
     private Node node = cluster.nodes().get(0);
     private Metrics metrics = new Metrics(time);
     FetcherMetricsRegistry metricsRegistry = new FetcherMetricsRegistry("consumer" + groupId);
@@ -140,7 +141,6 @@ public class FetcherTest {
     private MemoryRecords records;
     private MemoryRecords nextRecords;
     private MemoryRecords emptyRecords;
-    private MemoryRecords outOfOrderRecords;
     private Fetcher<byte[], byte[]> fetcher = createFetcher(subscriptions, metrics);
     private Metrics fetcherMetrics = new Metrics(time);
     private Fetcher<byte[], byte[]> fetcherNoAutoReset = createFetcher(subscriptionsNoAutoReset, fetcherMetrics);
@@ -163,10 +163,6 @@ public class FetcherTest {
 
         builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
         emptyRecords = builder.build();
-
-        builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME, 42L);
-        builder.append(0L, "key".getBytes(), "value-1".getBytes());
-        outOfOrderRecords = builder.build();
     }
 
     @After
@@ -826,8 +822,8 @@ public class FetcherTest {
 
     @Test
     public void testFetchPositionAfterException() {
-        // verify the advancement in the next fetch offset equals to the number of fetched records when some fetched
-        // partitions with non-empty records cause Exception. This ensures that consumer won't lose record upon exception
+        // verify the advancement in the next fetch offset equals to the number of fetched records when
+        // some fetched partitions cause Exception. This ensures that consumer won't lose record upon exception
         subscriptionsNoAutoReset.assignFromUser(Utils.mkSet(tp0, tp1));
         subscriptionsNoAutoReset.seek(tp0, 1);
         subscriptionsNoAutoReset.seek(tp1, 1);
@@ -838,7 +834,7 @@ public class FetcherTest {
         partitions.put(tp1, new FetchResponse.PartitionData(Errors.NONE, 100,
             FetchResponse.INVALID_LAST_STABLE_OFFSET, FetchResponse.INVALID_LOG_START_OFFSET, null, records));
         partitions.put(tp0, new FetchResponse.PartitionData(Errors.OFFSET_OUT_OF_RANGE, 100,
-            FetchResponse.INVALID_LAST_STABLE_OFFSET, FetchResponse.INVALID_LOG_START_OFFSET, null, outOfOrderRecords));
+            FetchResponse.INVALID_LAST_STABLE_OFFSET, FetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY));
         client.prepareResponse(new FetchResponse(Errors.NONE, new LinkedHashMap<>(partitions),
             0, INVALID_SESSION_ID));
         consumerClient.poll(0);
@@ -871,9 +867,10 @@ public class FetcherTest {
     @Test
     public void testEmptyRecordsRemoval() {
         // Ensure the removal of completed fetches with empty records that cause Exception.
-        subscriptionsNoAutoReset.assignFromUser(Utils.mkSet(tp0, tp1));
+        subscriptionsNoAutoReset.assignFromUser(Utils.mkSet(tp0, tp1, tp2));
         subscriptionsNoAutoReset.seek(tp0, 1);
         subscriptionsNoAutoReset.seek(tp1, 1);
+        subscriptionsNoAutoReset.seek(tp2, 1);
 
         assertEquals(1, fetcherNoAutoReset.sendFetches());
 
@@ -882,6 +879,8 @@ public class FetcherTest {
             FetchResponse.INVALID_LOG_START_OFFSET, null, records));
         partitions.put(tp0, new FetchResponse.PartitionData(Errors.OFFSET_OUT_OF_RANGE, 100,
             FetchResponse.INVALID_LAST_STABLE_OFFSET, FetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY));
+        partitions.put(tp2, new FetchResponse.PartitionData(Errors.NONE, 100L, 4,
+            0L, null, nextRecords));
         client.prepareResponse(new FetchResponse(Errors.NONE, new LinkedHashMap<>(partitions),
                                                  0, INVALID_SESSION_ID));
         consumerClient.poll(0);
@@ -893,15 +892,32 @@ public class FetcherTest {
 
         assertEquals(fetchedRecords.size(), subscriptionsNoAutoReset.position(tp1) - 1);
 
+        List<OffsetOutOfRangeException> exceptions = new ArrayList<>();
         try {
             for (List<ConsumerRecord<byte[], byte[]>> records: fetcherNoAutoReset.fetchedRecords().values())
                 fetchedRecords.addAll(records);
-        } catch (OffsetOutOfRangeException e) {
-            fail("Should not have received an OffsetOutOfRangeException.");
+        } catch (OffsetOutOfRangeException oor) {
+            exceptions.add(oor);
         }
+
+        // Should have received one OffsetOutOfRangeException for partition tp1
+        assertEquals(1, exceptions.size());
+        OffsetOutOfRangeException oor = exceptions.get(0);
+        assertTrue(oor.offsetOutOfRangePartitions().containsKey(tp0));
+        assertEquals(oor.offsetOutOfRangePartitions().size(), 1);
 
         assertEquals(4, subscriptionsNoAutoReset.position(tp1).longValue());
         assertEquals(3, fetchedRecords.size());
+
+        try {
+            for (List<ConsumerRecord<byte[], byte[]>> records: fetcherNoAutoReset.fetchedRecords().values())
+                fetchedRecords.addAll(records);
+        } catch (Exception e) {
+            fail("Should not have received an Exception for tp2.");
+        }
+
+        assertEquals(6, subscriptionsNoAutoReset.position(tp2).longValue());
+        assertEquals(5, fetchedRecords.size());
     }
 
     @Test

@@ -472,6 +472,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
      * @return The fetched records per partition
      * @throws OffsetOutOfRangeException If there is OffsetOutOfRange error in fetchResponse and
      *         the defaultResetPolicy is NONE
+     * @throws TopicAuthorizationException If there is TopicAuthorization error in fetchResponse.
      */
     public Map<TopicPartition, List<ConsumerRecord<K, V>>> fetchedRecords() {
         Map<TopicPartition, List<ConsumerRecord<K, V>>> fetched = new HashMap<>();
@@ -489,7 +490,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                         // Remove completedFetch upon a failed parse if it contains no records due to reasons including
                         // a TopicAuthorizationException.
                         FetchResponse.PartitionData partition = completedFetch.partitionData;
-                        if (partition.records == null || partition.records.sizeInBytes() == 0) {
+                        if (fetched.isEmpty() && (partition.records == null || partition.records.sizeInBytes() == 0)) {
                             completedFetches.poll();
                         }
                         throw e;
