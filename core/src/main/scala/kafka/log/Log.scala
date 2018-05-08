@@ -2005,7 +2005,7 @@ object Log extends Logging {
       var maxOffset = Long.MinValue
 
       // find all batches that are valid to be appended to the current log segment
-      val (validBatches, overflowBatches) = records.batches.asScala.span(batch => (batch.lastOffset <= baseOffset + Int.MaxValue))
+      val (validBatches, overflowBatches) = records.batches.asScala.span(batch => (batch.lastOffset - Int.MaxValue <= baseOffset))
       val overflowOffset = overflowBatches.headOption.map(firstBatch => {
         log.info(s"Found overflow at offset ${firstBatch.baseOffset} in segment $segment of log $log")
         firstBatch.baseOffset
