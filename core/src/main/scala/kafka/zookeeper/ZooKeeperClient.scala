@@ -355,12 +355,17 @@ class ZooKeeperClient(connectString: String,
   // Visibility for testing
   private[zookeeper] def scheduleSessionExpiryHandler(): Unit = {
     expiryScheduler.schedule("zk-session-expired", () => {
+      info("Session expired.")
+
+      // Initialization callbacks are invoked outside of the lock to avoid deadlock potential
+      // since callbacks may acquire their own locks and add new requests
+      stateChangeHandlers.values.foreach(_.beforeInitializingSession())
+
       inWriteLock(initializationLock) {
-        info("Session expired.")
-        stateChangeHandlers.values.foreach(_.beforeInitializingSession())
         initialize()
-        stateChangeHandlers.values.foreach(_.afterInitializingSession())
       }
+
+      stateChangeHandlers.values.foreach(_.afterInitializingSession())
     }, delay = 0L, period = -1L, unit = TimeUnit.MILLISECONDS)
   }
 
