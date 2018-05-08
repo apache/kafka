@@ -14,24 +14,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.connect.source;
+package org.apache.kafka.connect.runtime;
 
-import org.apache.kafka.connect.storage.OffsetStorageReader;
-
-import java.util.Map;
-
-/**
- * SourceTaskContext is provided to SourceTasks to allow them to interact with the underlying
- * runtime.
- */
-public interface SourceTaskContext {
-    /**
-     * Get the Task configuration.
-     */
-    public Map<String, String> configs();
-
-    /**
-     * Get the OffsetStorageReader for this SourceTask.
-     */
-    OffsetStorageReader offsetStorageReader();
+public interface HerderRequestId {
+    void cancel();
 }

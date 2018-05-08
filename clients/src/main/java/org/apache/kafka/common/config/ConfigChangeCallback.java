@@ -14,24 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.connect.source;
-
-import org.apache.kafka.connect.storage.OffsetStorageReader;
-
-import java.util.Map;
+package org.apache.kafka.common.config;
 
 /**
- * SourceTaskContext is provided to SourceTasks to allow them to interact with the underlying
- * runtime.
+ * A callback passed to {@link ConfigProvider} for subscribing to changes.
  */
-public interface SourceTaskContext {
-    /**
-     * Get the Task configuration.
-     */
-    public Map<String, String> configs();
+public interface ConfigChangeCallback {
 
     /**
-     * Get the OffsetStorageReader for this SourceTask.
+     * Performs an action when configuration data changes.
+     *
+     * @param path the path at which the data resides
+     * @param data the configuration data
      */
-    OffsetStorageReader offsetStorageReader();
+    void onChange(String path, ConfigData data);
 }

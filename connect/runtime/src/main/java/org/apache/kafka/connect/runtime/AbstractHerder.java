@@ -91,6 +91,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                           StatusBackingStore statusBackingStore,
                           ConfigBackingStore configBackingStore) {
         this.worker = worker;
+        this.worker.herder = this;
         this.workerId = workerId;
         this.kafkaClusterId = kafkaClusterId;
         this.statusBackingStore = statusBackingStore;

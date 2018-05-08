@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime.isolation;
 
+import org.apache.kafka.common.config.ConfigProvider;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
@@ -64,6 +65,7 @@ public class DelegatingClassLoader extends URLClassLoader {
     private final SortedSet<PluginDesc<Converter>> converters;
     private final SortedSet<PluginDesc<HeaderConverter>> headerConverters;
     private final SortedSet<PluginDesc<Transformation>> transformations;
+    private final SortedSet<PluginDesc<ConfigProvider>> configProviders;
     private final List<String> pluginPaths;
     private final Map<Path, PluginClassLoader> activePaths;
 
@@ -77,6 +79,7 @@ public class DelegatingClassLoader extends URLClassLoader {
         this.converters = new TreeSet<>();
         this.headerConverters = new TreeSet<>();
         this.transformations = new TreeSet<>();
+        this.configProviders = new TreeSet<>();
     }
 
     public DelegatingClassLoader(List<String> pluginPaths) {
@@ -97,6 +100,10 @@ public class DelegatingClassLoader extends URLClassLoader {
 
     public Set<PluginDesc<Transformation>> transformations() {
         return transformations;
+    }
+
+    public Set<PluginDesc<ConfigProvider>> configProviders() {
+        return configProviders;
     }
 
     public ClassLoader connectorLoader(Connector connector) {
@@ -228,6 +235,8 @@ public class DelegatingClassLoader extends URLClassLoader {
             headerConverters.addAll(plugins.headerConverters());
             addPlugins(plugins.transformations(), loader);
             transformations.addAll(plugins.transformations());
+            addPlugins(plugins.configProviders(), loader);
+            configProviders.addAll(plugins.configProviders());
         }
 
         loadJdbcDrivers(loader);
@@ -281,7 +290,8 @@ public class DelegatingClassLoader extends URLClassLoader {
                 getPluginDesc(reflections, Connector.class, loader),
                 getPluginDesc(reflections, Converter.class, loader),
                 getPluginDesc(reflections, HeaderConverter.class, loader),
-                getPluginDesc(reflections, Transformation.class, loader)
+                getPluginDesc(reflections, Transformation.class, loader),
+                getPluginDesc(reflections, ConfigProvider.class, loader)
         );
     }
 
