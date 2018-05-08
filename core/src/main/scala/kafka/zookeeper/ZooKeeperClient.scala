@@ -326,8 +326,8 @@ class ZooKeeperClient(connectString: String,
   }
   
   private def reinitialize(): Unit = {
-    // Initialization callbacks are invoked outside of the lock to avoid deadlock potential
-    // since callbacks may acquire their own locks and add new requests
+    // Initialization callbacks are invoked outside of the lock to avoid deadlock potential since their completion
+    // may require additional Zookeeper requests, which will block to acquire the initialization lock
     stateChangeHandlers.values.foreach(callBeforeInitializingSession _)
 
     inWriteLock(initializationLock) {

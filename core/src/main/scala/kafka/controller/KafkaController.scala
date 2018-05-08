@@ -161,8 +161,8 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
         val expireEvent = new Expire
         eventManager.clearAndPut(expireEvent)
 
-        // Block initialization of the new session until the expiration event is being handled to
-        // ensure it cannot be associated with the wrong session
+        // Block initialization of the new session until the expiration event is being handled,
+        // which ensures that all pending events have been processed before creating the new session
         expireEvent.waitUntilProcessingStarted()
       }
     })
