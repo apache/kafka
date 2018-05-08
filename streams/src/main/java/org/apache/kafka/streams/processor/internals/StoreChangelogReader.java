@@ -89,16 +89,20 @@ public class StoreChangelogReader implements ChangelogReader {
                 if (records.count() == 0) {
                     break;
                 }
-                for (TopicPartition partition : restoringPartitions) {
+                final Iterator<TopicPartition> iterator = restoringPartitions.iterator();
+                final Set<TopicPartition> completedPartitions = new HashSet<>();
+                while (iterator.hasNext()) {
+                    final TopicPartition partition = iterator.next();
                     final StateRestorer restorer = stateRestorers.get(partition);
                     final long pos = processNext(records.records(partition), restorer, endOffsets.get(partition));
                     restorer.setRestoredOffset(pos);
                     if (restorer.hasCompleted(pos, endOffsets.get(partition))) {
                         restorer.restoreDone();
                         needsRestoring.remove(partition);
-                        restoringPartitions.remove(partition);
+                        completedPartitions.add(partition);
                     }
                 }
+                restoringPartitions.removeAll(completedPartitions);
             }
         } catch (final InvalidOffsetException recoverableException) {
             log.warn("Restoring StreamTasks failed. Deleting StreamTasks stores to recreate from scratch.", recoverableException);
