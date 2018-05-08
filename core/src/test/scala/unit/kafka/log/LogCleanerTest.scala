@@ -118,7 +118,9 @@ class LogCleanerTest extends JUnitSuite {
     val cleaner = makeCleaner(Int.MaxValue)
     val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, 2048: java.lang.Integer)
-    var log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
+
+    val config = LogConfig.fromProps(logConfig.originals, logProps)
+    var log = makeLog(config = config)
 
     val producerEpoch = 0.toShort
     val pid1 = 1
@@ -137,13 +139,7 @@ class LogCleanerTest extends JUnitSuite {
     assertEquals(List(2, 3, 1, 4), keysInLog(log))
     assertEquals(List(1, 3, 6, 7), offsetsInLog(log))
 
-    // we have to reload the log to validate that the cleaner maintained sequence numbers correctly
-    def reloadLog(): Unit = {
-      log.close()
-      log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps), recoveryPoint = 0L)
-    }
-
-    reloadLog()
+    log = reloadLog(log)
 
     // check duplicate append from producer 1
     var logAppendInfo = appendIdempotentAsLeader(log, pid1, producerEpoch)(Seq(1, 2, 3))
@@ -169,7 +165,7 @@ class LogCleanerTest extends JUnitSuite {
     assertEquals(List(3, 1, 4, 2), keysInLog(log))
     assertEquals(List(3, 6, 7, 8), offsetsInLog(log))
 
-    reloadLog()
+    log = reloadLog(log)
 
     // duplicate append from producer1 should still be fine
     logAppendInfo = appendIdempotentAsLeader(log, pid1, producerEpoch)(Seq(1, 2, 3))
@@ -1247,6 +1243,68 @@ class LogCleanerTest extends JUnitSuite {
     assertEquals("The tombstone should be retained.", 1, log.logSegments.head.log.batches.iterator.next().lastOffset)
   }
 
+  /**
+    * Verify that cleaner does not crash, and handles the case where a log segment has messages
+    * with offsets that overflow base_offset + Integer.MAX_VALUE due to KAFKA-5413.
+    */
+  @Test
+  def testLogSegmentWithIndexOffsetOverflow(): Unit = {
+    val props = logProps
+    // Make sure every append is potentially able to create an index entry
+    props.put(LogConfig.IndexIntervalBytesProp, 1: java.lang.Integer)
+    val config = LogConfig(props)
+
+    val tp = new TopicPartition("test", 0)
+    val cleaner = makeCleaner(Int.MaxValue)
+    var log = makeLog(config = config)
+
+    val keys = List(1, 2, 2, 3)
+    val offsets = List(0L, 1L, Int.MaxValue + 0L, Int.MaxValue + 1L)
+
+    // Create a "legacy" log segment, consisting of messages that would result in index overflow
+    for (i <- keys.indices) {
+      val records = MemoryRecords.withRecords(offsets(i), CompressionType.NONE, 0,
+        new SimpleRecord(i, keys(i).toString.getBytes, keys(i).toString.getBytes))
+
+      // write to the segment directly since offsets will overflow the index
+      log.activeSegment.append(offsets(i), i, offsets(i), records, allowOversizeIndexOffset = true)
+    }
+
+    // Since we wrote messages directly to the log segment, bypassing the log layer, the log now would be in an
+    // inconsistent state. Reload the log so that the state is recomputed and built up accurately.
+    log = reloadLog(log)
+
+    // Sanity check to make sure records were written into a single log segment
+    assertEquals(1, log.numberOfSegments)
+    assertEquals(keys, keysInLog(log))
+    assertEquals(offsets, offsetsInLog(log))
+    assertEquals(offsets.last + 1L, log.logEndOffset)
+
+    // Make sure the offset index and time index last offsets correspond to baseOffset + Int.MaxValue
+    // We'd also have two index entries in total for the four messages we added, corresponding the the second and
+    // third append
+    assertEquals(2, log.activeSegment.timeIndex._entries)
+    assertEquals(Int.MaxValue + 0L, log.activeSegment.timeIndex.lastEntry.offset)
+    assertEquals(2, log.activeSegment.offsetIndex._entries)
+    assertEquals(Int.MaxValue + 0L, log.activeSegment.offsetIndex.lastOffset)
+
+    // Roll the log so that the segment we are interested in becomes inactive
+    log.roll()
+    cleaner.doClean(LogToClean(tp, log, 0, Long.MaxValue), Long.MaxValue)
+
+    // We must have now cleaned up duplicate keys, and should have still retained those messages
+    // whose offset resulted in overflow
+    assertEquals(2, log.numberOfSegments)
+    assertEquals(List(1, 2, 3), keysInLog(log))
+    assertEquals(List(0L, Int.MaxValue + 0L, Int.MaxValue + 1L), offsetsInLog(log))
+    assertEquals(0L, log.logStartOffset)
+    assertEquals(Int.MaxValue + 2L, log.logEndOffset)
+
+    val firstSegment = log.logSegments.head
+    assertEquals(0L, firstSegment.baseOffset)
+    assertEquals(Int.MaxValue + 1L, firstSegment.log.batches.asScala.map(_.lastOffset).max)
+  }
+
   private def writeToLog(log: Log, keysAndValues: Iterable[(Int, Int)], offsetSeq: Iterable[Long]): Iterable[Long] = {
     for(((key, value), offset) <- keysAndValues.zip(offsetSeq))
       yield log.appendAsFollower(messageWithOffset(key, value, offset)).lastOffset
@@ -1300,6 +1358,11 @@ class LogCleanerTest extends JUnitSuite {
 
   private def writeToLog(log: Log, seq: Iterable[(Int, Int)]): Iterable[Long] = {
     for ((key, value) <- seq) yield log.appendAsLeader(record(key, value), leaderEpoch = 0).firstOffset.get
+  }
+
+  private def reloadLog(log: Log): Log = {
+    log.close()
+    makeLog(config = log.config, recoveryPoint = 0L)
   }
 
   private def key(id: Int) = ByteBuffer.wrap(id.toString.getBytes)

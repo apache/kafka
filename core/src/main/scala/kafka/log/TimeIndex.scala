@@ -97,19 +97,51 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
   }
 
   /**
+    * Convert given offset to base-relative form. This function throws InvalidOffsetException if the conversion results
+    * in overflow or underflow.
+    * @param offset Offset to convert to base-relative form.
+    * @return Base-relative offset.
+    * @throws InvalidOffsetException
+    */
+  def relativeOffset(offset: Long): Int = {
+    val relativeOffset = (offset - baseOffset)
+    if (relativeOffset > Integer.MAX_VALUE || relativeOffset < 0)
+      throw new InvalidOffsetException(
+        s"Attempt to append offset $offset to time index with base offset $baseOffset will cause overflow (${file.getAbsolutePath})")
+    relativeOffset.toInt
+  }
+
+  /**
    * Attempt to append a time index entry to the time index.
    * The new entry is appended only if both the timestamp and offsets are greater than the last appended timestamp and
    * the last appended offset.
    *
    * @param timestamp The timestamp of the new time index entry
    * @param offset The offset of the new time index entry
-   * @param skipFullCheck To skip checking whether the segment is full or not. We only skip the check when the segment
+   * @param skipIndexFullCheck To skip checking whether the segment is full or not. We only skip the check when the segment
    *                      gets rolled or the segment is closed.
    */
-  def maybeAppend(timestamp: Long, offset: Long, skipFullCheck: Boolean = false) {
+  def maybeAppend(timestamp: Long, offset: Long, skipIndexFullCheck: Boolean): Unit = {
+    maybeAppend(timestamp, offset, skipIndexFullCheck, mayHaveIndexOverflow = false)
+  }
+
+  /**
+    * For most cases, you might want to call append(Long, Int) instead of calling this method directly. This option is
+    * only exposed for segments created before the patch for KAFKA-5413.
+    *
+    * Append an entry for the given offset/location pair to the index, allowing for the possibility that the offset might
+    * overflow the index. If it does and overflow is allowed, this function silently returns without appending to the
+    * index. Note that this `mayHaveIndexOverflow` must only be used for log segments that were created before the patch
+    * for KAFKA-5413. For such segments, it should be fine to skip index entries corresponding to messages that cause an
+    * index overflow.
+    *
+    * This option is directly exposed only for log recovery and log close.
+    */
+  private[log] def maybeAppend(timestamp: Long, offset: Long, skipIndexFullCheck: Boolean, mayHaveIndexOverflow: Boolean) {
     inLock(lock) {
-      if (!skipFullCheck)
+      if (!skipIndexFullCheck)
         require(!isFull, "Attempt to append to a full time index (size = " + _entries + ").")
+
       // We do not throw exception when the offset equals to the offset of last entry. That means we are trying
       // to insert the same time index entry as the last entry.
       // If the timestamp index entry to be inserted is the same as the last entry, we simply ignore the insertion
@@ -122,13 +154,23 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
       if (_entries != 0 && timestamp < lastEntry.timestamp)
         throw new IllegalStateException("Attempt to append a timestamp (%d) to slot %d no larger than the last timestamp appended (%d) to %s."
             .format(timestamp, _entries, lastEntry.timestamp, file.getAbsolutePath))
+
       // We only append to the time index when the timestamp is greater than the last inserted timestamp.
       // If all the messages are in message format v0, the timestamp will always be NoTimestamp. In that case, the time
       // index will be empty.
       if (timestamp > lastEntry.timestamp) {
+        val relOffset =
+          try relativeOffset(offset)
+          catch {
+            case _: InvalidOffsetException if (mayHaveIndexOverflow) => {
+              debug(s"Skipping time index append: overflow for offset: $offset baseOffset: $baseOffset (${file.getAbsolutePath})")
+              return
+            }
+          }
+
         debug("Adding index entry %d => %d to %s.".format(timestamp, offset, file.getName))
         mmap.putLong(timestamp)
-        mmap.putInt((offset - baseOffset).toInt)
+        mmap.putInt(relOffset)
         _entries += 1
         _lastEntry = TimestampOffset(timestamp, offset)
         require(_entries * entrySize == mmap.position(), _entries + " entries but file position in index is " + mmap.position() + ".")

@@ -501,7 +501,9 @@ private[log] class Cleaner(val id: Int,
     try {
       // clean segments into the new destination segment
       val iter = segments.iterator
+      val numSegments = segments.length
       var currentSegmentOpt: Option[LogSegment] = Some(iter.next())
+
       while (currentSegmentOpt.isDefined) {
         val currentSegment = currentSegmentOpt.get
         val nextSegmentOpt = if (iter.hasNext) Some(iter.next()) else None
@@ -515,7 +517,7 @@ private[log] class Cleaner(val id: Int,
         info(s"Cleaning segment $startOffset in log ${log.name} (largest timestamp ${new Date(currentSegment.largestTimestamp)}) " +
           s"into ${cleaned.baseOffset}, ${if(retainDeletes) "retaining" else "discarding"} deletes.")
         cleanInto(log.topicPartition, currentSegment.log, cleaned, map, retainDeletes, log.config.maxMessageSize,
-          transactionMetadata, log.activeProducersWithLastSequence, stats)
+          transactionMetadata, log.activeProducersWithLastSequence, stats, numSegments)
 
         currentSegmentOpt = nextSegmentOpt
       }
@@ -553,6 +555,7 @@ private[log] class Cleaner(val id: Int,
    * @param retainDeletes Should delete tombstones be retained while cleaning this segment
    * @param maxLogMessageSize The maximum message size of the corresponding topic
    * @param stats Collector for cleaning statistics
+   * @param numSegmentsInGroup Number of segments in source group, being cleaned into 'dest'
    */
   private[log] def cleanInto(topicPartition: TopicPartition,
                              sourceRecords: FileRecords,
@@ -562,7 +565,8 @@ private[log] class Cleaner(val id: Int,
                              maxLogMessageSize: Int,
                              transactionMetadata: CleanedTransactionMetadata,
                              activeProducers: Map[Long, Int],
-                             stats: CleanerStats) {
+                             stats: CleanerStats,
+                             numSegmentsInGroup: Int) {
     val logCleanerFilter = new RecordFilter {
       var discardBatchRecords: Boolean = _
 
@@ -591,6 +595,7 @@ private[log] class Cleaner(val id: Int,
     }
 
     var position = 0
+    var allowOversizeIndexOffset = false
     while (position < sourceRecords.sizeInBytes) {
       checkDone(topicPartition)
       // read a chunk of messages and copy any that are to be retained to the write buffer to be written out
@@ -611,12 +616,29 @@ private[log] class Cleaner(val id: Int,
       if (outputBuffer.position() > 0) {
         outputBuffer.flip()
         val retained = MemoryRecords.readableRecords(outputBuffer)
+        val baseOffsetOfLog = dest.baseOffset
+        val largestOffsetToAppend = result.maxOffset
+
+        if ((largestOffsetToAppend - baseOffsetOfLog) > Integer.MAX_VALUE) {
+          // Typically, a segment can only include messages whose offsets can be represented as an integer offset relative
+          // to the baseOffset. #groupSegmentsBySize must already make sure that we do not cross this threshold on a
+          // segment-boundary. So if the largest offset cannot be represented as its base-relative form, we must only
+          // have exactly one segment in such a group.
+          // Note that having a segment with messages that cannot be expressed as an integer in base-relative form is not
+          // a typical scenario, and is only true for segments created before the patch for KAFKA-5413.
+          require(numSegmentsInGroup == 1, s"Constructed segment group causes index offset overflow for $topicPartition")
+          allowOversizeIndexOffset = true
+
+          debug(s"Offset overflow during log cleaning topic-partition: $topicPartition largestOffset: $largestOffsetToAppend")
+        }
+
         // it's OK not to hold the Log's lock in this case, because this segment is only accessed by other threads
         // after `Log.replaceSegments` (which acquires the lock) is called
-        dest.append(largestOffset = result.maxOffset,
+        dest.append(largestOffset = largestOffsetToAppend,
           largestTimestamp = result.maxTimestamp,
           shallowOffsetOfMaxTimestamp = result.shallowOffsetOfMaxTimestamp,
-          records = retained)
+          records = retained,
+          allowOversizeIndexOffset = allowOversizeIndexOffset)
         throttler.maybeThrottle(outputBuffer.limit())
       }
 

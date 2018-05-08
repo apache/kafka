@@ -96,6 +96,19 @@ class LogSegment private[log] (val log: FileRecords,
   @volatile private var maxTimestampSoFar: Long = timeIndex.lastEntry.timestamp
   @volatile private var offsetOfMaxTimestamp: Long = timeIndex.lastEntry.offset
 
+  /**
+    * Initialize timestamp metadata accurately for a log segment that already exists. This method must be called when an
+    * existing log segment is opened.
+    * For some cases (like KAFKA-6264), it might not be enough to lookup the last entry in time index because we could
+    * have messages that were appended after time index was last updated. So lookup the last entry and scan messages
+    * that appear after that to make sure we have the correct maximum timestamp and its corresponding offset.
+    * @throws CorruptIndexException
+    * @throws NoSuchFileException
+    */
+  def initializeTimestampMetadata(): Unit = {
+    loadLargestTimestamp()
+  }
+
   /* Return the size in bytes of this log segment */
   def size: Int = log.sizeInBytes()
 
@@ -107,8 +120,7 @@ class LogSegment private[log] (val log: FileRecords,
   }
 
   /**
-   * Append the given messages starting with the given offset. Add
-   * an entry to the index if needed.
+   * Append the given messages ending at the given last offset. Add an entry to the index if needed.
    *
    * It is assumed this method is being called from within a lock.
    *
@@ -116,33 +128,69 @@ class LogSegment private[log] (val log: FileRecords,
    * @param largestTimestamp The largest timestamp in the message set.
    * @param shallowOffsetOfMaxTimestamp The offset of the message that has the largest timestamp in the messages to append.
    * @param records The log entries to append.
-   * @return the physical position in the file of the appended records
    */
   @nonthreadsafe
   def append(largestOffset: Long,
              largestTimestamp: Long,
              shallowOffsetOfMaxTimestamp: Long,
              records: MemoryRecords): Unit = {
+    append(largestOffset, largestTimestamp, shallowOffsetOfMaxTimestamp, records, allowOversizeIndexOffset = false)
+  }
+
+  /**
+   * NOTE: For most cases, you might want to call append(Long, Long, Long, MemoryRecords) instead of invoking this method
+   * directly. This option is directly exposed only for the LogCleaner.
+   *
+   * Append the given messages ending at the given last offset and allow for the possibility that the offset might
+   * overflow the index. If it does and overflow is allowed, append to the log, but skip the index append. Note that
+   * this only affects log segments that were created before the patch for KAFKA-5413. For such a segment, all oversize
+   * offsets will be at the end of the log segment, so it should be fine to skip the index entries.
+   */
+  @nonthreadsafe
+  private[log] def append(largestOffset: Long,
+                          largestTimestamp: Long,
+                          shallowOffsetOfMaxTimestamp: Long,
+                          records: MemoryRecords,
+                          allowOversizeIndexOffset: Boolean): Unit = {
     if (records.sizeInBytes > 0) {
       trace(s"Inserting ${records.sizeInBytes} bytes at end offset $largestOffset at position ${log.sizeInBytes} " +
             s"with largest timestamp $largestTimestamp at shallow offset $shallowOffsetOfMaxTimestamp")
       val physicalPosition = log.sizeInBytes()
+      var canAppendToIndex = true
+
       if (physicalPosition == 0)
         rollingBasedTimestamp = Some(largestTimestamp)
+
+      // Must be able to convert the largest offset to base-relative offset.
+      // Because of KAFKA-5413, a log segment could contain messages larger than firstOffset + Integer.MAX_VALUE. If
+      // that is the case, silently ignore the fact that we cannot convert all message offsets and skip the
+      // append to the index.
+      if (!canConvertToRelativeOffset(largestOffset)) {
+        if (allowOversizeIndexOffset)
+          canAppendToIndex = false
+        else
+          throw new IllegalArgumentException(s"Largest offset in message set $largestOffset cannot be safely " +
+            s"converted to relative offset for segment with base offset $baseOffset.")
+      }
+
       // append the messages
-      require(canConvertToRelativeOffset(largestOffset), "largest offset in message set can not be safely converted to relative offset.")
       val appendedBytes = log.append(records)
-      trace(s"Appended $appendedBytes to ${log.file()} at end offset $largestOffset")
+      trace(s"Appended $appendedBytes to ${log.file} at end offset $largestOffset")
       // Update the in memory max timestamp and corresponding offset.
       if (largestTimestamp > maxTimestampSoFar) {
         maxTimestampSoFar = largestTimestamp
         offsetOfMaxTimestamp = shallowOffsetOfMaxTimestamp
       }
+
       // append an entry to the index (if needed)
-      if(bytesSinceLastIndexEntry > indexIntervalBytes) {
-        offsetIndex.append(largestOffset, physicalPosition)
-        timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestamp)
-        bytesSinceLastIndexEntry = 0
+      if (bytesSinceLastIndexEntry > indexIntervalBytes) {
+        if (canAppendToIndex) {
+          offsetIndex.append(largestOffset, physicalPosition)
+          timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestamp, skipIndexFullCheck = false)
+          bytesSinceLastIndexEntry = 0
+        } else {
+          debug(s"Skipping append to offset index to prevent offset overflow (${log.file})")
+        }
       }
       bytesSinceLastIndexEntry += records.sizeInBytes
     }
@@ -282,10 +330,20 @@ class LogSegment private[log] (val log: FileRecords,
 
         // Build offset index
         if (validBytes - lastIndexEntry > indexIntervalBytes) {
-          val startOffset = batch.baseOffset
-          offsetIndex.append(startOffset, validBytes)
-          timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestamp)
-          lastIndexEntry = validBytes
+          val lastOffsetInBatch = batch.lastOffset
+
+          /* Could have index overflow for log segments created before the patch for KAFKA-5413. For such a segment,
+           * all oversize offsets will be at the end of the log segment, so it should be fine to skip the index entries.
+           * Only need to check if we are able to convert the largest offset in this batch.
+           */
+          if (canConvertToRelativeOffset(lastOffsetInBatch)) {
+            offsetIndex.append(lastOffsetInBatch, validBytes)
+            timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestamp, skipIndexFullCheck = false)
+            lastIndexEntry = validBytes
+          } else {
+            debug(s"Ignored index offset overflow when recovering lastOffset: $lastOffsetInBatch baseOffset: $baseOffset " +
+                  s"(${log.file.getAbsolutePath})")
+          }
         }
         validBytes += batch.sizeInBytes()
 
@@ -304,12 +362,14 @@ class LogSegment private[log] (val log: FileRecords,
     }
     val truncated = log.sizeInBytes - validBytes
     if (truncated > 0)
-      debug(s"Truncated $truncated invalid bytes at the end of segment ${log.file.getAbsoluteFile} during recovery")
+      debug(s"Truncating $truncated invalid bytes at the end of segment ${log.file.getAbsoluteFile} during recovery")
 
     log.truncateTo(validBytes)
     offsetIndex.trimToValidSize()
-    // A normally closed segment always appends the biggest timestamp ever seen into log segment, we do this as well.
-    timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestamp, skipFullCheck = true)
+    // A normally closed segment always appends the biggest timestamp ever seen into log segment, we do this as well. This
+    // segment, if created before the patch for KAFKA-5413, could have messages that overflow the index so skip the entry
+    // in such cases.
+    timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestamp, skipIndexFullCheck = true, mayHaveIndexOverflow = true)
     timeIndex.trimToValidSize()
     truncated
   }
@@ -422,7 +482,7 @@ class LogSegment private[log] (val log: FileRecords,
    * The time index entry appended will be used to decide when to delete the segment.
    */
   def onBecomeInactiveSegment() {
-    timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestamp, skipFullCheck = true)
+    timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestamp, skipIndexFullCheck = true, mayHaveIndexOverflow = true)
     offsetIndex.trimToValidSize()
     timeIndex.trimToValidSize()
     log.trim()
@@ -486,7 +546,7 @@ class LogSegment private[log] (val log: FileRecords,
    * Close this log segment
    */
   def close() {
-    CoreUtils.swallow(timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestamp, skipFullCheck = true), this)
+    CoreUtils.swallow(timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestamp, skipIndexFullCheck = true, mayHaveIndexOverflow = true), this)
     CoreUtils.swallow(offsetIndex.close(), this)
     CoreUtils.swallow(timeIndex.close(), this)
     CoreUtils.swallow(log.close(), this)
