@@ -58,15 +58,15 @@ public class OffsetsForLeaderEpochResponse extends AbstractResponse {
     // OFFSET_FOR_LEADER_EPOCH_RESPONSE_PARTITION_V1 added a per-partition leader epoch field,
     // which specifies which leader epoch the end offset belongs to
     private static final Schema OFFSET_FOR_LEADER_EPOCH_RESPONSE_PARTITION_V1 = new Schema(
-        ERROR_CODE,
-        PARTITION_ID,
-        LEADER_EPOCH,
-        new Field(END_OFFSET_KEY_NAME, INT64, "The end offset"));
+            ERROR_CODE,
+            PARTITION_ID,
+            LEADER_EPOCH,
+            new Field(END_OFFSET_KEY_NAME, INT64, "The end offset"));
     private static final Schema OFFSET_FOR_LEADER_EPOCH_RESPONSE_TOPIC_V1 = new Schema(
-        TOPIC_NAME,
-        new Field(PARTITIONS_KEY_NAME, new ArrayOf(OFFSET_FOR_LEADER_EPOCH_RESPONSE_PARTITION_V1)));
+            TOPIC_NAME,
+            new Field(PARTITIONS_KEY_NAME, new ArrayOf(OFFSET_FOR_LEADER_EPOCH_RESPONSE_PARTITION_V1)));
     private static final Schema OFFSET_FOR_LEADER_EPOCH_RESPONSE_V1 = new Schema(
-        new Field(TOPICS_KEY_NAME, new ArrayOf(OFFSET_FOR_LEADER_EPOCH_RESPONSE_TOPIC_V1),
+            new Field(TOPICS_KEY_NAME, new ArrayOf(OFFSET_FOR_LEADER_EPOCH_RESPONSE_TOPIC_V1),
                   "An array of topics for which we have leader offsets for some requested Partition Leader Epoch"));
 
     public static Schema[] schemaVersions() {

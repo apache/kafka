@@ -305,16 +305,6 @@ abstract class AbstractFetcherThread(name: String,
     // to make sure we can distinguish log output for fetching from remote leader or local replica
     val followerName = if (isFutureReplica) "future replica" else "follower"
 
-    // Called when 'offsetToTruncateTo' is the final offset to truncate to.
-    def finalFetchLeaderEpochOffset(offsetToTruncateTo: Long, offsetFromLeader: Long): OffsetTruncationState = {
-      val fetchOffset =
-        if (offsetToTruncateTo >= replica.logEndOffset.messageOffset) {
-          replica.logEndOffset.messageOffset
-        } else
-          offsetToTruncateTo
-      OffsetTruncationState(fetchOffset, truncationCompleted = true)
-    }
-
     if (leaderEpochOffset.endOffset == UNDEFINED_EPOCH_OFFSET) {
       // truncate to initial offset which is the high watermark for follower replica. For
       // future replica, it is either high watermark of the future replica or current
@@ -328,12 +318,12 @@ abstract class AbstractFetcherThread(name: String,
       // (version 0 of OffsetForLeaderEpoch request/response)
       warn(s"Leader or $followerName is on protocol version where leader epoch is not considered in the OffsetsForLeaderEpoch response. " +
            s"The leader's offset ${leaderEpochOffset.endOffset} will be used for truncation in ${replica.topicPartition}.")
-      finalFetchLeaderEpochOffset(leaderEpochOffset.endOffset, leaderEpochOffset.endOffset)
+      OffsetTruncationState(min(leaderEpochOffset.endOffset, replica.logEndOffset.messageOffset), truncationCompleted = true)
     } else {
       // get (leader epoch, end offset) pair that corresponds to the largest leader epoch
       // less than or equal to the requested epoch.
-      val (followerEpoch, replicaEndOffset) = replica.epochs.get.endOffsetFor(leaderEpochOffset.leaderEpoch)
-      if (replicaEndOffset == UNDEFINED_EPOCH_OFFSET) {
+      val (followerEpoch, followerEndOffset) = replica.epochs.get.endOffsetFor(leaderEpochOffset.leaderEpoch)
+      if (followerEndOffset == UNDEFINED_EPOCH_OFFSET) {
         // This can happen if replica was not tracking leader epochs at that point (before the
         // upgrade, or if this broker is new). Since the leader replied with epoch <
         // requested epoch from follower, so should be safe to truncate to leader's
@@ -341,19 +331,19 @@ abstract class AbstractFetcherThread(name: String,
         warn(s"Based on $followerName's leader epoch, leader replied with epoch ${leaderEpochOffset.leaderEpoch} " +
              s"below any $followerName's tracked epochs for ${replica.topicPartition}. " +
              s"The leader's offset only ${leaderEpochOffset.endOffset} will be used for truncation.")
-        finalFetchLeaderEpochOffset(leaderEpochOffset.endOffset, leaderEpochOffset.endOffset)
+        OffsetTruncationState(min(leaderEpochOffset.endOffset, replica.logEndOffset.messageOffset), truncationCompleted = true)
       } else if (followerEpoch != leaderEpochOffset.leaderEpoch) {
         // the replica does not know about the epoch that leader replied with
         // we truncate to the end offset of the largest epoch that is smaller than the
         // epoch the leader replied with, and send another offset for leader epoch request
-        val intermediateOffsetToTruncateTo = min(replicaEndOffset, replica.logEndOffset.messageOffset)
+        val intermediateOffsetToTruncateTo = min(followerEndOffset, replica.logEndOffset.messageOffset)
         info(s"Based on $followerName's leader epoch, leader replied with epoch ${leaderEpochOffset.leaderEpoch} " +
              s"unknown to the $followerName for ${replica.topicPartition}. " +
              s"Will truncate to $intermediateOffsetToTruncateTo and send another leader epoch request to the leader.")
         OffsetTruncationState(intermediateOffsetToTruncateTo, truncationCompleted = false)
       } else {
-        val offsetToTruncateTo = min(replicaEndOffset, leaderEpochOffset.endOffset)
-        finalFetchLeaderEpochOffset(offsetToTruncateTo, leaderEpochOffset.endOffset)
+        val offsetToTruncateTo = min(followerEndOffset, leaderEpochOffset.endOffset)
+        OffsetTruncationState(min(offsetToTruncateTo, replica.logEndOffset.messageOffset), truncationCompleted = true)
       }
     }
   }
@@ -519,7 +509,7 @@ case class PartitionFetchState(fetchOffset: Long, delay: DelayedItem, truncating
 
 case class OffsetTruncationState(offset: Long, truncationCompleted: Boolean) {
 
-  def this (offset: Long) = this(offset, true)
+  def this(offset: Long) = this(offset, true)
 
   override def toString = "offset:%d-truncationCompleted:%b".format(offset, truncationCompleted)
 }
