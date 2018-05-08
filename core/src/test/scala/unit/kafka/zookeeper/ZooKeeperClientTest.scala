@@ -323,12 +323,11 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
 
     val requestThread = new Thread() {
       override def run(): Unit = {
-        try {
+        try
           client.handleRequest(CreateRequest(mockPath, Array.empty[Byte],
             ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, CreateMode.PERSISTENT))
-        } finally {
+        finally
           latch.countDown()
-        }
       }
     }
 
@@ -339,9 +338,11 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
     }
 
     reinitializeThread.start()
+
+    // sleep briefly before starting the request thread so that the initialization
+    // thread is blocking on the latch
     Thread.sleep(100)
     requestThread.start()
-
 
     reinitializeThread.join()
     requestThread.join()

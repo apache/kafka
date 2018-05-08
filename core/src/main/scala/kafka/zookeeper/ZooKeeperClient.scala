@@ -353,7 +353,7 @@ class ZooKeeperClient(connectString: String,
   }
 
   /**
-   * reinitialize method to use in unit tests
+   * Close the zookeeper client to force session reinitialization. This is visible for testing only.
    */
   private[zookeeper] def forceReinitialize(): Unit = {
     zooKeeper.close()
