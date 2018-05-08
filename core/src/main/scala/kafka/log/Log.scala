@@ -1970,7 +1970,8 @@ object Log extends Logging {
   private[log] def maybeHandleOffsetOverflow[T](log: Log, segment: LogSegment, retries: Int = 1)(fn: => T): T = {
     try fn
     catch {
-      case _: OffsetOverflowException if (retries > 1) => {
+      case e: OffsetOverflowException if (retries > 1) => {
+        info(s"Caught OffsetOverflowException $e")
         Log.splitSegmentOnOffsetOverflow(log, segment)
         maybeHandleOffsetOverflow(log, segment, retries - 1)(fn)
       }

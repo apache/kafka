@@ -507,11 +507,17 @@ private[log] class Cleaner(val id: Int,
         info(s"Cleaning segment $startOffset in log ${log.name} (largest timestamp ${new Date(currentSegment.largestTimestamp)}) " +
           s"into ${cleaned.baseOffset}, ${if(retainDeletes) "retaining" else "discarding"} deletes.")
 
-        Log.maybeHandleOffsetOverflow(log, currentSegment) {
+        try {
           cleanInto(log.topicPartition, currentSegment.log, cleaned, map, retainDeletes, log.config.maxMessageSize,
             transactionMetadata, log.activeProducersWithLastSequence, stats)
+        } catch {
+          case e: OffsetOverflowException =>
+            // KAFKA-6264: if we got an OffsetOverflowException, split the current segment. It's also safest to abort
+            // the current cleaning process, so that we retry from scratch once the split is complete.
+            info(s"Caught OffsetOverflowException during log cleaning $e")
+            Log.splitSegmentOnOffsetOverflow(log, currentSegment)
+            throw new LogCleaningAbortedException()
         }
-
         currentSegmentOpt = nextSegmentOpt
       }
 
@@ -533,7 +539,8 @@ private[log] class Cleaner(val id: Int,
         catch {
           case deleteException: Exception =>
             e.addSuppressed(deleteException)
-        } finally throw e
+        }
+        finally throw e
     }
   }
 
