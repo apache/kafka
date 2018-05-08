@@ -16,11 +16,9 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import kafka.utils.MockTime;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
-import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -28,7 +26,6 @@ import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.InternalMockProcessorContext;
-import org.apache.kafka.test.MockStateStoreSupplier;
 import org.apache.kafka.test.NoOpReadOnlyStore;
 import org.apache.kafka.test.NoOpRecordCollector;
 import org.apache.kafka.test.StateStoreProviderStub;
