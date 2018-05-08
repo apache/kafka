@@ -27,13 +27,11 @@ class StreamSinkNode<K, V> extends StreamsGraphNode {
     private final String topic;
     private final ProducedInternal<K, V> producedInternal;
 
-    StreamSinkNode(final String parentProcessorNodeName,
-                   final String processorNodeName,
+    StreamSinkNode(final String nodeName,
                    final String topic,
                    final ProducedInternal<K, V> producedInternal) {
 
-        super(parentProcessorNodeName,
-              processorNodeName,
+        super(nodeName,
               false);
 
         this.topic = topic;

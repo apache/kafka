@@ -17,21 +17,18 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStore;
 
 class TableProcessorNode<K, V, S extends StateStore> extends StatelessProcessorNode<K, V> {
 
     private final MaterializedInternal<K, V, S> materializedInternal;
 
-    TableProcessorNode(final String parentProcessorNodeName,
-                       final String processorNodeName,
-                       final ProcessorSupplier processorSupplier,
+    TableProcessorNode(final String nodeName,
+                       final ProcessorParameters processorParameters,
                        final MaterializedInternal<K, V, S> materializedInternal) {
 
-        super(parentProcessorNodeName,
-              processorNodeName,
-              processorSupplier,
+        super(nodeName,
+              processorParameters,
               false);
         this.materializedInternal = materializedInternal;
     }

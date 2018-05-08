@@ -48,8 +48,8 @@ class StatefulSourceNode<K, V> extends StreamSourceNode<K, V> {
                        final ProcessorSupplier<K, V> processorSupplier,
                        final KTableSource<K, V> kTableSource) {
 
-        super(predecessorNodeName,
-              nodeName,
+        super(
+            nodeName,
               Collections.singletonList(topic),
               consumedInternal);
 

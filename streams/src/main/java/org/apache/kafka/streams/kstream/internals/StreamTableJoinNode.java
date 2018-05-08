@@ -17,7 +17,6 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
 import java.util.Arrays;
@@ -29,27 +28,25 @@ import java.util.Arrays;
 class StreamTableJoinNode<K, V> extends StreamsGraphNode {
 
     private final String[] storeNames;
-    private final ProcessorSupplier<K, V> processorSupplier;
+    private final ProcessorParameters<K, V> processorParameters;
 
-    StreamTableJoinNode(final String parentProcessorNodeName,
-                        final String processorNodeName,
-                        final ProcessorSupplier<K, V> processorSupplier,
+    StreamTableJoinNode(final String nodeName,
+                        final ProcessorParameters<K, V> processorParameters,
                         final String[] storeNames) {
-        super(parentProcessorNodeName,
-              processorNodeName,
+        super(nodeName,
               false);
 
         // in the case of Stream-Table join the state stores associated with the KTable
         this.storeNames = storeNames;
-        this.processorSupplier = processorSupplier;
+        this.processorParameters = processorParameters;
     }
 
     String[] storeNames() {
         return Arrays.copyOf(storeNames, storeNames.length);
     }
 
-    ProcessorSupplier<K, V> processorSupplier() {
-        return processorSupplier;
+    ProcessorParameters<K, V> processorParameters() {
+        return processorParameters;
     }
 
     @Override

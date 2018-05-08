@@ -18,7 +18,6 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
 class RepartitionNode<K, V> extends StatelessProcessorNode<K, V> {
@@ -28,22 +27,18 @@ class RepartitionNode<K, V> extends StatelessProcessorNode<K, V> {
     private final String sinkName;
     private final String sourceName;
     private final String repartitionTopic;
-    private final String processorName;
 
 
-    RepartitionNode(final String parentProcessorNodeName,
-                    final String processorNodeName,
+    RepartitionNode(final String nodeName,
                     final String sourceName,
-                    final ProcessorSupplier<K, V> processorSupplier,
+                    final ProcessorParameters processorParameters,
                     final Serde<K> keySerde,
                     final Serde<V> valueSerde,
                     final String sinkName,
-                    final String repartitionTopic,
-                    final String processorName) {
+                    final String repartitionTopic) {
 
-        super(parentProcessorNodeName,
-              processorNodeName,
-              processorSupplier,
+        super(nodeName,
+              processorParameters,
               false);
 
         this.keySerde = keySerde;
@@ -51,7 +46,6 @@ class RepartitionNode<K, V> extends StatelessProcessorNode<K, V> {
         this.sinkName = sinkName;
         this.sourceName = sourceName;
         this.repartitionTopic = repartitionTopic;
-        this.processorName = processorName;
     }
 
     Serde<K> keySerde() {
@@ -74,9 +68,6 @@ class RepartitionNode<K, V> extends StatelessProcessorNode<K, V> {
         return repartitionTopic;
     }
 
-    String processorName() {
-        return processorName;
-    }
 
     @Override
     void writeToTopology(InternalTopologyBuilder topologyBuilder) {
@@ -90,21 +81,19 @@ class RepartitionNode<K, V> extends StatelessProcessorNode<K, V> {
 
     static final class RepartitionNodeBuilder<K, V> {
 
-        private String processorNodeName;
-        private ProcessorSupplier<K, V> processorSupplier;
+        private String nodeName;
+        private ProcessorParameters processorParameters;
         private Serde<K> keySerde;
         private Serde<V> valueSerde;
         private String sinkName;
         private String sourceName;
         private String repartitionTopic;
-        private String processorName;
-        private String parentProcessorNodeName;
 
         private RepartitionNodeBuilder() {
         }
 
-        RepartitionNodeBuilder<K, V> withProcessorSupplier(final ProcessorSupplier<K, V> processorSupplier) {
-            this.processorSupplier = processorSupplier;
+        RepartitionNodeBuilder<K, V> withProcessorParameters(final ProcessorParameters processorParameters) {
+            this.processorParameters = processorParameters;
             return this;
         }
 
@@ -133,32 +122,22 @@ class RepartitionNode<K, V> extends StatelessProcessorNode<K, V> {
             return this;
         }
 
-        RepartitionNodeBuilder<K, V> withProcessorName(final String processorName) {
-            this.processorName = processorName;
-            return this;
-        }
 
-        RepartitionNodeBuilder<K, V> withParentProcessorNodeName(final String parentProcessorNodeName) {
-            this.parentProcessorNodeName = parentProcessorNodeName;
-            return this;
-        }
-
-        RepartitionNodeBuilder<K, V> withProcessorNodeName(final String processorNodeName) {
-            this.processorNodeName = processorNodeName;
+        RepartitionNodeBuilder<K, V> withNodeName(final String nodeName) {
+            this.nodeName = nodeName;
             return this;
         }
 
         RepartitionNode<K, V> build() {
 
-            return new RepartitionNode<>(parentProcessorNodeName,
-                                         processorNodeName,
+            return new RepartitionNode<>(nodeName,
                                          sourceName,
-                                         processorSupplier,
+                                         processorParameters,
                                          keySerde,
                                          valueSerde,
                                          sinkName,
-                                         repartitionTopic,
-                                         processorName);
+                                         repartitionTopic
+            );
 
         }
     }

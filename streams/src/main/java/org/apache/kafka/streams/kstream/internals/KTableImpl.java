@@ -34,7 +34,6 @@ import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 
-
 import java.util.Collections;
 import java.util.Objects;
 import java.util.Set;
@@ -298,10 +297,10 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                 return change.newValue;
             }
         });
+        ProcessorParameters processorParameters = new ProcessorParameters<>(kStreamMapValues, name);
 
-        final StatelessProcessorNode<K, V> toStreamNode = new StatelessProcessorNode<>(this.name,
-                                                                                       name,
-                                                                                       kStreamMapValues,
+        final StatelessProcessorNode<K, V> toStreamNode = new StatelessProcessorNode<>(name,
+                                                                                       processorParameters,
                                                                                        false);
 
         builder.addNode(toStreamNode);
@@ -391,8 +390,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         }
         kTableJoinNodeBuilder.withMaterializedInternal(materialized);
 
-        kTableJoinNodeBuilder.withProcessorNodeName(joinMergeName);
-        kTableJoinNodeBuilder.withParentProcessorNodeName(this.name);
+        kTableJoinNodeBuilder.withNodeName(joinMergeName);
 
         builder.addNode(kTableJoinNodeBuilder.build());
         return result;
@@ -466,12 +464,12 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         String selectName = builder.newProcessorName(SELECT_NAME);
 
         KTableProcessorSupplier<K, V, KeyValue<K1, V1>> selectSupplier = new KTableRepartitionMap<>(this, selector);
+        ProcessorParameters processorParameters = new ProcessorParameters(selectSupplier, selectName);
 
         // select the aggregate key and values (old and new), it would require parent to send old values
-        final StatelessProcessorNode<K1, V1> graphNode = new StatelessProcessorNode<>(this.name,
-                                                                                      selectName,
+        final StatelessProcessorNode<K1, V1> graphNode = new StatelessProcessorNode<>(selectName,
+                                                                                      processorParameters,
                                                                                       false,
-                                                                                      selectSupplier,
                                                                                       Collections.<String>emptyList());
 
         builder.addNode(graphNode);

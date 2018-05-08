@@ -83,11 +83,12 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
                                 final String sinkName,
                                 final StatefulRepartitionNode.StatefulRepartitionNodeBuilder<K, V, T> statefulRepartitionNodeBuilder) {
 
+        ProcessorParameters processorParameters = new ProcessorParameters<>(aggregateSupplier, funcName);
+
         statefulRepartitionNodeBuilder.withRepartitionTopic(topic)
             .withSinkName(sinkName)
             .withSourceName(sourceName)
-            .withStatefulProcessorSupplier(aggregateSupplier)
-            .withProcessorNodeName(funcName)
+            .withProcessorParameters(processorParameters)
             .withKeySerde(keySerde)
             .withValueSerde(valSerde);
     }
@@ -109,7 +110,6 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
                        statefulRepartitionNodeBuilder);
 
         statefulRepartitionNodeBuilder.withMaterialized(materialized)
-            .withParentProcessorNodeName(this.name)
             .withNodeName(funcName);
 
         builder.addNode(statefulRepartitionNodeBuilder.build());

@@ -17,7 +17,6 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -31,16 +30,14 @@ class StatefulProcessorNode<K, V> extends StatelessProcessorNode<K, V> {
     private final String maybeRepartitionedSourceName;
 
 
-    StatefulProcessorNode(final String parentNodeName,
-                          final String processorNodeName,
-                          final ProcessorSupplier processorSupplier,
+    StatefulProcessorNode(final String nodeName,
+                          final ProcessorParameters processorParameters,
                           final String[] storeNames,
                           final String maybeRepartitionedSourceName,
                           final StoreBuilder<KeyValueStore<K, V>> storeBuilder,
                           final boolean repartitionRequired) {
-        super(parentNodeName,
-              processorNodeName,
-              processorSupplier,
+        super(nodeName,
+              processorParameters,
               repartitionRequired);
 
         this.storeNames = storeNames;
@@ -57,6 +54,10 @@ class StatefulProcessorNode<K, V> extends StatelessProcessorNode<K, V> {
         return storeBuilder;
     }
 
+    String maybeRepartitionedSourceName() {
+        return this.maybeRepartitionedSourceName;
+    }
+
     @Override
     void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
         //TODO will implement in follow-up pr
@@ -68,9 +69,8 @@ class StatefulProcessorNode<K, V> extends StatelessProcessorNode<K, V> {
 
     static final class StatefulProcessorNodeBuilder<K, V> {
 
-        private ProcessorSupplier processorSupplier;
-        private String processorNodeName;
-        private String parentProcessorNodeName;
+        private ProcessorParameters processorSupplier;
+        private String nodeName;
         private boolean repartitionRequired;
         private String maybeRepartitionedSourceName;
         private String[] storeNames;
@@ -79,18 +79,13 @@ class StatefulProcessorNode<K, V> extends StatelessProcessorNode<K, V> {
         private StatefulProcessorNodeBuilder() {
         }
 
-        StatefulProcessorNodeBuilder<K, V> withProcessorSupplier(final ProcessorSupplier processorSupplier) {
-            this.processorSupplier = processorSupplier;
+        StatefulProcessorNodeBuilder<K, V> withProcessorParameters(final ProcessorParameters processorParameters) {
+            this.processorSupplier = processorParameters;
             return this;
         }
 
-        StatefulProcessorNodeBuilder<K, V> withProcessorNodeName(final String processorNodeName) {
-            this.processorNodeName = processorNodeName;
-            return this;
-        }
-
-        StatefulProcessorNodeBuilder<K, V> withParentProcessorNodeName(final String parentProcessorNodeName) {
-            this.parentProcessorNodeName = parentProcessorNodeName;
+        StatefulProcessorNodeBuilder<K, V> withNodeName(final String nodeName) {
+            this.nodeName = nodeName;
             return this;
         }
 
@@ -115,8 +110,7 @@ class StatefulProcessorNode<K, V> extends StatelessProcessorNode<K, V> {
         }
 
         StatefulProcessorNode<K, V> build() {
-            return new StatefulProcessorNode<>(parentProcessorNodeName,
-                                               processorNodeName,
+            return new StatefulProcessorNode<>(nodeName,
                                                processorSupplier,
                                                storeNames,
                                                maybeRepartitionedSourceName,

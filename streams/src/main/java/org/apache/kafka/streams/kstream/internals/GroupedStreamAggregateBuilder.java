@@ -77,10 +77,10 @@ class GroupedStreamAggregateBuilder<K, V> {
         final String sourceName = repartitionIfRequired(storeBuilder.name());
 
         StatefulProcessorNode.StatefulProcessorNodeBuilder<K, V> statefulProcessorNodeBuilder = StatefulProcessorNode.statefulProcessorNodeBuilder();
-
-        statefulProcessorNodeBuilder.withParentProcessorNodeName(name)
-            .withProcessorSupplier(aggregateSupplier)
-            .withProcessorNodeName(aggFunctionName)
+        ProcessorParameters processorParameters = new ProcessorParameters<>(aggregateSupplier, functionName);
+        statefulProcessorNodeBuilder
+            .withProcessorParameters(processorParameters)
+            .withNodeName(aggFunctionName)
             .withRepartitionRequired(repartitionRequired)
             .withStoreBuilder(storeBuilder)
             .withMaybeRepartitionedSourceName(sourceName);

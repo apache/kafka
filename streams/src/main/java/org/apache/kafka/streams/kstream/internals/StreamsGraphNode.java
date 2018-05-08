@@ -26,31 +26,20 @@ abstract class StreamsGraphNode {
 
     private StreamsGraphNode parentNode;
     private final Collection<StreamsGraphNode> childNodes = new LinkedHashSet<>();
-    private final String processorNodeName;
-    private String parentProcessorNodeName;
+    private String nodeName;
     private boolean repartitionRequired;
     private boolean triggersRepartitioning;
     private Integer id;
     private StreamsTopologyGraph streamsTopologyGraph;
 
-    StreamsGraphNode(final String parentProcessorNodeName,
-                     final String processorNodeName,
+    StreamsGraphNode(final String nodeName,
                      final boolean repartitionRequired) {
-        this.parentProcessorNodeName = parentProcessorNodeName;
-        this.processorNodeName = processorNodeName;
+        this.nodeName = nodeName;
         this.repartitionRequired = repartitionRequired;
     }
 
     StreamsGraphNode parentNode() {
         return parentNode;
-    }
-
-    String parentProcessorNodeName() {
-        return parentProcessorNodeName;
-    }
-
-    void setParentProcessorNodeName(final String parentProcessorNodeName) {
-        this.parentProcessorNodeName = parentProcessorNodeName;
     }
 
     void setParentNode(final StreamsGraphNode parentNode) {
@@ -65,8 +54,12 @@ abstract class StreamsGraphNode {
         this.childNodes.add(node);
     }
 
-    String processorNodeName() {
-        return processorNodeName;
+    String nodeName() {
+        return nodeName;
+    }
+
+    void setNodeName(String nodeName) {
+        this.nodeName = nodeName;
     }
 
     boolean repartitionRequired() {

@@ -32,8 +32,7 @@ class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K, V1, V
     private final String[] joinOtherStoreNames;
     private final MaterializedInternal materializedInternal;
 
-    KTableKTableJoinNode(final String parentProcessorNodeName,
-                         final String processorNodeName,
+    KTableKTableJoinNode(final String nodeName,
                          final ValueJoiner<? super V1, ? super V2, ? extends VR> valueJoiner,
                          final ProcessorParameters<K, V1> joinThisProcessorParameters,
                          final ProcessorParameters<K, V2> joinOtherProcessorParameters,
@@ -44,8 +43,7 @@ class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K, V1, V
                          final String[] joinThisStoreNames,
                          final String[] joinOtherStoreNames) {
 
-        super(parentProcessorNodeName,
-              processorNodeName,
+        super(nodeName,
               valueJoiner,
               joinThisProcessorParameters,
               joinOtherProcessorParameters,
@@ -81,8 +79,7 @@ class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K, V1, V
 
     static final class KTableKTableJoinNodeBuilder<K, V1, V2, VR> {
 
-        private String processorNodeName;
-        private String parentProcessorNodeName;
+        private String nodeName;
         private String[] joinThisStoreNames;
         private ProcessorParameters<K, V1> joinThisProcessorParameters;
         private String[] joinOtherStoreNames;
@@ -106,18 +103,13 @@ class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K, V1, V
             return this;
         }
 
-        KTableKTableJoinNodeBuilder<K, V1, V2, VR> withProcessorNodeName(String processorNodeName) {
-            this.processorNodeName = processorNodeName;
+        KTableKTableJoinNodeBuilder<K, V1, V2, VR> withNodeName(String nodeName) {
+            this.nodeName = nodeName;
             return this;
         }
 
         KTableKTableJoinNodeBuilder<K, V1, V2, VR>  withJoinOtherStoreNames(final String[] joinOtherStoreNames) {
             this.joinOtherStoreNames = joinOtherStoreNames;
-            return this;
-        }
-
-        KTableKTableJoinNodeBuilder<K, V1, V2, VR> withParentProcessorNodeName(final String parentProcessorNodeName) {
-            this.parentProcessorNodeName = parentProcessorNodeName;
             return this;
         }
 
@@ -153,8 +145,7 @@ class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K, V1, V
 
         KTableKTableJoinNode<K, V1, V2, VR> build() {
 
-            return new KTableKTableJoinNode<>(parentProcessorNodeName,
-                                              processorNodeName,
+            return new KTableKTableJoinNode<>(nodeName,
                                               valueJoiner,
                                               joinThisProcessorParameters,
                                               joinOtherProcessorParameters,

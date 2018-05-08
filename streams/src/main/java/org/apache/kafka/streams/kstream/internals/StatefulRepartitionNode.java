@@ -21,42 +21,33 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 
 class StatefulRepartitionNode<K, V, T> extends RepartitionNode<K, V> {
 
-    private final ProcessorSupplier<K, Change<V>> statefulProcessorSupplier;
     private final MaterializedInternal<K, T, KeyValueStore<Bytes, byte[]>> materialized;
 
-    StatefulRepartitionNode(final String parentProcessorNodeName,
-                            final String processorNodeName,
+    StatefulRepartitionNode(final String nodeName,
                             final String sourceName,
                             final Serde<K> keySerde,
                             final Serde<V> valueSerde,
                             final String sinkName,
                             final String repartitionTopic,
-                            final String processorName,
-                            final ProcessorSupplier<K, Change<V>> statefulProcessorSupplier,
+                            final ProcessorParameters processorParameters,
                             final MaterializedInternal<K, T, KeyValueStore<Bytes, byte[]>> materialized) {
-        super(parentProcessorNodeName,
-              processorNodeName,
+        super(nodeName,
               sourceName,
-              null,
+              processorParameters,
               keySerde,
               valueSerde,
               sinkName,
-              repartitionTopic,
-              processorName);
+              repartitionTopic
+        );
 
-        this.statefulProcessorSupplier = statefulProcessorSupplier;
         this.materialized = materialized;
     }
 
-    ProcessorSupplier<K, Change<V>> statefulProcessorSupplier() {
-        return statefulProcessorSupplier;
-    }
 
     MaterializedInternal<K, T, KeyValueStore<Bytes, byte[]>> materialized() {
         return materialized;
@@ -85,15 +76,13 @@ class StatefulRepartitionNode<K, V, T> extends RepartitionNode<K, V> {
 
     static final class StatefulRepartitionNodeBuilder<K, V, T> {
 
-        private String parentProcessorNodeName;
-        private String processorNodeName;
+        private String nodeName;
         private Serde<K> keySerde;
         private Serde<V> valueSerde;
         private String sinkName;
         private String sourceName;
         private String repartitionTopic;
-        private String processorName;
-        private ProcessorSupplier<K, Change<V>> statefulProcessorSupplier;
+        private ProcessorParameters processorParameters;
         private MaterializedInternal<K, T, KeyValueStore<Bytes, byte[]>> materialized;
 
         private StatefulRepartitionNodeBuilder() {
@@ -107,11 +96,6 @@ class StatefulRepartitionNode<K, V, T> extends RepartitionNode<K, V> {
 
         StatefulRepartitionNodeBuilder<K, V, T> withValueSerde(final Serde<V> valueSerde) {
             this.valueSerde = valueSerde;
-            return this;
-        }
-
-        StatefulRepartitionNodeBuilder<K, V, T> withParentProcessorNodeName(final String parentProcessorNodeName) {
-            this.parentProcessorNodeName = parentProcessorNodeName;
             return this;
         }
 
@@ -130,13 +114,13 @@ class StatefulRepartitionNode<K, V, T> extends RepartitionNode<K, V> {
             return this;
         }
 
-        StatefulRepartitionNodeBuilder<K, V, T> withProcessorNodeName(final String processorNodeName) {
-            this.processorName = processorNodeName;
+        StatefulRepartitionNodeBuilder<K, V, T> withNodeName(final String nodeName) {
+            this.nodeName = nodeName;
             return this;
         }
 
-        StatefulRepartitionNodeBuilder<K, V, T> withStatefulProcessorSupplier(final ProcessorSupplier<K, Change<V>> statefulProcessorSupplier) {
-            this.statefulProcessorSupplier = statefulProcessorSupplier;
+        StatefulRepartitionNodeBuilder<K, V, T> withProcessorParameters(final ProcessorParameters processorParameters) {
+            this.processorParameters = processorParameters;
             return this;
         }
 
@@ -145,22 +129,16 @@ class StatefulRepartitionNode<K, V, T> extends RepartitionNode<K, V> {
             return this;
         }
 
-        StatefulRepartitionNodeBuilder<K, V, T> withNodeName(final String nodeName) {
-            this.processorNodeName = nodeName;
-            return this;
-        }
 
         public StatefulRepartitionNode<K, V, T> build() {
 
-            return new StatefulRepartitionNode<>(parentProcessorNodeName,
-                                                 processorNodeName,
+            return new StatefulRepartitionNode<>(nodeName,
                                                  sourceName,
                                                  keySerde,
                                                  valueSerde,
                                                  sinkName,
                                                  repartitionTopic,
-                                                 processorName,
-                                                 statefulProcessorSupplier,
+                                                 processorParameters,
                                                  materialized);
 
 

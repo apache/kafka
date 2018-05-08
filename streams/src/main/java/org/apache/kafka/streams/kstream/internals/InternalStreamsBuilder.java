@@ -50,8 +50,8 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                        final ConsumedInternal<K, V> consumed) {
         final String name = newProcessorName(KStreamImpl.SOURCE_NAME);
 
-        addNode(new StreamSourceNode<>(TOPOLOGY_ROOT,
-                                       name,
+        addNode(new StreamSourceNode<>(
+            name,
                                        topics,
                                        consumed));
 
@@ -61,8 +61,8 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     public <K, V> KStream<K, V> stream(final Pattern topicPattern, final ConsumedInternal<K, V> consumed) {
         final String name = newProcessorName(KStreamImpl.SOURCE_NAME);
 
-        addNode(new StreamSourceNode<>(TOPOLOGY_ROOT,
-                                       name,
+        addNode(new StreamSourceNode<>(
+            name,
                                        topicPattern,
                                        consumed));
 

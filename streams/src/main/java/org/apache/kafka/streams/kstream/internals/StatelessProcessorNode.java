@@ -17,7 +17,6 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
 import java.util.ArrayList;
@@ -31,7 +30,7 @@ import java.util.List;
  */
 class StatelessProcessorNode<K, V> extends StreamsGraphNode {
 
-    private final ProcessorSupplier processorSupplier;
+    private final ProcessorParameters<K, V> processorParameters;
 
     // some processors need to register multiple parent names with
     // the InternalTopologyBuilder KStream#merge for example.
@@ -41,31 +40,28 @@ class StatelessProcessorNode<K, V> extends StreamsGraphNode {
     private List<String> multipleParentNames = new ArrayList<>();
 
 
-    StatelessProcessorNode(final String parentProcessorNodeName,
-                           final String processorNodeName,
-                           final ProcessorSupplier processorSupplier,
+    StatelessProcessorNode(final String nodeName,
+                           final ProcessorParameters processorParameters,
                            final boolean repartitionRequired) {
 
-        super(parentProcessorNodeName,
-              processorNodeName,
+        super(nodeName,
               repartitionRequired);
 
-        this.processorSupplier = processorSupplier;
+        this.processorParameters = processorParameters;
     }
 
-    StatelessProcessorNode(final String parentProcessorNodeName,
-                           final String processorNodeName,
+    StatelessProcessorNode(final String processorNodeName,
+                           final ProcessorParameters processorParameters,
                            final boolean repartitionRequired,
-                           final ProcessorSupplier processorSupplier,
                            final List<String> multipleParentNames) {
 
-        this(parentProcessorNodeName, processorNodeName, processorSupplier, repartitionRequired);
+        this(processorNodeName, processorParameters, repartitionRequired);
 
         this.multipleParentNames = multipleParentNames;
     }
 
-    ProcessorSupplier<K, V> processorSupplier() {
-        return processorSupplier;
+    ProcessorParameters<K, V> processorSupplier() {
+        return processorParameters;
     }
 
     List<String> multipleParentNames() {

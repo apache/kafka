@@ -33,7 +33,7 @@ class StreamsTopologyGraph {
     private static final Logger LOG = LoggerFactory.getLogger(StreamsTopologyGraph.class);
     static final String TOPOLOGY_ROOT = "root";
 
-    protected final StreamsGraphNode root = new StreamsGraphNode(null, TOPOLOGY_ROOT, false) {
+    protected final StreamsGraphNode root = new StreamsGraphNode(TOPOLOGY_ROOT, false) {
         @Override
         void writeToTopology(InternalTopologyBuilder topologyBuilder) {
             // no-op for root node
@@ -55,19 +55,19 @@ class StreamsTopologyGraph {
     void addNode(final StreamsGraphNode node) {
         node.setId(nodeIdCounter.getAndIncrement());
 
-        if (node.parentProcessorNodeName() == null && !node.processorNodeName().equals(TOPOLOGY_ROOT)) {
-            LOG.warn("Updating node {} with predecessor name {}", node, previousNode.processorNodeName());
-            node.setParentProcessorNodeName(previousNode.processorNodeName());
+        if (node.parentNode() == null && !node.nodeName().equals(TOPOLOGY_ROOT)) {
+            LOG.warn("Updating node {} with predecessor name {}", node, previousNode.nodeName());
+            node.setParentNode(previousNode);
         }
 
         LOG.debug("Adding node {}", node);
 
-        final StreamsGraphNode predecessorNode =  nameToGraphNode.get(node.parentProcessorNodeName());
+        final StreamsGraphNode predecessorNode =  nameToGraphNode.get(node.parentNode().nodeName());
 
         if (predecessorNode == null) {
             throw new IllegalStateException(
-                "Nodes should not have a null predecessor.  Name: " + node.processorNodeName() + " Type: "
-                + node.getClass().getSimpleName() + " predecessor name " + node.parentProcessorNodeName());
+                "Nodes should not have a null predecessor.  Name: " + node.nodeName() + " Type: "
+                + node.getClass().getSimpleName() + " predecessor name " + node.parentNode().nodeName());
         }
 
         node.setParentNode(predecessorNode);
@@ -87,8 +87,8 @@ class StreamsTopologyGraph {
             }
         }
 
-        if (!nameToGraphNode.containsKey(node.processorNodeName())) {
-            nameToGraphNode.put(node.processorNodeName(), node);
+        if (!nameToGraphNode.containsKey(node.nodeName())) {
+            nameToGraphNode.put(node.nodeName(), node);
         }
 
         previousNode = node;

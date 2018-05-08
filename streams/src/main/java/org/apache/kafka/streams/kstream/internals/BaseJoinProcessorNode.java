@@ -18,7 +18,6 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.ValueJoiner;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
 
 /**
  * Utility base class containing the common fields between
@@ -26,19 +25,15 @@ import org.apache.kafka.streams.processor.ProcessorSupplier;
  */
 abstract class BaseJoinProcessorNode<K, V1, V2, VR> extends StreamsGraphNode {
 
-    private final ProcessorSupplier<K, V1> joinThisProcessSupplier;
-    private final ProcessorSupplier<K, V2> joinOtherProcessSupplier;
-    private final ProcessorSupplier<K, VR> joinMergeProcessor;
+    private final ProcessorParameters<K, V1> joinThisProcessorParameters;
+    private final ProcessorParameters<K, V2> joinOtherProcessorParameters;
+    private final ProcessorParameters<K, VR> joinMergeProcessorParameters;
     private final ValueJoiner<? super V1, ? super V2, ? extends VR> valueJoiner;
-    private final String joinThisProcessorName;
-    private final String joinOtherProcessorName;
-    private final String joinMergeProcessorName;
     private final String thisJoinSide;
     private final String otherJoinSide;
 
 
-    BaseJoinProcessorNode(final String parentProcessorNodeName,
-                          final String processorNodeName,
+    BaseJoinProcessorNode(final String nodeName,
                           final ValueJoiner<? super V1, ? super V2, ? extends VR> valueJoiner,
                           final ProcessorParameters<K, V1> joinThisProcessorDetails,
                           final ProcessorParameters<K, V2> joinOtherProcessDetails,
@@ -46,47 +41,31 @@ abstract class BaseJoinProcessorNode<K, V1, V2, VR> extends StreamsGraphNode {
                           final String thisJoinSide,
                           final String otherJoinSide) {
 
-        super(parentProcessorNodeName,
-              processorNodeName,
+        super(nodeName,
               false);
 
         this.valueJoiner = valueJoiner;
-        this.joinThisProcessSupplier = joinThisProcessorDetails.processorSupplier();
-        this.joinOtherProcessSupplier = joinOtherProcessDetails.processorSupplier();
-        this.joinMergeProcessor = joinMergeProcessorDetails.processorSupplier();
-        this.joinThisProcessorName = joinThisProcessorDetails.processorName();
-        this.joinOtherProcessorName = joinOtherProcessDetails.processorName();
-        this.joinMergeProcessorName = joinMergeProcessorDetails.processorName();
+        this.joinThisProcessorParameters = joinThisProcessorDetails;
+        this.joinOtherProcessorParameters = joinOtherProcessDetails;
+        this.joinMergeProcessorParameters = joinMergeProcessorDetails;
         this.thisJoinSide = thisJoinSide;
         this.otherJoinSide = otherJoinSide;
     }
 
-    ProcessorSupplier<K, V1> joinThisProcessorSupplier() {
-        return joinThisProcessSupplier;
+    ProcessorParameters<K, V1> joinThisProcessorParameters() {
+        return joinThisProcessorParameters;
     }
 
-    ProcessorSupplier<K, V2> joinOtherProcessorSupplier() {
-        return joinOtherProcessSupplier;
+    ProcessorParameters<K, V2> joinOtherProcessorParameters() {
+        return joinOtherProcessorParameters;
     }
 
-    ProcessorSupplier<K, VR> joinMergeProcessor() {
-        return joinMergeProcessor;
+    ProcessorParameters<K, VR> joinMergeProcessorParameters() {
+        return joinMergeProcessorParameters;
     }
 
     ValueJoiner<? super V1, ? super V2, ? extends VR> valueJoiner() {
         return valueJoiner;
-    }
-
-    String joinThisProcessorName() {
-        return joinThisProcessorName;
-    }
-
-    String joinOtherProcessorName() {
-        return joinOtherProcessorName;
-    }
-
-    String joinMergeProcessorName() {
-        return joinMergeProcessorName;
     }
 
     String thisJoinSide() {
