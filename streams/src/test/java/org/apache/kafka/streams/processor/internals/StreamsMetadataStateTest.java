@@ -71,19 +71,19 @@ public class StreamsMetadataStateTest {
     private StreamPartitioner<String, Object> partitioner;
 
     @Before
-    public void before() throws Exception {
+    public void before() {
         builder = new StreamsBuilder();
         final KStream<Object, Object> one = builder.stream("topic-one");
-        one.groupByKey().count("table-one");
+        one.groupByKey().count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>as("table-one"));
 
         final KStream<Object, Object> two = builder.stream("topic-two");
-        two.groupByKey().count("table-two");
+        two.groupByKey().count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>as("table-two"));
 
         builder.stream("topic-three")
                 .groupByKey()
-                .count("table-three");
+                .count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>as("table-three"));
 
-        one.merge(two).groupByKey().count("merged-table");
+        one.merge(two).groupByKey().count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>as("merged-table"));
 
         builder.stream("topic-four").mapValues(new ValueMapper<Object, Object>() {
             @Override

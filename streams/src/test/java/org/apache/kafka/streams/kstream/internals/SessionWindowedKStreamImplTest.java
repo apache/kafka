@@ -112,7 +112,8 @@ public class SessionWindowedKStreamImplTest {
         final Map<Windowed<String>, String> results = new HashMap<>();
         stream.aggregate(MockInitializer.STRING_INIT,
                          MockAggregator.TOSTRING_ADDER,
-                         sessionMerger)
+                         sessionMerger,
+                         Materialized.<String, String, SessionStore<Bytes, byte[]>>with(Serdes.String(), Serdes.String()))
                 .toStream()
                 .foreach(new ForeachAction<Windowed<String>, String>() {
                     @Override
@@ -129,21 +130,6 @@ public class SessionWindowedKStreamImplTest {
     @SuppressWarnings("unchecked")
     @Test
     public void shouldMaterializeCount() {
-        stream.count(Materialized.<String, Long, SessionStore<Bytes, byte[]>>as("count-store")
-                             .withKeySerde(Serdes.String()));
-
-        processData();
-        final SessionStore<String, Long> store = (SessionStore<String, Long>) driver.allStateStores().get("count-store");
-        final List<KeyValue<Windowed<String>, Long>> data = StreamsTestUtils.toList(store.fetch("1", "2"));
-        assertThat(data, equalTo(Arrays.asList(
-                KeyValue.pair(new Windowed<>("1", new SessionWindow(10, 15)), 2L),
-                KeyValue.pair(new Windowed<>("1", new SessionWindow(600, 600)), 1L),
-                KeyValue.pair(new Windowed<>("2", new SessionWindow(600, 600)), 1L))));
-    }
-
-    @SuppressWarnings("unchecked")
-    @Test
-    public void shouldMaterializeWithoutSpecifyingSerdes() {
         stream.count(Materialized.<String, Long, SessionStore<Bytes, byte[]>>as("count-store"));
 
         processData();
@@ -158,10 +144,7 @@ public class SessionWindowedKStreamImplTest {
     @SuppressWarnings("unchecked")
     @Test
     public void shouldMaterializeReduced() {
-        stream.reduce(MockReducer.STRING_ADDER,
-                      Materialized.<String, String, SessionStore<Bytes, byte[]>>as("reduced")
-                              .withKeySerde(Serdes.String())
-                              .withValueSerde(Serdes.String()));
+        stream.reduce(MockReducer.STRING_ADDER, Materialized.<String, String, SessionStore<Bytes, byte[]>>as("reduced"));
 
         processData();
         final SessionStore<String, String> sessionStore = (SessionStore<String, String>) driver.allStateStores().get("reduced");
@@ -179,9 +162,7 @@ public class SessionWindowedKStreamImplTest {
         stream.aggregate(MockInitializer.STRING_INIT,
                          MockAggregator.TOSTRING_ADDER,
                          sessionMerger,
-                         Materialized.<String, String, SessionStore<Bytes, byte[]>>as("aggregated")
-                                 .withKeySerde(Serdes.String())
-                                 .withValueSerde(Serdes.String()));
+                         Materialized.<String, String, SessionStore<Bytes, byte[]>>as("aggregated").withValueSerde(Serdes.String()));
 
         processData();
         final SessionStore<String, String> sessionStore = (SessionStore<String, String>) driver.allStateStores().get("aggregated");

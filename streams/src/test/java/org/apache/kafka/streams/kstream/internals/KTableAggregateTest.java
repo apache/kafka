@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KeyValue;
@@ -28,10 +29,12 @@ import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
@@ -80,8 +83,7 @@ public class KTableAggregateTest {
         ).aggregate(MockInitializer.STRING_INIT,
                 MockAggregator.TOSTRING_ADDER,
                 MockAggregator.TOSTRING_REMOVER,
-                stringSerde,
-                "topic1-Canonized");
+                Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("topic1-Canonized").withValueSerde(stringSerde));
 
         table2.toStream().process(supplier);
 
@@ -127,8 +129,7 @@ public class KTableAggregateTest {
         ).aggregate(MockInitializer.STRING_INIT,
             MockAggregator.TOSTRING_ADDER,
             MockAggregator.TOSTRING_REMOVER,
-            stringSerde,
-            "topic1-Canonized");
+            Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("topic1-Canonized").withValueSerde(stringSerde));
 
         table2.toStream().process(supplier);
 
@@ -167,8 +168,7 @@ public class KTableAggregateTest {
                 .aggregate(MockInitializer.STRING_INIT,
                 MockAggregator.TOSTRING_ADDER,
                 MockAggregator.TOSTRING_REMOVER,
-                stringSerde,
-                "topic1-Canonized");
+                Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("topic1-Canonized").withValueSerde(stringSerde));
 
         table2.toStream().process(supplier);
 
@@ -235,7 +235,7 @@ public class KTableAggregateTest {
 
         builder.table(input, consumed)
                 .groupBy(MockMapper.<String, String>selectValueKeyValueMapper(), stringSerialzied)
-                .count("count")
+                .count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("count"))
                 .toStream()
                 .process(supplier);
 
@@ -264,7 +264,7 @@ public class KTableAggregateTest {
 
         builder.table(input, consumed)
             .groupBy(MockMapper.<String, String>selectValueKeyValueMapper(), stringSerialzied)
-            .count("count")
+            .count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("count"))
             .toStream()
             .process(supplier);
 
@@ -319,7 +319,7 @@ public class KTableAggregateTest {
                     public String apply(String key, String value, String aggregate) {
                         return aggregate.replaceAll(value, "");
                     }
-                }, Serdes.String(), "someStore")
+                }, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("someStore").withValueSerde(Serdes.String()))
                 .toStream()
                 .process(supplier);
 
@@ -372,7 +372,7 @@ public class KTableAggregateTest {
                     public Long apply(final Long value1, final Long value2) {
                         return value1 - value2;
                     }
-                }, "reducer-store");
+                }, Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("reducer-store"));
 
         reduce.toStream().foreach(new ForeachAction<String, Long>() {
             @Override

@@ -107,57 +107,44 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     public String queryableStoreName() {
         if (!isQueryable) {
             return null;
-        }
-        return this.queryableStoreName;
-    }
-
-    @SuppressWarnings("deprecation")
-    private KTable<K, V> doFilter(final Predicate<? super K, ? super V> predicate,
-                                  final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier,
-                                  final boolean isFilterNot) {
-        Objects.requireNonNull(predicate, "predicate can't be null");
-        String name = builder.newProcessorName(FILTER_NAME);
-        String internalStoreName = null;
-        if (storeSupplier != null) {
-            internalStoreName = storeSupplier.name();
-        }
-        KTableProcessorSupplier<K, V, V> processorSupplier = new KTableFilter<>(this, predicate, isFilterNot, internalStoreName);
-        builder.internalTopologyBuilder.addProcessor(name, processorSupplier, this.name);
-        if (storeSupplier != null) {
-            builder.internalTopologyBuilder.addStateStore(storeSupplier, name);
-            return new KTableImpl<>(builder, name, processorSupplier, this.keySerde, this.valSerde, sourceNodes, internalStoreName, true);
         } else {
-            return new KTableImpl<>(builder, name, processorSupplier, sourceNodes, this.queryableStoreName, false);
+            return this.queryableStoreName;
         }
     }
 
     private KTable<K, V> doFilter(final Predicate<? super K, ? super V> predicate,
                                   final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized,
                                   final boolean filterNot) {
-        String name = builder.newProcessorName(FILTER_NAME);
+        final String name = builder.newProcessorName(FILTER_NAME);
+
+        // only materialize if the state store is queryable
+        final boolean shouldMaterialize = materialized != null && materialized.isQueryable();
 
         KTableProcessorSupplier<K, V, V> processorSupplier = new KTableFilter<>(this,
-                                                                                predicate,
-                                                                                filterNot,
-                                                                                materialized.storeName());
+                predicate,
+                filterNot,
+                shouldMaterialize ? materialized.storeName() : null);
+
         builder.internalTopologyBuilder.addProcessor(name, processorSupplier, this.name);
 
-        final StoreBuilder builder = new KeyValueStoreMaterializer<>(materialized).materialize();
-        this.builder.internalTopologyBuilder.addStateStore(builder, name);
+        if (shouldMaterialize) {
+            this.builder.internalTopologyBuilder.addStateStore(new KeyValueStoreMaterializer<>(materialized).materialize(), name);
+        }
 
-        return new KTableImpl<>(this.builder,
-                                name,
-                                processorSupplier,
-                                this.keySerde,
-                                this.valSerde,
-                                sourceNodes,
-                                builder.name(),
-                                true);
+        return new KTableImpl<>(builder,
+                name,
+                processorSupplier,
+                this.keySerde,
+                this.valSerde,
+                sourceNodes,
+                shouldMaterialize ? materialized.storeName() : this.queryableStoreName,
+                shouldMaterialize);
     }
 
     @Override
     public KTable<K, V> filter(final Predicate<? super K, ? super V> predicate) {
-        return filter(predicate, (String) null);
+        Objects.requireNonNull(predicate, "predicate can't be null");
+        return doFilter(predicate, null, false);
     }
 
     @Override
@@ -168,28 +155,10 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         return doFilter(predicate, new MaterializedInternal<>(materialized, builder, FILTER_NAME), false);
     }
 
-    @SuppressWarnings("deprecation")
-    @Override
-    public KTable<K, V> filter(final Predicate<? super K, ? super V> predicate,
-                               final String queryableStoreName) {
-        org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier = null;
-        if (queryableStoreName != null) {
-            storeSupplier = keyValueStore(this.keySerde, this.valSerde, queryableStoreName);
-        }
-        return doFilter(predicate, storeSupplier, false);
-    }
-
-    @SuppressWarnings("deprecation")
-    @Override
-    public KTable<K, V> filter(final Predicate<? super K, ? super V> predicate,
-                               final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier) {
-        Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
-        return doFilter(predicate, storeSupplier, false);
-    }
-
     @Override
     public KTable<K, V> filterNot(final Predicate<? super K, ? super V> predicate) {
-        return filterNot(predicate, (String) null);
+        Objects.requireNonNull(predicate, "predicate can't be null");
+        return doFilter(predicate, null, true);
     }
 
     @Override
@@ -200,60 +169,46 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         return doFilter(predicate, new MaterializedInternal<>(materialized, builder, FILTER_NAME), true);
     }
 
-    @SuppressWarnings("deprecation")
-    @Override
-    public KTable<K, V> filterNot(final Predicate<? super K, ? super V> predicate,
-                                  final String queryableStoreName) {
-        org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier = null;
-        if (queryableStoreName != null) {
-            storeSupplier = keyValueStore(this.keySerde, this.valSerde, queryableStoreName);
-        }
-        return doFilter(predicate, storeSupplier, true);
-    }
+    private <VR> KTable<K, VR> doMapValues(final ValueMapperWithKey<? super K, ? super V, ? extends VR> mapper,
+                                           final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
+        final String name = builder.newProcessorName(MAPVALUES_NAME);
 
-    @SuppressWarnings("deprecation")
-    @Override
-    public KTable<K, V> filterNot(final Predicate<? super K, ? super V> predicate,
-                                  final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier) {
-        Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
-        return doFilter(predicate, storeSupplier, true);
-    }
+        // only materialize if the state store is queryable
+        final boolean shouldMaterialize = materialized != null && materialized.isQueryable();
 
-    @SuppressWarnings("deprecation")
-    private <V1> KTable<K, V1> doMapValues(final ValueMapperWithKey<? super K, ? super V, ? extends V1> mapper,
-                                           final Serde<V1> valueSerde,
-                                           final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier) {
-        Objects.requireNonNull(mapper);
-        String name = builder.newProcessorName(MAPVALUES_NAME);
-        String internalStoreName = null;
-        if (storeSupplier != null) {
-            internalStoreName = storeSupplier.name();
-        }
-        KTableProcessorSupplier<K, V, V1> processorSupplier = new KTableMapValues<>(this, mapper, internalStoreName);
+        final KTableProcessorSupplier<K, V, VR> processorSupplier = new KTableMapValues<>(
+                this,
+                mapper,
+                shouldMaterialize ? materialized.storeName() : null);
+
         builder.internalTopologyBuilder.addProcessor(name, processorSupplier, this.name);
-        if (storeSupplier != null) {
-            builder.internalTopologyBuilder.addStateStore(storeSupplier, name);
-            return new KTableImpl<>(builder, name, processorSupplier, this.keySerde, valueSerde, sourceNodes, internalStoreName, true);
-        } else {
-            return new KTableImpl<>(builder, name, processorSupplier, sourceNodes, this.queryableStoreName, false);
+
+        if (shouldMaterialize) {
+            this.builder.internalTopologyBuilder.addStateStore(new KeyValueStoreMaterializer<>(materialized).materialize(), name);
         }
+
+        return new KTableImpl<>(builder, name, processorSupplier, sourceNodes, shouldMaterialize ? materialized.storeName() : this.queryableStoreName, shouldMaterialize);
     }
 
     @Override
-    public <V1> KTable<K, V1> mapValues(final ValueMapper<? super V, ? extends V1> mapper) {
-        return doMapValues(withKey(mapper), null, null);
+    public <VR> KTable<K, VR> mapValues(final ValueMapper<? super V, ? extends VR> mapper) {
+        Objects.requireNonNull(mapper, "mapper can't be null");
+        return doMapValues(withKey(mapper), null);
     }
 
     @Override
     public <VR> KTable<K, VR> mapValues(final ValueMapperWithKey<? super K, ? super V, ? extends VR> mapper) {
-        return doMapValues(mapper, null, null);
-
+        Objects.requireNonNull(mapper, "mapper can't be null");
+        return doMapValues(mapper, null);
     }
 
     @Override
     public <VR> KTable<K, VR> mapValues(final ValueMapper<? super V, ? extends VR> mapper,
                                         final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
-        return mapValues(withKey(mapper), materialized);
+        Objects.requireNonNull(mapper, "mapper can't be null");
+        Objects.requireNonNull(materialized, "materialized can't be null");
+
+        return doMapValues(withKey(mapper), new MaterializedInternal<>(materialized, builder, MAPVALUES_NAME));
     }
 
     @Override
@@ -261,36 +216,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                                         final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(mapper, "mapper can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
-        final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal
-                = new MaterializedInternal<>(materialized, builder, MAPVALUES_NAME);
-        final String name = builder.newProcessorName(MAPVALUES_NAME);
-        final KTableProcessorSupplier<K, V, VR> processorSupplier = new KTableMapValues<>(
-                this,
-                mapper,
-                materializedInternal.storeName());
-        builder.internalTopologyBuilder.addProcessor(name, processorSupplier, this.name);
-        builder.internalTopologyBuilder.addStateStore(
-                new KeyValueStoreMaterializer<>(materializedInternal).materialize(),
-                name);
-        return new KTableImpl<>(builder, name, processorSupplier, sourceNodes, this.queryableStoreName, true);
-    }
 
-    @SuppressWarnings("deprecation")
-    @Override
-    public <V1> KTable<K, V1> mapValues(final ValueMapper<? super V, ? extends V1> mapper,
-                                        final Serde<V1> valueSerde,
-                                        final String queryableStoreName) {
-        return mapValues(withKey(mapper), Materialized.<K, V1, KeyValueStore<Bytes, byte[]>>as(queryableStoreName).
-                withValueSerde(valueSerde).withKeySerde(this.keySerde));
-    }
-
-    @SuppressWarnings("deprecation")
-    @Override
-    public  <V1> KTable<K, V1> mapValues(final ValueMapper<? super V, ? extends V1> mapper,
-                                         final Serde<V1> valueSerde,
-                                         final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier) {
-        Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
-        return doMapValues(withKey(mapper), valueSerde, storeSupplier);
+        return doMapValues(mapper, new MaterializedInternal<>(materialized, builder, MAPVALUES_NAME));
     }
 
     @Override
@@ -328,24 +255,6 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         return doJoin(other, joiner, new MaterializedInternal<>(materialized, builder, MERGE_NAME), false, false);
     }
 
-    @SuppressWarnings("deprecation")
-    @Override
-    public <V1, R> KTable<K, R> join(final KTable<K, V1> other,
-                                     final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
-                                     final Serde<R> joinSerde,
-                                     final String queryableStoreName) {
-        return doJoin(other, joiner, false, false, joinSerde, queryableStoreName);
-    }
-
-    @SuppressWarnings("deprecation")
-    @Override
-    public <V1, R> KTable<K, R> join(final KTable<K, V1> other,
-                                     final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
-                                     final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier) {
-        Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
-        return doJoin(other, joiner, false, false, storeSupplier);
-    }
-
     @Override
     public <V1, R> KTable<K, R> outerJoin(final KTable<K, V1> other,
                                           final ValueJoiner<? super V, ? super V1, ? extends R> joiner) {
@@ -357,24 +266,6 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                                             final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                             final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
         return doJoin(other, joiner, new MaterializedInternal<>(materialized, builder, MERGE_NAME), true, true);
-    }
-
-    @SuppressWarnings("deprecation")
-    @Override
-    public <V1, R> KTable<K, R> outerJoin(final KTable<K, V1> other,
-                                          final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
-                                          final Serde<R> joinSerde,
-                                          final String queryableStoreName) {
-        return doJoin(other, joiner, true, true, joinSerde, queryableStoreName);
-    }
-
-    @SuppressWarnings("deprecation")
-    @Override
-    public <V1, R> KTable<K, R> outerJoin(final KTable<K, V1> other,
-                                          final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
-                                          final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier) {
-        Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
-        return doJoin(other, joiner, true, true, storeSupplier);
     }
 
     @Override
@@ -394,64 +285,6 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                       false);
     }
 
-    @SuppressWarnings("deprecation")
-    @Override
-    public <V1, R> KTable<K, R> leftJoin(final KTable<K, V1> other,
-                                         final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
-                                         final Serde<R> joinSerde,
-                                         final String queryableStoreName) {
-        return doJoin(other, joiner, true, false, joinSerde, queryableStoreName);
-    }
-
-    @SuppressWarnings("deprecation")
-    @Override
-    public <V1, R> KTable<K, R> leftJoin(final KTable<K, V1> other,
-                                         final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
-                                         final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier) {
-        Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
-        return doJoin(other, joiner, true, false, storeSupplier);
-    }
-
-    @SuppressWarnings({"unchecked", "deprecation"})
-    private <V1, R> KTable<K, R> doJoin(final KTable<K, V1> other,
-                                        final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
-                                        final boolean leftOuter,
-                                        final boolean rightOuter,
-                                        final Serde<R> joinSerde,
-                                        final String queryableStoreName) {
-        Objects.requireNonNull(other, "other can't be null");
-        Objects.requireNonNull(joiner, "joiner can't be null");
-
-        final org.apache.kafka.streams.processor.StateStoreSupplier storeSupplier
-            = queryableStoreName == null ? null : keyValueStore(this.keySerde, joinSerde, queryableStoreName);
-
-        return doJoin(other, joiner, leftOuter, rightOuter, storeSupplier);
-    }
-
-    @SuppressWarnings({"unchecked", "deprecation"})
-    private <V1, R> KTable<K, R> doJoin(final KTable<K, V1> other,
-                                        final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
-                                        final boolean leftOuter,
-                                        final boolean rightOuter,
-                                        final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier) {
-        Objects.requireNonNull(other, "other can't be null");
-        Objects.requireNonNull(joiner, "joiner can't be null");
-        final String joinMergeName = builder.newProcessorName(MERGE_NAME);
-        final String internalQueryableName = storeSupplier == null ? null : storeSupplier.name();
-        final KTable<K, R> result = buildJoin((AbstractStream<K>) other,
-                                              joiner,
-                                              leftOuter,
-                                              rightOuter,
-                                              joinMergeName,
-                                              internalQueryableName);
-
-        if (internalQueryableName != null) {
-            builder.internalTopologyBuilder.addStateStore(storeSupplier, joinMergeName);
-        }
-
-        return result;
-    }
-
     @SuppressWarnings("unchecked")
     private <VO, VR> KTable<K, VR> doJoin(final KTable<K, VO> other,
                                           final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
@@ -469,6 +302,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                                                joinMergeName,
                                                internalQueryableName);
 
+        // only materialize if specified in Materialized
         if (materialized != null) {
             final StoreBuilder<KeyValueStore<K, VR>> storeBuilder
                     = new KeyValueStoreMaterializer<>(materialized).materialize();
@@ -524,14 +358,6 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         builder.internalTopologyBuilder.connectProcessorAndStateStores(joinThisName, ((KTableImpl) other).valueGetterSupplier().storeNames());
         builder.internalTopologyBuilder.connectProcessorAndStateStores(joinOtherName, valueGetterSupplier().storeNames());
         return new KTableImpl<>(builder, joinMergeName, joinMerge, allSourceNodes, internalQueryableName, internalQueryableName != null);
-    }
-
-    @SuppressWarnings("deprecation")
-    @Override
-    public <K1, V1> KGroupedTable<K1, V1> groupBy(final KeyValueMapper<? super K, ? super V, KeyValue<K1, V1>> selector,
-                                                  final Serde<K1> keySerde,
-                                                  final Serde<V1> valueSerde) {
-        return groupBy(selector, Serialized.with(keySerde, valueSerde));
     }
 
     @Override
