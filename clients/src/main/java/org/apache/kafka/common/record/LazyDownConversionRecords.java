@@ -65,10 +65,12 @@ public class LazyDownConversionRecords implements SerializableRecords {
         this.records = records;
         this.toMagic = toMagic;
         this.firstOffset = firstOffset;
-        this.minimumSize = RecordsUtil.downConvert(
-                Arrays.asList(records.batchIterator().peek()), toMagic, firstOffset, new SystemTime())
-                .records()
-                .sizeInBytes();
+
+        AbstractIterator<? extends RecordBatch> it = records.batchIterator();
+        if (it.hasNext())
+            this.minimumSize = RecordsUtil.downConvert(Arrays.asList(it.peek()), toMagic, firstOffset, new SystemTime()).records().sizeInBytes();
+        else
+            this.minimumSize = 0;
     }
 
     /**

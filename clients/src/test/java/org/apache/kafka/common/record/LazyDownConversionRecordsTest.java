@@ -27,7 +27,6 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
-import java.util.ArrayList;
 import java.util.List;
 
 import static java.util.Arrays.asList;
@@ -41,7 +40,6 @@ public class LazyDownConversionRecordsTest {
     enum DownConversionTest {
         DEFAULT,
         OVERFLOW,
-        UNDERFLOW
     }
 
     @Test
@@ -97,7 +95,8 @@ public class LazyDownConversionRecordsTest {
         buffer.flip();
 
         try (FileRecords inputRecords = FileRecords.open(tempFile())) {
-            inputRecords.append(MemoryRecords.readableRecords(buffer));
+            MemoryRecords memoryRecords = MemoryRecords.readableRecords(buffer);
+            inputRecords.append(memoryRecords);
             inputRecords.flush();
 
             LazyDownConversionRecords lazyRecords = new LazyDownConversionRecords(new TopicPartition("test", 1),
@@ -122,11 +121,6 @@ public class LazyDownConversionRecordsTest {
                     toWrite = inputRecords.sizeInBytes() * 2;
                     recordsBeingConverted = records;
                     offsetsOfRecords = offsets;
-                    break;
-                case UNDERFLOW:
-                    toWrite = 10;
-                    recordsBeingConverted = new ArrayList<>();
-                    offsetsOfRecords = new ArrayList<>();
                     break;
                 default:
                     throw new IllegalArgumentException();
