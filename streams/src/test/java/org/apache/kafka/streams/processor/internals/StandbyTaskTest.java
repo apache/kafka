@@ -348,7 +348,6 @@ public class StandbyTaskTest {
         );
         task.initializeStateStores();
 
-
         restoreStateConsumer.assign(new ArrayList<>(task.checkpointedOffsets().keySet()));
 
         final byte[] serializedValue = Serdes.Integer().serializer().serialize("", 1);
