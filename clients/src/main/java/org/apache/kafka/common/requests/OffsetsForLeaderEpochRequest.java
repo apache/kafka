@@ -66,12 +66,12 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<OffsetsForLeaderEpochRequest> {
         private Map<TopicPartition, Integer> epochsByPartition = new HashMap<>();
 
-        public Builder() {
-            super(ApiKeys.OFFSET_FOR_LEADER_EPOCH);
+        public Builder(short version) {
+            super(ApiKeys.OFFSET_FOR_LEADER_EPOCH, version);
         }
 
-        public Builder(Map<TopicPartition, Integer> epochsByPartition) {
-            super(ApiKeys.OFFSET_FOR_LEADER_EPOCH);
+        public Builder(short version, Map<TopicPartition, Integer> epochsByPartition) {
+            super(ApiKeys.OFFSET_FOR_LEADER_EPOCH, version);
             this.epochsByPartition = epochsByPartition;
         }
 
