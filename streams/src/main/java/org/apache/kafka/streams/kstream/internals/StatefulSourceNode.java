@@ -17,8 +17,6 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.processor.ProcessorSupplier;
-import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -26,73 +24,48 @@ import org.apache.kafka.streams.state.StoreBuilder;
 import java.util.Collections;
 
 /**
- * Used to represent either a KTable source or a GlobalKTable source.
- * The presence of a {@link KTableSource} indicates this source node supplies
- * a {@link org.apache.kafka.streams.kstream.GlobalKTable}
+ * Used to represent either a KTable source or a GlobalKTable source. A boolean flag is used to indicate if this represents a GlobalKTable a {@link
+ * org.apache.kafka.streams.kstream.GlobalKTable}
  */
 class StatefulSourceNode<K, V> extends StreamSourceNode<K, V> {
 
-    private org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier;
     private StoreBuilder<KeyValueStore<K, V>> storeBuilder;
-    private final ProcessorSupplier<K, V> processorSupplier;
+    private final ProcessorParameters<K, V> processorParameters;
     private final String sourceName;
-    private final String processorName;
-    private final KTableSource<K, V> kTableSource;
+    private final boolean isGlobalKTable;
 
-    StatefulSourceNode(final String predecessorNodeName,
-                       final String nodeName,
+    StatefulSourceNode(final String nodeName,
                        final String sourceName,
-                       final String processorName,
                        final String topic,
                        final ConsumedInternal<K, V> consumedInternal,
-                       final ProcessorSupplier<K, V> processorSupplier,
-                       final KTableSource<K, V> kTableSource) {
+                       final StoreBuilder<KeyValueStore<K, V>> storeBuilder,
+                       final ProcessorParameters<K, V> processorParameters,
+                       final boolean isGlobalKTable) {
 
-        super(
-            nodeName,
+        super(nodeName,
               Collections.singletonList(topic),
               consumedInternal);
 
-        this.processorSupplier = processorSupplier;
+        this.processorParameters = processorParameters;
         this.sourceName = sourceName;
-        this.processorName = processorName;
-        this.kTableSource = kTableSource;
-    }
-
-    StateStoreSupplier<KeyValueStore> storeSupplier() {
-        return storeSupplier;
-    }
-
-    void setStoreSupplier(StateStoreSupplier<KeyValueStore> storeSupplier) {
-        this.storeSupplier = storeSupplier;
+        this.isGlobalKTable = isGlobalKTable;
+        this.storeBuilder = storeBuilder;
     }
 
     StoreBuilder<KeyValueStore<K, V>> storeBuilder() {
         return storeBuilder;
     }
 
-    void setStoreBuilder(StoreBuilder<KeyValueStore<K, V>> storeBuilder) {
-        this.storeBuilder = storeBuilder;
-    }
-
-    ProcessorSupplier<K, V> processorSupplier() {
-        return processorSupplier;
+    ProcessorParameters<K, V> processorParameters() {
+        return processorParameters;
     }
 
     String sourceName() {
         return sourceName;
     }
 
-    KTableSource<K, V> kTableSource() {
-        return kTableSource;
-    }
-
-    String processorName() {
-        return processorName;
-    }
-
     boolean isGlobalKTable() {
-        return kTableSource != null;
+        return isGlobalKTable;
     }
 
     static <K, V> StatefulSourceNodeBuilder<K, V> statefulSourceNodeBuilder() {
@@ -106,24 +79,15 @@ class StatefulSourceNode<K, V> extends StreamSourceNode<K, V> {
 
     static final class StatefulSourceNodeBuilder<K, V> {
 
-        private String predecessorNodeName;
         private String nodeName;
         private String sourceName;
-        private String processorName;
         private String topic;
         private ConsumedInternal<K, V> consumedInternal;
-        private StateStoreSupplier<KeyValueStore> storeSupplier;
         private StoreBuilder<KeyValueStore<K, V>> storeBuilder;
-        private ProcessorSupplier<K, V> processorSupplier;
-        private KTableSource<K, V> kTableSource;
+        private ProcessorParameters<K, V> processorParameters;
+        private boolean isGlobalKTable = false;
 
         private StatefulSourceNodeBuilder() {
-        }
-
-
-        StatefulSourceNodeBuilder<K, V> withPredecessorNodeName(final String predecessorNodeName) {
-            this.predecessorNodeName = predecessorNodeName;
-            return this;
         }
 
         StatefulSourceNodeBuilder<K, V> withSourceName(final String sourceName) {
@@ -131,21 +95,10 @@ class StatefulSourceNode<K, V> extends StreamSourceNode<K, V> {
             return this;
         }
 
-        StatefulSourceNodeBuilder<K, V> withProcessorName(final String processorName) {
-            this.processorName = processorName;
-            return this;
-        }
-
         StatefulSourceNodeBuilder<K, V> withTopic(final String topic) {
             this.topic = topic;
             return this;
         }
-
-        StatefulSourceNodeBuilder<K, V> withStoreSupplier(final StateStoreSupplier<KeyValueStore> storeSupplier) {
-            this.storeSupplier = storeSupplier;
-            return this;
-        }
-
 
         StatefulSourceNodeBuilder<K, V> withStoreBuilder(final StoreBuilder<KeyValueStore<K, V>> storeBuilder) {
             this.storeBuilder = storeBuilder;
@@ -157,13 +110,8 @@ class StatefulSourceNode<K, V> extends StreamSourceNode<K, V> {
             return this;
         }
 
-        StatefulSourceNodeBuilder<K, V> withProcessorSupplier(final ProcessorSupplier<K, V> processorSupplier) {
-            this.processorSupplier = processorSupplier;
-            return this;
-        }
-
-        StatefulSourceNodeBuilder<K, V> withKTableSource(final KTableSource<K, V> kTableSource) {
-            this.kTableSource = kTableSource;
+        StatefulSourceNodeBuilder<K, V> withProcessorParameters(final ProcessorParameters<K, V> processorParameters) {
+            this.processorParameters = processorParameters;
             return this;
         }
 
@@ -172,26 +120,21 @@ class StatefulSourceNode<K, V> extends StreamSourceNode<K, V> {
             return this;
         }
 
+        StatefulSourceNodeBuilder<K, V> isGlobalKTable(final boolean isGlobaKTable) {
+            this.isGlobalKTable = isGlobaKTable;
+            return this;
+        }
+
         StatefulSourceNode<K, V> build() {
-            StatefulSourceNode<K, V>
-                statefulSourceNode =
-                new StatefulSourceNode<>(predecessorNodeName,
-                                         nodeName,
-                                         sourceName,
-                                         processorName,
-                                         topic,
-                                         consumedInternal,
-                                         processorSupplier,
-                                         kTableSource);
+            return new StatefulSourceNode<>(nodeName,
+                                            sourceName,
+                                            topic,
+                                            consumedInternal,
+                                            storeBuilder,
+                                            processorParameters,
+                                            isGlobalKTable);
 
-            statefulSourceNode.setRepartitionRequired(false);
-            if (storeSupplier != null) {
-                statefulSourceNode.setStoreSupplier(storeSupplier);
-            } else if (storeBuilder != null) {
-                statefulSourceNode.setStoreBuilder(storeBuilder);
-            }
 
-            return statefulSourceNode;
         }
     }
 }

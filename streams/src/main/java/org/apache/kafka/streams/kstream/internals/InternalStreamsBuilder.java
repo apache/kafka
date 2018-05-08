@@ -31,8 +31,6 @@ import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 
-import static org.apache.kafka.streams.kstream.internals.StreamsTopologyGraph.TOPOLOGY_ROOT;
-
 public class InternalStreamsBuilder implements InternalNameProvider {
 
     final InternalTopologyBuilder internalTopologyBuilder;
@@ -90,7 +88,6 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
         StatefulSourceNode<K, V> statefulSourceNode = statefulSourceNodeBuilder.withNodeName(name)
                                                                                .withSourceName(source)
-                                                                               .withPredecessorNodeName(TOPOLOGY_ROOT)
                                                                                .withStoreBuilder(storeBuilder)
                                                                                .withConsumedInternal(consumed)
                                                                                .withTopic(topic)
@@ -112,9 +109,8 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                              final String name,
                                              final StatefulSourceNode.StatefulSourceNodeBuilder<K, V> statefulSourceNodeBuilder) {
         final ProcessorSupplier<K, V> processorSupplier = new KTableSource<>(storeName);
-
-        statefulSourceNodeBuilder.withProcessorName(name)
-                                 .withProcessorSupplier(processorSupplier);
+        final ProcessorParameters processorParameters = new ProcessorParameters<>(processorSupplier, name);
+        statefulSourceNodeBuilder.withProcessorParameters(processorParameters);
 
         return new KTableImpl<>(this, name, processorSupplier,
                                 consumed.keySerde(), consumed.valueSerde(), Collections.singleton(source), storeName, isQueryable);
@@ -133,12 +129,14 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         final String processorName = newProcessorName(KTableImpl.SOURCE_NAME);
         final KTableSource<K, V> tableSource = new KTableSource<>(storeBuilder.name());
 
+        final ProcessorParameters processorParameters = new ProcessorParameters(tableSource, processorName);
+
         StatefulSourceNode<K, V> statefulSourceNode = StatefulSourceNode.statefulSourceNodeBuilder().withStoreBuilder(storeBuilder)
                                                                                                     .withSourceName(sourceName)
                                                                                                     .withConsumedInternal(consumed)
                                                                                                     .withTopic(topic)
-                                                                                                    .withProcessorName(processorName)
-                                                                                                    .withKTableSource(tableSource)
+                                                                                                    .withProcessorParameters(processorParameters)
+                                                                                                    .isGlobalKTable(true)
                                                                                                     .build();
 
         addNode(statefulSourceNode);

@@ -748,10 +748,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         final SerializedInternal<KR, V> serializedInternal = new SerializedInternal<>(serialized);
         final String selectName = internalSelectKey(selector);
 
-        final StatelessProcessorNode<KR, V> graphNode = new StatelessProcessorNode<>(
-            this.name + "GROUP_BY",
-            null, repartitionRequired,
-            Collections.<String>emptyList());
+        final StatelessProcessorNode<KR, V> graphNode = new StatelessProcessorNode<>(this.name + "GROUP_BY",
+                                                                                     null, repartitionRequired,
+                                                                                     Collections.<String>emptyList());
         builder.addNode(graphNode);
         return new KGroupedStreamImpl<>(builder,
                                         selectName,
