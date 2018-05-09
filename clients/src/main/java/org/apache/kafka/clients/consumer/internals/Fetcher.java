@@ -472,6 +472,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
      * @return The fetched records per partition
      * @throws OffsetOutOfRangeException If there is OffsetOutOfRange error in fetchResponse and
      *         the defaultResetPolicy is NONE
+     * @throws TopicAuthorizationException If there is TopicAuthorization error in fetchResponse.
      */
     public Map<TopicPartition, List<ConsumerRecord<K, V>>> fetchedRecords() {
         Map<TopicPartition, List<ConsumerRecord<K, V>>> fetched = new HashMap<>();
@@ -483,7 +484,20 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                     CompletedFetch completedFetch = completedFetches.peek();
                     if (completedFetch == null) break;
 
-                    nextInLineRecords = parseCompletedFetch(completedFetch);
+                    try {
+                        nextInLineRecords = parseCompletedFetch(completedFetch);
+                    } catch (Exception e) {
+                        // Remove a completedFetch upon a parse with exception if (1) it contains no records, and
+                        // (2) there are no fetched records with actual content preceding this exception.
+                        // The first condition ensures that the completedFetches is not stuck with the same completedFetch
+                        // in cases such as the TopicAuthorizationException, and the second condition ensures that no
+                        // potential data loss due to an exception in a following record.
+                        FetchResponse.PartitionData partition = completedFetch.partitionData;
+                        if (fetched.isEmpty() && (partition.records == null || partition.records.sizeInBytes() == 0)) {
+                            completedFetches.poll();
+                        }
+                        throw e;
+                    }
                     completedFetches.poll();
                 } else {
                     List<ConsumerRecord<K, V>> records = fetchRecords(nextInLineRecords, recordsRemaining);
@@ -945,7 +959,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 this.metadata.requestUpdate();
             } else if (error == Errors.OFFSET_OUT_OF_RANGE) {
                 if (fetchOffset != subscriptions.position(tp)) {
-                    log.debug("Discarding stale fetch response for partition {} since the fetched offset {}" +
+                    log.debug("Discarding stale fetch response for partition {} since the fetched offset {} " +
                             "does not match the current offset {}", tp, fetchOffset, subscriptions.position(tp));
                 } else if (subscriptions.hasDefaultOffsetResetPolicy()) {
                     log.info("Fetch offset {} is out of range for partition {}, resetting offset", fetchOffset, tp);
