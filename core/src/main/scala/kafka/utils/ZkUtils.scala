@@ -1148,6 +1148,10 @@ class ZKCheckedEphemeral(path: String,
                             case Code.INVALIDACL =>
                               error("Invalid ACL")
                               setResult(Code.INVALIDACL)
+                            case Code.NOAUTH =>
+                              // Allows old consumer to register with secure ZK
+                              error("NOAUTH raised on path %s (AUTH may not be needed to create children)".format(path))
+                              createRecursive(path, suffix)
                             case _ =>
                               warn("ZooKeeper event while creating registration node: %s %s".format(path, Code.get(rc)))
                               setResult(Code.get(rc))
