@@ -38,6 +38,7 @@ class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, Epoc
   private val client = new MockClient(new SystemTime)
   var fetchCount = 0
   var epochFetchCount = 0
+  var lastUsedOffsetForLeaderEpochVersion = -1
   var callback: Option[() => Unit] = None
   var currentOffsets: java.util.Map[TopicPartition, EpochEndOffset] = offsets
 
@@ -60,6 +61,7 @@ class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, Epoc
       case ApiKeys.OFFSET_FOR_LEADER_EPOCH =>
         callback.foreach(_.apply())
         epochFetchCount += 1
+        lastUsedOffsetForLeaderEpochVersion = requestBuilder.latestAllowedVersion()
         new OffsetsForLeaderEpochResponse(currentOffsets)
 
       case ApiKeys.FETCH =>

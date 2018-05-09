@@ -49,8 +49,7 @@ class ReplicaAlterLogDirsThread(name: String,
                                 sourceBroker = sourceBroker,
                                 fetchBackOffMs = brokerConfig.replicaFetchBackoffMs,
                                 isInterruptible = false,
-                                includeLogTruncation = true,
-                                useLeaderEpochInResponse = brokerConfig.interBrokerProtocolVersion >= KAFKA_2_0_IV0) {
+                                includeLogTruncation = true) {
 
   type REQ = FetchRequest
   type PD = PartitionData

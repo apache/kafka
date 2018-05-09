@@ -202,9 +202,9 @@ class ReplicaFetcherThreadTest {
     thread.doWork()
 
     //We should have truncated to the offsets in the response
-    assertTrue("Expected offset 156 in captured truncation offsets " + truncateToCapture.getValues,
+    assertTrue("Expected " + t1p0 + " to truncate to offset 156 (truncation offsets: " + truncateToCapture.getValues + ")",
                truncateToCapture.getValues.asScala.contains(156))
-    assertTrue("Expected offset 172 in captured truncation offsets " + truncateToCapture.getValues,
+    assertTrue("Expected " + t2p1 + " to truncate to offset 172 (truncation offsets: " + truncateToCapture.getValues + ")",
                truncateToCapture.getValues.asScala.contains(172))
   }
 
@@ -254,9 +254,10 @@ class ReplicaFetcherThreadTest {
     thread.doWork()
 
     //We should have truncated to the offsets in the response
-    assertTrue("Expected offset 156 in captured truncation offsets " + truncateToCapture.getValues,
+    assertTrue("Expected " + t1p0 + " to truncate to offset 156 (truncation offsets: " + truncateToCapture.getValues + ")",
                truncateToCapture.getValues.asScala.contains(156))
-    assertTrue("Expected offset " + initialLEO + " in captured truncation offsets " + truncateToCapture.getValues,
+    assertTrue("Expected " + t2p1 + " to truncate to offset " + initialLEO +
+               " (truncation offsets: " + truncateToCapture.getValues + ")",
                truncateToCapture.getValues.asScala.contains(initialLEO))
   }
 
@@ -312,6 +313,8 @@ class ReplicaFetcherThreadTest {
     thread.doWork()
     assertEquals(2, mockNetwork.epochFetchCount)
     assertEquals(1, mockNetwork.fetchCount)
+    assertEquals("OffsetsForLeaderEpochRequest version.",
+                 1, mockNetwork.lastUsedOffsetForLeaderEpochVersion)
 
     //Loop 3 we should not fetch epochs
     thread.doWork()
@@ -320,9 +323,9 @@ class ReplicaFetcherThreadTest {
 
 
     //We should have truncated to the offsets in the second response
-    assertTrue("Expected offset 102 in captured truncation offsets " + truncateToCapture.getValues,
+    assertTrue("Expected " + t1p1 + " to truncate to offset 102 (truncation offsets: " + truncateToCapture.getValues + ")",
                truncateToCapture.getValues.asScala.contains(102))
-    assertTrue("Expected offset 101 in captured truncation offsets " + truncateToCapture.getValues,
+    assertTrue("Expected " + t1p0 + " to truncate to offset 101 (truncation offsets: " + truncateToCapture.getValues + ")",
                truncateToCapture.getValues.asScala.contains(101))
   }
 
@@ -374,17 +377,18 @@ class ReplicaFetcherThreadTest {
     thread.doWork()
     assertEquals(1, mockNetwork.epochFetchCount)
     assertEquals(1, mockNetwork.fetchCount)
+    assertEquals("OffsetsForLeaderEpochRequest version.",
+                 0, mockNetwork.lastUsedOffsetForLeaderEpochVersion)
 
     //Loop 2 we should not fetch epochs
     thread.doWork()
     assertEquals(1, mockNetwork.epochFetchCount)
     assertEquals(2, mockNetwork.fetchCount)
 
-
     //We should have truncated to the offsets in the first response
-    assertTrue("Expected offset 155 in captured truncation offsets " + truncateToCapture.getValues,
+    assertTrue("Expected " + t1p0 + " to truncate to offset 155 (truncation offsets: " + truncateToCapture.getValues + ")",
                truncateToCapture.getValues.asScala.contains(155))
-    assertTrue("Expected offset 143 in captured truncation offsets " + truncateToCapture.getValues,
+    assertTrue("Expected " + t1p1 + " to truncate to offset 143 (truncation offsets: " + truncateToCapture.getValues + ")",
                truncateToCapture.getValues.asScala.contains(143))
   }
 
