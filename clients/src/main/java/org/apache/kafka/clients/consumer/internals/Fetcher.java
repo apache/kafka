@@ -487,8 +487,11 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                     try {
                         nextInLineRecords = parseCompletedFetch(completedFetch);
                     } catch (Exception e) {
-                        // Remove completedFetch upon a failed parse if it contains no records due to reasons including
-                        // a TopicAuthorizationException.
+                        // Remove a completedFetch upon a parse with exception if (1) it contains no records, and
+                        // (2) there are no fetched records with actual content preceding this exception.
+                        // The first condition ensures that the completedFetches is not stuck with the same completedFetch
+                        // in cases such as the TopicAuthorizationException, and the second condition ensures that no
+                        // potential data loss due to an exception in a following record.
                         FetchResponse.PartitionData partition = completedFetch.partitionData;
                         if (fetched.isEmpty() && (partition.records == null || partition.records.sizeInBytes() == 0)) {
                             completedFetches.poll();
