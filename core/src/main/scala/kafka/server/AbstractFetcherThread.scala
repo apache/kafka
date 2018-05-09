@@ -284,10 +284,7 @@ abstract class AbstractFetcherThread(name: String,
     val newStates: Map[TopicPartition, PartitionFetchState] = partitionStates.partitionStates.asScala
       .map { state =>
         val maybeTruncationComplete = fetchOffsets.get(state.topicPartition()) match {
-          case Some(offsetTruncationState) =>
-            if (offsetTruncationState.offset < state.value.fetchOffset)
-              warn(s"Truncating ${state.topicPartition()} to offset ${offsetTruncationState.offset} below high watermark ${state.value.fetchOffset}")
-            PartitionFetchState(offsetTruncationState.offset, state.value.delay, truncatingLog = !offsetTruncationState.truncationCompleted)
+          case Some(offsetTruncationState) => PartitionFetchState(offsetTruncationState.offset, state.value.delay, truncatingLog = !offsetTruncationState.truncationCompleted)
           case None => state.value()
         }
         (state.topicPartition(), maybeTruncationComplete)
