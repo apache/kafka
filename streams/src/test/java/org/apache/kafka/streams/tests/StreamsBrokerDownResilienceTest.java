@@ -45,15 +45,14 @@ public class StreamsBrokerDownResilienceTest {
     private static final String SINK_TOPIC = "streamsResilienceSink";
 
     public static void main(String[] args) throws IOException {
-        if (args.length < 2) {
-            System.err.println("StreamsBrokerDownResilienceTest are expecting two parameters: propFile, additionalConfigs; but only see " + args.length + " parameter");
+        if (args.length < 1) {
+            System.err.println("StreamsBrokerDownResilienceTest is expecting one parameter: propFile; but currently sees " + args.length + " parameter(s)");
             System.exit(1);
         }
 
         System.out.println("StreamsTest instance started");
 
         final String propFileName = args[0];
-        final String additionalConfigs = args[1];
 
         final Properties streamsProperties = Utils.loadProps(propFileName);
         final String kafka = streamsProperties.getProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG);
@@ -67,15 +66,6 @@ public class StreamsBrokerDownResilienceTest {
         streamsProperties.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsProperties.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsProperties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
-
-
-        // it is expected that max.poll.interval, retries, request.timeout and max.block.ms set
-        // streams_broker_down_resilience_test and passed as args
-        if (additionalConfigs != null && !additionalConfigs.equalsIgnoreCase("none")) {
-            Map<String, String> updated = updatedConfigs(additionalConfigs);
-            System.out.println("Updating configs with " + updated);
-            streamsProperties.putAll(updated);
-        }
 
         if (!confirmCorrectConfigs(streamsProperties)) {
             System.err.println(String.format("ERROR: Did not have all required configs expected  to contain %s %s %s %s",
@@ -91,16 +81,16 @@ public class StreamsBrokerDownResilienceTest {
         final Serde<String> stringSerde = Serdes.String();
 
         builder.stream(Collections.singletonList(SOURCE_TOPIC_1), Consumed.with(stringSerde, stringSerde))
-            .peek(new ForeachAction<String, String>() {
-                int messagesProcessed = 0;
-                @Override
-                public void apply(String key, String value) {
-                    System.out.println("received key " + key + " and value " + value);
-                    messagesProcessed++;
-                    System.out.println("processed" + messagesProcessed + "messages");
-                    System.out.flush();
-                }
-            }).to(SINK_TOPIC);
+               .peek(new ForeachAction<String, String>() {
+                   int messagesProcessed = 0;
+                   @Override
+                   public void apply(String key, String value) {
+                       System.out.println("received key " + key + " and value " + value);
+                       messagesProcessed++;
+                       System.out.println("processed" + messagesProcessed + "messages");
+                       System.out.flush();
+                   }
+               }).to(SINK_TOPIC);
 
         final KafkaStreams streams = new KafkaStreams(builder.build(), streamsProperties);
 
