@@ -30,6 +30,7 @@ import org.junit.rules.TemporaryFolder
 import org.apache.kafka.streams.KeyValue
 import org.apache.kafka.streams._
 import org.apache.kafka.streams.scala.kstream._
+import org.apache.kafka.streams.kstream.Materialized
 
 import org.apache.kafka.streams.integration.utils.{EmbeddedKafkaCluster, IntegrationTestUtils}
 import org.apache.kafka.clients.consumer.ConsumerConfig
@@ -74,7 +75,6 @@ class WordCountTest extends JUnitSuite with WordCountTestData {
   }
 
   @Test def testShouldCountWords(): Unit = {
-
     import Serdes._
 
     val streamsConfiguration = getStreamsConfiguration()
@@ -89,6 +89,37 @@ class WordCountTest extends JUnitSuite with WordCountTestData {
       textLines.flatMapValues(v => pattern.split(v.toLowerCase))
         .groupBy((k, v) => v)
         .count()
+
+    // write to output topic
+    wordCounts.toStream.to(outputTopic)
+
+    val streams: KafkaStreams = new KafkaStreams(streamBuilder.build(), streamsConfiguration)
+    streams.start()
+
+    // produce and consume synchronously
+    val actualWordCounts: java.util.List[KeyValue[String, Long]] = produceNConsume(inputTopic, outputTopic)
+
+    streams.close()
+
+    import collection.JavaConverters._
+    assertEquals(actualWordCounts.asScala.take(expectedWordCounts.size).sortBy(_.key), expectedWordCounts.sortBy(_.key))
+  }
+
+  @Test def testShouldCountWordsMaterialized(): Unit = {
+    import Serdes._
+
+    val streamsConfiguration = getStreamsConfiguration()
+
+    val streamBuilder = new StreamsBuilder
+    val textLines = streamBuilder.stream[String, String](inputTopic)
+
+    val pattern = Pattern.compile("\\W+", Pattern.UNICODE_CHARACTER_CLASS)
+
+    // generate word counts
+    val wordCounts: KTable[String, Long] =
+      textLines.flatMapValues(v => pattern.split(v.toLowerCase))
+        .groupBy((k, v) => v)
+        .count(Materialized.as("word-count"))
 
     // write to output topic
     wordCounts.toStream.to(outputTopic)
