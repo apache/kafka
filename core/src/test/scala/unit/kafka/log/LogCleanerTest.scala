@@ -17,7 +17,7 @@
 
 package kafka.log
 
-import java.io.File
+import java.io.{File, RandomAccessFile}
 import java.nio._
 import java.nio.file.Paths
 import java.util.Properties
@@ -26,6 +26,7 @@ import kafka.common._
 import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
 import org.junit.Assert._
@@ -498,6 +499,78 @@ class LogCleanerTest extends JUnitSuite {
     cleaner.cleanSegments(log, Seq(log.logSegments.head), map, 0L, stats)
     val shouldRemain = keysInLog(log).filter(!keys.contains(_))
     assertEquals(shouldRemain, keysInLog(log))
+  }
+
+  /**
+   * Test log cleaning with logs containing messages larger than topic's max message size
+   */
+  @Test
+  def testMessageLargerThanMaxMessageSize() {
+    val (log, offsetMap) = createLogWithMessagesLargerThanMaxSize(largeMessageSize = 1024 * 1024)
+
+    val cleaner = makeCleaner(Int.MaxValue, maxMessageSize=1024)
+    cleaner.cleanSegments(log, Seq(log.logSegments.head), offsetMap, 0L, new CleanerStats)
+    val shouldRemain = keysInLog(log).filter(k => !offsetMap.map.containsKey(k.toString))
+    assertEquals(shouldRemain, keysInLog(log))
+  }
+
+  /**
+   * Test log cleaning with logs containing messages larger than topic's max message size
+   * where header is corrupt
+   */
+  @Test
+  def testMessageLargerThanMaxMessageSizeWithCorruptHeader() {
+    val (log, offsetMap) = createLogWithMessagesLargerThanMaxSize(largeMessageSize = 1024 * 1024)
+    val file = new RandomAccessFile(log.logSegments.head.log.file, "rw")
+    file.seek(Records.MAGIC_OFFSET)
+    file.write(0xff)
+    file.close()
+
+    val cleaner = makeCleaner(Int.MaxValue, maxMessageSize=1024)
+    intercept[CorruptRecordException] {
+      cleaner.cleanSegments(log, Seq(log.logSegments.head), offsetMap, 0L, new CleanerStats)
+    }
+  }
+
+  /**
+   * Test log cleaning with logs containing messages larger than topic's max message size
+   * where message size is corrupt and larger than bytes available in log segment.
+   */
+  @Test
+  def testCorruptMessageSizeLargerThanBytesAvailable() {
+    val (log, offsetMap) = createLogWithMessagesLargerThanMaxSize(largeMessageSize = 1024 * 1024)
+    val file = new RandomAccessFile(log.logSegments.head.log.file, "rw")
+    file.setLength(1024)
+    file.close()
+
+    val cleaner = makeCleaner(Int.MaxValue, maxMessageSize=1024)
+    intercept[CorruptRecordException] {
+      cleaner.cleanSegments(log, Seq(log.logSegments.head), offsetMap, 0L, new CleanerStats)
+    }
+  }
+
+  def createLogWithMessagesLargerThanMaxSize(largeMessageSize: Int): (Log, FakeOffsetMap) = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, largeMessageSize * 16: java.lang.Integer)
+    logProps.put(LogConfig.MaxMessageBytesProp, largeMessageSize * 2: java.lang.Integer)
+
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
+
+    while(log.numberOfSegments < 2)
+      log.appendAsLeader(record(log.logEndOffset.toInt, Array.fill(largeMessageSize)(0: Byte)), leaderEpoch = 0)
+    val keysFound = keysInLog(log)
+    assertEquals(0L until log.logEndOffset, keysFound)
+
+    // Decrease the log's max message size
+    logProps.put(LogConfig.MaxMessageBytesProp, largeMessageSize / 2: java.lang.Integer)
+    log.config = LogConfig.fromProps(logConfig.originals, logProps)
+
+    // pretend we have the following keys
+    val keys = immutable.ListSet(1, 3, 5, 7, 9)
+    val map = new FakeOffsetMap(Int.MaxValue)
+    keys.foreach(k => map.put(key(k), Long.MaxValue))
+
+    (log, map)
   }
 
   @Test

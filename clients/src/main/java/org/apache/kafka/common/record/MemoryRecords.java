@@ -18,6 +18,7 @@ package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.CloseableIterator;
@@ -115,6 +116,18 @@ public class MemoryRecords extends AbstractRecords {
     @Override
     public ConvertedRecords<MemoryRecords> downConvert(byte toMagic, long firstOffset, Time time) {
         return downConvert(batches(), toMagic, firstOffset, time);
+    }
+
+    /**
+     * Validates the header of the first batch and returns batch size.
+     * @return first batch size including LOG_OVERHEAD if buffer contains header up to
+     *         magic byte, null otherwise
+     * @throws CorruptRecordException if record size or magic is invalid
+     */
+    public Integer firstBatchSize() {
+        if (buffer.remaining() < HEADER_SIZE_UP_TO_MAGIC)
+            return null;
+        return new ByteBufferLogInputStream(buffer, Integer.MAX_VALUE).nextBatchSize();
     }
 
     /**
