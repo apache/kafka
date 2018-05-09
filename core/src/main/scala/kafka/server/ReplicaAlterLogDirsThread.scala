@@ -21,7 +21,6 @@ import java.nio.ByteBuffer
 import java.util
 
 import AbstractFetcherThread.ResultWithPartitions
-import kafka.api._
 import kafka.cluster.BrokerEndPoint
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.requests.EpochEndOffset._
