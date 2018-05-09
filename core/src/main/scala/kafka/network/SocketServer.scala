@@ -638,7 +638,7 @@ private[kafka] class Processor(val id: Int,
             updateRequestMetrics(curr)
             trace("Closing socket connection actively according to the response code.")
             close(channelId)
-          case RequestChannel.StartThrottlingAction => incrementChannelUnmuteRefCount(channelId)
+          case RequestChannel.StartThrottlingAction => incrementChannelMuteRefCount(channelId)
           case RequestChannel.EndThrottlingAction => tryUnmuteChannel(channelId)
         }
       } catch {
@@ -688,7 +688,7 @@ private[kafka] class Processor(val id: Int,
             val req = new RequestChannel.Request(processor = id, context = context,
               startTimeNanos = time.nanoseconds, memoryPool, receive.payload, requestChannel.metrics)
             requestChannel.sendRequest(req)
-            incrementChannelUnmuteRefCount(connectionId)
+            incrementChannelMuteRefCount(connectionId)
             selector.mute(connectionId)
           case None =>
             // This should never happen since completed receives are processed immediately after `poll()`
@@ -834,12 +834,12 @@ private[kafka] class Processor(val id: Int,
   private[network] def openOrClosingChannel(connectionId: String): Option[KafkaChannel] =
     Option(selector.channel(connectionId)).orElse(Option(selector.closingChannel(connectionId)))
 
-  private def incrementChannelUnmuteRefCount(connectionId: String) = {
-    openOrClosingChannel(connectionId).foreach(c => c.incrementUnmuteRefCount())
+  private def incrementChannelMuteRefCount(connectionId: String) = {
+    openOrClosingChannel(connectionId).foreach(c => c.incrementMuteRefCount())
   }
 
   private def tryUnmuteChannel(connectionId: String) = {
-    openOrClosingChannel(connectionId).foreach(c => if (c.decrementUnmuteRefCountAndGet() == 0) selector.unmute(c.id))
+    openOrClosingChannel(connectionId).foreach(c => if (c.decrementMuteRefCountAndGet() == 0) selector.unmute(c.id))
   }
 
   /* For test usage */

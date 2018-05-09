@@ -45,8 +45,7 @@ public class ApiKeysTest {
 
     /**
      * All valid client responses which may be throttled should have a field named
-     * 'throttle_time_ms' to return the throttle time to the client. These include cluster actions that may be throttled
-     * on errors. More specifically,
+     * 'throttle_time_ms' to return the throttle time to the client. Exclusions are
      * <ul>
      *   <li> Cluster actions used only for inter-broker are throttled only if unauthorized
      *   <li> SASL_HANDSHAKE and SASL_AUTHENTICATE are not throttled when used for authentication
@@ -56,12 +55,11 @@ public class ApiKeysTest {
      */
     @Test
     public void testResponseThrottleTime() {
-        List<ApiKeys> clusterActionsThatMayBeThrottled = Arrays.asList(ApiKeys.LEADER_AND_ISR, ApiKeys.SASL_HANDSHAKE,
-            ApiKeys.SASL_AUTHENTICATE, ApiKeys.UPDATE_METADATA);
+        List<ApiKeys> authenticationKeys = Arrays.asList(ApiKeys.SASL_HANDSHAKE, ApiKeys.SASL_AUTHENTICATE);
         for (ApiKeys apiKey: ApiKeys.values()) {
             Schema responseSchema = apiKey.responseSchema(apiKey.latestVersion());
             BoundField throttleTimeField = responseSchema.get(CommonFields.THROTTLE_TIME_MS.name);
-            if (apiKey.clusterAction && !clusterActionsThatMayBeThrottled.contains(apiKey))
+            if (apiKey.clusterAction || authenticationKeys.contains(apiKey))
                 assertNull("Unexpected throttle time field: " + apiKey, throttleTimeField);
             else
                 assertNotNull("Throttle time field missing: " + apiKey, throttleTimeField);

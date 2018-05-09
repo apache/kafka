@@ -103,7 +103,6 @@ public class LeaderAndIsrRequest extends AbstractRequest {
 
     /**
      * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
-     * THROTTLE_TIME_MS is also added to the response for client-side throttling for error responses.
      */
     private static final Schema LEADER_AND_ISR_REQUEST_V2 = LEADER_AND_ISR_REQUEST_V1;
 
@@ -253,9 +252,8 @@ public class LeaderAndIsrRequest extends AbstractRequest {
         switch (versionId) {
             case 0:
             case 1:
-                return new LeaderAndIsrResponse(error, responses);
             case 2:
-                return new LeaderAndIsrResponse(error, responses, throttleTimeMs);
+                return new LeaderAndIsrResponse(error, responses);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
                         versionId, this.getClass().getSimpleName(), ApiKeys.LEADER_AND_ISR.latestVersion()));

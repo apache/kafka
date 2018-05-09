@@ -701,13 +701,11 @@ public class NetworkClient implements KafkaClient {
      * @param now The current time
      */
     private void maybeThrottle(AbstractResponse response, int throttleTimeMs, short apiVersion, String nodeId,
-        long now) {
+                               long now) {
         if (throttleTimeMs > 0 && response.shouldClientThrottle(apiVersion)) {
             connectionStates.throttle(nodeId, now + throttleTimeMs);
-            if (log.isTraceEnabled()) {
-                log.trace("Connection to node {} is throttled for {} ms until timestamp {}", nodeId, throttleTimeMs,
-                    now + throttleTimeMs);
-            }
+            log.trace("Connection to node {} is throttled for {} ms until timestamp {}", nodeId, throttleTimeMs,
+                      now + throttleTimeMs);
         }
     }
 
