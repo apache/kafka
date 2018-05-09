@@ -497,11 +497,9 @@ public abstract class AbstractCoordinator implements Closeable {
                 log.error("Attempt to join group failed due to fatal error: {}", error.message());
                 future.raise(error);
             } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
-                log.error("Attempt to join group failed due to authorization error: {}", error.message());
                 future.raise(new GroupAuthorizationException(groupId));
             } else {
                 // unexpected error, throw the exception
-                log.error("Unexpect error when attempting to join the group: {}", error.message());
                 future.raise(new KafkaException("Unexpected error in join group response: " + error.message()));
             }
         }
