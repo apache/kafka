@@ -550,7 +550,6 @@ class LogCleanerTest extends JUnitSuite {
   }
 
   def createLogWithMessagesLargerThanMaxSize(largeMessageSize: Int): (Log, FakeOffsetMap) = {
-    // Create cleaner with very small default max message size
     val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, largeMessageSize * 16: java.lang.Integer)
     logProps.put(LogConfig.MaxMessageBytesProp, largeMessageSize * 2: java.lang.Integer)
