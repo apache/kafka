@@ -95,9 +95,8 @@ public class SaslAuthenticateRequest extends AbstractRequest {
         short versionId = version();
         switch (versionId) {
             case 0:
-                return new SaslAuthenticateResponse(Errors.forException(e), e.getMessage());
             case 1:
-                return new SaslAuthenticateResponse(Errors.forException(e), e.getMessage(), throttleTimeMs);
+                return new SaslAuthenticateResponse(Errors.forException(e), e.getMessage());
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
                         versionId, this.getClass().getSimpleName(), ApiKeys.SASL_AUTHENTICATE.latestVersion()));

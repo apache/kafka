@@ -131,13 +131,13 @@ final class ClusterConnectionStates {
     /**
      * Indicate that the connection is throttled until the specified deadline.
      * @param id the connection to be throttled
-     * @param throttleDeadlineMs the throttle deadline in milliseconds
+     * @param throttleUntilTimeMs the throttle deadline in milliseconds
      */
-    public void throttle(String id, long throttleDeadlineMs) {
+    public void throttle(String id, long throttleUntilTimeMs) {
         NodeConnectionState state = nodeState.get(id);
         // The throttle deadline should never regress.
-        if (state != null && state.throttleUntilTimeMs < throttleDeadlineMs) {
-            state.throttleUntilTimeMs = throttleDeadlineMs;
+        if (state != null && state.throttleUntilTimeMs < throttleUntilTimeMs) {
+            state.throttleUntilTimeMs = throttleUntilTimeMs;
         }
     }
 

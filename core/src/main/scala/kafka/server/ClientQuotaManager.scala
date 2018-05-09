@@ -248,6 +248,22 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
     throttleTimeMs
   }
 
+  /** "Unrecord" the given value that has already been recorded for the given user/client by recording a negative value
+    * of the same quantity.
+    *
+    * For a throttled fetch, the broker should return an empty response and thus should not record the value. Ideally,
+    * we would like to compute the throttle time before actually recording the value, but the current Sensor code
+    * couples value recording and quota checking very tightly. As a workaround, we will unrecord the value for the fetch
+    * in case of throttling. Rate keeps the sum of values that fall in each time window, so this should bring the
+    * overall sum back to the previous value.
+    */
+  def maybeUnrecord(request: RequestChannel.Request, value: Double): Unit = {
+    if (quotasEnabled) {
+      val clientSensors = getOrCreateQuotaSensors(request.session, request.header.clientId)
+      clientSensors.quotaSensor.record(value * (-1), time.milliseconds(), false)
+    }
+  }
+
   /**
     * Throttle a client by muting the associated channel for the given throttle time.
     * @param request client request

@@ -53,6 +53,7 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.requests.{SaslAuthenticateResponse, SaslHandshakeResponse}
+import org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID
 import org.apache.kafka.common.resource.{Resource => AdminResource}
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding}
 import DescribeLogDirsResponse.LogDirInfo
@@ -240,8 +241,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
       sendResponseExemptThrottle(request, new UpdateMetadataResponse(Errors.NONE))
     } else {
-      sendResponseMaybeThrottle(request,
-        throttleTimeMs => new UpdateMetadataResponse(Errors.CLUSTER_AUTHORIZATION_FAILED, throttleTimeMs))
+      sendResponseMaybeThrottle(request, _ => new UpdateMetadataResponse(Errors.CLUSTER_AUTHORIZATION_FAILED))
     }
   }
 
@@ -582,17 +582,18 @@ class KafkaApis(val requestChannel: RequestChannel,
           data.logStartOffset, abortedTransactions, data.records))
       }
       erroneous.foreach{case (tp, data) => partitions.put(tp, data)}
-      val unconvertedFetchResponse = fetchContext.updateAndGenerateResponseData(partitions)
 
       // When this callback is triggered, the remote API call has completed.
       // Record time before any byte-rate throttling.
       request.apiRemoteCompleteTimeNanos = time.nanoseconds
 
+      var unconvertedFetchResponse: FetchResponse = null
+
       def createResponse(throttleTimeMs: Int): FetchResponse = {
         // If throttling is required, return an empty response.
         if (throttleTimeMs > 0) {
           new FetchResponse(Errors.NONE, new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData](),
-            throttleTimeMs, unconvertedFetchResponse.sessionId())
+            throttleTimeMs, INVALID_SESSION_ID)
         } else {
           val convertedData = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData]
           unconvertedFetchResponse.responseData().asScala.foreach { case (tp, partitionData) =>
@@ -613,6 +614,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
       if (fetchRequest.isFromFollower) {
         // We've already evaluated against the quota and are good to go. Just need to record it now.
+        unconvertedFetchResponse = fetchContext.updateAndGenerateResponseData(partitions)
         val responseSize = sizeOfThrottledPartitions(versionId, unconvertedFetchResponse, quotas.leader)
         quotas.leader.record(responseSize)
         trace(s"Sending Fetch response with partitions.size=${unconvertedFetchResponse.responseData().size()}, " +
@@ -621,24 +623,30 @@ class KafkaApis(val requestChannel: RequestChannel,
       } else {
         // Fetch size used to determine throttle time is calculated before any down conversions.
         // This may be slightly different from the actual response size. But since down conversions
-        // result in data being loaded into memory, it is better to do this after throttling to avoid OOM.
-        val responseStruct = unconvertedFetchResponse.toStruct(versionId)
-
-        trace(s"Sending Fetch response with partitions.size=${unconvertedFetchResponse.responseData().size()}, " +
-          s"metadata=${unconvertedFetchResponse.sessionId()}")
-
-        // Record both bandwidth and request quota-specific values and throttle by muting the channel if any of the quotas
-        // have been violated. If both quotas have been violated, use the max throttle time between the two quotas.
-        val bandwidthThrottleTimeMs = quotas.fetch.maybeRecordAndGetThrottleTimeMs(request, responseStruct.sizeOf)
+        // result in data being loaded into memory, we should do this only when we are not going to throttle.
+        //
+        // Record both bandwidth and request quota-specific values and throttle by muting the channel if any of the
+        // quotas have been violated. If both quotas have been violated, use the max throttle time between the two
+        // quotas. When throttled, we unrecord the recorded bandwidth quota value
+        val responseSize = fetchContext.getResponseSize(partitions, versionId)
         val requestThrottleTimeMs = quotas.request.maybeRecordAndGetThrottleTimeMs(request)
+        val bandwidthThrottleTimeMs = quotas.fetch.maybeRecordAndGetThrottleTimeMs(request, responseSize)
 
         val maxThrottleTimeMs = math.max(bandwidthThrottleTimeMs, requestThrottleTimeMs)
         if (maxThrottleTimeMs > 0) {
+          // Even if we need to throttle for request quota violation, we should "unrecord" the already recorded value
+          // from the fetch quota because we are going to return an empty response.
+          quotas.fetch.maybeUnrecord(request, responseSize)
           if (bandwidthThrottleTimeMs > requestThrottleTimeMs) {
             quotas.fetch.throttle(request, bandwidthThrottleTimeMs, sendActionOnlyResponse(request))
           } else {
             quotas.request.throttle(request, requestThrottleTimeMs, sendActionOnlyResponse(request))
           }
+        } else {
+          // Get the actual response. This will update the fetch context.
+          unconvertedFetchResponse = fetchContext.updateAndGenerateResponseData(partitions)
+          trace(s"Sending Fetch response with partitions.size=${responseSize}, " +
+            s"metadata=${unconvertedFetchResponse.sessionId()}")
         }
 
         // Send the response immediately.
@@ -1358,13 +1366,12 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleSaslHandshakeRequest(request: RequestChannel.Request) {
-    sendResponseMaybeThrottle(request, requestThrottleMs => new SaslHandshakeResponse(
-      Errors.ILLEGAL_SASL_STATE, Collections.emptySet(), requestThrottleMs))
+    sendResponseMaybeThrottle(request, _ => new SaslHandshakeResponse(Errors.ILLEGAL_SASL_STATE, Collections.emptySet()))
   }
 
   def handleSaslAuthenticateRequest(request: RequestChannel.Request) {
-    sendResponseMaybeThrottle(request, requestThrottleMs => new SaslAuthenticateResponse(Errors.ILLEGAL_SASL_STATE,
-        "SaslAuthenticate request received after successful authentication", requestThrottleMs))
+    sendResponseMaybeThrottle(request, _ => new SaslAuthenticateResponse(Errors.ILLEGAL_SASL_STATE,
+      "SaslAuthenticate request received after successful authentication"))
   }
 
   def handleApiVersionsRequest(request: RequestChannel.Request) {

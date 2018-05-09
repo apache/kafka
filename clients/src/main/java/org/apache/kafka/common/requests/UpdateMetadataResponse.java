@@ -25,7 +25,6 @@ import java.nio.ByteBuffer;
 import java.util.Map;
 
 import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
-import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
 
 public class UpdateMetadataResponse extends AbstractResponse {
     private static final Schema UPDATE_METADATA_RESPONSE_V0 = new Schema(ERROR_CODE);
@@ -36,9 +35,8 @@ public class UpdateMetadataResponse extends AbstractResponse {
 
     /**
      * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
-     * THROTTLE_TIME_MS is also added to the response for client-side throttling for error responses.
      */
-    private static final Schema UPDATE_METADATA_RESPONSE_V5 = new Schema(THROTTLE_TIME_MS, ERROR_CODE);
+    private static final Schema UPDATE_METADATA_RESPONSE_V5 = UPDATE_METADATA_RESPONSE_V4;
 
     public static Schema[] schemaVersions() {
         return new Schema[]{UPDATE_METADATA_RESPONSE_V0, UPDATE_METADATA_RESPONSE_V1, UPDATE_METADATA_RESPONSE_V2,
@@ -51,28 +49,17 @@ public class UpdateMetadataResponse extends AbstractResponse {
      * STALE_CONTROLLER_EPOCH (11)
      */
     private final Errors error;
-    private final int throttleTimeMs;
 
     public UpdateMetadataResponse(Errors error) {
-        this(error, 0);
-    }
-
-    public UpdateMetadataResponse(Errors error, int throttleTimeMs) {
         this.error = error;
-        this.throttleTimeMs = throttleTimeMs;
     }
 
     public UpdateMetadataResponse(Struct struct) {
         error = Errors.forCode(struct.get(ERROR_CODE));
-        throttleTimeMs = struct.getOrElse(THROTTLE_TIME_MS, DEFAULT_THROTTLE_TIME);
     }
 
     public Errors error() {
         return error;
-    }
-
-    public int throttleTimeMs() {
-        return throttleTimeMs;
     }
 
     @Override
@@ -88,7 +75,6 @@ public class UpdateMetadataResponse extends AbstractResponse {
     protected Struct toStruct(short version) {
         Struct struct = new Struct(ApiKeys.UPDATE_METADATA.responseSchema(version));
         struct.set(ERROR_CODE, error.code());
-        struct.setIfExists(THROTTLE_TIME_MS, throttleTimeMs);
         return struct;
     }
 

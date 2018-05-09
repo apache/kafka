@@ -56,7 +56,7 @@ public class KafkaChannel {
     //    (2) throttling is done
     //
     // The channel can be unmuted only when the count is 0.
-    private AtomicInteger unmuteRefCount = new AtomicInteger(0);
+    private AtomicInteger muteRefCount = new AtomicInteger(0);
 
     public KafkaChannel(String id, TransportLayer transportLayer, Authenticator authenticator, int maxReceiveSize, MemoryPool memoryPool) throws IOException {
         this.id = id;
@@ -150,17 +150,17 @@ public class KafkaChannel {
         muted = false;
     }
 
-    public void incrementUnmuteRefCount() {
-        unmuteRefCount.incrementAndGet();
+    public void incrementMuteRefCount() {
+        muteRefCount.incrementAndGet();
     }
 
-    public int decrementUnmuteRefCountAndGet() {
-        return unmuteRefCount.decrementAndGet();
+    public int decrementMuteRefCountAndGet() {
+        return muteRefCount.decrementAndGet();
     }
 
     /* Used for tests */
-    public int getUnmuteRefCount() {
-        return unmuteRefCount.get();
+    public int getMuteRefCount() {
+        return muteRefCount.get();
     }
 
     /**
