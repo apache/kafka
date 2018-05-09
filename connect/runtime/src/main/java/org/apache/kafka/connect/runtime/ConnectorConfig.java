@@ -24,6 +24,8 @@ import org.apache.kafka.common.config.ConfigDef.Width;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.runtime.errors.Stage;
+import org.apache.kafka.connect.runtime.errors.StageType;
 import org.apache.kafka.connect.runtime.isolation.PluginDesc;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.transforms.Transformation;
@@ -164,6 +166,21 @@ public class ConnectorConfig extends AbstractConfig {
         }
 
         return transformations;
+    }
+
+    public List<Stage> transformationAsStages() {
+        final List<String> transformAliases = getList(TRANSFORMS_CONFIG);
+        List<Stage> stages = new ArrayList<>();
+        for (String alias : transformAliases) {
+            final String prefix = TRANSFORMS_CONFIG + "." + alias + ".";
+            stages.add(Stage.newBuilder(StageType.TRANSFORMATION)
+                    .setExecutingClass(getClass(prefix + "type"))
+                    .setConfig(originalsWithPrefix(prefix))
+                    .build()
+            );
+        }
+
+        return stages;
     }
 
     /**
