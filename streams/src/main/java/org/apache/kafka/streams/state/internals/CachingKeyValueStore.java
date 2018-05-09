@@ -163,7 +163,10 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
     }
 
     private byte[] getInternal(final Bytes key) {
-        final LRUCacheEntry entry = cache.get(cacheName, key);
+        LRUCacheEntry entry = null;
+        if (cache != null) {
+            entry = cache.get(cacheName, key);
+        }
         if (entry == null) {
             final byte[] rawValue = underlying.get(key);
             if (rawValue == null) {
