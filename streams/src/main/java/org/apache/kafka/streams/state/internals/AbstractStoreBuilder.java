@@ -25,16 +25,16 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
-abstract class AbstractStoreBuilder<K, V, T extends StateStore> implements StoreBuilder<T> {
-    private final String name;
+abstract public class AbstractStoreBuilder<K, V, T extends StateStore> implements StoreBuilder<T> {
     private Map<String, String> logConfig = new HashMap<>();
+    protected final String name;
     final Serde<K> keySerde;
     final Serde<V> valueSerde;
     final Time time;
     boolean enableCaching;
     boolean enableLogging = true;
 
-    AbstractStoreBuilder(final String name,
+    public AbstractStoreBuilder(final String name,
                          final Serde<K> keySerde,
                          final Serde<V> valueSerde,
                          final Time time) {
