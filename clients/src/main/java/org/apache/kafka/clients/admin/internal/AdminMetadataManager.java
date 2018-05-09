@@ -179,7 +179,7 @@ public class AdminMetadataManager {
     public void requestUpdate() {
         if (state == State.QUIESCENT) {
             state = State.UPDATE_REQUESTED;
-            log.trace("Requesting metadata update.");
+            log.debug("Requesting metadata update.");
         }
     }
 
