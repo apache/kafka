@@ -166,10 +166,7 @@ class ReplicaAlterLogDirsThread(name: String,
     partitions.map { case (tp, epoch) =>
       try {
         val (leaderEpoch, leaderOffset) = replicaMgr.getReplicaOrException(tp).epochs.get.endOffsetFor(epoch)
-        val leaderEpochInResponse: Int =
-          if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_0_IV0) leaderEpoch
-          else UNDEFINED_EPOCH
-        tp -> new EpochEndOffset(Errors.NONE, leaderEpochInResponse, leaderOffset)
+        tp -> new EpochEndOffset(Errors.NONE, leaderEpoch, leaderOffset)
       } catch {
         case t: Throwable =>
           warn(s"Error when getting EpochEndOffset for $tp", t)
