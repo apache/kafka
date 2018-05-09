@@ -457,7 +457,7 @@ public abstract class AbstractCoordinator implements Closeable {
         public void handle(JoinGroupResponse joinResponse, RequestFuture<ByteBuffer> future) {
             Errors error = joinResponse.error();
             if (error == Errors.NONE) {
-                log.info("Received successful JoinGroup response: {}", joinResponse);
+                log.debug("Received successful JoinGroup response: {}", joinResponse);
                 sensors.joinLatency.record(response.requestLatencyMs());
 
                 synchronized (AbstractCoordinator.this) {
