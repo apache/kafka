@@ -24,6 +24,10 @@ import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
  */
 public class TopologyWrapper extends Topology {
 
+    static public InternalTopologyBuilder getInternalTopologyBuilder(final Topology topology) {
+        return topology.internalTopologyBuilder;
+    }
+
     public InternalTopologyBuilder getInternalBuilder() {
         return internalTopologyBuilder;
     }

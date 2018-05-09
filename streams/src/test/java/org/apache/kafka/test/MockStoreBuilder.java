@@ -18,9 +18,10 @@ package org.apache.kafka.test;
 
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.internals.AbstractStoreBuilder;
 
-public class MockStoreBuilder extends AbstractStoreBuilder<Integer, byte[], MockStateStore> {
+public class MockStoreBuilder extends AbstractStoreBuilder<Integer, byte[], StateStore> {
 
     private final boolean persistent;
 
@@ -31,7 +32,7 @@ public class MockStoreBuilder extends AbstractStoreBuilder<Integer, byte[], Mock
     }
 
     @Override
-    public MockStateStore build() {
+    public StateStore build() {
         return new MockStateStore(name, persistent);
     }
 }
