@@ -233,10 +233,10 @@ public class RegexSourceIntegrationTest {
         final StoreBuilder storeBuilder = Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore("testStateStore"), Serdes.String(), Serdes.String());
         final long thirtySecondTimeout = 30 * 1000;
 
-        final Topology topology = new TopologyWrapper()
-                .addSource("ingest", Pattern.compile("topic-\\d+"))
-                .addProcessor("my-processor", processorSupplier, "ingest")
-                .addStateStore(storeBuilder, "my-processor");
+        final TopologyWrapper topology = new TopologyWrapper();
+        topology.addSource("ingest", Pattern.compile("topic-\\d+"));
+        topology.addProcessor("my-processor", processorSupplier, "ingest");
+        topology.addStateStore(storeBuilder, "my-processor");
 
         streams = new KafkaStreams(topology, streamsConfiguration);
 
@@ -246,7 +246,7 @@ public class RegexSourceIntegrationTest {
             final TestCondition stateStoreNameBoundToSourceTopic = new TestCondition() {
                 @Override
                 public boolean conditionMet() {
-                    final Map<String, List<String>> stateStoreToSourceTopic = ((TopologyWrapper) topology).getInternalBuilder().stateStoreNameToSourceTopics();
+                    final Map<String, List<String>> stateStoreToSourceTopic = topology.getInternalBuilder().stateStoreNameToSourceTopics();
                     final List<String> topicNamesList = stateStoreToSourceTopic.get("testStateStore");
                     return topicNamesList != null && !topicNamesList.isEmpty() && topicNamesList.get(0).equals("topic-1");
                 }
