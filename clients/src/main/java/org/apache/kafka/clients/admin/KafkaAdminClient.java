@@ -2378,21 +2378,26 @@ public class KafkaAdminClient extends AdminClient {
                                     final List<MemberDescription> consumers = new ArrayList<>(members.size());
 
                                     for (DescribeGroupsResponse.GroupMember groupMember : members) {
-                                        final PartitionAssignor.Assignment assignment =
+                                        if (groupMember.memberAssignment().remaining() > 0) {
+                                            final PartitionAssignor.Assignment assignment =
                                                 ConsumerProtocol.deserializeAssignment(
-                                                        ByteBuffer.wrap(Utils.readBytes(groupMember.memberAssignment())));
+                                                    ByteBuffer.wrap(Utils.readBytes(groupMember.memberAssignment())));
 
-                                        final MemberDescription memberDescription =
-                                                new MemberDescription(
-                                                        groupMember.memberId(),
-                                                        groupMember.clientId(),
-                                                        groupMember.clientHost(),
-                                                        new MemberAssignment(assignment.partitions()));
-                                        consumers.add(memberDescription);
+                                            final MemberDescription memberDescription =
+                                                new MemberDescription.Builder(groupMember.memberId()).
+                                                    clientId(groupMember.clientId()).
+                                                    host(groupMember.clientHost()).
+                                                    assignment(new MemberAssignment(assignment.partitions())).build();
+                                            consumers.add(memberDescription);
+                                        }
                                     }
-                                    final String protocol = groupMetadata.protocol();
                                     final ConsumerGroupDescription consumerGroupDescription =
-                                            new ConsumerGroupDescription(groupId, protocolType.isEmpty(), consumers, protocol);
+                                            new ConsumerGroupDescription.Builder(groupId).
+                                                isSimpleConsumerGroup(protocolType.isEmpty()).
+                                                members(consumers).
+                                                partitionAssignor(groupMetadata.protocol()).
+                                                state(groupMetadata.state()).
+                                                build();
                                     future.complete(consumerGroupDescription);
                                 }
                             }

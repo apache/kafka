@@ -19,53 +19,88 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.utils.Utils;
 
-import java.util.List;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Objects;
 
 /**
  * A detailed description of a single consumer group in the cluster.
  */
 public class ConsumerGroupDescription {
+    private final static String PREPARING_REBALANCE = "PreparingRebalance";
+    private final static String COMPLETING_REBALANCE = "CompletingRebalance";
+    private final static String DEAD = "Dead";
+    private final static String STABLE = "Stable";
 
     private final String groupId;
     private final boolean isSimpleConsumerGroup;
-    private final List<MemberDescription> members;
+    private final Collection<MemberDescription> members;
     private final String partitionAssignor;
+    private final String state;
 
-    /**
-     * Creates an instance with the specified parameters.
-     *
-     * @param groupId               The consumer group id
-     * @param isSimpleConsumerGroup If Consumer Group is simple
-     * @param members               The consumer group members
-     * @param partitionAssignor     The consumer group partition assignor
-     */
-    public ConsumerGroupDescription(String groupId, boolean isSimpleConsumerGroup, List<MemberDescription> members, String partitionAssignor) {
-        this.groupId = groupId;
+    public static class Builder {
+        private final String groupId;
+        private boolean isSimpleConsumerGroup = true;
+        private Collection<MemberDescription> members = null;
+        private String partitionAssignor = "";
+        private String state = "";
+
+        public Builder(String groupId) {
+            this.groupId = groupId;
+        }
+
+        public Builder isSimpleConsumerGroup(boolean isSimpleConsumerGroup) {
+            this.isSimpleConsumerGroup = isSimpleConsumerGroup;
+            return this;
+        }
+
+        public Builder members(Collection<MemberDescription> members) {
+            this.members = members;
+            return this;
+        }
+
+        public Builder partitionAssignor(String partitionAssignor) {
+            this.partitionAssignor = partitionAssignor;
+            return this;
+        }
+
+        public Builder state(String state) {
+            this.state = state;
+            return this;
+        }
+
+        public ConsumerGroupDescription build() {
+            return new ConsumerGroupDescription(groupId, isSimpleConsumerGroup,
+                members, partitionAssignor, state);
+        }
+    }
+
+    private ConsumerGroupDescription(String groupId, boolean isSimpleConsumerGroup,
+            Collection<MemberDescription> members, String partitionAssignor, String state) {
+        this.groupId = groupId == null ? "" : groupId;
         this.isSimpleConsumerGroup = isSimpleConsumerGroup;
-        this.members = members;
-        this.partitionAssignor = partitionAssignor;
+        this.members = members == null ? Collections.<MemberDescription>emptyList() :
+            Collections.unmodifiableList(new ArrayList<>(members));
+        this.partitionAssignor = partitionAssignor == null ? "" : partitionAssignor;
+        this.state = state == null ? "" : state;
     }
 
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-
         ConsumerGroupDescription that = (ConsumerGroupDescription) o;
-
-        if (isSimpleConsumerGroup != that.isSimpleConsumerGroup) return false;
-        if (groupId != null ? !groupId.equals(that.groupId) : that.groupId != null) return false;
-        if (members != null ? !members.equals(that.members) : that.members != null) return false;
-        return partitionAssignor != null ? partitionAssignor.equals(that.partitionAssignor) : that.partitionAssignor == null;
+        return isSimpleConsumerGroup == that.isSimpleConsumerGroup &&
+            groupId.equals(that.groupId) &&
+            members.equals(that.members) &&
+            partitionAssignor.equals(that.partitionAssignor) &&
+            state.equals(that.state);
     }
 
     @Override
     public int hashCode() {
-        int result = groupId != null ? groupId.hashCode() : 0;
-        result = 31 * result + (isSimpleConsumerGroup ? 1 : 0);
-        result = 31 * result + (members != null ? members.hashCode() : 0);
-        result = 31 * result + (partitionAssignor != null ? partitionAssignor.hashCode() : 0);
-        return result;
+        return Objects.hash(isSimpleConsumerGroup, groupId, members, partitionAssignor, state);
     }
 
     /**
@@ -85,7 +120,7 @@ public class ConsumerGroupDescription {
     /**
      * A list of the members of the consumer group.
      */
-    public List<MemberDescription> members() {
+    public Collection<MemberDescription> members() {
         return members;
     }
 
@@ -96,9 +131,42 @@ public class ConsumerGroupDescription {
         return partitionAssignor;
     }
 
+    /**
+     * The consumer group partition assignor.
+     */
+    public String state() {
+        return state;
+    }
+
+    /**
+     * Returns true if the consumer group is currently rebalancing.
+     * If the consumer group is rebalancing, the member list will be empty.
+     */
+    public boolean isRebalancing() {
+        return state.equals(PREPARING_REBALANCE) || state.equals(COMPLETING_REBALANCE);
+    }
+
+    /**
+     * Returns true if the consumer group is currently dead.
+     * If the consumer group is dead, the member list will be empty.
+     */
+    public boolean isDead() {
+        return state.equals(DEAD);
+    }
+
+    /**
+     * Returns true if the consumer group is currently stable.
+     */
+    public boolean isStable() {
+        return state.equals(STABLE);
+    }
+
     @Override
     public String toString() {
-        return "(groupId=" + groupId + ", isSimpleConsumerGroup=" + isSimpleConsumerGroup + ", members=" +
-            Utils.join(members, ",") + ", partitionAssignor=" + partitionAssignor + ")";
+        return "(groupId=" + groupId +
+            ", isSimpleConsumerGroup=" + isSimpleConsumerGroup +
+            ", members=" + Utils.join(members, ",") +
+            ", partitionAssignor=" + partitionAssignor +
+            ", state=" + state + ")";
     }
 }
