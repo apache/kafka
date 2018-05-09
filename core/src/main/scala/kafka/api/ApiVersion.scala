@@ -69,14 +69,8 @@ object ApiVersion {
     KAFKA_1_0_IV0,
     // Introduced DeleteGroupsRequest V0 via KIP-229, plus KIP-227 incremental fetch requests,
     // and KafkaStorageException for fetch requests.
-<<<<<<< HEAD
-    "1.1-IV0" -> KAFKA_1_1_IV0,
-    "1.1" -> KAFKA_1_1_IV0,
-    "2.0-IV0" -> KAFKA_2_0_IV0,
-    "2.0" -> KAFKA_2_0_IV0
-=======
-    KAFKA_1_1_IV0
->>>>>>> Address review feedback and refactor ApiVersion a bit
+    KAFKA_1_1_IV0,
+    KAFKA_2_0_IV0
   )
 
   // Map keys are the union of the short and full versions
