@@ -748,7 +748,7 @@ public class KafkaAdminClient extends AdminClient {
          *
          * @param processor     The timeout processor.
          */
-        private synchronized void timeoutPendingCalls(TimeoutProcessor processor, List<Call> pendingCalls) {
+        private void timeoutPendingCalls(TimeoutProcessor processor, List<Call> pendingCalls) {
             int numTimedOut = processor.handleTimeouts(pendingCalls,
                     "Timed out waiting for a node assignment.");
             if (numTimedOut > 0)
@@ -802,7 +802,7 @@ public class KafkaAdminClient extends AdminClient {
                     node = call.nodeProvider.provide();
                 } catch (Throwable t) {
                     // Handle authentication errors while choosing nodes.
-                    log.debug("Unable to choose node for {}: {}", call, t);
+                    log.debug("Unable to choose node for {}", call, t);
                     pendingIter.remove();
                     call.fail(now, t);
                 }
@@ -1006,21 +1006,6 @@ public class KafkaAdminClient extends AdminClient {
             }
             log.debug("Hard shutdown in {} ms.", curHardShutdownTimeMs - now);
             return false;
-        }
-
-        private void failPendingCalls(long now, Map<Node, List<Call>> callsToSend, Throwable t) {
-            synchronized (this) {
-                for (Call call : newCalls) {
-                    call.fail(now, t);
-                }
-                newCalls.clear();
-            }
-            for (List<Call> calls : callsToSend.values()) {
-                for (Call call : calls) {
-                    call.fail(now, t);
-                }
-            }
-            callsToSend.clear();
         }
 
         @Override
