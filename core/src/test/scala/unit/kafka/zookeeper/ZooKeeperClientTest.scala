@@ -18,7 +18,7 @@ package kafka.zookeeper
 
 import java.nio.charset.StandardCharsets
 import java.util.UUID
-import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.concurrent.{ArrayBlockingQueue, ConcurrentLinkedQueue, CountDownLatch, Executors, Semaphore, TimeUnit}
 
 import com.yammer.metrics.Metrics
@@ -305,6 +305,82 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
   }
 
   @Test
+  def testBlockOnRequestCompletionFromStateChangeHandler(): Unit = {
+    // This tests the scenario exposed by KAFKA-6879 in which the expiration callback awaits
+    // completion of a request which is handled by another thread
+
+    val latch = new CountDownLatch(1)
+    val stateChangeHandler = new StateChangeHandler {
+      override val name = this.getClass.getName
+      override def beforeInitializingSession(): Unit = {
+        latch.await()
+      }
+    }
+
+    val client = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, Int.MaxValue, time,
+      "testMetricGroup", "testMetricType")
+    client.registerStateChangeHandler(stateChangeHandler)
+
+    val requestThread = new Thread() {
+      override def run(): Unit = {
+        try
+          client.handleRequest(CreateRequest(mockPath, Array.empty[Byte],
+            ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, CreateMode.PERSISTENT))
+        finally
+          latch.countDown()
+      }
+    }
+
+    val reinitializeThread = new Thread() {
+      override def run(): Unit = {
+        client.forceReinitialize()
+      }
+    }
+
+    reinitializeThread.start()
+
+    // sleep briefly before starting the request thread so that the initialization
+    // thread is blocking on the latch
+    Thread.sleep(100)
+    requestThread.start()
+
+    reinitializeThread.join()
+    requestThread.join()
+  }
+
+  @Test
+  def testExceptionInBeforeInitializingSession(): Unit = {
+    val faultyHandler = new StateChangeHandler {
+      override val name = this.getClass.getName
+      override def beforeInitializingSession(): Unit = {
+        throw new RuntimeException()
+      }
+    }
+
+    val goodHandler = new StateChangeHandler {
+      val calls = new AtomicInteger(0)
+      override val name = this.getClass.getName
+      override def beforeInitializingSession(): Unit = {
+        calls.incrementAndGet()
+      }
+    }
+
+    val client = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, Int.MaxValue, time,
+      "testMetricGroup", "testMetricType")
+    client.registerStateChangeHandler(faultyHandler)
+    client.registerStateChangeHandler(goodHandler)
+
+    client.forceReinitialize()
+
+    assertEquals(1, goodHandler.calls.get)
+
+    // Client should be usable even if the callback throws an error
+    val createResponse = zooKeeperClient.handleRequest(CreateRequest(mockPath, Array.empty[Byte],
+      ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, CreateMode.PERSISTENT))
+    assertEquals("Response code for create should be OK", Code.OK, createResponse.resultCode)
+  }
+
+  @Test
   def testZNodeChildChangeHandlerForChildChange(): Unit = {
     import scala.collection.JavaConverters._
     val zNodeChildChangeHandlerCountDownLatch = new CountDownLatch(1)
@@ -343,7 +419,7 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
       "testMetricGroup", "testMetricType")
     try {
       zooKeeperClient.registerStateChangeHandler(stateChangeHandler)
-      zooKeeperClient.reinitialize()
+      zooKeeperClient.forceReinitialize()
 
       assertTrue("Failed to receive auth failed notification", stateChangeHandlerCountDownLatch.await(5, TimeUnit.SECONDS))
     } finally zooKeeperClient.close()

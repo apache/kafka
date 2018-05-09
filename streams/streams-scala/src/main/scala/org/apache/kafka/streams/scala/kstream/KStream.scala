@@ -206,7 +206,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * Example:
    *
    * // brings implicit serdes in scope
-   * import DefaultSerdes._
+   * import Serdes._
    *
    * //..
    * val clicksPerRegion: KTable[String, Long] = //..
@@ -238,7 +238,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * Example:
    *
    * // brings implicit serdes in scope
-   * import DefaultSerdes._
+   * import Serdes._
    *
    * //..
    * val clicksPerRegion: KTable[String, Long] = //..
@@ -354,7 +354,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * Example:
    *
    * // brings implicit serdes in scope
-   * import DefaultSerdes._
+   * import Serdes._
    *
    * val clicksPerRegion: KTable[String, Long] =
    *   userClicksStream
@@ -362,7 +362,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    *     .map((_, regionWithClicks) => regionWithClicks)
    *
    *     // the groupByKey gets the Serialized instance through an implicit conversion of the
-   *     // serdes brought into scope through the import DefaultSerdes._ above
+   *     // serdes brought into scope through the import Serdes._ above
    *     .groupByKey
    *     .reduce(_ + _)
    *
@@ -388,7 +388,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * Example:
    *
    * // brings implicit serdes in scope
-   * import DefaultSerdes._
+   * import Serdes._
    *
    * val textLines = streamBuilder.stream[String, String](inputTopic)
    *
@@ -398,7 +398,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    *   textLines.flatMapValues(v => pattern.split(v.toLowerCase))
    *
    *     // the groupBy gets the Serialized instance through an implicit conversion of the
-   *     // serdes brought into scope through the import DefaultSerdes._ above
+   *     // serdes brought into scope through the import Serdes._ above
    *     .groupBy((k, v) => v)
    *
    *     .count()

@@ -73,7 +73,7 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends JUnitSuite
     // DefaultSerdes brings into scope implicit serdes (mostly for primitives) that will set up all Serialized, Produced, 
     // Consumed and Joined instances. So all APIs below that accept Serialized, Produced, Consumed or Joined will
     // get these instances automatically
-    import DefaultSerdes._
+    import Serdes._
 
     val streamsConfiguration: Properties = getStreamsConfiguration()
 
@@ -122,16 +122,16 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends JUnitSuite
 
     val streamsConfiguration: Properties = getStreamsConfiguration()
 
-    streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName())
-    streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName())
+    streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String.getClass.getName)
+    streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String.getClass.getName)
 
     val builder: StreamsBuilderJ = new StreamsBuilderJ()
 
     val userClicksStream: KStreamJ[String, JLong] = 
-      builder.stream[String, JLong](userClicksTopicJ, Consumed.`with`(Serdes.String(), Serdes.Long()))
+      builder.stream[String, JLong](userClicksTopicJ, Consumed.`with`(Serdes.String, Serdes.JavaLong))
 
     val userRegionsTable: KTableJ[String, String] = 
-      builder.table[String, String](userRegionsTopicJ, Consumed.`with`(Serdes.String(), Serdes.String()))
+      builder.table[String, String](userRegionsTopicJ, Consumed.`with`(Serdes.String, Serdes.String))
 
     // Join the stream against the table.
     val userClicksJoinRegion: KStreamJ[String, (String, JLong)] = userClicksStream
@@ -140,7 +140,7 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends JUnitSuite
           def apply(clicks: JLong, region: String): (String, JLong) = 
             (if (region == null) "UNKNOWN" else region, clicks)
         }, 
-        Joined.`with`[String, JLong, String](Serdes.String(), Serdes.Long(), Serdes.String())) 
+        Joined.`with`[String, JLong, String](Serdes.String, Serdes.JavaLong, Serdes.String))
 
     // Change the stream from <user> -> <region, clicks> to <region> -> <clicks>
     val clicksByRegion : KStreamJ[String, JLong] = userClicksJoinRegion
@@ -152,7 +152,7 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends JUnitSuite
         
     // Compute the total per region by summing the individual click counts per region.
     val clicksPerRegion: KTableJ[String, JLong] = clicksByRegion
-      .groupByKey(Serialized.`with`(Serdes.String(), Serdes.Long()))
+      .groupByKey(Serialized.`with`(Serdes.String, Serdes.JavaLong))
       .reduce {
         new Reducer[JLong] {
           def apply(v1: JLong, v2: JLong) = v1 + v2
@@ -160,7 +160,7 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends JUnitSuite
       }
         
     // Write the (continuously updating) results to the output topic.
-    clicksPerRegion.toStream.to(outputTopicJ, Produced.`with`(Serdes.String(), Serdes.Long()))
+    clicksPerRegion.toStream.to(outputTopicJ, Produced.`with`(Serdes.String, Serdes.JavaLong))
 
     val streams: KafkaStreamsJ = new KafkaStreamsJ(builder.build(), streamsConfiguration)
 

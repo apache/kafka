@@ -261,7 +261,7 @@ import org.apache.kafka.streams.scala.kstream._
 import org.apache.kafka.streams.{KafkaStreams, StreamsConfig}
 
 object WordCountApplication extends App {
-  import DefaultSerdes._
+  import Serdes._
 
   val config: Properties = {
     val p = new Properties()

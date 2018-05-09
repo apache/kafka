@@ -75,7 +75,7 @@ class WordCountTest extends JUnitSuite with WordCountTestData {
 
   @Test def testShouldCountWords(): Unit = {
 
-    import DefaultSerdes._
+    import Serdes._
 
     val streamsConfiguration = getStreamsConfiguration()
 
@@ -112,8 +112,8 @@ class WordCountTest extends JUnitSuite with WordCountTestData {
     import collection.JavaConverters._
 
     val streamsConfiguration = getStreamsConfiguration()
-    streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName())
-    streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName())
+    streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String.getClass.getName)
+    streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String.getClass.getName)
 
     val streamBuilder = new StreamsBuilderJ
     val textLines: KStreamJ[String, String] = streamBuilder.stream[String, String](inputTopicJ)
@@ -134,7 +134,7 @@ class WordCountTest extends JUnitSuite with WordCountTestData {
 
     val wordCounts: KTableJ[String, java.lang.Long] = grouped.count()
 
-    wordCounts.toStream.to(outputTopicJ, Produced.`with`(Serdes.String(), Serdes.Long()))
+    wordCounts.toStream.to(outputTopicJ, Produced.`with`(Serdes.String, Serdes.JavaLong))
 
     val streams: KafkaStreamsJ = new KafkaStreamsJ(streamBuilder.build(), streamsConfiguration)
     streams.start()
@@ -153,7 +153,7 @@ class WordCountTest extends JUnitSuite with WordCountTestData {
     streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers())
     streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, "10000")
     streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
-    streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, testFolder.getRoot().getPath())
+    streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, testFolder.getRoot.getPath)
     streamsConfiguration
   }
 

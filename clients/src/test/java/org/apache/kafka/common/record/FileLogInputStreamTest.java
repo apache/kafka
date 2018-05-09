@@ -112,8 +112,8 @@ public class FileLogInputStreamTest {
             SimpleRecord[] firstBatchRecords = new SimpleRecord[]{
                 new SimpleRecord(3241324L, "a".getBytes(), "1".getBytes()),
                 new SimpleRecord(234280L, "b".getBytes(), "2".getBytes())
-
             };
+
             SimpleRecord[] secondBatchRecords = new SimpleRecord[]{
                 new SimpleRecord(238423489L, "c".getBytes(), "3".getBytes()),
                 new SimpleRecord(897839L, null, "4".getBytes()),
@@ -152,8 +152,8 @@ public class FileLogInputStreamTest {
             SimpleRecord[] firstBatchRecords = new SimpleRecord[]{
                 new SimpleRecord(3241324L, "a".getBytes(), "1".getBytes()),
                 new SimpleRecord(234280L, "b".getBytes(), "2".getBytes())
-
             };
+
             SimpleRecord[] secondBatchRecords = new SimpleRecord[]{
                 new SimpleRecord(238423489L, "c".getBytes(), "3".getBytes()),
                 new SimpleRecord(897839L, null, "4".getBytes()),
@@ -200,6 +200,22 @@ public class FileLogInputStreamTest {
             assertNoProducerData(firstBatch);
             assertGenericRecordBatchData(firstBatch, 0L, 100L, firstBatchRecord);
 
+            assertNull(logInputStream.nextBatch());
+        }
+    }
+
+    @Test
+    public void testNextBatchSelectionWithMaxedParams() throws IOException {
+        try (FileRecords fileRecords = FileRecords.open(tempFile())) {
+            FileLogInputStream logInputStream = new FileLogInputStream(fileRecords, Integer.MAX_VALUE, Integer.MAX_VALUE);
+            assertNull(logInputStream.nextBatch());
+        }
+    }
+
+    @Test
+    public void testNextBatchSelectionWithZeroedParams() throws IOException {
+        try (FileRecords fileRecords = FileRecords.open(tempFile())) {
+            FileLogInputStream logInputStream = new FileLogInputStream(fileRecords, 0, 0);
             assertNull(logInputStream.nextBatch());
         }
     }

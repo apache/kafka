@@ -160,7 +160,10 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
       override def beforeInitializingSession(): Unit = {
         val expireEvent = new Expire
         eventManager.clearAndPut(expireEvent)
-        expireEvent.waitUntilProcessed()
+
+        // Block initialization of the new session until the expiration event is being handled,
+        // which ensures that all pending events have been processed before creating the new session
+        expireEvent.waitUntilProcessingStarted()
       }
     })
     eventManager.put(Startup)
@@ -1518,17 +1521,17 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
 
   // We can't make this a case object due to the countDownLatch field
   class Expire extends ControllerEvent {
-    private val countDownLatch = new CountDownLatch(1)
+    private val processingStarted = new CountDownLatch(1)
     override def state = ControllerState.ControllerChange
 
     override def process(): Unit = {
-      countDownLatch.countDown()
+      processingStarted.countDown()
       activeControllerId = -1
       onControllerResignation()
     }
 
-    def waitUntilProcessed(): Unit = {
-      countDownLatch.await()
+    def waitUntilProcessingStarted(): Unit = {
+      processingStarted.await()
     }
   }
 
