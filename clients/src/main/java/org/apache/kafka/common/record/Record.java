@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -18,327 +18,125 @@ package org.apache.kafka.common.record;
 
 import java.nio.ByteBuffer;
 
-import org.apache.kafka.common.utils.Crc32;
-import org.apache.kafka.common.utils.Utils;
-
+import org.apache.kafka.common.header.Header;
 
 /**
- * A record: a serialized key and value along with the associated CRC and other fields
+ * A log record is a tuple consisting of a unique offset in the log, a sequence number assigned by
+ * the producer, a timestamp, a key and a value.
  */
-public final class Record {
+public interface Record {
+
+    Header[] EMPTY_HEADERS = new Header[0];
 
     /**
-     * The current offset and size for all the fixed-length fields
+     * The offset of this record in the log
+     * @return the offset
      */
-    public static final int CRC_OFFSET = 0;
-    public static final int CRC_LENGTH = 4;
-    public static final int MAGIC_OFFSET = CRC_OFFSET + CRC_LENGTH;
-    public static final int MAGIC_LENGTH = 1;
-    public static final int ATTRIBUTES_OFFSET = MAGIC_OFFSET + MAGIC_LENGTH;
-    public static final int ATTRIBUTE_LENGTH = 1;
-    public static final int KEY_SIZE_OFFSET = ATTRIBUTES_OFFSET + ATTRIBUTE_LENGTH;
-    public static final int KEY_SIZE_LENGTH = 4;
-    public static final int KEY_OFFSET = KEY_SIZE_OFFSET + KEY_SIZE_LENGTH;
-    public static final int VALUE_SIZE_LENGTH = 4;
+    long offset();
 
     /**
-     * The size for the record header
+     * Get the sequence number assigned by the producer.
+     * @return the sequence number
      */
-    public static final int HEADER_SIZE = CRC_LENGTH + MAGIC_LENGTH + ATTRIBUTE_LENGTH;
+    int sequence();
 
     /**
-     * The amount of overhead bytes in a record
+     * Get the size in bytes of this record.
+     * @return the size of the record in bytes
      */
-    public static final int RECORD_OVERHEAD = HEADER_SIZE + KEY_SIZE_LENGTH + VALUE_SIZE_LENGTH;
+    int sizeInBytes();
 
     /**
-     * The current "magic" value
+     * Get the record's timestamp.
+     * @return the record's timestamp
      */
-    public static final byte CURRENT_MAGIC_VALUE = 0;
+    long timestamp();
 
     /**
-     * Specifies the mask for the compression code. 3 bits to hold the compression codec. 0 is reserved to indicate no
-     * compression
+     * Get a checksum of the record contents.
+     * @return A 4-byte unsigned checksum represented as a long or null if the message format does not
+     *         include a checksum (i.e. for v2 and above)
      */
-    public static final int COMPRESSION_CODEC_MASK = 0x07;
+    Long checksumOrNull();
 
     /**
-     * Compression code for uncompressed records
+     * Check whether the record has a valid checksum.
+     * @return true if the record has a valid checksum, false otherwise
      */
-    public static final int NO_COMPRESSION = 0;
-
-    private final ByteBuffer buffer;
-
-    public Record(ByteBuffer buffer) {
-        this.buffer = buffer;
-    }
+    boolean isValid();
 
     /**
-     * A constructor to create a LogRecord. If the record's compression type is not none, then
-     * its value payload should be already compressed with the specified type; the constructor
-     * would always write the value payload as is and will not do the compression itself.
-     * 
-     * @param key The key of the record (null, if none)
-     * @param value The record value
-     * @param type The compression type used on the contents of the record (if any)
-     * @param valueOffset The offset into the payload array used to extract payload
-     * @param valueSize The size of the payload to use
+     * Raise a {@link org.apache.kafka.common.errors.CorruptRecordException} if the record does not have a valid checksum.
      */
-    public Record(byte[] key, byte[] value, CompressionType type, int valueOffset, int valueSize) {
-        this(ByteBuffer.allocate(recordSize(key == null ? 0 : key.length,
-            value == null ? 0 : valueSize >= 0 ? valueSize : value.length - valueOffset)));
-        write(this.buffer, key, value, type, valueOffset, valueSize);
-        this.buffer.rewind();
-    }
-
-    public Record(byte[] key, byte[] value, CompressionType type) {
-        this(key, value, type, 0, -1);
-    }
-
-    public Record(byte[] value, CompressionType type) {
-        this(null, value, type);
-    }
-
-    public Record(byte[] key, byte[] value) {
-        this(key, value, CompressionType.NONE);
-    }
-
-    public Record(byte[] value) {
-        this(null, value, CompressionType.NONE);
-    }
-
-    // Write a record to the buffer, if the record's compression type is none, then
-    // its value payload should be already compressed with the specified type
-    public static void write(ByteBuffer buffer, byte[] key, byte[] value, CompressionType type, int valueOffset, int valueSize) {
-        // construct the compressor with compression type none since this function will not do any
-        //compression according to the input type, it will just write the record's payload as is
-        Compressor compressor = new Compressor(buffer, CompressionType.NONE, buffer.capacity());
-        compressor.putRecord(key, value, type, valueOffset, valueSize);
-    }
-
-    public static void write(Compressor compressor, long crc, byte attributes, byte[] key, byte[] value, int valueOffset, int valueSize) {
-        // write crc
-        compressor.putInt((int) (crc & 0xffffffffL));
-        // write magic value
-        compressor.putByte(CURRENT_MAGIC_VALUE);
-        // write attributes
-        compressor.putByte(attributes);
-        // write the key
-        if (key == null) {
-            compressor.putInt(-1);
-        } else {
-            compressor.putInt(key.length);
-            compressor.put(key, 0, key.length);
-        }
-        // write the value
-        if (value == null) {
-            compressor.putInt(-1);
-        } else {
-            int size = valueSize >= 0 ? valueSize : (value.length - valueOffset);
-            compressor.putInt(size);
-            compressor.put(value, valueOffset, size);
-        }
-    }
-
-    public static int recordSize(byte[] key, byte[] value) {
-        return recordSize(key == null ? 0 : key.length, value == null ? 0 : value.length);
-    }
-
-    public static int recordSize(int keySize, int valueSize) {
-        return CRC_LENGTH + MAGIC_LENGTH + ATTRIBUTE_LENGTH + KEY_SIZE_LENGTH + keySize + VALUE_SIZE_LENGTH + valueSize;
-    }
-
-    public ByteBuffer buffer() {
-        return this.buffer;
-    }
-
-    public static byte computeAttributes(CompressionType type) {
-        byte attributes = 0;
-        if (type.id > 0)
-            attributes = (byte) (attributes | (COMPRESSION_CODEC_MASK & type.id));
-        return attributes;
-    }
+    void ensureValid();
 
     /**
-     * Compute the checksum of the record from the record contents
+     * Get the size in bytes of the key.
+     * @return the size of the key, or -1 if there is no key
      */
-    public static long computeChecksum(ByteBuffer buffer, int position, int size) {
-        Crc32 crc = new Crc32();
-        crc.update(buffer.array(), buffer.arrayOffset() + position, size);
-        return crc.getValue();
-    }
+    int keySize();
 
     /**
-     * Compute the checksum of the record from the attributes, key and value payloads
+     * Check whether this record has a key
+     * @return true if there is a key, false otherwise
      */
-    public static long computeChecksum(byte[] key, byte[] value, CompressionType type, int valueOffset, int valueSize) {
-        Crc32 crc = new Crc32();
-        crc.update(CURRENT_MAGIC_VALUE);
-        byte attributes = 0;
-        if (type.id > 0)
-            attributes = (byte) (attributes | (COMPRESSION_CODEC_MASK & type.id));
-        crc.update(attributes);
-        // update for the key
-        if (key == null) {
-            crc.updateInt(-1);
-        } else {
-            crc.updateInt(key.length);
-            crc.update(key, 0, key.length);
-        }
-        // update for the value
-        if (value == null) {
-            crc.updateInt(-1);
-        } else {
-            int size = valueSize >= 0 ? valueSize : (value.length - valueOffset);
-            crc.updateInt(size);
-            crc.update(value, valueOffset, size);
-        }
-        return crc.getValue();
-    }
-
+    boolean hasKey();
 
     /**
-     * Compute the checksum of the record from the record contents
+     * Get the record's key.
+     * @return the key or null if there is none
      */
-    public long computeChecksum() {
-        return computeChecksum(buffer, MAGIC_OFFSET, buffer.limit() - MAGIC_OFFSET);
-    }
+    ByteBuffer key();
 
     /**
-     * Retrieve the previously computed CRC for this record
+     * Get the size in bytes of the value.
+     * @return the size of the value, or -1 if the value is null
      */
-    public long checksum() {
-        return Utils.readUnsignedInt(buffer, CRC_OFFSET);
-    }
+    int valueSize();
 
     /**
-     * Returns true if the crc stored with the record matches the crc computed off the record contents
+     * Check whether a value is present (i.e. if the value is not null)
+     * @return true if so, false otherwise
      */
-    public boolean isValid() {
-        return checksum() == computeChecksum();
-    }
+    boolean hasValue();
 
     /**
-     * Throw an InvalidRecordException if isValid is false for this record
+     * Get the record's value
+     * @return the (nullable) value
      */
-    public void ensureValid() {
-        if (!isValid())
-            throw new InvalidRecordException("Record is corrupt (stored crc = " + checksum()
-                                             + ", computed crc = "
-                                             + computeChecksum()
-                                             + ")");
-    }
+    ByteBuffer value();
 
     /**
-     * The complete serialized size of this record in bytes (including crc, header attributes, etc)
+     * Check whether the record has a particular magic. For versions prior to 2, the record contains its own magic,
+     * so this function can be used to check whether it matches a particular value. For version 2 and above, this
+     * method returns true if the passed magic is greater than or equal to 2.
+     *
+     * @param magic the magic value to check
+     * @return true if the record has a magic field (versions prior to 2) and the value matches
      */
-    public int size() {
-        return buffer.limit();
-    }
+    boolean hasMagic(byte magic);
 
     /**
-     * The length of the key in bytes
+     * For versions prior to 2, check whether the record is compressed (and therefore
+     * has nested record content). For versions 2 and above, this always returns false.
+     * @return true if the magic is lower than 2 and the record is compressed
      */
-    public int keySize() {
-        return buffer.getInt(KEY_SIZE_OFFSET);
-    }
+    boolean isCompressed();
 
     /**
-     * Does the record have a key?
+     * For versions prior to 2, the record contained a timestamp type attribute. This method can be
+     * used to check whether the value of that attribute matches a particular timestamp type. For versions
+     * 2 and above, this will always be false.
+     *
+     * @param timestampType the timestamp type to compare
+     * @return true if the version is lower than 2 and the timestamp type matches
      */
-    public boolean hasKey() {
-        return keySize() >= 0;
-    }
+    boolean hasTimestampType(TimestampType timestampType);
 
     /**
-     * The position where the value size is stored
+     * Get the headers. For magic versions 1 and below, this always returns an empty array.
+     *
+     * @return the array of headers
      */
-    private int valueSizeOffset() {
-        return KEY_OFFSET + Math.max(0, keySize());
-    }
-
-    /**
-     * The length of the value in bytes
-     */
-    public int valueSize() {
-        return buffer.getInt(valueSizeOffset());
-    }
-
-    /**
-     * The magic version of this record
-     */
-    public byte magic() {
-        return buffer.get(MAGIC_OFFSET);
-    }
-
-    /**
-     * The attributes stored with this record
-     */
-    public byte attributes() {
-        return buffer.get(ATTRIBUTES_OFFSET);
-    }
-
-    /**
-     * The compression type used with this record
-     */
-    public CompressionType compressionType() {
-        return CompressionType.forId(buffer.get(ATTRIBUTES_OFFSET) & COMPRESSION_CODEC_MASK);
-    }
-
-    /**
-     * A ByteBuffer containing the value of this record
-     */
-    public ByteBuffer value() {
-        return sliceDelimited(valueSizeOffset());
-    }
-
-    /**
-     * A ByteBuffer containing the message key
-     */
-    public ByteBuffer key() {
-        return sliceDelimited(KEY_SIZE_OFFSET);
-    }
-
-    /**
-     * Read a size-delimited byte buffer starting at the given offset
-     */
-    private ByteBuffer sliceDelimited(int start) {
-        int size = buffer.getInt(start);
-        if (size < 0) {
-            return null;
-        } else {
-            ByteBuffer b = buffer.duplicate();
-            b.position(start + 4);
-            b = b.slice();
-            b.limit(size);
-            b.rewind();
-            return b;
-        }
-    }
-
-    public String toString() {
-        return String.format("Record(magic = %d, attributes = %d, compression = %s, crc = %d, key = %d bytes, value = %d bytes)",
-                             magic(),
-                             attributes(),
-                             compressionType(),
-                             checksum(),
-                             key() == null ? 0 : key().limit(),
-                             value() == null ? 0 : value().limit());
-    }
-
-    public boolean equals(Object other) {
-        if (this == other)
-            return true;
-        if (other == null)
-            return false;
-        if (!other.getClass().equals(Record.class))
-            return false;
-        Record record = (Record) other;
-        return this.buffer.equals(record.buffer);
-    }
-
-    public int hashCode() {
-        return buffer.hashCode();
-    }
-
+    Header[] headers();
 }

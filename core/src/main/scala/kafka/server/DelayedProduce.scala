@@ -19,10 +19,12 @@ package kafka.server
 
 
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.locks.Lock
 
 import com.yammer.metrics.core.Meter
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.Pool
+
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
@@ -32,8 +34,8 @@ import scala.collection._
 case class ProducePartitionStatus(requiredOffset: Long, responseStatus: PartitionResponse) {
   @volatile var acksPending = false
 
-  override def toString = "[acksPending: %b, error: %d, startOffset: %d, requiredOffset: %d]"
-    .format(acksPending, responseStatus.errorCode, responseStatus.baseOffset, requiredOffset)
+  override def toString = s"[acksPending: $acksPending, error: ${responseStatus.error.code}, " +
+    s"startOffset: ${responseStatus.baseOffset}, requiredOffset: $requiredOffset]"
 }
 
 /**
@@ -42,8 +44,7 @@ case class ProducePartitionStatus(requiredOffset: Long, responseStatus: Partitio
 case class ProduceMetadata(produceRequiredAcks: Short,
                            produceStatus: Map[TopicPartition, ProducePartitionStatus]) {
 
-  override def toString = "[requiredAcks: %d, partitionStatus: %s]"
-    .format(produceRequiredAcks, produceStatus)
+  override def toString = s"[requiredAcks: $produceRequiredAcks, partitionStatus: $produceStatus]"
 }
 
 /**
@@ -53,20 +54,21 @@ case class ProduceMetadata(produceRequiredAcks: Short,
 class DelayedProduce(delayMs: Long,
                      produceMetadata: ProduceMetadata,
                      replicaManager: ReplicaManager,
-                     responseCallback: Map[TopicPartition, PartitionResponse] => Unit)
-  extends DelayedOperation(delayMs) {
+                     responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
+                     lockOpt: Option[Lock] = None)
+  extends DelayedOperation(delayMs, lockOpt) {
 
   // first update the acks pending variable according to the error code
   produceMetadata.produceStatus.foreach { case (topicPartition, status) =>
-    if (status.responseStatus.errorCode == Errors.NONE.code) {
+    if (status.responseStatus.error == Errors.NONE) {
       // Timeout error state will be cleared when required acks are received
       status.acksPending = true
-      status.responseStatus.errorCode = Errors.REQUEST_TIMED_OUT.code
+      status.responseStatus.error = Errors.REQUEST_TIMED_OUT
     } else {
       status.acksPending = false
     }
 
-    trace("Initial partition status for %s is %s".format(topicPartition, status))
+    trace(s"Initial partition status for $topicPartition is $status")
   }
 
   /**
@@ -81,33 +83,30 @@ class DelayedProduce(delayMs: Long,
    */
   override def tryComplete(): Boolean = {
     // check for each partition if it still has pending acks
-    produceMetadata.produceStatus.foreach { case (topicAndPartition, status) =>
-      trace("Checking produce satisfaction for %s, current status %s"
-        .format(topicAndPartition, status))
+    produceMetadata.produceStatus.foreach { case (topicPartition, status) =>
+      trace(s"Checking produce satisfaction for $topicPartition, current status $status")
       // skip those partitions that have already been satisfied
       if (status.acksPending) {
-        val partitionOpt = replicaManager.getPartition(topicAndPartition.topic, topicAndPartition.partition)
-        val (hasEnough, errorCode) = partitionOpt match {
+        val (hasEnough, error) = replicaManager.getPartition(topicPartition) match {
           case Some(partition) =>
-            partition.checkEnoughReplicasReachOffset(status.requiredOffset)
+            if (partition eq ReplicaManager.OfflinePartition)
+              (false, Errors.KAFKA_STORAGE_ERROR)
+            else
+              partition.checkEnoughReplicasReachOffset(status.requiredOffset)
           case None =>
             // Case A
-            (false, Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
+            (false, Errors.UNKNOWN_TOPIC_OR_PARTITION)
         }
-        if (errorCode != Errors.NONE.code) {
-          // Case B.1
+        // Case B.1 || B.2
+        if (error != Errors.NONE || hasEnough) {
           status.acksPending = false
-          status.responseStatus.errorCode = errorCode
-        } else if (hasEnough) {
-          // Case B.2
-          status.acksPending = false
-          status.responseStatus.errorCode = Errors.NONE.code
+          status.responseStatus.error = error
         }
       }
     }
 
-    // check if each partition has satisfied at lease one of case A and case B
-    if (! produceMetadata.produceStatus.values.exists(p => p.acksPending))
+    // check if every partition has satisfied at least one of case A or B
+    if (!produceMetadata.produceStatus.values.exists(_.acksPending))
       forceComplete()
     else
       false
@@ -116,6 +115,7 @@ class DelayedProduce(delayMs: Long,
   override def onExpiration() {
     produceMetadata.produceStatus.foreach { case (topicPartition, status) =>
       if (status.acksPending) {
+        debug(s"Expiring produce request for partition $topicPartition with status $status")
         DelayedProduceMetrics.recordExpiration(topicPartition)
       }
     }

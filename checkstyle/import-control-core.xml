@@ -53,10 +53,20 @@
   </subpackage>
 
   <subpackage name="tools">
+    <allow pkg="org.apache.kafka.clients.admin" />
+    <allow pkg="kafka.admin" />
     <allow pkg="kafka.javaapi" />
     <allow pkg="kafka.producer" />
     <allow pkg="kafka.consumer" />
     <allow pkg="joptsimple" />
+    <allow pkg="org.apache.kafka.clients.consumer" />
+    <allow class="javax.xml.datatype.Duration" />
+    <allow class="javax.xml.datatype.DatatypeFactory" />
+    <allow class="javax.xml.datatype.DatatypeConfigurationException" />
+  </subpackage>
+
+  <subpackage name="coordinator">
+    <allow class="kafka.server.MetadataCache" />
   </subpackage>
 
   <subpackage name="examples">

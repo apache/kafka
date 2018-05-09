@@ -19,20 +19,19 @@ package kafka.message
 
 import java.io.ByteArrayOutputStream
 import scala.collection._
-import org.scalatest.junit.JUnitSuite
 import org.junit._
 import org.junit.Assert._
 
-class MessageCompressionTest extends JUnitSuite {
+class MessageCompressionTest {
 
   @Test
   def testSimpleCompressDecompress() {
     val codecs = mutable.ArrayBuffer[CompressionCodec](GZIPCompressionCodec)
-    if(isSnappyAvailable)
+    if (isSnappyAvailable)
       codecs += SnappyCompressionCodec
-    if(isLZ4Available)
+    if (isLZ4Available)
       codecs += LZ4CompressionCodec
-    for(codec <- codecs)
+    for (codec <- codecs)
       testSimpleCompressDecompress(codec)
   }
 
@@ -42,15 +41,17 @@ class MessageCompressionTest extends JUnitSuite {
     val bytes1k: Array[Byte] = (0 until 1000).map(_.toByte).toArray
     val bytes2k: Array[Byte] = (1000 until 2000).map(_.toByte).toArray
     val bytes3k: Array[Byte] = (3000 until 4000).map(_.toByte).toArray
-    val messages: List[Message] = List(new Message(bytes1k), new Message(bytes2k), new Message(bytes3k))
+    val messages: List[Message] = List(new Message(bytes1k, Message.NoTimestamp, Message.MagicValue_V1),
+                                       new Message(bytes2k, Message.NoTimestamp, Message.MagicValue_V1),
+                                       new Message(bytes3k, Message.NoTimestamp, Message.MagicValue_V1))
 
-    testCompressSize(GZIPCompressionCodec, messages, 388)
+    testCompressSize(GZIPCompressionCodec, messages, 396)
 
-    if(isSnappyAvailable)
-      testCompressSize(SnappyCompressionCodec, messages, 491)
+    if (isSnappyAvailable)
+      testCompressSize(SnappyCompressionCodec, messages, 503)
 
-    if(isLZ4Available)
-      testCompressSize(LZ4CompressionCodec, messages, 380)
+    if (isLZ4Available)
+      testCompressSize(LZ4CompressionCodec, messages, 387)
   }
 
   def testSimpleCompressDecompress(compressionCodec: CompressionCodec) {
@@ -71,8 +72,7 @@ class MessageCompressionTest extends JUnitSuite {
       new org.xerial.snappy.SnappyOutputStream(new ByteArrayOutputStream())
       true
     } catch {
-      case e: UnsatisfiedLinkError => false
-      case e: org.xerial.snappy.SnappyError => false
+      case _: UnsatisfiedLinkError | _: org.xerial.snappy.SnappyError => false
     }
   }
 
@@ -81,7 +81,7 @@ class MessageCompressionTest extends JUnitSuite {
       new net.jpountz.lz4.LZ4BlockOutputStream(new ByteArrayOutputStream())
       true
     } catch {
-      case e: UnsatisfiedLinkError => false
+      case _: UnsatisfiedLinkError => false
     }
   }
 }

@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,193 +14,213 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
+import org.apache.kafka.streams.Consumed;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.test.KStreamTestDriver;
+import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.TestUtils;
+import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 
 import java.io.File;
-import java.io.IOException;
-import java.nio.file.Files;
 
+import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
+import static org.hamcrest.CoreMatchers.hasItem;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 
 public class KTableSourceTest {
 
-    private final Serializer<String> strSerializer = new StringSerializer();
-    private final Deserializer<String> strDeserializer = new StringDeserializer();
+    final private Serde<String> stringSerde = Serdes.String();
+    private final Consumed<String, String> stringConsumed = Consumed.with(stringSerde, stringSerde);
+    final private Serde<Integer> intSerde = Serdes.Integer();
+    @Rule
+    public final KStreamTestDriver driver = new KStreamTestDriver();
+    private File stateDir = null;
+
+    @Before
+    public void setUp() {
+        stateDir = TestUtils.tempDirectory("kafka-test");
+    }
 
     @Test
     public void testKTable() {
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
-        String topic1 = "topic1";
+        final String topic1 = "topic1";
 
-        KTable<String, String> table1 = builder.table(strSerializer, strSerializer, strDeserializer, strDeserializer, topic1);
+        final KTable<String, Integer> table1 = builder.table(topic1, Consumed.with(stringSerde, intSerde));
 
-        MockProcessorSupplier<String, String> proc1 = new MockProcessorSupplier<>();
-        table1.toStream().process(proc1);
+        final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
+        table1.toStream().process(supplier);
 
-        KStreamTestDriver driver = new KStreamTestDriver(builder);
-
+        driver.setUp(builder, stateDir);
         driver.process(topic1, "A", 1);
         driver.process(topic1, "B", 2);
         driver.process(topic1, "C", 3);
         driver.process(topic1, "D", 4);
+        driver.flushState();
+        driver.process(topic1, "A", null);
+        driver.process(topic1, "B", null);
+        driver.flushState();
+
+        assertEquals(Utils.mkList("A:1", "B:2", "C:3", "D:4", "A:null", "B:null"), supplier.theCapturedProcessor().processed);
+    }
+
+    @Test
+    public void kTableShouldLogAndMeterOnSkippedRecords() {
+        final StreamsBuilder streamsBuilder = new StreamsBuilder();
+        final String topic = "topic";
+        streamsBuilder.table(topic, Consumed.with(stringSerde, intSerde));
+
+        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
+        driver.setUp(streamsBuilder, stateDir);
+        driver.process(topic, null, "value");
+        driver.flushState();
+        LogCaptureAppender.unregister(appender);
+
+        assertEquals(1.0, getMetricByName(driver.context().metrics().metrics(), "skipped-records-total", "stream-metrics").metricValue());
+        assertThat(appender.getMessages(), hasItem("Skipping record due to null key. topic=[topic] partition=[-1] offset=[-1]"));
+    }
+
+    @Test
+    public void testValueGetter() {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final String topic1 = "topic1";
+
+        final KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>) builder.table(topic1, stringConsumed);
+
+        final KTableValueGetterSupplier<String, String> getterSupplier1 = table1.valueGetterSupplier();
+
+        driver.setUp(builder, stateDir);
+        final KTableValueGetter<String, String> getter1 = getterSupplier1.get();
+        getter1.init(driver.context());
+
+        driver.process(topic1, "A", "01");
+        driver.process(topic1, "B", "01");
+        driver.process(topic1, "C", "01");
+
+        assertEquals("01", getter1.get("A"));
+        assertEquals("01", getter1.get("B"));
+        assertEquals("01", getter1.get("C"));
+
+        driver.process(topic1, "A", "02");
+        driver.process(topic1, "B", "02");
+
+        assertEquals("02", getter1.get("A"));
+        assertEquals("02", getter1.get("B"));
+        assertEquals("01", getter1.get("C"));
+
+        driver.process(topic1, "A", "03");
+
+        assertEquals("03", getter1.get("A"));
+        assertEquals("02", getter1.get("B"));
+        assertEquals("01", getter1.get("C"));
+
         driver.process(topic1, "A", null);
         driver.process(topic1, "B", null);
 
-        assertEquals(Utils.mkList("A:1", "B:2", "C:3", "D:4", "A:null", "B:null"), proc1.processed);
+        assertNull(getter1.get("A"));
+        assertNull(getter1.get("B"));
+        assertEquals("01", getter1.get("C"));
+
     }
 
     @Test
-    public void testValueGetter() throws IOException {
-        File stateDir = Files.createTempDirectory("test").toFile();
-        try {
-            final KStreamBuilder builder = new KStreamBuilder();
+    public void testNotSendingOldValue() {
+        final StreamsBuilder builder = new StreamsBuilder();
 
-            String topic1 = "topic1";
+        final String topic1 = "topic1";
 
-            KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>)
-                    builder.table(strSerializer, strSerializer, strDeserializer, strDeserializer, topic1);
+        final KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>) builder.table(topic1, stringConsumed);
 
-            KTableValueGetterSupplier<String, String> getterSupplier1 = table1.valueGetterSupplier();
+        final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
 
-            KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir, null, null, null, null);
+        builder.build().addProcessor("proc1", supplier, table1.name);
 
-            KTableValueGetter<String, String> getter1 = getterSupplier1.get();
-            getter1.init(driver.context());
+        driver.setUp(builder, stateDir);
 
-            driver.process(topic1, "A", "01");
-            driver.process(topic1, "B", "01");
-            driver.process(topic1, "C", "01");
+        final MockProcessor<String, Integer> proc1 = supplier.theCapturedProcessor();
 
-            assertEquals("01", getter1.get("A"));
-            assertEquals("01", getter1.get("B"));
-            assertEquals("01", getter1.get("C"));
+        driver.process(topic1, "A", "01");
+        driver.process(topic1, "B", "01");
+        driver.process(topic1, "C", "01");
+        driver.flushState();
 
-            driver.process(topic1, "A", "02");
-            driver.process(topic1, "B", "02");
+        proc1.checkAndClearProcessResult("A:(01<-null)", "B:(01<-null)", "C:(01<-null)");
 
-            assertEquals("02", getter1.get("A"));
-            assertEquals("02", getter1.get("B"));
-            assertEquals("01", getter1.get("C"));
+        driver.process(topic1, "A", "02");
+        driver.process(topic1, "B", "02");
+        driver.flushState();
 
-            driver.process(topic1, "A", "03");
+        proc1.checkAndClearProcessResult("A:(02<-null)", "B:(02<-null)");
 
-            assertEquals("03", getter1.get("A"));
-            assertEquals("02", getter1.get("B"));
-            assertEquals("01", getter1.get("C"));
+        driver.process(topic1, "A", "03");
+        driver.flushState();
 
-            driver.process(topic1, "A", null);
-            driver.process(topic1, "B", null);
+        proc1.checkAndClearProcessResult("A:(03<-null)");
 
-            assertNull(getter1.get("A"));
-            assertNull(getter1.get("B"));
-            assertEquals("01", getter1.get("C"));
+        driver.process(topic1, "A", null);
+        driver.process(topic1, "B", null);
+        driver.flushState();
 
-        } finally {
-            Utils.delete(stateDir);
-        }
+        proc1.checkAndClearProcessResult("A:(null<-null)", "B:(null<-null)");
     }
 
     @Test
-    public void testNotSedingOldValue() throws IOException {
-        File stateDir = Files.createTempDirectory("test").toFile();
-        try {
-            final KStreamBuilder builder = new KStreamBuilder();
+    public void testSendingOldValue() {
+        final StreamsBuilder builder = new StreamsBuilder();
 
-            String topic1 = "topic1";
+        final String topic1 = "topic1";
 
-            KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>)
-                    builder.table(strSerializer, strSerializer, strDeserializer, strDeserializer, topic1);
+        final KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>) builder.table(topic1, stringConsumed);
 
-            MockProcessorSupplier<String, Integer> proc1 = new MockProcessorSupplier<>();
+        table1.enableSendingOldValues();
 
-            builder.addProcessor("proc1", proc1, table1.name);
+        assertTrue(table1.sendingOldValueEnabled());
 
-            KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir, null, null, null, null);
+        final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
 
-            driver.process(topic1, "A", "01");
-            driver.process(topic1, "B", "01");
-            driver.process(topic1, "C", "01");
+        builder.build().addProcessor("proc1", supplier, table1.name);
 
-            proc1.checkAndClearResult("A:(01<-null)", "B:(01<-null)", "C:(01<-null)");
+        driver.setUp(builder, stateDir);
 
-            driver.process(topic1, "A", "02");
-            driver.process(topic1, "B", "02");
+        final MockProcessor<String, Integer> proc1 = supplier.theCapturedProcessor();
 
-            proc1.checkAndClearResult("A:(02<-null)", "B:(02<-null)");
+        driver.process(topic1, "A", "01");
+        driver.process(topic1, "B", "01");
+        driver.process(topic1, "C", "01");
+        driver.flushState();
 
-            driver.process(topic1, "A", "03");
+        proc1.checkAndClearProcessResult("A:(01<-null)", "B:(01<-null)", "C:(01<-null)");
 
-            proc1.checkAndClearResult("A:(03<-null)");
+        driver.process(topic1, "A", "02");
+        driver.process(topic1, "B", "02");
+        driver.flushState();
 
-            driver.process(topic1, "A", null);
-            driver.process(topic1, "B", null);
+        proc1.checkAndClearProcessResult("A:(02<-01)", "B:(02<-01)");
 
-            proc1.checkAndClearResult("A:(null<-null)", "B:(null<-null)");
+        driver.process(topic1, "A", "03");
+        driver.flushState();
 
-        } finally {
-            Utils.delete(stateDir);
-        }
+        proc1.checkAndClearProcessResult("A:(03<-02)");
+
+        driver.process(topic1, "A", null);
+        driver.process(topic1, "B", null);
+        driver.flushState();
+
+        proc1.checkAndClearProcessResult("A:(null<-03)", "B:(null<-02)");
     }
-
-    @Test
-    public void testSedingOldValue() throws IOException {
-        File stateDir = Files.createTempDirectory("test").toFile();
-        try {
-            final KStreamBuilder builder = new KStreamBuilder();
-
-            String topic1 = "topic1";
-
-            KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>)
-                    builder.table(strSerializer, strSerializer, strDeserializer, strDeserializer, topic1);
-
-            table1.enableSendingOldValues();
-
-            assertTrue(table1.sendingOldValueEnabled());
-
-            MockProcessorSupplier<String, Integer> proc1 = new MockProcessorSupplier<>();
-
-            builder.addProcessor("proc1", proc1, table1.name);
-
-            KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir, null, null, null, null);
-
-            driver.process(topic1, "A", "01");
-            driver.process(topic1, "B", "01");
-            driver.process(topic1, "C", "01");
-
-            proc1.checkAndClearResult("A:(01<-null)", "B:(01<-null)", "C:(01<-null)");
-
-            driver.process(topic1, "A", "02");
-            driver.process(topic1, "B", "02");
-
-            proc1.checkAndClearResult("A:(02<-01)", "B:(02<-01)");
-
-            driver.process(topic1, "A", "03");
-
-            proc1.checkAndClearResult("A:(03<-02)");
-
-            driver.process(topic1, "A", null);
-            driver.process(topic1, "B", null);
-
-            proc1.checkAndClearResult("A:(null<-03)", "B:(null<-02)");
-
-        } finally {
-            Utils.delete(stateDir);
-        }
-    }
-
 }

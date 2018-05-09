@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,150 +14,203 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StreamsMetrics;
-import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.StateRestoreCallback;
+import org.apache.kafka.streams.processor.Cancellable;
+import org.apache.kafka.streams.processor.PunctuationType;
+import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TaskId;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.state.internals.ThreadCache;
 
-import java.io.File;
+import java.util.Collections;
+import java.util.Map;
 
-public class StandbyContextImpl implements ProcessorContext, RecordCollector.Supplier {
+class StandbyContextImpl extends AbstractProcessorContext implements RecordCollector.Supplier {
 
-    private static final Logger log = LoggerFactory.getLogger(StandbyContextImpl.class);
+    private static final RecordCollector NO_OP_COLLECTOR = new RecordCollector() {
+        @Override
+        public <K, V> void send(final String topic,
+                                final K key,
+                                final V value,
+                                final Integer partition,
+                                final Long timestamp,
+                                final Serializer<K> keySerializer,
+                                final Serializer<V> valueSerializer) {
+        }
 
-    private final TaskId id;
-    private final StreamsMetrics metrics;
-    private final ProcessorStateManager stateMgr;
+        @Override
+        public <K, V> void send(final String topic,
+                                final K key,
+                                final V value,
+                                final Long timestamp,
+                                final Serializer<K> keySerializer,
+                                final Serializer<V> valueSerializer,
+                                final StreamPartitioner<? super K, ? super V> partitioner) {}
 
-    private final Serializer<?> keySerializer;
-    private final Serializer<?> valSerializer;
-    private final Deserializer<?> keyDeserializer;
-    private final Deserializer<?> valDeserializer;
+        @Override
+        public void flush() {}
 
-    private boolean initialized;
+        @Override
+        public void close() {}
 
-    public StandbyContextImpl(TaskId id,
-                              StreamsConfig config,
-                              ProcessorStateManager stateMgr,
-                              StreamsMetrics metrics) {
-        this.id = id;
-        this.metrics = metrics;
-        this.stateMgr = stateMgr;
+        @Override
+        public Map<TopicPartition, Long> offsets() {
+            return Collections.emptyMap();
+        }
+    };
 
-        this.keySerializer = config.keySerializer();
-        this.valSerializer = config.valueSerializer();
-        this.keyDeserializer = config.keyDeserializer();
-        this.valDeserializer = config.valueDeserializer();
-
-        this.initialized = false;
+    StandbyContextImpl(final TaskId id,
+                       final StreamsConfig config,
+                       final ProcessorStateManager stateMgr,
+                       final StreamsMetricsImpl metrics) {
+        super(
+            id,
+            config,
+            metrics,
+            stateMgr,
+            new ThreadCache(
+                new LogContext(String.format("stream-thread [%s] ", Thread.currentThread().getName())),
+                0,
+                metrics
+            )
+        );
     }
 
-    public void initialized() {
-        this.initialized = true;
-    }
 
-    public TaskId id() {
-        return id;
-    }
-
-    public ProcessorStateManager getStateMgr() {
-        return stateMgr;
+    StateManager getStateMgr() {
+        return stateManager;
     }
 
     @Override
     public RecordCollector recordCollector() {
-        throw new UnsupportedOperationException();
+        return NO_OP_COLLECTOR;
     }
 
+    /**
+     * @throws UnsupportedOperationException on every invocation
+     */
     @Override
-    public Serializer<?> keySerializer() {
-        return this.keySerializer;
+    public StateStore getStateStore(final String name) {
+        throw new UnsupportedOperationException("this should not happen: getStateStore() not supported in standby tasks.");
     }
 
-    @Override
-    public Serializer<?> valueSerializer() {
-        return this.valSerializer;
-    }
-
-    @Override
-    public Deserializer<?> keyDeserializer() {
-        return this.keyDeserializer;
-    }
-
-    @Override
-    public Deserializer<?> valueDeserializer() {
-        return this.valDeserializer;
-    }
-
-    @Override
-    public File stateDir() {
-        return stateMgr.baseDir();
-    }
-
-    @Override
-    public StreamsMetrics metrics() {
-        return metrics;
-    }
-
-    @Override
-    public void register(StateStore store, boolean loggingEnabled, StateRestoreCallback stateRestoreCallback) {
-        if (initialized)
-            throw new IllegalStateException("Can only create state stores during initialization.");
-
-        stateMgr.register(store, loggingEnabled, stateRestoreCallback);
-    }
-
-    @Override
-    public StateStore getStateStore(String name) {
-        throw new UnsupportedOperationException();
-    }
-
+    /**
+     * @throws UnsupportedOperationException on every invocation
+     */
     @Override
     public String topic() {
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("this should not happen: topic() not supported in standby tasks.");
     }
 
+    /**
+     * @throws UnsupportedOperationException on every invocation
+     */
     @Override
     public int partition() {
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("this should not happen: partition() not supported in standby tasks.");
     }
 
+    /**
+     * @throws UnsupportedOperationException on every invocation
+     */
     @Override
     public long offset() {
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("this should not happen: offset() not supported in standby tasks.");
     }
 
+    /**
+     * @throws UnsupportedOperationException on every invocation
+     */
     @Override
     public long timestamp() {
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("this should not happen: timestamp() not supported in standby tasks.");
     }
 
+    /**
+     * @throws UnsupportedOperationException on every invocation
+     */
     @Override
-    public <K, V> void forward(K key, V value) {
-        throw new UnsupportedOperationException();
+    public <K, V> void forward(final K key, final V value) {
+        throw new UnsupportedOperationException("this should not happen: forward() not supported in standby tasks.");
     }
 
+    /**
+     * @throws UnsupportedOperationException on every invocation
+     */
     @Override
-    public <K, V> void forward(K key, V value, int childIndex) {
-        throw new UnsupportedOperationException();
+    public <K, V> void forward(final K key, final V value, final To to) {
+        throw new UnsupportedOperationException("this should not happen: forward() not supported in standby tasks.");
     }
 
+    /**
+     * @throws UnsupportedOperationException on every invocation
+     */
+    @SuppressWarnings("deprecation")
+    @Override
+    public <K, V> void forward(final K key, final V value, final int childIndex) {
+        throw new UnsupportedOperationException("this should not happen: forward() not supported in standby tasks.");
+    }
+
+    /**
+     * @throws UnsupportedOperationException on every invocation
+     */
+    @SuppressWarnings("deprecation")
+    @Override
+    public <K, V> void forward(final K key, final V value, final String childName) {
+        throw new UnsupportedOperationException("this should not happen: forward() not supported in standby tasks.");
+    }
+
+    /**
+     * @throws UnsupportedOperationException on every invocation
+     */
     @Override
     public void commit() {
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("this should not happen: commit() not supported in standby tasks.");
+    }
+
+    /**
+     * @throws UnsupportedOperationException on every invocation
+     */
+    @Override
+    public Cancellable schedule(long interval, PunctuationType type, Punctuator callback) {
+        throw new UnsupportedOperationException("this should not happen: schedule() not supported in standby tasks.");
+    }
+
+    /**
+     * @throws UnsupportedOperationException on every invocation
+     */
+    @Override
+    public RecordContext recordContext() {
+        throw new UnsupportedOperationException("this should not happen: recordContext not supported in standby tasks.");
+    }
+
+    /**
+     * @throws UnsupportedOperationException on every invocation
+     */
+    @Override
+    public void setRecordContext(final RecordContext recordContext) {
+        throw new UnsupportedOperationException("this should not happen: setRecordContext not supported in standby tasks.");
     }
 
     @Override
-    public void schedule(long interval) {
-        throw new UnsupportedOperationException();
+    public void setCurrentNode(final ProcessorNode currentNode) {
+        // no-op. can't throw as this is called on commit when the StateStores get flushed.
     }
+
+    /**
+     * @throws UnsupportedOperationException on every invocation
+     */
+    @Override
+    public ProcessorNode currentNode() {
+        throw new UnsupportedOperationException("this should not happen: currentNode not supported in standby tasks.");
+    }
+
 }

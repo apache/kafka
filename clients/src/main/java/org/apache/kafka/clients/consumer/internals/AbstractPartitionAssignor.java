@@ -1,14 +1,18 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
- * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
- * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
- * License. You may obtain a copy of the License at
- * <p/>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p/>
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.clients.consumer.internals;
 
@@ -33,12 +37,13 @@ public abstract class AbstractPartitionAssignor implements PartitionAssignor {
 
     /**
      * Perform the group assignment given the partition counts and member subscriptions
-     * @param partitionsPerTopic The number of partitions for each subscribed topic (may be empty for some topics)
+     * @param partitionsPerTopic The number of partitions for each subscribed topic. Topics not in metadata will be excluded
+     *                           from this map.
      * @param subscriptions Map from the memberId to their respective topic subscription
-     * @return Map from each member to the
+     * @return Map from each member to the list of partitions assigned to them.
      */
     public abstract Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic,
-                                                             Map<String, List<String>> subscriptions);
+                                                             Map<String, Subscription> subscriptions);
 
     @Override
     public Subscription subscription(Set<String> topics) {
@@ -48,25 +53,21 @@ public abstract class AbstractPartitionAssignor implements PartitionAssignor {
     @Override
     public Map<String, Assignment> assign(Cluster metadata, Map<String, Subscription> subscriptions) {
         Set<String> allSubscribedTopics = new HashSet<>();
-        Map<String, List<String>> topicSubscriptions = new HashMap<>();
-        for (Map.Entry<String, Subscription> subscriptionEntry : subscriptions.entrySet()) {
-            List<String> topics = subscriptionEntry.getValue().topics();
-            allSubscribedTopics.addAll(topics);
-            topicSubscriptions.put(subscriptionEntry.getKey(), topics);
-        }
+        for (Map.Entry<String, Subscription> subscriptionEntry : subscriptions.entrySet())
+            allSubscribedTopics.addAll(subscriptionEntry.getValue().topics());
 
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         for (String topic : allSubscribedTopics) {
             Integer numPartitions = metadata.partitionCountForTopic(topic);
-            if (numPartitions != null)
+            if (numPartitions != null && numPartitions > 0)
                 partitionsPerTopic.put(topic, numPartitions);
             else
                 log.debug("Skipping assignment for topic {} since no metadata is available", topic);
         }
 
-        Map<String, List<TopicPartition>> rawAssignments = assign(partitionsPerTopic, topicSubscriptions);
+        Map<String, List<TopicPartition>> rawAssignments = assign(partitionsPerTopic, subscriptions);
 
-        // this class has maintains no user data, so just wrap the results
+        // this class maintains no user data, so just wrap the results
         Map<String, Assignment> assignments = new HashMap<>();
         for (Map.Entry<String, List<TopicPartition>> assignmentEntry : rawAssignments.entrySet())
             assignments.put(assignmentEntry.getKey(), new Assignment(assignmentEntry.getValue()));
@@ -87,4 +88,10 @@ public abstract class AbstractPartitionAssignor implements PartitionAssignor {
         list.add(value);
     }
 
+    protected static List<TopicPartition> partitions(String topic, int numPartitions) {
+        List<TopicPartition> partitions = new ArrayList<>(numPartitions);
+        for (int i = 0; i < numPartitions; i++)
+            partitions.add(new TopicPartition(topic, i));
+        return partitions;
+    }
 }

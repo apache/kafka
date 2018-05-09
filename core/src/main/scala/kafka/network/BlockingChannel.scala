@@ -21,10 +21,11 @@ import java.net.InetSocketAddress
 import java.nio.channels._
 
 import kafka.api.RequestOrResponse
-import kafka.utils.{Logging, nonthreadsafe}
+import kafka.utils.{CoreUtils, Logging, nonthreadsafe}
 import org.apache.kafka.common.network.NetworkReceive
 
 
+@deprecated("This object has been deprecated and will be removed in a future release.", "0.11.0.0")
 object BlockingChannel{
   val UseDefaultBufferSize = -1
 }
@@ -34,6 +35,7 @@ object BlockingChannel{
  *
  */
 @nonthreadsafe
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
 class BlockingChannel( val host: String, 
                        val port: Int, 
                        val readBufferSize: Int, 
@@ -82,22 +84,22 @@ class BlockingChannel( val host: String,
                          connectTimeoutMs))
 
       } catch {
-        case e: Throwable => disconnect()
+        case _: Throwable => disconnect()
       }
     }
   }
   
   def disconnect() = lock synchronized {
     if(channel != null) {
-      swallow(channel.close())
-      swallow(channel.socket.close())
+      CoreUtils.swallow(channel.close(), this)
+      CoreUtils.swallow(channel.socket.close(), this)
       channel = null
       writeChannel = null
     }
     // closing the main socket channel *should* close the read channel
     // but let's do it to be sure.
     if(readChannel != null) {
-      swallow(readChannel.close())
+      CoreUtils.swallow(readChannel.close(), this)
       readChannel = null
     }
     connected = false

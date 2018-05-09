@@ -33,6 +33,7 @@ NUM_RECOVERY_THREADS_PER_DATA_DIR = "num.recovery.threads.per.data.dir"
 LOG_RETENTION_HOURS = "log.retention.hours"
 LOG_SEGMENT_BYTES = "log.segment.bytes"
 LOG_RETENTION_CHECK_INTERVAL_MS = "log.retention.check.interval.ms"
+LOG_RETENTION_MS = "log.retention.ms"
 LOG_CLEANER_ENABLE = "log.cleaner.enable"
 
 AUTO_CREATE_TOPICS_ENABLE = "auto.create.topics.enable"
@@ -40,7 +41,13 @@ AUTO_CREATE_TOPICS_ENABLE = "auto.create.topics.enable"
 ZOOKEEPER_CONNECT = "zookeeper.connect"
 ZOOKEEPER_CONNECTION_TIMEOUT_MS = "zookeeper.connection.timeout.ms"
 INTER_BROKER_PROTOCOL_VERSION = "inter.broker.protocol.version"
+MESSAGE_FORMAT_VERSION = "log.message.format.version"
+MESSAGE_TIMESTAMP_TYPE = "message.timestamp.type"
+THROTTLING_REPLICATION_RATE_LIMIT = "replication.quota.throttled.rate"
 
+LOG_FLUSH_INTERVAL_MESSAGE = "log.flush.interval.messages"
+REPLICA_HIGHWATERMARK_CHECKPOINT_INTERVAL_MS = "replica.high.watermark.checkpoint.interval.ms"
+LOG_ROLL_TIME_MS = "log.roll.ms"
 
 """
 From KafkaConfig.scala
@@ -142,8 +149,6 @@ From KafkaConfig.scala
   /** ********* Quota Configuration ***********/
   val ProducerQuotaBytesPerSecondDefaultProp = "quota.producer.default"
   val ConsumerQuotaBytesPerSecondDefaultProp = "quota.consumer.default"
-  val ProducerQuotaBytesPerSecondOverridesProp = "quota.producer.bytes.per.second.overrides"
-  val ConsumerQuotaBytesPerSecondOverridesProp = "quota.consumer.bytes.per.second.overrides"
   val NumQuotaSamplesProp = "quota.window.num"
   val QuotaWindowSizeSecondsProp = "quota.window.size.seconds"
 
@@ -171,6 +176,7 @@ From KafkaConfig.scala
   val SSLKeyManagerAlgorithmProp = SSLConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG
   val SSLTrustManagerAlgorithmProp = SSLConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG
   val SSLEndpointIdentificationAlgorithmProp = SSLConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG
+  val SSLSecureRandomImplementationProp = SSLConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG
   val SSLClientAuthProp = SSLConfigs.SSL_CLIENT_AUTH_CONFIG
 """
 

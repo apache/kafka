@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,9 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
@@ -31,7 +31,7 @@ public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, V> {
 
     private boolean sendOldValues = false;
 
-    public KTableReduce(String storeName, Reducer<V> addReducer, Reducer<V> removeReducer) {
+    KTableReduce(final String storeName, final Reducer<V> addReducer, final Reducer<V> removeReducer) {
         this.storeName = storeName;
         this.addReducer = addReducer;
         this.removeReducer = removeReducer;
@@ -44,27 +44,36 @@ public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, V> {
 
     @Override
     public Processor<K, Change<V>> get() {
-        return new KTableAggregateProcessor();
+        return new KTableReduceProcessor();
     }
 
-    private class KTableAggregateProcessor extends AbstractProcessor<K, Change<V>> {
+    private class KTableReduceProcessor extends AbstractProcessor<K, Change<V>> {
 
         private KeyValueStore<K, V> store;
+        private TupleForwarder<K, V> tupleForwarder;
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(ProcessorContext context) {
+        public void init(final ProcessorContext context) {
             super.init(context);
-
             store = (KeyValueStore<K, V>) context.getStateStore(storeName);
+            tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context, sendOldValues), sendOldValues);
         }
 
+        /**
+         * @throws StreamsException if key is null
+         */
         @Override
-        public void process(K key, Change<V> value) {
-            V oldAgg = store.get(key);
+        public void process(final K key, final Change<V> value) {
+            // the keys should never be null
+            if (key == null) {
+                throw new StreamsException("Record key for KTable reduce operator with state " + storeName + " should not be null.");
+            }
+
+            final V oldAgg = store.get(key);
             V newAgg = oldAgg;
 
-            // first try to add the new new value
+            // first try to add the new value
             if (value.newValue != null) {
                 if (newAgg == null) {
                     newAgg = value.newValue;
@@ -80,41 +89,12 @@ public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, V> {
 
             // update the store with the new value
             store.put(key, newAgg);
-
-            // send the old / new pair
-            if (sendOldValues)
-                context().forward(key, new Change<>(newAgg, oldAgg));
-            else
-                context().forward(key, new Change<>(newAgg, null));
+            tupleForwarder.maybeForward(key, newAgg, oldAgg);
         }
     }
 
     @Override
     public KTableValueGetterSupplier<K, V> view() {
-
-        return new KTableValueGetterSupplier<K, V>() {
-
-            public KTableValueGetter<K, V> get() {
-                return new KTableAggregateValueGetter();
-            }
-
-        };
-    }
-
-    private class KTableAggregateValueGetter implements KTableValueGetter<K, V> {
-
-        private KeyValueStore<K, V> store;
-
-        @SuppressWarnings("unchecked")
-        @Override
-        public void init(ProcessorContext context) {
-            store = (KeyValueStore<K, V>) context.getStateStore(storeName);
-        }
-
-        @Override
-        public V get(K key) {
-            return store.get(key);
-        }
-
+        return new KTableMaterializedValueGetterSupplier<>(storeName);
     }
 }

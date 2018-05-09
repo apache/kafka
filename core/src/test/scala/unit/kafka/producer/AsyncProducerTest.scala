@@ -19,8 +19,9 @@ package kafka.producer
 
 import java.util.Properties
 import java.util.concurrent.LinkedBlockingQueue
+
 import org.apache.kafka.common.protocol.Errors
-import org.junit.Assert._
+import org.junit.Assert.{assertEquals, assertTrue}
 import org.easymock.EasyMock
 import org.junit.Test
 import kafka.api._
@@ -31,15 +32,27 @@ import kafka.producer.async._
 import kafka.serializer._
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils._
+
 import scala.collection.Map
 import scala.collection.mutable.ArrayBuffer
 import kafka.utils._
+import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.common.utils.Time
 
+@deprecated("This test has been deprecated and it will be removed in a future release.", "0.10.0.0")
 class AsyncProducerTest {
+
+  class NegativePartitioner(props: VerifiableProperties = null) extends Partitioner {
+    def partition(data: Any, numPartitions: Int): Int = -1
+  }
+
   // One of the few cases we can just set a fixed port because the producer is mocked out here since this uses mocks
-  val props = Seq(createBrokerConfig(1, "127.0.0.1:1", port=65534))
+  val props = Seq(createBrokerConfig(1, "127.0.0.1:1", port = 65534))
   val configs = props.map(KafkaConfig.fromProps)
-  val brokerList = configs.map(c => org.apache.kafka.common.utils.Utils.formatAddress(c.hostName, c.port)).mkString(",")
+  val brokerList = configs.map { config =>
+    val endPoint = config.advertisedListeners.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).get
+    org.apache.kafka.common.utils.Utils.formatAddress(endPoint.host, endPoint.port)
+  }.mkString(",")
 
   @Test
   def testProducerQueueSize() {
@@ -50,7 +63,7 @@ class AsyncProducerTest {
         Thread.sleep(500)
       }
 
-      def close {}
+      def close(): Unit = ()
     }
 
     val props = new Properties()
@@ -70,7 +83,7 @@ class AsyncProducerTest {
       fail("Queue should be full")
     }
     catch {
-      case e: QueueFullException => //expected
+      case _: QueueFullException => //expected
     }finally {
       producer.close()
     }
@@ -90,7 +103,7 @@ class AsyncProducerTest {
       fail("should complain that producer is already closed")
     }
     catch {
-      case e: ProducerClosedException => //expected
+      case _: ProducerClosedException => //expected
     }
   }
 
@@ -260,7 +273,7 @@ class AsyncProducerTest {
     }
     catch {
       // should not throw any exception
-      case e: Throwable => fail("Should not throw any exception")
+      case _: Throwable => fail("Should not throw any exception")
 
     }
   }
@@ -292,7 +305,7 @@ class AsyncProducerTest {
       fail("Should fail with FailedToSendMessageException")
     }
     catch {
-      case e: FailedToSendMessageException => // we retry on any exception now
+      case _: FailedToSendMessageException => // we retry on any exception now
     }
   }
 
@@ -311,8 +324,8 @@ class AsyncProducerTest {
       producer.send(getProduceData(1): _*)
       fail("Should fail with ClassCastException due to incompatible Encoder")
     } catch {
-      case e: ClassCastException =>
-    }finally {
+      case _: ClassCastException =>
+    } finally {
       producer.close()
     }
   }
@@ -346,9 +359,9 @@ class AsyncProducerTest {
     val partitionedDataOpt = handler.partitionAndCollate(producerDataList)
     partitionedDataOpt match {
       case Some(partitionedData) =>
-        for ((brokerId, dataPerBroker) <- partitionedData) {
-          for ( (TopicAndPartition(topic, partitionId), dataPerTopic) <- dataPerBroker)
-            assertTrue(partitionId == 0)
+        for (dataPerBroker <- partitionedData.values) {
+          for (tp <- dataPerBroker.keys)
+            assertTrue(tp.partition == 0)
         }
       case None =>
         fail("Failed to collate requests by topic, partition")
@@ -360,9 +373,9 @@ class AsyncProducerTest {
     val props = new Properties()
     props.put("metadata.broker.list", brokerList)
     props.put("request.required.acks", "1")
-    props.put("serializer.class", classOf[StringEncoder].getName.toString)
-    props.put("key.serializer.class", classOf[NullEncoder[Int]].getName.toString)
-    props.put("producer.num.retries", 3.toString)
+    props.put("serializer.class", classOf[StringEncoder].getName)
+    props.put("key.serializer.class", classOf[NullEncoder[Int]].getName)
+    props.put("producer.num.retries", "3")
 
     val config = new ProducerConfig(props)
 
@@ -373,37 +386,52 @@ class AsyncProducerTest {
 
     val msgs = TestUtils.getMsgStrings(2)
 
+    import SyncProducerConfig.{DefaultAckTimeoutMs, DefaultClientId}
+
     // produce request for topic1 and partitions 0 and 1.  Let the first request fail
     // entirely.  The second request will succeed for partition 1 but fail for partition 0.
     // On the third try for partition 0, let it succeed.
-    val request1 = TestUtils.produceRequestWithAcks(List(topic1), List(0, 1), messagesToSet(msgs), acks = 1, correlationId = 11)
-    val request2 = TestUtils.produceRequestWithAcks(List(topic1), List(0, 1), messagesToSet(msgs), acks = 1, correlationId = 17)
+    val request1 = TestUtils.produceRequestWithAcks(List(topic1), List(0, 1), messagesToSet(msgs), acks = 1,
+      correlationId = 5, timeout = DefaultAckTimeoutMs, clientId = DefaultClientId)
+    val request2 = TestUtils.produceRequestWithAcks(List(topic1), List(0, 1), messagesToSet(msgs), acks = 1,
+      correlationId = 11, timeout = DefaultAckTimeoutMs, clientId = DefaultClientId)
     val response1 = ProducerResponse(0,
-      Map((TopicAndPartition("topic1", 0), ProducerResponseStatus(Errors.NOT_LEADER_FOR_PARTITION.code, 0L)),
-          (TopicAndPartition("topic1", 1), ProducerResponseStatus(Errors.NONE.code, 0L))))
-    val request3 = TestUtils.produceRequest(topic1, 0, messagesToSet(msgs), acks = 1, correlationId = 21)
+      Map((TopicAndPartition("topic1", 0), ProducerResponseStatus(Errors.NOT_LEADER_FOR_PARTITION, 0L)),
+          (TopicAndPartition("topic1", 1), ProducerResponseStatus(Errors.NONE, 0L))))
+    val request3 = TestUtils.produceRequest(topic1, 0, messagesToSet(msgs), acks = 1, correlationId = 15,
+      timeout = DefaultAckTimeoutMs, clientId = DefaultClientId)
     val response2 = ProducerResponse(0,
-      Map((TopicAndPartition("topic1", 0), ProducerResponseStatus(Errors.NONE.code, 0L))))
+      Map((TopicAndPartition("topic1", 0), ProducerResponseStatus(Errors.NONE, 0L))))
     val mockSyncProducer = EasyMock.createMock(classOf[SyncProducer])
     // don't care about config mock
-    EasyMock.expect(mockSyncProducer.config).andReturn(EasyMock.anyObject()).anyTimes()
+    val myProps = new Properties()
+    myProps.put("host", "localhost")
+    myProps.put("port", "9092")
+    val myConfig = new SyncProducerConfig(myProps)
+    EasyMock.expect(mockSyncProducer.config).andReturn(myConfig).anyTimes()
     EasyMock.expect(mockSyncProducer.send(request1)).andThrow(new RuntimeException) // simulate SocketTimeoutException
     EasyMock.expect(mockSyncProducer.send(request2)).andReturn(response1)
     EasyMock.expect(mockSyncProducer.send(request3)).andReturn(response2)
     EasyMock.replay(mockSyncProducer)
 
     val producerPool = EasyMock.createMock(classOf[ProducerPool])
-    EasyMock.expect(producerPool.getProducer(0)).andReturn(mockSyncProducer).times(4)
+    EasyMock.expect(producerPool.getProducer(0)).andReturn(mockSyncProducer).times(3)
     EasyMock.expect(producerPool.close())
     EasyMock.replay(producerPool)
-
-    val handler = new DefaultEventHandler[Int,String](config,
-                                                      partitioner = new FixedValuePartitioner(),
-                                                      encoder = new StringEncoder(),
-                                                      keyEncoder = new NullEncoder[Int](),
-                                                      producerPool = producerPool,
-                                                      topicPartitionInfos = topicPartitionInfos)
-    val data = msgs.map(m => new KeyedMessage[Int,String](topic1, 0, m)) ++ msgs.map(m => new KeyedMessage[Int,String](topic1, 1, m))
+    val time = new Time {
+      override def nanoseconds: Long = 0L
+      override def milliseconds: Long = 0L
+      override def sleep(ms: Long): Unit = {}
+      override def hiResClockMs: Long = 0L
+    }
+    val handler = new DefaultEventHandler(config,
+                                          partitioner = new FixedValuePartitioner(),
+                                          encoder = new StringEncoder(),
+                                          keyEncoder = new NullEncoder[Int](),
+                                          producerPool = producerPool,
+                                          topicPartitionInfos = topicPartitionInfos,
+                                          time = time)
+    val data = msgs.map(m => new KeyedMessage(topic1, 0, m)) ++ msgs.map(m => new KeyedMessage(topic1, 1, m))
     handler.handle(data)
     handler.close()
 
@@ -445,7 +473,7 @@ class AsyncProducerTest {
       fail("should complain about wrong config")
     }
     catch {
-      case e: IllegalArgumentException => //expected
+      case _: IllegalArgumentException => //expected
     }
   }
 
@@ -466,14 +494,12 @@ class AsyncProducerTest {
   }
 
   def messagesToSet(messages: Seq[String]): ByteBufferMessageSet = {
-    new ByteBufferMessageSet(NoCompressionCodec, messages.map(m => new Message(m.getBytes)): _*)
+    new ByteBufferMessageSet(NoCompressionCodec, messages.map(m => new Message(m.getBytes, 0L, Message.MagicValue_V1)): _*)
   }
 
   def messagesToSet(key: Array[Byte], messages: Seq[Array[Byte]]): ByteBufferMessageSet = {
-    new ByteBufferMessageSet(NoCompressionCodec, messages.map(m => new Message(key = key, bytes = m)): _*)
+    new ByteBufferMessageSet(
+      NoCompressionCodec,
+      messages.map(m => new Message(key = key, bytes = m, timestamp = 0L, magicValue = Message.MagicValue_V1)): _*)
   }
-}
-
-class NegativePartitioner(props: VerifiableProperties = null) extends Partitioner {
-  def partition(data: Any, numPartitions: Int): Int = -1
 }

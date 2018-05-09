@@ -1,22 +1,22 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p/>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p/>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- **/
-
+ */
 package org.apache.kafka.connect.storage;
 
+import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.util.Callback;
 import org.easymock.EasyMock;
 import org.junit.After;
@@ -36,7 +36,8 @@ import static org.junit.Assert.assertEquals;
 public class FileOffsetBackingStoreTest {
 
     FileOffsetBackingStore store;
-    Map<String, Object> props;
+    Map<String, String> props;
+    StandaloneConfig config;
     File tempFile;
 
     private static Map<ByteBuffer, ByteBuffer> firstSet = new HashMap<>();
@@ -50,9 +51,14 @@ public class FileOffsetBackingStoreTest {
     public void setup() throws IOException {
         store = new FileOffsetBackingStore();
         tempFile = File.createTempFile("fileoffsetbackingstore", null);
-        props = new HashMap<>();
-        props.put(FileOffsetBackingStore.OFFSET_STORAGE_FILE_FILENAME_CONFIG, tempFile.getAbsolutePath());
-        store.configure(props);
+        props = new HashMap<String, String>();
+        props.put(StandaloneConfig.OFFSET_STORAGE_FILE_FILENAME_CONFIG, tempFile.getAbsolutePath());
+        props.put(StandaloneConfig.KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
+        props.put(StandaloneConfig.VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
+        props.put(StandaloneConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
+        props.put(StandaloneConfig.INTERNAL_VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
+        config = new StandaloneConfig(props);
+        store.configure(config);
         store.start();
     }
 
@@ -87,7 +93,7 @@ public class FileOffsetBackingStoreTest {
 
         // Restore into a new store to ensure correct reload from scratch
         FileOffsetBackingStore restore = new FileOffsetBackingStore();
-        restore.configure(props);
+        restore.configure(config);
         restore.start();
         Map<ByteBuffer, ByteBuffer> values = restore.get(Arrays.asList(buffer("key")), getCallback).get();
         assertEquals(buffer("value"), values.get(buffer("key")));

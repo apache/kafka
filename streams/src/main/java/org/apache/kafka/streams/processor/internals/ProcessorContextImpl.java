@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,72 +14,42 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StreamsMetrics;
-import org.apache.kafka.streams.errors.TopologyBuilderException;
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.Cancellable;
+import org.apache.kafka.streams.processor.PunctuationType;
+import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.state.internals.ThreadCache;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import java.util.List;
 
-import java.io.File;
+public class ProcessorContextImpl extends AbstractProcessorContext implements RecordCollector.Supplier {
 
-public class ProcessorContextImpl implements ProcessorContext, RecordCollector.Supplier {
-
-    private static final Logger log = LoggerFactory.getLogger(ProcessorContextImpl.class);
-
-    private final TaskId id;
     private final StreamTask task;
-    private final StreamsMetrics metrics;
     private final RecordCollector collector;
-    private final ProcessorStateManager stateMgr;
+    private final ToInternal toInternal = new ToInternal();
+    private final static To SEND_TO_ALL = To.all();
 
-    private final Serializer<?> keySerializer;
-    private final Serializer<?> valSerializer;
-    private final Deserializer<?> keyDeserializer;
-    private final Deserializer<?> valDeserializer;
-
-    private boolean initialized;
-
-    @SuppressWarnings("unchecked")
-    public ProcessorContextImpl(TaskId id,
-                                StreamTask task,
-                                StreamsConfig config,
-                                RecordCollector collector,
-                                ProcessorStateManager stateMgr,
-                                StreamsMetrics metrics) {
-        this.id = id;
+    ProcessorContextImpl(final TaskId id,
+                         final StreamTask task,
+                         final StreamsConfig config,
+                         final RecordCollector collector,
+                         final ProcessorStateManager stateMgr,
+                         final StreamsMetricsImpl metrics,
+                         final ThreadCache cache) {
+        super(id, config, metrics, stateMgr, cache);
         this.task = task;
-        this.metrics = metrics;
         this.collector = collector;
-        this.stateMgr = stateMgr;
-
-        this.keySerializer = config.keySerializer();
-        this.valSerializer = config.valueSerializer();
-        this.keyDeserializer = config.keyDeserializer();
-        this.valDeserializer = config.valueDeserializer();
-
-        this.initialized = false;
-    }
-
-    public void initialized() {
-        this.initialized = true;
-    }
-
-    public TaskId id() {
-        return id;
     }
 
     public ProcessorStateManager getStateMgr() {
-        return stateMgr;
+        return (ProcessorStateManager) stateManager;
     }
 
     @Override
@@ -87,97 +57,89 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
         return this.collector;
     }
 
+    /**
+     * @throws StreamsException if an attempt is made to access this state store from an unknown node
+     */
     @Override
-    public Serializer<?> keySerializer() {
-        return this.keySerializer;
+    public StateStore getStateStore(final String name) {
+        if (currentNode() == null) {
+            throw new StreamsException("Accessing from an unknown node");
+        }
+
+        final StateStore global = stateManager.getGlobalStore(name);
+        if (global != null) {
+            return global;
+        }
+
+        if (!currentNode().stateStores.contains(name)) {
+            throw new StreamsException("Processor " + currentNode().name() + " has no access to StateStore " + name +
+                    " as the store is not connected to the processor. If you add stores manually via '.addStateStore()' " +
+                    "make sure to connect the added store to the processor by providing the processor name to " +
+                    "'.addStateStore()' or connect them via '.connectProcessorAndStateStores()'. " +
+                    "DSL users need to provide the store name to '.process()', '.transform()', or '.transformValues()' " +
+                    "to connect the store to the corresponding operator. If you do not add stores manually, " +
+                    "please file a bug report at https://issues.apache.org/jira/projects/KAFKA.");
+        }
+
+        return stateManager.getStore(name);
     }
 
+    @SuppressWarnings("unchecked")
     @Override
-    public Serializer<?> valueSerializer() {
-        return this.valSerializer;
+    public <K, V> void forward(final K key, final V value) {
+        forward(key, value, SEND_TO_ALL);
     }
 
+    @SuppressWarnings({"unchecked", "deprecation"})
     @Override
-    public Deserializer<?> keyDeserializer() {
-        return this.keyDeserializer;
+    public <K, V> void forward(final K key, final V value, final int childIndex) {
+        forward(key, value, To.child(((List<ProcessorNode>) currentNode().children()).get(childIndex).name()));
     }
 
+    @SuppressWarnings({"unchecked", "deprecation"})
     @Override
-    public Deserializer<?> valueDeserializer() {
-        return this.valDeserializer;
+    public <K, V> void forward(final K key, final V value, final String childName) {
+        forward(key, value, To.child(childName));
     }
 
+    @SuppressWarnings("unchecked")
     @Override
-    public File stateDir() {
-        return stateMgr.baseDir();
+    public <K, V> void forward(final K key, final V value, final To to) {
+        toInternal.update(to);
+        if (toInternal.hasTimestamp()) {
+            recordContext.setTimestamp(toInternal.timestamp());
+        }
+        final ProcessorNode previousNode = currentNode();
+        try {
+            final List<ProcessorNode<K, V>> children = (List<ProcessorNode<K, V>>) currentNode().children();
+            final String sendTo = toInternal.child();
+            if (sendTo != null) {
+                final ProcessorNode child = currentNode().getChild(sendTo);
+                if (child == null) {
+                    throw new StreamsException("Unknown processor name: " + sendTo);
+                }
+                forward(child, key, value);
+            } else {
+                if (children.size() == 1) {
+                    final ProcessorNode child = children.get(0);
+                    forward(child, key, value);
+                } else {
+                    for (final ProcessorNode child : children) {
+                        forward(child, key, value);
+                    }
+                }
+            }
+        } finally {
+            setCurrentNode(previousNode);
+        }
     }
 
-    @Override
-    public StreamsMetrics metrics() {
-        return metrics;
-    }
-
-    @Override
-    public void register(StateStore store, boolean loggingEnabled, StateRestoreCallback stateRestoreCallback) {
-        if (initialized)
-            throw new IllegalStateException("Can only create state stores during initialization.");
-
-        stateMgr.register(store, loggingEnabled, stateRestoreCallback);
-    }
-
-    @Override
-    public StateStore getStateStore(String name) {
-        ProcessorNode node = task.node();
-
-        if (node == null)
-            throw new TopologyBuilderException("Accessing from an unknown node");
-
-        if (!node.stateStores.contains(name))
-            throw new TopologyBuilderException("Processor " + node.name() + " has no access to StateStore " + name);
-
-        return stateMgr.getStore(name);
-    }
-
-    @Override
-    public String topic() {
-        if (task.record() == null)
-            throw new IllegalStateException("This should not happen as topic() should only be called while a record is processed");
-
-        return task.record().topic();
-    }
-
-    @Override
-    public int partition() {
-        if (task.record() == null)
-            throw new IllegalStateException("This should not happen as partition() should only be called while a record is processed");
-
-        return task.record().partition();
-    }
-
-    @Override
-    public long offset() {
-        if (this.task.record() == null)
-            throw new IllegalStateException("This should not happen as offset() should only be called while a record is processed");
-
-        return this.task.record().offset();
-    }
-
-    @Override
-    public long timestamp() {
-        if (task.record() == null)
-            throw new IllegalStateException("This should not happen as timestamp() should only be called while a record is processed");
-
-        return task.record().timestamp;
-    }
-
-    @Override
-    public <K, V> void forward(K key, V value) {
-        task.forward(key, value);
-    }
-
-    @Override
-    public <K, V> void forward(K key, V value, int childIndex) {
-        task.forward(key, value, childIndex);
+    @SuppressWarnings("unchecked")
+    private <K, V> void forward(final ProcessorNode child,
+                                final K key,
+                                final V value) {
+        setCurrentNode(child);
+        child.process(key, value);
     }
 
     @Override
@@ -186,7 +148,8 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
     }
 
     @Override
-    public void schedule(long interval) {
-        task.schedule(interval);
+    public Cancellable schedule(final long interval, final PunctuationType type, final Punctuator callback) {
+        return task.schedule(interval, type, callback);
     }
+
 }

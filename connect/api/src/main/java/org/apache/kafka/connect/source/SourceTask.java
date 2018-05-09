@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -13,11 +13,9 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- **/
-
+ */
 package org.apache.kafka.connect.source;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.connect.connector.Task;
 
 import java.util.List;
@@ -26,7 +24,6 @@ import java.util.Map;
 /**
  * SourceTask is a Task that pulls records from another system for storage in Kafka.
  */
-@InterfaceStability.Unstable
 public abstract class SourceTask implements Task {
 
     protected SourceTaskContext context;
@@ -46,8 +43,16 @@ public abstract class SourceTask implements Task {
     public abstract void start(Map<String, String> props);
 
     /**
-     * Poll this SourceTask for new records. This method should block if no data is currently
-     * available.
+     * <p>
+     * Poll this source task for new records. If no data is currently available, this method
+     * should block but return control to the caller regularly (by returning {@code null}) in
+     * order for the task to transition to the {@code PAUSED} state if requested to do so.
+     * </p>
+     * <p>
+     * The task will be {@link #stop() stopped} on a separate thread, and when that happens
+     * this method is expected to unblock, quickly finish up any remaining processing, and
+     * return.
+     * </p>
      *
      * @return a list of source records
      */
@@ -78,5 +83,23 @@ public abstract class SourceTask implements Task {
      * could set a flag that will force {@link #poll()} to exit immediately and invoke
      * {@link java.nio.channels.Selector#wakeup() wakeup()} to interrupt any ongoing requests.
      */
+    @Override
     public abstract void stop();
+
+    /**
+     * <p>
+     * Commit an individual {@link SourceRecord} when the callback from the producer client is received, or if a record is filtered by a transformation.
+     * </p>
+     * <p>
+     * SourceTasks are not required to implement this functionality; Kafka Connect will record offsets
+     * automatically. This hook is provided for systems that also need to store offsets internally
+     * in their own system.
+     * </p>
+     *
+     * @param record {@link SourceRecord} that was successfully sent via the producer.
+     * @throws InterruptedException
+     */
+    public void commitRecord(SourceRecord record) throws InterruptedException {
+        // This space intentionally left blank.
+    }
 }

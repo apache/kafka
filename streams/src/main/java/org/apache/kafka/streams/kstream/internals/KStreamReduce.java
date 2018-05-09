@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,40 +14,33 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Reducer;
-import org.apache.kafka.streams.kstream.Window;
-import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.streams.state.WindowStoreIterator;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.util.Iterator;
-import java.util.Map;
-
-public class KStreamReduce<K, V, W extends Window> implements KTableProcessorSupplier<Windowed<K>, V, V> {
+public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, K, V, V> {
+    private static final Logger LOG = LoggerFactory.getLogger(KStreamReduce.class);
 
     private final String storeName;
-    private final Windows<W> windows;
     private final Reducer<V> reducer;
 
     private boolean sendOldValues = false;
 
-    public KStreamReduce(Windows<W> windows, String storeName, Reducer<V> reducer) {
-        this.windows = windows;
+    KStreamReduce(final String storeName, final Reducer<V> reducer) {
         this.storeName = storeName;
         this.reducer = reducer;
     }
 
     @Override
-    public Processor<Windowed<K>, Change<V>> get() {
-        return new KStreamAggregateProcessor();
+    public Processor<K, V> get() {
+        return new KStreamReduceProcessor();
     }
 
     @Override
@@ -55,113 +48,81 @@ public class KStreamReduce<K, V, W extends Window> implements KTableProcessorSup
         sendOldValues = true;
     }
 
-    private class KStreamAggregateProcessor extends AbstractProcessor<Windowed<K>, Change<V>> {
+    private class KStreamReduceProcessor extends AbstractProcessor<K, V> {
 
-        private WindowStore<K, V> windowStore;
+        private KeyValueStore<K, V> store;
+        private TupleForwarder<K, V> tupleForwarder;
+        private StreamsMetricsImpl metrics;
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(ProcessorContext context) {
+        public void init(final ProcessorContext context) {
             super.init(context);
+            metrics = (StreamsMetricsImpl) context.metrics();
 
-            windowStore = (WindowStore<K, V>) context.getStateStore(storeName);
+            store = (KeyValueStore<K, V>) context.getStateStore(storeName);
+            tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context, sendOldValues), sendOldValues);
         }
 
+
         @Override
-        public void process(Windowed<K> windowedKey, Change<V> change) {
-            // first get the matching windows
-            long timestamp = windowedKey.window().start();
-            K key = windowedKey.value();
-            V value = change.newValue;
-
-            Map<Long, W> matchedWindows = windows.windowsFor(timestamp);
-
-            long timeFrom = Long.MAX_VALUE;
-            long timeTo = Long.MIN_VALUE;
-
-            // use range query on window store for efficient reads
-            for (long windowStartMs : matchedWindows.keySet()) {
-                timeFrom = windowStartMs < timeFrom ? windowStartMs : timeFrom;
-                timeTo = windowStartMs > timeTo ? windowStartMs : timeTo;
+        public void process(final K key, final V value) {
+            // If the key or value is null we don't need to proceed
+            if (key == null || value == null) {
+                LOG.warn(
+                    "Skipping record due to null key or value. key=[{}] value=[{}] topic=[{}] partition=[{}] offset=[{}]",
+                    key, value, context().topic(), context().partition(), context().offset()
+                );
+                metrics.skippedRecordsSensor().record();
+                return;
             }
 
-            WindowStoreIterator<V> iter = windowStore.fetch(key, timeFrom, timeTo);
+            final V oldAgg = store.get(key);
+            V newAgg = oldAgg;
 
-            // for each matching window, try to update the corresponding key and send to the downstream
-            while (iter.hasNext()) {
-                KeyValue<Long, V> entry = iter.next();
-                W window = matchedWindows.get(entry.key);
-
-                if (window != null) {
-
-                    V oldAgg = entry.value;
-                    V newAgg = oldAgg;
-
-                    // try to add the new new value (there will never be old value)
-                    if (newAgg == null) {
-                        newAgg = value;
-                    } else {
-                        newAgg = reducer.apply(newAgg, value);
-                    }
-
-                    // update the store with the new value
-                    windowStore.put(key, newAgg, window.start());
-
-                    // forward the aggregated change pair
-                    if (sendOldValues)
-                        context().forward(new Windowed<>(key, window), new Change<>(newAgg, oldAgg));
-                    else
-                        context().forward(new Windowed<>(key, window), new Change<>(newAgg, null));
-
-                    matchedWindows.remove(entry.key);
-                }
+            // try to add the new value
+            if (newAgg == null) {
+                newAgg = value;
+            } else {
+                newAgg = reducer.apply(newAgg, value);
             }
 
-            iter.close();
-
-            // create the new window for the rest of unmatched window that do not exist yet
-            for (long windowStartMs : matchedWindows.keySet()) {
-                windowStore.put(key, value, windowStartMs);
-
-                // send the new aggregate pair (there will be no old value)
-                context().forward(new Windowed<>(key, matchedWindows.get(windowStartMs)), new Change<>(value, null));
-            }
+            // update the store with the new value
+            store.put(key, newAgg);
+            tupleForwarder.maybeForward(key, newAgg, oldAgg);
         }
     }
 
     @Override
-    public KTableValueGetterSupplier<Windowed<K>, V> view() {
+    public KTableValueGetterSupplier<K, V> view() {
 
-        return new KTableValueGetterSupplier<Windowed<K>, V>() {
+        return new KTableValueGetterSupplier<K, V>() {
 
-            public KTableValueGetter<Windowed<K>, V> get() {
-                return new KStreamAggregateValueGetter();
+            public KTableValueGetter<K, V> get() {
+                return new KStreamReduceValueGetter();
             }
 
+            @Override
+            public String[] storeNames() {
+                return new String[]{storeName};
+            }
         };
     }
 
-    private class KStreamAggregateValueGetter implements KTableValueGetter<Windowed<K>, V> {
+    private class KStreamReduceValueGetter implements KTableValueGetter<K, V> {
 
-        private WindowStore<K, V> windowStore;
-
-        @SuppressWarnings("unchecked")
-        @Override
-        public void init(ProcessorContext context) {
-            windowStore = (WindowStore<K, V>) context.getStateStore(storeName);
-        }
+        private KeyValueStore<K, V> store;
 
         @SuppressWarnings("unchecked")
         @Override
-        public V get(Windowed<K> windowedKey) {
-            K key = windowedKey.value();
-            W window = (W) windowedKey.window();
-
-            // this iterator should only contain one element
-            Iterator<KeyValue<Long, V>> iter = windowStore.fetch(key, window.start(), window.start());
-
-            return iter.next().value;
+        public void init(final ProcessorContext context) {
+            store = (KeyValueStore<K, V>) context.getStateStore(storeName);
         }
 
+        @Override
+        public V get(final K key) {
+            return store.get(key);
+        }
     }
 }
+

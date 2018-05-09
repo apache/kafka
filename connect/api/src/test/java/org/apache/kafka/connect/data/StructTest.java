@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -13,12 +13,13 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- **/
-
+ */
 package org.apache.kafka.connect.data;
 
 import org.apache.kafka.connect.errors.DataException;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -28,6 +29,8 @@ import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNull;
+
 
 public class StructTest {
 
@@ -160,6 +163,20 @@ public class StructTest {
         struct.validate();
     }
 
+    @Test
+    public void testMissingFieldWithDefaultValue() {
+        Schema schema = SchemaBuilder.struct().field("field", DEFAULT_FIELD_SCHEMA).build();
+        Struct struct = new Struct(schema);
+        assertEquals((byte) 0, struct.get("field"));
+    }
+
+    @Test
+    public void testMissingFieldWithoutDefaultValue() {
+        Schema schema = SchemaBuilder.struct().field("field", REQUIRED_FIELD_SCHEMA).build();
+        Struct struct = new Struct(schema);
+        assertNull(struct.get("field"));
+    }
+
 
     @Test
     public void testEquals() {
@@ -218,5 +235,108 @@ public class StructTest {
 
         assertEquals(struct1, struct2);
         assertNotEquals(struct1, struct3);
+    }
+
+    @Test
+    public void testEqualsAndHashCodeWithByteArrayValue() {
+        Struct struct1 = new Struct(FLAT_STRUCT_SCHEMA)
+                .put("int8", (byte) 12)
+                .put("int16", (short) 12)
+                .put("int32", 12)
+                .put("int64", (long) 12)
+                .put("float32", 12.f)
+                .put("float64", 12.)
+                .put("boolean", true)
+                .put("string", "foobar")
+                .put("bytes", "foobar".getBytes());
+
+        Struct struct2 = new Struct(FLAT_STRUCT_SCHEMA)
+                .put("int8", (byte) 12)
+                .put("int16", (short) 12)
+                .put("int32", 12)
+                .put("int64", (long) 12)
+                .put("float32", 12.f)
+                .put("float64", 12.)
+                .put("boolean", true)
+                .put("string", "foobar")
+                .put("bytes", "foobar".getBytes());
+
+        Struct struct3 = new Struct(FLAT_STRUCT_SCHEMA)
+                .put("int8", (byte) 12)
+                .put("int16", (short) 12)
+                .put("int32", 12)
+                .put("int64", (long) 12)
+                .put("float32", 12.f)
+                .put("float64", 12.)
+                .put("boolean", true)
+                .put("string", "foobar")
+                .put("bytes", "mismatching_string".getBytes());
+
+        // Verify contract for equals: method must be reflexive and transitive
+        assertEquals(struct1, struct2);
+        assertEquals(struct2, struct1);
+        assertNotEquals(struct1, struct3);
+        assertNotEquals(struct2, struct3);
+        // Testing hashCode against a hardcoded value here would be incorrect: hashCode values need not be equal for any
+        // two distinct executions. However, based on the general contract for hashCode, if two objects are equal, their
+        // hashCodes must be equal. If they are not equal, their hashCodes should not be equal for performance reasons.
+        assertEquals(struct1.hashCode(), struct2.hashCode());
+        assertNotEquals(struct1.hashCode(), struct3.hashCode());
+        assertNotEquals(struct2.hashCode(), struct3.hashCode());
+    }
+
+    @Rule
+    public ExpectedException thrown = ExpectedException.none();
+
+    @Test
+    public void testValidateStructWithNullValue() {
+        Schema schema = SchemaBuilder.struct()
+                .field("one", Schema.STRING_SCHEMA)
+                .field("two", Schema.STRING_SCHEMA)
+                .field("three", Schema.STRING_SCHEMA)
+                .build();
+
+        Struct struct = new Struct(schema);
+        thrown.expect(DataException.class);
+        thrown.expectMessage("Invalid value: null used for required field: \"one\", schema type: STRING");
+        struct.validate();
+    }
+
+    @Test
+    public void testValidateFieldWithInvalidValueType() {
+        String fieldName = "field";
+        FakeSchema fakeSchema = new FakeSchema();
+
+        thrown.expect(DataException.class);
+        thrown.expectMessage("Invalid Java object for schema type null: class java.lang.Object for field: \"field\"");
+        ConnectSchema.validateValue(fieldName, fakeSchema, new Object());
+
+        thrown.expect(DataException.class);
+        thrown.expectMessage("Invalid Java object for schema type INT8: class java.lang.Object for field: \"field\"");
+        ConnectSchema.validateValue(fieldName, Schema.INT8_SCHEMA, new Object());
+    }
+
+    @Test
+    public void testPutNullField() {
+        final String fieldName = "fieldName";
+        Schema testSchema = SchemaBuilder.struct()
+            .field(fieldName, Schema.STRING_SCHEMA);
+        Struct struct = new Struct(testSchema);
+
+        thrown.expect(DataException.class);
+        Field field = null;
+        struct.put(field, "valid");
+    }
+
+    @Test
+    public void testInvalidPutIncludesFieldName() {
+        final String fieldName = "fieldName";
+        Schema testSchema = SchemaBuilder.struct()
+            .field(fieldName, Schema.STRING_SCHEMA);
+        Struct struct = new Struct(testSchema);
+
+        thrown.expect(DataException.class);
+        thrown.expectMessage("Invalid value: null used for required field: \"fieldName\", schema type: STRING");
+        struct.put(fieldName, null);
     }
 }

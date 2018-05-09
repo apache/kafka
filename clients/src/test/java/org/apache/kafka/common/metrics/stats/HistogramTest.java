@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -33,12 +33,12 @@ public class HistogramTest {
 
     @Test
     public void testHistogram() {
-        BinScheme scheme = new ConstantBinScheme(12, -5, 5);
+        BinScheme scheme = new ConstantBinScheme(10, -5, 5);
         Histogram hist = new Histogram(scheme);
         for (int i = -5; i < 5; i++)
             hist.record(i);
         for (int i = 0; i < 10; i++)
-            assertEquals(scheme.fromBin(i + 1), hist.value(i / 10.0 + EPS), EPS);
+            assertEquals(scheme.fromBin(i), hist.value(i / 10.0 + EPS), EPS);
     }
 
     @Test
@@ -46,16 +46,90 @@ public class HistogramTest {
         ConstantBinScheme scheme = new ConstantBinScheme(5, -5, 5);
         assertEquals("A value below the lower bound should map to the first bin", 0, scheme.toBin(-5.01));
         assertEquals("A value above the upper bound should map to the last bin", 4, scheme.toBin(5.01));
-        assertEquals("Check boundary of bucket 1", 1, scheme.toBin(-5));
-        assertEquals("Check boundary of bucket 4", 4, scheme.toBin(5));
-        assertEquals("Check boundary of bucket 3", 3, scheme.toBin(4.9999));
-        checkBinningConsistency(new ConstantBinScheme(4, 0, 5));
+        assertEquals("Check boundary of bucket 0", 0, scheme.toBin(-5.0001));
+        assertEquals("Check boundary of bucket 0", 0, scheme.toBin(-5.0000));
+        assertEquals("Check boundary of bucket 0", 0, scheme.toBin(-4.99999));
+        assertEquals("Check boundary of bucket 0", 0, scheme.toBin(-3.00001));
+        assertEquals("Check boundary of bucket 1", 1, scheme.toBin(-3));
+        assertEquals("Check boundary of bucket 1", 1, scheme.toBin(-1.00001));
+        assertEquals("Check boundary of bucket 2", 2, scheme.toBin(-1));
+        assertEquals("Check boundary of bucket 2", 2, scheme.toBin(0.99999));
+        assertEquals("Check boundary of bucket 3", 3, scheme.toBin(1));
+        assertEquals("Check boundary of bucket 3", 3, scheme.toBin(2.99999));
+        assertEquals("Check boundary of bucket 4", 4, scheme.toBin(3));
+        assertEquals("Check boundary of bucket 4", 4, scheme.toBin(4.9999));
+        assertEquals("Check boundary of bucket 4", 4, scheme.toBin(5.000));
+        assertEquals("Check boundary of bucket 4", 4, scheme.toBin(5.001));
+        assertEquals(Float.NEGATIVE_INFINITY, scheme.fromBin(-1), 0.001d);
+        assertEquals(Float.POSITIVE_INFINITY, scheme.fromBin(5), 0.001d);
+        assertEquals(-5.0, scheme.fromBin(0), 0.001d);
+        assertEquals(-3.0, scheme.fromBin(1), 0.001d);
+        assertEquals(-1.0, scheme.fromBin(2), 0.001d);
+        assertEquals(1.0, scheme.fromBin(3), 0.001d);
+        assertEquals(3.0, scheme.fromBin(4), 0.001d);
+        checkBinningConsistency(scheme);
+    }
+
+    @Test
+    public void testConstantBinSchemeWithPositiveRange() {
+        ConstantBinScheme scheme = new ConstantBinScheme(5, 0, 5);
+        assertEquals("A value below the lower bound should map to the first bin", 0, scheme.toBin(-1.0));
+        assertEquals("A value above the upper bound should map to the last bin", 4, scheme.toBin(5.01));
+        assertEquals("Check boundary of bucket 0", 0, scheme.toBin(-0.0001));
+        assertEquals("Check boundary of bucket 0", 0, scheme.toBin(0.0000));
+        assertEquals("Check boundary of bucket 0", 0, scheme.toBin(0.0001));
+        assertEquals("Check boundary of bucket 0", 0, scheme.toBin(0.9999));
+        assertEquals("Check boundary of bucket 1", 1, scheme.toBin(1.0000));
+        assertEquals("Check boundary of bucket 1", 1, scheme.toBin(1.0001));
+        assertEquals("Check boundary of bucket 1", 1, scheme.toBin(1.9999));
+        assertEquals("Check boundary of bucket 2", 2, scheme.toBin(2.0000));
+        assertEquals("Check boundary of bucket 2", 2, scheme.toBin(2.0001));
+        assertEquals("Check boundary of bucket 2", 2, scheme.toBin(2.9999));
+        assertEquals("Check boundary of bucket 3", 3, scheme.toBin(3.0000));
+        assertEquals("Check boundary of bucket 3", 3, scheme.toBin(3.0001));
+        assertEquals("Check boundary of bucket 3", 3, scheme.toBin(3.9999));
+        assertEquals("Check boundary of bucket 4", 4, scheme.toBin(4.0000));
+        assertEquals("Check boundary of bucket 4", 4, scheme.toBin(4.9999));
+        assertEquals("Check boundary of bucket 4", 4, scheme.toBin(5.0000));
+        assertEquals("Check boundary of bucket 4", 4, scheme.toBin(5.0001));
+        assertEquals(Float.NEGATIVE_INFINITY, scheme.fromBin(-1), 0.001d);
+        assertEquals(Float.POSITIVE_INFINITY, scheme.fromBin(5), 0.001d);
+        assertEquals(0.0, scheme.fromBin(0), 0.001d);
+        assertEquals(1.0, scheme.fromBin(1), 0.001d);
+        assertEquals(2.0, scheme.fromBin(2), 0.001d);
+        assertEquals(3.0, scheme.fromBin(3), 0.001d);
+        assertEquals(4.0, scheme.fromBin(4), 0.001d);
         checkBinningConsistency(scheme);
     }
 
     @Test
     public void testLinearBinScheme() {
         LinearBinScheme scheme = new LinearBinScheme(10, 10);
+        assertEquals(Float.NEGATIVE_INFINITY, scheme.fromBin(-1), 0.001d);
+        assertEquals(Float.POSITIVE_INFINITY, scheme.fromBin(11), 0.001d);
+        assertEquals(0.0, scheme.fromBin(0), 0.001d);
+        assertEquals(0.2222, scheme.fromBin(1), 0.001d);
+        assertEquals(0.6666, scheme.fromBin(2), 0.001d);
+        assertEquals(1.3333, scheme.fromBin(3), 0.001d);
+        assertEquals(2.2222, scheme.fromBin(4), 0.001d);
+        assertEquals(3.3333, scheme.fromBin(5), 0.001d);
+        assertEquals(4.6667, scheme.fromBin(6), 0.001d);
+        assertEquals(6.2222, scheme.fromBin(7), 0.001d);
+        assertEquals(8.0000, scheme.fromBin(8), 0.001d);
+        assertEquals(10.000, scheme.fromBin(9), 0.001d);
+        assertEquals(0, scheme.toBin(0.0000));
+        assertEquals(0, scheme.toBin(0.2221));
+        assertEquals(1, scheme.toBin(0.2223));
+        assertEquals(2, scheme.toBin(0.6667));
+        assertEquals(3, scheme.toBin(1.3334));
+        assertEquals(4, scheme.toBin(2.2223));
+        assertEquals(5, scheme.toBin(3.3334));
+        assertEquals(6, scheme.toBin(4.6667));
+        assertEquals(7, scheme.toBin(6.2223));
+        assertEquals(8, scheme.toBin(8.0000));
+        assertEquals(9, scheme.toBin(10.000));
+        assertEquals(9, scheme.toBin(10.001));
+        assertEquals(Float.POSITIVE_INFINITY, scheme.fromBin(10), 0.001d);
         checkBinningConsistency(scheme);
     }
 

@@ -19,36 +19,43 @@ package kafka.integration
 
 import java.util.concurrent._
 import java.util.concurrent.atomic._
-import org.junit.{Test, After, Before}
+
+import org.junit.{After, Before, Test}
 
 import scala.collection._
 import org.junit.Assert._
-
 import kafka.cluster._
 import kafka.server._
 import kafka.consumer._
-import kafka.utils.TestUtils
+import kafka.utils.{CoreUtils, TestUtils, ZkUtils}
+import org.apache.kafka.common.security.JaasUtils
 
+@deprecated("This test has been deprecated and will be removed in a future release.", "0.11.0.0")
 class FetcherTest extends KafkaServerTestHarness {
   val numNodes = 1
-  def generateConfigs() = TestUtils.createBrokerConfigs(numNodes, zkConnect).map(KafkaConfig.fromProps)
+  def generateConfigs = TestUtils.createBrokerConfigs(numNodes, zkConnect).map(KafkaConfig.fromProps)
 
   val messages = new mutable.HashMap[Int, Seq[Array[Byte]]]
   val topic = "topic"
   val queue = new LinkedBlockingQueue[FetchedDataChunk]
 
   var fetcher: ConsumerFetcherManager = null
+  var zkUtils: ZkUtils = null
 
   @Before
   override def setUp() {
     super.setUp
-    TestUtils.createTopic(zkUtils, topic, partitionReplicaAssignment = Map(0 -> Seq(configs.head.brokerId)), servers = servers)
+    zkUtils = ZkUtils(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled))
 
-    val cluster = new Cluster(servers.map(s => new Broker(s.config.brokerId, "localhost", s.boundPort())))
+    createTopic(topic, partitionReplicaAssignment = Map(0 -> Seq(configs.head.brokerId)))
+
+    val cluster = new Cluster(servers.map { s =>
+      new Broker(s.config.brokerId, "localhost", boundPort(s), listenerName, securityProtocol)
+    })
 
     fetcher = new ConsumerFetcherManager("consumer1", new ConsumerConfig(TestUtils.createConsumerProperties("", "", "")), zkUtils)
     fetcher.stopConnections()
-    val topicInfos = configs.map(c =>
+    val topicInfos = configs.map(_ =>
       new PartitionTopicInfo(topic,
         0,
         queue,
@@ -62,17 +69,19 @@ class FetcherTest extends KafkaServerTestHarness {
   @After
   override def tearDown() {
     fetcher.stopConnections()
+    if (zkUtils != null)
+     CoreUtils.swallow(zkUtils.close(), this)
     super.tearDown
   }
 
   @Test
   def testFetcher() {
     val perNode = 2
-    var count = TestUtils.sendMessages(servers, topic, perNode).size
+    var count = TestUtils.produceMessages(servers, topic, perNode).size
 
     fetch(count)
     assertQueueEmpty()
-    count = TestUtils.sendMessages(servers, topic, perNode).size
+    count = TestUtils.produceMessages(servers, topic, perNode).size
     fetch(count)
     assertQueueEmpty()
   }
@@ -81,14 +90,10 @@ class FetcherTest extends KafkaServerTestHarness {
 
   def fetch(expected: Int) {
     var count = 0
-    while(true) {
+    while (count < expected) {
       val chunk = queue.poll(2L, TimeUnit.SECONDS)
       assertNotNull("Timed out waiting for data chunk " + (count + 1), chunk)
-      for(message <- chunk.messages)
-        count += 1
-      if(count == expected)
-        return
+      count += chunk.messages.size
     }
   }
-
 }

@@ -20,22 +20,24 @@ package kafka.consumer
 
 import java.util.concurrent._
 import java.util.concurrent.atomic._
+
+import kafka.common.LongRef
+
 import scala.collection._
 import org.junit.Assert._
-
 import kafka.message._
 import kafka.server._
-import kafka.utils.TestUtils._
 import kafka.utils._
 import org.junit.{Before, Test}
 import kafka.serializer._
 import kafka.integration.KafkaServerTestHarness
 
+@deprecated("This test has been deprecated and will be removed in a future release.", "0.11.0.0")
 class ConsumerIteratorTest extends KafkaServerTestHarness {
 
   val numNodes = 1
 
-  def generateConfigs() = TestUtils.createBrokerConfigs(numNodes, zkConnect).map(KafkaConfig.fromProps)
+  def generateConfigs = TestUtils.createBrokerConfigs(numNodes, zkConnect).map(KafkaConfig.fromProps)
 
   val messages = new mutable.HashMap[Int, Seq[Message]]
   val topic = "topic"
@@ -50,32 +52,32 @@ class ConsumerIteratorTest extends KafkaServerTestHarness {
   @Before
   override def setUp() {
     super.setUp()
-    topicInfos = configs.map(c => new PartitionTopicInfo(topic,
+    topicInfos = configs.map(_ => new PartitionTopicInfo(topic,
       0,
       queue,
       new AtomicLong(consumedOffset),
       new AtomicLong(0),
       new AtomicInteger(0),
       ""))
-    createTopic(zkUtils, topic, partitionReplicaAssignment = Map(0 -> Seq(configs.head.brokerId)), servers = servers)
+    createTopic(topic, partitionReplicaAssignment = Map(0 -> Seq(configs.head.brokerId)))
   }
 
   @Test
   def testConsumerIteratorDeduplicationDeepIterator() {
     val messageStrings = (0 until 10).map(_.toString).toList
     val messages = messageStrings.map(s => new Message(s.getBytes))
-    val messageSet = new ByteBufferMessageSet(DefaultCompressionCodec, new AtomicLong(0), messages:_*)
+    val messageSet = new ByteBufferMessageSet(DefaultCompressionCodec, new LongRef(0), messages:_*)
 
-    topicInfos(0).enqueue(messageSet)
+    topicInfos.head.enqueue(messageSet)
     assertEquals(1, queue.size)
     queue.put(ZookeeperConsumerConnector.shutdownCommand)
 
-    val iter = new ConsumerIterator[String, String](queue, 
+    val iter = new ConsumerIterator[String, String](queue,
                                                     consumerConfig.consumerTimeoutMs,
-                                                    new StringDecoder(), 
+                                                    new StringDecoder(),
                                                     new StringDecoder(),
                                                     clientId = "")
-    val receivedMessages = (0 until 5).map(i => iter.next.message).toList
+    val receivedMessages = (0 until 5).map(_ => iter.next.message)
 
     assertFalse(iter.hasNext)
     assertEquals(0, queue.size) // Shutdown command has been consumed.
@@ -88,9 +90,9 @@ class ConsumerIteratorTest extends KafkaServerTestHarness {
   def testConsumerIteratorDecodingFailure() {
     val messageStrings = (0 until 10).map(_.toString).toList
     val messages = messageStrings.map(s => new Message(s.getBytes))
-    val messageSet = new ByteBufferMessageSet(NoCompressionCodec, new AtomicLong(0), messages:_*)
+    val messageSet = new ByteBufferMessageSet(NoCompressionCodec, new LongRef(0), messages:_*)
 
-    topicInfos(0).enqueue(messageSet)
+    topicInfos.head.enqueue(messageSet)
     assertEquals(1, queue.size)
 
     val iter = new ConsumerIterator[String, String](queue,
@@ -99,17 +101,14 @@ class ConsumerIteratorTest extends KafkaServerTestHarness {
       new FailDecoder(),
       clientId = "")
 
-    val receivedMessages = (0 until 5).map{ i =>
+    (0 until 5).foreach { i =>
       assertTrue(iter.hasNext)
       val message = iter.next
       assertEquals(message.offset, i + consumedOffset)
 
-      try {
-        message.message // should fail
-      }
+      try message.message // should fail
       catch {
-        case e: UnsupportedOperationException => // this is ok
-        case e2: Throwable => fail("Unexpected exception when iterating the message set. " + e2.getMessage)
+        case _: UnsupportedOperationException => // this is ok
       }
     }
   }

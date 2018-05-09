@@ -1,18 +1,21 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
- * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
- * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
- * License. You may obtain a copy of the License at
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.common;
 
-import java.util.HashMap;
 import java.util.Map;
 
 import org.apache.kafka.common.utils.Utils;
@@ -79,69 +82,6 @@ public final class MetricName {
         this.group = Utils.notNull(group);
         this.description = Utils.notNull(description);
         this.tags = Utils.notNull(tags);
-    }
-
-    /**
-     * @deprecated This method will be removed in a future release.
-     * Please create MetricName by method {@link org.apache.kafka.common.metrics.Metrics#metricName(String, String, String, String...)}
-     *
-     * @param name          The name of the metric
-     * @param group         logical group name of the metrics to which this metric belongs
-     * @param description   A human-readable description to include in the metric
-     * @param keyValue      additional key/value attributes of the metric (must come in pairs)
-     */
-    @Deprecated
-    public MetricName(String name, String group, String description, String... keyValue) {
-        this(name, group, description, getTags(keyValue));
-    }
-
-    private static Map<String, String> getTags(String... keyValue) {
-        if ((keyValue.length % 2) != 0)
-            throw new IllegalArgumentException("keyValue needs to be specified in pairs");
-        Map<String, String> tags = new HashMap<String, String>();
-
-        for (int i = 0; i < keyValue.length; i += 2)
-            tags.put(keyValue[i], keyValue[i + 1]);
-
-        return tags;
-    }
-
-    /**
-     * @deprecated This method will be removed in a future release.
-     * Please create MetricName by method {@link org.apache.kafka.common.metrics.Metrics#metricName(String, String, Map)}
-     *
-     * @param name  The name of the metric
-     * @param group logical group name of the metrics to which this metric belongs
-     * @param tags  key/value attributes of the metric
-     */
-    @Deprecated
-    public MetricName(String name, String group, Map<String, String> tags) {
-        this(name, group, "", tags);
-    }
-
-    /**
-     * @deprecated This method will be removed in a future release.
-     * Please create MetricName by method {@link org.apache.kafka.common.metrics.Metrics#metricName(String, String, String)}
-     *
-     * @param name        The name of the metric
-     * @param group       logical group name of the metrics to which this metric belongs
-     * @param description A human-readable description to include in the metric
-     */
-    @Deprecated
-    public MetricName(String name, String group, String description) {
-        this(name, group, description, new HashMap<String, String>());
-    }
-
-    /**
-     * @deprecated This method will be removed in a future release.
-     * Please create MetricName by method {@link org.apache.kafka.common.metrics.Metrics#metricName(String, String)}
-     *
-     * @param name  The name of the metric
-     * @param group logical group name of the metrics to which this metric belongs
-     */
-    @Deprecated
-    public MetricName(String name, String group) {
-        this(name, group, "", new HashMap<String, String>());
     }
 
     public String name() {

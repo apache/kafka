@@ -19,21 +19,24 @@ package kafka.tools
 
 import java.net.URI
 import java.text.SimpleDateFormat
-import kafka.api.{PartitionOffsetRequestInfo, FetchRequestBuilder, OffsetRequest}
+
+import com.typesafe.scalalogging.LazyLogging
+import kafka.api.{FetchRequestBuilder, OffsetRequest, PartitionOffsetRequestInfo}
 import kafka.consumer.SimpleConsumer
 import kafka.utils._
-import org.apache.log4j.Logger
 import kafka.common.TopicAndPartition
+import org.apache.kafka.common.utils.Time
 
 
 /**
  * Performance test for the simple consumer
  */
-object SimpleConsumerPerformance {
-
-  private val logger = Logger.getLogger(getClass())
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
+object SimpleConsumerPerformance extends LazyLogging {
 
   def main(args: Array[String]) {
+    logger.warn("WARNING: SimpleConsumerPerformance is deprecated and will be dropped in a future release following 0.11.0.0.")
+
     val config = new ConsumerPerfConfig(args)
     logger.info("Starting SimpleConsumer...")
 
@@ -92,11 +95,11 @@ object SimpleConsumerPerformance {
           val reportTime = System.currentTimeMillis
           val elapsed = (reportTime - lastReportTime)/1000.0
           val totalMBRead = ((totalBytesRead-lastBytesRead)*1.0)/(1024*1024)
-          println(("%s, %d, %.4f, %.4f, %d, %.4f").format(config.dateFormat.format(reportTime), config.fetchSize,
+          println("%s, %d, %.4f, %.4f, %d, %.4f".format(config.dateFormat.format(reportTime), config.fetchSize,
             (totalBytesRead*1.0)/(1024*1024), totalMBRead/elapsed,
             totalMessagesRead, (totalMessagesRead-lastMessagesRead)/elapsed))
         }
-        lastReportTime = SystemTime.milliseconds
+        lastReportTime = Time.SYSTEM.milliseconds
         lastBytesRead = totalBytesRead
         lastMessagesRead = totalMessagesRead
         consumedInterval = 0
@@ -107,11 +110,11 @@ object SimpleConsumerPerformance {
 
     if(!config.showDetailedStats) {
       val totalMBRead = (totalBytesRead*1.0)/(1024*1024)
-      println(("%s, %s, %d, %.4f, %.4f, %d, %.4f").format(config.dateFormat.format(startMs),
+      println("%s, %s, %d, %.4f, %.4f, %d, %.4f".format(config.dateFormat.format(startMs),
         config.dateFormat.format(reportTime), config.fetchSize, totalMBRead, totalMBRead/elapsed,
         totalMessagesRead, totalMessagesRead/elapsed))
     }
-    System.exit(0)
+    Exit.exit(0)
   }
 
   class ConsumerPerfConfig(args: Array[String]) extends PerfConfig(args) {
@@ -140,6 +143,8 @@ object SimpleConsumerPerformance {
                            .describedAs("clientId")
                            .ofType(classOf[String])
                            .defaultsTo("SimpleConsumerPerformanceClient")
+    val showDetailedStatsOpt = parser.accepts("show-detailed-stats", "If set, stats are reported for each reporting " +
+      "interval as configured by reporting-interval")
 
     val options = parser.parse(args : _*)
 

@@ -17,12 +17,13 @@
 
 package kafka.consumer
 
-import org.I0Itec.zkclient.ZkClient
 import kafka.common.TopicAndPartition
 import kafka.utils.{Pool, CoreUtils, ZkUtils, Logging}
 
 import scala.collection.mutable
 
+@deprecated("This trait has been deprecated and will be removed in a future release. " +
+            "Please use org.apache.kafka.clients.consumer.internals.PartitionAssignor instead.", "0.11.0.0")
 trait PartitionAssignor {
 
   /**
@@ -34,6 +35,8 @@ trait PartitionAssignor {
 
 }
 
+@deprecated("This object has been deprecated and will be removed in a future release. " +
+            "Please use org.apache.kafka.clients.consumer.internals.PartitionAssignor instead.", "0.11.0.0")
 object PartitionAssignor {
   def createInstance(assignmentStrategy: String) = assignmentStrategy match {
     case "roundrobin" => new RoundRobinAssignor()
@@ -41,17 +44,19 @@ object PartitionAssignor {
   }
 }
 
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
 class AssignmentContext(group: String, val consumerId: String, excludeInternalTopics: Boolean, zkUtils: ZkUtils) {
   val myTopicThreadIds: collection.Map[String, collection.Set[ConsumerThreadId]] = {
     val myTopicCount = TopicCount.constructTopicCount(group, consumerId, zkUtils, excludeInternalTopics)
     myTopicCount.getConsumerThreadIdsPerTopic
   }
 
-  val partitionsForTopic: collection.Map[String, Seq[Int]] =
-    zkUtils.getPartitionsForTopics(myTopicThreadIds.keySet.toSeq)
-
   val consumersForTopic: collection.Map[String, List[ConsumerThreadId]] =
     zkUtils.getConsumersPerTopic(group, excludeInternalTopics)
+
+  // Some assignment strategies require knowledge of all topics consumed by any member of the group
+  val partitionsForTopic: collection.Map[String, Seq[Int]] =
+    zkUtils.getPartitionsForTopics(consumersForTopic.keySet.toSeq)
 
   val consumers: Seq[String] = zkUtils.getConsumersInGroup(group).sorted
 }
@@ -61,34 +66,24 @@ class AssignmentContext(group: String, val consumerId: String, excludeInternalTo
  * then proceeds to do a round-robin assignment from partition to consumer thread. If the subscriptions of all consumer
  * instances are identical, then the partitions will be uniformly distributed. (i.e., the partition ownership counts
  * will be within a delta of exactly one across all consumer threads.)
- *
- * (For simplicity of implementation) the assignor is allowed to assign a given topic-partition to any consumer instance
- * and thread-id within that instance. Therefore, round-robin assignment is allowed only if:
- * a) Every topic has the same number of streams within a consumer instance
- * b) The set of subscribed topics is identical for every consumer instance within the group.
  */
-
+@deprecated("This class has been deprecated and will be removed in a future release. " +
+            "Please use org.apache.kafka.clients.consumer.RoundRobinAssignor instead.", "0.11.0.0")
 class RoundRobinAssignor() extends PartitionAssignor with Logging {
 
   def assign(ctx: AssignmentContext) = {
 
-    val valueFactory = (topic: String) => new mutable.HashMap[TopicAndPartition, ConsumerThreadId]
+    val valueFactory = (_: String) => new mutable.HashMap[TopicAndPartition, ConsumerThreadId]
     val partitionAssignment =
       new Pool[String, mutable.Map[TopicAndPartition, ConsumerThreadId]](Some(valueFactory))
 
-    if (ctx.consumersForTopic.size > 0) {
-      // check conditions (a) and (b)
-      val (headTopic, headThreadIdSet) = (ctx.consumersForTopic.head._1, ctx.consumersForTopic.head._2.toSet)
-      ctx.consumersForTopic.foreach { case (topic, threadIds) =>
-        val threadIdSet = threadIds.toSet
-        require(threadIdSet == headThreadIdSet,
-          "Round-robin assignment is allowed only if all consumers in the group subscribe to the same topics, " +
-            "AND if the stream counts across topics are identical for a given consumer instance.\n" +
-            "Topic %s has the following available consumer streams: %s\n".format(topic, threadIdSet) +
-            "Topic %s has the following available consumer streams: %s\n".format(headTopic, headThreadIdSet))
-      }
+    if (ctx.consumersForTopic.nonEmpty) {
+      // Collect consumer thread ids across all topics, remove duplicates, and sort to ensure determinism
+      val allThreadIds = ctx.consumersForTopic.flatMap { case (topic, threadIds) =>
+         threadIds
+      }.toSet.toSeq.sorted
 
-      val threadAssignor = CoreUtils.circularIterator(headThreadIdSet.toSeq.sorted)
+      val threadAssignor = CoreUtils.circularIterator(allThreadIds)
 
       info("Starting round-robin assignment with consumers " + ctx.consumers)
       val allTopicPartitions = ctx.partitionsForTopic.flatMap { case (topic, partitions) =>
@@ -106,7 +101,7 @@ class RoundRobinAssignor() extends PartitionAssignor with Logging {
       })
 
       allTopicPartitions.foreach(topicPartition => {
-        val threadId = threadAssignor.next()
+        val threadId = threadAssignor.dropWhile(threadId => !ctx.consumersForTopic(topicPartition.topic).contains(threadId)).next
         // record the partition ownership decision
         val assignmentForConsumer = partitionAssignment.getAndMaybePut(threadId.consumer)
         assignmentForConsumer += (topicPartition -> threadId)
@@ -128,10 +123,12 @@ class RoundRobinAssignor() extends PartitionAssignor with Logging {
  * will get at least one partition and the first consumer thread will get one extra partition. So the assignment will be:
  * p0 -> C1-0, p1 -> C1-0, p2 -> C1-1, p3 -> C2-0, p4 -> C2-1
  */
+@deprecated("This class has been deprecated and will be removed in a future release. " +
+            "Please use org.apache.kafka.clients.consumer.RangeAssignor instead.", "0.11.0.0")
 class RangeAssignor() extends PartitionAssignor with Logging {
 
   def assign(ctx: AssignmentContext) = {
-    val valueFactory = (topic: String) => new mutable.HashMap[TopicAndPartition, ConsumerThreadId]
+    val valueFactory = (_: String) => new mutable.HashMap[TopicAndPartition, ConsumerThreadId]
     val partitionAssignment =
       new Pool[String, mutable.Map[TopicAndPartition, ConsumerThreadId]](Some(valueFactory))
     for (topic <- ctx.myTopicThreadIds.keySet) {

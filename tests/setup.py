@@ -12,16 +12,37 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# see kafka.server.KafkaConfig for additional details and defaults
 
 import re
+import sys
 from setuptools import find_packages, setup
+from setuptools.command.test import test as TestCommand
 
 version = ''
 with open('kafkatest/__init__.py', 'r') as fd:
-    version = re.search(r'^__version__\s*=\s*[\'"]([^\'"]*)[\'"]',
-                        fd.read(), re.MULTILINE).group(1)
+    version = re.search(r'^__version__\s*=\s*[\'"]([^\'"]*)[\'"]', fd.read(), re.MULTILINE).group(1)
 
+
+class PyTest(TestCommand):
+    user_options = [('pytest-args=', 'a', "Arguments to pass to py.test")]
+
+    def initialize_options(self):
+        TestCommand.initialize_options(self)
+        self.pytest_args = []
+
+    def finalize_options(self):
+        TestCommand.finalize_options(self)
+        self.test_args = []
+        self.test_suite = True
+
+    def run_tests(self):
+        # import here, cause outside the eggs aren't loaded
+        import pytest
+        print(self.pytest_args)
+        errno = pytest.main(self.pytest_args)
+        sys.exit(errno)
+
+# Note: when changing the version of ducktape, also revise tests/docker/Dockerfile
 setup(name="kafkatest",
       version=version,
       description="Apache Kafka System Tests",
@@ -30,5 +51,7 @@ setup(name="kafkatest",
       license="apache2.0",
       packages=find_packages(),
       include_package_data=True,
-      install_requires=["ducktape==0.3.8", "requests>=2.5.0"]
+      install_requires=["ducktape==0.7.1", "requests>=2.5.0"],
+      tests_require=["pytest", "mock"],
+      cmdclass={'test': PyTest},
       )

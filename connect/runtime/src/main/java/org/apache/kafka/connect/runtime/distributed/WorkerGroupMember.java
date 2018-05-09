@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -13,10 +13,10 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- **/
-
+ */
 package org.apache.kafka.connect.runtime.distributed;
 
+import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.Metadata;
@@ -31,13 +31,14 @@ import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.utils.AppInfoParser;
-import org.apache.kafka.common.utils.SystemTime;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.connect.storage.KafkaConfigStorage;
+import org.apache.kafka.connect.storage.ConfigBackingStore;
+import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -52,11 +53,11 @@ import java.util.concurrent.atomic.AtomicReference;
  * higher level operations in response to group membership events being handled by the herder.
  */
 public class WorkerGroupMember {
-    private static final Logger log = LoggerFactory.getLogger(WorkerGroupMember.class);
 
     private static final AtomicInteger CONNECT_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
     private static final String JMX_PREFIX = "kafka.connect";
 
+    private final Logger log;
     private final Time time;
     private final String clientId;
     private final ConsumerNetworkClient client;
@@ -67,12 +68,21 @@ public class WorkerGroupMember {
 
     private boolean stopped = false;
 
-    public WorkerGroupMember(DistributedConfig config, String restUrl, KafkaConfigStorage configStorage, WorkerRebalanceListener listener) {
+    public WorkerGroupMember(DistributedConfig config,
+                             String restUrl,
+                             ConfigBackingStore configStorage,
+                             WorkerRebalanceListener listener,
+                             Time time) {
         try {
-            this.time = new SystemTime();
+            this.time = time;
 
             String clientIdConfig = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
             clientId = clientIdConfig.length() <= 0 ? "connect-" + CONNECT_CLIENT_ID_SEQUENCE.getAndIncrement() : clientIdConfig;
+            String groupId = config.getString(DistributedConfig.GROUP_ID_CONFIG);
+
+            LogContext logContext = new LogContext("[Worker clientId=" + clientId + ", groupId=" + groupId + "] ");
+            this.log = logContext.logger(WorkerGroupMember.class);
+
             Map<String, String> metricsTags = new LinkedHashMap<>();
             metricsTags.put("client-id", clientId);
             MetricConfig metricConfig = new MetricConfig().samples(config.getInt(CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG))
@@ -82,23 +92,38 @@ public class WorkerGroupMember {
             reporters.add(new JmxReporter(JMX_PREFIX));
             this.metrics = new Metrics(metricConfig, reporters, time);
             this.retryBackoffMs = config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG);
-            this.metadata = new Metadata(retryBackoffMs, config.getLong(CommonClientConfigs.METADATA_MAX_AGE_CONFIG));
+            this.metadata = new Metadata(retryBackoffMs, config.getLong(CommonClientConfigs.METADATA_MAX_AGE_CONFIG), true);
             List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG));
-            this.metadata.update(Cluster.bootstrap(addresses), 0);
+            this.metadata.update(Cluster.bootstrap(addresses), Collections.<String>emptySet(), 0);
             String metricGrpPrefix = "connect";
-            ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config.values());
+            ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config);
             NetworkClient netClient = new NetworkClient(
-                    new Selector(config.getLong(CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG), metrics, time, metricGrpPrefix, channelBuilder),
+                    new Selector(config.getLong(CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG), metrics, time, metricGrpPrefix, channelBuilder, logContext),
                     this.metadata,
                     clientId,
                     100, // a fixed large enough value will suffice
                     config.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG),
+                    config.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_CONFIG),
                     config.getInt(CommonClientConfigs.SEND_BUFFER_CONFIG),
                     config.getInt(CommonClientConfigs.RECEIVE_BUFFER_CONFIG),
-                    config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG), time);
-            this.client = new ConsumerNetworkClient(netClient, metadata, time, retryBackoffMs);
-            this.coordinator = new WorkerCoordinator(this.client,
-                    config.getString(DistributedConfig.GROUP_ID_CONFIG),
+                    config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG),
+                    time,
+                    true,
+                    new ApiVersions(),
+                    logContext);
+            this.client = new ConsumerNetworkClient(
+                    logContext,
+                    netClient,
+                    metadata,
+                    time,
+                    retryBackoffMs,
+                    config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG),
+                    Integer.MAX_VALUE);
+            this.coordinator = new WorkerCoordinator(
+                    logContext,
+                    this.client,
+                    groupId,
+                    config.getInt(DistributedConfig.REBALANCE_TIMEOUT_MS_CONFIG),
                     config.getInt(DistributedConfig.SESSION_TIMEOUT_MS_CONFIG),
                     config.getInt(DistributedConfig.HEARTBEAT_INTERVAL_MS_CONFIG),
                     metrics,
@@ -109,7 +134,7 @@ public class WorkerGroupMember {
                     configStorage,
                     listener);
 
-            AppInfoParser.registerAppInfo(JMX_PREFIX, clientId);
+            AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics);
             log.debug("Connect group member created");
         } catch (Throwable t) {
             // call close methods if internal objects are already constructed
@@ -126,23 +151,13 @@ public class WorkerGroupMember {
     }
 
     public void ensureActive() {
-        coordinator.ensureCoordinatorKnown();
-        coordinator.ensureActiveGroup();
+        coordinator.poll(0);
     }
 
     public void poll(long timeout) {
         if (timeout < 0)
             throw new IllegalArgumentException("Timeout must not be negative");
-
-        // poll for new data until the timeout expires
-        long remaining = timeout;
-        while (remaining >= 0) {
-            long start = time.milliseconds();
-            coordinator.ensureCoordinatorKnown();
-            coordinator.ensureActiveGroup();
-            client.poll(remaining);
-            remaining -= time.milliseconds() - start;
-        }
+        coordinator.poll(timeout);
     }
 
     /**
@@ -167,14 +182,26 @@ public class WorkerGroupMember {
         coordinator.requestRejoin();
     }
 
+    public void maybeLeaveGroup() {
+        coordinator.maybeLeaveGroup();
+    }
+
+    public String ownerUrl(String connector) {
+        return coordinator.ownerUrl(connector);
+    }
+
+    public String ownerUrl(ConnectorTaskId task) {
+        return coordinator.ownerUrl(task);
+    }
+
     private void stop(boolean swallowException) {
         log.trace("Stopping the Connect group member.");
-        AtomicReference<Throwable> firstException = new AtomicReference<Throwable>();
+        AtomicReference<Throwable> firstException = new AtomicReference<>();
         this.stopped = true;
         ClientUtils.closeQuietly(coordinator, "coordinator", firstException);
         ClientUtils.closeQuietly(metrics, "consumer metrics", firstException);
         ClientUtils.closeQuietly(client, "consumer network client", firstException);
-        AppInfoParser.unregisterAppInfo(JMX_PREFIX, clientId);
+        AppInfoParser.unregisterAppInfo(JMX_PREFIX, clientId, metrics);
         if (firstException.get() != null && !swallowException)
             throw new KafkaException("Failed to stop the Connect group member", firstException.get());
         else

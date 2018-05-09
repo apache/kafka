@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -16,14 +16,20 @@
  */
 package org.apache.kafka.test;
 
+import org.apache.kafka.common.ClusterResourceListener;
+import org.apache.kafka.common.ClusterResource;
 import org.apache.kafka.common.serialization.Serializer;
 
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
-public class MockSerializer implements Serializer<byte[]> {
+public class MockSerializer implements ClusterResourceListener, Serializer<byte[]> {
     public static final AtomicInteger INIT_COUNT = new AtomicInteger(0);
     public static final AtomicInteger CLOSE_COUNT = new AtomicInteger(0);
+    public static final AtomicReference<ClusterResource> CLUSTER_META = new AtomicReference<>();
+    public static final ClusterResource NO_CLUSTER_ID = new ClusterResource("no_cluster_id");
+    public static final AtomicReference<ClusterResource> CLUSTER_ID_BEFORE_SERIALIZE = new AtomicReference<>(NO_CLUSTER_ID);
 
     public MockSerializer() {
         INIT_COUNT.incrementAndGet();
@@ -35,11 +41,19 @@ public class MockSerializer implements Serializer<byte[]> {
 
     @Override
     public byte[] serialize(String topic, byte[] data) {
+        // This will ensure that we get the cluster metadata when serialize is called for the first time
+        // as subsequent compareAndSet operations will fail.
+        CLUSTER_ID_BEFORE_SERIALIZE.compareAndSet(NO_CLUSTER_ID, CLUSTER_META.get());
         return data;
     }
 
     @Override
     public void close() {
         CLOSE_COUNT.incrementAndGet();
+    }
+
+    @Override
+    public void onUpdate(ClusterResource clusterResource) {
+        CLUSTER_META.set(clusterResource);
     }
 }

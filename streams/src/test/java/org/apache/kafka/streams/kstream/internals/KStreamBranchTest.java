@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,33 +14,37 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.serialization.IntegerDeserializer;
-import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.IntegerSerializer;
+import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.streams.Consumed;
+import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.Predicate;
-import org.apache.kafka.test.KStreamTestDriver;
+import org.apache.kafka.streams.test.ConsumerRecordFactory;
+import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
 
-import java.lang.reflect.Array;
+import java.util.List;
+import java.util.Properties;
 
 import static org.junit.Assert.assertEquals;
 
 public class KStreamBranchTest {
 
-    private String topicName = "topic";
-
-    private IntegerDeserializer keyDeserializer = new IntegerDeserializer();
-    private StringDeserializer valDeserializer = new StringDeserializer();
+    private final String topicName = "topic";
+    private final ConsumerRecordFactory<Integer, String> recordFactory = new ConsumerRecordFactory<>(new IntegerSerializer(), new StringSerializer());
+    private final Properties props = StreamsTestUtils.topologyTestConfig(Serdes.String(), Serdes.String());
 
     @SuppressWarnings("unchecked")
     @Test
     public void testKStreamBranch() {
-        KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         Predicate<Integer, String> isEven = new Predicate<Integer, String>() {
             @Override
@@ -65,26 +69,48 @@ public class KStreamBranchTest {
 
         KStream<Integer, String> stream;
         KStream<Integer, String>[] branches;
-        MockProcessorSupplier<Integer, String>[] processors;
 
-        stream = builder.stream(keyDeserializer, valDeserializer, topicName);
+        stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String()));
         branches = stream.branch(isEven, isMultipleOfThree, isOdd);
 
         assertEquals(3, branches.length);
 
-        processors = (MockProcessorSupplier<Integer, String>[]) Array.newInstance(MockProcessorSupplier.class, branches.length);
+        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
         for (int i = 0; i < branches.length; i++) {
-            processors[i] = new MockProcessorSupplier<>();
-            branches[i].process(processors[i]);
+            branches[i].process(supplier);
         }
 
-        KStreamTestDriver driver = new KStreamTestDriver(builder);
-        for (int i = 0; i < expectedKeys.length; i++) {
-            driver.process(topicName, expectedKeys[i], "V" + expectedKeys[i]);
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            for (int expectedKey : expectedKeys) {
+                driver.pipeInput(recordFactory.create(topicName, expectedKey, "V" + expectedKey));
+            }
         }
 
-        assertEquals(3, processors[0].processed.size());
-        assertEquals(1, processors[1].processed.size());
-        assertEquals(2, processors[2].processed.size());
+        final List<MockProcessor<Integer, String>> processors = supplier.capturedProcessors(3);
+        assertEquals(3, processors.get(0).processed.size());
+        assertEquals(1, processors.get(1).processed.size());
+        assertEquals(2, processors.get(2).processed.size());
+    }
+
+    @Test
+    public void testTypeVariance() {
+        Predicate<Number, Object> positive = new Predicate<Number, Object>() {
+            @Override
+            public boolean test(Number key, Object value) {
+                return key.doubleValue() > 0;
+            }
+        };
+
+        Predicate<Number, Object> negative = new Predicate<Number, Object>() {
+            @Override
+            public boolean test(Number key, Object value) {
+                return key.doubleValue() < 0;
+            }
+        };
+
+        @SuppressWarnings("unchecked")
+        final KStream<Integer, String>[] branches = new StreamsBuilder()
+            .<Integer, String>stream("empty")
+            .branch(positive, negative);
     }
 }

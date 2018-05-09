@@ -21,11 +21,12 @@ import java.util.Properties
 import java.util.Collections
 import scala.collection._
 import kafka.message.{CompressionCodec, NoCompressionCodec}
+import scala.collection.JavaConverters._
 
 
 class VerifiableProperties(val props: Properties) extends Logging {
   private val referenceSet = mutable.HashSet[String]()
-  
+
   def this() = this(new Properties)
 
   def containsKey(name: String): Boolean = {
@@ -121,7 +122,7 @@ class VerifiableProperties(val props: Properties) extends Logging {
     require(v >= range._1 && v <= range._2, name + " has value " + v + " which is not in the range " + range + ".")
     v
   }
-  
+
   /**
    * Get a required argument as a double
    * @param name The property name
@@ -129,7 +130,7 @@ class VerifiableProperties(val props: Properties) extends Logging {
    * @throws IllegalArgumentException If the given property is not present
    */
   def getDouble(name: String): Double = getString(name).toDouble
-  
+
   /**
    * Get an optional argument as a double
    * @param name The property name
@@ -140,7 +141,7 @@ class VerifiableProperties(val props: Properties) extends Logging {
       getDouble(name)
     else
       default
-  } 
+  }
 
   /**
    * Read a boolean value from the properties instance
@@ -157,7 +158,7 @@ class VerifiableProperties(val props: Properties) extends Logging {
       v.toBoolean
     }
   }
-  
+
   def getBoolean(name: String) = getString(name).toBoolean
 
   /**
@@ -177,11 +178,11 @@ class VerifiableProperties(val props: Properties) extends Logging {
     require(containsKey(name), "Missing required property '" + name + "'")
     getProperty(name)
   }
-  
+
   /**
    * Get a Map[String, String] from a property list in the form k1:v2, k2:v2, ...
    */
-  def getMap(name: String, valid: String => Boolean = s => true): Map[String, String] = {
+  def getMap(name: String, valid: String => Boolean = _ => true): Map[String, String] = {
     try {
       val m = CoreUtils.parseCsvMap(getString(name, ""))
       m.foreach {
@@ -208,17 +209,14 @@ class VerifiableProperties(val props: Properties) extends Logging {
       CompressionCodec.getCompressionCodec(prop.toInt)
     }
     catch {
-      case nfe: NumberFormatException =>
+      case _: NumberFormatException =>
         CompressionCodec.getCompressionCodec(prop)
     }
   }
 
   def verify() {
     info("Verifying properties")
-    val propNames = {
-      import JavaConversions._
-      Collections.list(props.propertyNames).map(_.toString).sorted
-    }
+    val propNames = Collections.list(props.propertyNames).asScala.map(_.toString).sorted
     for(key <- propNames) {
       if (!referenceSet.contains(key) && !key.startsWith("external"))
         warn("Property %s is not valid".format(key))
@@ -227,6 +225,6 @@ class VerifiableProperties(val props: Properties) extends Logging {
     }
   }
   
-  override def toString(): String = props.toString
+  override def toString: String = props.toString
  
 }

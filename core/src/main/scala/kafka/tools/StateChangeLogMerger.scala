@@ -18,13 +18,17 @@
 package kafka.tools
 
 import joptsimple._
+
 import scala.util.matching.Regex
 import collection.mutable
 import java.util.Date
 import java.text.SimpleDateFormat
-import kafka.utils.{CoreUtils, Logging, CommandLineUtils}
-import kafka.common.Topic
+
+import kafka.utils.{CommandLineUtils, CoreUtils, Exit, Logging}
 import java.io.{BufferedOutputStream, OutputStream}
+import java.nio.charset.StandardCharsets
+
+import org.apache.kafka.common.internals.Topic
 
 /**
  * A utility that merges the state change logs (possibly obtained from different brokers and over multiple days).
@@ -44,7 +48,7 @@ import java.io.{BufferedOutputStream, OutputStream}
 object StateChangeLogMerger extends Logging {
 
   val dateFormatString = "yyyy-MM-dd HH:mm:ss,SSS"
-  val topicPartitionRegex = new Regex("\\[(" + Topic.legalChars + "+),( )*([0-9]+)\\]")
+  val topicPartitionRegex = new Regex("\\[(" + Topic.LEGAL_CHARS + "+),( )*([0-9]+)\\]")
   val dateRegex = new Regex("[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2},[0-9]{3}")
   val dateFormat = new SimpleDateFormat(dateFormatString)
   var files: List[String] = List()
@@ -56,7 +60,7 @@ object StateChangeLogMerger extends Logging {
   def main(args: Array[String]) {
 
     // Parse input arguments.
-    val parser = new OptionParser
+    val parser = new OptionParser(false)
     val filesOpt = parser.accepts("logs", "Comma separated list of state change logs or a regex for the log file names")
                               .withRequiredArg
                               .describedAs("file1,file2,...")
@@ -92,12 +96,12 @@ object StateChangeLogMerger extends Logging {
     if ((!options.has(filesOpt) && !options.has(regexOpt)) || (options.has(filesOpt) && options.has(regexOpt))) {
       System.err.println("Provide arguments to exactly one of the two options \"" + filesOpt + "\" or \"" + regexOpt + "\"")
       parser.printHelpOn(System.err)
-      System.exit(1)
+      Exit.exit(1)
     }
     if (options.has(partitionsOpt) && !options.has(topicOpt)) {
       System.err.println("The option \"" + topicOpt + "\" needs to be provided an argument when specifying partition ids")
       parser.printHelpOn(System.err)
-      System.exit(1)
+      Exit.exit(1)
     }
 
     // Populate data structures.
@@ -108,7 +112,7 @@ object StateChangeLogMerger extends Logging {
       val fileNameIndex = regex.lastIndexOf('/') + 1
       val dirName = if (fileNameIndex == 0) "." else regex.substring(0, fileNameIndex - 1)
       val fileNameRegex = new Regex(regex.substring(fileNameIndex))
-      files :::= new java.io.File(dirName).listFiles.filter(f => fileNameRegex.findFirstIn(f.getName) != None).map(dirName + "/" + _.getName).toList
+      files :::= new java.io.File(dirName).listFiles.filter(f => fileNameRegex.findFirstIn(f.getName).isDefined).map(dirName + "/" + _.getName).toList
     }
     if (options.has(topicOpt)) {
       topic = options.valueOf(topicOpt)
@@ -118,7 +122,7 @@ object StateChangeLogMerger extends Logging {
       val duplicatePartitions = CoreUtils.duplicates(partitions)
       if (duplicatePartitions.nonEmpty) {
         System.err.println("The list of partitions contains repeated entries: %s".format(duplicatePartitions.mkString(",")))
-        System.exit(1)
+        Exit.exit(1)
       }
     }
     startDate = dateFormat.parse(options.valueOf(startTimeOpt).replace('\"', ' ').trim)
@@ -141,11 +145,11 @@ object StateChangeLogMerger extends Logging {
       if (!lineItr.isEmpty)
         lines ::= lineItr
     }
-    if (!lines.isEmpty) pqueue.enqueue(lines:_*)
+    if (lines.nonEmpty) pqueue.enqueue(lines:_*)
 
-    while (!pqueue.isEmpty) {
+    while (pqueue.nonEmpty) {
       val lineItr = pqueue.dequeue()
-      output.write((lineItr.line + "\n").getBytes)
+      output.write((lineItr.line + "\n").getBytes(StandardCharsets.UTF_8))
       val nextLineItr = getNextLine(lineItr.itr)
       if (!nextLineItr.isEmpty)
         pqueue.enqueue(nextLineItr)
@@ -163,18 +167,14 @@ object StateChangeLogMerger extends Logging {
   def getNextLine(itr: Iterator[String]): LineIterator = {
     while (itr != null && itr.hasNext) {
       val nextLine = itr.next
-      dateRegex.findFirstIn(nextLine) match {
-        case Some(d) =>
-          val date = dateFormat.parse(d)
-          if ((date.equals(startDate) || date.after(startDate)) && (date.equals(endDate) || date.before(endDate))) {
-            topicPartitionRegex.findFirstMatchIn(nextLine) match {
-              case Some(matcher) =>
-                if ((topic == null || topic == matcher.group(1)) && (partitions.isEmpty || partitions.contains(matcher.group(3).toInt)))
-                  return new LineIterator(nextLine, itr)
-              case None =>
-            }
+      dateRegex.findFirstIn(nextLine).foreach { d =>
+        val date = dateFormat.parse(d)
+        if ((date.equals(startDate) || date.after(startDate)) && (date.equals(endDate) || date.before(endDate))) {
+          topicPartitionRegex.findFirstMatchIn(nextLine).foreach { matcher =>
+            if ((topic == null || topic == matcher.group(1)) && (partitions.isEmpty || partitions.contains(matcher.group(3).toInt)))
+              return new LineIterator(nextLine, itr)
           }
-        case None =>
+        }
       }
     }
     new LineIterator()
@@ -182,7 +182,7 @@ object StateChangeLogMerger extends Logging {
 
   class LineIterator(val line: String, val itr: Iterator[String]) {
     def this() = this("", null)
-    def isEmpty = (line == "" && itr == null)
+    def isEmpty = line == "" && itr == null
   }
 
   implicit object dateBasedOrdering extends Ordering[LineIterator] {

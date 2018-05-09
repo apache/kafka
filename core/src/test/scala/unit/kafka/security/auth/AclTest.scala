@@ -14,13 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package unit.kafka.security.auth
+package kafka.security.auth
 
-import kafka.security.auth._
+import java.nio.charset.StandardCharsets.UTF_8
+
 import kafka.utils.Json
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.junit.{Test, Assert}
+import org.junit.{Assert, Test}
 import org.scalatest.junit.JUnitSuite
+import scala.collection.JavaConverters._
 
 class AclTest extends JUnitSuite {
 
@@ -35,10 +37,10 @@ class AclTest extends JUnitSuite {
     val acl3 = new Acl(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob"), Deny, "host1", Read)
 
     val acls = Set[Acl](acl1, acl2, acl3)
-    val jsonAcls = Json.encode(Acl.toJsonCompatibleMap(acls))
+    val jsonAcls = Json.encodeAsBytes(Acl.toJsonCompatibleMap(acls).asJava)
 
-    Assert.assertEquals(acls, Acl.fromJson(jsonAcls))
-    Assert.assertEquals(acls, Acl.fromJson(AclJson))
+    Assert.assertEquals(acls, Acl.fromBytes(jsonAcls))
+    Assert.assertEquals(acls, Acl.fromBytes(AclJson.getBytes(UTF_8)))
   }
 
 }

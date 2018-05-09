@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.
@@ -13,8 +14,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-#!/bin/bash
-
 # Usage: brokers.sh <broker ID> <public hostname or IP> <list zookeeper public hostname or IP + port>
 
 set -e
@@ -24,7 +23,7 @@ PUBLIC_ADDRESS=$2
 PUBLIC_ZOOKEEPER_ADDRESSES=$3
 JMX_PORT=$4
 
-kafka_dir=/opt/kafka-trunk
+kafka_dir=/opt/kafka-dev
 cd $kafka_dir
 
 sed \

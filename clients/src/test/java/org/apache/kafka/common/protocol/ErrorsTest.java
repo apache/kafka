@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -24,6 +24,7 @@ import java.util.HashSet;
 import java.util.Set;
 
 import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.junit.Test;
 
 public class ErrorsTest {
@@ -58,6 +59,32 @@ public class ErrorsTest {
     @Test
     public void testNoneException() {
         assertNull("The NONE error should not have an exception", Errors.NONE.exception());
+    }
+
+    @Test
+    public void testForExceptionInheritance() {
+        class ExtendedTimeoutException extends TimeoutException { }
+
+        Errors expectedError = Errors.forException(new TimeoutException());
+        Errors actualError = Errors.forException(new ExtendedTimeoutException());
+
+        assertEquals("forException should match super classes", expectedError, actualError);
+    }
+
+    @Test
+    public void testForExceptionDefault() {
+        Errors error = Errors.forException(new ApiException());
+        assertEquals("forException should default to unknown", Errors.UNKNOWN_SERVER_ERROR, error);
+    }
+
+    @Test
+    public void testExceptionName() {
+        String exceptionName = Errors.UNKNOWN_SERVER_ERROR.exceptionName();
+        assertEquals("org.apache.kafka.common.errors.UnknownServerException", exceptionName);
+        exceptionName = Errors.NONE.exceptionName();
+        assertNull(exceptionName);
+        exceptionName = Errors.INVALID_TOPIC_EXCEPTION.exceptionName();
+        assertEquals("org.apache.kafka.common.errors.InvalidTopicException", exceptionName);
     }
 
 }

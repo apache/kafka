@@ -20,63 +20,62 @@ package kafka.producer
 import java.net.SocketTimeoutException
 import java.util.Properties
 
-import org.junit.Assert
-import kafka.admin.AdminUtils
-import kafka.api.ProducerResponseStatus
+import kafka.api.{ProducerRequest, ProducerResponseStatus}
 import kafka.common.TopicAndPartition
 import kafka.integration.KafkaServerTestHarness
 import kafka.message._
 import kafka.server.KafkaConfig
 import kafka.utils._
-import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
+import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.record.{DefaultRecordBatch, DefaultRecord}
 import org.junit.Test
+import org.junit.Assert._
 
+@deprecated("This test has been deprecated and it will be removed in a future release", "0.10.0.0")
 class SyncProducerTest extends KafkaServerTestHarness {
   private val messageBytes =  new Array[Byte](2)
   // turning off controlled shutdown since testProducerCanTimeout() explicitly shuts down request handler pool.
-  def generateConfigs() = List(KafkaConfig.fromProps(TestUtils.createBrokerConfigs(1, zkConnect, false).head))
+  def generateConfigs = List(KafkaConfig.fromProps(TestUtils.createBrokerConfigs(1, zkConnect, false).head))
+
+  private def produceRequest(topic: String,
+    partition: Int,
+    message: ByteBufferMessageSet,
+    acks: Int,
+    timeout: Int = SyncProducerConfig.DefaultAckTimeoutMs,
+    correlationId: Int = 0,
+    clientId: String = SyncProducerConfig.DefaultClientId): ProducerRequest = {
+    TestUtils.produceRequest(topic, partition, message, acks, timeout, correlationId, clientId)
+  }
 
   @Test
   def testReachableServer() {
     val server = servers.head
-
-    val props = TestUtils.getSyncProducerConfig(server.socketServer.boundPort())
-
+    val props = TestUtils.getSyncProducerConfig(boundPort(server))
 
     val producer = new SyncProducer(new SyncProducerConfig(props))
-    val firstStart = SystemTime.milliseconds
-    try {
-      val response = producer.send(TestUtils.produceRequest("test", 0,
-        new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(messageBytes)), acks = 1))
-      Assert.assertNotNull(response)
-    } catch {
-      case e: Exception => Assert.fail("Unexpected failure sending message to broker. " + e.getMessage)
-    }
-    val firstEnd = SystemTime.milliseconds
-    Assert.assertTrue((firstEnd-firstStart) < 500)
-    val secondStart = SystemTime.milliseconds
-    try {
-      val response = producer.send(TestUtils.produceRequest("test", 0,
-        new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(messageBytes)), acks = 1))
-      Assert.assertNotNull(response)
-    } catch {
-      case e: Exception => Assert.fail("Unexpected failure sending message to broker. " + e.getMessage)
-    }
-    val secondEnd = SystemTime.milliseconds
-    Assert.assertTrue((secondEnd-secondStart) < 500)
-    try {
-      val response = producer.send(TestUtils.produceRequest("test", 0,
-        new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(messageBytes)), acks = 1))
-      Assert.assertNotNull(response)
-    } catch {
-      case e: Exception => Assert.fail("Unexpected failure sending message to broker. " + e.getMessage)
-    }
+
+    val firstStart = Time.SYSTEM.milliseconds
+    var response = producer.send(produceRequest("test", 0,
+      new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(messageBytes)), acks = 1))
+    assertNotNull(response)
+    assertTrue((Time.SYSTEM.milliseconds - firstStart) < 12000)
+
+    val secondStart = Time.SYSTEM.milliseconds
+    response = producer.send(produceRequest("test", 0,
+      new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(messageBytes)), acks = 1))
+    assertNotNull(response)
+    assertTrue((Time.SYSTEM.milliseconds - secondStart) < 12000)
+
+    response = producer.send(produceRequest("test", 0,
+      new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(messageBytes)), acks = 1))
+    assertNotNull(response)
   }
 
   @Test
   def testEmptyProduceRequest() {
     val server = servers.head
-    val props = TestUtils.getSyncProducerConfig(server.socketServer.boundPort())
+    val props = TestUtils.getSyncProducerConfig(boundPort(server))
 
 
     val correlationId = 0
@@ -87,106 +86,106 @@ class SyncProducerTest extends KafkaServerTestHarness {
 
     val producer = new SyncProducer(new SyncProducerConfig(props))
     val response = producer.send(emptyRequest)
-    Assert.assertTrue(response != null)
-    Assert.assertTrue(!response.hasError && response.status.size == 0)
+    assertTrue(response != null)
+    assertTrue(!response.hasError && response.status.isEmpty)
   }
 
   @Test
   def testMessageSizeTooLarge() {
     val server = servers.head
-    val props = TestUtils.getSyncProducerConfig(server.socketServer.boundPort())
+    val props = TestUtils.getSyncProducerConfig(boundPort(server))
 
     val producer = new SyncProducer(new SyncProducerConfig(props))
-    TestUtils.createTopic(zkUtils, "test", numPartitions = 1, replicationFactor = 1, servers = servers)
+    createTopic("test", numPartitions = 1, replicationFactor = 1)
 
-    val message1 = new Message(new Array[Byte](configs(0).messageMaxBytes + 1))
+    val message1 = new Message(new Array[Byte](configs.head.messageMaxBytes + 1))
     val messageSet1 = new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = message1)
-    val response1 = producer.send(TestUtils.produceRequest("test", 0, messageSet1, acks = 1))
+    val response1 = producer.send(produceRequest("test", 0, messageSet1, acks = 1))
 
-    Assert.assertEquals(1, response1.status.count(_._2.error != Errors.NONE.code))
-    Assert.assertEquals(Errors.MESSAGE_TOO_LARGE.code, response1.status(TopicAndPartition("test", 0)).error)
-    Assert.assertEquals(-1L, response1.status(TopicAndPartition("test", 0)).offset)
+    assertEquals(1, response1.status.count(_._2.error != Errors.NONE))
+    assertEquals(Errors.MESSAGE_TOO_LARGE, response1.status(TopicAndPartition("test", 0)).error)
+    assertEquals(-1L, response1.status(TopicAndPartition("test", 0)).offset)
 
-    val safeSize = configs(0).messageMaxBytes - Message.MessageOverhead - MessageSet.LogOverhead - 1
+    val safeSize = configs.head.messageMaxBytes - DefaultRecordBatch.RECORD_BATCH_OVERHEAD - DefaultRecord.MAX_RECORD_OVERHEAD
     val message2 = new Message(new Array[Byte](safeSize))
     val messageSet2 = new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = message2)
-    val response2 = producer.send(TestUtils.produceRequest("test", 0, messageSet2, acks = 1))
+    val response2 = producer.send(produceRequest("test", 0, messageSet2, acks = 1))
 
-    Assert.assertEquals(1, response1.status.count(_._2.error != Errors.NONE.code))
-    Assert.assertEquals(Errors.NONE.code, response2.status(TopicAndPartition("test", 0)).error)
-    Assert.assertEquals(0, response2.status(TopicAndPartition("test", 0)).offset)
+    assertEquals(1, response1.status.count(_._2.error != Errors.NONE))
+    assertEquals(Errors.NONE, response2.status(TopicAndPartition("test", 0)).error)
+    assertEquals(0, response2.status(TopicAndPartition("test", 0)).offset)
   }
-
 
   @Test
   def testMessageSizeTooLargeWithAckZero() {
     val server = servers.head
-    val props = TestUtils.getSyncProducerConfig(server.socketServer.boundPort())
+    val props = TestUtils.getSyncProducerConfig(boundPort(server))
 
     props.put("request.required.acks", "0")
 
     val producer = new SyncProducer(new SyncProducerConfig(props))
-    AdminUtils.createTopic(zkUtils, "test", 1, 1)
-    TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, "test", 0)
+    adminZkClient.createTopic("test", 1, 1)
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, "test", 0)
 
     // This message will be dropped silently since message size too large.
-    producer.send(TestUtils.produceRequest("test", 0,
-      new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(new Array[Byte](configs(0).messageMaxBytes + 1))), acks = 0))
+    producer.send(produceRequest("test", 0,
+      new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(new Array[Byte](configs.head.messageMaxBytes + 1))), acks = 0))
 
     // Send another message whose size is large enough to exceed the buffer size so
     // the socket buffer will be flushed immediately;
     // this send should fail since the socket has been closed
     try {
-      producer.send(TestUtils.produceRequest("test", 0,
-        new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(new Array[Byte](configs(0).messageMaxBytes + 1))), acks = 0))
+      producer.send(produceRequest("test", 0,
+        new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(new Array[Byte](configs.head.messageMaxBytes + 1))), acks = 0))
     } catch {
-      case e : java.io.IOException => // success
-      case e2: Throwable => throw e2
+      case _ : java.io.IOException => // success
     }
   }
 
   @Test
   def testProduceCorrectlyReceivesResponse() {
     val server = servers.head
-    val props = TestUtils.getSyncProducerConfig(server.socketServer.boundPort())
+    val props = TestUtils.getSyncProducerConfig(boundPort(server))
 
     val producer = new SyncProducer(new SyncProducerConfig(props))
     val messages = new ByteBufferMessageSet(NoCompressionCodec, new Message(messageBytes))
 
     // #1 - test that we get an error when partition does not belong to broker in response
-    val request = TestUtils.produceRequestWithAcks(Array("topic1", "topic2", "topic3"), Array(0), messages, 1)
+    val request = TestUtils.produceRequestWithAcks(Array("topic1", "topic2", "topic3"), Array(0), messages, 1,
+      timeout = SyncProducerConfig.DefaultAckTimeoutMs, clientId = SyncProducerConfig.DefaultClientId)
     val response = producer.send(request)
 
-    Assert.assertNotNull(response)
-    Assert.assertEquals(request.correlationId, response.correlationId)
-    Assert.assertEquals(3, response.status.size)
+    assertNotNull(response)
+    assertEquals(request.correlationId, response.correlationId)
+    assertEquals(3, response.status.size)
     response.status.values.foreach {
-      case ProducerResponseStatus(error, nextOffset) =>
-        Assert.assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code, error)
-        Assert.assertEquals(-1L, nextOffset)
+      case ProducerResponseStatus(error, nextOffset, timestamp) =>
+        assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, error)
+        assertEquals(-1L, nextOffset)
+        assertEquals(Message.NoTimestamp, timestamp)
     }
 
     // #2 - test that we get correct offsets when partition is owned by broker
-    AdminUtils.createTopic(zkUtils, "topic1", 1, 1)
-    TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, "topic1", 0)
-    AdminUtils.createTopic(zkUtils, "topic3", 1, 1)
-    TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, "topic3", 0)
+    adminZkClient.createTopic("topic1", 1, 1)
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, "topic1", 0)
+    adminZkClient.createTopic("topic3", 1, 1)
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, "topic3", 0)
 
     val response2 = producer.send(request)
-    Assert.assertNotNull(response2)
-    Assert.assertEquals(request.correlationId, response2.correlationId)
-    Assert.assertEquals(3, response2.status.size)
+    assertNotNull(response2)
+    assertEquals(request.correlationId, response2.correlationId)
+    assertEquals(3, response2.status.size)
 
     // the first and last message should have been accepted by broker
-    Assert.assertEquals(Errors.NONE.code, response2.status(TopicAndPartition("topic1", 0)).error)
-    Assert.assertEquals(Errors.NONE.code, response2.status(TopicAndPartition("topic3", 0)).error)
-    Assert.assertEquals(0, response2.status(TopicAndPartition("topic1", 0)).offset)
-    Assert.assertEquals(0, response2.status(TopicAndPartition("topic3", 0)).offset)
+    assertEquals(Errors.NONE, response2.status(TopicAndPartition("topic1", 0)).error)
+    assertEquals(Errors.NONE, response2.status(TopicAndPartition("topic3", 0)).error)
+    assertEquals(0, response2.status(TopicAndPartition("topic1", 0)).offset)
+    assertEquals(0, response2.status(TopicAndPartition("topic3", 0)).offset)
 
     // the middle message should have been rejected because broker doesn't lead partition
-    Assert.assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code,
+    assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION,
                         response2.status(TopicAndPartition("topic2", 0)).error)
-    Assert.assertEquals(-1, response2.status(TopicAndPartition("topic2", 0)).offset)
+    assertEquals(-1, response2.status(TopicAndPartition("topic2", 0)).offset)
   }
 
   @Test
@@ -194,34 +193,33 @@ class SyncProducerTest extends KafkaServerTestHarness {
     val timeoutMs = 500
 
     val server = servers.head
-    val props = TestUtils.getSyncProducerConfig(server.socketServer.boundPort())
+    val props = TestUtils.getSyncProducerConfig(boundPort(server))
     val producer = new SyncProducer(new SyncProducerConfig(props))
 
     val messages = new ByteBufferMessageSet(NoCompressionCodec, new Message(messageBytes))
-    val request = TestUtils.produceRequest("topic1", 0, messages, acks = 1)
+    val request = produceRequest("topic1", 0, messages, acks = 1)
 
     // stop IO threads and request handling, but leave networking operational
     // any requests should be accepted and queue up, but not handled
     server.requestHandlerPool.shutdown()
 
-    val t1 = SystemTime.milliseconds
+    val t1 = Time.SYSTEM.milliseconds
     try {
       producer.send(request)
-      Assert.fail("Should have received timeout exception since request handling is stopped.")
+      fail("Should have received timeout exception since request handling is stopped.")
     } catch {
-      case e: SocketTimeoutException => /* success */
-      case e: Throwable => Assert.fail("Unexpected exception when expecting timeout: " + e)
+      case _: SocketTimeoutException => /* success */
     }
-    val t2 = SystemTime.milliseconds
+    val t2 = Time.SYSTEM.milliseconds
     // make sure we don't wait fewer than timeoutMs for a response
-    Assert.assertTrue((t2-t1) >= timeoutMs)
+    assertTrue((t2-t1) >= timeoutMs)
   }
 
   @Test
   def testProduceRequestWithNoResponse() {
     val server = servers.head
 
-    val port = server.socketServer.boundPort(SecurityProtocol.PLAINTEXT)
+    val port = TestUtils.boundPort(server)
     val props = TestUtils.getSyncProducerConfig(port)
     val correlationId = 0
     val clientId = SyncProducerConfig.DefaultClientId
@@ -230,26 +228,26 @@ class SyncProducerTest extends KafkaServerTestHarness {
     val emptyRequest = new kafka.api.ProducerRequest(correlationId, clientId, ack, ackTimeoutMs, collection.mutable.Map[TopicAndPartition, ByteBufferMessageSet]())
     val producer = new SyncProducer(new SyncProducerConfig(props))
     val response = producer.send(emptyRequest)
-    Assert.assertTrue(response == null)
+    assertTrue(response == null)
   }
 
   @Test
   def testNotEnoughReplicas()  {
     val topicName = "minisrtest"
     val server = servers.head
-    val props = TestUtils.getSyncProducerConfig(server.socketServer.boundPort())
+    val props = TestUtils.getSyncProducerConfig(boundPort(server))
 
     props.put("request.required.acks", "-1")
 
     val producer = new SyncProducer(new SyncProducerConfig(props))
     val topicProps = new Properties()
     topicProps.put("min.insync.replicas","2")
-    AdminUtils.createTopic(zkUtils, topicName, 1, 1,topicProps)
-    TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, topicName, 0)
+    adminZkClient.createTopic(topicName, 1, 1,topicProps)
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topicName, 0)
 
-    val response = producer.send(TestUtils.produceRequest(topicName, 0,
+    val response = producer.send(produceRequest(topicName, 0,
       new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(messageBytes)),-1))
 
-    Assert.assertEquals(Errors.NOT_ENOUGH_REPLICAS.code, response.status(TopicAndPartition(topicName, 0)).error)
+    assertEquals(Errors.NOT_ENOUGH_REPLICAS, response.status(TopicAndPartition(topicName, 0)).error)
   }
 }

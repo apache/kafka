@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -13,20 +13,19 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- **/
-
+ */
 package org.apache.kafka.connect.file;
 
-import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTaskContext;
 import org.apache.kafka.connect.storage.OffsetStorageReader;
 import org.easymock.EasyMock;
+import org.easymock.EasyMockSupport;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import org.powermock.api.easymock.PowerMock;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -37,7 +36,7 @@ import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 
-public class FileStreamSourceTaskTest {
+public class FileStreamSourceTaskTest extends EasyMockSupport {
 
     private static final String TOPIC = "test";
 
@@ -55,9 +54,10 @@ public class FileStreamSourceTaskTest {
         config = new HashMap<>();
         config.put(FileStreamSourceConnector.FILE_CONFIG, tempFile.getAbsolutePath());
         config.put(FileStreamSourceConnector.TOPIC_CONFIG, TOPIC);
+        config.put(FileStreamSourceConnector.TASK_BATCH_SIZE_CONFIG, String.valueOf(FileStreamSourceConnector.DEFAULT_TASK_BATCH_SIZE));
         task = new FileStreamSourceTask();
-        offsetStorageReader = PowerMock.createMock(OffsetStorageReader.class);
-        context = PowerMock.createMock(SourceTaskContext.class);
+        offsetStorageReader = createMock(OffsetStorageReader.class);
+        context = createMock(SourceTaskContext.class);
         task.initialize(context);
     }
 
@@ -66,11 +66,11 @@ public class FileStreamSourceTaskTest {
         tempFile.delete();
 
         if (verifyMocks)
-            PowerMock.verifyAll();
+            verifyAll();
     }
 
     private void replay() {
-        PowerMock.replayAll();
+        replayAll();
         verifyMocks = true;
     }
 
@@ -123,15 +123,50 @@ public class FileStreamSourceTaskTest {
         assertEquals(Collections.singletonMap(FileStreamSourceTask.FILENAME_FIELD, tempFile.getAbsolutePath()), records.get(0).sourcePartition());
         assertEquals(Collections.singletonMap(FileStreamSourceTask.POSITION_FIELD, 48L), records.get(0).sourceOffset());
 
+        os.close();
         task.stop();
     }
 
-    @Test(expected = ConnectException.class)
-    public void testMissingTopic() throws InterruptedException {
+    @Test
+    public void testBatchSize() throws IOException, InterruptedException {
+        expectOffsetLookupReturnNone();
         replay();
 
-        config.remove(FileStreamSourceConnector.TOPIC_CONFIG);
+        config.put(FileStreamSourceConnector.TASK_BATCH_SIZE_CONFIG, "5000");
         task.start(config);
+
+        FileOutputStream os = new FileOutputStream(tempFile);
+        for (int i = 0; i < 10_000; i++) {
+            os.write("Neque porro quisquam est qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit...\n".getBytes());
+        }
+        os.flush();
+
+        List<SourceRecord> records = task.poll();
+        assertEquals(5000, records.size());
+
+        records = task.poll();
+        assertEquals(5000, records.size());
+
+        os.close();
+        task.stop();
+    }
+
+    @Test
+    public void testMissingFile() throws InterruptedException {
+        replay();
+
+        String data = "line\n";
+        System.setIn(new ByteArrayInputStream(data.getBytes()));
+
+        config.remove(FileStreamSourceConnector.FILE_CONFIG);
+        task.start(config);
+
+        List<SourceRecord> records = task.poll();
+        assertEquals(1, records.size());
+        assertEquals(TOPIC, records.get(0).topic());
+        assertEquals("line", records.get(0).value());
+
+        task.stop();
     }
 
     public void testInvalidFile() throws InterruptedException {
@@ -145,6 +180,6 @@ public class FileStreamSourceTaskTest {
 
     private void expectOffsetLookupReturnNone() {
         EasyMock.expect(context.offsetStorageReader()).andReturn(offsetStorageReader);
-        EasyMock.expect(offsetStorageReader.offset(EasyMock.anyObject(Map.class))).andReturn(null);
+        EasyMock.expect(offsetStorageReader.offset(EasyMock.<Map<String, String>>anyObject())).andReturn(null);
     }
 }

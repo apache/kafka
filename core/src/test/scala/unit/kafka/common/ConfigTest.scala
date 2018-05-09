@@ -26,6 +26,7 @@ import kafka.consumer.ConsumerConfig
 class ConfigTest {
 
   @Test
+  @deprecated("This test is deprecated and it will be removed in a future release.", "0.10.0.0")
   def testInvalidClientIds() {
     val invalidClientIds = new ArrayBuffer[String]()
     val badChars = Array('/', '\\', ',', '\u0000', ':', "\"", '\'', ';', '*', '?', ' ', '\t', '\r', '\n', '=')
@@ -39,7 +40,7 @@ class ConfigTest {
         fail("Should throw InvalidClientIdException.")
       }
       catch {
-        case e: InvalidConfigException => "This is good."
+        case _: InvalidConfigException => // This is good
       }
     }
 
@@ -50,7 +51,7 @@ class ConfigTest {
         ProducerConfig.validateClientId(validClientIds(i))
       }
       catch {
-        case e: Exception => fail("Should not throw exception.")
+        case _: Exception => fail("Should not throw exception.")
       }
     }
   }
@@ -69,7 +70,7 @@ class ConfigTest {
         fail("Should throw InvalidGroupIdException.")
       }
       catch {
-        case e: InvalidConfigException => "This is good."
+        case _: InvalidConfigException => // This is good
       }
     }
 
@@ -80,7 +81,7 @@ class ConfigTest {
         ConsumerConfig.validateGroupId(validGroupIds(i))
       }
       catch {
-        case e: Exception => fail("Should not throw exception.")
+        case _: Exception => fail("Should not throw exception.")
       }
     }
   }

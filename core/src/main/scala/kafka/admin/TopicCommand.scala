@@ -17,22 +17,25 @@
 
 package kafka.admin
 
-import joptsimple._
 import java.util.Properties
-import kafka.common.{TopicExistsException, Topic, AdminCommandFailedException}
-import kafka.utils.CommandLineUtils
-import kafka.utils._
-import kafka.utils.ZkUtils._
-import org.I0Itec.zkclient.exception.ZkNodeExistsException
-import scala.collection._
-import scala.collection.JavaConversions._
-import kafka.log.{Defaults, LogConfig}
-import kafka.consumer.{ConsumerConfig, Whitelist}
-import kafka.server.ConfigType
-import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.common.security.JaasUtils
-import kafka.coordinator.GroupCoordinator
 
+import joptsimple._
+import kafka.common.AdminCommandFailedException
+import kafka.utils.Implicits._
+import kafka.consumer.Whitelist
+import kafka.log.LogConfig
+import kafka.server.ConfigType
+import kafka.utils._
+import kafka.zk.{AdminZkClient, KafkaZkClient}
+import org.apache.kafka.common.errors.{InvalidTopicException, TopicExistsException}
+import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.security.JaasUtils
+import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.zookeeper.KeeperException.NodeExistsException
+import org.apache.kafka.common.TopicPartition
+
+import scala.collection.JavaConverters._
+import scala.collection._
 
 object TopicCommand extends Logging {
 
@@ -50,36 +53,36 @@ object TopicCommand extends Logging {
 
     opts.checkArgs()
 
-    val zkUtils = ZkUtils(opts.options.valueOf(opts.zkConnectOpt),
-                          30000,
-                          30000,
-                          JaasUtils.isZkSecurityEnabled())
+    val time = Time.SYSTEM
+    val zkClient = KafkaZkClient(opts.options.valueOf(opts.zkConnectOpt), JaasUtils.isZkSecurityEnabled, 30000, 30000,
+      Int.MaxValue, time)
+
     var exitCode = 0
     try {
       if(opts.options.has(opts.createOpt))
-        createTopic(zkUtils, opts)
+        createTopic(zkClient, opts)
       else if(opts.options.has(opts.alterOpt))
-        alterTopic(zkUtils, opts)
+        alterTopic(zkClient, opts)
       else if(opts.options.has(opts.listOpt))
-        listTopics(zkUtils, opts)
+        listTopics(zkClient, opts)
       else if(opts.options.has(opts.describeOpt))
-        describeTopic(zkUtils, opts)
+        describeTopic(zkClient, opts)
       else if(opts.options.has(opts.deleteOpt))
-        deleteTopic(zkUtils, opts)
+        deleteTopic(zkClient, opts)
     } catch {
       case e: Throwable =>
         println("Error while executing topic command : " + e.getMessage)
         error(Utils.stackTrace(e))
         exitCode = 1
     } finally {
-      zkUtils.close()
-      System.exit(exitCode)
+      zkClient.close()
+      Exit.exit(exitCode)
     }
 
   }
 
-  private def getTopics(zkUtils: ZkUtils, opts: TopicCommandOptions): Seq[String] = {
-    val allTopics = zkUtils.getAllTopics().sorted
+  private def getTopics(zkClient: KafkaZkClient, opts: TopicCommandOptions): Seq[String] = {
+    val allTopics = zkClient.getAllTopicsInCluster.sorted
     if (opts.options.has(opts.topicOpt)) {
       val topicsSpec = opts.options.valueOf(opts.topicOpt)
       val topicsFilter = new Whitelist(topicsSpec)
@@ -88,23 +91,24 @@ object TopicCommand extends Logging {
       allTopics
   }
 
-  def createTopic(zkUtils: ZkUtils, opts: TopicCommandOptions) {
+  def createTopic(zkClient: KafkaZkClient, opts: TopicCommandOptions) {
     val topic = opts.options.valueOf(opts.topicOpt)
     val configs = parseTopicConfigsToBeAdded(opts)
-    val ifNotExists = if (opts.options.has(opts.ifNotExistsOpt)) true else false
+    val ifNotExists = opts.options.has(opts.ifNotExistsOpt)
     if (Topic.hasCollisionChars(topic))
       println("WARNING: Due to limitations in metric names, topics with a period ('.') or underscore ('_') could collide. To avoid issues it is best to use either, but not both.")
+    val adminZkClient = new AdminZkClient(zkClient)
     try {
       if (opts.options.has(opts.replicaAssignmentOpt)) {
         val assignment = parseReplicaAssignment(opts.options.valueOf(opts.replicaAssignmentOpt))
-        warnOnMaxMessagesChange(configs, assignment.valuesIterator.next().length)
-        AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, assignment, configs, update = false)
+        adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic, assignment, configs, update = false)
       } else {
         CommandLineUtils.checkRequiredArgs(opts.parser, opts.options, opts.partitionsOpt, opts.replicationFactorOpt)
         val partitions = opts.options.valueOf(opts.partitionsOpt).intValue
         val replicas = opts.options.valueOf(opts.replicationFactorOpt).intValue
-        warnOnMaxMessagesChange(configs, replicas)
-        AdminUtils.createTopic(zkUtils, topic, partitions, replicas, configs)
+        val rackAwareMode = if (opts.options.has(opts.disableRackAware)) RackAwareMode.Disabled
+                            else RackAwareMode.Enforced
+        adminZkClient.createTopic(topic, partitions, replicas, configs, rackAwareMode)
       }
       println("Created topic \"%s\".".format(topic))
     } catch  {
@@ -112,15 +116,16 @@ object TopicCommand extends Logging {
     }
   }
 
-  def alterTopic(zkUtils: ZkUtils, opts: TopicCommandOptions) {
-    val topics = getTopics(zkUtils, opts)
-    val ifExists = if (opts.options.has(opts.ifExistsOpt)) true else false
-    if (topics.length == 0 && !ifExists) {
+  def alterTopic(zkClient: KafkaZkClient, opts: TopicCommandOptions) {
+    val topics = getTopics(zkClient, opts)
+    val ifExists = opts.options.has(opts.ifExistsOpt)
+    if (topics.isEmpty && !ifExists) {
       throw new IllegalArgumentException("Topic %s does not exist on ZK path %s".format(opts.options.valueOf(opts.topicOpt),
           opts.options.valueOf(opts.zkConnectOpt)))
     }
+    val adminZkClient = new AdminZkClient(zkClient)
     topics.foreach { topic =>
-      val configs = AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Topic, topic)
+      val configs = adminZkClient.fetchEntityConfig(ConfigType.Topic, topic)
       if(opts.options.has(opts.configOpt) || opts.options.has(opts.deleteConfigOpt)) {
         println("WARNING: Altering topic configuration from this script has been deprecated and may be removed in future releases.")
         println("         Going forward, please use kafka-configs.sh for this functionality")
@@ -128,30 +133,41 @@ object TopicCommand extends Logging {
         val configsToBeAdded = parseTopicConfigsToBeAdded(opts)
         val configsToBeDeleted = parseTopicConfigsToBeDeleted(opts)
         // compile the final set of configs
-        configs.putAll(configsToBeAdded)
+        configs ++= configsToBeAdded
         configsToBeDeleted.foreach(config => configs.remove(config))
-        AdminUtils.changeTopicConfig(zkUtils, topic, configs)
+        adminZkClient.changeTopicConfig(topic, configs)
         println("Updated config for topic \"%s\".".format(topic))
       }
 
       if(opts.options.has(opts.partitionsOpt)) {
-        if (topic == GroupCoordinator.GroupMetadataTopicName) {
+        if (topic == Topic.GROUP_METADATA_TOPIC_NAME) {
           throw new IllegalArgumentException("The number of partitions for the offsets topic cannot be changed.")
         }
         println("WARNING: If partitions are increased for a topic that has a key, the partition " +
           "logic or ordering of the messages will be affected")
         val nPartitions = opts.options.valueOf(opts.partitionsOpt).intValue
+        val existingAssignment = zkClient.getReplicaAssignmentForTopics(immutable.Set(topic)).map {
+          case (topicPartition, replicas) => topicPartition.partition -> replicas
+        }
+        if (existingAssignment.isEmpty)
+          throw new InvalidTopicException(s"The topic $topic does not exist")
         val replicaAssignmentStr = opts.options.valueOf(opts.replicaAssignmentOpt)
-        AdminUtils.addPartitions(zkUtils, topic, nPartitions, replicaAssignmentStr)
+        val newAssignment = Option(replicaAssignmentStr).filter(_.nonEmpty).map { replicaAssignmentString =>
+          val startPartitionId = existingAssignment.size
+          val partitionList = replicaAssignmentString.split(",").drop(startPartitionId)
+          AdminUtils.parseReplicaAssignment(partitionList.mkString(","), startPartitionId)
+        }
+        val allBrokers = adminZkClient.getBrokerMetadatas()
+        adminZkClient.addPartitions(topic, existingAssignment, allBrokers, nPartitions, newAssignment)
         println("Adding partitions succeeded!")
       }
     }
   }
 
-  def listTopics(zkUtils: ZkUtils, opts: TopicCommandOptions) {
-    val topics = getTopics(zkUtils, opts)
+  def listTopics(zkClient: KafkaZkClient, opts: TopicCommandOptions) {
+    val topics = getTopics(zkClient, opts)
     for(topic <- topics) {
-      if (zkUtils.pathExists(getDeleteTopicPath(topic))) {
+      if (zkClient.isTopicMarkedForDeletion(topic)) {
         println("%s - marked for deletion".format(topic))
       } else {
         println(topic)
@@ -159,66 +175,78 @@ object TopicCommand extends Logging {
     }
   }
 
-  def deleteTopic(zkUtils: ZkUtils, opts: TopicCommandOptions) {
-    val topics = getTopics(zkUtils, opts)
-    val ifExists = if (opts.options.has(opts.ifExistsOpt)) true else false
-    if (topics.length == 0 && !ifExists) {
+  def deleteTopic(zkClient: KafkaZkClient, opts: TopicCommandOptions) {
+    val topics = getTopics(zkClient, opts)
+    val ifExists = opts.options.has(opts.ifExistsOpt)
+    if (topics.isEmpty && !ifExists) {
       throw new IllegalArgumentException("Topic %s does not exist on ZK path %s".format(opts.options.valueOf(opts.topicOpt),
           opts.options.valueOf(opts.zkConnectOpt)))
     }
     topics.foreach { topic =>
       try {
-        if (Topic.InternalTopics.contains(topic)) {
+        if (Topic.isInternal(topic)) {
           throw new AdminOperationException("Topic %s is a kafka internal topic and is not allowed to be marked for deletion.".format(topic))
         } else {
-          zkUtils.createPersistentPath(getDeleteTopicPath(topic))
+          zkClient.createDeleteTopicPath(topic)
           println("Topic %s is marked for deletion.".format(topic))
           println("Note: This will have no impact if delete.topic.enable is not set to true.")
         }
       } catch {
-        case e: ZkNodeExistsException =>
+        case _: NodeExistsException =>
           println("Topic %s is already marked for deletion.".format(topic))
         case e: AdminOperationException =>
           throw e
-        case e: Throwable =>
+        case _: Throwable =>
           throw new AdminOperationException("Error while deleting topic %s".format(topic))
       }
     }
   }
 
-  def describeTopic(zkUtils: ZkUtils, opts: TopicCommandOptions) {
-    val topics = getTopics(zkUtils, opts)
-    val reportUnderReplicatedPartitions = if (opts.options.has(opts.reportUnderReplicatedPartitionsOpt)) true else false
-    val reportUnavailablePartitions = if (opts.options.has(opts.reportUnavailablePartitionsOpt)) true else false
-    val reportOverriddenConfigs = if (opts.options.has(opts.topicsWithOverridesOpt)) true else false
-    val liveBrokers = zkUtils.getAllBrokersInCluster().map(_.id).toSet
+  def describeTopic(zkClient: KafkaZkClient, opts: TopicCommandOptions) {
+    val topics = getTopics(zkClient, opts)
+    val reportUnderReplicatedPartitions = opts.options.has(opts.reportUnderReplicatedPartitionsOpt)
+    val reportUnavailablePartitions = opts.options.has(opts.reportUnavailablePartitionsOpt)
+    val reportOverriddenConfigs = opts.options.has(opts.topicsWithOverridesOpt)
+    val liveBrokers = zkClient.getAllBrokersInCluster.map(_.id).toSet
+    val adminZkClient = new AdminZkClient(zkClient)
+
     for (topic <- topics) {
-      zkUtils.getPartitionAssignmentForTopics(List(topic)).get(topic) match {
+       zkClient.getPartitionAssignmentForTopics(immutable.Set(topic)).get(topic) match {
         case Some(topicPartitionAssignment) =>
           val describeConfigs: Boolean = !reportUnavailablePartitions && !reportUnderReplicatedPartitions
           val describePartitions: Boolean = !reportOverriddenConfigs
-          val sortedPartitions = topicPartitionAssignment.toList.sortWith((m1, m2) => m1._1 < m2._1)
+          val sortedPartitions = topicPartitionAssignment.toSeq.sortBy(_._1)
+          val markedForDeletion = zkClient.isTopicMarkedForDeletion(topic)
           if (describeConfigs) {
-            val configs = AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Topic, topic)
-            if (!reportOverriddenConfigs || configs.size() != 0) {
+            val configs = adminZkClient.fetchEntityConfig(ConfigType.Topic, topic).asScala
+            if (!reportOverriddenConfigs || configs.nonEmpty) {
               val numPartitions = topicPartitionAssignment.size
               val replicationFactor = topicPartitionAssignment.head._2.size
-              println("Topic:%s\tPartitionCount:%d\tReplicationFactor:%d\tConfigs:%s"
-                .format(topic, numPartitions, replicationFactor, configs.map(kv => kv._1 + "=" + kv._2).mkString(",")))
+              val configsAsString = configs.map { case (k, v) => s"$k=$v" }.mkString(",")
+              val markedForDeletionString = if (markedForDeletion) "\tMarkedForDeletion:true" else ""
+              println("Topic:%s\tPartitionCount:%d\tReplicationFactor:%d\tConfigs:%s%s"
+                .format(topic, numPartitions, replicationFactor, configsAsString, markedForDeletionString))
             }
           }
           if (describePartitions) {
             for ((partitionId, assignedReplicas) <- sortedPartitions) {
-              val inSyncReplicas = zkUtils.getInSyncReplicasForPartition(topic, partitionId)
-              val leader = zkUtils.getLeaderForPartition(topic, partitionId)
+              val leaderIsrEpoch = zkClient.getTopicPartitionState(new TopicPartition(topic, partitionId))
+              val inSyncReplicas = if (leaderIsrEpoch.isEmpty) Seq.empty[Int] else leaderIsrEpoch.get.leaderAndIsr.isr
+              val leader = if (leaderIsrEpoch.isEmpty) None else Option(leaderIsrEpoch.get.leaderAndIsr.leader)
+
               if ((!reportUnderReplicatedPartitions && !reportUnavailablePartitions) ||
                   (reportUnderReplicatedPartitions && inSyncReplicas.size < assignedReplicas.size) ||
-                  (reportUnavailablePartitions && (!leader.isDefined || !liveBrokers.contains(leader.get)))) {
+                  (reportUnavailablePartitions && (leader.isEmpty || !liveBrokers.contains(leader.get)))) {
+
+                val markedForDeletionString =
+                  if (markedForDeletion && !describeConfigs) "\tMarkedForDeletion: true" else ""
                 print("\tTopic: " + topic)
                 print("\tPartition: " + partitionId)
                 print("\tLeader: " + (if(leader.isDefined) leader.get else "none"))
                 print("\tReplicas: " + assignedReplicas.mkString(","))
-                println("\tIsr: " + inSyncReplicas.mkString(","))
+                print("\tIsr: " + inSyncReplicas.mkString(","))
+                print(markedForDeletionString)
+                println()
               }
             }
           }
@@ -229,18 +257,22 @@ object TopicCommand extends Logging {
   }
 
   def parseTopicConfigsToBeAdded(opts: TopicCommandOptions): Properties = {
-    val configsToBeAdded = opts.options.valuesOf(opts.configOpt).map(_.split("""\s*=\s*"""))
+    val configsToBeAdded = opts.options.valuesOf(opts.configOpt).asScala.map(_.split("""\s*=\s*"""))
     require(configsToBeAdded.forall(config => config.length == 2),
       "Invalid topic config: all configs to be added must be in the format \"key=val\".")
     val props = new Properties
     configsToBeAdded.foreach(pair => props.setProperty(pair(0).trim, pair(1).trim))
     LogConfig.validate(props)
+    if (props.containsKey(LogConfig.MessageFormatVersionProp)) {
+      println(s"WARNING: The configuration ${LogConfig.MessageFormatVersionProp}=${props.getProperty(LogConfig.MessageFormatVersionProp)} is specified. " +
+      s"This configuration will be ignored if the version is newer than the inter.broker.protocol.version specified in the broker.")
+    }
     props
   }
 
   def parseTopicConfigsToBeDeleted(opts: TopicCommandOptions): Seq[String] = {
     if (opts.options.has(opts.deleteConfigOpt)) {
-      val configsToBeDeleted = opts.options.valuesOf(opts.deleteConfigOpt).map(_.trim())
+      val configsToBeDeleted = opts.options.valuesOf(opts.deleteConfigOpt).asScala.map(_.trim())
       val propsToBeDeleted = new Properties
       configsToBeDeleted.foreach(propsToBeDeleted.setProperty(_, ""))
       LogConfig.validateNames(propsToBeDeleted)
@@ -266,11 +298,11 @@ object TopicCommand extends Logging {
   }
 
   class TopicCommandOptions(args: Array[String]) {
-    val parser = new OptionParser
+    val parser = new OptionParser(false)
     val zkConnectOpt = parser.accepts("zookeeper", "REQUIRED: The connection string for the zookeeper connection in the form host:port. " +
-                                      "Multiple URLS can be given to allow fail-over.")
+                                      "Multiple hosts can be given to allow fail-over.")
                            .withRequiredArg
-                           .describedAs("urls")
+                           .describedAs("hosts")
                            .ofType(classOf[String])
     val listOpt = parser.accepts("list", "List all available topics.")
     val createOpt = parser.accepts("create", "Create a new topic.")
@@ -319,6 +351,10 @@ object TopicCommand extends Logging {
     val ifNotExistsOpt = parser.accepts("if-not-exists",
                                         "if set when creating topics, the action will only execute if the topic does not already exist")
 
+    val disableRackAware = parser.accepts("disable-rack-aware", "Disable rack aware replica assignment")
+
+    val forceOpt = parser.accepts("force", "Suppress console prompts")
+
     val options = parser.parse(args : _*)
 
     val allTopicLevelOpts: Set[OptionSpec[_]] = Set(alterOpt, createOpt, describeOpt, listOpt, deleteOpt)
@@ -347,54 +383,14 @@ object TopicCommand extends Logging {
       CommandLineUtils.checkInvalidArgs(parser, options, ifNotExistsOpt, allTopicLevelOpts -- Set(createOpt))
     }
   }
-  def warnOnMaxMessagesChange(configs: Properties, replicas: Integer): Unit = {
-    val maxMessageBytes =  configs.get(LogConfig.MaxMessageBytesProp) match {
-      case n: String => n.toInt
-      case _ => -1
-    }
-    if (maxMessageBytes > Defaults.MaxMessageSize)
-      if (replicas > 1) {
-        error(longMessageSizeWarning(maxMessageBytes))
-        askToProceed
-      }
-      else
-        warn(shortMessageSizeWarning(maxMessageBytes))
-  }
 
-  def askToProceed: Unit = {
+  def askToProceed(): Unit = {
     println("Are you sure you want to continue? [y/n]")
     if (!Console.readLine().equalsIgnoreCase("y")) {
       println("Ending your session")
-      System.exit(0)
+      Exit.exit(0)
     }
   }
 
-  def shortMessageSizeWarning(maxMessageBytes: Int): String = {
-    "\n\n" +
-      "*****************************************************************************************************\n" +
-      "*** WARNING: you are creating a topic where the the max.message.bytes is greater than the consumer ***\n" +
-      "*** default. This operation is potentially dangerous. Consumers will get failures if their        ***\n" +
-      "*** fetch.message.max.bytes < the value you are using.                                            ***\n" +
-      "*****************************************************************************************************\n" +
-      s"- value set here: $maxMessageBytes\n" +
-      s"- Default Consumer fetch.message.max.bytes: ${ConsumerConfig.FetchSize}\n" +
-      s"- Default Broker max.message.bytes: ${kafka.server.Defaults.MessageMaxBytes}\n\n"
-  }
-
-  def longMessageSizeWarning(maxMessageBytes: Int): String = {
-    "\n\n" +
-      "****************************************************************************************************\n" +
-      "*** WARNING: you are creating a topic where the max.message.bytes is greater than the broker      ***\n" +
-      "*** default. This operation is dangerous. There are two potential side effects:                  ***\n" +
-      "*** - Consumers will get failures if their fetch.message.max.bytes < the value you are using     ***\n" +
-      "*** - Producer requests larger than replica.fetch.max.bytes will not replicate and hence have    ***\n" +
-      "***   a higher risk of data loss                                                                 ***\n" +
-      "*** You should ensure both of these settings are greater than the value set here before using    ***\n" +
-      "*** this topic.                                                                                  ***\n" +
-      "****************************************************************************************************\n" +
-      s"- value set here: $maxMessageBytes\n" +
-      s"- Default Broker replica.fetch.max.bytes: ${kafka.server.Defaults.ReplicaFetchMaxBytes}\n" +
-      s"- Default Broker max.message.bytes: ${kafka.server.Defaults.MessageMaxBytes}\n" +
-      s"- Default Consumer fetch.message.max.bytes: ${ConsumerConfig.FetchSize}\n\n"
-  }
 }
+

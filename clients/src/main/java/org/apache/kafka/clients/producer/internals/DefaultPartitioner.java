@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -18,7 +18,9 @@ package org.apache.kafka.clients.producer.internals;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.kafka.clients.producer.Partitioner;
@@ -35,23 +37,7 @@ import org.apache.kafka.common.utils.Utils;
  */
 public class DefaultPartitioner implements Partitioner {
 
-    private final AtomicInteger counter = new AtomicInteger(new Random().nextInt());
-
-    /**
-     * A cheap way to deterministically convert a number to a positive value. When the input is
-     * positive, the original value is returned. When the input number is negative, the returned
-     * positive value is the original value bit AND against 0x7fffffff which is not its absolutely
-     * value.
-     *
-     * Note: changing this method in the future will possibly cause partition selection not to be
-     * compatible with the existing messages already placed on a partition.
-     *
-     * @param number a given number
-     * @return a positive number.
-     */
-    private static int toPositive(int number) {
-        return number & 0x7fffffff;
-    }
+    private final ConcurrentMap<String, AtomicInteger> topicCounterMap = new ConcurrentHashMap<>();
 
     public void configure(Map<String, ?> configs) {}
 
@@ -69,19 +55,31 @@ public class DefaultPartitioner implements Partitioner {
         List<PartitionInfo> partitions = cluster.partitionsForTopic(topic);
         int numPartitions = partitions.size();
         if (keyBytes == null) {
-            int nextValue = counter.getAndIncrement();
+            int nextValue = nextValue(topic);
             List<PartitionInfo> availablePartitions = cluster.availablePartitionsForTopic(topic);
             if (availablePartitions.size() > 0) {
-                int part = DefaultPartitioner.toPositive(nextValue) % availablePartitions.size();
+                int part = Utils.toPositive(nextValue) % availablePartitions.size();
                 return availablePartitions.get(part).partition();
             } else {
                 // no partitions are available, give a non-available partition
-                return DefaultPartitioner.toPositive(nextValue) % numPartitions;
+                return Utils.toPositive(nextValue) % numPartitions;
             }
         } else {
             // hash the keyBytes to choose a partition
-            return DefaultPartitioner.toPositive(Utils.murmur2(keyBytes)) % numPartitions;
+            return Utils.toPositive(Utils.murmur2(keyBytes)) % numPartitions;
         }
+    }
+
+    private int nextValue(String topic) {
+        AtomicInteger counter = topicCounterMap.get(topic);
+        if (null == counter) {
+            counter = new AtomicInteger(ThreadLocalRandom.current().nextInt());
+            AtomicInteger currentCounter = topicCounterMap.putIfAbsent(topic, counter);
+            if (currentCounter != null) {
+                counter = currentCounter;
+            }
+        }
+        return counter.getAndIncrement();
     }
 
     public void close() {}

@@ -21,6 +21,8 @@ import kafka.producer.ProducerConfig
 import kafka.producer.KeyedMessage
 import scala.collection.mutable
 
+@deprecated("This class has been deprecated and will be removed in a future release. " +
+            "Please use org.apache.kafka.clients.producer.KafkaProducer instead.", "0.10.0.0")
 class Producer[K,V](private val underlying: kafka.producer.Producer[K,V]) // for testing only
 {
   def this(config: ProducerConfig) = this(new kafka.producer.Producer[K,V](config))
@@ -46,5 +48,5 @@ class Producer[K,V](private val underlying: kafka.producer.Producer[K,V]) // for
    * Close API to close the producer pool connections to all Kafka brokers. Also closes
    * the zookeeper client connection if one exists
    */
-  def close = underlying.close
+  def close() = underlying.close()
 }

@@ -18,16 +18,16 @@ package kafka.server
 
 import java.util.Properties
 
-import kafka.utils.TestUtils._
-import kafka.utils.{IntEncoder, CoreUtils, TestUtils}
+import kafka.utils.TestUtils
+import TestUtils._
 import kafka.zk.ZooKeeperTestHarness
-import kafka.common._
-import kafka.producer.{KeyedMessage, Producer}
-import kafka.serializer.StringEncoder
-
 import java.io.File
 
-import org.junit.{Test, After, Before}
+import kafka.server.checkpoints.OffsetCheckpointFile
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
+import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.serialization.{IntegerSerializer, StringSerializer}
+import org.junit.{After, Before, Test}
 import org.junit.Assert._
 
 class LogRecoveryTest extends ZooKeeperTestHarness {
@@ -45,6 +45,7 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
   var configs: Seq[KafkaConfig] = null
   val topic = "new-topic"
   val partitionId = 0
+  val topicPartition = new TopicPartition(topic, partitionId)
 
   var server1: KafkaServer = null
   var server2: KafkaServer = null
@@ -54,9 +55,9 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
 
   val message = "hello"
 
-  var producer: Producer[Int, String] = null
-  def hwFile1 = new OffsetCheckpoint(new File(configProps1.logDirs(0), ReplicaManager.HighWatermarkFilename))
-  def hwFile2 = new OffsetCheckpoint(new File(configProps2.logDirs(0), ReplicaManager.HighWatermarkFilename))
+  var producer: KafkaProducer[Integer, String] = null
+  def hwFile1 = new OffsetCheckpointFile(new File(configProps1.logDirs.head, ReplicaManager.HighWatermarkFilename))
+  def hwFile2 = new OffsetCheckpointFile(new File(configProps2.logDirs.head, ReplicaManager.HighWatermarkFilename))
   var servers = Seq.empty[KafkaServer]
 
   // Some tests restart the brokers then produce more data. But since test brokers use random ports, we need
@@ -64,16 +65,19 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
   def updateProducer() = {
     if (producer != null)
       producer.close()
-    producer = TestUtils.createProducer[Int, String](TestUtils.getBrokerListStrFromServers(servers),
-      encoder = classOf[StringEncoder].getName,
-      keyEncoder = classOf[IntEncoder].getName)
+    producer = TestUtils.createNewProducer(
+      TestUtils.getBrokerListStrFromServers(servers),
+      retries = 5,
+      keySerializer = new IntegerSerializer,
+      valueSerializer = new StringSerializer
+    )
   }
 
   @Before
   override def setUp() {
     super.setUp()
 
-    configs = TestUtils.createBrokerConfigs(2, zkConnect, false).map(KafkaConfig.fromProps(_, overridingProps))
+    configs = TestUtils.createBrokerConfigs(2, zkConnect, enableControlledShutdown = false).map(KafkaConfig.fromProps(_, overridingProps))
 
     // start both servers
     server1 = TestUtils.createServer(configProps1)
@@ -81,7 +85,7 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
     servers = List(server1, server2)
 
     // create topic with 1 partition, 2 replicas, one on each broker
-    createTopic(zkUtils, topic, partitionReplicaAssignment = Map(0 -> Seq(0,1)), servers = servers)
+    createTopic(zkClient, topic, partitionReplicaAssignment = Map(0 -> Seq(0,1)), servers = servers)
 
     // create the producer
     updateProducer()
@@ -90,35 +94,32 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
   @After
   override def tearDown() {
     producer.close()
-    for (server <- servers) {
-      server.shutdown()
-      CoreUtils.rm(server.config.logDirs(0))
-    }
+    TestUtils.shutdownServers(servers)
     super.tearDown()
   }
 
   @Test
-  def testHWCheckpointNoFailuresSingleLogSegment {
+  def testHWCheckpointNoFailuresSingleLogSegment(): Unit = {
     val numMessages = 2L
     sendMessages(numMessages.toInt)
 
     // give some time for the follower 1 to record leader HW
     TestUtils.waitUntilTrue(() =>
-      server2.replicaManager.getReplica(topic, 0).get.highWatermark.messageOffset == numMessages,
+      server2.replicaManager.getReplica(topicPartition).get.highWatermark.messageOffset == numMessages,
       "Failed to update high watermark for follower after timeout")
 
     servers.foreach(_.replicaManager.checkpointHighWatermarks())
-    val leaderHW = hwFile1.read.getOrElse(TopicAndPartition(topic, 0), 0L)
+    val leaderHW = hwFile1.read.getOrElse(topicPartition, 0L)
     assertEquals(numMessages, leaderHW)
-    val followerHW = hwFile2.read.getOrElse(TopicAndPartition(topic, 0), 0L)
+    val followerHW = hwFile2.read.getOrElse(topicPartition, 0L)
     assertEquals(numMessages, followerHW)
   }
 
   @Test
-  def testHWCheckpointWithFailuresSingleLogSegment {
-    var leader = waitUntilLeaderIsElectedOrChanged(zkUtils, topic, partitionId)
+  def testHWCheckpointWithFailuresSingleLogSegment(): Unit = {
+    var leader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId)
 
-    assertEquals(0L, hwFile1.read.getOrElse(TopicAndPartition(topic, 0), 0L))
+    assertEquals(0L, hwFile1.read.getOrElse(topicPartition, 0L))
 
     sendMessages(1)
     Thread.sleep(1000)
@@ -126,111 +127,110 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
 
     // kill the server hosting the preferred replica
     server1.shutdown()
-    assertEquals(hw, hwFile1.read.getOrElse(TopicAndPartition(topic, 0), 0L))
+    assertEquals(hw, hwFile1.read.getOrElse(topicPartition, 0L))
 
     // check if leader moves to the other server
-    leader = waitUntilLeaderIsElectedOrChanged(zkUtils, topic, partitionId, oldLeaderOpt = leader)
-    assertEquals("Leader must move to broker 1", 1, leader.getOrElse(-1))
+    leader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, oldLeaderOpt = Some(leader))
+    assertEquals("Leader must move to broker 1", 1, leader)
 
     // bring the preferred replica back
     server1.startup()
     // Update producer with new server settings
     updateProducer()
 
-    leader = waitUntilLeaderIsElectedOrChanged(zkUtils, topic, partitionId)
-    assertTrue("Leader must remain on broker 1, in case of zookeeper session expiration it can move to broker 0",
-      leader.isDefined && (leader.get == 0 || leader.get == 1))
+    leader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId)
+    assertTrue("Leader must remain on broker 1, in case of ZooKeeper session expiration it can move to broker 0",
+      leader == 0 || leader == 1)
 
-    assertEquals(hw, hwFile1.read.getOrElse(TopicAndPartition(topic, 0), 0L))
+    assertEquals(hw, hwFile1.read.getOrElse(topicPartition, 0L))
     // since server 2 was never shut down, the hw value of 30 is probably not checkpointed to disk yet
     server2.shutdown()
-    assertEquals(hw, hwFile2.read.getOrElse(TopicAndPartition(topic, 0), 0L))
+    assertEquals(hw, hwFile2.read.getOrElse(topicPartition, 0L))
 
     server2.startup()
     updateProducer()
-    leader = waitUntilLeaderIsElectedOrChanged(zkUtils, topic, partitionId, oldLeaderOpt = leader)
-    assertTrue("Leader must remain on broker 0, in case of zookeeper session expiration it can move to broker 1",
-      leader.isDefined && (leader.get == 0 || leader.get == 1))
+    leader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, oldLeaderOpt = Some(leader))
+    assertTrue("Leader must remain on broker 0, in case of ZooKeeper session expiration it can move to broker 1",
+      leader == 0 || leader == 1)
 
     sendMessages(1)
     hw += 1
 
     // give some time for follower 1 to record leader HW of 60
     TestUtils.waitUntilTrue(() =>
-      server2.replicaManager.getReplica(topic, 0).get.highWatermark.messageOffset == hw,
+      server2.replicaManager.getReplica(topicPartition).get.highWatermark.messageOffset == hw,
       "Failed to update high watermark for follower after timeout")
     // shutdown the servers to allow the hw to be checkpointed
     servers.foreach(_.shutdown())
-    assertEquals(hw, hwFile1.read.getOrElse(TopicAndPartition(topic, 0), 0L))
-    assertEquals(hw, hwFile2.read.getOrElse(TopicAndPartition(topic, 0), 0L))
+    assertEquals(hw, hwFile1.read.getOrElse(topicPartition, 0L))
+    assertEquals(hw, hwFile2.read.getOrElse(topicPartition, 0L))
   }
 
   @Test
-  def testHWCheckpointNoFailuresMultipleLogSegments {
+  def testHWCheckpointNoFailuresMultipleLogSegments(): Unit = {
     sendMessages(20)
     val hw = 20L
     // give some time for follower 1 to record leader HW of 600
     TestUtils.waitUntilTrue(() =>
-      server2.replicaManager.getReplica(topic, 0).get.highWatermark.messageOffset == hw,
+      server2.replicaManager.getReplica(topicPartition).get.highWatermark.messageOffset == hw,
       "Failed to update high watermark for follower after timeout")
     // shutdown the servers to allow the hw to be checkpointed
     servers.foreach(_.shutdown())
-    val leaderHW = hwFile1.read.getOrElse(TopicAndPartition(topic, 0), 0L)
+    val leaderHW = hwFile1.read.getOrElse(topicPartition, 0L)
     assertEquals(hw, leaderHW)
-    val followerHW = hwFile2.read.getOrElse(TopicAndPartition(topic, 0), 0L)
+    val followerHW = hwFile2.read.getOrElse(topicPartition, 0L)
     assertEquals(hw, followerHW)
   }
 
   @Test
-  def testHWCheckpointWithFailuresMultipleLogSegments {
-    var leader = waitUntilLeaderIsElectedOrChanged(zkUtils, topic, partitionId)
+  def testHWCheckpointWithFailuresMultipleLogSegments(): Unit = {
+    var leader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId)
 
     sendMessages(2)
     var hw = 2L
 
     // allow some time for the follower to get the leader HW
     TestUtils.waitUntilTrue(() =>
-      server2.replicaManager.getReplica(topic, 0).get.highWatermark.messageOffset == hw,
+      server2.replicaManager.getReplica(topicPartition).get.highWatermark.messageOffset == hw,
       "Failed to update high watermark for follower after timeout")
     // kill the server hosting the preferred replica
     server1.shutdown()
     server2.shutdown()
-    assertEquals(hw, hwFile1.read.getOrElse(TopicAndPartition(topic, 0), 0L))
-    assertEquals(hw, hwFile2.read.getOrElse(TopicAndPartition(topic, 0), 0L))
+    assertEquals(hw, hwFile1.read.getOrElse(topicPartition, 0L))
+    assertEquals(hw, hwFile2.read.getOrElse(topicPartition, 0L))
 
     server2.startup()
     updateProducer()
     // check if leader moves to the other server
-    leader = waitUntilLeaderIsElectedOrChanged(zkUtils, topic, partitionId, oldLeaderOpt = leader)
-    assertEquals("Leader must move to broker 1", 1, leader.getOrElse(-1))
+    leader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, oldLeaderOpt = Some(leader))
+    assertEquals("Leader must move to broker 1", 1, leader)
 
-    assertEquals(hw, hwFile1.read.getOrElse(TopicAndPartition(topic, 0), 0L))
+    assertEquals(hw, hwFile1.read.getOrElse(topicPartition, 0L))
 
     // bring the preferred replica back
     server1.startup()
     updateProducer()
 
-    assertEquals(hw, hwFile1.read.getOrElse(TopicAndPartition(topic, 0), 0L))
-    assertEquals(hw, hwFile2.read.getOrElse(TopicAndPartition(topic, 0), 0L))
+    assertEquals(hw, hwFile1.read.getOrElse(topicPartition, 0L))
+    assertEquals(hw, hwFile2.read.getOrElse(topicPartition, 0L))
 
     sendMessages(2)
     hw += 2
 
     // allow some time for the follower to create replica
-    TestUtils.waitUntilTrue(() => server1.replicaManager.getReplica(topic, 0).nonEmpty,
+    TestUtils.waitUntilTrue(() => server1.replicaManager.getReplica(topicPartition).nonEmpty,
       "Failed to create replica in follower after timeout")
     // allow some time for the follower to get the leader HW
     TestUtils.waitUntilTrue(() =>
-      server1.replicaManager.getReplica(topic, 0).get.highWatermark.messageOffset == hw,
+      server1.replicaManager.getReplica(topicPartition).get.highWatermark.messageOffset == hw,
       "Failed to update high watermark for follower after timeout")
     // shutdown the servers to allow the hw to be checkpointed
     servers.foreach(_.shutdown())
-    assertEquals(hw, hwFile1.read.getOrElse(TopicAndPartition(topic, 0), 0L))
-    assertEquals(hw, hwFile2.read.getOrElse(TopicAndPartition(topic, 0), 0L))
+    assertEquals(hw, hwFile1.read.getOrElse(topicPartition, 0L))
+    assertEquals(hw, hwFile2.read.getOrElse(topicPartition, 0L))
   }
 
-  private def sendMessages(n: Int = 1) {
-    for(i <- 0 until n)
-      producer.send(new KeyedMessage[Int, String](topic, 0, message))
+  private def sendMessages(n: Int) {
+    (0 until n).map(_ => producer.send(new ProducerRecord(topic, 0, message))).foreach(_.get)
   }
 }

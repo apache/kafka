@@ -25,7 +25,8 @@ import kafka.producer.async.{DefaultEventHandler, EventHandler, ProducerSendThre
 import kafka.serializer.Encoder
 import kafka.utils._
 
-
+@deprecated("This class has been deprecated and will be removed in a future release. " +
+            "Please use org.apache.kafka.clients.producer.KafkaProducer instead.", "0.10.0.0")
 class Producer[K,V](val config: ProducerConfig,
                     private val eventHandler: EventHandler[K,V])  // only for unit testing
   extends Logging {
@@ -73,12 +74,13 @@ class Producer[K,V](val config: ProducerConfig,
       if (hasShutdown.get)
         throw new ProducerClosedException
       recordStats(messages)
-      sync match {
-        case true => eventHandler.handle(messages)
-        case false => asyncSend(messages)
-      }
+      if (sync)
+        eventHandler.handle(messages)
+      else
+        asyncSend(messages)
     }
   }
+
 
   private def recordStats(messages: Seq[KeyedMessage[K,V]]) {
     for (message <- messages) {
@@ -94,16 +96,15 @@ class Producer[K,V](val config: ProducerConfig,
           queue.offer(message)
         case _  =>
           try {
-            config.queueEnqueueTimeoutMs < 0 match {
-            case true =>
+            if (config.queueEnqueueTimeoutMs < 0) {
               queue.put(message)
               true
-            case _ =>
+            } else {
               queue.offer(message, config.queueEnqueueTimeoutMs, TimeUnit.MILLISECONDS)
             }
           }
           catch {
-            case e: InterruptedException =>
+            case _: InterruptedException =>
               false
           }
       }
@@ -131,7 +132,7 @@ class Producer[K,V](val config: ProducerConfig,
         KafkaMetricsGroup.removeAllProducerMetrics(config.clientId)
         if (producerSendThread != null)
           producerSendThread.shutdown
-        eventHandler.close
+        eventHandler.close()
         info("Producer shutdown completed in " + (System.nanoTime() - startTime) / 1000000 + " ms")
       }
     }

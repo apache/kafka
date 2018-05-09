@@ -17,8 +17,6 @@
 
 package kafka.utils
 
-import java.lang.IllegalStateException
-
 class State
 object DONE extends State
 object READY extends State
@@ -44,12 +42,12 @@ abstract class IteratorTemplate[T] extends Iterator[T] with java.util.Iterator[T
   }
   
   def peek(): T = {
-    if(!hasNext())
+    if(!hasNext)
       throw new NoSuchElementException()
     nextItem
   }
   
-  def hasNext(): Boolean = {
+  def hasNext: Boolean = {
     if(state == FAILED)
       throw new IllegalStateException("Iterator is in failed state")
     state match {
@@ -77,7 +75,7 @@ abstract class IteratorTemplate[T] extends Iterator[T] with java.util.Iterator[T
     null.asInstanceOf[T]
   }
   
-  def remove = 
+  override def remove =
     throw new UnsupportedOperationException("Removal not supported")
 
   protected def resetState() {

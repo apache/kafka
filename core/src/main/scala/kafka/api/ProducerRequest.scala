@@ -22,12 +22,11 @@ import java.nio._
 import kafka.api.ApiUtils._
 import kafka.common._
 import kafka.message._
-import kafka.network.{RequestOrResponseSend, RequestChannel}
-import kafka.network.RequestChannel.Response
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.protocol.ApiKeys
 
+@deprecated("This object has been deprecated and will be removed in a future release.", "1.0.0")
 object ProducerRequest {
-  val CurrentVersion = 1.shortValue
+  val CurrentVersion = 2.shortValue
 
   def readFrom(buffer: ByteBuffer): ProducerRequest = {
     val versionId: Short = buffer.getShort
@@ -54,6 +53,7 @@ object ProducerRequest {
   }
 }
 
+@deprecated("This object has been deprecated and will be removed in a future release.", "1.0.0")
 case class ProducerRequest(versionId: Short = ProducerRequest.CurrentVersion,
                            correlationId: Int,
                            clientId: String,
@@ -93,7 +93,7 @@ case class ProducerRequest(versionId: Short = ProducerRequest.CurrentVersion,
           val partitionMessageData = partitionAndData._2
           val bytes = partitionMessageData.buffer
           buffer.putInt(partition)
-          buffer.putInt(bytes.limit)
+          buffer.putInt(bytes.limit())
           buffer.put(bytes)
           bytes.rewind
         })
@@ -124,22 +124,8 @@ case class ProducerRequest(versionId: Short = ProducerRequest.CurrentVersion,
 
   def numPartitions = data.size
 
-  override def toString(): String = {
+  override def toString: String = {
     describe(true)
-  }
-
-  override  def handleError(e: Throwable, requestChannel: RequestChannel, request: RequestChannel.Request): Unit = {
-    if(request.requestObj.asInstanceOf[ProducerRequest].requiredAcks == 0) {
-        requestChannel.closeConnection(request.processor, request)
-    }
-    else {
-      val producerResponseStatus = data.map {
-        case (topicAndPartition, data) =>
-          (topicAndPartition, ProducerResponseStatus(Errors.forException(e).code, -1l))
-      }
-      val errorResponse = ProducerResponse(correlationId, producerResponseStatus)
-      requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, errorResponse)))
-    }
   }
 
   override def describe(details: Boolean): String = {

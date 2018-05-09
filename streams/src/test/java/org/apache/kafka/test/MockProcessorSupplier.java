@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,59 +14,52 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.test;
 
 import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.PunctuationType;
 
 import java.util.ArrayList;
+import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 
 public class MockProcessorSupplier<K, V> implements ProcessorSupplier<K, V> {
 
-    public final ArrayList<String> processed = new ArrayList<>();
-    public final ArrayList<Long> punctuated = new ArrayList<>();
+    private final long scheduleInterval;
+    private final PunctuationType punctuationType;
+    private final List<MockProcessor<K, V>> processors = new ArrayList<>();
+
+    public MockProcessorSupplier() {
+        this(-1L);
+    }
+
+    public MockProcessorSupplier(long scheduleInterval) {
+        this(scheduleInterval, PunctuationType.STREAM_TIME);
+    }
+
+    public MockProcessorSupplier(long scheduleInterval, PunctuationType punctuationType) {
+        this.scheduleInterval = scheduleInterval;
+        this.punctuationType = punctuationType;
+    }
 
     @Override
     public Processor<K, V> get() {
-        return new MockProcessor();
+        final MockProcessor<K, V> processor = new MockProcessor<>(punctuationType, scheduleInterval);
+        processors.add(processor);
+        return processor;
     }
 
-    public class MockProcessor implements Processor<K, V> {
-
-        @Override
-        public void init(ProcessorContext context) {
-            // do nothing
-        }
-
-        @Override
-        public void process(K key, V value) {
-            processed.add(key + ":" + value);
-        }
-
-        @Override
-        public void punctuate(long streamTime) {
-            punctuated.add(streamTime);
-        }
-
-        @Override
-        public void close() {
-            // do nothing
-        }
-
+    // get the captured processor assuming that only one processor gets returned from this supplier
+    public MockProcessor<K, V> theCapturedProcessor() {
+        return capturedProcessors(1).get(0);
     }
 
-    public void checkAndClearResult(String... expected) {
-        assertEquals("the number of outputs:", expected.length, processed.size());
+    // get the captured processors with the expected number
+    public List<MockProcessor<K, V>> capturedProcessors(final int expectedNumberOfProcessors) {
+        assertEquals(expectedNumberOfProcessors, processors.size());
 
-        for (int i = 0; i < expected.length; i++) {
-            assertEquals("output[" + i + "]:", expected[i], processed.get(i));
-        }
-
-        processed.clear();
+        return processors;
     }
-
 }

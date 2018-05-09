@@ -16,72 +16,239 @@
  */
 package kafka.utils
 
+import java.io.{File, BufferedWriter, FileWriter}
+import java.util.Properties
+import kafka.server.KafkaConfig
+import org.apache.kafka.common.utils.Java
 
 object JaasTestUtils {
-  // ZooKeeper vals
-  val zkServerContextName = "Server"
-  val zkClientContextName = "Client"
-  val userSuperPasswd = "adminpasswd"
-  val user = "fpj"
-  val userPasswd = "fpjsecret"
-  val zkModule = "org.apache.zookeeper.server.auth.DigestLoginModule"
-  //Kafka vals
-  val kafkaServerContextName = "KafkaServer"
-  val kafkaClientContextName = "KafkaClient"
-  val kafkaServerPrincipal = "client@EXAMPLE.COM"
-  val kafkaClientPrincipal = "kafka/localhost@EXAMPLE.COM"
-  val kafkaModule = "com.sun.security.auth.module.Krb5LoginModule"
-  
-  def genZkFile: String = {
-    val jaasFile = java.io.File.createTempFile("jaas", ".conf")
-    val jaasOutputStream = new java.io.FileOutputStream(jaasFile)
-    writeZkToOutputStream(jaasOutputStream)
-    jaasOutputStream.close()
-    jaasFile.deleteOnExit()
-    jaasFile.getCanonicalPath
+
+  case class Krb5LoginModule(useKeyTab: Boolean,
+                             storeKey: Boolean,
+                             keyTab: String,
+                             principal: String,
+                             debug: Boolean,
+                             serviceName: Option[String]) extends JaasModule {
+
+    def name =
+      if (Java.isIbmJdk)
+        "com.ibm.security.auth.module.Krb5LoginModule"
+      else
+        "com.sun.security.auth.module.Krb5LoginModule"
+
+    def entries: Map[String, String] =
+      if (Java.isIbmJdk)
+        Map(
+          "principal" -> principal,
+          "credsType" -> "both"
+        ) ++ (if (useKeyTab) Map("useKeytab" -> s"file:$keyTab") else Map.empty)
+      else
+        Map(
+          "useKeyTab" -> useKeyTab.toString,
+          "storeKey" -> storeKey.toString,
+          "keyTab" -> keyTab,
+          "principal" -> principal
+        ) ++ serviceName.map(s => Map("serviceName" -> s)).getOrElse(Map.empty)
   }
-  
-  def genKafkaFile(keytabLocation: String): String = {
-    val jaasFile = java.io.File.createTempFile("jaas", ".conf")
-    val jaasOutputStream = new java.io.FileOutputStream(jaasFile)
-    writeKafkaToOutputStream(jaasOutputStream, keytabLocation)
-    jaasOutputStream.close()
-    jaasFile.deleteOnExit()
-    jaasFile.getCanonicalPath
+
+  case class PlainLoginModule(username: String,
+                              password: String,
+                              debug: Boolean = false,
+                              validUsers: Map[String, String] = Map.empty) extends JaasModule {
+
+    def name = "org.apache.kafka.common.security.plain.PlainLoginModule"
+
+    def entries: Map[String, String] = Map(
+      "username" -> username,
+      "password" -> password
+    ) ++ validUsers.map { case (user, pass) => s"user_$user" -> pass }
+
   }
-  
-  def genZkAndKafkaFile(keytabLocation: String): String = {
-    val jaasFile = java.io.File.createTempFile("jaas", ".conf")
-    val jaasOutputStream = new java.io.FileOutputStream(jaasFile)
-    writeKafkaToOutputStream(jaasOutputStream, keytabLocation)
-    jaasOutputStream.write("\n\n".getBytes)
-    writeZkToOutputStream(jaasOutputStream)
-    jaasOutputStream.close()
-    jaasFile.deleteOnExit()
-    jaasFile.getCanonicalPath
+
+  case class ZkDigestModule(debug: Boolean = false,
+                            entries: Map[String, String] = Map.empty) extends JaasModule {
+    def name = "org.apache.zookeeper.server.auth.DigestLoginModule"
   }
-  
-  private def writeZkToOutputStream(jaasOutputStream: java.io.FileOutputStream) {
-    jaasOutputStream.write(s"$zkServerContextName {\n\t$zkModule required\n".getBytes)
-    jaasOutputStream.write(s"""\tuser_super="$userSuperPasswd"\n""".getBytes)
-    jaasOutputStream.write(s"""\tuser_$user="$userPasswd";\n};\n\n""".getBytes)
-    jaasOutputStream.write(s"""$zkClientContextName {\n\t$zkModule required\n""".getBytes)
-    jaasOutputStream.write(s"""\tusername="$user"\n""".getBytes)
-    jaasOutputStream.write(s"""\tpassword="$userPasswd";\n};""".getBytes)
+
+  case class ScramLoginModule(username: String,
+                              password: String,
+                              debug: Boolean = false,
+                              tokenProps: Map[String, String] = Map.empty) extends JaasModule {
+
+    def name = "org.apache.kafka.common.security.scram.ScramLoginModule"
+
+    def entries: Map[String, String] = Map(
+      "username" -> username,
+      "password" -> password
+    ) ++ tokenProps.map { case (name, value) => name -> value }
   }
-  
-  private def writeKafkaToOutputStream(jaasOutputStream: java.io.FileOutputStream, keytabLocation: String) {
-    jaasOutputStream.write(s"$kafkaClientContextName {\n\t$kafkaModule required debug=true\n".getBytes)
-    jaasOutputStream.write(s"\tuseKeyTab=true\n".getBytes)
-    jaasOutputStream.write(s"\tstoreKey=true\n".getBytes)
-    jaasOutputStream.write(s"""\tserviceName="kafka"\n""".getBytes)
-    jaasOutputStream.write(s"""\tkeyTab="$keytabLocation"\n""".getBytes)
-    jaasOutputStream.write(s"""\tprincipal="$kafkaServerPrincipal";\n};\n\n""".getBytes)
-    jaasOutputStream.write(s"""$kafkaServerContextName {\n\t$kafkaModule required debug=true\n""".getBytes)
-    jaasOutputStream.write(s"\tuseKeyTab=true\n".getBytes)
-    jaasOutputStream.write(s"\tstoreKey=true\n".getBytes)
-    jaasOutputStream.write(s"""\tserviceName="kafka"\n""".getBytes)
-    jaasOutputStream.write(s"""\tkeyTab="$keytabLocation"\n""".getBytes)
-    jaasOutputStream.write(s"""\tprincipal="$kafkaClientPrincipal";\n};""".getBytes)
+
+  sealed trait JaasModule {
+    def name: String
+    def debug: Boolean
+    def entries: Map[String, String]
+
+    override def toString: String = {
+      s"""$name required
+          |  debug=$debug
+          |  ${entries.map { case (k, v) => s"""$k="$v"""" }.mkString("", "\n|  ", ";")}
+          |""".stripMargin
+    }
   }
+
+  case class JaasSection(contextName: String, modules: Seq[JaasModule]) {
+    override def toString: String = {
+      s"""|$contextName {
+          |  ${modules.mkString("\n  ")}
+          |};
+          |""".stripMargin
+    }
+  }
+
+  private val ZkServerContextName = "Server"
+  private val ZkClientContextName = "Client"
+  private val ZkUserSuperPasswd = "adminpasswd"
+  private val ZkUser = "fpj"
+  private val ZkUserPassword = "fpjsecret"
+
+  val KafkaServerContextName = "KafkaServer"
+  val KafkaServerPrincipalUnqualifiedName = "kafka"
+  private val KafkaServerPrincipal = KafkaServerPrincipalUnqualifiedName + "/localhost@EXAMPLE.COM"
+  val KafkaClientContextName = "KafkaClient"
+  val KafkaClientPrincipalUnqualifiedName = "client"
+  private val KafkaClientPrincipal = KafkaClientPrincipalUnqualifiedName + "@EXAMPLE.COM"
+  val KafkaClientPrincipalUnqualifiedName2 = "client2"
+  private val KafkaClientPrincipal2 = KafkaClientPrincipalUnqualifiedName2 + "@EXAMPLE.COM"
+  
+  val KafkaPlainUser = "plain-user"
+  private val KafkaPlainPassword = "plain-user-secret"
+  val KafkaPlainUser2 = "plain-user2"
+  val KafkaPlainPassword2 = "plain-user2-secret"
+  val KafkaPlainAdmin = "plain-admin"
+  private val KafkaPlainAdminPassword = "plain-admin-secret"
+
+  val KafkaScramUser = "scram-user"
+  val KafkaScramPassword = "scram-user-secret"
+  val KafkaScramUser2 = "scram-user2"
+  val KafkaScramPassword2 = "scram-user2-secret"
+  val KafkaScramAdmin = "scram-admin"
+  val KafkaScramAdminPassword = "scram-admin-secret"
+
+  val serviceName = "kafka"
+
+  def saslConfigs(saslProperties: Option[Properties]): Properties = {
+    val result = saslProperties match {
+      case Some(properties) => properties
+      case None => new Properties
+    }
+    // IBM Kerberos module doesn't support the serviceName JAAS property, hence it needs to be
+    // passed as a Kafka property
+    if (Java.isIbmJdk && !result.contains(KafkaConfig.SaslKerberosServiceNameProp))
+      result.put(KafkaConfig.SaslKerberosServiceNameProp, serviceName)
+    result
+  }
+
+  def writeJaasContextsToFile(jaasSections: Seq[JaasSection]): File = {
+    val jaasFile = TestUtils.tempFile()
+    writeToFile(jaasFile, jaasSections)
+    jaasFile
+  }
+
+  // Returns the dynamic configuration, using credentials for user #1
+  def clientLoginModule(mechanism: String, keytabLocation: Option[File]): String =
+    kafkaClientModule(mechanism, keytabLocation, KafkaClientPrincipal, KafkaPlainUser, KafkaPlainPassword, KafkaScramUser, KafkaScramPassword).toString
+
+  def tokenClientLoginModule(tokenId: String, password: String): String = {
+    ScramLoginModule(
+      tokenId,
+      password,
+      debug = false,
+      Map(
+        "tokenauth" -> "true"
+      )).toString
+  }
+
+  def zkSections: Seq[JaasSection] = Seq(
+    JaasSection(ZkServerContextName, Seq(ZkDigestModule(debug = false,
+      Map("user_super" -> ZkUserSuperPasswd, s"user_$ZkUser" -> ZkUserPassword)))),
+    JaasSection(ZkClientContextName, Seq(ZkDigestModule(debug = false,
+      Map("username" -> ZkUser, "password" -> ZkUserPassword))))
+  )
+
+  def kafkaServerSection(contextName: String, mechanisms: Seq[String], keytabLocation: Option[File]): JaasSection = {
+    val modules = mechanisms.map {
+      case "GSSAPI" =>
+        Krb5LoginModule(
+          useKeyTab = true,
+          storeKey = true,
+          keyTab = keytabLocation.getOrElse(throw new IllegalArgumentException("Keytab location not specified for GSSAPI")).getAbsolutePath,
+          principal = KafkaServerPrincipal,
+          debug = true,
+          serviceName = Some(serviceName))
+      case "PLAIN" =>
+        PlainLoginModule(
+          KafkaPlainAdmin,
+          KafkaPlainAdminPassword,
+          debug = false,
+          Map(
+            KafkaPlainAdmin -> KafkaPlainAdminPassword,
+            KafkaPlainUser -> KafkaPlainPassword,
+            KafkaPlainUser2 -> KafkaPlainPassword2
+          ))
+      case "SCRAM-SHA-256" | "SCRAM-SHA-512" =>
+        ScramLoginModule(
+          KafkaScramAdmin,
+          KafkaScramAdminPassword,
+          debug = false)
+      case mechanism => throw new IllegalArgumentException("Unsupported server mechanism " + mechanism)
+    }
+    JaasSection(contextName, modules)
+  }
+
+  // consider refactoring if more mechanisms are added
+  private def kafkaClientModule(mechanism: String, 
+      keytabLocation: Option[File], clientPrincipal: String,
+      plainUser: String, plainPassword: String, 
+      scramUser: String, scramPassword: String): JaasModule = {
+    mechanism match {
+      case "GSSAPI" =>
+        Krb5LoginModule(
+          useKeyTab = true,
+          storeKey = true,
+          keyTab = keytabLocation.getOrElse(throw new IllegalArgumentException("Keytab location not specified for GSSAPI")).getAbsolutePath,
+          principal = clientPrincipal,
+          debug = true,
+          serviceName = Some(serviceName)
+        )
+      case "PLAIN" =>
+        PlainLoginModule(
+          plainUser,
+          plainPassword
+        )
+      case "SCRAM-SHA-256" | "SCRAM-SHA-512" =>
+        ScramLoginModule(
+          scramUser,
+          scramPassword
+        )
+      case mechanism => throw new IllegalArgumentException("Unsupported client mechanism " + mechanism)
+    }
+  }
+
+  /*
+   * Used for the static JAAS configuration and it uses the credentials for client#2
+   */
+  def kafkaClientSection(mechanism: Option[String], keytabLocation: Option[File]): JaasSection = {
+    JaasSection(KafkaClientContextName, mechanism.map(m =>
+      kafkaClientModule(m, keytabLocation, KafkaClientPrincipal2, KafkaPlainUser2, KafkaPlainPassword2, KafkaScramUser2, KafkaScramPassword2)).toSeq)
+  }
+
+  private def jaasSectionsToString(jaasSections: Seq[JaasSection]): String =
+    jaasSections.mkString
+
+  private def writeToFile(file: File, jaasSections: Seq[JaasSection]) {
+    val writer = new BufferedWriter(new FileWriter(file))
+    try writer.write(jaasSectionsToString(jaasSections))
+    finally writer.close()
+  }
+
 }

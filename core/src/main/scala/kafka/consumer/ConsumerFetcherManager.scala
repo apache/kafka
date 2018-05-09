@@ -17,18 +17,19 @@
 
 package kafka.consumer
 
-import org.I0Itec.zkclient.ZkClient
-import kafka.server.{BrokerAndInitialOffset, AbstractFetcherThread, AbstractFetcherManager}
+import kafka.server.{AbstractFetcherManager, AbstractFetcherThread, BrokerAndInitialOffset}
 import kafka.cluster.{BrokerEndPoint, Cluster}
-import org.apache.kafka.common.protocol.SecurityProtocol
+import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.utils.Time
+
 import scala.collection.immutable
 import collection.mutable.HashMap
 import scala.collection.mutable
 import java.util.concurrent.locks.ReentrantLock
+
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.ZkUtils
-import kafka.utils.{ShutdownableThread, SystemTime}
-import kafka.common.TopicAndPartition
+import kafka.utils.ShutdownableThread
 import kafka.client.ClientUtils
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -37,14 +38,14 @@ import java.util.concurrent.atomic.AtomicInteger
  *  Once ConsumerFetcherManager is created, startConnections() and stopAllConnections() can be called repeatedly
  *  until shutdown() is called.
  */
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
 class ConsumerFetcherManager(private val consumerIdString: String,
                              private val config: ConsumerConfig,
                              private val zkUtils : ZkUtils)
-        extends AbstractFetcherManager("ConsumerFetcherManager-%d".format(SystemTime.milliseconds),
+        extends AbstractFetcherManager("ConsumerFetcherManager-%d".format(Time.SYSTEM.milliseconds),
                                        config.clientId, config.numConsumerFetchers) {
-  private var partitionMap: immutable.Map[TopicAndPartition, PartitionTopicInfo] = null
-  private var cluster: Cluster = null
-  private val noLeaderPartitionSet = new mutable.HashSet[TopicAndPartition]
+  private var partitionMap: immutable.Map[TopicPartition, PartitionTopicInfo] = null
+  private val noLeaderPartitionSet = new mutable.HashSet[TopicPartition]
   private val lock = new ReentrantLock
   private val cond = lock.newCondition()
   private var leaderFinderThread: ShutdownableThread = null
@@ -53,7 +54,7 @@ class ConsumerFetcherManager(private val consumerIdString: String,
   private class LeaderFinderThread(name: String) extends ShutdownableThread(name) {
     // thread responsible for adding the fetcher to the right broker when leader is available
     override def doWork() {
-      val leaderForPartitionsMap = new HashMap[TopicAndPartition, BrokerEndPoint]
+      val leaderForPartitionsMap = new HashMap[TopicPartition, BrokerEndPoint]
       lock.lock()
       try {
         while (noLeaderPartitionSet.isEmpty) {
@@ -62,17 +63,17 @@ class ConsumerFetcherManager(private val consumerIdString: String,
         }
 
         trace("Partitions without leader %s".format(noLeaderPartitionSet))
-        val brokers = zkUtils.getAllBrokerEndPointsForChannel(SecurityProtocol.PLAINTEXT)
+        val brokers = ClientUtils.getPlaintextBrokerEndPoints(zkUtils)
         val topicsMetadata = ClientUtils.fetchTopicMetadata(noLeaderPartitionSet.map(m => m.topic).toSet,
                                                             brokers,
                                                             config.clientId,
                                                             config.socketTimeoutMs,
                                                             correlationId.getAndIncrement).topicsMetadata
-        if(logger.isDebugEnabled) topicsMetadata.foreach(topicMetadata => debug(topicMetadata.toString()))
+        if(isDebugEnabled) topicsMetadata.foreach(topicMetadata => debug(topicMetadata.toString()))
         topicsMetadata.foreach { tmd =>
           val topic = tmd.topic
           tmd.partitionsMetadata.foreach { pmd =>
-            val topicAndPartition = TopicAndPartition(topic, pmd.partitionId)
+            val topicAndPartition = new TopicPartition(topic, pmd.partitionId)
             if(pmd.leader.isDefined && noLeaderPartitionSet.contains(topicAndPartition)) {
               val leaderBroker = pmd.leader.get
               leaderForPartitionsMap.put(topicAndPartition, leaderBroker)
@@ -82,7 +83,7 @@ class ConsumerFetcherManager(private val consumerIdString: String,
         }
       } catch {
         case t: Throwable => {
-            if (!isRunning.get())
+            if (!isRunning)
               throw t /* If this thread is stopped, propagate this exception to kill the thread. */
             else
               warn("Failed to find leader for %s".format(noLeaderPartitionSet), t)
@@ -92,13 +93,12 @@ class ConsumerFetcherManager(private val consumerIdString: String,
       }
 
       try {
-        addFetcherForPartitions(leaderForPartitionsMap.map{
-          case (topicAndPartition, broker) =>
-            topicAndPartition -> BrokerAndInitialOffset(broker, partitionMap(topicAndPartition).getFetchOffset())}
+        addFetcherForPartitions(leaderForPartitionsMap.map { case (topicPartition, broker) =>
+          topicPartition -> BrokerAndInitialOffset(broker, partitionMap(topicPartition).getFetchOffset())}
         )
       } catch {
-        case t: Throwable => {
-          if (!isRunning.get())
+        case t: Throwable =>
+          if (!isRunning)
             throw t /* If this thread is stopped, propagate this exception to kill the thread. */
           else {
             warn("Failed to add leader for partitions %s; will retry".format(leaderForPartitionsMap.keySet.mkString(",")), t)
@@ -107,7 +107,6 @@ class ConsumerFetcherManager(private val consumerIdString: String,
             lock.unlock()
           }
         }
-      }
 
       shutdownIdleFetcherThreads()
       Thread.sleep(config.refreshLeaderBackoffMs)
@@ -115,9 +114,7 @@ class ConsumerFetcherManager(private val consumerIdString: String,
   }
 
   override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): AbstractFetcherThread = {
-    new ConsumerFetcherThread(
-      "ConsumerFetcherThread-%s-%d-%d".format(consumerIdString, fetcherId, sourceBroker.id),
-      config, sourceBroker, partitionMap, this)
+    new ConsumerFetcherThread(consumerIdString, fetcherId, config, sourceBroker, partitionMap, this)
   }
 
   def startConnections(topicInfos: Iterable[PartitionTopicInfo], cluster: Cluster) {
@@ -125,9 +122,8 @@ class ConsumerFetcherManager(private val consumerIdString: String,
     leaderFinderThread.start()
 
     inLock(lock) {
-      partitionMap = topicInfos.map(tpi => (TopicAndPartition(tpi.topic, tpi.partitionId), tpi)).toMap
-      this.cluster = cluster
-      noLeaderPartitionSet ++= topicInfos.map(tpi => TopicAndPartition(tpi.topic, tpi.partitionId))
+      partitionMap = topicInfos.map(tpi => (new TopicPartition(tpi.topic, tpi.partitionId), tpi)).toMap
+      noLeaderPartitionSet ++= topicInfos.map(tpi => new TopicPartition(tpi.topic, tpi.partitionId))
       cond.signalAll()
     }
   }
@@ -154,7 +150,7 @@ class ConsumerFetcherManager(private val consumerIdString: String,
     info("All connections stopped")
   }
 
-  def addPartitionsWithError(partitionList: Iterable[TopicAndPartition]) {
+  def addPartitionsWithError(partitionList: Iterable[TopicPartition]) {
     debug("adding partitions with error %s".format(partitionList))
     inLock(lock) {
       if (partitionMap != null) {

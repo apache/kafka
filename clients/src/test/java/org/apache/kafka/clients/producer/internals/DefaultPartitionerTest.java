@@ -1,29 +1,34 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
- * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
- * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
- * License. You may obtain a copy of the License at
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.clients.producer.internals;
-
-import static java.util.Arrays.asList;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-
-import java.util.Collections;
-import java.util.List;
 
 import org.apache.kafka.clients.producer.Partitioner;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.junit.Test;
+
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import static java.util.Arrays.asList;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 public class DefaultPartitionerTest {
     private byte[] keyBytes = "key".getBytes();
@@ -37,7 +42,8 @@ public class DefaultPartitionerTest {
     private List<PartitionInfo> partitions = asList(new PartitionInfo(topic, 1, null, nodes, nodes),
                                                     new PartitionInfo(topic, 2, node1, nodes, nodes),
                                                     new PartitionInfo(topic, 0, node0, nodes, nodes));
-    private Cluster cluster = new Cluster(asList(node0, node1, node2), partitions, Collections.<String>emptySet());
+    private Cluster cluster = new Cluster("clusterId", asList(node0, node1, node2), partitions,
+            Collections.<String>emptySet(), Collections.<String>emptySet());
 
     @Test
     public void testKeyPartitionIsStable() {
@@ -60,5 +66,36 @@ public class DefaultPartitionerTest {
                 countForPart2++;
         }
         assertEquals("The distribution between two available partitions should be even", countForPart0, countForPart2);
+    }
+
+    @Test
+    public void testRoundRobin() throws InterruptedException {
+        final String topicA = "topicA";
+        final String topicB = "topicB";
+
+        List<PartitionInfo> allPartitions = asList(new PartitionInfo(topicA, 0, node0, nodes, nodes),
+                new PartitionInfo(topicA, 1, node1, nodes, nodes),
+                new PartitionInfo(topicA, 2, node2, nodes, nodes),
+                new PartitionInfo(topicB, 0, node0, nodes, nodes)
+                );
+        Cluster testCluster = new Cluster("clusterId", asList(node0, node1, node2), allPartitions,
+                Collections.<String>emptySet(), Collections.<String>emptySet());
+
+        final Map<Integer, Integer> partitionCount = new HashMap<>();
+
+        for (int i = 0; i < 30; ++i) {
+            int partition = partitioner.partition(topicA, null, null, null, null, testCluster);
+            Integer count = partitionCount.get(partition);
+            if (null == count) count = 0;
+            partitionCount.put(partition, count + 1);
+
+            if (i % 5 == 0) {
+                partitioner.partition(topicB, null, null, null, null, testCluster);
+            }
+        }
+
+        assertEquals(10, (int) partitionCount.get(0));
+        assertEquals(10, (int) partitionCount.get(1));
+        assertEquals(10, (int) partitionCount.get(2));
     }
 }

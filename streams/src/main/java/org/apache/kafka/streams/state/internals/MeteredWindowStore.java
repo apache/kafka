@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,196 +14,149 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.utils.SystemTime;
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsMetrics;
-import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.StateRestoreCallback;
-import org.apache.kafka.streams.state.Serdes;
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
+import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
-public class MeteredWindowStore<K, V> implements WindowStore<K, V> {
+public class MeteredWindowStore<K, V> extends WrappedStateStore.AbstractStateStore implements WindowStore<K, V> {
 
-    protected final WindowStore<K, V> inner;
-    protected final StoreChangeLogger.ValueGetter<byte[], byte[]> getter;
-    protected final String metricScope;
-    protected final Time time;
-
-    private Sensor putTime;
-    private Sensor getTime;
-    private Sensor rangeTime;
-    private Sensor flushTime;
-    private Sensor restoreTime;
+    private final WindowStore<Bytes, byte[]> inner;
+    private final String metricScope;
+    private final Time time;
+    private final Serde<K> keySerde;
+    private final Serde<V> valueSerde;
     private StreamsMetrics metrics;
+    private Sensor putTime;
+    private Sensor fetchTime;
+    private Sensor flushTime;
+    private StateSerdes<K, V> serdes;
+    private ProcessorContext context;
 
-    private boolean loggingEnabled = true;
-    private StoreChangeLogger<byte[], byte[]> changeLogger = null;
-
-    // always wrap the store with the metered store
-    public MeteredWindowStore(final WindowStore<K, V> inner, String metricScope, Time time) {
+    MeteredWindowStore(final WindowStore<Bytes, byte[]> inner,
+                       final String metricScope,
+                       final Time time,
+                       final Serde<K> keySerde,
+                       final Serde<V> valueSerde) {
+        super(inner);
         this.inner = inner;
-        this.getter = new StoreChangeLogger.ValueGetter<byte[], byte[]>() {
-            public byte[] get(byte[] key) {
-                return inner.getInternal(key);
-            }
-        };
         this.metricScope = metricScope;
-        this.time = time != null ? time : new SystemTime();
+        this.time = time;
+        this.keySerde = keySerde;
+        this.valueSerde = valueSerde;
     }
 
-    public MeteredWindowStore<K, V> disableLogging() {
-        loggingEnabled = false;
-        return this;
-    }
-
+    @SuppressWarnings("unchecked")
     @Override
-    public String name() {
-        return inner.name();
-    }
-
-    @Override
-    public void init(ProcessorContext context) {
-        final String name = name();
+    public void init(final ProcessorContext context, final StateStore root) {
+        this.context = context;
+        this.serdes = new StateSerdes<>(ProcessorStateManager.storeChangelogTopic(context.applicationId(), name()),
+                                        keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
+                                        valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
+        final String tagKey = "task-id";
+        final String tagValue = context.taskId().toString();
         this.metrics = context.metrics();
-        this.putTime = this.metrics.addLatencySensor(metricScope, name, "put");
-        this.getTime = this.metrics.addLatencySensor(metricScope, name, "get");
-        this.rangeTime = this.metrics.addLatencySensor(metricScope, name, "range");
-        this.flushTime = this.metrics.addLatencySensor(metricScope, name, "flush");
-        this.restoreTime = this.metrics.addLatencySensor(metricScope, name, "restore");
-
-        this.changeLogger = this.loggingEnabled ?
-                new StoreChangeLogger<>(name, context, Serdes.withBuiltinTypes("", byte[].class, byte[].class)) : null;
-
+        this.putTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name(), "put",
+                                                                  Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
+        this.fetchTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name(), "fetch",
+                                                                    Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
+        this.flushTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name(), "flush",
+                                                                    Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
+        final Sensor restoreTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name(), "restore",
+                                                                              Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
         // register and possibly restore the state from the logs
-        long startNs = time.nanoseconds();
-        inner.init(context);
+        final long startNs = time.nanoseconds();
         try {
-            context.register(this, loggingEnabled, new StateRestoreCallback() {
-                @Override
-                public void restore(byte[] key, byte[] value) {
-                    inner.putInternal(key, value);
-                }
-            });
+            inner.init(context, root);
         } finally {
-            this.metrics.recordLatency(this.restoreTime, startNs, time.nanoseconds());
+            this.metrics.recordLatency(restoreTime, startNs, time.nanoseconds());
         }
     }
 
     @Override
-    public boolean persistent() {
-        return inner.persistent();
+    public void put(final K key, final V value) {
+        put(key, value, context.timestamp());
     }
 
     @Override
-    public WindowStoreIterator<V> fetch(K key, long timeFrom, long timeTo) {
-        return new MeteredWindowStoreIterator<>(this.inner.fetch(key, timeFrom, timeTo), this.rangeTime);
-    }
-
-    @Override
-    public void put(K key, V value) {
-        putAndReturnInternalKey(key, value, -1L);
-    }
-
-    @Override
-    public void put(K key, V value, long timestamp) {
-        putAndReturnInternalKey(key, value, timestamp);
-    }
-
-    @Override
-    public byte[] putAndReturnInternalKey(K key, V value, long timestamp) {
-        long startNs = time.nanoseconds();
+    public void put(final K key, final V value, final long timestamp) {
+        final long startNs = time.nanoseconds();
         try {
-            byte[] binKey = this.inner.putAndReturnInternalKey(key, value, timestamp);
+            inner.put(keyBytes(key), serdes.rawValue(value), timestamp);
+        } finally {
+            metrics.recordLatency(this.putTime, startNs, time.nanoseconds());
+        }
+    }
 
-            if (loggingEnabled) {
-                changeLogger.add(binKey);
-                changeLogger.maybeLogChange(this.getter);
+    private Bytes keyBytes(final K key) {
+        return Bytes.wrap(serdes.rawKey(key));
+    }
+
+    @Override
+    public V fetch(final K key, final long timestamp) {
+        final long startNs = time.nanoseconds();
+        try {
+            final byte[] result = inner.fetch(keyBytes(key), timestamp);
+            if (result == null) {
+                return null;
             }
-
-            return binKey;
+            return serdes.valueFrom(result);
         } finally {
-            this.metrics.recordLatency(this.putTime, startNs, time.nanoseconds());
+            metrics.recordLatency(this.fetchTime, startNs, time.nanoseconds());
         }
     }
 
     @Override
-    public void putInternal(byte[] binaryKey, byte[] binaryValue) {
-        inner.putInternal(binaryKey, binaryValue);
+    public WindowStoreIterator<V> fetch(final K key, final long timeFrom, final long timeTo) {
+        return new MeteredWindowStoreIterator<>(inner.fetch(keyBytes(key), timeFrom, timeTo),
+                                                fetchTime,
+                                                metrics,
+                                                serdes,
+                                                time);
     }
 
     @Override
-    public byte[] getInternal(byte[] binaryKey) {
-        long startNs = time.nanoseconds();
-        try {
-            return this.inner.getInternal(binaryKey);
-        } finally {
-            this.metrics.recordLatency(this.getTime, startNs, time.nanoseconds());
-        }
+    public KeyValueIterator<Windowed<K>, V> all() {
+        return new MeteredWindowedKeyValueIterator<>(inner.all(), fetchTime, metrics, serdes, time);
     }
-
+    
     @Override
-    public void close() {
-        inner.close();
+    public KeyValueIterator<Windowed<K>, V> fetchAll(final long timeFrom, final long timeTo) {
+        return new MeteredWindowedKeyValueIterator<>(inner.fetchAll(timeFrom, timeTo), 
+                                                     fetchTime, 
+                                                     metrics, 
+                                                     serdes, 
+                                                     time);
+    }
+    
+    @Override
+    public KeyValueIterator<Windowed<K>, V> fetch(final K from, final K to, final long timeFrom, final long timeTo) {
+        return new MeteredWindowedKeyValueIterator<>(inner.fetch(keyBytes(from), keyBytes(to), timeFrom, timeTo),
+                                                     fetchTime,
+                                                     metrics,
+                                                     serdes,
+                                                     time);
     }
 
     @Override
     public void flush() {
-        long startNs = time.nanoseconds();
+        final long startNs = time.nanoseconds();
         try {
-            this.inner.flush();
-
-            if (loggingEnabled)
-                changeLogger.logChange(this.getter);
+            inner.flush();
         } finally {
-            this.metrics.recordLatency(this.flushTime, startNs, time.nanoseconds());
+            metrics.recordLatency(flushTime, startNs, time.nanoseconds());
         }
     }
 
-    private class MeteredWindowStoreIterator<E> implements WindowStoreIterator<E> {
-
-        private final WindowStoreIterator<E> iter;
-        private final Sensor sensor;
-        private final long startNs;
-
-        public MeteredWindowStoreIterator(WindowStoreIterator<E> iter, Sensor sensor) {
-            this.iter = iter;
-            this.sensor = sensor;
-            this.startNs = time.nanoseconds();
-        }
-
-        @Override
-        public boolean hasNext() {
-            return iter.hasNext();
-        }
-
-        @Override
-        public KeyValue<Long, E> next() {
-            return iter.next();
-        }
-
-        @Override
-        public void remove() {
-            iter.remove();
-        }
-
-        @Override
-        public void close() {
-            try {
-                iter.close();
-            } finally {
-                metrics.recordLatency(this.sensor, this.startNs, time.nanoseconds());
-            }
-        }
-
-    }
-
-    WindowStore<K, V> inner() {
-        return inner;
-    }
 }

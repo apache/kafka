@@ -17,42 +17,54 @@
 
 package kafka.javaapi
 
-import java.nio.ByteBuffer
+import java.util
+
 import kafka.common.TopicAndPartition
-import kafka.api.{Request, PartitionFetchInfo}
-import scala.collection.mutable
+import kafka.api.{PartitionFetchInfo, Request}
+
+import scala.collection.JavaConverters._
+
+object FetchRequest {
+  private def seqToLinkedHashMap[K, V](s: Seq[(K, V)]): util.LinkedHashMap[K, V] = {
+    val map = new util.LinkedHashMap[K, V]
+    s.foreach { case (k, v) => map.put(k, v) }
+    map
+  }
+}
 
 class FetchRequest(correlationId: Int,
                    clientId: String,
                    maxWait: Int,
                    minBytes: Int,
-                   requestInfo: java.util.Map[TopicAndPartition, PartitionFetchInfo]) {
+                   requestInfo: util.LinkedHashMap[TopicAndPartition, PartitionFetchInfo]) {
 
-  val underlying = {
-    val scalaMap: Map[TopicAndPartition, PartitionFetchInfo] = {
-      import scala.collection.JavaConversions._
-      (requestInfo: mutable.Map[TopicAndPartition, PartitionFetchInfo]).toMap
-    }
-    kafka.api.FetchRequest(
-      correlationId = correlationId,
-      clientId = clientId,
-      replicaId = Request.OrdinaryConsumerId,
-      maxWait = maxWait,
-      minBytes = minBytes,
-      requestInfo = scalaMap
-    )
+  @deprecated("The order of partitions in `requestInfo` is relevant, so this constructor is deprecated in favour of the " +
+    "one that takes a LinkedHashMap", since = "0.10.1.0")
+  def this(correlationId: Int, clientId: String, maxWait: Int, minBytes: Int,
+    requestInfo: java.util.Map[TopicAndPartition, PartitionFetchInfo]) {
+    this(correlationId, clientId, maxWait, minBytes,
+      FetchRequest.seqToLinkedHashMap(kafka.api.FetchRequest.shuffle(requestInfo.asScala.toSeq)))
   }
+
+  val underlying = kafka.api.FetchRequest(
+    correlationId = correlationId,
+    clientId = clientId,
+    replicaId = Request.OrdinaryConsumerId,
+    maxWait = maxWait,
+    minBytes = minBytes,
+    requestInfo = requestInfo.asScala.toBuffer
+  )
 
   override def toString = underlying.toString
 
-  override def equals(other: Any) = canEqual(other) && {
-    val otherFetchRequest = other.asInstanceOf[kafka.javaapi.FetchRequest]
-    this.underlying.equals(otherFetchRequest.underlying)
+  override def equals(obj: Any): Boolean = {
+    obj match {
+      case null => false
+      case other: FetchRequest => this.underlying.equals(other.underlying)
+      case _ => false
+    }
   }
 
-  def canEqual(other: Any) = other.isInstanceOf[kafka.javaapi.FetchRequest]
-
   override def hashCode = underlying.hashCode
-
 }
 

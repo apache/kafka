@@ -27,7 +27,6 @@ import kafka.javaapi.producer.Producer
 import kafka.utils.IntEncoder
 import kafka.utils.{Logging, TestUtils}
 import kafka.consumer.{KafkaStream, ConsumerConfig}
-import kafka.zk.ZooKeeperTestHarness
 import kafka.common.MessageStreamsExistException
 import org.junit.Test
 
@@ -36,8 +35,8 @@ import scala.collection.JavaConversions
 import org.apache.log4j.{Level, Logger}
 import org.junit.Assert._
 
-
-class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with ZooKeeperTestHarness with Logging {
+@deprecated("This test has been deprecated and it will be removed in a future release", "0.10.0.0")
+class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with Logging {
   val numNodes = 2
   val numParts = 2
   val topic = "topic1"
@@ -45,7 +44,8 @@ class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with ZooKeep
   val overridingProps = new Properties()
   overridingProps.put(KafkaConfig.NumPartitionsProp, numParts.toString)
 
-  def generateConfigs() = TestUtils.createBrokerConfigs(numNodes, zkConnect).map(KafkaConfig.fromProps(_, overridingProps))
+  def generateConfigs =
+    TestUtils.createBrokerConfigs(numNodes, zkConnect).map(KafkaConfig.fromProps(_, overridingProps))
 
   val group = "group1"
   val consumer1 = "consumer1"
@@ -57,7 +57,7 @@ class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with ZooKeep
     requestHandlerLogger.setLevel(Level.FATAL)
 
     // create the topic
-    TestUtils.createTopic(zkUtils, topic, numParts, 1, servers)
+    createTopic(topic, numParts, 1)
 
     // send some messages to each broker
     val sentMessages1 = sendMessages(servers, nMessages, "batch1")
@@ -72,10 +72,10 @@ class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with ZooKeep
 
     // call createMesssageStreams twice should throw MessageStreamsExistException
     try {
-      val topicMessageStreams2 = zkConsumerConnector1.createMessageStreams(toJavaMap(Map(topic -> numNodes*numParts/2)), new StringDecoder(), new StringDecoder())
+      zkConsumerConnector1.createMessageStreams(toJavaMap(Map(topic -> numNodes*numParts/2)), new StringDecoder(), new StringDecoder())
       fail("Should fail with MessageStreamsExistException")
     } catch {
-      case e: MessageStreamsExistException => // expected
+      case _: MessageStreamsExistException => // expected
     }
     zkConsumerConnector1.shutdown
     info("all consumer connectors stopped")

@@ -18,11 +18,11 @@ package kafka.utils.timer
 
 import org.junit.Assert._
 import java.util.concurrent.atomic._
-import org.junit.{Test, After, Before}
+import org.junit.Test
 
 class TimerTaskListTest {
 
-  private class TestTask(val expirationMs: Long) extends TimerTask {
+  private class TestTask(val delayMs: Long) extends TimerTask {
     def run(): Unit = { }
   }
 
@@ -35,18 +35,16 @@ class TimerTaskListTest {
   @Test
   def testAll() {
     val sharedCounter = new AtomicInteger(0)
-    val runCounter = new AtomicInteger(0)
-    val execCounter = new AtomicInteger(0)
     val list1 = new TimerTaskList(sharedCounter)
     val list2 = new TimerTaskList(sharedCounter)
     val list3 = new TimerTaskList(sharedCounter)
 
     val tasks = (1 to 10).map { i =>
-      val task = new TestTask(10L)
-      list1.add(new TimerTaskEntry(task))
+      val task = new TestTask(0L)
+      list1.add(new TimerTaskEntry(task, 10L))
       assertEquals(i, sharedCounter.get)
       task
-    }.toSeq
+    }
 
     assertEquals(tasks.size, sharedCounter.get)
 
@@ -54,7 +52,7 @@ class TimerTaskListTest {
     tasks.take(4).foreach { task =>
       val prevCount = sharedCounter.get
       // new TimerTaskEntry(task) will remove the existing entry from the list
-      list2.add(new TimerTaskEntry(task))
+      list2.add(new TimerTaskEntry(task, 10L))
       assertEquals(prevCount, sharedCounter.get)
     }
     assertEquals(10 - 4, size(list1))
@@ -66,7 +64,7 @@ class TimerTaskListTest {
     tasks.drop(4).foreach { task =>
       val prevCount = sharedCounter.get
       // new TimerTaskEntry(task) will remove the existing entry from the list
-      list3.add(new TimerTaskEntry(task))
+      list3.add(new TimerTaskEntry(task, 10L))
       assertEquals(prevCount, sharedCounter.get)
     }
     assertEquals(0, size(list1))

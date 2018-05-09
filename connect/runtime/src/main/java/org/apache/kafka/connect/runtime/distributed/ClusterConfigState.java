@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -13,40 +13,50 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- **/
-
+ */
 package org.apache.kafka.connect.runtime.distributed;
 
+import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 
 /**
  * An immutable snapshot of the configuration state of connectors and tasks in a Kafka Connect cluster.
  */
 public class ClusterConfigState {
-    public static final ClusterConfigState EMPTY = new ClusterConfigState(-1, Collections.<String, Integer>emptyMap(),
-            Collections.<String, Map<String, String>>emptyMap(), Collections.<ConnectorTaskId, Map<String, String>>emptyMap(),
+    public static final long NO_OFFSET = -1;
+    public static final ClusterConfigState EMPTY = new ClusterConfigState(
+            NO_OFFSET,
+            Collections.<String, Integer>emptyMap(),
+            Collections.<String, Map<String, String>>emptyMap(),
+            Collections.<String, TargetState>emptyMap(),
+            Collections.<ConnectorTaskId, Map<String, String>>emptyMap(),
             Collections.<String>emptySet());
 
     private final long offset;
     private final Map<String, Integer> connectorTaskCounts;
     private final Map<String, Map<String, String>> connectorConfigs;
+    private final Map<String, TargetState> connectorTargetStates;
     private final Map<ConnectorTaskId, Map<String, String>> taskConfigs;
     private final Set<String> inconsistentConnectors;
 
     public ClusterConfigState(long offset,
                               Map<String, Integer> connectorTaskCounts,
                               Map<String, Map<String, String>> connectorConfigs,
+                              Map<String, TargetState> connectorTargetStates,
                               Map<ConnectorTaskId, Map<String, String>> taskConfigs,
                               Set<String> inconsistentConnectors) {
         this.offset = offset;
         this.connectorTaskCounts = connectorTaskCounts;
         this.connectorConfigs = connectorConfigs;
+        this.connectorTargetStates = connectorTargetStates;
         this.taskConfigs = taskConfigs;
         this.inconsistentConnectors = inconsistentConnectors;
     }
@@ -58,6 +68,15 @@ public class ClusterConfigState {
      */
     public long offset() {
         return offset;
+    }
+
+    /**
+     * Check whether this snapshot contains configuration for a connector.
+     * @param connector name of the connector
+     * @return true if this state contains configuration for the connector, false otherwise
+     */
+    public boolean contains(String connector) {
+        return connectorConfigs.containsKey(connector);
     }
 
     /**
@@ -77,12 +96,35 @@ public class ClusterConfigState {
     }
 
     /**
+     * Get the target state of the connector
+     * @param connector name of the connector
+     * @return the target state
+     */
+    public TargetState targetState(String connector) {
+        return connectorTargetStates.get(connector);
+    }
+
+    /**
      * Get the configuration for a task.
      * @param task id of the task
      * @return a map containing configuration parameters
      */
     public Map<String, String> taskConfig(ConnectorTaskId task) {
         return taskConfigs.get(task);
+    }
+
+    /**
+     * Get all task configs for a connector.
+     * @param connector name of the connector
+     * @return a list of task configurations
+     */
+    public List<Map<String, String>> allTaskConfigs(String connector) {
+        Map<Integer, Map<String, String>> taskConfigs = new TreeMap<>();
+        for (Map.Entry<ConnectorTaskId, Map<String, String>> taskConfigEntry : this.taskConfigs.entrySet()) {
+            if (taskConfigEntry.getKey().connector().equals(connector))
+                taskConfigs.put(taskConfigEntry.getKey().task(), taskConfigEntry.getValue());
+        }
+        return new LinkedList<>(taskConfigs.values());
     }
 
     /**

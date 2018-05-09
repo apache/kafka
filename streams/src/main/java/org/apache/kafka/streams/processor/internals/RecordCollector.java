@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,93 +14,58 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.Producer;
-import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.StreamPartitioner;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
-import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
-public class RecordCollector {
+public interface RecordCollector {
+
+    <K, V> void send(final String topic,
+                     final K key,
+                     final V value,
+                     final Integer partition,
+                     final Long timestamp,
+                     final Serializer<K> keySerializer,
+                     final Serializer<V> valueSerializer);
+
+    <K, V> void send(final String topic,
+                     final K key,
+                     final V value,
+                     final Long timestamp,
+                     final Serializer<K> keySerializer,
+                     final Serializer<V> valueSerializer,
+                     final StreamPartitioner<? super K, ? super V> partitioner);
 
     /**
-     * A supplier of a {@link RecordCollector} instance.
+     * Flush the internal {@link Producer}.
      */
-    public static interface Supplier {
+    void flush();
+
+    /**
+     * Close the internal {@link Producer}.
+     */
+    void close();
+
+    /**
+     * The last acked offsets from the internal {@link Producer}.
+     *
+     * @return the map from TopicPartition to offset
+     */
+    Map<TopicPartition, Long> offsets();
+
+    /**
+     * A supplier of a {@link RecordCollectorImpl} instance.
+     */
+    interface Supplier {
         /**
          * Get the record collector.
          * @return the record collector
          */
-        public RecordCollector recordCollector();
-    }
-
-    private static final Logger log = LoggerFactory.getLogger(RecordCollector.class);
-
-    private final Producer<byte[], byte[]> producer;
-    private final Map<TopicPartition, Long> offsets;
-    private final Callback callback = new Callback() {
-        @Override
-        public void onCompletion(RecordMetadata metadata, Exception exception) {
-            if (exception == null) {
-                TopicPartition tp = new TopicPartition(metadata.topic(), metadata.partition());
-                offsets.put(tp, metadata.offset());
-            } else {
-                log.error("Error sending record: ", exception);
-            }
-        }
-    };
-
-
-    public RecordCollector(Producer<byte[], byte[]> producer) {
-        this.producer = producer;
-        this.offsets = new HashMap<>();
-    }
-
-    public <K, V> void send(ProducerRecord<K, V> record, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
-        send(record, keySerializer, valueSerializer, null);
-    }
-
-    public <K, V> void send(ProducerRecord<K, V> record, Serializer<K> keySerializer, Serializer<V> valueSerializer,
-                            StreamPartitioner<K, V> partitioner) {
-        byte[] keyBytes = keySerializer.serialize(record.topic(), record.key());
-        byte[] valBytes = valueSerializer.serialize(record.topic(), record.value());
-        Integer partition = null;
-        if (partitioner != null) {
-            List<PartitionInfo> partitions = this.producer.partitionsFor(record.topic());
-            if (partitions != null)
-                partition = partitioner.partition(record.key(), record.value(), partitions.size());
-        }
-        this.producer.send(new ProducerRecord<>(record.topic(), partition, keyBytes, valBytes), callback);
-    }
-
-    public void flush() {
-        this.producer.flush();
-    }
-
-    /**
-     * Closes this RecordCollector
-     */
-    public void close() {
-        producer.close();
-    }
-
-    /**
-     * The last ack'd offset from the producer
-     *
-     * @return the map from TopicPartition to offset
-     */
-    Map<TopicPartition, Long> offsets() {
-        return this.offsets;
+        RecordCollector recordCollector();
     }
 }

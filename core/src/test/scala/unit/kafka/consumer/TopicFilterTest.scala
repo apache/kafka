@@ -18,47 +18,47 @@
 package kafka.consumer
 
 
+import org.apache.kafka.common.internals.Topic
 import org.junit.Assert._
 import org.scalatest.junit.JUnitSuite
 import org.junit.Test
-import kafka.coordinator.GroupCoordinator
 
-
+@deprecated("This test has been deprecated and will be removed in a future release.", "0.11.0.0")
 class TopicFilterTest extends JUnitSuite {
 
   @Test
   def testWhitelists() {
 
-    val topicFilter1 = new Whitelist("white1,white2")
+    val topicFilter1 = Whitelist("white1,white2")
     assertTrue(topicFilter1.isTopicAllowed("white2", excludeInternalTopics = true))
     assertTrue(topicFilter1.isTopicAllowed("white2", excludeInternalTopics = false))
     assertFalse(topicFilter1.isTopicAllowed("black1", excludeInternalTopics = true))
     assertFalse(topicFilter1.isTopicAllowed("black1", excludeInternalTopics = false))
 
-    val topicFilter2 = new Whitelist(".+")
+    val topicFilter2 = Whitelist(".+")
     assertTrue(topicFilter2.isTopicAllowed("alltopics", excludeInternalTopics = true))
-    assertFalse(topicFilter2.isTopicAllowed(GroupCoordinator.GroupMetadataTopicName, excludeInternalTopics = true))
-    assertTrue(topicFilter2.isTopicAllowed(GroupCoordinator.GroupMetadataTopicName, excludeInternalTopics = false))
+    assertFalse(topicFilter2.isTopicAllowed(Topic.GROUP_METADATA_TOPIC_NAME, excludeInternalTopics = true))
+    assertTrue(topicFilter2.isTopicAllowed(Topic.GROUP_METADATA_TOPIC_NAME, excludeInternalTopics = false))
 
-    val topicFilter3 = new Whitelist("white_listed-topic.+")
+    val topicFilter3 = Whitelist("white_listed-topic.+")
     assertTrue(topicFilter3.isTopicAllowed("white_listed-topic1", excludeInternalTopics = true))
     assertFalse(topicFilter3.isTopicAllowed("black1", excludeInternalTopics = true))
 
-    val topicFilter4 = new Whitelist("test-(?!bad\\b)[\\w]+")
+    val topicFilter4 = Whitelist("test-(?!bad\\b)[\\w]+")
     assertTrue(topicFilter4.isTopicAllowed("test-good", excludeInternalTopics = true))
-    assertFalse(topicFilter4.isTopicAllowed("test-bad", excludeInternalTopics = true))    
+    assertFalse(topicFilter4.isTopicAllowed("test-bad", excludeInternalTopics = true))
   }
 
   @Test
   def testBlacklists() {
-    val topicFilter1 = new Blacklist("black1")
+    val topicFilter1 = Blacklist("black1")
     assertTrue(topicFilter1.isTopicAllowed("white2", excludeInternalTopics = true))
     assertTrue(topicFilter1.isTopicAllowed("white2", excludeInternalTopics = false))
     assertFalse(topicFilter1.isTopicAllowed("black1", excludeInternalTopics = true))
     assertFalse(topicFilter1.isTopicAllowed("black1", excludeInternalTopics = false))
 
-    assertFalse(topicFilter1.isTopicAllowed(GroupCoordinator.GroupMetadataTopicName, excludeInternalTopics = true))
-    assertTrue(topicFilter1.isTopicAllowed(GroupCoordinator.GroupMetadataTopicName, excludeInternalTopics = false))
+    assertFalse(topicFilter1.isTopicAllowed(Topic.GROUP_METADATA_TOPIC_NAME, excludeInternalTopics = true))
+    assertTrue(topicFilter1.isTopicAllowed(Topic.GROUP_METADATA_TOPIC_NAME, excludeInternalTopics = false))
   }
 
   @Test
@@ -68,7 +68,7 @@ class TopicFilterTest extends JUnitSuite {
       topicCount.getTopicCountMap.head._1
     }
     //lets make sure that the JSON strings are escaping as we expect
-    //if they are not then when they get saved to zookeeper and read back out they will be broken on parse
+    //if they are not then when they get saved to ZooKeeper and read back out they will be broken on parse
     assertEquals("-\\\"-", getTopicCountMapKey("-\"-"))
     assertEquals("-\\\\-", getTopicCountMapKey("-\\-"))
     assertEquals("-\\/-", getTopicCountMapKey("-/-"))
@@ -81,5 +81,5 @@ class TopicFilterTest extends JUnitSuite {
     assertEquals("-\\\\u001f-", getTopicCountMapKey("-\\u001f-"))
     assertEquals("-\\\\u007f-", getTopicCountMapKey("-\\u007f-"))
     assertEquals("-\\\\u009f-", getTopicCountMapKey("-\\u009f-"))
-  }    
+  }
 }

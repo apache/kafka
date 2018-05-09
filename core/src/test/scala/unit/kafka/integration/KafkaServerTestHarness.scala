@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -22,94 +22,137 @@ import java.util.Arrays
 
 import kafka.common.KafkaException
 import kafka.server._
-import kafka.utils.{CoreUtils, TestUtils}
+import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
-import org.apache.kafka.common.protocol.SecurityProtocol
-import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.junit.{After, Before}
 
-import scala.collection.mutable.Buffer
+import scala.collection.mutable.{ArrayBuffer, Buffer}
+import java.util.Properties
+
+import org.apache.kafka.common.network.ListenerName
 
 /**
  * A test harness that brings up some number of broker nodes
  */
-trait KafkaServerTestHarness extends ZooKeeperTestHarness {
+abstract class KafkaServerTestHarness extends ZooKeeperTestHarness {
   var instanceConfigs: Seq[KafkaConfig] = null
-  var servers: Buffer[KafkaServer] = null
+  var servers: Buffer[KafkaServer] = new ArrayBuffer
   var brokerList: String = null
   var alive: Array[Boolean] = null
   val kafkaPrincipalType = KafkaPrincipal.USER_TYPE
-  val setClusterAcl: Option[() => Unit] = None
 
   /**
    * Implementations must override this method to return a set of KafkaConfigs. This method will be invoked for every
    * test and should not reuse previous configurations unless they select their ports randomly when servers are started.
    */
-  def generateConfigs(): Seq[KafkaConfig]
+  def generateConfigs: Seq[KafkaConfig]
+
+  /**
+   * Override this in case ACLs or security credentials must be set before `servers` are started.
+   *
+   * This is required in some cases because of the topic creation in the setup of `IntegrationTestHarness`. If the ACLs
+   * are only set later, tests may fail. The failure could manifest itself as a cluster action
+   * authorization exception when processing an update metadata request (controller -> broker) or in more obscure
+   * ways (e.g. __consumer_offsets topic replication fails because the metadata cache has no brokers as a previous
+   * update metadata request failed due to an authorization exception).
+   *
+   * The default implementation of this method is a no-op.
+   */
+  def configureSecurityBeforeServersStart() {}
+
+  /**
+   * Override this in case Tokens or security credentials needs to be created after `servers` are started.
+   * The default implementation of this method is a no-op.
+   */
+  def configureSecurityAfterServersStart() {}
 
   def configs: Seq[KafkaConfig] = {
     if (instanceConfigs == null)
-      instanceConfigs = generateConfigs()
+      instanceConfigs = generateConfigs
     instanceConfigs
   }
 
-  def serverForId(id: Int) = servers.find(s => s.config.brokerId == id)
+  def serverForId(id: Int): Option[KafkaServer] = servers.find(s => s.config.brokerId == id)
+
+  def boundPort(server: KafkaServer): Int = server.boundPort(listenerName)
 
   protected def securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT
+  protected def listenerName: ListenerName = ListenerName.forSecurityProtocol(securityProtocol)
   protected def trustStoreFile: Option[File] = None
+  protected def serverSaslProperties: Option[Properties] = None
+  protected def clientSaslProperties: Option[Properties] = None
 
   @Before
   override def setUp() {
-    super.setUp
-    if (configs.size <= 0)
+    super.setUp()
+
+    if (configs.isEmpty)
       throw new KafkaException("Must supply at least one server config.")
-    servers = configs.map(TestUtils.createServer(_)).toBuffer
-    brokerList = TestUtils.getBrokerListStrFromServers(servers, securityProtocol)
+
+    // default implementation is a no-op, it is overridden by subclasses if required
+    configureSecurityBeforeServersStart()
+
+    // Add each broker to `servers` buffer as soon as it is created to ensure that brokers
+    // are shutdown cleanly in tearDown even if a subsequent broker fails to start
+    for (config <- configs)
+      servers += TestUtils.createServer(config)
+    brokerList = TestUtils.bootstrapServers(servers, listenerName)
     alive = new Array[Boolean](servers.length)
     Arrays.fill(alive, true)
-    // We need to set a cluster ACL in some cases here
-    // because of the topic creation in the setup of
-    // IntegrationTestHarness. If we don't, then tests
-    // fail with a cluster action authorization exception
-    // when processing an update metadata request
-    // (controller -> broker).
-    //
-    // The following method does nothing by default, but
-    // if the test case requires setting up a cluster ACL,
-    // then it needs to be implemented.
-    setClusterAcl match {
-      case Some(f) =>
-        f()
-      case None => // Nothing to do
-    }
+
+    // default implementation is a no-op, it is overridden by subclasses if required
+    configureSecurityAfterServersStart()
   }
 
   @After
   override def tearDown() {
-    servers.foreach(_.shutdown())
-    servers.foreach(_.config.logDirs.foreach(CoreUtils.rm(_)))
+    if (servers != null) {
+      TestUtils.shutdownServers(servers)
+    }
     super.tearDown
   }
-  
+
+  /**
+   * Create a topic in ZooKeeper.
+   * Wait until the leader is elected and the metadata is propagated to all brokers.
+   * Return the leader for each partition.
+   */
+  def createTopic(topic: String, numPartitions: Int = 1, replicationFactor: Int = 1,
+                  topicConfig: Properties = new Properties): scala.collection.immutable.Map[Int, Int] =
+    TestUtils.createTopic(zkClient, topic, numPartitions, replicationFactor, servers, topicConfig)
+
+  /**
+   * Create a topic in ZooKeeper using a customized replica assignment.
+   * Wait until the leader is elected and the metadata is propagated to all brokers.
+   * Return the leader for each partition.
+   */
+  def createTopic(topic: String, partitionReplicaAssignment: collection.Map[Int, Seq[Int]]): scala.collection.immutable.Map[Int, Int] =
+    TestUtils.createTopic(zkClient, topic, partitionReplicaAssignment, servers)
+
   /**
    * Pick a broker at random and kill it if it isn't already dead
    * Return the id of the broker killed
    */
   def killRandomBroker(): Int = {
     val index = TestUtils.random.nextInt(servers.length)
+    killBroker(index)
+    index
+  }
+
+  def killBroker(index: Int) {
     if(alive(index)) {
       servers(index).shutdown()
       servers(index).awaitShutdown()
       alive(index) = false
     }
-    index
   }
-  
+
   /**
    * Restart any dead brokers
    */
   def restartDeadBrokers() {
-    for(i <- 0 until servers.length if !alive(i)) {
+    for(i <- servers.indices if !alive(i)) {
       servers(i).startup()
       alive(i) = true
     }

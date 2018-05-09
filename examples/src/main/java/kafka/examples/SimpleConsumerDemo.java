@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -30,6 +30,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * @deprecated since 0.11.0.0. This class will be removed in a future release.
+ */
+@Deprecated
 public class SimpleConsumerDemo {
 
     private static void printMessages(ByteBufferMessageSet messageSet) throws UnsupportedEncodingException {
@@ -71,7 +75,7 @@ public class SimpleConsumerDemo {
         printMessages(fetchResponse.messageSet(KafkaProperties.TOPIC2, 0));
 
         System.out.println("Testing single multi-fetch");
-        Map<String, List<Integer>> topicMap = new HashMap<String, List<Integer>>();
+        Map<String, List<Integer>> topicMap = new HashMap<>();
         topicMap.put(KafkaProperties.TOPIC2, Collections.singletonList(0));
         topicMap.put(KafkaProperties.TOPIC3, Collections.singletonList(0));
         req = new FetchRequestBuilder()

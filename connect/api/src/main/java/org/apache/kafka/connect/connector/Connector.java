@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -13,11 +13,12 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- **/
-
+ */
 package org.apache.kafka.connect.connector;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.config.Config;
+import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigValue;
 
 import java.util.List;
 import java.util.Map;
@@ -39,7 +40,6 @@ import java.util.Map;
  * Tasks.
  * </p>
  */
-@InterfaceStability.Unstable
 public abstract class Connector {
 
     protected ConnectorContext context;
@@ -121,4 +121,22 @@ public abstract class Connector {
      * Stop this connector.
      */
     public abstract void stop();
+
+    /**
+     * Validate the connector configuration values against configuration definitions.
+     * @param connectorConfigs the provided configuration values
+     * @return List of Config, each Config contains the updated configuration information given
+     * the current configuration values.
+     */
+    public Config validate(Map<String, String> connectorConfigs) {
+        ConfigDef configDef = config();
+        List<ConfigValue> configValues = configDef.validate(connectorConfigs);
+        return new Config(configValues);
+    }
+
+    /**
+     * Define the configuration for the connector.
+     * @return The ConfigDef for this connector.
+     */
+    public abstract ConfigDef config();
 }

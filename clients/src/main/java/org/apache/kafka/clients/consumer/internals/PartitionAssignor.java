@@ -1,14 +1,18 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
- * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
- * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
- * License. You may obtain a copy of the License at
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.clients.consumer.internals;
 
@@ -39,7 +43,7 @@ public interface PartitionAssignor {
      * Return a serializable object representing the local member's subscription. This can include
      * additional information as well (e.g. local host/rack information) which can be leveraged in
      * {@link #assign(Cluster, Map)}.
-     * @param topics Topics subscribed to through {@link org.apache.kafka.clients.consumer.KafkaConsumer#subscribe(List)}
+     * @param topics Topics subscribed to through {@link org.apache.kafka.clients.consumer.KafkaConsumer#subscribe(java.util.Collection)}
      *               and variants
      * @return Non-null subscription with optional user data
      */
@@ -63,7 +67,7 @@ public interface PartitionAssignor {
 
 
     /**
-     * Unique name for this assignor (e.g. "range" or "roundrobin")
+     * Unique name for this assignor (e.g. "range" or "roundrobin" or "sticky")
      * @return non-null unique name
      */
     String name();
@@ -89,6 +93,12 @@ public interface PartitionAssignor {
             return userData;
         }
 
+        @Override
+        public String toString() {
+            return "Subscription(" +
+                    "topics=" + topics +
+                    ')';
+        }
     }
 
     class Assignment {
@@ -112,6 +122,12 @@ public interface PartitionAssignor {
             return userData;
         }
 
+        @Override
+        public String toString() {
+            return "Assignment(" +
+                    "partitions=" + partitions +
+                    ')';
+        }
     }
 
 }

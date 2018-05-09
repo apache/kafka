@@ -20,67 +20,148 @@ then
   exit 1
 fi
 
+# CYGINW == 1 if Cygwin is detected, else 0.
+if [[ $(uname -a) =~ "CYGWIN" ]]; then
+  CYGWIN=1
+else
+  CYGWIN=0
+fi
+
+if [ -z "$INCLUDE_TEST_JARS" ]; then
+  INCLUDE_TEST_JARS=false
+fi
+
+# Exclude jars not necessary for running commands.
+regex="(-(test|src|scaladoc|javadoc)\.jar|jar.asc)$"
+should_include_file() {
+  if [ "$INCLUDE_TEST_JARS" = true ]; then
+    return 0
+  fi
+  file=$1
+  if [ -z "$(echo "$file" | egrep "$regex")" ] ; then
+    return 0
+  else
+    return 1
+  fi
+}
+
 base_dir=$(dirname $0)/..
 
 if [ -z "$SCALA_VERSION" ]; then
-	SCALA_VERSION=2.10.6
+  SCALA_VERSION=2.11.12
 fi
 
 if [ -z "$SCALA_BINARY_VERSION" ]; then
-	SCALA_BINARY_VERSION=2.10
+  SCALA_BINARY_VERSION=$(echo $SCALA_VERSION | cut -f 1-2 -d '.')
 fi
 
 # run ./gradlew copyDependantLibs to get all dependant jars in a local dir
 shopt -s nullglob
-for dir in $base_dir/core/build/dependant-libs-${SCALA_VERSION}*;
+for dir in "$base_dir"/core/build/dependant-libs-${SCALA_VERSION}*;
 do
-  CLASSPATH=$CLASSPATH:$dir/*
+  CLASSPATH="$CLASSPATH:$dir/*"
 done
 
-for file in $base_dir/examples/build/libs//kafka-examples*.jar;
+for file in "$base_dir"/examples/build/libs/kafka-examples*.jar;
 do
-  CLASSPATH=$CLASSPATH:$file
+  if should_include_file "$file"; then
+    CLASSPATH="$CLASSPATH":"$file"
+  fi
 done
 
-for file in $base_dir/clients/build/libs/kafka-clients*.jar;
+if [ -z "$UPGRADE_KAFKA_STREAMS_TEST_VERSION" ]; then
+  clients_lib_dir=$(dirname $0)/../clients/build/libs
+  streams_lib_dir=$(dirname $0)/../streams/build/libs
+  rocksdb_lib_dir=$(dirname $0)/../streams/build/dependant-libs-${SCALA_VERSION}
+else
+  clients_lib_dir=/opt/kafka-$UPGRADE_KAFKA_STREAMS_TEST_VERSION/libs
+  streams_lib_dir=$clients_lib_dir
+  rocksdb_lib_dir=$streams_lib_dir
+fi
+
+
+for file in "$clients_lib_dir"/kafka-clients*.jar;
 do
-  CLASSPATH=$CLASSPATH:$file
+  if should_include_file "$file"; then
+    CLASSPATH="$CLASSPATH":"$file"
+  fi
 done
 
-for file in $base_dir/streams/build/libs/kafka-streams*.jar;
+for file in "$streams_lib_dir"/kafka-streams*.jar;
 do
-  CLASSPATH=$CLASSPATH:$file
+  if should_include_file "$file"; then
+    CLASSPATH="$CLASSPATH":"$file"
+  fi
 done
 
-for file in $base_dir/tools/build/libs/kafka-tools*.jar;
-do
-  CLASSPATH=$CLASSPATH:$file
-done
-
-for dir in $base_dir/tools/build/dependant-libs-${SCALA_VERSION}*;
-do
-  CLASSPATH=$CLASSPATH:$dir/*
-done
-
-for cc_pkg in "api" "runtime" "file" "json" "tools"
-do
-  for file in $base_dir/connect/${cc_pkg}/build/libs/connect-${cc_pkg}*.jar;
+if [ -z "$UPGRADE_KAFKA_STREAMS_TEST_VERSION" ]; then
+  for file in "$base_dir"/streams/examples/build/libs/kafka-streams-examples*.jar;
   do
-    CLASSPATH=$CLASSPATH:$file
+    if should_include_file "$file"; then
+      CLASSPATH="$CLASSPATH":"$file"
+    fi
+  done
+else
+  VERSION_NO_DOTS=`echo $UPGRADE_KAFKA_STREAMS_TEST_VERSION | sed 's/\.//g'`
+  SHORT_VERSION_NO_DOTS=${VERSION_NO_DOTS:0:((${#VERSION_NO_DOTS} - 1))} # remove last char, ie, bug-fix number
+  for file in "$base_dir"/streams/upgrade-system-tests-$SHORT_VERSION_NO_DOTS/build/libs/kafka-streams-upgrade-system-tests*.jar;
+  do
+    if should_include_file "$file"; then
+      CLASSPATH="$CLASSPATH":"$file"
+    fi
+  done
+fi
+
+for file in "$rocksdb_lib_dir"/rocksdb*.jar;
+do
+  CLASSPATH="$CLASSPATH":"$file"
+done
+
+for file in "$base_dir"/tools/build/libs/kafka-tools*.jar;
+do
+  if should_include_file "$file"; then
+    CLASSPATH="$CLASSPATH":"$file"
+  fi
+done
+
+for dir in "$base_dir"/tools/build/dependant-libs-${SCALA_VERSION}*;
+do
+  CLASSPATH="$CLASSPATH:$dir/*"
+done
+
+for cc_pkg in "api" "transforms" "runtime" "file" "json" "tools"
+do
+  for file in "$base_dir"/connect/${cc_pkg}/build/libs/connect-${cc_pkg}*.jar;
+  do
+    if should_include_file "$file"; then
+      CLASSPATH="$CLASSPATH":"$file"
+    fi
   done
   if [ -d "$base_dir/connect/${cc_pkg}/build/dependant-libs" ] ; then
-    CLASSPATH=$CLASSPATH:$base_dir/connect/${cc_pkg}/build/dependant-libs/*
+    CLASSPATH="$CLASSPATH:$base_dir/connect/${cc_pkg}/build/dependant-libs/*"
   fi
 done
 
 # classpath addition for release
-CLASSPATH=$CLASSPATH:$base_dir/libs/*
-
-for file in $base_dir/core/build/libs/kafka_${SCALA_BINARY_VERSION}*.jar;
+for file in "$base_dir"/libs/*;
 do
-  CLASSPATH=$CLASSPATH:$file
+  if should_include_file "$file"; then
+    CLASSPATH="$CLASSPATH":"$file"
+  fi
+done
+
+for file in "$base_dir"/core/build/libs/kafka_${SCALA_BINARY_VERSION}*.jar;
+do
+  if should_include_file "$file"; then
+    CLASSPATH="$CLASSPATH":"$file"
+  fi
 done
 shopt -u nullglob
+
+if [ -z "$CLASSPATH" ] ; then
+  echo "Classpath is empty. Please build the project first e.g. by running './gradlew jar -PscalaVersion=$SCALA_VERSION'"
+  exit 1
+fi
 
 # JMX settings
 if [ -z "$KAFKA_JMX_OPTS" ]; then
@@ -94,13 +175,16 @@ fi
 
 # Log directory to use
 if [ "x$LOG_DIR" = "x" ]; then
-    LOG_DIR="$base_dir/logs"
+  LOG_DIR="$base_dir/logs"
 fi
 
 # Log4j settings
 if [ -z "$KAFKA_LOG4J_OPTS" ]; then
   # Log to console. This is a tool.
-  KAFKA_LOG4J_OPTS="-Dlog4j.configuration=file:$base_dir/config/tools-log4j.properties"
+  LOG4J_DIR="$base_dir/config/tools-log4j.properties"
+  # If Cygwin is detected, LOG4J_DIR is converted to Windows format.
+  (( CYGWIN )) && LOG4J_DIR=$(cygpath --path --mixed "${LOG4J_DIR}")
+  KAFKA_LOG4J_OPTS="-Dlog4j.configuration=file:${LOG4J_DIR}"
 else
   # create logs directory
   if [ ! -d "$LOG_DIR" ]; then
@@ -108,11 +192,33 @@ else
   fi
 fi
 
+# If Cygwin is detected, LOG_DIR is converted to Windows format.
+(( CYGWIN )) && LOG_DIR=$(cygpath --path --mixed "${LOG_DIR}")
 KAFKA_LOG4J_OPTS="-Dkafka.logs.dir=$LOG_DIR $KAFKA_LOG4J_OPTS"
 
 # Generic jvm settings you want to add
 if [ -z "$KAFKA_OPTS" ]; then
   KAFKA_OPTS=""
+fi
+
+# Set Debug options if enabled
+if [ "x$KAFKA_DEBUG" != "x" ]; then
+
+    # Use default ports
+    DEFAULT_JAVA_DEBUG_PORT="5005"
+
+    if [ -z "$JAVA_DEBUG_PORT" ]; then
+        JAVA_DEBUG_PORT="$DEFAULT_JAVA_DEBUG_PORT"
+    fi
+
+    # Use the defaults if JAVA_DEBUG_OPTS was not set
+    DEFAULT_JAVA_DEBUG_OPTS="-agentlib:jdwp=transport=dt_socket,server=y,suspend=${DEBUG_SUSPEND_FLAG:-n},address=$JAVA_DEBUG_PORT"
+    if [ -z "$JAVA_DEBUG_OPTS" ]; then
+        JAVA_DEBUG_OPTS="$DEFAULT_JAVA_DEBUG_OPTS"
+    fi
+
+    echo "Enabling Java debug options: $JAVA_DEBUG_OPTS"
+    KAFKA_OPTS="$JAVA_DEBUG_OPTS $KAFKA_OPTS"
 fi
 
 # Which java to use
@@ -129,7 +235,7 @@ fi
 
 # JVM performance options
 if [ -z "$KAFKA_JVM_PERFORMANCE_OPTS" ]; then
-  KAFKA_JVM_PERFORMANCE_OPTS="-server -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:+DisableExplicitGC -Djava.awt.headless=true"
+  KAFKA_JVM_PERFORMANCE_OPTS="-server -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:+ExplicitGCInvokesConcurrent -Djava.awt.headless=true"
 fi
 
 
@@ -162,8 +268,30 @@ GC_FILE_SUFFIX='-gc.log'
 GC_LOG_FILE_NAME=''
 if [ "x$GC_LOG_ENABLED" = "xtrue" ]; then
   GC_LOG_FILE_NAME=$DAEMON_NAME$GC_FILE_SUFFIX
-  KAFKA_GC_LOG_OPTS="-Xloggc:$LOG_DIR/$GC_LOG_FILE_NAME -verbose:gc -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:+PrintGCTimeStamps "
+
+  # The first segment of the version number, which is '1' for releases before Java 9
+  # it then becomes '9', '10', ...
+  # Some examples of the first line of `java --version`:
+  # 8 -> java version "1.8.0_152"
+  # 9.0.4 -> java version "9.0.4"
+  # 10 -> java version "10" 2018-03-20
+  # 10.0.1 -> java version "10.0.1" 2018-04-17
+  # We need to match to the end of the line to prevent sed from printing the characters that do not match
+  JAVA_MAJOR_VERSION=$($JAVA -version 2>&1 | sed -E -n 's/.* version "([0-9]*).*$/\1/p')
+  if [[ "$JAVA_MAJOR_VERSION" -ge "9" ]] ; then
+    KAFKA_GC_LOG_OPTS="-Xlog:gc*:file=$LOG_DIR/$GC_LOG_FILE_NAME:time,tags:filecount=10,filesize=102400"
+  else
+    KAFKA_GC_LOG_OPTS="-Xloggc:$LOG_DIR/$GC_LOG_FILE_NAME -verbose:gc -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:+PrintGCTimeStamps -XX:+UseGCLogFileRotation -XX:NumberOfGCLogFiles=10 -XX:GCLogFileSize=100M"
+  fi
 fi
+
+# Remove a possible colon prefix from the classpath (happens at lines like `CLASSPATH="$CLASSPATH:$file"` when CLASSPATH is blank)
+# Syntax used on the right side is native Bash string manipulation; for more details see
+# http://tldp.org/LDP/abs/html/string-manipulation.html, specifically the section titled "Substring Removal"
+CLASSPATH=${CLASSPATH#:}
+
+# If Cygwin is detected, classpath is converted to Windows format.
+(( CYGWIN )) && CLASSPATH=$(cygpath --path --mixed "${CLASSPATH}")
 
 # Launch mode
 if [ "x$DAEMON_MODE" = "xtrue" ]; then

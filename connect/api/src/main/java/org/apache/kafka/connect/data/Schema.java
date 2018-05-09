@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -13,11 +13,11 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- **/
-
+ */
 package org.apache.kafka.connect.data;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -43,12 +43,71 @@ public interface Schema {
      * The type of a schema. These only include the core types; logical types must be determined by checking the schema name.
      */
     enum Type {
-        INT8, INT16, INT32, INT64, FLOAT32, FLOAT64, BOOLEAN, STRING, BYTES, ARRAY, MAP, STRUCT;
+        /**
+         *  8-bit signed integer
+         *
+         *  Note that if you have an unsigned 8-bit data source, {@link Type#INT16} will be required to safely capture all valid values
+         */
+        INT8,
+        /**
+         *  16-bit signed integer
+         *
+         *  Note that if you have an unsigned 16-bit data source, {@link Type#INT32} will be required to safely capture all valid values
+         */
+        INT16,
+        /**
+         *  32-bit signed integer
+         *
+         *  Note that if you have an unsigned 32-bit data source, {@link Type#INT64} will be required to safely capture all valid values
+         */
+        INT32,
+        /**
+         *  64-bit signed integer
+         *
+         *  Note that if you have an unsigned 64-bit data source, the {@link Decimal} logical type (encoded as {@link Type#BYTES})
+         *  will be required to safely capture all valid values
+         */
+        INT64,
+        /**
+         *  32-bit IEEE 754 floating point number
+         */
+        FLOAT32,
+        /**
+         *  64-bit IEEE 754 floating point number
+         */
+        FLOAT64,
+        /**
+         * Boolean value (true or false)
+         */
+        BOOLEAN,
+        /**
+         * Character string that supports all Unicode characters.
+         *
+         * Note that this does not imply any specific encoding (e.g. UTF-8) as this is an in-memory representation.
+         */
+        STRING,
+        /**
+         * Sequence of unsigned 8-bit bytes
+         */
+        BYTES,
+        /**
+         * An ordered sequence of elements, each of which shares the same type.
+         */
+        ARRAY,
+        /**
+         * A mapping from keys to values. Both keys and values can be arbitrarily complex types, including complex types
+         * such as {@link Struct}.
+         */
+        MAP,
+        /**
+         * A structured record containing a set of named fields, each field using a fixed, independent {@link Schema}.
+         */
+        STRUCT;
 
         private String name;
 
         Type() {
-            this.name = this.name().toLowerCase();
+            this.name = this.name().toLowerCase(Locale.ROOT);
         }
 
         public String getName() {

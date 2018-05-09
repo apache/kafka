@@ -16,26 +16,34 @@
  */
 package kafka.server
 
+import java.{lang, util}
 import java.util.concurrent.{ConcurrentHashMap, DelayQueue, TimeUnit}
-
-import kafka.utils.{ShutdownableThread, Logging}
-import org.apache.kafka.common.MetricName
-import org.apache.kafka.common.metrics._
-import org.apache.kafka.common.metrics.stats.{Total, Rate, Avg}
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
-import org.apache.kafka.common.utils.Time
+import kafka.network.RequestChannel.Session
+import kafka.server.ClientQuotaManager._
+import kafka.utils.{Logging, ShutdownableThread}
+import org.apache.kafka.common.{Cluster, MetricName}
+import org.apache.kafka.common.metrics._
+import org.apache.kafka.common.metrics.stats.{Avg, Rate, Total}
+import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.apache.kafka.common.utils.{Sanitizer, Time}
+import org.apache.kafka.server.quota.{ClientQuotaCallback, ClientQuotaEntity, ClientQuotaType}
+
+import scala.collection.JavaConverters._
 
 /**
  * Represents the sensors aggregated per client
+ * @param metricTags Quota metric tags for the client
  * @param quotaSensor @Sensor that tracks the quota
  * @param throttleTimeSensor @Sensor that tracks the throttle time
  */
-private case class ClientSensors(quotaSensor: Sensor, throttleTimeSensor: Sensor)
+case class ClientSensors(metricTags: Map[String, String], quotaSensor: Sensor, throttleTimeSensor: Sensor)
 
 /**
  * Configuration settings for quota management
- * @param quotaBytesPerSecondDefault The default bytes per second quota allocated to any client
+ * @param quotaBytesPerSecondDefault The default bytes per second quota allocated to any client-id if
+ *        dynamic defaults or user quotas are not set
  * @param numQuotaSamples The number of samples to retain in memory
  * @param quotaWindowSizeSeconds The time span of each sample
  *
@@ -54,38 +62,133 @@ object ClientQuotaManagerConfig {
   val DefaultQuotaWindowSizeSeconds = 1
   // Purge sensors after 1 hour of inactivity
   val InactiveSensorExpirationTimeSeconds  = 3600
+  val QuotaRequestPercentDefault = Int.MaxValue.toDouble
+  val NanosToPercentagePerSecond = 100.0 / TimeUnit.SECONDS.toNanos(1)
+
+  val UnlimitedQuota = Quota.upperBound(Long.MaxValue)
+}
+
+object QuotaTypes {
+  val NoQuotas = 0
+  val ClientIdQuotaEnabled = 1
+  val UserQuotaEnabled = 2
+  val UserClientIdQuotaEnabled = 4
+  val CustomQuotas = 8 // No metric update optimizations are used with custom quotas
+}
+
+object ClientQuotaManager {
+  val DefaultClientIdQuotaEntity = KafkaQuotaEntity(None, Some(DefaultClientIdEntity))
+  val DefaultUserQuotaEntity = KafkaQuotaEntity(Some(DefaultUserEntity), None)
+  val DefaultUserClientIdQuotaEntity = KafkaQuotaEntity(Some(DefaultUserEntity), Some(DefaultClientIdEntity))
+
+  case class UserEntity(sanitizedUser: String) extends ClientQuotaEntity.ConfigEntity {
+    override def entityType: ClientQuotaEntity.ConfigEntityType = ClientQuotaEntity.ConfigEntityType.USER
+    override def name: String = Sanitizer.desanitize(sanitizedUser)
+    override def toString: String = s"user $sanitizedUser"
+  }
+
+  case class ClientIdEntity(clientId: String) extends ClientQuotaEntity.ConfigEntity {
+    override def entityType: ClientQuotaEntity.ConfigEntityType = ClientQuotaEntity.ConfigEntityType.CLIENT_ID
+    override def name: String = clientId
+    override def toString: String = s"client-id $clientId"
+  }
+
+  case object DefaultUserEntity extends ClientQuotaEntity.ConfigEntity {
+    override def entityType: ClientQuotaEntity.ConfigEntityType = ClientQuotaEntity.ConfigEntityType.DEFAULT_USER
+    override def name: String = ConfigEntityName.Default
+    override def toString: String = "default user"
+  }
+
+  case object DefaultClientIdEntity extends ClientQuotaEntity.ConfigEntity {
+    override def entityType: ClientQuotaEntity.ConfigEntityType = ClientQuotaEntity.ConfigEntityType.DEFAULT_CLIENT_ID
+    override def name: String = ConfigEntityName.Default
+    override def toString: String = "default client-id"
+  }
+
+  case class KafkaQuotaEntity(userEntity: Option[ClientQuotaEntity.ConfigEntity],
+                              clientIdEntity: Option[ClientQuotaEntity.ConfigEntity]) extends ClientQuotaEntity {
+    override def configEntities: util.List[ClientQuotaEntity.ConfigEntity] =
+      (userEntity.toList ++ clientIdEntity.toList).asJava
+    def sanitizedUser: String = userEntity.map {
+      case entity: UserEntity => entity.sanitizedUser
+      case DefaultUserEntity => ConfigEntityName.Default
+    }.getOrElse("")
+    def clientId: String = clientIdEntity.map(_.name).getOrElse("")
+
+    override def toString: String = {
+      val user = userEntity.map(_.toString).getOrElse("")
+      val clientId = clientIdEntity.map(_.toString).getOrElse("")
+      s"$user $clientId".trim
+    }
+  }
+
+  object DefaultTags {
+    val User = "user"
+    val ClientId = "client-id"
+  }
 }
 
 /**
  * Helper class that records per-client metrics. It is also responsible for maintaining Quota usage statistics
  * for all clients.
+ * <p/>
+ * Quotas can be set at <user, client-id>, user or client-id levels. For a given client connection,
+ * the most specific quota matching the connection will be applied. For example, if both a <user, client-id>
+ * and a user quota match a connection, the <user, client-id> quota will be used. Otherwise, user quota takes
+ * precedence over client-id quota. The order of precedence is:
+ * <ul>
+ *   <li>/config/users/<user>/clients/<client-id>
+ *   <li>/config/users/<user>/clients/<default>
+ *   <li>/config/users/<user>
+ *   <li>/config/users/<default>/clients/<client-id>
+ *   <li>/config/users/<default>/clients/<default>
+ *   <li>/config/users/<default>
+ *   <li>/config/clients/<client-id>
+ *   <li>/config/clients/<default>
+ * </ul>
+ * Quota limits including defaults may be updated dynamically. The implementation is optimized for the case
+ * where a single level of quotas is configured.
+ *
  * @param config @ClientQuotaManagerConfig quota configs
  * @param metrics @Metrics Metrics instance
- * @param apiKey API Key for the request
+ * @param quotaType Quota type of this quota manager
  * @param time @Time object to use
  */
 class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
                          private val metrics: Metrics,
-                         private val apiKey: String,
-                         private val time: Time) extends Logging {
-  private val overriddenQuota = new ConcurrentHashMap[String, Quota]()
-  private val defaultQuota = Quota.upperBound(config.quotaBytesPerSecondDefault)
+                         private val quotaType: QuotaType,
+                         private val time: Time,
+                         threadNamePrefix: String,
+                         clientQuotaCallback: Option[ClientQuotaCallback] = None) extends Logging {
+  private val staticConfigClientIdQuota = Quota.upperBound(config.quotaBytesPerSecondDefault)
+  private val clientQuotaType = quotaTypeToClientQuotaType(quotaType)
+  @volatile private var quotaTypesEnabled = clientQuotaCallback match {
+    case Some(_) => QuotaTypes.CustomQuotas
+    case None =>
+      if (config.quotaBytesPerSecondDefault == Long.MaxValue) QuotaTypes.NoQuotas
+      else QuotaTypes.ClientIdQuotaEnabled
+  }
   private val lock = new ReentrantReadWriteLock()
   private val delayQueue = new DelayQueue[ThrottledResponse]()
-  val throttledRequestReaper = new ThrottledRequestReaper(delayQueue)
-  throttledRequestReaper.start()
+  private val sensorAccessor = new SensorAccess(lock, metrics)
+  private[server] val throttledRequestReaper = new ThrottledRequestReaper(delayQueue, threadNamePrefix)
+  private val quotaCallback = clientQuotaCallback.getOrElse(new DefaultQuotaCallback)
 
-  private val delayQueueSensor = metrics.sensor(apiKey + "-delayQueue")
+  private val delayQueueSensor = metrics.sensor(quotaType + "-delayQueue")
   delayQueueSensor.add(metrics.metricName("queue-size",
-                                      apiKey,
-                                      "Tracks the size of the delay queue"), new Total())
+    quotaType.toString,
+    "Tracks the size of the delay queue"), new Total())
+  start() // Use start method to keep findbugs happy
+  private def start() {
+    throttledRequestReaper.start()
+  }
 
   /**
    * Reaper thread that triggers callbacks on all throttled requests
    * @param delayQueue DelayQueue to dequeue from
    */
-  class ThrottledRequestReaper(delayQueue: DelayQueue[ThrottledResponse]) extends ShutdownableThread(
-    "ThrottledRequestReaper-%s".format(apiKey), false) {
+  class ThrottledRequestReaper(delayQueue: DelayQueue[ThrottledResponse], prefix: String) extends ShutdownableThread(
+    s"${prefix}ThrottledRequestReaper-$quotaType", false) {
 
     override def doWork(): Unit = {
       val response: ThrottledResponse = delayQueue.poll(1, TimeUnit.SECONDS)
@@ -99,33 +202,90 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
   }
 
   /**
-   * Records that a clientId changed some metric being throttled (produced/consumed bytes, QPS etc.)
-   * @param clientId clientId that produced the data
-   * @param value amount of data written in bytes
+   * Returns true if any quotas are enabled for this quota manager. This is used
+   * to determine if quota related metrics should be created.
+   * Note: If any quotas (static defaults, dynamic defaults or quota overrides) have
+   * been configured for this broker at any time for this quota type, quotasEnabled will
+   * return true until the next broker restart, even if all quotas are subsequently deleted.
+   */
+  def quotasEnabled: Boolean = quotaTypesEnabled != QuotaTypes.NoQuotas
+
+  /**
+   * Records that a user/clientId changed some metric being throttled (produced/consumed bytes, request processing time etc.)
+   * If quota has been violated, callback is invoked after a delay, otherwise the callback is invoked immediately.
+   * Throttle time calculation may be overridden by sub-classes.
+   *
+   * @param session  the session associated with this request
+   * @param clientId clientId that produced/fetched the data
+   * @param value    amount of data in bytes or request processing time as a percentage
    * @param callback Callback function. This will be triggered immediately if quota is not violated.
    *                 If there is a quota violation, this callback will be triggered after a delay
    * @return Number of milliseconds to delay the response in case of Quota violation.
    *         Zero otherwise
    */
-  def recordAndMaybeThrottle(clientId: String, value: Int, callback: Int => Unit): Int = {
-    val clientSensors = getOrCreateQuotaSensors(clientId)
+  def maybeRecordAndThrottle(session: Session, clientId: String, value: Double, callback: Int => Unit): Int = {
+    if (quotasEnabled) {
+      val clientSensors = getOrCreateQuotaSensors(session, clientId)
+      recordAndThrottleOnQuotaViolation(clientSensors, value, callback)
+    } else {
+      // Don't record any metrics if quotas are not enabled at any level
+      val throttleTimeMs = 0
+      callback(throttleTimeMs)
+      throttleTimeMs
+    }
+  }
+
+  def recordAndThrottleOnQuotaViolation(clientSensors: ClientSensors, value: Double, callback: Int => Unit): Int = {
     var throttleTimeMs = 0
     try {
       clientSensors.quotaSensor.record(value)
       // trigger the callback immediately if quota is not violated
       callback(0)
     } catch {
-      case qve: QuotaViolationException =>
+      case _: QuotaViolationException =>
         // Compute the delay
-        val clientMetric = metrics.metrics().get(clientRateMetricName(clientId))
-        throttleTimeMs = throttleTime(clientMetric, getQuotaMetricConfig(quota(clientId)))
+        val clientMetric = metrics.metrics().get(clientRateMetricName(clientSensors.metricTags))
+        throttleTimeMs = throttleTime(clientMetric).toInt
         clientSensors.throttleTimeSensor.record(throttleTimeMs)
+        // If delayed, add the element to the delayQueue
         delayQueue.add(new ThrottledResponse(time, throttleTimeMs, callback))
         delayQueueSensor.record()
-        // If delayed, add the element to the delayQueue
-        logger.debug("Quota violated for sensor (%s). Delay time: (%d)".format(clientSensors.quotaSensor.name(), throttleTimeMs))
+        debug("Quota violated for sensor (%s). Delay time: (%d)".format(clientSensors.quotaSensor.name(), throttleTimeMs))
     }
     throttleTimeMs
+  }
+
+  /**
+   * Records that a user/clientId changed some metric being throttled without checking for
+   * quota violation. The aggregate value will subsequently be used for throttling when the
+   * next request is processed.
+   */
+  def recordNoThrottle(clientSensors: ClientSensors, value: Double) {
+    clientSensors.quotaSensor.record(value, time.milliseconds(), false)
+  }
+
+  /**
+   * Returns the quota for the client with the specified (non-encoded) user principal and client-id.
+   *
+   * Note: this method is expensive, it is meant to be used by tests only
+   */
+  def quota(user: String, clientId: String): Quota = {
+    val userPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, user)
+    quota(userPrincipal, clientId)
+  }
+
+  /**
+   * Returns the quota for the client with the specified user principal and client-id.
+   *
+   * Note: this method is expensive, it is meant to be used by tests only
+   */
+  def quota(userPrincipal: KafkaPrincipal, clientId: String): Quota = {
+    val metricTags = quotaCallback.quotaMetricTags(clientQuotaType, userPrincipal, clientId)
+    Quota.upperBound(quotaLimit(metricTags))
+  }
+
+  private def quotaLimit(metricTags: util.Map[String, String]): Double = {
+    Option(quotaCallback.quotaLimit(clientQuotaType, metricTags)).map(_.toDouble)getOrElse(Long.MaxValue)
   }
 
   /*
@@ -136,13 +296,14 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
    * we need to add a delay of X to W such that O * W / (W + X) = T.
    * Solving for X, we get X = (O - T)/T * W.
    */
-  private def throttleTime(clientMetric: KafkaMetric, config: MetricConfig): Int = {
+  protected def throttleTime(clientMetric: KafkaMetric): Long = {
+    val config = clientMetric.config
     val rateMetric: Rate = measurableAsRate(clientMetric.metricName(), clientMetric.measurable())
     val quota = config.quota()
-    val difference = clientMetric.value() - quota.bound
+    val difference = clientMetric.metricValue.asInstanceOf[Double] - quota.bound
     // Use the precise window used by the rate calculation
     val throttleTimeMs = difference / quota.bound * rateMetric.windowSize(config, time.milliseconds())
-    throttleTimeMs.round.toInt
+    throttleTimeMs.round
   }
 
   // Casting to Rate because we only use Rate in Quota computation
@@ -153,95 +314,78 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
     }
   }
 
-  /**
-   * Returns the quota for the specified clientId
-   */
-  def quota(clientId: String): Quota =
-    if (overriddenQuota.containsKey(clientId)) overriddenQuota.get(clientId) else defaultQuota;
-
   /*
    * This function either returns the sensors for a given client id or creates them if they don't exist
    * First sensor of the tuple is the quota enforcement sensor. Second one is the throttle time sensor
    */
-  private def getOrCreateQuotaSensors(clientId: String): ClientSensors = {
-
+  def getOrCreateQuotaSensors(session: Session, clientId: String): ClientSensors = {
+    // Use cached sanitized principal if using default callback
+    val metricTags = quotaCallback match {
+      case callback: DefaultQuotaCallback => callback.quotaMetricTags(session.sanitizedUser, clientId)
+      case _ => quotaCallback.quotaMetricTags(clientQuotaType, session.principal, clientId).asScala.toMap
+    }
     // Names of the sensors to access
-    val quotaSensorName = getQuotaSensorName(clientId)
-    val throttleTimeSensorName = getThrottleTimeSensorName(clientId)
-    var quotaSensor: Sensor = null
-    var throttleTimeSensor: Sensor = null
-
-    /* Acquire the read lock to fetch the sensors. It is safe to call getSensor from multiple threads.
-     * The read lock allows a thread to create a sensor in isolation. The thread creating the sensor
-     * will acquire the write lock and prevent the sensors from being read while they are being created.
-     * It should be sufficient to simply check if the sensor is null without acquiring a read lock but the
-     * sensor being present doesn't mean that it is fully initialized i.e. all the Metrics may not have been added.
-     * This read lock waits until the writer thread has released its lock i.e. fully initialized the sensor
-     * at which point it is safe to read
-     */
-    lock.readLock().lock()
-    try {
-      quotaSensor = metrics.getSensor(quotaSensorName)
-      throttleTimeSensor = metrics.getSensor(throttleTimeSensorName)
-    }
-    finally {
-      lock.readLock().unlock()
-    }
-
-    /* If the sensor is null, try to create it else return the created sensor
-     * Also if quota sensor is null, the throttle time sensor must be null
-     */
-    if (quotaSensor == null) {
-      /* Acquire a write lock because the sensor may not have been created and we only want one thread to create it.
-       * Note that multiple threads may acquire the write lock if they all see a null sensor initially
-       * In this case, the writer checks the sensor after acquiring the lock again.
-       * This is safe from Double Checked Locking because the references are read
-       * after acquiring read locks and hence they cannot see a partially published reference
-       */
-      lock.writeLock().lock()
-      try {
-        quotaSensor = metrics.getSensor(quotaSensorName)
-        if (quotaSensor == null) {
-          // create the throttle time sensor also. Use default metric config
-          throttleTimeSensor = metrics.sensor(throttleTimeSensorName,
-                                              null,
-                                              ClientQuotaManagerConfig.InactiveSensorExpirationTimeSeconds)
-          throttleTimeSensor.add(metrics.metricName("throttle-time",
-                                                apiKey,
-                                                "Tracking average throttle-time per client",
-                                                "client-id",
-                                                clientId), new Avg())
-
-          quotaSensor = metrics.sensor(quotaSensorName,
-                                       getQuotaMetricConfig(quota(clientId)),
-                                       ClientQuotaManagerConfig.InactiveSensorExpirationTimeSeconds)
-          quotaSensor.add(clientRateMetricName(clientId), new Rate())
-        }
-      } finally {
-        lock.writeLock().unlock()
-      }
-    }
-    // return the read or created sensors
-    ClientSensors(quotaSensor, throttleTimeSensor)
+    val sensors = ClientSensors(
+      metricTags,
+      sensorAccessor.getOrCreate(
+        getQuotaSensorName(metricTags),
+        ClientQuotaManagerConfig.InactiveSensorExpirationTimeSeconds,
+        clientRateMetricName(metricTags),
+        Some(getQuotaMetricConfig(metricTags)),
+        new Rate
+      ),
+      sensorAccessor.getOrCreate(getThrottleTimeSensorName(metricTags),
+        ClientQuotaManagerConfig.InactiveSensorExpirationTimeSeconds,
+        throttleMetricName(metricTags),
+        None,
+        new Avg
+      )
+    )
+    if (quotaCallback.quotaResetRequired(clientQuotaType))
+      updateQuotaMetricConfigs()
+    sensors
   }
 
-  private def getThrottleTimeSensorName(clientId: String): String = apiKey + "ThrottleTime-" + clientId
+  private def metricTagsToSensorSuffix(metricTags: Map[String, String]): String =
+    metricTags.values.mkString(":")
 
-  private def getQuotaSensorName(clientId: String): String = apiKey + "-" + clientId
+  private def getThrottleTimeSensorName(metricTags: Map[String, String]): String =
+    s"${quotaType}ThrottleTime-${metricTagsToSensorSuffix(metricTags)}"
 
-  private def getQuotaMetricConfig(quota: Quota): MetricConfig = {
+  private def getQuotaSensorName(metricTags: Map[String, String]): String =
+    s"$quotaType-${metricTagsToSensorSuffix(metricTags)}"
+
+  private def getQuotaMetricConfig(metricTags: Map[String, String]): MetricConfig = {
+    getQuotaMetricConfig(quotaLimit(metricTags.asJava))
+  }
+
+  private def getQuotaMetricConfig(quotaLimit: Double): MetricConfig = {
     new MetricConfig()
-            .timeWindow(config.quotaWindowSizeSeconds, TimeUnit.SECONDS)
-            .samples(config.numQuotaSamples)
-            .quota(quota)
+      .timeWindow(config.quotaWindowSizeSeconds, TimeUnit.SECONDS)
+      .samples(config.numQuotaSamples)
+      .quota(new Quota(quotaLimit, true))
+  }
+
+  protected def getOrCreateSensor(sensorName: String, metricName: MetricName): Sensor = {
+    sensorAccessor.getOrCreate(
+      sensorName,
+      ClientQuotaManagerConfig.InactiveSensorExpirationTimeSeconds,
+      metricName,
+      None,
+      new Rate
+    )
   }
 
   /**
-   * Overrides quotas per clientId
-   * @param clientId client to override
-   * @param quota custom quota to apply
+   * Overrides quotas for <user>, <client-id> or <user, client-id> or the dynamic defaults
+   * for any of these levels.
+   *
+   * @param sanitizedUser     user to override if quota applies to <user> or <user, client-id>
+   * @param clientId          client to override if quota applies to <client-id> or <user, client-id>
+   * @param sanitizedClientId sanitized client ID to override if quota applies to <client-id> or <user, client-id>
+   * @param quota             custom quota to apply or None if quota override is being removed
    */
-  def updateQuota(clientId: String, quota: Quota) = {
+  def updateQuota(sanitizedUser: Option[String], clientId: Option[String], sanitizedClientId: Option[String], quota: Option[Quota]) {
     /*
      * Acquire the write lock to apply changes in the quota objects.
      * This method changes the quota in the overriddenQuota map and applies the update on the actual KafkaMetric object (if it exists).
@@ -251,32 +395,233 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
      */
     lock.writeLock().lock()
     try {
-      logger.info(s"Changing quota for clientId $clientId to ${quota.bound()}")
-
-      if (quota.equals(defaultQuota))
-        this.overriddenQuota.remove(clientId)
-      else
-        this.overriddenQuota.put(clientId, quota)
-
-      // Change the underlying metric config if the sensor has been created
-      val allMetrics = metrics.metrics()
-      val quotaMetricName = clientRateMetricName(clientId)
-      if (allMetrics.containsKey(quotaMetricName)) {
-        logger.info(s"Sensor for clientId $clientId already exists. Changing quota to ${quota.bound()} in MetricConfig")
-        allMetrics.get(quotaMetricName).config(getQuotaMetricConfig(quota))
+      val userEntity = sanitizedUser.map {
+        case ConfigEntityName.Default => DefaultUserEntity
+        case user => UserEntity(user)
       }
+      val clientIdEntity = sanitizedClientId.map {
+        case ConfigEntityName.Default => DefaultClientIdEntity
+        case _ => ClientIdEntity(clientId.getOrElse(throw new IllegalStateException("Client-id not provided")))
+      }
+      val quotaEntity = KafkaQuotaEntity(userEntity, clientIdEntity)
+
+      if (userEntity.nonEmpty) {
+        if (quotaEntity.clientIdEntity.nonEmpty)
+          quotaTypesEnabled |= QuotaTypes.UserClientIdQuotaEnabled
+        else
+          quotaTypesEnabled |= QuotaTypes.UserQuotaEnabled
+      } else if (clientIdEntity.nonEmpty)
+        quotaTypesEnabled |= QuotaTypes.ClientIdQuotaEnabled
+
+      quota match {
+        case Some(newQuota) => quotaCallback.updateQuota(clientQuotaType, quotaEntity, newQuota.bound)
+        case None => quotaCallback.removeQuota(clientQuotaType, quotaEntity)
+      }
+      val updatedEntity = if (userEntity.contains(DefaultUserEntity) || clientIdEntity.contains(DefaultClientIdEntity))
+        None // more than one entity may need updating, so `updateQuotaMetricConfigs` will go through all metrics
+      else
+        Some(quotaEntity)
+      updateQuotaMetricConfigs(updatedEntity)
+
     } finally {
       lock.writeLock().unlock()
     }
   }
 
-  private def clientRateMetricName(clientId: String): MetricName = {
-    metrics.metricName("byte-rate", apiKey,
-                   "Tracking byte-rate per client",
-                   "client-id", clientId)
+  /**
+   * Updates metrics configs. This is invoked when quota configs are updated in ZooKeeper
+   * or when partitions leaders change and custom callbacks that implement partition-based quotas
+   * have updated quotas.
+   * @param updatedQuotaEntity If set to one entity and quotas have only been enabled at one
+   *    level, then an optimized update is performed with a single metric update. If None is provided,
+   *    or if custom callbacks are used or if multi-level quotas have been enabled, all metric configs
+   *    are checked and updated if required.
+   */
+  def updateQuotaMetricConfigs(updatedQuotaEntity: Option[KafkaQuotaEntity] = None): Unit = {
+    val allMetrics = metrics.metrics()
+
+    // If using custom quota callbacks or if multiple-levels of quotas are defined or
+    // if this is a default quota update, traverse metrics to find all affected values.
+    // Otherwise, update just the single matching one.
+    val singleUpdate = quotaTypesEnabled match {
+      case QuotaTypes.NoQuotas | QuotaTypes.ClientIdQuotaEnabled | QuotaTypes.UserQuotaEnabled | QuotaTypes.UserClientIdQuotaEnabled =>
+        updatedQuotaEntity.nonEmpty
+      case _ => false
+    }
+    if (singleUpdate) {
+      val quotaEntity = updatedQuotaEntity.getOrElse(throw new IllegalStateException("Quota entity not specified"))
+      val user = quotaEntity.sanitizedUser
+      val clientId = quotaEntity.clientId
+      val metricTags = Map(DefaultTags.User -> user, DefaultTags.ClientId -> clientId)
+
+      val quotaMetricName = clientRateMetricName(metricTags)
+      // Change the underlying metric config if the sensor has been created
+      val metric = allMetrics.get(quotaMetricName)
+      if (metric != null) {
+        Option(quotaCallback.quotaLimit(clientQuotaType, metricTags.asJava)).foreach { newQuota =>
+          info(s"Sensor for $quotaEntity already exists. Changing quota to $newQuota in MetricConfig")
+          metric.config(getQuotaMetricConfig(newQuota))
+        }
+      }
+    } else {
+      val quotaMetricName = clientRateMetricName(Map.empty)
+      allMetrics.asScala.filterKeys(n => n.name == quotaMetricName.name && n.group == quotaMetricName.group).foreach {
+        case (metricName, metric) =>
+          val metricTags = metricName.tags
+          Option(quotaCallback.quotaLimit(clientQuotaType, metricTags)).foreach { quota =>
+            val newQuota = quota.asInstanceOf[Double]
+            if (newQuota != metric.config.quota.bound) {
+              info(s"Sensor for quota-id $metricTags already exists. Setting quota to $newQuota in MetricConfig")
+              metric.config(getQuotaMetricConfig(newQuota))
+            }
+          }
+      }
+    }
   }
 
-  def shutdown() = {
+  protected def clientRateMetricName(quotaMetricTags: Map[String, String]): MetricName = {
+    metrics.metricName("byte-rate", quotaType.toString,
+      "Tracking byte-rate per user/client-id",
+      quotaMetricTags.asJava)
+  }
+
+  private def throttleMetricName(quotaMetricTags: Map[String, String]): MetricName = {
+    metrics.metricName("throttle-time",
+      quotaType.toString,
+      "Tracking average throttle-time per user/client-id",
+      quotaMetricTags.asJava)
+  }
+
+  private def quotaTypeToClientQuotaType(quotaType: QuotaType): ClientQuotaType = {
+    quotaType match {
+      case QuotaType.Fetch => ClientQuotaType.FETCH
+      case QuotaType.Produce => ClientQuotaType.PRODUCE
+      case QuotaType.Request => ClientQuotaType.REQUEST
+      case _ => throw new IllegalArgumentException(s"Not a client quota type: $quotaType")
+    }
+  }
+
+  def shutdown(): Unit = {
     throttledRequestReaper.shutdown()
+  }
+
+  class DefaultQuotaCallback extends ClientQuotaCallback {
+    private val overriddenQuotas = new ConcurrentHashMap[ClientQuotaEntity, Quota]()
+
+    override def configure(configs: util.Map[String, _]): Unit = {}
+
+    override def quotaMetricTags(quotaType: ClientQuotaType, principal: KafkaPrincipal, clientId: String): util.Map[String, String] = {
+      quotaMetricTags(Sanitizer.sanitize(principal.getName), clientId).asJava
+    }
+
+    override def quotaLimit(quotaType: ClientQuotaType, metricTags: util.Map[String, String]): lang.Double = {
+      val sanitizedUser = metricTags.get(DefaultTags.User)
+      val clientId = metricTags.get(DefaultTags.ClientId)
+      var quota: Quota = null
+
+      if (sanitizedUser != null && clientId != null) {
+        val userEntity = Some(UserEntity(sanitizedUser))
+        val clientIdEntity = Some(ClientIdEntity(clientId))
+        if (!sanitizedUser.isEmpty && !clientId.isEmpty) {
+          // /config/users/<user>/clients/<client-id>
+          quota = overriddenQuotas.get(KafkaQuotaEntity(userEntity, clientIdEntity))
+          if (quota == null) {
+            // /config/users/<user>/clients/<default>
+            quota = overriddenQuotas.get(KafkaQuotaEntity(userEntity, Some(DefaultClientIdEntity)))
+          }
+          if (quota == null) {
+            // /config/users/<default>/clients/<client-id>
+            quota = overriddenQuotas.get(KafkaQuotaEntity(Some(DefaultUserEntity), clientIdEntity))
+          }
+          if (quota == null) {
+            // /config/users/<default>/clients/<default>
+            quota = overriddenQuotas.get(DefaultUserClientIdQuotaEntity)
+          }
+        } else if (!sanitizedUser.isEmpty) {
+          // /config/users/<user>
+          quota = overriddenQuotas.get(KafkaQuotaEntity(userEntity, None))
+          if (quota == null) {
+            // /config/users/<default>
+            quota = overriddenQuotas.get(DefaultUserQuotaEntity)
+          }
+        } else if (!clientId.isEmpty) {
+          // /config/clients/<client-id>
+          quota = overriddenQuotas.get(KafkaQuotaEntity(None, clientIdEntity))
+          if (quota == null) {
+            // /config/clients/<default>
+            quota = overriddenQuotas.get(DefaultClientIdQuotaEntity)
+          }
+          if (quota == null)
+            quota = staticConfigClientIdQuota
+        }
+      }
+      if (quota == null) null else quota.bound
+    }
+
+    override def updateClusterMetadata(cluster: Cluster): Boolean = {
+      // Default quota callback does not use any cluster metadata
+      false
+    }
+
+    override def updateQuota(quotaType: ClientQuotaType, entity: ClientQuotaEntity, newValue: Double): Unit = {
+      val quotaEntity = entity.asInstanceOf[KafkaQuotaEntity]
+      info(s"Changing $quotaType quota for $quotaEntity to $newValue")
+      overriddenQuotas.put(quotaEntity, new Quota(newValue, true))
+    }
+
+    override def removeQuota(quotaType: ClientQuotaType, entity: ClientQuotaEntity): Unit = {
+      val quotaEntity = entity.asInstanceOf[KafkaQuotaEntity]
+      info(s"Removing $quotaType quota for $quotaEntity")
+      overriddenQuotas.remove(quotaEntity)
+    }
+
+    override def quotaResetRequired(quotaType: ClientQuotaType): Boolean = false
+
+    def quotaMetricTags(sanitizedUser: String, clientId: String) : Map[String, String] = {
+      val (userTag, clientIdTag) = quotaTypesEnabled match {
+        case QuotaTypes.NoQuotas | QuotaTypes.ClientIdQuotaEnabled =>
+          ("", clientId)
+        case QuotaTypes.UserQuotaEnabled =>
+          (sanitizedUser, "")
+        case QuotaTypes.UserClientIdQuotaEnabled =>
+          (sanitizedUser, clientId)
+        case _ =>
+          val userEntity = Some(UserEntity(sanitizedUser))
+          val clientIdEntity = Some(ClientIdEntity(clientId))
+
+          var metricTags = (sanitizedUser, clientId)
+          // 1) /config/users/<user>/clients/<client-id>
+          if (!overriddenQuotas.containsKey(KafkaQuotaEntity(userEntity, clientIdEntity))) {
+            // 2) /config/users/<user>/clients/<default>
+            metricTags = (sanitizedUser, clientId)
+            if (!overriddenQuotas.containsKey(KafkaQuotaEntity(userEntity, Some(DefaultClientIdEntity)))) {
+              // 3) /config/users/<user>
+              metricTags = (sanitizedUser, "")
+              if (!overriddenQuotas.containsKey(KafkaQuotaEntity(userEntity, None))) {
+                // 4) /config/users/<default>/clients/<client-id>
+                metricTags = (sanitizedUser, clientId)
+                if (!overriddenQuotas.containsKey(KafkaQuotaEntity(Some(DefaultUserEntity), clientIdEntity))) {
+                  // 5) /config/users/<default>/clients/<default>
+                  metricTags = (sanitizedUser, clientId)
+                  if (!overriddenQuotas.containsKey(DefaultUserClientIdQuotaEntity)) {
+                    // 6) /config/users/<default>
+                    metricTags = (sanitizedUser, "")
+                    if (!overriddenQuotas.containsKey(DefaultUserQuotaEntity)) {
+                      // 7) /config/clients/<client-id>
+                      // 8) /config/clients/<default>
+                      // 9) static client-id quota
+                      metricTags = ("", clientId)
+                    }
+                  }
+                }
+              }
+            }
+          }
+          metricTags
+      }
+      Map(DefaultTags.User -> userTag, DefaultTags.ClientId -> clientIdTag)
+    }
+
+    override def close(): Unit = {}
   }
 }

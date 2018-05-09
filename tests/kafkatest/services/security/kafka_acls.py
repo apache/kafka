@@ -13,16 +13,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from kafkatest.services.kafka.directory import kafka_dir
+from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 
-class ACLs():
 
-    def __init__(self):
-        pass
+class ACLs(KafkaPathResolverMixin):
+    def __init__(self, context):
+        self.context = context
 
-    def set_acls(self, protocol, kafka, zk, topic, group):
+    def set_acls(self, protocol, kafka, topic, group):
         node = kafka.nodes[0]
-        setting = zk.connect_setting()
+        setting = kafka.zk_connect_setting()
 
         # Set server ACLs
         kafka_principal = "User:CN=systemtest" if protocol == "SSL" else "User:kafka"
@@ -35,7 +35,7 @@ class ACLs():
         self.acls_command(node, ACLs.consume_acl(setting, topic, group, client_principal))
 
     def acls_command(self, node, properties):
-        cmd = "/opt/%s/bin/kafka-acls.sh %s" % (kafka_dir(node), properties)
+        cmd = "%s %s" % (self.path.script("kafka-acls.sh", node), properties)
         node.account.ssh(cmd)
 
     @staticmethod

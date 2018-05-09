@@ -1,46 +1,62 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license
- * agreements.  See the NOTICE file distributed with this work for additional information regarding
- * copyright ownership. The ASF licenses this file to You under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance with the License.  You may obtain a
- * copy of the License at <p/> http://www.apache.org/licenses/LICENSE-2.0 <p/> Unless required by
- * applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See
- * the License for the specific language governing permissions and limitations under the License.
- **/
-
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.errors.IllegalWorkerStateException;
 import org.apache.kafka.connect.sink.SinkTaskContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
 public class WorkerSinkTaskContext implements SinkTaskContext {
+
+    private final Logger log = LoggerFactory.getLogger(getClass());
     private Map<TopicPartition, Long> offsets;
     private long timeoutMs;
     private KafkaConsumer<byte[], byte[]> consumer;
+    private final WorkerSinkTask sinkTask;
     private final Set<TopicPartition> pausedPartitions;
+    private boolean commitRequested;
 
-    public WorkerSinkTaskContext(KafkaConsumer<byte[], byte[]> consumer) {
+    public WorkerSinkTaskContext(KafkaConsumer<byte[], byte[]> consumer, WorkerSinkTask sinkTask) {
         this.offsets = new HashMap<>();
         this.timeoutMs = -1L;
         this.consumer = consumer;
+        this.sinkTask = sinkTask;
         this.pausedPartitions = new HashSet<>();
     }
 
     @Override
     public void offset(Map<TopicPartition, Long> offsets) {
+        log.debug("{} Setting offsets for topic partitions {}", this, offsets);
         this.offsets.putAll(offsets);
     }
 
     @Override
     public void offset(TopicPartition tp, long offset) {
+        log.debug("{} Setting offset for topic partition {} to {}", this, tp, offset);
         offsets.put(tp, offset);
     }
 
@@ -58,6 +74,7 @@ public class WorkerSinkTaskContext implements SinkTaskContext {
 
     @Override
     public void timeout(long timeoutMs) {
+        log.debug("{} Setting timeout to {} ms", this, timeoutMs);
         this.timeoutMs = timeoutMs;
     }
 
@@ -83,9 +100,13 @@ public class WorkerSinkTaskContext implements SinkTaskContext {
             throw new IllegalWorkerStateException("SinkTaskContext may not be used to pause consumption until the task is initialized");
         }
         try {
-            for (TopicPartition partition : partitions)
-                pausedPartitions.add(partition);
-            consumer.pause(partitions);
+            Collections.addAll(pausedPartitions, partitions);
+            if (sinkTask.shouldPause()) {
+                log.debug("{} Connector is paused, so not pausing consumer's partitions {}", this, partitions);
+            } else {
+                consumer.pause(Arrays.asList(partitions));
+                log.debug("{} Pausing partitions {}. Connector is not paused.", this, partitions);
+            }
         } catch (IllegalStateException e) {
             throw new IllegalWorkerStateException("SinkTasks may not pause partitions that are not currently assigned to them.", e);
         }
@@ -97,9 +118,13 @@ public class WorkerSinkTaskContext implements SinkTaskContext {
             throw new IllegalWorkerStateException("SinkTaskContext may not be used to resume consumption until the task is initialized");
         }
         try {
-            for (TopicPartition partition : partitions)
-                pausedPartitions.remove(partition);
-            consumer.resume(partitions);
+            pausedPartitions.removeAll(Arrays.asList(partitions));
+            if (sinkTask.shouldPause()) {
+                log.debug("{} Connector is paused, so not resuming consumer's partitions {}", this, partitions);
+            } else {
+                consumer.resume(Arrays.asList(partitions));
+                log.debug("{} Resuming partitions: {}", this, partitions);
+            }
         } catch (IllegalStateException e) {
             throw new IllegalWorkerStateException("SinkTasks may not resume partitions that are not currently assigned to them.", e);
         }
@@ -107,5 +132,26 @@ public class WorkerSinkTaskContext implements SinkTaskContext {
 
     public Set<TopicPartition> pausedPartitions() {
         return pausedPartitions;
+    }
+
+    @Override
+    public void requestCommit() {
+        log.debug("{} Requesting commit", this);
+        commitRequested = true;
+    }
+
+    public boolean isCommitRequested() {
+        return commitRequested;
+    }
+
+    public void clearCommitRequest() {
+        commitRequested = false;
+    }
+
+    @Override
+    public String toString() {
+        return "WorkerSinkTaskContext{" +
+               "id=" + sinkTask.id +
+               '}';
     }
 }
