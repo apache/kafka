@@ -151,7 +151,7 @@ public class AdminMetadataManager {
 
     public boolean isReady() {
         if (authException != null) {
-            log.trace("Metadata is ready: got authentication exception.");
+            log.debug("Metadata is not usable: failed to get metadata.", authException);
             throw authException;
         }
         if (cluster.nodes().isEmpty()) {
