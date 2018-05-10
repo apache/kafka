@@ -20,7 +20,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
 
 import kafka.server.LogOffsetMetadata
 import kafka.server.checkpoints.LeaderEpochCheckpoint
-import org.apache.kafka.common.requests.EpochEndOffset.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
+import org.apache.kafka.common.requests.EpochEndOffset._
 import kafka.utils.CoreUtils._
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
@@ -29,7 +29,7 @@ import scala.collection.mutable.ListBuffer
 trait LeaderEpochCache {
   def assign(leaderEpoch: Int, offset: Long)
   def latestEpoch(): Int
-  def endOffsetFor(epoch: Int): Long
+  def endOffsetFor(epoch: Int): (Int, Long)
   def clearAndFlushLatest(offset: Long)
   def clearAndFlushEarliest(offset: Long)
   def clearAndFlush()
@@ -81,36 +81,42 @@ class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetM
   }
 
   /**
-    * Returns the End Offset for a requested Leader Epoch.
+    * Returns the Leader Epoch and the End Offset for a requested Leader Epoch.
     *
-    * This is defined as the start offset of the first Leader Epoch larger than the
-    * Leader Epoch requested, or else the Log End Offset if the latest epoch was requested.
+    * The Leader Epoch returned is the largest epoch less than or equal to the requested Leader
+    * Epoch. The End Offset is the end offset of this epoch, which is defined as the start offset
+    * of the first Leader Epoch larger than the Leader Epoch requested, or else the Log End
+    * Offset if the latest epoch was requested.
     *
     * During the upgrade phase, where there are existing messages may not have a leader epoch,
     * if requestedEpoch is < the first epoch cached, UNSUPPORTED_EPOCH_OFFSET will be returned
     * so that the follower falls back to High Water Mark.
     *
-    * @param requestedEpoch
-    * @return offset
+    * @param requestedEpoch requested leader epoch
+    * @return leader epoch and offset
     */
-  override def endOffsetFor(requestedEpoch: Int): Long = {
+  override def endOffsetFor(requestedEpoch: Int): (Int, Long) = {
     inReadLock(lock) {
-      val offset =
+      val epochAndOffset =
         if (requestedEpoch == UNDEFINED_EPOCH) {
           // this may happen if a bootstrapping follower sends a request with undefined epoch or
           // a follower is on the older message format where leader epochs are not recorded
-          UNDEFINED_EPOCH_OFFSET
+          (UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
         } else if (requestedEpoch == latestEpoch) {
-          leo().messageOffset
+          (requestedEpoch, leo().messageOffset)
         } else {
-          val subsequentEpochs = epochs.filter(e => e.epoch > requestedEpoch)
+          val (subsequentEpochs, previousEpochs) = epochs.partition { e => e.epoch > requestedEpoch}
           if (subsequentEpochs.isEmpty || requestedEpoch < epochs.head.epoch)
-            UNDEFINED_EPOCH_OFFSET
-          else
-            subsequentEpochs.head.startOffset
+            // no epochs recorded or requested epoch < the first epoch cached
+            (UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
+          else {
+            // we must get at least one element in previous epochs list, because if we are here,
+            // it means that requestedEpoch >= epochs.head.epoch -- so at least the first epoch is
+            (previousEpochs.last.epoch, subsequentEpochs.head.startOffset)
+          }
         }
-      debug(s"Processed offset for epoch request for partition ${topicPartition} epoch:$requestedEpoch and returning offset $offset from epoch list of size ${epochs.size}")
-      offset
+      debug(s"Processed offset for epoch request for partition ${topicPartition} epoch:$requestedEpoch and returning epoch ${epochAndOffset._1} and offset ${epochAndOffset._2} from epoch list of size ${epochs.size}")
+      epochAndOffset
     }
   }
 

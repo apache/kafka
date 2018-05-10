@@ -102,7 +102,7 @@ public interface ConsumerRebalanceListener {
 
     /**
      * A callback method the user can implement to provide handling of customized offsets on completion of a successful
-     * partition re-assignment. This method will be called after an offset re-assignment completes and before the
+     * partition re-assignment. This method will be called after the partition re-assignment completes and before the
      * consumer starts fetching data, and only as the result of a {@link Consumer#poll(long) poll(long)} call.
      * <p>
      * It is guaranteed that all the processes in a consumer group will execute their

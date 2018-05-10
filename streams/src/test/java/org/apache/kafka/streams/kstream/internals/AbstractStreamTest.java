@@ -47,29 +47,26 @@ public class AbstractStreamTest {
 
     @Test
     public void testToInternlValueTransformerSupplierSuppliesNewTransformers() {
-        final ValueTransformerSupplier vts = createMock(ValueTransformerSupplier.class);
-        expect(vts.get()).andReturn(null).times(3);
-        final InternalValueTransformerWithKeySupplier ivtwks =
-            AbstractStream.toInternalValueTransformerSupplier(vts);
-        replay(vts);
-        ivtwks.get();
-        ivtwks.get();
-        ivtwks.get();
-        verify(vts);
+        final ValueTransformerSupplier valueTransformerSupplier = createMock(ValueTransformerSupplier.class);
+        expect(valueTransformerSupplier.get()).andReturn(null).times(3);
+        final ValueTransformerWithKeySupplier valueTransformerWithKeySupplier =
+            AbstractStream.toValueTransformerWithKeySupplier(valueTransformerSupplier);
+        replay(valueTransformerSupplier);
+        valueTransformerWithKeySupplier.get();
+        valueTransformerWithKeySupplier.get();
+        valueTransformerWithKeySupplier.get();
+        verify(valueTransformerSupplier);
     }
 
     @Test
     public void testToInternalValueTransformerSupplierSuppliesNewTransformers() {
-        final ValueTransformerWithKeySupplier vtwks =
-            createMock(ValueTransformerWithKeySupplier.class);
-        expect(vtwks.get()).andReturn(null).times(3);
-        final InternalValueTransformerWithKeySupplier ivtwks =
-            AbstractStream.toInternalValueTransformerSupplier(vtwks);
-        replay(vtwks);
-        ivtwks.get();
-        ivtwks.get();
-        ivtwks.get();
-        verify(vtwks);
+        final ValueTransformerWithKeySupplier valueTransformerWithKeySupplier = createMock(ValueTransformerWithKeySupplier.class);
+        expect(valueTransformerWithKeySupplier.get()).andReturn(null).times(3);
+        replay(valueTransformerWithKeySupplier);
+        valueTransformerWithKeySupplier.get();
+        valueTransformerWithKeySupplier.get();
+        valueTransformerWithKeySupplier.get();
+        verify(valueTransformerWithKeySupplier);
     }
 
     @Test

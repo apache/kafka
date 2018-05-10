@@ -77,6 +77,7 @@ object ApiVersion {
     // and KafkaStorageException for fetch requests.
     "1.1-IV0" -> KAFKA_1_1_IV0,
     "1.1" -> KAFKA_1_1_IV0,
+    // Introduced OffsetsForLeaderEpochRequest V1 via KIP-279
     "2.0-IV0" -> KAFKA_2_0_IV0,
     "2.0" -> KAFKA_2_0_IV0
   )

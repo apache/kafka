@@ -69,11 +69,6 @@ public class KStreamTransformValuesTest {
                         }
 
                         @Override
-                        public Integer punctuate(long timestamp) {
-                            return null;
-                        }
-
-                        @Override
                         public void close() {
                         }
                     };
@@ -143,15 +138,10 @@ public class KStreamTransformValuesTest {
     @Test
     public void shouldNotAllowValueTransformerToCallInternalProcessorContextMethods() {
         final BadValueTransformer badValueTransformer = new BadValueTransformer();
-        final KStreamTransformValues<Integer, Integer, Integer> transformValue = new KStreamTransformValues<>(new InternalValueTransformerWithKeySupplier<Integer, Integer, Integer>() {
+        final KStreamTransformValues<Integer, Integer, Integer> transformValue = new KStreamTransformValues<>(new ValueTransformerWithKeySupplier<Integer, Integer, Integer>() {
             @Override
-            public InternalValueTransformerWithKey<Integer, Integer, Integer> get() {
-                return new InternalValueTransformerWithKey<Integer, Integer, Integer>() {
-                    @Override
-                    public Integer punctuate(long timestamp) {
-                        throw new StreamsException("ValueTransformerWithKey#punctuate should not be called.");
-                    }
-
+            public ValueTransformerWithKey<Integer, Integer, Integer> get() {
+                return new ValueTransformerWithKey<Integer, Integer, Integer>() {
                     @Override
                     public void init(final ProcessorContext context) {
                         badValueTransformer.init(context);
