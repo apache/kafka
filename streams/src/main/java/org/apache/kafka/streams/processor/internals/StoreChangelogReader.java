@@ -88,9 +88,6 @@ public class StoreChangelogReader implements ChangelogReader {
                 restoreConsumer.endOffsets(restoringPartitions) : updatedEndOffsets;
             while (!needsRestoring.isEmpty()) {
                 final ConsumerRecords<byte[], byte[]> records = poll(restoreConsumer, 10);
-                if (records.count() == 0) {
-                    break;
-                }
                 final Iterator<TopicPartition> iterator = restoringPartitions.iterator();
                 final Set<TopicPartition> completedPartitions = new HashSet<>();
                 while (iterator.hasNext()) {
@@ -105,6 +102,9 @@ public class StoreChangelogReader implements ChangelogReader {
                     }
                 }
                 restoringPartitions.removeAll(completedPartitions);
+                if (records.count() == 0) {
+                    break;
+                }
             }
         } catch (final InvalidOffsetException recoverableException) {
             log.warn("Restoring StreamTasks failed. Deleting StreamTasks stores to recreate from scratch.", recoverableException);
