@@ -152,30 +152,38 @@ public class SensorTest {
         final CountDownLatch latch = new CountDownLatch(1);
         ExecutorService service = Executors.newFixedThreadPool(threadCount);
         List<Future<Throwable>> workers = new ArrayList<>(threadCount);
-        for (int i = 0; i != threadCount; ++i) {
-            final int index = i;
-            workers.add(service.submit(new Callable<Throwable>() {
-                @Override
-                public Throwable call() {
-                    try {
-                        assertTrue(latch.await(5, TimeUnit.SECONDS));
-                        for (int j = 0; j != 20; ++j) {
-                            sensor.record(j * index, System.currentTimeMillis() + j, false);
-                            sensor.checkQuotas();
+        boolean needShutdown = true;
+        try {
+            for (int i = 0; i != threadCount; ++i) {
+                final int index = i;
+                workers.add(service.submit(new Callable<Throwable>() {
+                    @Override
+                    public Throwable call() {
+                        try {
+                            assertTrue(latch.await(5, TimeUnit.SECONDS));
+                            for (int j = 0; j != 20; ++j) {
+                                sensor.record(j * index, System.currentTimeMillis() + j, false);
+                                sensor.checkQuotas();
+                            }
+                            return null;
+                        } catch (Throwable e) {
+                            return e;
                         }
-                        return null;
-                    } catch (Throwable e) {
-                        return e;
                     }
-                }
-            }));
-        }
-        latch.countDown();
-        service.shutdown();
-        assertTrue(service.awaitTermination(10, TimeUnit.SECONDS));
-        for (Future<Throwable> callable : workers) {
-            assertTrue(callable.isDone());
-            assertNull(callable.get());
+                }));
+            }
+            latch.countDown();
+            service.shutdown();
+            assertTrue(service.awaitTermination(10, TimeUnit.SECONDS));
+            needShutdown = false;
+            for (Future<Throwable> callable : workers) {
+                assertTrue("If this failure happen frequently, we can try to increase the wait time", callable.isDone());
+                assertNull("Sensor#checkQuotas SHOULD be thread-safe!", callable.get());
+            }
+        } finally {
+            if (needShutdown) {
+                service.shutdownNow();
+            }
         }
     }
 }

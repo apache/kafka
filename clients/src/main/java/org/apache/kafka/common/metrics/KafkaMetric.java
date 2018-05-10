@@ -85,7 +85,6 @@ public final class KafkaMetric implements Metric {
             else
                 return 0;
         }
-
     }
 
     public void config(MetricConfig config) {
