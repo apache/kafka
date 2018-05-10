@@ -56,6 +56,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.regex.Pattern;
 
 import static java.util.Collections.singleton;
@@ -448,6 +449,12 @@ class WorkerSinkTask extends WorkerTask {
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
 
         props.putAll(workerConfig.originalsWithPrefix("consumer."));
+        
+        for (Entry<String, String> connectorProp : taskConfig.entrySet()) {
+            if (connectorProp.getKey().startsWith("consumer.")) {
+                props.put(connectorProp.getKey().substring(9), connectorProp.getValue());
+            }
+        }
 
         KafkaConsumer<byte[], byte[]> newConsumer;
         try {
