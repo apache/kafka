@@ -36,3 +36,4 @@ public class MockStoreBuilder extends AbstractStoreBuilder<Integer, byte[], Stat
         return new MockStateStore(name, persistent);
     }
 }
+
