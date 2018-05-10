@@ -44,13 +44,13 @@ public class ClientUtilsTest {
 
     @Test
     public void testParseAndValidateAddressesWithReverseLookup() {
-        List<InetSocketAddress> validatedAddresses = checkWithLookup(Arrays.asList("mydomain.com:10000"),"PLAINTEXT");
+        List<InetSocketAddress> validatedAddresses = checkWithLookup(Arrays.asList("mydomain.com:10000"));
         assertEquals(1, validatedAddresses.size());
         InetSocketAddress onlyAddress = validatedAddresses.get(0);
         assertEquals("65-254-242-180.yourhostingaccount.com", onlyAddress.getHostName());
         assertEquals(10000, onlyAddress.getPort());
 
-        validatedAddresses = checkWithLookup(Arrays.asList("mydomain.com:10000"),"SSL");
+        validatedAddresses = checkWithLookup(Arrays.asList("mydomain.com:10000"));
         assertEquals(1, validatedAddresses.size());
         onlyAddress = validatedAddresses.get(0);
         assertEquals("mydomain.com", onlyAddress.getHostName());
@@ -70,11 +70,11 @@ public class ClientUtilsTest {
     }
 
     private List<InetSocketAddress> check(String... url) {
-        return ClientUtils.parseAndValidateAddresses(Arrays.asList(url),false,"PLAINTEXT");
+        return ClientUtils.parseAndValidateAddresses(Arrays.asList(url),false);
     }
 
-    private List<InetSocketAddress> checkWithLookup(List<String> url, String securityProtocol) {
-        return ClientUtils.parseAndValidateAddresses(url,true,securityProtocol);
+    private List<InetSocketAddress> checkWithLookup(List<String> url) {
+        return ClientUtils.parseAndValidateAddresses(url,true);
     }
 
 }

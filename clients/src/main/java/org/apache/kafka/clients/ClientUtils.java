@@ -43,7 +43,7 @@ public final class ClientUtils {
     private ClientUtils() {
     }
 
-    public static List<InetSocketAddress> parseAndValidateAddresses(List<String> urls, boolean reverseLookup, String securityProtocolConfig) {
+    public static List<InetSocketAddress> parseAndValidateAddresses(List<String> urls, boolean reverseLookup) {
         List<InetSocketAddress> addresses = new ArrayList<>();
         for (String url : urls) {
             if (url != null && !url.isEmpty()) {
@@ -53,8 +53,7 @@ public final class ClientUtils {
                     if (host == null || port == null)
                         throw new ConfigException("Invalid url in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
 
-                    //Reverse lookup of bootstrap.servers is not allowed if SSL is used as it can break authentication when using wildcard certificates
-                    if(reverseLookup && SecurityProtocol.forName(securityProtocolConfig) != SecurityProtocol.SSL)
+                    if(reverseLookup)
                     {
                         InetAddress[] inetAddresses = InetAddress.getAllByName(host);
                         for (InetAddress inetAddress : inetAddresses) {

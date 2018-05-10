@@ -398,7 +398,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     time,
                     apiVersions,
                     transactionManager);
-            List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG),config.getBoolean(CommonClientConfigs.BOOTSTRAP_REVERSE_DNS_LOOKUP),config.getString(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
+            List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG),config.getBoolean(CommonClientConfigs.BOOTSTRAP_REVERSE_DNS_LOOKUP));
             if (metadata != null) {
                 this.metadata = metadata;
             } else {
