@@ -378,11 +378,11 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
   private[server] def createBrokerInfo: BrokerInfo = {
     val endPoints = config.advertisedListeners.map(e => s"${e.host}:${e.port}")
-    zkClient.getAllBrokersInCluster.filter(_.id != config.brokerId).foreach(broker => {
+    zkClient.getAllBrokersInCluster.filter(_.id != config.brokerId).foreach { broker =>
       val commonEndPoints = broker.endPoints.map(e => s"${e.host}:${e.port}").intersect(endPoints)
-      require(commonEndPoints.isEmpty, s"Configured end points: ${endPoints.mkString(",")} in" +
-        s" listeners are already registered in broker ${broker.id}")
-    })
+      require(commonEndPoints.isEmpty, s"Configured end points ${commonEndPoints.mkString(",")} in" +
+        s" advertised listeners are already registered by broker ${broker.id}")
+    }
 
     val listeners = config.advertisedListeners.map { endpoint =>
       if (endpoint.port == 0)

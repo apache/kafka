@@ -807,7 +807,7 @@ class KafkaConfigTest extends ZooKeeperTestHarness {
 
   def createServer(nodeId: Int, hostName: String, port: Int): KafkaServer = {
     val props = TestUtils.createBrokerConfig(nodeId, zkConnect)
-    props.put(KafkaConfig.AdvertisedListenersProp, s"PLAINTEXT://${hostName}:${port}")
+    props.put(KafkaConfig.AdvertisedListenersProp, s"PLAINTEXT://$hostName:$port")
     val kafkaConfig = KafkaConfig.fromProps(props)
     TestUtils.createServer(kafkaConfig)
   }
