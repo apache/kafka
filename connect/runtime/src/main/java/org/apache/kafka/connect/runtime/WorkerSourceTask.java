@@ -87,6 +87,7 @@ class WorkerSourceTask extends WorkerTask {
     private Map<String, String> taskConfig;
     private boolean finishedStart = false;
     private boolean startedShutdownBeforeStartCompleted = false;
+    private boolean stopped = false;
 
     public WorkerSourceTask(ConnectorTaskId id,
                             SourceTask task,
@@ -137,8 +138,19 @@ class WorkerSourceTask extends WorkerTask {
 
     @Override
     protected void close() {
-        producer.close(30, TimeUnit.SECONDS);
-        transformationChain.close();
+        tryStop();
+        if (producer != null) {
+            try {
+                producer.close(30, TimeUnit.SECONDS);
+            } catch (Throwable t) {
+                log.warn("Could not stop producer", t);
+            }
+        }
+        try {
+            transformationChain.close();
+        } catch (Throwable t) {
+            log.warn("Could not stop transformation chain", t);
+        }
     }
 
     @Override
@@ -152,9 +164,20 @@ class WorkerSourceTask extends WorkerTask {
         stopRequestedLatch.countDown();
         synchronized (this) {
             if (finishedStart)
-                task.stop();
+                tryStop();
             else
                 startedShutdownBeforeStartCompleted = true;
+        }
+    }
+
+    private void tryStop() {
+        if (!stopped) {
+            try {
+                task.stop();
+                stopped = true;
+            } catch (Throwable t) {
+                log.warn("Could not stop task", t);
+            }
         }
     }
 
@@ -166,7 +189,7 @@ class WorkerSourceTask extends WorkerTask {
             log.info("{} Source task finished initialization and start", this);
             synchronized (this) {
                 if (startedShutdownBeforeStartCompleted) {
-                    task.stop();
+                    tryStop();
                     return;
                 }
                 finishedStart = true;
