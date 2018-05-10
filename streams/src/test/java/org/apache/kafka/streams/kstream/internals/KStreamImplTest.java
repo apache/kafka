@@ -224,9 +224,9 @@ public class KStreamImplTest {
     @Test
     public void shouldUseRecordMetadataTimestampExtractorWhenInternalRepartitioningTopicCreated() {
         final StreamsBuilder builder = new StreamsBuilder();
-        KStream<String, String> kStream = builder.stream("topic-1", stringConsumed);
-        ValueJoiner<String, String, String> valueJoiner = MockValueJoiner.instance(":");
-        long windowSize = TimeUnit.MILLISECONDS.convert(1, TimeUnit.DAYS);
+        final KStream<String, String> kStream = builder.stream("topic-1", stringConsumed);
+        final ValueJoiner<String, String, String> valueJoiner = MockValueJoiner.instance(":");
+        final long windowSize = TimeUnit.MILLISECONDS.convert(1, TimeUnit.DAYS);
         final KStream<String, String> stream = kStream
                         .map(new KeyValueMapper<String, String, KeyValue<? extends String, ? extends String>>() {
                             @Override
@@ -242,9 +242,9 @@ public class KStreamImplTest {
                                 Serdes.String()))
                 .to("output-topic", Produced.with(Serdes.String(), Serdes.String()));
 
-        ProcessorTopology topology = TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").build();
+        final ProcessorTopology topology = TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").build();
 
-        SourceNode originalSourceNode = topology.source("topic-1");
+        final SourceNode originalSourceNode = topology.source("topic-1");
 
         for (SourceNode sourceNode: topology.sources()) {
             if (sourceNode.name().equals(originalSourceNode.name())) {

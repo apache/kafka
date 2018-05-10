@@ -377,15 +377,10 @@ public class RegexSourceIntegrationTest {
 
     @Test
     public void testNoMessagesSentExceptionFromOverlappingPatterns() throws Exception {
-
-        final String fooMessage = "fooMessage";
         final String fMessage = "fMessage";
-
-
+        final String fooMessage = "fooMessage";
         final Serde<String> stringSerde = Serdes.String();
-
         final StreamsBuilder builder = new StreamsBuilder();
-
 
         // overlapping patterns here, no messages should be sent as TopologyException
         // will be thrown when the processor topology is built.
@@ -415,7 +410,7 @@ public class RegexSourceIntegrationTest {
         final Properties consumerConfig = TestUtils.consumerConfig(CLUSTER.bootstrapServers(), StringDeserializer.class, StringDeserializer.class);
         try {
             IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, DEFAULT_OUTPUT_TOPIC, 2, 5000);
-        } catch (AssertionError e) {
+        } catch (final AssertionError e) {
             // this is fine
         }
 
