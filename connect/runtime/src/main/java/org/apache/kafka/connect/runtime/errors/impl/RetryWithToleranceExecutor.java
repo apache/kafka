@@ -23,7 +23,13 @@ public class RetryWithToleranceExecutor extends OperationExecutor {
 
     @Override
     public <V> V execute(Operation<V> operation, V value, ProcessingContext context) {
-        return operation.apply();
+        try {
+            return operation.apply();
+        } catch (RuntimeException e) {
+            throw e;
+        } catch (Exception ignored) {
+        }
+        return value;
     }
 
 }

@@ -43,6 +43,7 @@ public class TransformationChain<R extends ConnectRecord<R>> {
 
         for (final Transformation<R> transformation : transformations) {
             final R current = record;
+            processingContext.setRecord(current);
             record = operationExecutor.execute(new OperationExecutor.Operation<R>() {
                 @Override
                 public R apply() {

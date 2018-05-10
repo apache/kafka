@@ -18,6 +18,7 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.MetricNameTemplate;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Sensor;
@@ -72,6 +73,7 @@ abstract class WorkerTask implements Runnable {
 
     protected static final SchemaAndValue DEFAULT_SCHEMA_AND_VALUE = new SchemaAndValue(Schema.BOOLEAN_SCHEMA, false);
     protected static final Headers DEFAULT_HEADERS = new ConnectHeaders();
+    protected static final RecordHeaders DEFAULT_RECORD_HEADERS = new RecordHeaders();
 
     public WorkerTask(ConnectorTaskId id,
                       TaskStatus.Listener statusListener,

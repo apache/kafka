@@ -41,7 +41,7 @@ public abstract class OperationExecutor {
     public abstract <V> V execute(Operation<V> operation, V value, ProcessingContext context);
 
     public interface Operation<V> {
-        V apply();
+        V apply() throws Exception;
     }
 
 }
