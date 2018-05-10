@@ -49,6 +49,7 @@ import java.util.Collection;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -267,6 +268,7 @@ public class JsonConverter implements Converter, HeaderConverter {
 
 
     private boolean enableSchemas = JsonConverterConfig.SCHEMAS_ENABLE_DEFAULT;
+    private boolean enableInferSchemas = JsonConverterConfig.SCHEMAS_INFER_ENABLE_DEFAULT;
     private int cacheSize = JsonConverterConfig.SCHEMAS_CACHE_SIZE_DEFAULT;
     private Cache<Schema, ObjectNode> fromConnectSchemaCache;
     private Cache<JsonNode, Schema> toConnectSchemaCache;
@@ -283,6 +285,7 @@ public class JsonConverter implements Converter, HeaderConverter {
     public void configure(Map<String, ?> configs) {
         JsonConverterConfig config = new JsonConverterConfig(configs);
         enableSchemas = config.schemasEnabled();
+        enableInferSchemas = config.schemasInferEnabled();
         cacheSize = config.schemaCacheSize();
 
         boolean isKey = config.type() == ConverterType.KEY;
@@ -341,6 +344,9 @@ public class JsonConverter implements Converter, HeaderConverter {
         // The deserialized data should either be an envelope object containing the schema and the payload or the schema
         // was stripped during serialization and we need to fill in an all-encompassing schema.
         if (!enableSchemas) {
+            if (enableInferSchemas) {
+                return schemalessJsonToConnect(jsonValue);
+            }
             ObjectNode envelope = JsonNodeFactory.instance.objectNode();
             envelope.set("schema", null);
             envelope.set("payload", jsonValue);
@@ -359,6 +365,22 @@ public class JsonConverter implements Converter, HeaderConverter {
 
         Schema schema = asConnectSchema(jsonValue.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
         return new SchemaAndValue(schema, convertToConnect(schema, jsonValue.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME)));
+    }
+
+    private SchemaAndValue schemalessJsonToConnect(JsonNode jsonValue) {
+        if (jsonValue == null)
+            return SchemaAndValue.NULL;
+
+        LinkedHashMap<String, Object> map = new LinkedHashMap<String, Object>();
+        SchemaBuilder builder = SchemaBuilder.struct();
+        flatten(null, jsonValue, map, builder);
+        Schema schema = builder.build();
+        Struct struct = new Struct(schema);
+        for (Map.Entry<String, Object> entry : map.entrySet()) {
+            struct.put(entry.getKey(), entry.getValue());
+        }
+
+        return new SchemaAndValue(schema, struct);
     }
 
     public ObjectNode asJsonSchema(Schema schema) {
@@ -754,5 +776,41 @@ public class JsonConverter implements Converter, HeaderConverter {
 
     private interface LogicalTypeConverter {
         Object convert(Schema schema, Object value);
+    }
+
+    private void flatten(String key, JsonNode jsonValue, LinkedHashMap<String, Object> map, SchemaBuilder builder) {
+        switch (jsonValue.getNodeType()) {
+            case NULL:
+                builder.field(key, Schema.OPTIONAL_STRING_SCHEMA);
+                map.put(key, null);
+                break;
+            case BOOLEAN:
+                builder.field(key, Schema.BOOLEAN_SCHEMA);
+                map.put(key, jsonValue.booleanValue());
+                break;
+            case NUMBER:
+                if (jsonValue.isIntegralNumber()) {
+                    builder.field(key, Schema.INT64_SCHEMA);
+                    map.put(key, jsonValue.longValue());
+                }
+                else {
+                    builder.field(key, Schema.FLOAT64_SCHEMA);
+                    map.put(key, jsonValue.doubleValue());
+                }
+                break;
+            case OBJECT:
+                Iterator<Map.Entry<String, JsonNode>> it = jsonValue.fields();
+                while (it.hasNext()) {
+                    Map.Entry<String, JsonNode> entry = it.next();
+                    flatten(entry.getKey(), entry.getValue(), map, builder);
+                }
+                break;
+            case STRING:
+                builder.field(key, Schema.STRING_SCHEMA);
+                map.put(key, jsonValue.textValue());
+                break;
+            default:
+                break;
+        }
     }
 }

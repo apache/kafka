@@ -39,6 +39,11 @@ public class JsonConverterConfig extends ConverterConfig {
     private static final String SCHEMAS_CACHE_SIZE_DOC = "The maximum number of schemas that can be cached in this converter instance.";
     private static final String SCHEMAS_CACHE_SIZE_DISPLAY = "Schema Cache Size";
 
+    public static final String SCHEMAS_INFER_ENABLE_CONFIG = "schemas.infer.enable";
+    public static final boolean SCHEMAS_INFER_ENABLE_DEFAULT = false;
+    private static final String SCHEMAS_INFER_ENABLE_DOC = "Infer the schemas when they are missing within each of the serialized values and keys.";
+    private static final String SCHEMAS_INFER_ENABLE_DISPLAY = "Enable Infer Schemas";
+
     private final static ConfigDef CONFIG;
 
     static {
@@ -49,6 +54,8 @@ public class JsonConverterConfig extends ConverterConfig {
                       orderInGroup++, Width.MEDIUM, SCHEMAS_ENABLE_DISPLAY);
         CONFIG.define(SCHEMAS_CACHE_SIZE_CONFIG, Type.INT, SCHEMAS_CACHE_SIZE_DEFAULT, Importance.HIGH, SCHEMAS_CACHE_SIZE_DOC, group,
                       orderInGroup++, Width.MEDIUM, SCHEMAS_CACHE_SIZE_DISPLAY);
+        CONFIG.define(SCHEMAS_INFER_ENABLE_CONFIG, Type.BOOLEAN, SCHEMAS_INFER_ENABLE_DEFAULT, Importance.HIGH, SCHEMAS_INFER_ENABLE_DOC, group,
+                orderInGroup++, Width.MEDIUM, SCHEMAS_INFER_ENABLE_DISPLAY);
     }
 
     public static ConfigDef configDef() {
@@ -75,5 +82,14 @@ public class JsonConverterConfig extends ConverterConfig {
      */
     public int schemaCacheSize() {
         return getInt(SCHEMAS_CACHE_SIZE_CONFIG);
+    }
+
+    /**
+     * Return whether schema inferencing is enabled.
+     *
+     * @return true if enabled, or false otherwise
+     */
+    public boolean schemasInferEnabled() {
+        return getBoolean(SCHEMAS_INFER_ENABLE_CONFIG);
     }
 }
