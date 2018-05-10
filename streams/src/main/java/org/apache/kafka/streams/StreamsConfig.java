@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams;
 
+import org.apache.kafka.clients.CommonClientConfigDefs;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.AdminClientConfig;
@@ -28,7 +29,6 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.TopicConfig;
-import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
@@ -51,7 +51,6 @@ import java.util.Properties;
 import java.util.Set;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
-import static org.apache.kafka.common.config.ConfigDef.Range.between;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 import static org.apache.kafka.common.requests.IsolationLevel.READ_COMMITTED;
 
@@ -393,11 +392,7 @@ public class StreamsConfig extends AbstractConfig {
                     atLeast(0),
                     Importance.MEDIUM,
                     CACHE_MAX_BYTES_BUFFERING_DOC)
-            .define(CLIENT_ID_CONFIG,
-                    Type.STRING,
-                    "",
-                    Importance.MEDIUM,
-                    CLIENT_ID_DOC)
+            .define(CommonClientConfigDefs.clientId(CLIENT_ID_DOC))
             .define(DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG,
                     Type.CLASS,
                     LogAndFailExceptionHandler.class.getName(),
@@ -439,11 +434,7 @@ public class StreamsConfig extends AbstractConfig {
                     in(AT_LEAST_ONCE, EXACTLY_ONCE),
                     Importance.MEDIUM,
                     PROCESSING_GUARANTEE_DOC)
-            .define(SECURITY_PROTOCOL_CONFIG,
-                    Type.STRING,
-                    CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
-                    Importance.MEDIUM,
-                    CommonClientConfigs.SECURITY_PROTOCOL_DOC)
+            .define(CommonClientConfigDefs.securityProtocol())
 
             // LOW
 
@@ -462,40 +453,12 @@ public class StreamsConfig extends AbstractConfig {
                     DEFAULT_COMMIT_INTERVAL_MS,
                     Importance.LOW,
                     COMMIT_INTERVAL_MS_DOC)
-            .define(CONNECTIONS_MAX_IDLE_MS_CONFIG,
-                    ConfigDef.Type.LONG,
-                    9 * 60 * 1000,
-                    ConfigDef.Importance.LOW,
-                    CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_DOC)
-            .define(METADATA_MAX_AGE_CONFIG,
-                    ConfigDef.Type.LONG,
-                    5 * 60 * 1000,
-                    atLeast(0),
-                    ConfigDef.Importance.LOW,
-                    CommonClientConfigs.METADATA_MAX_AGE_DOC)
-            .define(METRICS_NUM_SAMPLES_CONFIG,
-                    Type.INT,
-                    2,
-                    atLeast(1),
-                    Importance.LOW,
-                    CommonClientConfigs.METRICS_NUM_SAMPLES_DOC)
-            .define(METRIC_REPORTER_CLASSES_CONFIG,
-                    Type.LIST,
-                    "",
-                    Importance.LOW,
-                    CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
-            .define(METRICS_RECORDING_LEVEL_CONFIG,
-                    Type.STRING,
-                    Sensor.RecordingLevel.INFO.toString(),
-                    in(Sensor.RecordingLevel.INFO.toString(), Sensor.RecordingLevel.DEBUG.toString()),
-                    Importance.LOW,
-                    CommonClientConfigs.METRICS_RECORDING_LEVEL_DOC)
-            .define(METRICS_SAMPLE_WINDOW_MS_CONFIG,
-                    Type.LONG,
-                    30000,
-                    atLeast(0),
-                    Importance.LOW,
-                    CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_DOC)
+            .define(CommonClientConfigDefs.connectionsMaxIdleMs(9 * 60 * 1000L))
+            .define(CommonClientConfigDefs.metadataMaxAge(5 * 60 * 1000L))
+            .define(CommonClientConfigDefs.metricsNumSamplesConfig(2))
+            .define(CommonClientConfigDefs.metricReporterClasses())
+            .define(CommonClientConfigDefs.metricsRecordingLevel())
+            .define(CommonClientConfigDefs.metricsSampleWindowMs(30_000L))
             .define(PARTITION_GROUPER_CLASS_CONFIG,
                     Type.CLASS,
                     DefaultPartitionGrouper.class.getName(),
@@ -506,53 +469,23 @@ public class StreamsConfig extends AbstractConfig {
                     100,
                     Importance.LOW,
                     POLL_MS_DOC)
-            .define(RECEIVE_BUFFER_CONFIG,
-                    Type.INT,
-                    32 * 1024,
-                    atLeast(0),
-                    Importance.LOW,
-                    CommonClientConfigs.RECEIVE_BUFFER_DOC)
-            .define(RECONNECT_BACKOFF_MS_CONFIG,
-                    Type.LONG,
-                    50L,
-                    atLeast(0L),
-                    Importance.LOW,
-                    CommonClientConfigs.RECONNECT_BACKOFF_MS_DOC)
-            .define(RECONNECT_BACKOFF_MAX_MS_CONFIG,
-                    Type.LONG,
-                    1000L,
-                    atLeast(0L),
-                    ConfigDef.Importance.LOW,
-                    CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_DOC)
-            .define(RETRIES_CONFIG,
-                    Type.INT,
-                    0,
-                    between(0, Integer.MAX_VALUE),
-                    ConfigDef.Importance.LOW,
-                    CommonClientConfigs.RETRIES_DOC)
+            .define(CommonClientConfigDefs.receiveBufferBytes(32 * 1024))
+            .define(CommonClientConfigDefs.reconnectBackoffMs(50L))
+            .define(CommonClientConfigDefs.reconnectBackoffMaxMs(1000L))
+            .define(CommonClientConfigDefs.retries(0, CommonClientConfigs.RETRIES_DOC))
             .define(RETRY_BACKOFF_MS_CONFIG,
                     Type.LONG,
                     100L,
                     atLeast(0L),
                     ConfigDef.Importance.LOW,
                     CommonClientConfigs.RETRY_BACKOFF_MS_DOC)
-            .define(REQUEST_TIMEOUT_MS_CONFIG,
-                    Type.INT,
-                    40 * 1000,
-                    atLeast(0),
-                    ConfigDef.Importance.LOW,
-                    CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC)
+            .define(CommonClientConfigDefs.requestTimeoutMs(40 * 1000, CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC))
             .define(ROCKSDB_CONFIG_SETTER_CLASS_CONFIG,
                     Type.CLASS,
                     null,
                     Importance.LOW,
                     ROCKSDB_CONFIG_SETTER_CLASS_DOC)
-            .define(SEND_BUFFER_CONFIG,
-                    Type.INT,
-                    128 * 1024,
-                    atLeast(0),
-                    Importance.LOW,
-                    CommonClientConfigs.SEND_BUFFER_DOC)
+            .define(CommonClientConfigDefs.sendBufferBytes(128 * 1024))
             .define(STATE_CLEANUP_DELAY_MS_CONFIG,
                     Type.LONG,
                     10 * 60 * 1000,

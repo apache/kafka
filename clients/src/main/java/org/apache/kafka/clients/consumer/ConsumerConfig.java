@@ -16,12 +16,12 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.clients.CommonClientConfigDefs;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
-import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.requests.IsolationLevel;
 import org.apache.kafka.common.serialization.Deserializer;
 
@@ -32,6 +32,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 
+import static org.apache.kafka.clients.CommonClientConfigs.CLIENT_ID_DOC;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 
@@ -216,7 +217,6 @@ public class ConsumerConfig extends AbstractConfig {
 
     /** <code>request.timeout.ms</code> */
     public static final String REQUEST_TIMEOUT_MS_CONFIG = CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG;
-    private static final String REQUEST_TIMEOUT_MS_DOC = CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC;
 
     /** <code>interceptor.classes</code> */
     public static final String INTERCEPTOR_CLASSES_CONFIG = "interceptor.classes";
@@ -255,12 +255,7 @@ public class ConsumerConfig extends AbstractConfig {
     public static final String DEFAULT_ISOLATION_LEVEL = IsolationLevel.READ_UNCOMMITTED.toString().toLowerCase(Locale.ROOT);
     
     static {
-        CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
-                                        Type.LIST,
-                                        Collections.emptyList(),
-                                        new ConfigDef.NonNullValidator(),
-                                        Importance.HIGH,
-                                        CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
+        CONFIG = new ConfigDef().define(CommonClientConfigDefs.bootstrapServers(ConfigDef.NO_DEFAULT_VALUE, CommonClientConfigs.BOOTSTRAP_SERVERS_DOC))
                                 .define(GROUP_ID_CONFIG, Type.STRING, "", Importance.HIGH, GROUP_ID_DOC)
                                 .define(SESSION_TIMEOUT_MS_CONFIG,
                                         Type.INT,
@@ -278,12 +273,7 @@ public class ConsumerConfig extends AbstractConfig {
                                         new ConfigDef.NonNullValidator(),
                                         Importance.MEDIUM,
                                         PARTITION_ASSIGNMENT_STRATEGY_DOC)
-                                .define(METADATA_MAX_AGE_CONFIG,
-                                        Type.LONG,
-                                        5 * 60 * 1000,
-                                        atLeast(0),
-                                        Importance.LOW,
-                                        CommonClientConfigs.METADATA_MAX_AGE_DOC)
+                                .define(CommonClientConfigDefs.metadataMaxAge(5 * 60 * 1000L))
                                 .define(ENABLE_AUTO_COMMIT_CONFIG,
                                         Type.BOOLEAN,
                                         true,
@@ -295,29 +285,15 @@ public class ConsumerConfig extends AbstractConfig {
                                         atLeast(0),
                                         Importance.LOW,
                                         AUTO_COMMIT_INTERVAL_MS_DOC)
-                                .define(CLIENT_ID_CONFIG,
-                                        Type.STRING,
-                                        "",
-                                        Importance.LOW,
-                                        CommonClientConfigs.CLIENT_ID_DOC)
+                                .define(CommonClientConfigDefs.clientId(CLIENT_ID_DOC))
                                 .define(MAX_PARTITION_FETCH_BYTES_CONFIG,
                                         Type.INT,
                                         DEFAULT_MAX_PARTITION_FETCH_BYTES,
                                         atLeast(0),
                                         Importance.HIGH,
                                         MAX_PARTITION_FETCH_BYTES_DOC)
-                                .define(SEND_BUFFER_CONFIG,
-                                        Type.INT,
-                                        128 * 1024,
-                                        atLeast(-1),
-                                        Importance.MEDIUM,
-                                        CommonClientConfigs.SEND_BUFFER_DOC)
-                                .define(RECEIVE_BUFFER_CONFIG,
-                                        Type.INT,
-                                        64 * 1024,
-                                        atLeast(-1),
-                                        Importance.MEDIUM,
-                                        CommonClientConfigs.RECEIVE_BUFFER_DOC)
+                                .define(CommonClientConfigDefs.sendBufferBytes(128 * 1024))
+                                .define(CommonClientConfigDefs.receiveBufferBytes(64 * 1024))
                                 .define(FETCH_MIN_BYTES_CONFIG,
                                         Type.INT,
                                         1,
@@ -336,24 +312,9 @@ public class ConsumerConfig extends AbstractConfig {
                                         atLeast(0),
                                         Importance.LOW,
                                         FETCH_MAX_WAIT_MS_DOC)
-                                .define(RECONNECT_BACKOFF_MS_CONFIG,
-                                        Type.LONG,
-                                        50L,
-                                        atLeast(0L),
-                                        Importance.LOW,
-                                        CommonClientConfigs.RECONNECT_BACKOFF_MS_DOC)
-                                .define(RECONNECT_BACKOFF_MAX_MS_CONFIG,
-                                        Type.LONG,
-                                        1000L,
-                                        atLeast(0L),
-                                        Importance.LOW,
-                                        CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_DOC)
-                                .define(RETRY_BACKOFF_MS_CONFIG,
-                                        Type.LONG,
-                                        100L,
-                                        atLeast(0L),
-                                        Importance.LOW,
-                                        CommonClientConfigs.RETRY_BACKOFF_MS_DOC)
+                                .define(CommonClientConfigDefs.reconnectBackoffMs(50L))
+                                .define(CommonClientConfigDefs.reconnectBackoffMaxMs(1000L))
+                                .define(CommonClientConfigDefs.retryBackoffMs(100L))
                                 .define(AUTO_OFFSET_RESET_CONFIG,
                                         Type.STRING,
                                         "latest",
@@ -365,30 +326,10 @@ public class ConsumerConfig extends AbstractConfig {
                                         true,
                                         Importance.LOW,
                                         CHECK_CRCS_DOC)
-                                .define(METRICS_SAMPLE_WINDOW_MS_CONFIG,
-                                        Type.LONG,
-                                        30000,
-                                        atLeast(0),
-                                        Importance.LOW,
-                                        CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_DOC)
-                                .define(METRICS_NUM_SAMPLES_CONFIG,
-                                        Type.INT,
-                                        2,
-                                        atLeast(1),
-                                        Importance.LOW,
-                                        CommonClientConfigs.METRICS_NUM_SAMPLES_DOC)
-                                .define(METRICS_RECORDING_LEVEL_CONFIG,
-                                        Type.STRING,
-                                        Sensor.RecordingLevel.INFO.toString(),
-                                        in(Sensor.RecordingLevel.INFO.toString(), Sensor.RecordingLevel.DEBUG.toString()),
-                                        Importance.LOW,
-                                        CommonClientConfigs.METRICS_RECORDING_LEVEL_DOC)
-                                .define(METRIC_REPORTER_CLASSES_CONFIG,
-                                        Type.LIST,
-                                        Collections.emptyList(),
-                                        new ConfigDef.NonNullValidator(),
-                                        Importance.LOW,
-                                        CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
+                                .define(CommonClientConfigDefs.metricsSampleWindowMs(30_000L))
+                                .define(CommonClientConfigDefs.metricsNumSamplesConfig(2))
+                                .define(CommonClientConfigDefs.metricsRecordingLevel())
+                                .define(CommonClientConfigDefs.metricReporterClasses())
                                 .define(KEY_DESERIALIZER_CLASS_CONFIG,
                                         Type.CLASS,
                                         Importance.HIGH,
@@ -397,18 +338,9 @@ public class ConsumerConfig extends AbstractConfig {
                                         Type.CLASS,
                                         Importance.HIGH,
                                         VALUE_DESERIALIZER_CLASS_DOC)
-                                .define(REQUEST_TIMEOUT_MS_CONFIG,
-                                        Type.INT,
-                                        305000, // chosen to be higher than the default of max.poll.interval.ms
-                                        atLeast(0),
-                                        Importance.MEDIUM,
-                                        REQUEST_TIMEOUT_MS_DOC)
+                                .define(CommonClientConfigDefs.requestTimeoutMs(305000, CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC))
                                 /* default is set to be a bit lower than the server default (10 min), to avoid both client and server closing connection at same time */
-                                .define(CONNECTIONS_MAX_IDLE_MS_CONFIG,
-                                        Type.LONG,
-                                        9 * 60 * 1000,
-                                        Importance.MEDIUM,
-                                        CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_DOC)
+                                .define(CommonClientConfigDefs.connectionsMaxIdleMs(9 * 60 * 1000L))
                                 .define(INTERCEPTOR_CLASSES_CONFIG,
                                         Type.LIST,
                                         Collections.emptyList(),
@@ -443,11 +375,8 @@ public class ConsumerConfig extends AbstractConfig {
                                         Importance.MEDIUM,
                                         ISOLATION_LEVEL_DOC)
                                 // security support
-                                .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
-                                        Type.STRING,
-                                        CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
-                                        Importance.MEDIUM,
-                                        CommonClientConfigs.SECURITY_PROTOCOL_DOC)
+                                .define(CommonClientConfigDefs.securityProtocol())
+
                                 .withClientSslSupport()
                                 .withClientSaslSupport();
 

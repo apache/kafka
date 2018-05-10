@@ -16,22 +16,19 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.clients.CommonClientConfigDefs;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
-import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.connect.storage.SimpleHeaderConverter;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-
-import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
-import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 
 /**
  * Common base class providing configuration for Kafka Connect workers, whether standalone or distributed.
@@ -172,11 +169,6 @@ public class WorkerConfig extends AbstractConfig {
             + "Examples: plugin.path=/usr/local/share/java,/usr/local/share/kafka/plugins,"
             + "/opt/connectors";
 
-    public static final String METRICS_SAMPLE_WINDOW_MS_CONFIG = CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG;
-    public static final String METRICS_NUM_SAMPLES_CONFIG = CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG;
-    public static final String METRICS_RECORDING_LEVEL_CONFIG = CommonClientConfigs.METRICS_RECORDING_LEVEL_CONFIG;
-    public static final String METRIC_REPORTER_CLASSES_CONFIG = CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG;
-
     /**
      * Get a basic ConfigDef for a WorkerConfig. This includes all the common settings. Subclasses can use this to
      * bootstrap their own ConfigDef.
@@ -184,8 +176,7 @@ public class WorkerConfig extends AbstractConfig {
      */
     protected static ConfigDef baseConfigDef() {
         return new ConfigDef()
-                .define(BOOTSTRAP_SERVERS_CONFIG, Type.LIST, BOOTSTRAP_SERVERS_DEFAULT,
-                        Importance.HIGH, BOOTSTRAP_SERVERS_DOC)
+                .define(CommonClientConfigDefs.bootstrapServers(BOOTSTRAP_SERVERS_DEFAULT, BOOTSTRAP_SERVERS_DOC))
                 .define(KEY_CONVERTER_CLASS_CONFIG, Type.CLASS,
                         Importance.HIGH, KEY_CONVERTER_CLASS_DOC)
                 .define(VALUE_CONVERTER_CLASS_CONFIG, Type.CLASS,
@@ -218,20 +209,10 @@ public class WorkerConfig extends AbstractConfig {
                         null,
                         Importance.LOW,
                         PLUGIN_PATH_DOC)
-                .define(METRICS_SAMPLE_WINDOW_MS_CONFIG, Type.LONG,
-                        30000, atLeast(0), Importance.LOW,
-                        CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_DOC)
-                .define(METRICS_NUM_SAMPLES_CONFIG, Type.INT,
-                        2, atLeast(1), Importance.LOW,
-                        CommonClientConfigs.METRICS_NUM_SAMPLES_DOC)
-                .define(METRICS_RECORDING_LEVEL_CONFIG, Type.STRING,
-                        Sensor.RecordingLevel.INFO.toString(),
-                        in(Sensor.RecordingLevel.INFO.toString(), Sensor.RecordingLevel.DEBUG.toString()),
-                        Importance.LOW,
-                        CommonClientConfigs.METRICS_RECORDING_LEVEL_DOC)
-                .define(METRIC_REPORTER_CLASSES_CONFIG, Type.LIST,
-                        "", Importance.LOW,
-                        CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
+                .define(CommonClientConfigDefs.metricsSampleWindowMs(30_000L))
+                .define(CommonClientConfigDefs.metricsNumSamplesConfig(2))
+                .define(CommonClientConfigDefs.metricsRecordingLevel())
+                .define(CommonClientConfigDefs.metricReporterClasses())
                 .define(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG,
                         ConfigDef.Type.STRING, "none", ConfigDef.Importance.LOW, BrokerSecurityConfigs.SSL_CLIENT_AUTH_DOC)
                 .define(HEADER_CONVERTER_CLASS_CONFIG, Type.CLASS,

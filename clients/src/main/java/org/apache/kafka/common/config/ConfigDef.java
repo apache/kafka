@@ -1053,6 +1053,16 @@ public class ConfigDef {
             this.internalConfig = internalConfig;
         }
 
+        public ConfigKey(String name, Type type, Object defaultValue, Validator validator, Importance importance, String documentation) {
+            this(name, type, defaultValue, validator, importance, documentation, null,
+                    -1, Width.NONE, name, Collections.<String>emptyList(), null, false);
+        }
+
+        public ConfigKey(String name, Type type, Object defaultValue, Importance importance, String documentation) {
+            this(name, type, defaultValue, null, importance, documentation, null,
+                    -1, Width.NONE, name, Collections.<String>emptyList(), null, false);
+        }
+
         public boolean hasDefault() {
             return !NO_DEFAULT_VALUE.equals(this.defaultValue);
         }

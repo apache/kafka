@@ -16,12 +16,14 @@
  */
 package org.apache.kafka.connect.runtime.distributed;
 
+import org.apache.kafka.clients.CommonClientConfigDefs;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 
 import java.util.Map;
 
+import static org.apache.kafka.clients.CommonClientConfigs.CLIENT_ID_DOC;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 
 public class DistributedConfig extends WorkerConfig {
@@ -153,67 +155,23 @@ public class DistributedConfig extends WorkerConfig {
                         3000,
                         ConfigDef.Importance.HIGH,
                         HEARTBEAT_INTERVAL_MS_DOC)
-                .define(CommonClientConfigs.METADATA_MAX_AGE_CONFIG,
-                        ConfigDef.Type.LONG,
-                        5 * 60 * 1000,
-                        atLeast(0),
-                        ConfigDef.Importance.LOW,
-                        CommonClientConfigs.METADATA_MAX_AGE_DOC)
-                .define(CommonClientConfigs.CLIENT_ID_CONFIG,
-                        ConfigDef.Type.STRING,
-                        "",
-                        ConfigDef.Importance.LOW,
-                        CommonClientConfigs.CLIENT_ID_DOC)
-                .define(CommonClientConfigs.SEND_BUFFER_CONFIG,
-                        ConfigDef.Type.INT,
-                        128 * 1024,
-                        atLeast(0),
-                        ConfigDef.Importance.MEDIUM,
-                        CommonClientConfigs.SEND_BUFFER_DOC)
-                .define(CommonClientConfigs.RECEIVE_BUFFER_CONFIG,
-                        ConfigDef.Type.INT,
-                        32 * 1024,
-                        atLeast(0),
-                        ConfigDef.Importance.MEDIUM,
-                        CommonClientConfigs.RECEIVE_BUFFER_DOC)
-                .define(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG,
-                        ConfigDef.Type.LONG,
-                        50L,
-                        atLeast(0L),
-                        ConfigDef.Importance.LOW,
-                        CommonClientConfigs.RECONNECT_BACKOFF_MS_DOC)
-                .define(CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_CONFIG,
-                        ConfigDef.Type.LONG,
-                        1000L,
-                        atLeast(0L),
-                        ConfigDef.Importance.LOW,
-                        CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_DOC)
-                .define(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG,
-                        ConfigDef.Type.LONG,
-                        100L,
-                        atLeast(0L),
-                        ConfigDef.Importance.LOW,
-                        CommonClientConfigs.RETRY_BACKOFF_MS_DOC)
-                .define(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG,
-                        ConfigDef.Type.INT,
-                        40 * 1000,
-                        atLeast(0),
-                        ConfigDef.Importance.MEDIUM,
-                        CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC)
-                        /* default is set to be a bit lower than the server default (10 min), to avoid both client and server closing connection at same time */
-                .define(CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG,
-                        ConfigDef.Type.LONG,
-                        9 * 60 * 1000,
-                        ConfigDef.Importance.MEDIUM,
-                        CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_DOC)
+
+                .define(CommonClientConfigDefs.metadataMaxAge(5 * 60 * 1000L))
+                .define(CommonClientConfigDefs.clientId(CLIENT_ID_DOC))
+                .define(CommonClientConfigDefs.sendBufferBytes(128 * 1024))
+                .define(CommonClientConfigDefs.receiveBufferBytes(64 * 1024))
+                .define(CommonClientConfigDefs.reconnectBackoffMs(50L))
+                .define(CommonClientConfigDefs.reconnectBackoffMaxMs(1000L))
+                .define(CommonClientConfigDefs.retryBackoffMs(100L))
+                .define(CommonClientConfigDefs.requestTimeoutMs(40 * 1000,CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC))
+                /* default is set to be a bit lower than the server default (10 min), to avoid both client and server closing connection at same time */
+                .define(CommonClientConfigDefs.connectionsMaxIdleMs(9 * 60 * 1000L))
                 // security support
-                .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
-                        ConfigDef.Type.STRING,
-                        CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
-                        ConfigDef.Importance.MEDIUM,
-                        CommonClientConfigs.SECURITY_PROTOCOL_DOC)
+                .define(CommonClientConfigDefs.securityProtocol())
+
                 .withClientSslSupport()
                 .withClientSaslSupport()
+
                 .define(WORKER_SYNC_TIMEOUT_MS_CONFIG,
                         ConfigDef.Type.INT,
                         3000,
