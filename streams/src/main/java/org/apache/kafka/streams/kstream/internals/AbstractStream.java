@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.internals.Topic;
-import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueTransformer;
@@ -26,12 +24,7 @@ import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.ValueMapperWithKey;
-import org.apache.kafka.streams.kstream.Window;
-import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.streams.state.WindowStore;
 
 import java.util.HashSet;
 import java.util.Objects;
@@ -79,38 +72,6 @@ public abstract class AbstractStream<K> {
                 return joiner.apply(value1, value2);
             }
         };
-    }
-
-    @SuppressWarnings({"unchecked", "deprecation"})
-    static <T, K>  org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> keyValueStore(final Serde<K> keySerde,
-                                                                   final Serde<T> aggValueSerde,
-                                                                   final String storeName) {
-        Objects.requireNonNull(storeName, "storeName can't be null");
-        Topic.validate(storeName);
-        return storeFactory(keySerde, aggValueSerde, storeName).build();
-    }
-
-    @SuppressWarnings({"unchecked", "deprecation"})
-    static  <W extends Window, T, K> org.apache.kafka.streams.processor.StateStoreSupplier<WindowStore> windowedStore(final Serde<K> keySerde,
-                                                                                   final Serde<T> aggValSerde,
-                                                                                   final Windows<W> windows,
-                                                                                   final String storeName) {
-        Objects.requireNonNull(storeName, "storeName can't be null");
-        Topic.validate(storeName);
-        return storeFactory(keySerde, aggValSerde, storeName)
-                .windowed(windows.size(), windows.maintainMs(), windows.segments, false)
-                .build();
-    }
-
-    @SuppressWarnings("deprecation")
-    static  <T, K> Stores.PersistentKeyValueFactory<K, T> storeFactory(final Serde<K> keySerde,
-                                                                       final Serde<T> aggValueSerde,
-                                                                       final String storeName) {
-        return Stores.create(storeName)
-                .withKeys(keySerde)
-                .withValues(aggValueSerde)
-                .persistent()
-                .enableCaching();
     }
 
     static <K, V, VR> ValueMapperWithKey<K, V, VR> withKey(final ValueMapper<V, VR> valueMapper) {

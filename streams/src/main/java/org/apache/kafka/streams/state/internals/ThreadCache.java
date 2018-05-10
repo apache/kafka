@@ -33,8 +33,6 @@ import java.util.NoSuchElementException;
 /**
  * An in-memory LRU cache store similar to {@link MemoryLRUCache} but byte-based, not
  * record based
- *
- * @see org.apache.kafka.streams.state.Stores#create(String)
  */
 public class ThreadCache {
     private final Logger log;

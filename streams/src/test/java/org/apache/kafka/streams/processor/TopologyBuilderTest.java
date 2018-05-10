@@ -31,8 +31,6 @@ import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
 import org.apache.kafka.streams.processor.internals.UnwindowedChangelogTopicConfig;
-import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.streams.state.internals.RocksDBWindowStoreSupplier;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockStateStoreSupplier;
 import org.apache.kafka.test.MockTimestampExtractor;
@@ -547,23 +545,6 @@ public class TopologyBuilderTest {
         assertEquals(Collections.singletonList("appId-internal-topic"), stateStoreNameToSourceTopic.get("store"));
     }
 
-    @SuppressWarnings("unchecked")
-    @Test
-    public void shouldAddInternalTopicConfigForWindowStores() {
-        final TopologyBuilder builder = new TopologyBuilder();
-        builder.setApplicationId("appId");
-        builder.addSource("source", "topic");
-        builder.addProcessor("processor", new MockProcessorSupplier(), "source");
-        builder.addStateStore(new RocksDBWindowStoreSupplier("store", 30000, 3, false, null, null, 10000, true, Collections.<String, String>emptyMap(), false), "processor");
-        final Map<Integer, TopicsInfo> topicGroups = builder.topicGroups();
-        final TopicsInfo topicsInfo = topicGroups.values().iterator().next();
-        final InternalTopicConfig topicConfig = topicsInfo.stateChangelogTopics.get("appId-store-changelog");
-        final Map<String, String> properties = topicConfig.getProperties(Collections.<String, String>emptyMap(), 10000);
-        assertEquals(2, properties.size());
-        assertEquals("40000", properties.get(TopicConfig.RETENTION_MS_CONFIG));
-        assertEquals("appId-store-changelog", topicConfig.name());
-    }
-
     @Test
     public void shouldAddInternalTopicConfigForNonWindowStores() {
         final TopologyBuilder builder = new TopologyBuilder();
@@ -594,7 +575,7 @@ public class TopologyBuilderTest {
     }
 
     @Test
-    public void shouldThroughOnUnassignedStateStoreAccess() throws Exception {
+    public void shouldThrowOnUnassignedStateStoreAccess() {
         final String sourceNodeName = "source";
         final String goodNodeName = "goodGuy";
         final String badNodeName = "badGuy";
@@ -603,12 +584,11 @@ public class TopologyBuilderTest {
         config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "host:1");
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
         config.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
-        final StreamsConfig streamsConfig = new StreamsConfig(config);
 
         final TopologyBuilder builder = new TopologyBuilder();
         builder.addSource(sourceNodeName, "topic")
                 .addProcessor(goodNodeName, new LocalMockProcessorSupplier(), sourceNodeName)
-                .addStateStore(Stores.create(LocalMockProcessorSupplier.STORE_NAME).withStringKeys().withStringValues().inMemory().build(), goodNodeName)
+                .addStateStore(new MockStateStoreSupplier(LocalMockProcessorSupplier.STORE_NAME, false), goodNodeName)
                 .addProcessor(badNodeName, new LocalMockProcessorSupplier(), sourceNodeName);
         try {
             final TopologyTestDriverWrapper driver = new TopologyTestDriverWrapper(builder.internalTopologyBuilder, config);
@@ -724,6 +704,7 @@ public class TopologyBuilderTest {
         assertThat(processorTopology.source(pattern.pattern()).getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void shouldConnectRegexMatchedTopicsToStateStore() throws Exception {
 
@@ -755,10 +736,11 @@ public class TopologyBuilderTest {
         assertFalse(topics.contains("topic-A"));
     }
 
+    @SuppressWarnings("unchecked")
     @Test(expected = TopologyBuilderException.class)
     public void shouldNotAllowToAddGlobalStoreWithSourceNameEqualsProcessorName() {
         final String sameNameForSourceAndProcessor = "sameName";
-        final TopologyBuilder topologyBuilder = new TopologyBuilder()
+        new TopologyBuilder()
             .addGlobalStore(new MockStateStoreSupplier("anyName", false, false),
                 sameNameForSourceAndProcessor,
                 null,
