@@ -28,7 +28,6 @@ import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.WindowStoreBuilder;
-import org.apache.kafka.streams.state.internals.WindowStoreSupplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -172,35 +171,6 @@ public class InternalTopologyBuilder {
         @Override
         public Map<String, String> logConfig() {
             return logConfig;
-        }
-    }
-
-    private static class StateStoreSupplierFactory extends AbstractStateStoreFactory {
-        @SuppressWarnings("deprecation")
-        private final org.apache.kafka.streams.processor.StateStoreSupplier supplier;
-
-        @SuppressWarnings("deprecation")
-        StateStoreSupplierFactory(final org.apache.kafka.streams.processor.StateStoreSupplier<?> supplier) {
-            super(supplier.name(),
-                  supplier.loggingEnabled(),
-                  supplier instanceof WindowStoreSupplier,
-                  supplier.logConfig());
-            this.supplier = supplier;
-
-        }
-
-        @Override
-        public StateStore build() {
-            return supplier.get();
-        }
-
-        @SuppressWarnings("deprecation")
-        @Override
-        public long retentionPeriod() {
-            if (!isWindowStore()) {
-                throw new IllegalStateException("retentionPeriod is not supported when not a window store");
-            }
-            return ((WindowStoreSupplier) supplier).retentionPeriod();
         }
     }
 
@@ -510,24 +480,6 @@ public class InternalTopologyBuilder {
         nodeGrouper.unite(name, predecessorNames);
     }
 
-    @SuppressWarnings("deprecation")
-    public final void addStateStore(final org.apache.kafka.streams.processor.StateStoreSupplier supplier,
-                                    final String... processorNames) {
-        Objects.requireNonNull(supplier, "supplier can't be null");
-        if (stateFactories.containsKey(supplier.name())) {
-            throw new TopologyException("StateStore " + supplier.name() + " is already added.");
-        }
-
-        stateFactories.put(supplier.name(), new StateStoreSupplierFactory(supplier));
-
-        if (processorNames != null) {
-            for (final String processorName : processorNames) {
-                Objects.requireNonNull(processorName, "processor name must not be null");
-                connectProcessorAndStateStore(processorName, supplier.name());
-            }
-        }
-    }
-
     public final void addStateStore(final StoreBuilder storeBuilder,
                                     final String... processorNames) {
         Objects.requireNonNull(storeBuilder, "storeBuilder can't be null");
@@ -544,36 +496,6 @@ public class InternalTopologyBuilder {
             }
         }
     }
-
-    @SuppressWarnings("deprecation")
-    public final void addGlobalStore(final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier,
-                                     final String sourceName,
-                                     final TimestampExtractor timestampExtractor,
-                                     final Deserializer keyDeserializer,
-                                     final Deserializer valueDeserializer,
-                                     final String topic,
-                                     final String processorName,
-                                     final ProcessorSupplier stateUpdateSupplier) {
-        Objects.requireNonNull(storeSupplier, "store supplier must not be null");
-        final String name = storeSupplier.name();
-        validateGlobalStoreArguments(sourceName,
-                                     topic,
-                                     processorName,
-                                     stateUpdateSupplier,
-                                     name,
-                                     storeSupplier.loggingEnabled());
-        validateTopicNotAlreadyRegistered(topic);
-        addGlobalStore(sourceName,
-                       timestampExtractor,
-                       keyDeserializer,
-                       valueDeserializer,
-                       topic,
-                       processorName,
-                       stateUpdateSupplier,
-                       name,
-                       storeSupplier.get());
-    }
-
 
     public final void addGlobalStore(final StoreBuilder<KeyValueStore> storeBuilder,
                                      final String sourceName,
