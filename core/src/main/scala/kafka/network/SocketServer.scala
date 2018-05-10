@@ -146,10 +146,10 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
       val securityProtocol = endpoint.securityProtocol
 
       val acceptor = new Acceptor(endpoint, sendBufferSize, recvBufferSize, brokerId, connectionQuotas)
+      addProcessors(acceptor, endpoint, processorsPerListener)
       KafkaThread.nonDaemon(s"kafka-socket-acceptor-$listenerName-$securityProtocol-${endpoint.port}", acceptor).start()
       acceptor.awaitStartup()
       acceptors.put(endpoint, acceptor)
-      addProcessors(acceptor, endpoint, processorsPerListener)
     }
   }
 
