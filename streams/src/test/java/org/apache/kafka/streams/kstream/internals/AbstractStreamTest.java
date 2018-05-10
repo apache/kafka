@@ -49,8 +49,8 @@ public class AbstractStreamTest {
     public void testToInternlValueTransformerSupplierSuppliesNewTransformers() {
         final ValueTransformerSupplier vts = createMock(ValueTransformerSupplier.class);
         expect(vts.get()).andReturn(null).times(3);
-        final InternalValueTransformerWithKeySupplier ivtwks =
-            AbstractStream.toInternalValueTransformerSupplier(vts);
+        final ValueTransformerWithKeySupplier ivtwks =
+            AbstractStream.toValueTransformerWithKeySupplier(vts);
         replay(vts);
         ivtwks.get();
         ivtwks.get();
@@ -60,15 +60,12 @@ public class AbstractStreamTest {
 
     @Test
     public void testToInternalValueTransformerSupplierSuppliesNewTransformers() {
-        final ValueTransformerWithKeySupplier vtwks =
-            createMock(ValueTransformerWithKeySupplier.class);
+        final ValueTransformerWithKeySupplier vtwks = createMock(ValueTransformerWithKeySupplier.class);
         expect(vtwks.get()).andReturn(null).times(3);
-        final InternalValueTransformerWithKeySupplier ivtwks =
-            AbstractStream.toInternalValueTransformerSupplier(vtwks);
         replay(vtwks);
-        ivtwks.get();
-        ivtwks.get();
-        ivtwks.get();
+        vtwks.get();
+        vtwks.get();
+        vtwks.get();
         verify(vtwks);
     }
 
