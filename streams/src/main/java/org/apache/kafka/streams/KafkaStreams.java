@@ -383,10 +383,11 @@ public class KafkaStreams {
      *
      * @return Map of all metrics.
      */
-    // TODO: we can add metrics for producer and admin client as well
+    // TODO: we can add metrics for admin client as well
     public Map<MetricName, ? extends Metric> metrics() {
         final Map<MetricName, Metric> result = new LinkedHashMap<>();
         for (final StreamThread thread : threads) {
+            result.putAll(thread.producerMetrics());
             result.putAll(thread.consumerMetrics());
         }
         if (globalStreamThread != null) result.putAll(globalStreamThread.consumerMetrics());
