@@ -16,12 +16,24 @@
  */
 package org.apache.kafka.common.metrics;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-
+import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.utils.SystemTime;
 import org.junit.Test;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 public class SensorTest {
     @Test
@@ -58,5 +70,57 @@ public class SensorTest {
         debugSensor = new Sensor(null, "debugSensor", null, infoConfig, new SystemTime(),
             0, Sensor.RecordingLevel.DEBUG);
         assertFalse(debugSensor.shouldRecord());
+    }
+
+    /**
+     * The Sensor#checkQuotas should be thread-safe since the method may be used by many ReplicaFetcherThreads.
+     */
+    @Test
+    public void testCheckQuotasInMultiThreads() throws InterruptedException, ExecutionException {
+        final Metrics metrics = new Metrics(new MetricConfig().quota(Quota.upperBound(Double.MAX_VALUE))
+            // decreasing the value of time window make SampledStat always record the given value
+            .timeWindow(1, TimeUnit.MILLISECONDS)
+            // increasing the value of samples make SampledStat store more samples
+            .samples(100));
+        final Sensor sensor = metrics.sensor("sensor");
+
+        sensor.add(metrics.metricName("test-metric", "test-group"), new Rate());
+        final int threadCount = 10;
+        final CountDownLatch latch = new CountDownLatch(1);
+        ExecutorService service = Executors.newFixedThreadPool(threadCount);
+        List<Future<Throwable>> workers = new ArrayList<>(threadCount);
+        boolean needShutdown = true;
+        try {
+            for (int i = 0; i != threadCount; ++i) {
+                final int index = i;
+                workers.add(service.submit(new Callable<Throwable>() {
+                    @Override
+                    public Throwable call() {
+                        try {
+                            assertTrue(latch.await(5, TimeUnit.SECONDS));
+                            for (int j = 0; j != 20; ++j) {
+                                sensor.record(j * index, System.currentTimeMillis() + j, false);
+                                sensor.checkQuotas();
+                            }
+                            return null;
+                        } catch (Throwable e) {
+                            return e;
+                        }
+                    }
+                }));
+            }
+            latch.countDown();
+            service.shutdown();
+            assertTrue(service.awaitTermination(10, TimeUnit.SECONDS));
+            needShutdown = false;
+            for (Future<Throwable> callable : workers) {
+                assertTrue("If this failure happen frequently, we can try to increase the wait time", callable.isDone());
+                assertNull("Sensor#checkQuotas SHOULD be thread-safe!", callable.get());
+            }
+        } finally {
+            if (needShutdown) {
+                service.shutdownNow();
+            }
+        }
     }
 }
