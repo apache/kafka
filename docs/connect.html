@@ -419,6 +419,9 @@
     <p>The <code>flush()</code> method is used during the offset commit process, which allows tasks to recover from failures and resume from a safe point such that no events will be missed. The method should push any outstanding data to the destination system and then block until the write has been acknowledged. The <code>offsets</code> parameter can often be ignored, but is useful in some cases where implementations want to store offset information in the destination store to provide exactly-once
     delivery. For example, an HDFS connector could do this and use atomic move operations to make sure the <code>flush()</code> operation atomically commits the data and offsets to a final location in HDFS.</p>
 
+    <p>Tasks may also implement a custom <code>preCommit()</code> method to determine what commits are sent back to Kafka during the regualar commit cycle. The default implementation will assume that all commits read so far are safe to commit, but you may wish to provide a custom implementation. This method may also wish to change its behavior if it is being invoked because the task is about to close. Tasks are closed for various reasons: rebalance, connect gets shut down, the connector
+    configuration is removed. If your <code>preCommit()</code> method wishes to know if its being invoked for this reason, it should invoke <code>context.isClosing()</code> from the <code>SinkTaskContext</code> that is passed in from your task's constructor. <code>isClosing()</code> will return true if the task is about to be closed.</p>
+
 
     <h5><a id="connect_resuming" href="#connect_resuming">Resuming from Previous Offsets</a></h5>
 
