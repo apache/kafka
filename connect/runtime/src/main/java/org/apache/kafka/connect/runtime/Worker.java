@@ -31,11 +31,13 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.ConnectMetrics.LiteralSupplier;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.errors.ErrorReporter;
+import org.apache.kafka.connect.runtime.errors.OperationExecutor;
 import org.apache.kafka.connect.runtime.errors.ProcessingContext;
 import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.runtime.errors.StageType;
 import org.apache.kafka.connect.runtime.errors.impl.DLQReporter;
 import org.apache.kafka.connect.runtime.errors.impl.ReporterFactory;
+import org.apache.kafka.connect.runtime.errors.impl.RetryWithToleranceExecutor;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.isolation.Plugins.ClassLoaderUsage;
 import org.apache.kafka.connect.sink.SinkRecord;
@@ -444,7 +446,7 @@ public class Worker {
 
             prContextBuilder.addReporters(errorReportersConfig(connConfig));
 
-            workerTask = buildWorkerTask(connConfig, id, task, statusListener, initialState, keyConverter, valueConverter, headerConverter, connectorLoader, prContextBuilder);
+            workerTask = buildWorkerTask(connConfig, id, task, statusListener, initialState, keyConverter, valueConverter, headerConverter, connectorLoader, prContextBuilder, new RetryWithToleranceExecutor());
             workerTask.initialize(taskConfig);
             workerTask.operationExecutor().configure(connConfig.originalsWithPrefix("errors."));
             Plugins.compareAndSwapLoaders(savedLoader);
@@ -479,7 +481,8 @@ public class Worker {
                                        Converter valueConverter,
                                        HeaderConverter headerConverter,
                                        ClassLoader loader,
-                                       ProcessingContext.Builder prContextBuilder) {
+                                       ProcessingContext.Builder prContextBuilder,
+                                       OperationExecutor operationExecutor) {
         // Decide which type of worker task we need based on the type of task.
         if (task instanceof SourceTask) {
             TransformationChain<SourceRecord> transformationChain = new TransformationChain<>(connConfig.<SourceRecord>transformations());
@@ -502,7 +505,7 @@ public class Worker {
             prContextBuilder.appendStage(Stage.newBuilder(StageType.KAFKA_PRODUCE).build());
 
             return new WorkerSourceTask(id, (SourceTask) task, statusListener, initialState, keyConverter, valueConverter,
-                    headerConverter, transformationChain, producer, offsetReader, offsetWriter, config, metrics, loader, time, prContextBuilder.build());
+                    headerConverter, transformationChain, producer, offsetReader, offsetWriter, config, metrics, loader, time, prContextBuilder.build(), operationExecutor);
         } else if (task instanceof SinkTask) {
             TransformationChain<SinkRecord> transformationChain = new TransformationChain<>(connConfig.<SinkRecord>transformations());
 
@@ -519,7 +522,7 @@ public class Worker {
             prContextBuilder.prependStage(Stage.newBuilder(StageType.KAFKA_CONSUME).build());
 
             return new WorkerSinkTask(id, (SinkTask) task, statusListener, initialState, config, metrics, keyConverter,
-                    valueConverter, headerConverter, transformationChain, loader, time, prContextBuilder.build());
+                    valueConverter, headerConverter, transformationChain, loader, time, prContextBuilder.build(), operationExecutor);
 
         } else {
             log.error("Tasks must be a subclass of either SourceTask or SinkTask", task);
