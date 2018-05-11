@@ -85,4 +85,14 @@ public interface SinkTaskContext {
      */
     void requestCommit();
 
+    /**
+     * Determine if the Sink is about to be closed during preCommit.
+     *
+     * During the preCommit callback of a Sink, this method can be invokved to determine if the
+     * callback is being invoked because the task is about to close, so as to allow the Sink to
+     * determine if it wishes to behave differently. For example, a Sink might decide to commit
+     * progress earlier than it would during a normal preCommit invocation in order to avoid
+     * duplicating the work of processing messages that have already been processed.
+     */
+    boolean isClosing();
 }

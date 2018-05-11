@@ -39,6 +39,7 @@ public class WorkerSinkTaskContext implements SinkTaskContext {
     private final WorkerSinkTask sinkTask;
     private final Set<TopicPartition> pausedPartitions;
     private boolean commitRequested;
+    private boolean closingInProgress;
 
     public WorkerSinkTaskContext(KafkaConsumer<byte[], byte[]> consumer, WorkerSinkTask sinkTask) {
         this.offsets = new HashMap<>();
@@ -146,6 +147,15 @@ public class WorkerSinkTaskContext implements SinkTaskContext {
 
     public void clearCommitRequest() {
         commitRequested = false;
+    }
+
+    @Override
+    public boolean isClosing() {
+        return closingInProgress;
+    }
+
+    public void setClosingInProgress(boolean newValue) {
+        closingInProgress = newValue;
     }
 
     @Override
