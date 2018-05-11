@@ -52,6 +52,7 @@ public class StoreChangelogReader implements ChangelogReader {
     private final Map<TopicPartition, StateRestorer> stateRestorers = new HashMap<>();
     private final Map<TopicPartition, StateRestorer> needsRestoring = new HashMap<>();
     private final Map<TopicPartition, StateRestorer> needsInitializing = new HashMap<>();
+    private boolean hasRetrievedOffsets;
     private Map<TopicPartition, Long> updatedEndOffsets;
 
     public StoreChangelogReader(final Consumer<byte[], byte[]> restoreConsumer,
@@ -60,6 +61,7 @@ public class StoreChangelogReader implements ChangelogReader {
         this.restoreConsumer = restoreConsumer;
         this.log = logContext.logger(getClass());
         this.userStateRestoreListener = userStateRestoreListener;
+        this.hasRetrievedOffsets = false;
     }
 
     @Override
@@ -84,28 +86,25 @@ public class StoreChangelogReader implements ChangelogReader {
 
         final Set<TopicPartition> restoringPartitions = new HashSet<>(needsRestoring.keySet());
         try {
-            updatedEndOffsets = !needsRestoring.isEmpty() ? 
-                restoreConsumer.endOffsets(restoringPartitions) : updatedEndOffsets;
-            while (!needsRestoring.isEmpty()) {
-                final ConsumerRecords<byte[], byte[]> records = poll(restoreConsumer, 10);
-                final Iterator<TopicPartition> iterator = restoringPartitions.iterator();
-                final Set<TopicPartition> completedPartitions = new HashSet<>();
-                while (iterator.hasNext()) {
-                    final TopicPartition partition = iterator.next();
-                    final StateRestorer restorer = stateRestorers.get(partition);
-                    final long pos = processNext(records.records(partition), restorer, endOffsets.get(partition));
-                    restorer.setRestoredOffset(pos);
-                    if (restorer.hasCompleted(pos, endOffsets.get(partition))) {
-                        restorer.restoreDone();
-                        needsRestoring.remove(partition);
-                        completedPartitions.add(partition);
-                    }
-                }
-                restoringPartitions.removeAll(completedPartitions);
-                if (records.count() == 0) {
-                    break;
+            if (!needsRestoring.isEmpty() && !hasRetrievedOffsets) {
+                hasRetrievedOffsets = true;
+                updatedEndOffsets = restoreConsumer.endOffsets(restoringPartitions);
+            }
+            final ConsumerRecords<byte[], byte[]> records = poll(restoreConsumer, 10);
+            final Iterator<TopicPartition> iterator = restoringPartitions.iterator();
+            final Set<TopicPartition> completedPartitions = new HashSet<>();
+            while (iterator.hasNext()) {
+                final TopicPartition partition = iterator.next();
+                final StateRestorer restorer = stateRestorers.get(partition);
+                final long pos = processNext(records.records(partition), restorer, updatedEndOffsets.get(partition));
+                restorer.setRestoredOffset(pos);
+                if (restorer.hasCompleted(pos, updatedEndOffsets.get(partition))) {
+                    restorer.restoreDone();
+                    needsRestoring.remove(partition);
+                    completedPartitions.add(partition);
                 }
             }
+            restoringPartitions.removeAll(completedPartitions);
         } catch (final InvalidOffsetException recoverableException) {
             log.warn("Restoring StreamTasks failed. Deleting StreamTasks stores to recreate from scratch.", recoverableException);
             final Set<TopicPartition> partitions = recoverableException.partitions();
@@ -259,6 +258,7 @@ public class StoreChangelogReader implements ChangelogReader {
         needsRestoring.clear();
         endOffsets.clear();
         needsInitializing.clear();
+        hasRetrievedOffsets = false;
     }
 
     private long processNext(final List<ConsumerRecord<byte[], byte[]>> records,
