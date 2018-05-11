@@ -30,9 +30,12 @@ import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.ConnectMetrics.LiteralSupplier;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
+import org.apache.kafka.connect.runtime.errors.ErrorReporter;
 import org.apache.kafka.connect.runtime.errors.ProcessingContext;
 import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.runtime.errors.StageType;
+import org.apache.kafka.connect.runtime.errors.impl.DLQReporter;
+import org.apache.kafka.connect.runtime.errors.impl.ReporterFactory;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.isolation.Plugins.ClassLoaderUsage;
 import org.apache.kafka.connect.sink.SinkRecord;
@@ -439,8 +442,11 @@ public class Worker {
             prContextBuilder.appendStage(valueConverterStage.build());
             prContextBuilder.appendStage(headerConverterStage.build());
 
+            prContextBuilder.addReporters(errorReportersConfig(connConfig));
+
             workerTask = buildWorkerTask(connConfig, id, task, statusListener, initialState, keyConverter, valueConverter, headerConverter, connectorLoader, prContextBuilder);
             workerTask.initialize(taskConfig);
+            workerTask.operationExecutor().configure(connConfig.originalsWithPrefix("errors."));
             Plugins.compareAndSwapLoaders(savedLoader);
         } catch (Throwable t) {
             log.error("Failed to start task {}", id, t);
@@ -519,6 +525,15 @@ public class Worker {
             log.error("Tasks must be a subclass of either SourceTask or SinkTask", task);
             throw new ConnectException("Tasks must be a subclass of either SourceTask or SinkTask");
         }
+    }
+
+    private List<ErrorReporter> errorReportersConfig(ConnectorConfig connConfig) {
+        Map<String, Object> reporterProps = new HashMap<>();
+        for (Map.Entry<String, Object> e: producerProps.entrySet()) {
+            reporterProps.put(DLQReporter.DLQ_PRODUCER_PROPERTIES + "." + e.getKey(), e.getValue());
+        }
+        reporterProps.putAll(connConfig.errorHandlerConfig());
+        return new ReporterFactory().forConfig(reporterProps);
     }
 
     private void stopTask(ConnectorTaskId taskId) {

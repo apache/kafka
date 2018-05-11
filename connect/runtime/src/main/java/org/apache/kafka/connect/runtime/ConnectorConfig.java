@@ -93,6 +93,8 @@ public class ConnectorConfig extends AbstractConfig {
     private static final String TRANSFORMS_DOC = "Aliases for the transformations to be applied to records.";
     private static final String TRANSFORMS_DISPLAY = "Transforms";
 
+    public static final String ERROR_HANDLING_CONFIG = "errors";
+
     private final EnrichedConnectorConfig enrichedConfig;
     private static class EnrichedConnectorConfig extends AbstractConfig {
         EnrichedConnectorConfig(ConfigDef configDef, Map<String, String> props) {
@@ -139,6 +141,10 @@ public class ConnectorConfig extends AbstractConfig {
                 enrich(plugins, configDef, props, true),
                 props
         );
+    }
+
+    public Map<String, ?> errorHandlerConfig() {
+        return originalsWithPrefix(ERROR_HANDLING_CONFIG + ".");
     }
 
     @Override

@@ -21,6 +21,7 @@ import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
@@ -36,7 +37,7 @@ public class ProcessingContext implements Structable {
     private final String taskId;
     private final Map<String, Object> workerConfig;
     private final List<Stage> stages;
-    private final List<ErrorReporter> reporters;
+    private final ErrorReporter[] reporters;
 
     private Exception exception;
     private int current = 0;
@@ -53,10 +54,10 @@ public class ProcessingContext implements Structable {
 
     // VisibleForTesting
     public static ProcessingContext noop(String taskId) {
-        return new ProcessingContext(taskId, Collections.<String, Object>emptyMap(), Collections.<Stage>emptyList(), Collections.<ErrorReporter>emptyList());
+        return new ProcessingContext(taskId, Collections.<String, Object>emptyMap(), Collections.<Stage>emptyList(), new ErrorReporter[]{});
     }
 
-    private ProcessingContext(String taskId, Map<String, Object> workerConfig, List<Stage> stages, List<ErrorReporter> reporters) {
+    private ProcessingContext(String taskId, Map<String, Object> workerConfig, List<Stage> stages, ErrorReporter[] reporters) {
         Objects.requireNonNull(taskId);
         Objects.requireNonNull(workerConfig);
         Objects.requireNonNull(stages);
@@ -78,6 +79,7 @@ public class ProcessingContext implements Structable {
     /**
      * @return which task reported this error
      */
+    @Field("task_id")
     public String taskId() {
         return taskId;
     }
@@ -89,9 +91,14 @@ public class ProcessingContext implements Structable {
         return stages;
     }
 
+    public Stage current() {
+        return stages.get(current);
+    }
+
     /**
      * @return at what stage did this operation fail (0 indicates first stage)
      */
+    @Field("index")
     public int index() {
         return current;
     }
@@ -99,6 +106,7 @@ public class ProcessingContext implements Structable {
     /**
      * @return which attempt was this (first error will be 0)
      */
+    @Field("attempt")
     public int attempt() {
         return attempt;
     }
@@ -106,13 +114,19 @@ public class ProcessingContext implements Structable {
     /**
      * @return the (epoch) time of failure
      */
+    @Field("time_of_error")
     public long timeOfError() {
         return timetstamp;
+    }
+
+    public void setTimeOfError(long timetstamp) {
+        this.timetstamp = timetstamp;
     }
 
     /**
      * The exception accompanying this failure (if any)
      */
+    @Field("exception")
     public Exception exception() {
         return exception;
     }
@@ -133,9 +147,8 @@ public class ProcessingContext implements Structable {
     }
 
     public void report() {
-        Struct report = this.toStruct();
         for (ErrorReporter reporter : reporters) {
-            reporter.report(report);
+            reporter.report(this);
         }
     }
 
@@ -188,8 +201,12 @@ public class ProcessingContext implements Structable {
             stages.addLast(stage);
         }
 
+        public void addReporters(Collection<ErrorReporter> reporters) {
+            this.reporters.addAll(reporters);
+        }
+
         public ProcessingContext build() {
-            return new ProcessingContext(taskId, workerConfig, stages, reporters);
+            return new ProcessingContext(taskId, workerConfig, stages, reporters.toArray(new ErrorReporter[0]));
         }
     }
 }

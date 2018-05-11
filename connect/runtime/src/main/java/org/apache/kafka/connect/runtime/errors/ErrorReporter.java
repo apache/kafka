@@ -16,10 +16,14 @@
  */
 package org.apache.kafka.connect.runtime.errors;
 
+import org.apache.kafka.common.Configurable;
 import org.apache.kafka.connect.data.Struct;
 
-public interface ErrorReporter {
+public abstract class ErrorReporter implements Configurable {
 
-    void report(Struct report);
+    public void initialize() {
+    }
+
+    public abstract void report(ProcessingContext report);
 
 }

@@ -41,6 +41,7 @@ public class Stage implements Structable {
     /**
      * @return at what stage in processing did the error happen
      */
+    @Field("type")
     public StageType type() {
         return type;
     }
@@ -48,6 +49,7 @@ public class Stage implements Structable {
     /**
      * @return name of the class executing this stage.
      */
+    @Field("class")
     public Class<?> executingClass() {
         return klass;
     }
@@ -55,6 +57,7 @@ public class Stage implements Structable {
     /**
      * @return properties used to configure this stage
      */
+    @Field("config")
     public Map<String, Object> config() {
         return config;
     }

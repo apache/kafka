@@ -14,27 +14,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.connect.runtime.errors;
+package org.apache.kafka.connect.runtime.errors.impl;
 
-import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.runtime.errors.ErrorReporter;
+import org.apache.kafka.connect.runtime.errors.ProcessingContext;
 
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
-import java.lang.annotation.Target;
+import java.util.Map;
 
-import static java.lang.annotation.ElementType.METHOD;
+public class ErrorMetricsReporter extends ErrorReporter {
 
-public interface Structable {
+    @Override
+    public void configure(Map<String, ?> configs) {
+    }
 
-    /**
-     * @return a {@link Struct} representation of this object
-     */
-    Struct toStruct();
+    @Override
+    public void report(ProcessingContext report) {
 
-    @Target({METHOD})
-    @Retention(RetentionPolicy.RUNTIME)
-    @interface Field {
-        String value();
     }
 
 }

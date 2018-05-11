@@ -21,15 +21,17 @@ import org.apache.kafka.connect.runtime.errors.ProcessingContext;
 
 public class NoopExecutor extends OperationExecutor {
 
+
+
     @Override
     public <V> V execute(OperationExecutor.Operation<V> operation, V value, ProcessingContext context) {
         try {
             return operation.apply();
         } catch (RuntimeException e) {
             throw e;
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            context.setException(e);
+            throw new RuntimeException(e);
         }
-        return value;
     }
-
 }

@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.connect.runtime.errors;
 
+import org.apache.kafka.common.Configurable;
+
+import java.util.Map;
+
 /**
  * Execute a connect worker operation with configurable retries and tolerances. An operation here means applying tranformations
  * on a ConnectRecord, converting it to a format used by the Connect framework, writing it to a sink or reading from a source.
@@ -32,10 +36,17 @@ package org.apache.kafka.connect.runtime.errors;
  * The executor will report errors on failure (after reattempting). It will throw a {@link ToleranceExceededException} if
  * any of the tolerance limits are crossed.
  */
-public abstract class OperationExecutor {
+public abstract class OperationExecutor implements Configurable {
 
     public <V> V execute(Operation<V> operation, ProcessingContext context) {
         return execute(operation, null, context);
+    }
+
+    /**
+     * Configure this class with the given key-value pairs
+     */
+    @Override
+    public void configure(Map<String, ?> configs) {
     }
 
     public abstract <V> V execute(Operation<V> operation, V value, ProcessingContext context);
