@@ -49,7 +49,6 @@ import java.util.Collection;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -357,8 +356,9 @@ public class JsonConverter implements Converter, HeaderConverter {
     }
 
     private SchemaAndValue jsonToConnect(JsonNode jsonValue) {
-        if (jsonValue == null)
+        if (jsonValue == null) {
             return SchemaAndValue.NULL;
+        }
 
         if (!jsonValue.isObject() || jsonValue.size() != 2 || !jsonValue.has(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME) || !jsonValue.has(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME))
             throw new DataException("JSON value converted to Kafka Connect must be in envelope containing schema");
@@ -368,19 +368,12 @@ public class JsonConverter implements Converter, HeaderConverter {
     }
 
     private SchemaAndValue schemalessJsonToConnect(JsonNode jsonValue) {
-        if (jsonValue == null)
+        if (jsonValue == null) {
             return SchemaAndValue.NULL;
-
-        LinkedHashMap<String, Object> map = new LinkedHashMap<String, Object>();
-        SchemaBuilder builder = SchemaBuilder.struct();
-        flatten(null, jsonValue, map, builder);
-        Schema schema = builder.build();
-        Struct struct = new Struct(schema);
-        for (Map.Entry<String, Object> entry : map.entrySet()) {
-            struct.put(entry.getKey(), entry.getValue());
         }
 
-        return new SchemaAndValue(schema, struct);
+        Schema schema = inferSchema(jsonValue);
+        return new SchemaAndValue(schema, convertToConnect(schema, jsonValue));
     }
 
     public ObjectNode asJsonSchema(Schema schema) {
@@ -778,39 +771,34 @@ public class JsonConverter implements Converter, HeaderConverter {
         Object convert(Schema schema, Object value);
     }
 
-    private void flatten(String key, JsonNode jsonValue, LinkedHashMap<String, Object> map, SchemaBuilder builder) {
+    private Schema inferSchema(JsonNode jsonValue) {
         switch (jsonValue.getNodeType()) {
             case NULL:
-                builder.field(key, Schema.OPTIONAL_STRING_SCHEMA);
-                map.put(key, null);
-                break;
+                return Schema.OPTIONAL_STRING_SCHEMA;
             case BOOLEAN:
-                builder.field(key, Schema.BOOLEAN_SCHEMA);
-                map.put(key, jsonValue.booleanValue());
-                break;
+                return Schema.BOOLEAN_SCHEMA;
             case NUMBER:
                 if (jsonValue.isIntegralNumber()) {
-                    builder.field(key, Schema.INT64_SCHEMA);
-                    map.put(key, jsonValue.longValue());
+                    return Schema.INT64_SCHEMA;
                 }
                 else {
-                    builder.field(key, Schema.FLOAT64_SCHEMA);
-                    map.put(key, jsonValue.doubleValue());
+                    return Schema.FLOAT64_SCHEMA;
                 }
-                break;
+            case ARRAY:
+                SchemaBuilder arrayBuilder = SchemaBuilder.array(inferSchema(jsonValue.elements().next()));
+                return arrayBuilder.build();
             case OBJECT:
+                SchemaBuilder structBuilder = SchemaBuilder.struct();
                 Iterator<Map.Entry<String, JsonNode>> it = jsonValue.fields();
                 while (it.hasNext()) {
                     Map.Entry<String, JsonNode> entry = it.next();
-                    flatten(entry.getKey(), entry.getValue(), map, builder);
+                    structBuilder.field(entry.getKey(), inferSchema(entry.getValue()));
                 }
-                break;
+                return structBuilder.build();
             case STRING:
-                builder.field(key, Schema.STRING_SCHEMA);
-                map.put(key, jsonValue.textValue());
-                break;
+                return Schema.STRING_SCHEMA;
             default:
-                break;
+                return null;
         }
     }
 }
