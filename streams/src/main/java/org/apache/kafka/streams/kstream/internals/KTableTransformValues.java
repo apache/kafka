@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
+import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -28,21 +30,21 @@ import java.util.Objects;
 class KTableTransformValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
 
     private final KTableImpl<K, ?, V> parent;
-    private final InternalValueTransformerWithKeySupplier<? super K, ? super V, ? extends V1> valueTransformerSupplier;
+    private final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends V1> transformerSupplier;
     private final String queryableName;
     private boolean sendOldValues = false;
 
     KTableTransformValues(final KTableImpl<K, ?, V> parent,
-                          final InternalValueTransformerWithKeySupplier<? super K, ? super V, ? extends V1> valueTransformerSupplier,
+                          final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends V1> transformerSupplier,
                           final String queryableName) {
         this.parent = Objects.requireNonNull(parent, "parent");
-        this.valueTransformerSupplier = Objects.requireNonNull(valueTransformerSupplier, "valueTransformerSupplier");
+        this.transformerSupplier = Objects.requireNonNull(transformerSupplier, "transformerSupplier");
         this.queryableName = queryableName;
     }
 
     @Override
     public Processor<K, Change<V>> get() {
-        return new KTableTransformValuesProcessor(valueTransformerSupplier.get());
+        return new KTableTransformValuesProcessor(transformerSupplier.get());
     }
 
     @Override
@@ -57,7 +59,7 @@ class KTableTransformValues<K, V, V1> implements KTableProcessorSupplier<K, V, V
             public KTableValueGetter<K, V1> get() {
                 return new KTableTransformValuesGetter(
                         parentValueGetterSupplier.get(),
-                        valueTransformerSupplier.get());
+                        transformerSupplier.get());
             }
 
             @Override
@@ -75,7 +77,7 @@ class KTableTransformValues<K, V, V1> implements KTableProcessorSupplier<K, V, V
 
     private static <K, V, V1> V1 computeValue(final K key,
                                               final V value,
-                                              final InternalValueTransformerWithKey<? super K, ? super V, ? extends V1> valueTransformer) {
+                                              final ValueTransformerWithKey<? super K, ? super V, ? extends V1> valueTransformer) {
         if (value == null) {
             return null;
         }
@@ -84,11 +86,11 @@ class KTableTransformValues<K, V, V1> implements KTableProcessorSupplier<K, V, V
     }
 
     private class KTableTransformValuesProcessor extends AbstractProcessor<K, Change<V>> {
-        private final InternalValueTransformerWithKey<? super K, ? super V, ? extends V1> valueTransformer;
+        private final ValueTransformerWithKey<? super K, ? super V, ? extends V1> valueTransformer;
         private KeyValueStore<K, V1> store;
         private TupleForwarder<K, V1> tupleForwarder;
 
-        private KTableTransformValuesProcessor(final InternalValueTransformerWithKey<? super K, ? super V, ? extends V1> valueTransformer) {
+        private KTableTransformValuesProcessor(final ValueTransformerWithKey<? super K, ? super V, ? extends V1> valueTransformer) {
             this.valueTransformer = Objects.requireNonNull(valueTransformer, "valueTransformer");
         }
 
@@ -123,10 +125,10 @@ class KTableTransformValues<K, V, V1> implements KTableProcessorSupplier<K, V, V
     private class KTableTransformValuesGetter implements KTableValueGetter<K, V1> {
 
         private final KTableValueGetter<K, V> parentGetter;
-        private final InternalValueTransformerWithKey<? super K, ? super V, ? extends V1> valueTransformer;
+        private final ValueTransformerWithKey<? super K, ? super V, ? extends V1> valueTransformer;
 
         KTableTransformValuesGetter(final KTableValueGetter<K, V> parentGetter,
-                                    final InternalValueTransformerWithKey<? super K, ? super V, ? extends V1> valueTransformer) {
+                                    final ValueTransformerWithKey<? super K, ? super V, ? extends V1> valueTransformer) {
             this.parentGetter = Objects.requireNonNull(parentGetter, "parentGetter");
             this.valueTransformer = Objects.requireNonNull(valueTransformer, "valueTransformer");
         }

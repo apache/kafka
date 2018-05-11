@@ -224,19 +224,19 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     }
 
     @Override
-    public <VR> KTable<K, VR> transformValues(ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> valueTransformerSupplier, String... stateStoreNames) {
-        return doTransformValues(valueTransformerSupplier, null, stateStoreNames);
+    public <VR> KTable<K, VR> transformValues(ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> transformerSupplier, String... stateStoreNames) {
+        return doTransformValues(transformerSupplier, null, stateStoreNames);
     }
 
     @Override
-    public <VR> KTable<K, VR> transformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> valueTransformerSupplier,
+    public <VR> KTable<K, VR> transformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> transformerSupplier,
                                               final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized,
                                               final String... stateStoreNames) {
         Objects.requireNonNull(materialized, "materialized can't be null");
-        return doTransformValues(valueTransformerSupplier, materialized, stateStoreNames);
+        return doTransformValues(transformerSupplier, materialized, stateStoreNames);
     }
 
-    private <VR> KTable<K, VR> doTransformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> transformerWithKeySupplier,
+    private <VR> KTable<K, VR> doTransformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> transformerSupplier,
                                                final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized,
                                                final String... stateStoreNames) {
         Objects.requireNonNull(stateStoreNames, "stateStoreNames");
@@ -248,7 +248,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
         final String queryableName = materializedInternal == null ? null : materializedInternal.storeName();
 
-        final KTableProcessorSupplier<K, V, VR> processorSupplier = new KTableTransformValues<>(this, transformerWithKeySupplier, queryableName);
+        final KTableProcessorSupplier<K, V, VR> processorSupplier = new KTableTransformValues<>(this, transformerSupplier, queryableName);
         builder.internalTopologyBuilder.addProcessor(name, processorSupplier, this.name);
 
         if (stateStoreNames.length > 0) {

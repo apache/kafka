@@ -436,7 +436,7 @@ public interface KTable<K, V> {
      * Note that the key is read-only and should not be modified, as this can lead to corrupt partitioning.
      * Setting a new value preserves data co-location with respect to the key.
      *
-     * @param valueTransformerSupplier a instance of {@link ValueTransformerWithKeySupplier} that generates a
+     * @param transformerSupplier a instance of {@link ValueTransformerWithKeySupplier} that generates a
      *                                 {@link ValueTransformerWithKey}
      * @param stateStoreNames          the names of the state stores used by the processor
      * @param <VR>                     the value type of the result table
@@ -444,7 +444,7 @@ public interface KTable<K, V> {
      * @see #mapValues(ValueMapper)
      * @see #mapValues(ValueMapperWithKey)
      */
-    <VR> KTable<K, VR> transformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> valueTransformerSupplier,
+    <VR> KTable<K, VR> transformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> transformerSupplier,
                                        final String... stateStoreNames);
 
     /**
@@ -505,7 +505,7 @@ public interface KTable<K, V> {
      * Note that the key is read-only and should not be modified, as this can lead to corrupt partitioning.
      * Setting a new value preserves data co-location with respect to the key.
      *
-     * @param valueTransformerSupplier a instance of {@link ValueTransformerWithKeySupplier} that generates a
+     * @param transformerSupplier a instance of {@link ValueTransformerWithKeySupplier} that generates a
      *                                 {@link ValueTransformerWithKey}
      * @param materialized             an instance of {@link Materialized} used to describe how the state store of the
      *                                 resulting table should be materialized.
@@ -516,7 +516,7 @@ public interface KTable<K, V> {
      * @see #mapValues(ValueMapper)
      * @see #mapValues(ValueMapperWithKey)
      */
-    <VR> KTable<K, VR> transformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> valueTransformerSupplier,
+    <VR> KTable<K, VR> transformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> transformerSupplier,
                                        final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized,
                                        final String... stateStoreNames);
 

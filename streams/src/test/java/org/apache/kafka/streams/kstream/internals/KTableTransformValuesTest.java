@@ -123,8 +123,8 @@ public class KTableTransformValuesTest {
 
     @Test
     public void shouldNotSendOldValuesByDefault() {
-        final KTableTransformValues<String, String, String> transformValues = new KTableTransformValues<>(
-                parent, new ExclamationValueTransformerSupplier().asInternal(), null);
+        final KTableTransformValues<String, String, String> transformValues =
+                new KTableTransformValues<>(parent, new ExclamationValueTransformerSupplier(), null);
 
         final Processor<String, Change<String>> processor = transformValues.get();
         processor.init(context);
@@ -140,8 +140,8 @@ public class KTableTransformValuesTest {
 
     @Test
     public void shouldSendOldValuesIfConfigured() {
-        final KTableTransformValues<String, String, String> transformValues = new KTableTransformValues<>(
-                parent, new ExclamationValueTransformerSupplier().asInternal(), null);
+        final KTableTransformValues<String, String, String> transformValues =
+                new KTableTransformValues<>(parent, new ExclamationValueTransformerSupplier(), null);
 
         transformValues.enableSendingOldValues();
         final Processor<String, Change<String>> processor = transformValues.get();
@@ -170,8 +170,8 @@ public class KTableTransformValuesTest {
     @SuppressWarnings("unchecked")
     @Test
     public void shouldTransformOnGetIfNotMaterialized() {
-        final KTableTransformValues<String, String, String> transformValues = new KTableTransformValues<>(
-                parent, new ExclamationValueTransformerSupplier().asInternal(), null);
+        final KTableTransformValues<String, String, String> transformValues =
+                new KTableTransformValues<>(parent, new ExclamationValueTransformerSupplier(), null);
 
         expect(parent.valueGetterSupplier()).andReturn(parentGetterSupplier);
         expect(parentGetterSupplier.get()).andReturn(parentGetter);
@@ -188,8 +188,8 @@ public class KTableTransformValuesTest {
 
     @Test
     public void shouldGetFromStateStoreIfMaterialized() {
-        final KTableTransformValues<String, String, String> transformValues = new KTableTransformValues<>(
-                parent, new ExclamationValueTransformerSupplier().asInternal(), QUERYABLE_NAME);
+        final KTableTransformValues<String, String, String> transformValues =
+                new KTableTransformValues<>(parent, new ExclamationValueTransformerSupplier(), QUERYABLE_NAME);
 
         expect(context.getStateStore(QUERYABLE_NAME)).andReturn(stateStore);
         expect(stateStore.get("Key")).andReturn("something");
@@ -205,8 +205,8 @@ public class KTableTransformValuesTest {
 
     @Test
     public void shouldGetStoreNamesFromParentIfNotMaterialized() {
-        final KTableTransformValues<String, String, String> transformValues = new KTableTransformValues<>(
-                parent, new ExclamationValueTransformerSupplier().asInternal(), null);
+        final KTableTransformValues<String, String, String> transformValues =
+                new KTableTransformValues<>(parent, new ExclamationValueTransformerSupplier(), null);
 
         expect(parent.valueGetterSupplier()).andReturn(parentGetterSupplier);
         expect(parentGetterSupplier.storeNames()).andReturn(new String[]{"store1", "store2"});
@@ -219,8 +219,8 @@ public class KTableTransformValuesTest {
 
     @Test
     public void shouldGetQueryableStoreNameIfMaterialized() {
-        final KTableTransformValues<String, String, String> transformValues = new KTableTransformValues<>(
-                parent, new ExclamationValueTransformerSupplier().asInternal(), QUERYABLE_NAME);
+        final KTableTransformValues<String, String, String> transformValues =
+                new KTableTransformValues<>(parent, new ExclamationValueTransformerSupplier(), QUERYABLE_NAME);
 
         final String[] storeNames = transformValues.view().storeNames();
 
@@ -242,10 +242,9 @@ public class KTableTransformValuesTest {
 
         driver.pipeInput(recordFactory.create(INPUT_TOPIC, "A", "a", 0L));
         driver.pipeInput(recordFactory.create(INPUT_TOPIC, "B", "b", 0L));
-        driver.pipeInput(recordFactory.create(INPUT_TOPIC, "C", "c", 0L));
         driver.pipeInput(recordFactory.create(INPUT_TOPIC, "D", null, 0L));
 
-        assertThat(capture.processed, hasItems("A:A->a!", "B:B->b!", "C:C->c!", "D:null"));
+        assertThat(output(), hasItems("A:A->a!", "B:B->b!", "D:null"));
     }
 
     @Test
@@ -267,12 +266,16 @@ public class KTableTransformValuesTest {
         driver.pipeInput(recordFactory.create(INPUT_TOPIC, "B", "b", 0L));
         driver.pipeInput(recordFactory.create(INPUT_TOPIC, "C", null, 0L));
 
-        assertThat(capture.processed, hasItems("A:A->a!", "B:B->b!", "C:null"));
+        assertThat(output(), hasItems("A:A->a!", "B:B->b!", "C:null"));
 
         final KeyValueStore<String, String> keyValueStore = driver.getKeyValueStore(QUERYABLE_NAME);
         assertThat(keyValueStore.get("A"), is("A->a!"));
         assertThat(keyValueStore.get("B"), is("B->b!"));
         assertThat(keyValueStore.get("C"), is(nullValue()));
+    }
+
+    private ArrayList<String> output() {
+        return capture.capturedProcessors(1).get(0).processed;
     }
 
     private static StoreBuilder<KeyValueStore<Long, Long>> storeBuilder(final String storeName) {
@@ -315,35 +318,6 @@ public class KTableTransformValuesTest {
         public ExclamationValueTransformer get() {
             return new ExclamationValueTransformer(expectedStoredNames);
         }
-
-        InternalValueTransformerWithKeySupplier<String, String, String> asInternal() {
-            return new InternalValueTransformerWithKeySupplier<String, String, String>() {
-                @Override
-                public InternalValueTransformerWithKey<String, String, String> get() {
-                    final ExclamationValueTransformer delegate = ExclamationValueTransformerSupplier.this.get();
-                    return new InternalValueTransformerWithKey<String, String, String>() {
-                        @Override
-                        public String punctuate(long timestamp) {
-                            return null;
-                        }
-
-                        @Override
-                        public void init(ProcessorContext context) {
-                            delegate.init(context);
-                        }
-
-                        @Override
-                        public String transform(String readOnlyKey, String value) {
-                            return delegate.transform(readOnlyKey, value);
-                        }
-
-                        @Override
-                        public void close() {
-                        }
-                    };
-                }
-            };
-        }
     }
 
     public static class ExclamationValueTransformer implements ValueTransformerWithKey<Object, String, String> {
@@ -368,9 +342,9 @@ public class KTableTransformValuesTest {
         }
     }
 
-    private static class NullSupplier implements InternalValueTransformerWithKeySupplier<String, String, String> {
+    private static class NullSupplier implements ValueTransformerWithKeySupplier<String, String, String> {
         @Override
-        public InternalValueTransformerWithKey<String, String, String> get() {
+        public ValueTransformerWithKey<String, String, String> get() {
             return null;
         }
     }

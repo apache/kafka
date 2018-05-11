@@ -16,25 +16,20 @@
  */
 package org.apache.kafka.test;
 
-import org.apache.kafka.streams.kstream.internals.InternalValueTransformerWithKey;
-import org.apache.kafka.streams.kstream.internals.InternalValueTransformerWithKeySupplier;
+import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
+import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.ProcessorContext;
 
 /**
  * @author andy
  * created 02/05/2018
  */
-public class NoOpInternalValueTransformer<K, V> implements InternalValueTransformerWithKeySupplier<K, V, V> {
+public class NoOpInternalValueTransformer<K, V> implements ValueTransformerWithKeySupplier<K, V, V> {
     public ProcessorContext context;
 
     @Override
-    public InternalValueTransformerWithKey<K, V, V> get() {
-        return new InternalValueTransformerWithKey<K, V, V>() {
-
-            @Override
-            public V punctuate(long timestamp) {
-                return null;
-            }
+    public ValueTransformerWithKey<K, V, V> get() {
+        return new ValueTransformerWithKey<K, V, V>() {
 
             @Override
             public void init(ProcessorContext context) {

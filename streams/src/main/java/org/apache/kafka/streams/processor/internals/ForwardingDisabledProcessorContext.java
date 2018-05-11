@@ -74,9 +74,8 @@ public final class ForwardingDisabledProcessorContext implements ProcessorContex
 
     @Override
     public void register(final StateStore store,
-                         final boolean loggingEnabledIsDeprecatedAndIgnored,
                          final StateRestoreCallback stateRestoreCallback) {
-        delegate.register(store, loggingEnabledIsDeprecatedAndIgnored, stateRestoreCallback);
+        delegate.register(store, stateRestoreCallback);
     }
 
     @Override
@@ -89,12 +88,6 @@ public final class ForwardingDisabledProcessorContext implements ProcessorContex
                                 final PunctuationType type,
                                 final Punctuator callback) {
         return delegate.schedule(intervalMs, type, callback);
-    }
-
-    @SuppressWarnings("deprecation")
-    @Override
-    public void schedule(final long interval) {
-        delegate.schedule(interval);
     }
 
     @Override
