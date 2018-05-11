@@ -17,7 +17,7 @@
 
 package kafka.api
 
-import org.apache.kafka.common.record.RecordFormat
+import org.apache.kafka.common.record.RecordVersion
 import org.junit.Test
 import org.junit.Assert._
 
@@ -76,15 +76,21 @@ class ApiVersionTest {
   }
 
   @Test
-  def testMinVersionForMessageFormat(): Unit = {
-    assertEquals("0.8.0", ApiVersion.minVersionForMessageFormat(RecordFormat.V0))
-    assertEquals("0.10.0", ApiVersion.minVersionForMessageFormat(RecordFormat.V1))
-    assertEquals("0.11.0", ApiVersion.minVersionForMessageFormat(RecordFormat.V2))
+  def testMinSupportedVersionFor(): Unit = {
+    assertEquals(KAFKA_0_8_0, ApiVersion.minSupportedFor(RecordVersion.V0))
+    assertEquals(KAFKA_0_10_0_IV0, ApiVersion.minSupportedFor(RecordVersion.V1))
+    assertEquals(KAFKA_0_11_0_IV0, ApiVersion.minSupportedFor(RecordVersion.V2))
 
-    // Ensure that all message format versions have a defined min version so that we remember
-    // to update the function
-    for (messageFormatVersion <- RecordFormat.values)
-      assertNotNull(ApiVersion.minVersionForMessageFormat(messageFormatVersion))
+    // Ensure that all record versions have a defined min version so that we remember to update the method
+    for (recordVersion <- RecordVersion.values)
+      assertNotNull(ApiVersion.minSupportedFor(recordVersion))
+  }
+
+  @Test
+  def testShortVersion(): Unit = {
+    assertEquals("0.8.0", KAFKA_0_8_0.shortVersion)
+    assertEquals("0.10.0", KAFKA_0_10_0_IV0.shortVersion)
+    assertEquals("0.11.0", KAFKA_0_11_0_IV0.shortVersion)
   }
 
 }

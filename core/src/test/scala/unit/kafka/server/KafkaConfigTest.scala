@@ -533,7 +533,7 @@ class KafkaConfigTest {
 
     ApiVersion.allVersions.foreach { interBrokerVersion =>
       ApiVersion.allVersions.foreach { messageFormatVersion =>
-        if (interBrokerVersion.messageFormatVersion.value >= messageFormatVersion.messageFormatVersion.value) {
+        if (interBrokerVersion.recordVersion.value >= messageFormatVersion.recordVersion.value) {
           val config = buildConfig(interBrokerVersion, messageFormatVersion)
           assertEquals(messageFormatVersion, config.logMessageFormatVersion)
           assertEquals(interBrokerVersion, config.interBrokerProtocolVersion)
