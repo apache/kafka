@@ -49,9 +49,8 @@ public class CompositeReadOnlyKeyValueStoreTest {
     private final String storeNameA = "my-storeA";
     private StateStoreProviderStub stubProviderTwo;
     private KeyValueStore<String, String> stubOneUnderlying;
+    private KeyValueStore<String, String> otherUnderlyingStore;
     private CompositeReadOnlyKeyValueStore<String, String> theStore;
-    private KeyValueStore<String, String>
-        otherUnderlyingStore;
 
     @Before
     public void before() {

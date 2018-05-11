@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.clients.admin.internal;
+package org.apache.kafka.clients.admin.internals;
 
 import org.apache.kafka.clients.MetadataUpdater;
 import org.apache.kafka.common.Cluster;

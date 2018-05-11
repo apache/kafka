@@ -24,15 +24,14 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsBuilderTest;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.Joined;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Predicate;
-import org.apache.kafka.streams.kstream.Printed;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
@@ -223,12 +222,11 @@ public class KStreamImplTest {
     }
 
     @Test
-    // TODO: this test should be refactored when we removed KStreamBuilder so that the created Topology contains internal topics as well
     public void shouldUseRecordMetadataTimestampExtractorWhenInternalRepartitioningTopicCreated() {
-        final KStreamBuilder builder = new KStreamBuilder();
-        KStream<String, String> kStream = builder.stream(Serdes.String(), Serdes.String(), "topic-1");
-        ValueJoiner<String, String, String> valueJoiner = MockValueJoiner.instance(":");
-        long windowSize = TimeUnit.MILLISECONDS.convert(1, TimeUnit.DAYS);
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KStream<String, String> kStream = builder.stream("topic-1", stringConsumed);
+        final ValueJoiner<String, String, String> valueJoiner = MockValueJoiner.instance(":");
+        final long windowSize = TimeUnit.MILLISECONDS.convert(1, TimeUnit.DAYS);
         final KStream<String, String> stream = kStream
                         .map(new KeyValueMapper<String, String, KeyValue<? extends String, ? extends String>>() {
                             @Override
@@ -244,10 +242,11 @@ public class KStreamImplTest {
                                 Serdes.String()))
                 .to("output-topic", Produced.with(Serdes.String(), Serdes.String()));
 
-        ProcessorTopology processorTopology = builder.setApplicationId("X").build(null);
-        SourceNode originalSourceNode = processorTopology.source("topic-1");
+        final ProcessorTopology topology = TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").build();
 
-        for (SourceNode sourceNode: processorTopology.sources()) {
+        final SourceNode originalSourceNode = topology.source("topic-1");
+
+        for (SourceNode sourceNode: topology.sources()) {
             if (sourceNode.name().equals(originalSourceNode.name())) {
                 assertEquals(sourceNode.getTimestampExtractor(), null);
             } else {
@@ -427,10 +426,9 @@ public class KStreamImplTest {
                         null);
     }
 
-    @SuppressWarnings("unchecked")
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerOnPrintIfPrintedIsNull() {
-        testStream.print((Printed) null);
+        testStream.print(null);
     }
 
     @Test(expected = NullPointerException.class)
