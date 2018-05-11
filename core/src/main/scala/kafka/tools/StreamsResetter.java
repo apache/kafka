@@ -23,6 +23,7 @@ import joptsimple.OptionSpec;
 import joptsimple.OptionSpecBuilder;
 import kafka.utils.CommandLineUtils;
 import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.MemberDescription;
 import org.apache.kafka.clients.admin.DeleteTopicsResult;
 import org.apache.kafka.clients.admin.KafkaAdminClient;
 import org.apache.kafka.clients.admin.DescribeConsumerGroupsOptions;
@@ -154,10 +155,12 @@ public class StreamsResetter {
 
     private void validateNoActiveConsumers(final String groupId,
                                            final AdminClient adminClient) throws ExecutionException, InterruptedException {
-        DescribeConsumerGroupsResult describeResult = adminClient.describeConsumerGroups(Arrays.asList(groupId),
+        final DescribeConsumerGroupsResult describeResult = adminClient.describeConsumerGroups(Arrays.asList(groupId),
                 (new DescribeConsumerGroupsOptions()).timeoutMs(10 * 1000));
-        if (!describeResult.describedGroups().get(groupId).get().members().isEmpty()) { 
-            throw new IllegalStateException("Consumer group '" + groupId + "' is still active. "
+        final List<MemberDescription> members = describeResult.describedGroups().get(groupId).get().members();
+        if (!members.isEmpty()) {
+            throw new IllegalStateException("Consumer group '" + groupId + "' is still active "
+                    + "and has following members: " + members + ". "
                     + "Make sure to stop all running application instances before running the reset tool.");
         }
     }
