@@ -55,7 +55,7 @@ public class AbstractProcessorContextTest {
     public void shouldThrowIllegalStateExceptionOnRegisterWhenContextIsInitialized() {
         context.initialized();
         try {
-            context.register(stateStore, false, null);
+            context.register(stateStore, null);
             fail("should throw illegal state exception when context already initialized");
         } catch (IllegalStateException e) {
             // pass
@@ -64,12 +64,12 @@ public class AbstractProcessorContextTest {
 
     @Test
     public void shouldNotThrowIllegalStateExceptionOnRegisterWhenContextIsNotInitialized() {
-        context.register(stateStore, false, null);
+        context.register(stateStore, null);
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerOnRegisterIfStateStoreIsNull() {
-        context.register(null, false, null);
+        context.register(null, null);
     }
 
     @Test
@@ -175,9 +175,6 @@ public class AbstractProcessorContextTest {
         public Cancellable schedule(long interval, PunctuationType type, Punctuator callback) {
             return null;
         }
-
-        @Override
-        public void schedule(final long interval) {}
 
         @Override
         public <K, V> void forward(final K key, final V value) {}

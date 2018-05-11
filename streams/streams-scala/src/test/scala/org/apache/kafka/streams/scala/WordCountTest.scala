@@ -30,6 +30,7 @@ import org.junit.rules.TemporaryFolder
 import org.apache.kafka.streams.KeyValue
 import org.apache.kafka.streams._
 import org.apache.kafka.streams.scala.kstream._
+import org.apache.kafka.streams.kstream.Materialized
 
 import org.apache.kafka.streams.integration.utils.{EmbeddedKafkaCluster, IntegrationTestUtils}
 import org.apache.kafka.clients.consumer.ConsumerConfig
@@ -40,7 +41,6 @@ import org.apache.kafka.common.utils.MockTime
 import org.apache.kafka.test.TestUtils
 
 import ImplicitConversions._
-import com.typesafe.scalalogging.LazyLogging
 
 /**
  * Test suite that does a classic word count example.
@@ -51,7 +51,7 @@ import com.typesafe.scalalogging.LazyLogging
  * Note: In the current project settings SAM type conversion is turned off as it's experimental in Scala 2.11.
  * Hence the native Java API based version is more verbose.
  */ 
-class WordCountTest extends JUnitSuite with WordCountTestData with LazyLogging {
+class WordCountTest extends JUnitSuite with WordCountTestData {
 
   private val privateCluster: EmbeddedKafkaCluster = new EmbeddedKafkaCluster(1)
 
@@ -75,8 +75,7 @@ class WordCountTest extends JUnitSuite with WordCountTestData with LazyLogging {
   }
 
   @Test def testShouldCountWords(): Unit = {
-
-    import DefaultSerdes._
+    import Serdes._
 
     val streamsConfiguration = getStreamsConfiguration()
 
@@ -106,6 +105,37 @@ class WordCountTest extends JUnitSuite with WordCountTestData with LazyLogging {
     assertEquals(actualWordCounts.asScala.take(expectedWordCounts.size).sortBy(_.key), expectedWordCounts.sortBy(_.key))
   }
 
+  @Test def testShouldCountWordsMaterialized(): Unit = {
+    import Serdes._
+
+    val streamsConfiguration = getStreamsConfiguration()
+
+    val streamBuilder = new StreamsBuilder
+    val textLines = streamBuilder.stream[String, String](inputTopic)
+
+    val pattern = Pattern.compile("\\W+", Pattern.UNICODE_CHARACTER_CLASS)
+
+    // generate word counts
+    val wordCounts: KTable[String, Long] =
+      textLines.flatMapValues(v => pattern.split(v.toLowerCase))
+        .groupBy((k, v) => v)
+        .count(Materialized.as("word-count"))
+
+    // write to output topic
+    wordCounts.toStream.to(outputTopic)
+
+    val streams: KafkaStreams = new KafkaStreams(streamBuilder.build(), streamsConfiguration)
+    streams.start()
+
+    // produce and consume synchronously
+    val actualWordCounts: java.util.List[KeyValue[String, Long]] = produceNConsume(inputTopic, outputTopic)
+
+    streams.close()
+
+    import collection.JavaConverters._
+    assertEquals(actualWordCounts.asScala.take(expectedWordCounts.size).sortBy(_.key), expectedWordCounts.sortBy(_.key))
+  }
+
   @Test def testShouldCountWordsJava(): Unit = {
 
     import org.apache.kafka.streams.{KafkaStreams => KafkaStreamsJ, StreamsBuilder => StreamsBuilderJ}
@@ -113,8 +143,8 @@ class WordCountTest extends JUnitSuite with WordCountTestData with LazyLogging {
     import collection.JavaConverters._
 
     val streamsConfiguration = getStreamsConfiguration()
-    streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName())
-    streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName())
+    streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String.getClass.getName)
+    streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String.getClass.getName)
 
     val streamBuilder = new StreamsBuilderJ
     val textLines: KStreamJ[String, String] = streamBuilder.stream[String, String](inputTopicJ)
@@ -135,7 +165,7 @@ class WordCountTest extends JUnitSuite with WordCountTestData with LazyLogging {
 
     val wordCounts: KTableJ[String, java.lang.Long] = grouped.count()
 
-    wordCounts.toStream.to(outputTopicJ, Produced.`with`(Serdes.String(), Serdes.Long()))
+    wordCounts.toStream.to(outputTopicJ, Produced.`with`(Serdes.String, Serdes.JavaLong))
 
     val streams: KafkaStreamsJ = new KafkaStreamsJ(streamBuilder.build(), streamsConfiguration)
     streams.start()
@@ -154,7 +184,7 @@ class WordCountTest extends JUnitSuite with WordCountTestData with LazyLogging {
     streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers())
     streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, "10000")
     streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
-    streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, testFolder.getRoot().getPath())
+    streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, testFolder.getRoot.getPath)
     streamsConfiguration
   }
 

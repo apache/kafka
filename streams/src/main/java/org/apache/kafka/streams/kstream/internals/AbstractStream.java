@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.internals.Topic;
-import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueTransformer;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
@@ -26,12 +23,7 @@ import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.ValueMapperWithKey;
-import org.apache.kafka.streams.kstream.Window;
-import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.streams.state.WindowStore;
 
 import java.util.HashSet;
 import java.util.Objects;
@@ -72,12 +64,6 @@ public abstract class AbstractStream<K> {
         return allSourceNodes;
     }
 
-    String getOrCreateName(final String queryableStoreName, final String prefix) {
-        final String returnName = queryableStoreName != null ? queryableStoreName : builder.newStoreName(prefix);
-        Topic.validate(returnName);
-        return returnName;
-    }
-
     static <T2, T1, R> ValueJoiner<T2, T1, R> reverseJoiner(final ValueJoiner<T1, T2, R> joiner) {
         return new ValueJoiner<T2, T1, R>() {
             @Override
@@ -85,38 +71,6 @@ public abstract class AbstractStream<K> {
                 return joiner.apply(value1, value2);
             }
         };
-    }
-
-    @SuppressWarnings({"unchecked", "deprecation"})
-    static <T, K>  org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> keyValueStore(final Serde<K> keySerde,
-                                                                   final Serde<T> aggValueSerde,
-                                                                   final String storeName) {
-        Objects.requireNonNull(storeName, "storeName can't be null");
-        Topic.validate(storeName);
-        return storeFactory(keySerde, aggValueSerde, storeName).build();
-    }
-
-    @SuppressWarnings({"unchecked", "deprecation"})
-    static  <W extends Window, T, K> org.apache.kafka.streams.processor.StateStoreSupplier<WindowStore> windowedStore(final Serde<K> keySerde,
-                                                                                   final Serde<T> aggValSerde,
-                                                                                   final Windows<W> windows,
-                                                                                   final String storeName) {
-        Objects.requireNonNull(storeName, "storeName can't be null");
-        Topic.validate(storeName);
-        return storeFactory(keySerde, aggValSerde, storeName)
-                .windowed(windows.size(), windows.maintainMs(), windows.segments, false)
-                .build();
-    }
-
-    @SuppressWarnings("deprecation")
-    static  <T, K> Stores.PersistentKeyValueFactory<K, T> storeFactory(final Serde<K> keySerde,
-                                                                       final Serde<T> aggValueSerde,
-                                                                       final String storeName) {
-        return Stores.create(storeName)
-                .withKeys(keySerde)
-                .withValues(aggValueSerde)
-                .persistent()
-                .enableCaching();
     }
 
     static <K, V, VR> ValueMapperWithKey<K, V, VR> withKey(final ValueMapper<V, VR> valueMapper) {
@@ -129,19 +83,13 @@ public abstract class AbstractStream<K> {
         };
     }
 
-    static <K, V, VR> InternalValueTransformerWithKeySupplier<K, V, VR> toInternalValueTransformerSupplier(final ValueTransformerSupplier<V, VR> valueTransformerSupplier) {
+    static <K, V, VR> ValueTransformerWithKeySupplier<K, V, VR> toValueTransformerWithKeySupplier(final ValueTransformerSupplier<V, VR> valueTransformerSupplier) {
         Objects.requireNonNull(valueTransformerSupplier, "valueTransformerSupplier can't be null");
-        return new InternalValueTransformerWithKeySupplier<K, V, VR>() {
+        return new ValueTransformerWithKeySupplier<K, V, VR>() {
             @Override
-            public InternalValueTransformerWithKey<K, V, VR> get() {
+            public ValueTransformerWithKey<K, V, VR> get() {
                 final ValueTransformer<V, VR> valueTransformer = valueTransformerSupplier.get();
-                return new InternalValueTransformerWithKey<K, V, VR>() {
-                    @SuppressWarnings("deprecation")
-                    @Override
-                    public VR punctuate(final long timestamp) {
-                        return valueTransformer.punctuate(timestamp);
-                    }
-
+                return new ValueTransformerWithKey<K, V, VR>() {
                     @Override
                     public void init(final ProcessorContext context) {
                         valueTransformer.init(context);
@@ -155,37 +103,6 @@ public abstract class AbstractStream<K> {
                     @Override
                     public void close() {
                         valueTransformer.close();
-                    }
-                };
-            }
-        };
-    }
-
-    static <K, V, VR> InternalValueTransformerWithKeySupplier<K, V, VR> toInternalValueTransformerSupplier(final ValueTransformerWithKeySupplier<K, V, VR> valueTransformerWithKeySupplier) {
-        Objects.requireNonNull(valueTransformerWithKeySupplier, "valueTransformerSupplier can't be null");
-        return new InternalValueTransformerWithKeySupplier<K, V, VR>() {
-            @Override
-            public InternalValueTransformerWithKey<K, V, VR> get() {
-                final ValueTransformerWithKey<K, V, VR> valueTransformerWithKey = valueTransformerWithKeySupplier.get();
-                return new InternalValueTransformerWithKey<K, V, VR>() {
-                    @Override
-                    public VR punctuate(final long timestamp) {
-                        throw new StreamsException("ValueTransformerWithKey#punctuate should not be called.");
-                    }
-
-                    @Override
-                    public void init(final ProcessorContext context) {
-                        valueTransformerWithKey.init(context);
-                    }
-
-                    @Override
-                    public VR transform(final K readOnlyKey, final V value) {
-                        return valueTransformerWithKey.transform(readOnlyKey, value);
-                    }
-
-                    @Override
-                    public void close() {
-                        valueTransformerWithKey.close();
                     }
                 };
             }

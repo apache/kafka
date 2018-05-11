@@ -96,14 +96,4 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
         throw new UnsupportedOperationException("this should not happen: schedule() not supported in global processor context.");
     }
 
-
-    /**
-     * @throws UnsupportedOperationException on every invocation
-     */
-    @SuppressWarnings("deprecation")
-    @Override
-    public void schedule(long interval) {
-        throw new UnsupportedOperationException("this should not happen: schedule() not supported in global processor context.");
-    }
-
 }

@@ -284,6 +284,11 @@ abstract class AssignedTasks<T extends Task> {
         return Collections.unmodifiableMap(running);
     }
 
+    @Override
+    public String toString() {
+        return toString("");
+    }
+
     public String toString(final String indent) {
         final StringBuilder builder = new StringBuilder();
         describe(builder, running.values(), indent, "Running:");
