@@ -34,27 +34,28 @@
     </div>
 
     <p>
-        There are a few new APIs added and also some deprecated APIs since 1.0.x is removed in 2.0.0, and hence users upgrading may need to make some small code changes (see below for the details).
-        In addition, upgrading from any older version to 2.0.0 in the online mode requires two rolling bounces.
-        In the first rolling bounce phase users need to set config <code>upgrade.from="0.10.0"</code>
+        Upgrading from any older version to 2.0.0 is also possible: (1) you need to make sure to update you code accordingly, because some APIs got changes in non-compatible way since older releases (see below for the details),
+        (2) upgrading to 2.0.0 in the online mode required two rolling bounces.
+        For (2), in the first rolling bounce phase users need to set config <code>upgrade.from="older version"</code> (possible values are <code>"0.10.0", "0.10.1", "0.10.2", "0.11.0", "1.0", and "1.1"</code>)
         (cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-268%3A+Simplify+Kafka+Streams+Rebalance+Metadata+Upgrade">KIP-268</a>):
     </p>
     <ul>
-        <li> prepare your application instances for a rolling bounce and make sure that config <code>upgrade.from</code> is set to <code>"0.10.0"</code> for new version 2.0.0</li>
+        <li> prepare your application instances for a rolling bounce and make sure that config <code>upgrade.from</code> is set to the version from which it is being upgrade to new version 2.0.0</li>
         <li> bounce each instance of your application once </li>
         <li> prepare your newly deployed 2.0.0 application instances for a second round of rolling bounces; make sure to remove the value for config <code>upgrade.mode</code> </li>
         <li> bounce each instance of your application once more to complete the upgrade </li>
     </ul>
-    <p> As an alternative, an offline upgrade is also possible. Upgrading from 0.10.0.x to 2.0.0 in offline mode: </p>
+    <p> As an alternative, an offline upgrade is also possible. Upgrading from any versions as old as 0.10.0.x to 2.0.0 in offline mode require the following steps: </p>
     <ul>
-        <li> stop all old (0.10.0.x) application instances </li>
+        <li> stop all old (e.g., 0.10.0.x) application instances </li>
         <li> update your code and swap old code and jar file with new code and new jar file </li>
         <li> restart all new (2.0.0) application instances </li>
     </ul>
 
     <p>
-        Note, that a brokers must be on version 0.10.1 or higher and on-disk message format must be on version 0.10 or higher
-        to run a Kafka Streams application version 0.10.1 or higher.
+        Note, that a brokers must be on version 0.10.1 or higher to run a Kafka Streams application version 0.10.1 or higher;
+        On-disk message format must be 0.10 or higher to run a Kafka Streams application version 1.0 or higher.
+        For Kafka Streams 0.10.0, broker version 0.10.0 or higher is required.
     </p>
 
     <p>
