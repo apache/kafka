@@ -21,8 +21,6 @@ package org.apache.kafka.streams.scala
 package kstream
 
 import org.apache.kafka.streams.kstream.{TimeWindowedKStream => TimeWindowedKStreamJ, _}
-import org.apache.kafka.streams.state.WindowStore
-import org.apache.kafka.common.utils.Bytes
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.FunctionConversions._
 
@@ -47,10 +45,8 @@ class TimeWindowedKStream[K, V](val inner: TimeWindowedKStreamJ[K, V]) {
    * @see `org.apache.kafka.streams.kstream.TimeWindowedKStream#aggregate`
    */
   def aggregate[VR](initializer: () => VR,
-    aggregator: (K, V, VR) => VR): KTable[Windowed[K], VR] = {
-
+    aggregator: (K, V, VR) => VR): KTable[Windowed[K], VR] =
     inner.aggregate(initializer.asInitializer, aggregator.asAggregator)
-  }
 
   /**
    * Aggregate the values of records in this stream by the grouped key.
@@ -64,10 +60,8 @@ class TimeWindowedKStream[K, V](val inner: TimeWindowedKStreamJ[K, V]) {
    */
   def aggregate[VR](initializer: () => VR,
     aggregator: (K, V, VR) => VR,
-    materialized: Materialized[K, VR, WindowStore[Bytes, Array[Byte]]]): KTable[Windowed[K], VR] = {
-
+    materialized: Materialized[K, VR, ByteArrayWindowStore]): KTable[Windowed[K], VR] =
     inner.aggregate(initializer.asInitializer, aggregator.asAggregator, materialized)
-  }
 
   /**
    * Count the number of records in this stream by the grouped key and the defined windows.
@@ -78,7 +72,7 @@ class TimeWindowedKStream[K, V](val inner: TimeWindowedKStreamJ[K, V]) {
    */ 
   def count(): KTable[Windowed[K], Long] = {
     val c: KTable[Windowed[K], java.lang.Long] = inner.count()
-    c.mapValues[Long](Long2long(_))
+    c.mapValues[Long](Long2long _)
   }
 
   /**
@@ -89,10 +83,10 @@ class TimeWindowedKStream[K, V](val inner: TimeWindowedKStreamJ[K, V]) {
    * represent the latest (rolling) count (i.e., number of records) for each key
    * @see `org.apache.kafka.streams.kstream.TimeWindowedKStream#count`
    */ 
-  def count(materialized: Materialized[K, Long, WindowStore[Bytes, Array[Byte]]]): KTable[Windowed[K], Long] = {
-    val c: KTable[Windowed[K], java.lang.Long] = 
-      inner.count(materialized.asInstanceOf[Materialized[K, java.lang.Long, WindowStore[Bytes, Array[Byte]]]])
-    c.mapValues[Long](Long2long(_))
+  def count(materialized: Materialized[K, Long, ByteArrayWindowStore]): KTable[Windowed[K], Long] = {
+    val c: KTable[Windowed[K], java.lang.Long] =
+      inner.count(materialized.asInstanceOf[Materialized[K, java.lang.Long, ByteArrayWindowStore]])
+    c.mapValues[Long](Long2long _)
   }
 
   /**
@@ -103,9 +97,8 @@ class TimeWindowedKStream[K, V](val inner: TimeWindowedKStreamJ[K, V]) {
    * latest (rolling) aggregate for each key
    * @see `org.apache.kafka.streams.kstream.TimeWindowedKStream#reduce`
    */
-  def reduce(reducer: (V, V) => V): KTable[Windowed[K], V] = {
+  def reduce(reducer: (V, V) => V): KTable[Windowed[K], V] =
     inner.reduce(reducer.asReducer)
-  }
 
   /**
    * Combine the values of records in this stream by the grouped key.
@@ -117,8 +110,6 @@ class TimeWindowedKStream[K, V](val inner: TimeWindowedKStreamJ[K, V]) {
    * @see `org.apache.kafka.streams.kstream.TimeWindowedKStream#reduce`
    */
   def reduce(reducer: (V, V) => V,
-    materialized: Materialized[K, V, WindowStore[Bytes, Array[Byte]]]): KTable[Windowed[K], V] = {
-
+    materialized: Materialized[K, V, ByteArrayWindowStore]): KTable[Windowed[K], V] =
     inner.reduce(reducer.asReducer, materialized)
-  }
 }
