@@ -111,7 +111,9 @@ public class RegexSourceIntegrationTest {
     }
 
     @Before
-    public void setUp() {
+    public void setUp() throws Exception {
+        CLUSTER.deleteAndRecreateTopics(DEFAULT_OUTPUT_TOPIC);
+
         final Properties properties = new Properties();
         properties.put(IntegrationTestUtils.INTERNAL_LEAVE_GROUP_ON_CLOSE, true);
         streamsConfiguration = StreamsTestUtils.getStreamsConfig("regex-source-integration-test",
