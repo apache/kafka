@@ -1401,8 +1401,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * is invoked for the same partition more than once, the latest offset will be used on the next poll(). Note that
      * you may lose data if this API is arbitrarily used in the middle of consumption, to reset the fetch offsets
      *
-     * @throws IllegalArgumentException if the provided TopicPartition is not assigned to this consumer
-     *                                  or if provided offset is negative
+     * @throws IllegalArgumentException if the provided offset is negative
+     * @throws IllegalStateException  if the provided TopicPartition is not assigned to this consumer
      */
     @Override
     public void seek(TopicPartition partition, long offset) {
@@ -1423,7 +1423,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * first offset in all partitions only when {@link #poll(Duration)} or {@link #position(TopicPartition)} are called.
      * If no partitions are provided, seek to the first offset for all of the currently assigned partitions.
      *
-     * @throws IllegalArgumentException if {@code partitions} is {@code null} or the provided TopicPartition is not assigned to this consumer
+     * @throws IllegalArgumentException if {@code partitions} is {@code null}
+     * @throws IllegalStateException if one of the provided partitions is not assigned to this consumer
      */
     public void seekToBeginning(Collection<TopicPartition> partitions) {
         if (partitions == null)
@@ -1449,7 +1450,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * If {@code isolation.level=read_committed}, the end offset will be the Last Stable Offset, i.e., the offset
      * of the first message with an open transaction.
      *
-     * @throws IllegalArgumentException if {@code partitions} is {@code null} or the provided TopicPartition is not assigned to this consumer
+     * @throws IllegalArgumentException if {@code partitions} is {@code null}
+     * @throws IllegalStateException if one of the provided partitions is not assigned to this consumer
      */
     public void seekToEnd(Collection<TopicPartition> partitions) {
         if (partitions == null)
