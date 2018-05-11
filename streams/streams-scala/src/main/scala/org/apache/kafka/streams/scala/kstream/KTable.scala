@@ -20,9 +20,11 @@
 package org.apache.kafka.streams.scala
 package kstream
 
+import org.apache.kafka.common.utils.Bytes
 import org.apache.kafka.streams.kstream.{KTable => KTableJ, _}
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.FunctionConversions._
+import org.apache.kafka.streams.state.KeyValueStore
 
 /**
  * Wraps the Java class [[org.apache.kafka.streams.kstream.KTable]] and delegates method calls to the underlying Java object.
@@ -161,6 +163,43 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
    */
   def toStream[KR](mapper: (K, V) => KR): KStream[KR, V] =
     inner.toStream[KR](mapper.asKeyValueMapper)
+
+  /**
+    * Transform the value of each input record into a new value (with possible new type) of the output record.
+    * A `ValueTransformer` (provided by the given `ValueTransformerSupplier`) is applied to each input
+    * record value and computes a new value for it.
+    * In order to assign a state, the state must be created and registered
+    * beforehand via stores added via `addStateStore` or `addGlobalStore` before they can be connected to the `Transformer`
+    *
+    * @param valueTransformerSupplier a instance of `ValueTransformerWithKeySupplier` that generates a `ValueTransformerWithKey`
+    * @param stateStoreNames          the names of the state stores used by the processor
+    * @return a [[KStream]] that contains records with unmodified key and new values (possibly of different type)
+    * @see `org.apache.kafka.streams.kstream.KStream#transformValues`
+    */
+  def transformValues[VR](valueTransformerSupplier: ValueTransformerWithKeySupplier[K, V, VR],
+                          stateStoreNames: String*): KTable[K, VR] = {
+    inner.transformValues[VR](valueTransformerSupplier, stateStoreNames: _*)
+  }
+
+  /**
+    * Transform the value of each input record into a new value (with possible new type) of the output record.
+    * A `ValueTransformer` (provided by the given `ValueTransformerSupplier`) is applied to each input
+    * record value and computes a new value for it.
+    * In order to assign a state, the state must be created and registered
+    * beforehand via stores added via `addStateStore` or `addGlobalStore` before they can be connected to the `Transformer`
+    *
+    * @param valueTransformerSupplier a instance of `ValueTransformerWithKeySupplier` that generates a `ValueTransformerWithKey`
+    * @param materialized             an instance of `Materialized` used to describe how the state store of the
+    *                                 resulting table should be materialized.
+    * @param stateStoreNames          the names of the state stores used by the processor
+    * @return a [[KStream]] that contains records with unmodified key and new values (possibly of different type)
+    * @see `org.apache.kafka.streams.kstream.KStream#transformValues`
+    */
+  def transformValues[VR](valueTransformerSupplier: ValueTransformerWithKeySupplier[K, V, VR],
+                          materialized: Materialized[K, VR, KeyValueStore[Bytes, Array[Byte]]],
+                          stateStoreNames: String*): KTable[K, VR] = {
+    inner.transformValues[VR](valueTransformerSupplier, materialized, stateStoreNames: _*)
+  }
 
   /**
    * Re-groups the records of this [[KTable]] using the provided key/value mapper

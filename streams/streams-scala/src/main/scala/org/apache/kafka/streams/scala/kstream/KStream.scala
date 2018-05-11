@@ -320,9 +320,9 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @return a [[KStream]] that contains records with unmodified key and new values (possibly of different type)
    * @see `org.apache.kafka.streams.kstream.KStream#transformValues`
    */ 
-  def transformValues[VR](valueTransformerWithKeySupplier: ValueTransformerWithKeySupplier[K, V, VR],
+  def transformValues[VR](valueTransformerSupplier: ValueTransformerWithKeySupplier[K, V, VR],
                           stateStoreNames: String*): KStream[K, VR] = {
-    inner.transformValues[VR](valueTransformerWithKeySupplier, stateStoreNames: _*)
+    inner.transformValues[VR](valueTransformerSupplier, stateStoreNames: _*)
   }
 
   /**
