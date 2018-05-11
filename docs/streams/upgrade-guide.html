@@ -34,35 +34,6 @@
     </div>
 
     <p>
-        If you want to upgrade from 1.1.x to 2.0.0 and you have customized window store implementations on the <code>ReadOnlyWindowStore</code> interface
-        you'd need to update your code to incorporate the newly added public APIs; otherwise you don't need to make any code changes.
-        See <a href="#streams_api_changes_200">below</a> for a complete list of 2.0.0 API and semantic changes that allow you to advance your application and/or simplify your code base.
-    </p>
-
-    <p>
-        If you want to upgrade from 1.0.x to 2.0.0 and you have customized window store implementations on the <code>ReadOnlyWindowStore</code> interface
-        you'd need to update your code to incorporate the newly added public APIs.
-        Otherwise, if you are using Java 7 you don't need to make any code changes as the public API is fully backward compatible;
-        but if you are using Java 8 method references in your Kafka Streams code you might need to update your code to resolve method ambiguities.
-        Hot-swaping the jar-file only might not work for this case.
-        See below a complete list of <a href="#streams_api_changes_200">2.0.0</a> and <a href="#streams_api_changes_110">1.1.0</a>
-        API and semantic changes that allow you to advance your application and/or simplify your code base.
-    </p>
-
-    <p>
-        If you want to upgrade from 0.10.2.x or 0.11.0.x to 2.0.x and you have customized window store implementations on the <code>ReadOnlyWindowStore</code> interface
-        you'd need to update your code to incorporate the newly added public APIs.
-        Otherwise, if you are using Java 7 you don't need to do any code changes as the public API is fully backward compatible;
-        but if you are using Java 8 method references in your Kafka Streams code you might need to update your code to resolve method ambiguities.
-        However, some public APIs were deprecated and thus it is recommended to update your code eventually to allow for future upgrades.
-        See below a complete list of <a href="#streams_api_changes_200">2.0</a>, <a href="#streams_api_changes_110">1.1</a>,
-        <a href="#streams_api_changes_100">1.0</a>, and <a href="#streams_api_changes_0110">0.11.0</a> API
-        and semantic changes that allow you to advance your application and/or simplify your code base, including the usage of new features.
-        Additionally, Streams API 1.1.x requires broker on-disk message format version 0.10 or higher; thus, you need to make sure that the message
-        format is configured correctly before you upgrade your Kafka Streams application.
-    </p>
-
-    <p>
         If you want to upgrade from 0.10.1.x to 2.0.x see the Upgrade Sections for <a href="/{{version}}/documentation/#upgrade_1020_streams"><b>0.10.2</b></a>,
         <a href="/{{version}}/documentation/#upgrade_1100_streams"><b>0.11.0</b></a>,
         <a href="/{{version}}/documentation/#upgrade_100_streams"><b>1.0</b></a>,
@@ -82,9 +53,12 @@
         <a href="#streams_api_changes_0110">Streams API changes in 0.11.0</a>, <a href="#streams_api_changes_100">Streams API changes in 1.0</a>, and
         <a href="#streams_api_changes_110">Streams API changes in 1.1</a>, and <a href="#streams_api_changes_200">Streams API changes in 2.0</a>
         for a complete list of API changes.
-        Upgrading to 2.0.0 requires two rolling bounces with config <code>upgrade.from="0.10.0"</code> set for first upgrade phase
-        (cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-268%3A+Simplify+Kafka+Streams+Rebalance+Metadata+Upgrade">KIP-268</a>).
-        As an alternative, an offline upgrade is also possible.
+    </p>
+
+    <p>
+        Upgrading from 0.10.0.x to 2.0.0 in the online mode requires two rolling bounces.
+        In the first rolling bounce phase users need to set config <code>upgrade.from="0.10.0"</code>
+        (cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-268%3A+Simplify+Kafka+Streams+Rebalance+Metadata+Upgrade">KIP-268</a>):
     </p>
     <ul>
         <li> prepare your application instances for a rolling bounce and make sure that config <code>upgrade.from</code> is set to <code>"0.10.0"</code> for new version 2.0.0</li>
@@ -92,10 +66,42 @@
         <li> prepare your newly deployed 2.0.0 application instances for a second round of rolling bounces; make sure to remove the value for config <code>upgrade.mode</code> </li>
         <li> bounce each instance of your application once more to complete the upgrade </li>
     </ul>
-    <p> Upgrading from 0.10.0.x to 2.0.0 in offline mode: </p>
+    <p> As an alternative, an offline upgrade is also possible. Upgrading from 0.10.0.x to 2.0.0 in offline mode: </p>
     <ul>
         <li> stop all old (0.10.0.x) application instances </li>
         <li> update your code and swap old code and jar file with new code and new jar file </li>
+        <li> restart all new (2.0.0) application instances </li>
+    </ul>
+
+    <p>
+        If you want to upgrade from 1.1.x to 2.0.0 and you have customized window store implementations on the <code>ReadOnlyWindowStore</code> interface
+        you'd need to update your code to incorporate the newly added public APIs; otherwise you don't need to make any code changes.
+        See <a href="#streams_api_changes_200">below</a> for a complete list of 2.0.0 API and semantic changes that allow you to advance your application and/or simplify your code base.
+    </p>
+
+    <p>
+        In 2.0.0 we have added a few new APIs on the <code>ReadOnlyWindowStore</code> interface (for details please read <a href="#streams_api_changes_200">Streams API changes</a> below).
+        If you have customized window store implementations that extends the <code>ReadOnlyWindowStore</code> interface
+        you may or may not need to make code changes, depending from which version you are upgrading from, and which Java version are you using. Here are the details:
+    </p>
+    <ul>
+        <li> If you want to upgrade from 1.0.x to 2.0.0 and you have customized window store implementations on the <code>ReadOnlyWindowStore</code> interface
+            you'd need to update your code to incorporate the newly added public APIs.
+            Otherwise, if you are using Java 7 you don't need to make any code changes as the public API is fully backward compatible;
+            but if you are using Java 8 method references in your Kafka Streams code you might need to update your code to resolve method ambiguities.
+            Hot-swaping the jar-file only might not work for this case.
+            See below a complete list of <a href="#streams_api_changes_200">2.0.0</a> and <a href="#streams_api_changes_110">1.1.0</a>
+            API and semantic changes that allow you to advance your application and/or simplify your code base. </li>
+        <li> If you want to upgrade from 0.10.2.x or 0.11.0.x to 2.0.x and you have customized window store implementations on the <code>ReadOnlyWindowStore</code> interface
+            you'd need to update your code to incorporate the newly added public APIs.
+            Otherwise, if you are using Java 7 you don't need to do any code changes as the public API is fully backward compatible;
+            but if you are using Java 8 method references in your Kafka Streams code you might need to update your code to resolve method ambiguities.
+            However, some public APIs were deprecated and thus it is recommended to update your code eventually to allow for future upgrades.
+            See below a complete list of <a href="#streams_api_changes_200">2.0</a>, <a href="#streams_api_changes_110">1.1</a>,
+            <a href="#streams_api_changes_100">1.0</a>, and <a href="#streams_api_changes_0110">0.11.0</a> API
+            and semantic changes that allow you to advance your application and/or simplify your code base, including the usage of new features.
+            Additionally, Streams API 1.1.x requires broker on-disk message format version 0.10 or higher; thus, you need to make sure that the message
+            format is configured correctly before you upgrade your Kafka Streams application. </li>
         <li> restart all new (2.0.0) application instances </li>
     </ul>
 
