@@ -19,12 +19,16 @@ package org.apache.kafka.connect.runtime.errors.impl;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.runtime.errors.ErrorReporter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
 public class ReporterFactory {
+
+    private static final Logger log = LoggerFactory.getLogger(ReporterFactory.class);
 
     public static final String DLQ_ENABLE = "dlq.enable";
     public static final String DLQ_ENABLE_DOC = "Log the error context along with the other application logs.";
@@ -43,14 +47,17 @@ public class ReporterFactory {
     public List<ErrorReporter> forConfig(Map<String, ?> configs) {
         ReporterFactoryConfig config = new ReporterFactoryConfig(getConfigDef(), configs);
         List<ErrorReporter> reporters = new ArrayList<>(3);
+        log.info("Adding metrics reporter for reporting errors");
         reporters.add(new ErrorMetricsReporter());
         if (config.isDlqReporterEnabled()) {
+            log.info("Adding DLQ reporter for reporting errors");
             DLQReporter reporter = new DLQReporter();
             reporter.configure(configs);
             reporter.initialize();
             reporters.add(reporter);
         }
         if (config.isLogReporterEnabled()) {
+            log.info("Adding Log reporter for reporting errors");
             LogReporter reporter = new LogReporter();
             reporter.configure(configs);
             reporter.initialize();

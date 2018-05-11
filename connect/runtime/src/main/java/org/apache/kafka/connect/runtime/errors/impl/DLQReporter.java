@@ -24,7 +24,6 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.data.SchemaBuilder;
-import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.errors.ErrorReporter;
 import org.apache.kafka.connect.runtime.errors.ProcessingContext;
@@ -78,8 +77,7 @@ public class DLQReporter extends ErrorReporter {
                 .define(DLQ_TOPIC_REPLICATION_FACTOR, ConfigDef.Type.SHORT, DLQ_TOPIC_REPLICATION_FACTOR_DEFAULT, atLeast(1), ConfigDef.Importance.HIGH, DLQ_TOPIC_REPLICATION_FACTOR_DOC)
                 .define(DLQ_INCLUDE_CONFIGS, ConfigDef.Type.BOOLEAN, DLQ_INCLUDE_CONFIGS_DEFAULT, ConfigDef.Importance.HIGH, DLQ_INCLUDE_CONFIGS_DOC)
                 .define(DLQ_INCLUDE_MESSAGES, ConfigDef.Type.BOOLEAN, DLQ_INCLUDE_MESSAGES_DEFAULT, ConfigDef.Importance.HIGH, DLQ_INCLUDE_MESSAGES_DOC)
-                .define(DLQ_CONVERTER, ConfigDef.Type.CLASS, DLQ_CONVERTER_DEFAULT, ConfigDef.Importance.HIGH, DLQ_CONVERTER_DOC)
-                ;
+                .define(DLQ_CONVERTER, ConfigDef.Type.CLASS, DLQ_CONVERTER_DEFAULT, ConfigDef.Importance.HIGH, DLQ_CONVERTER_DOC);
     }
 
     @Override

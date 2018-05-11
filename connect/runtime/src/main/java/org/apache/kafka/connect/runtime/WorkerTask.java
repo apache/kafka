@@ -68,19 +68,30 @@ abstract class WorkerTask implements Runnable {
     private volatile boolean stopping;   // indicates whether the Worker has asked the task to stop
     private volatile boolean cancelled;  // indicates whether the Worker has cancelled the task (e.g. because of slow shutdown)
 
-    private final OperationExecutor operationExecutor = new NoopExecutor();
+    private final OperationExecutor operationExecutor;
     private final ProcessingContext processingContext;
 
     protected static final SchemaAndValue DEFAULT_SCHEMA_AND_VALUE = new SchemaAndValue(Schema.BOOLEAN_SCHEMA, false);
     protected static final Headers DEFAULT_HEADERS = new ConnectHeaders();
     protected static final RecordHeaders DEFAULT_RECORD_HEADERS = new RecordHeaders();
 
+    // Available for testing
     public WorkerTask(ConnectorTaskId id,
                       TaskStatus.Listener statusListener,
                       TargetState initialState,
                       ClassLoader loader,
                       ConnectMetrics connectMetrics,
                       ProcessingContext processingContext) {
+        this(id, statusListener, initialState, loader, connectMetrics, processingContext, NoopExecutor.INSTANCE);
+    }
+
+    public WorkerTask(ConnectorTaskId id,
+                      TaskStatus.Listener statusListener,
+                      TargetState initialState,
+                      ClassLoader loader,
+                      ConnectMetrics connectMetrics,
+                      ProcessingContext processingContext,
+                      OperationExecutor operationExecutor) {
         this.id = id;
         this.taskMetricsGroup = new TaskMetricsGroup(this.id, connectMetrics, statusListener);
         this.statusListener = taskMetricsGroup;
@@ -90,6 +101,7 @@ abstract class WorkerTask implements Runnable {
         this.cancelled = false;
         this.taskMetricsGroup.recordState(this.targetState);
         this.processingContext = processingContext;
+        this.operationExecutor = operationExecutor;
     }
 
     public ConnectorTaskId id() {

@@ -27,6 +27,7 @@ import org.apache.kafka.connect.runtime.errors.ProcessingContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
@@ -85,10 +86,10 @@ public class RetryWithToleranceExecutor extends OperationExecutor {
 
     static ConfigDef getConfigDef() {
         return new ConfigDef()
-                .define(RETRIES_LIMIT, ConfigDef.Type.INT, RETRIES_LIMIT_DEFAULT, ConfigDef.Importance.HIGH, RETRIES_LIMIT_DOC)
-                .define(RETRIES_DELAY_MAX_MS, ConfigDef.Type.INT, RETRIES_DELAY_MAX_MS_DEFAULT, atLeast(1), ConfigDef.Importance.MEDIUM, RETRIES_DELAY_MAX_MS_DOC)
-                .define(TOLERANCE_LIMIT, ConfigDef.Type.INT, TOLERANCE_LIMIT_DEFAULT, ConfigDef.Importance.HIGH, TOLERANCE_LIMIT_DOC)
-                .define(TOLERANCE_RATE_LIMIT, ConfigDef.Type.INT, TOLERANCE_RATE_LIMIT_DEFAULT, ConfigDef.Importance.MEDIUM, TOLERANCE_RATE_LIMIT_DOC)
+                .define(RETRIES_LIMIT, ConfigDef.Type.LONG, RETRIES_LIMIT_DEFAULT, ConfigDef.Importance.HIGH, RETRIES_LIMIT_DOC)
+                .define(RETRIES_DELAY_MAX_MS, ConfigDef.Type.LONG, RETRIES_DELAY_MAX_MS_DEFAULT, atLeast(1), ConfigDef.Importance.MEDIUM, RETRIES_DELAY_MAX_MS_DOC)
+                .define(TOLERANCE_LIMIT, ConfigDef.Type.LONG, TOLERANCE_LIMIT_DEFAULT, ConfigDef.Importance.HIGH, TOLERANCE_LIMIT_DOC)
+                .define(TOLERANCE_RATE_LIMIT, ConfigDef.Type.LONG, TOLERANCE_RATE_LIMIT_DEFAULT, ConfigDef.Importance.MEDIUM, TOLERANCE_RATE_LIMIT_DOC)
                 .define(TOLERANCE_RATE_DURATION, ConfigDef.Type.STRING, TOLERANCE_RATE_DURATION_DEFAULT, in("minute", "hour", "day"), ConfigDef.Importance.MEDIUM, TOLERANCE_RATE_DURATION_DOC);
     }
 
@@ -125,7 +126,7 @@ public class RetryWithToleranceExecutor extends OperationExecutor {
                     return response.result;
                 case RETRY:
                     context.setException(response.ex);
-                    retry = config.retriesLimit() > 0 && (context.attempt() - 1) < config.retriesLimit();
+                    retry = checkRetry(context);
                     break;
                 case UNHANDLED_EXCEPTION:
                     context.setException(response.ex);
@@ -152,11 +153,29 @@ public class RetryWithToleranceExecutor extends OperationExecutor {
         }
         totalFailuresInDuration++;
 
-        if (totalFailures > config.toleranceLimit()) {
+        log.debug("Marking the record as failed, totalFailures={}, totalFailuresInDuration={}", totalFailures, totalFailuresInDuration);
+
+        if (totalFailures > config.toleranceLimit() || totalFailuresInDuration > config.toleranceRateLimit()) {
             throw new ConnectException("Tolerance Limit Exceeded", response.ex);
         }
 
+        log.info("Returning default value={}", value);
         return value;
+    }
+
+    protected boolean checkRetry(ProcessingContext context) {
+        long limit = config.retriesLimit();
+        if (limit == -1) {
+            return true;
+        } else if (limit == 0) {
+            return false;
+        } else if (limit > 0) {
+            // number of retries is one less than the number of attempts.
+            return (context.attempt() - 1) < config.retriesLimit();
+        } else {
+            log.error("Unexpected value for retry limit={}. Will disable retry.", limit);
+            return false;
+        }
     }
 
     private void backoff(ProcessingContext context) {
@@ -221,11 +240,16 @@ public class RetryWithToleranceExecutor extends OperationExecutor {
         }
 
         public TimeUnit toleranceRateDuration() {
-            switch (getString(TOLERANCE_LIMIT).toLowerCase()) {
-                case "minute": return TimeUnit.MINUTES;
-                case "hour": return TimeUnit.HOURS;
-                case "day": return TimeUnit.DAYS;
-                default: throw new ConfigException("Could not recognize value " + getString(TOLERANCE_LIMIT) + " for config " + TOLERANCE_RATE_DURATION);
+            final String duration = getString(TOLERANCE_RATE_DURATION);
+            switch (duration.toLowerCase(Locale.ROOT)) {
+                case "minute":
+                    return TimeUnit.MINUTES;
+                case "hour":
+                    return TimeUnit.HOURS;
+                case "day":
+                    return TimeUnit.DAYS;
+                default:
+                    throw new ConfigException("Could not recognize value " + getString(TOLERANCE_LIMIT) + " for config " + TOLERANCE_RATE_DURATION);
             }
         }
     }

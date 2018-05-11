@@ -37,6 +37,7 @@ import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.errors.OperationExecutor;
 import org.apache.kafka.connect.runtime.errors.ProcessingContext;
 import org.apache.kafka.connect.runtime.errors.StageType;
+import org.apache.kafka.connect.runtime.errors.impl.NoopExecutor;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.storage.Converter;
@@ -107,7 +108,28 @@ class WorkerSourceTask extends WorkerTask {
                             ClassLoader loader,
                             Time time,
                             ProcessingContext processingContext) {
-        super(id, statusListener, initialState, loader, connectMetrics, processingContext);
+        this(id, task, statusListener, initialState, keyConverter, valueConverter, headerConverter, transformationChain,
+                producer, offsetReader, offsetWriter, workerConfig, connectMetrics, loader, time, processingContext, NoopExecutor.INSTANCE);
+    }
+
+    public WorkerSourceTask(ConnectorTaskId id,
+                SourceTask task,
+                TaskStatus.Listener statusListener,
+                TargetState initialState,
+                Converter keyConverter,
+                Converter valueConverter,
+                HeaderConverter headerConverter,
+                TransformationChain<SourceRecord> transformationChain,
+                KafkaProducer<byte[], byte[]> producer,
+                OffsetStorageReader offsetReader,
+                OffsetStorageWriter offsetWriter,
+                WorkerConfig workerConfig,
+                ConnectMetrics connectMetrics,
+                ClassLoader loader,
+                Time time,
+                ProcessingContext processingContext,
+                OperationExecutor operationExecutor) {
+        super(id, statusListener, initialState, loader, connectMetrics, processingContext, operationExecutor);
 
         this.workerConfig = workerConfig;
         this.task = task;

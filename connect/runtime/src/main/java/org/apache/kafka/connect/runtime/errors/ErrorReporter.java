@@ -17,7 +17,6 @@
 package org.apache.kafka.connect.runtime.errors;
 
 import org.apache.kafka.common.Configurable;
-import org.apache.kafka.connect.data.Struct;
 
 public abstract class ErrorReporter implements Configurable {
 

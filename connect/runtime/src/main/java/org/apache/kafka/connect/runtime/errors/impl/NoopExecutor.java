@@ -21,7 +21,10 @@ import org.apache.kafka.connect.runtime.errors.ProcessingContext;
 
 public class NoopExecutor extends OperationExecutor {
 
+    public static final OperationExecutor INSTANCE = new NoopExecutor();
 
+    private NoopExecutor() {
+    }
 
     @Override
     public <V> V execute(OperationExecutor.Operation<V> operation, V value, ProcessingContext context) {

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.runtime.errors.impl;
 
-import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
@@ -30,6 +29,8 @@ import org.apache.kafka.connect.sink.SinkTask;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Map;
@@ -66,7 +67,7 @@ public class StructUtil {
                 if (object != null) {
                     if (object instanceof Exception) {
                         Exception ex = (Exception) object;
-                        object = ExceptionUtils.getMessage(ex) + "\n" + ExceptionUtils.getStackTrace(ex);
+                        object = getMessage(ex) + "\n" + getStackTrace(ex);
                     } else if (object.getClass().isEnum()) {
                         object = String.valueOf(object);
                     } else if (Class.class.isAssignableFrom(object.getClass())) {
@@ -127,6 +128,22 @@ public class StructUtil {
             }
         }
         return schemaBuilder.build();
+    }
+
+    public static String getMessage(final Throwable th) {
+        if (th == null) {
+            return "";
+        }
+        final String clsName = th.getClass().getName();
+        final String msg = th.getMessage();
+        return clsName + ": " + msg;
+    }
+
+    public static String getStackTrace(final Throwable throwable) {
+        final StringWriter sw = new StringWriter();
+        final PrintWriter pw = new PrintWriter(sw, true);
+        throwable.printStackTrace(pw);
+        return sw.getBuffer().toString();
     }
 
     public static void main(String[] args) {

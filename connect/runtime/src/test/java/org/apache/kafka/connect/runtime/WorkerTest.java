@@ -34,6 +34,7 @@ import org.apache.kafka.connect.json.JsonConverterConfig;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.MockConnectMetrics.MockMetricsReporter;
 import org.apache.kafka.connect.runtime.errors.ProcessingContext;
+import org.apache.kafka.connect.runtime.errors.impl.NoopExecutor;
 import org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
@@ -476,6 +477,9 @@ public class WorkerTest extends ThreadedTest {
         expectStartStorage();
 
         EasyMock.expect(workerTask.id()).andStubReturn(TASK_ID);
+        EasyMock.expect(workerTask.processingContext()).andStubReturn(ProcessingContext.noop(TASK_ID.toString()));
+        EasyMock.expect(workerTask.operationExecutor()).andStubReturn(NoopExecutor.INSTANCE);
+        EasyMock.expect(workerTask.id()).andStubReturn(TASK_ID);
 
         EasyMock.expect(plugins.currentThreadLoader()).andReturn(delegatingLoader).times(2);
         PowerMock.expectNew(
@@ -614,6 +618,8 @@ public class WorkerTest extends ThreadedTest {
         expectStartStorage();
 
         EasyMock.expect(workerTask.id()).andStubReturn(TASK_ID);
+        EasyMock.expect(workerTask.processingContext()).andStubReturn(ProcessingContext.noop(TASK_ID.toString()));
+        EasyMock.expect(workerTask.operationExecutor()).andStubReturn(NoopExecutor.INSTANCE);
 
         EasyMock.expect(plugins.currentThreadLoader()).andReturn(delegatingLoader).times(2);
         PowerMock.expectNew(
@@ -702,6 +708,8 @@ public class WorkerTest extends ThreadedTest {
         expectStartStorage();
 
         EasyMock.expect(workerTask.id()).andStubReturn(TASK_ID);
+        EasyMock.expect(workerTask.processingContext()).andStubReturn(ProcessingContext.noop(TASK_ID.toString()));
+        EasyMock.expect(workerTask.operationExecutor()).andStubReturn(NoopExecutor.INSTANCE);
 
         Capture<TestConverter> keyConverter = EasyMock.newCapture();
         Capture<TestConfigurableConverter> valueConverter = EasyMock.newCapture();

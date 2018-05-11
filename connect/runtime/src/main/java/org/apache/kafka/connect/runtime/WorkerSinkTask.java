@@ -43,6 +43,7 @@ import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.errors.OperationExecutor;
 import org.apache.kafka.connect.runtime.errors.ProcessingContext;
 import org.apache.kafka.connect.runtime.errors.StageType;
+import org.apache.kafka.connect.runtime.errors.impl.NoopExecutor;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.storage.Converter;
@@ -105,7 +106,24 @@ class WorkerSinkTask extends WorkerTask {
                           ClassLoader loader,
                           Time time,
                           ProcessingContext processingContext) {
-        super(id, statusListener, initialState, loader, connectMetrics, processingContext);
+        this(id, task, statusListener, initialState, workerConfig, connectMetrics, keyConverter, valueConverter, headerConverter, transformationChain, loader, time, processingContext, NoopExecutor.INSTANCE);
+    }
+
+    public WorkerSinkTask(ConnectorTaskId id,
+                          SinkTask task,
+                          TaskStatus.Listener statusListener,
+                          TargetState initialState,
+                          WorkerConfig workerConfig,
+                          ConnectMetrics connectMetrics,
+                          Converter keyConverter,
+                          Converter valueConverter,
+                          HeaderConverter headerConverter,
+                          TransformationChain<SinkRecord> transformationChain,
+                          ClassLoader loader,
+                          Time time,
+                          ProcessingContext processingContext,
+                          OperationExecutor operationExecutor) {
+        super(id, statusListener, initialState, loader, connectMetrics, processingContext, operationExecutor);
 
         this.workerConfig = workerConfig;
         this.task = task;

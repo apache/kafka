@@ -35,7 +35,7 @@ public class TransformationChain<R extends ConnectRecord<R>> {
     }
 
     public R apply(R record) {
-        return apply(record, new NoopExecutor(), null);
+        return apply(record, NoopExecutor.INSTANCE, null);
     }
 
     public R apply(R record, OperationExecutor operationExecutor, ProcessingContext processingContext) {
