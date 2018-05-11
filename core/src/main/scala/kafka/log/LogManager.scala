@@ -878,9 +878,9 @@ class LogManager(logDirs: Seq[File],
   def allLogs: Iterable[Log] = currentLogs.values ++ futureLogs.values
 
   def logsByTopic(topic: String): Seq[Log] = {
-    (currentLogs.toList ++ futureLogs.toList).filter { case (topicPartition, log) =>
+    (currentLogs.toList ++ futureLogs.toList).filter { case (topicPartition, _) =>
       topicPartition.topic() == topic
-    }.map { case (topicPartition, log) => log }
+    }.map { case (_, log) => log }
   }
 
   /**

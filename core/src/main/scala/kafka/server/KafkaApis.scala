@@ -512,7 +512,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           }
         })
       } else {
-        fetchContext.foreachPartition((part, data) => {
+        fetchContext.foreachPartition((part, _) => {
           erroneous += part -> new FetchResponse.PartitionData(Errors.TOPIC_AUTHORIZATION_FAILED,
             FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LAST_STABLE_OFFSET,
             FetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY)

@@ -150,7 +150,7 @@ class ReplicaAlterLogDirsThread(name: String,
       .filter { case (_, state) => state.isTruncatingLog }
       .map { case (tp, _) => tp -> epochCacheOpt(tp) }.toMap
 
-    val (partitionsWithEpoch, partitionsWithoutEpoch) = partitionEpochOpts.partition { case (tp, epochCacheOpt) => epochCacheOpt.nonEmpty }
+    val (partitionsWithEpoch, partitionsWithoutEpoch) = partitionEpochOpts.partition { case (_, epochCacheOpt) => epochCacheOpt.nonEmpty }
 
     val result = partitionsWithEpoch.map { case (tp, epochCacheOpt) => tp -> epochCacheOpt.get.latestEpoch() }
     ResultWithPartitions(result, partitionsWithoutEpoch.keys.toSet)
@@ -217,7 +217,7 @@ class ReplicaAlterLogDirsThread(name: String,
 
   def buildFetchRequest(partitionMap: Seq[(TopicPartition, PartitionFetchState)]): ResultWithPartitions[FetchRequest] = {
     // Only include replica in the fetch request if it is not throttled.
-    val maxPartitionOpt = partitionMap.filter { case (topicPartition, partitionFetchState) =>
+    val maxPartitionOpt = partitionMap.filter { case (_, partitionFetchState) =>
       partitionFetchState.isReadyForFetch && !quota.isQuotaExceeded
     }.reduceLeftOption { (left, right) =>
       if ((left._1.topic > right._1.topic()) || (left._1.topic == right._1.topic() && left._1.partition() >= right._1.partition()))
@@ -237,7 +237,7 @@ class ReplicaAlterLogDirsThread(name: String,
         val logStartOffset = replicaMgr.getReplicaOrException(topicPartition, Request.FutureLocalReplicaId).logStartOffset
         requestMap.put(topicPartition, new JFetchRequest.PartitionData(partitionFetchState.fetchOffset, logStartOffset, fetchSize))
       } catch {
-        case e: KafkaStorageException =>
+        case _: KafkaStorageException =>
           partitionsWithError += topicPartition
       }
     }

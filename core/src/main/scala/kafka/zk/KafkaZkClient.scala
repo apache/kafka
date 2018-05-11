@@ -1315,7 +1315,7 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
       createRecursive(ClusterIdZNode.path, ClusterIdZNode.toJson(proposedClusterId))
       proposedClusterId
     } catch {
-      case e: NodeExistsException => getClusterId.getOrElse(
+      case _: NodeExistsException => getClusterId.getOrElse(
         throw new KafkaException("Failed to get cluster id from Zookeeper. This can happen if /cluster/id is deleted from Zookeeper."))
     }
   }
