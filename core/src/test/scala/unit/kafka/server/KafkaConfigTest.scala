@@ -23,15 +23,15 @@ import kafka.api.{ApiVersion, KAFKA_0_8_2}
 import kafka.cluster.EndPoint
 import kafka.message._
 import kafka.utils.{CoreUtils, TestUtils}
-import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.metrics.Sensor
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.Assert._
 import org.junit.Test
+import org.scalatest.Assertions.intercept
 
-class KafkaConfigTest extends ZooKeeperTestHarness {
+class KafkaConfigTest {
 
   @Test
   def testLogRetentionTimeHoursProvided() {
@@ -787,29 +787,6 @@ class KafkaConfigTest extends ZooKeeperTestHarness {
     assertFalse(isValidKafkaConfig(props))
     props.put(KafkaConfig.MaxConnectionsPerIpOverridesProp, "127.0.0.1:100")
     assertTrue(isValidKafkaConfig(props))
-  }
-
-  @Test
-  def testAlreadyRegisteredAdvertisedListeners() {
-    //start a server with a advertised listener
-    val server1 = createServer(1, "myhost", TestUtils.RandomPort)
-
-    //start a server with same advertised listener
-    intercept[IllegalArgumentException] {
-      createServer(2, "myhost", TestUtils.boundPort(server1))
-    }
-
-    //start a server with same host but with different port
-    val server2 = createServer(2, "myhost", TestUtils.RandomPort)
-
-    TestUtils.shutdownServers(Seq(server1, server2))
-  }
-
-  def createServer(nodeId: Int, hostName: String, port: Int): KafkaServer = {
-    val props = TestUtils.createBrokerConfig(nodeId, zkConnect)
-    props.put(KafkaConfig.AdvertisedListenersProp, s"PLAINTEXT://$hostName:$port")
-    val kafkaConfig = KafkaConfig.fromProps(props)
-    TestUtils.createServer(kafkaConfig)
   }
 
   private def assertPropertyInvalid(validRequiredProps: => Properties, name: String, values: Any*) {
