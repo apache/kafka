@@ -70,6 +70,7 @@ object ApiVersion {
     // Introduced DeleteGroupsRequest V0 via KIP-229, plus KIP-227 incremental fetch requests,
     // and KafkaStorageException for fetch requests.
     KAFKA_1_1_IV0,
+    // Introduced OffsetsForLeaderEpochRequest V1 via KIP-279
     KAFKA_2_0_IV0
   )
 

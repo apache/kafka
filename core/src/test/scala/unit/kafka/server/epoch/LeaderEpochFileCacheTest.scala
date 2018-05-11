@@ -50,7 +50,7 @@ class LeaderEpochFileCacheTest {
     //Then
     assertEquals(2, cache.latestEpoch())
     assertEquals(EpochEntry(2, 10), cache.epochEntries()(0))
-    assertEquals(11, cache.endOffsetFor(2)) //should match leo
+    assertEquals((2, leo), cache.endOffsetFor(2)) //should match leo
   }
 
   @Test
@@ -67,23 +67,27 @@ class LeaderEpochFileCacheTest {
     leo = 14
 
     //Then
-    assertEquals(14, cache.endOffsetFor(2))
+    assertEquals((2, leo), cache.endOffsetFor(2))
   }
 
   @Test
   def shouldReturnUndefinedOffsetIfUndefinedEpochRequested() = {
     def leoFinder() = new LogOffsetMetadata(0)
+    val expectedEpochEndOffset = (UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
 
     //Given cache with some data on leader
     val cache = new LeaderEpochFileCache(tp, () => leoFinder, checkpoint)
+
+    // assign couple of epochs
     cache.assign(epoch = 2, offset = 11)
     cache.assign(epoch = 3, offset = 12)
 
     //When (say a bootstraping follower) sends request for UNDEFINED_EPOCH
-    val offsetFor = cache.endOffsetFor(UNDEFINED_EPOCH)
+    val epochAndOffsetFor = cache.endOffsetFor(UNDEFINED_EPOCH)
 
     //Then
-    assertEquals(UNDEFINED_EPOCH_OFFSET, offsetFor)
+    assertEquals("Expected undefined epoch and offset if undefined epoch requested. Cache not empty.",
+                 expectedEpochEndOffset, epochAndOffsetFor)
   }
 
   @Test
@@ -140,7 +144,7 @@ class LeaderEpochFileCacheTest {
     val cache = new LeaderEpochFileCache(tp, () => leoFinder, checkpoint)
 
     //Then
-    assertEquals(UNDEFINED_EPOCH_OFFSET, cache.endOffsetFor(0))
+    assertEquals((UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET), cache.endOffsetFor(0))
   }
 
   @Test
@@ -155,7 +159,8 @@ class LeaderEpochFileCacheTest {
     val offsetFor = cache.endOffsetFor(UNDEFINED_EPOCH)
 
     //Then
-    assertEquals(UNDEFINED_EPOCH_OFFSET, offsetFor)
+    assertEquals("Expected undefined epoch and offset if undefined epoch requested. Empty cache.",
+                 (UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET), offsetFor)
   }
 
   @Test
@@ -170,10 +175,10 @@ class LeaderEpochFileCacheTest {
     cache.assign(epoch = 7, offset = 13)
 
     //When
-    val offset = cache.endOffsetFor(5 - 1)
+    val epochAndOffset = cache.endOffsetFor(5 - 1)
 
     //Then
-    assertEquals(UNDEFINED_EPOCH_OFFSET, offset)
+    assertEquals((UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET), epochAndOffset)
   }
 
   @Test
@@ -194,7 +199,7 @@ class LeaderEpochFileCacheTest {
     leo = 17
 
     //Then get the start offset of the next epoch
-    assertEquals(15, cache.endOffsetFor(2))
+    assertEquals((2, 15), cache.endOffsetFor(2))
   }
 
   @Test
@@ -210,8 +215,9 @@ class LeaderEpochFileCacheTest {
     cache.assign(epoch = 4, offset = 17)
 
     //Then
-    assertEquals(13, cache.endOffsetFor(requestedEpoch = 1))
-    assertEquals(17, cache.endOffsetFor(requestedEpoch = 2))
+    assertEquals((0, 13), cache.endOffsetFor(requestedEpoch = 1))
+    assertEquals((2, 17), cache.endOffsetFor(requestedEpoch = 2))
+    assertEquals((2, 17), cache.endOffsetFor(requestedEpoch = 3))
   }
 
   @Test
@@ -242,7 +248,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(epoch = 2, offset = 100)
 
     //Then
-    assertEquals(UNDEFINED_EPOCH_OFFSET, cache.endOffsetFor(3))
+    assertEquals((UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET), cache.endOffsetFor(3))
   }
 
   @Test
@@ -258,7 +264,7 @@ class LeaderEpochFileCacheTest {
     leo = 7
 
     //Then
-    assertEquals(leo, cache.endOffsetFor(2))
+    assertEquals((2, leo), cache.endOffsetFor(2))
     assertEquals(1, cache.epochEntries.size)
     assertEquals(EpochEntry(2, 6), cache.epochEntries()(0))
   }
@@ -300,10 +306,10 @@ class LeaderEpochFileCacheTest {
     assertEquals(2, cache.latestEpoch())
 
     //Then end offset for epoch 1 shouldn't have changed
-    assertEquals(6, cache.endOffsetFor(1))
+    assertEquals((1, 6), cache.endOffsetFor(1))
 
-    //Then end offset for epoch 2 has to be the offset of the epoch 1 message (I can't thing of a better option)
-    assertEquals(8, cache.endOffsetFor(2))
+    //Then end offset for epoch 2 has to be the offset of the epoch 1 message (I can't think of a better option)
+    assertEquals((2, 8), cache.endOffsetFor(2))
 
     //Epoch history shouldn't have changed
     assertEquals(EpochEntry(1, 5), cache.epochEntries()(0))
@@ -340,17 +346,17 @@ class LeaderEpochFileCacheTest {
     //Then epoch should go up
     assertEquals(1, cache.latestEpoch())
     //offset for 1 should still be 0
-    assertEquals(0, cache.endOffsetFor(1))
+    assertEquals((1, 0), cache.endOffsetFor(1))
     //offset for epoch 0 should still be 0
-    assertEquals(0, cache.endOffsetFor(0))
+    assertEquals((0, 0), cache.endOffsetFor(0))
 
     //When we write 5 messages as epoch 1
     leo = 5
 
     //Then end offset for epoch(1) should be leo => 5
-    assertEquals(5, cache.endOffsetFor(1))
+    assertEquals((1, 5), cache.endOffsetFor(1))
     //Epoch 0 should still be at offset 0
-    assertEquals(0, cache.endOffsetFor(0))
+    assertEquals((0, 0), cache.endOffsetFor(0))
 
     //When
     cache.assign(epoch = 2, offset = 5) //leo=5
@@ -358,13 +364,13 @@ class LeaderEpochFileCacheTest {
     leo = 10 //write another 5 messages
 
     //Then end offset for epoch(2) should be leo => 10
-    assertEquals(10, cache.endOffsetFor(2))
+    assertEquals((2, 10), cache.endOffsetFor(2))
 
     //end offset for epoch(1) should be the start offset of epoch(2) => 5
-    assertEquals(5, cache.endOffsetFor(1))
+    assertEquals((1, 5), cache.endOffsetFor(1))
 
     //epoch (0) should still be 0
-    assertEquals(0, cache.endOffsetFor(0))
+    assertEquals((0, 0), cache.endOffsetFor(0))
   }
 
   @Test
@@ -382,7 +388,7 @@ class LeaderEpochFileCacheTest {
 
     //Then epoch should stay, offsets should grow
     assertEquals(0, cache.latestEpoch())
-    assertEquals(leo, cache.endOffsetFor(0))
+    assertEquals((0, leo), cache.endOffsetFor(0))
 
     //When messages arrive with greater epoch
     cache.assign(epoch = 1, offset = 3); leo = 4
@@ -390,7 +396,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(epoch = 1, offset = 5); leo = 6
 
     assertEquals(1, cache.latestEpoch())
-    assertEquals(leo, cache.endOffsetFor(1))
+    assertEquals((1, leo), cache.endOffsetFor(1))
 
     //When
     cache.assign(epoch = 2, offset = 6); leo = 7
@@ -398,11 +404,11 @@ class LeaderEpochFileCacheTest {
     cache.assign(epoch = 2, offset = 8); leo = 9
 
     assertEquals(2, cache.latestEpoch())
-    assertEquals(leo, cache.endOffsetFor(2))
+    assertEquals((2, leo), cache.endOffsetFor(2))
 
     //Older epochs should return the start offset of the first message in the subsequent epoch.
-    assertEquals(3, cache.endOffsetFor(0))
-    assertEquals(6, cache.endOffsetFor(1))
+    assertEquals((0, 3), cache.endOffsetFor(0))
+    assertEquals((1, 6), cache.endOffsetFor(1))
   }
 
   @Test
@@ -648,7 +654,7 @@ class LeaderEpochFileCacheTest {
     val cache = new LeaderEpochFileCache(tp, () => leoFinder, checkpoint)
 
     //Then
-    assertEquals(-1, cache.endOffsetFor(7))
+    assertEquals((UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET), cache.endOffsetFor(7))
   }
 
   @Test

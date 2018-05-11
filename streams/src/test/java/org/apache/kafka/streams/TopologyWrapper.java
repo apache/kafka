@@ -14,8 +14,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.kstream.internals;
+package org.apache.kafka.streams;
 
-public interface InternalValueTransformerWithKeySupplier<K, V, VR> {
-    InternalValueTransformerWithKey<K, V, VR> get();
+import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
+
+/**
+ *  This class allows to access the {@link InternalTopologyBuilder} a {@link Topology} object.
+ *
+ */
+public class TopologyWrapper extends Topology {
+
+    public InternalTopologyBuilder getInternalBuilder() {
+        return internalTopologyBuilder;
+    }
+
+    public void setApplicationId(String applicationId) {
+        internalTopologyBuilder.setApplicationId(applicationId);
+    }
 }

@@ -712,6 +712,10 @@ public class InternalTopologyBuilder {
 
     private void connectProcessorAndStateStore(final String processorName,
                                                final String stateStoreName) {
+        if (globalStateStores.containsKey(stateStoreName)) {
+            throw new TopologyException("Global StateStore " + stateStoreName +
+                    " can be used by a Processor without being specified; it should not be explicitly passed.");
+        }
         if (!stateFactories.containsKey(stateStoreName)) {
             throw new TopologyException("StateStore " + stateStoreName + " is not added yet.");
         }
