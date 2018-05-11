@@ -410,6 +410,7 @@ public class RegexSourceIntegrationTest {
         final Properties consumerConfig = TestUtils.consumerConfig(CLUSTER.bootstrapServers(), StringDeserializer.class, StringDeserializer.class);
         try {
             IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, DEFAULT_OUTPUT_TOPIC, 2, 5000);
+            throw new IllegalStateException("This should not happen: an assertion error should have been thrown before this.");
         } catch (final AssertionError e) {
             // this is fine
         }
