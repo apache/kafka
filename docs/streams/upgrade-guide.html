@@ -34,7 +34,8 @@
     </div>
 
     <p>
-        Upgrading from any older verion to 2.0.0 in the online mode requires two rolling bounces.
+        There are a few new APIs added and also some deprecated APIs since 1.0.x is removed in 2.0.0, and hence users upgrading may need to make some small code changes (see below for the details).
+        In addition, upgrading from any older version to 2.0.0 in the online mode requires two rolling bounces.
         In the first rolling bounce phase users need to set config <code>upgrade.from="0.10.0"</code>
         (cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-268%3A+Simplify+Kafka+Streams+Rebalance+Metadata+Upgrade">KIP-268</a>):
     </p>
@@ -53,7 +54,7 @@
 
     <p>
         Note, that a brokers must be on version 0.10.1 or higher and on-disk message format must be on version 0.10 or higher
-        to run a Kafka Streams application version 2.0 or higher.
+        to run a Kafka Streams application version 0.10.1 or higher.
     </p>
 
     <p>
@@ -62,7 +63,7 @@
     </p>
 
     <p>
-        We have removed the public APIs that are deprecated priori to 1.0 in 2.0.0 as well; users leveraging on those deprecated APIs need to make code changes accordingly.
+        We have also removed some public APIs that are deprecated prior to 1.0.x in 2.0.0 as well; users leveraging on those deprecated APIs need to make code changes accordingly.
         See below for a detailed list of removed APIs.
     </p>
     <p>
@@ -143,7 +144,7 @@
         <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-270+-+A+Scala+Wrapper+Library+for+Kafka+Streams">KIP-270</a>.
     </p>
     <p>
-        We have removed a list of deprecated APIs prior to 1.0:
+        We have removed a list of deprecated APIs prior to 1.0.x:
     </p>
     <ul>
         <li><code>TopologyBuilder</code> and <code>KStreamBuilder</code> are removed and replaced by <code>Topology</code> and <code>StreamsBuidler</code> respectively. </li>
