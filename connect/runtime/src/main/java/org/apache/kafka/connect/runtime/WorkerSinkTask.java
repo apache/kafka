@@ -356,6 +356,7 @@ class WorkerSinkTask extends WorkerTask {
         final Map<TopicPartition, OffsetAndMetadata> taskProvidedOffsets;
         try {
             log.trace("{} Calling task.preCommit with current offsets: {}", this, currentOffsets);
+            context.setClosingInProgress(closing);
             taskProvidedOffsets = task.preCommit(new HashMap<>(currentOffsets));
         } catch (Throwable t) {
             if (closing) {
@@ -375,6 +376,7 @@ class WorkerSinkTask extends WorkerTask {
             if (closing) {
                 log.trace("{} Closing the task before committing the offsets: {}", this, currentOffsets);
                 task.close(currentOffsets.keySet());
+                context.setClosingInProgress(false);
             }
         }
 
