@@ -31,6 +31,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
@@ -2347,11 +2348,11 @@ public class KafkaAdminClient extends AdminClient {
 
                 @Override
                 void handleResponse(AbstractResponse abstractResponse) {
-                    final FindCoordinatorResponse response = (FindCoordinatorResponse) abstractResponse;
+                    final FindCoordinatorResponse fcResponse = (FindCoordinatorResponse) abstractResponse;
 
                     final long nowDescribeConsumerGroups = time.milliseconds();
 
-                    final int nodeId = response.node().id();
+                    final int nodeId = fcResponse.node().id();
 
                     runnable.call(new Call("describeConsumerGroups", deadline, new ConstantNodeIdProvider(nodeId)) {
 
@@ -2375,7 +2376,7 @@ public class KafkaAdminClient extends AdminClient {
                                 final String protocolType = groupMetadata.protocolType();
                                 if (protocolType.equals(ConsumerProtocol.PROTOCOL_TYPE) || protocolType.isEmpty()) {
                                     final List<DescribeGroupsResponse.GroupMember> members = groupMetadata.members();
-                                    final List<MemberDescription> consumers = new ArrayList<>(members.size());
+                                    final List<MemberDescription> memberDescriptions = new ArrayList<>(members.size());
 
                                     for (DescribeGroupsResponse.GroupMember groupMember : members) {
                                         if (groupMember.memberAssignment().remaining() > 0) {
@@ -2388,15 +2389,16 @@ public class KafkaAdminClient extends AdminClient {
                                                     clientId(groupMember.clientId()).
                                                     host(groupMember.clientHost()).
                                                     assignment(new MemberAssignment(assignment.partitions())).build();
-                                            consumers.add(memberDescription);
+                                            memberDescriptions.add(memberDescription);
                                         }
                                     }
                                     final ConsumerGroupDescription consumerGroupDescription =
                                             new ConsumerGroupDescription.Builder(groupId).
                                                 isSimpleConsumerGroup(protocolType.isEmpty()).
-                                                members(consumers).
+                                                members(memberDescriptions).
                                                 partitionAssignor(groupMetadata.protocol()).
-                                                state(groupMetadata.state()).
+                                                state(ConsumerGroupState.parse(groupMetadata.state())).
+                                                coordinator(fcResponse.node()).
                                                 build();
                                     future.complete(consumerGroupDescription);
                                 }

@@ -56,11 +56,11 @@ public class DescribeConsumerGroupsResult {
                 @Override
                 public Map<String, ConsumerGroupDescription> apply(Void v) {
                     try {
-                        HashMap<String, ConsumerGroupDescription> map = new HashMap<>();
+                        Map<String, ConsumerGroupDescription> descriptions = new HashMap<>();
                         for (Map.Entry<String, KafkaFuture<ConsumerGroupDescription>> entry : futures.entrySet()) {
-                            map.put(entry.getKey(), entry.getValue().get());
+                            descriptions.put(entry.getKey(), entry.getValue().get());
                         }
-                        return map;
+                        return descriptions;
                     } catch (InterruptedException | ExecutionException e) {
                         // This should be unreachable, since the KafkaFuture#allOf already ensured
                         // that all of the futures completed successfully.

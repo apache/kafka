@@ -17,6 +17,8 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.ConsumerGroupState;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.utils.Utils;
 
 import java.util.ArrayList;
@@ -28,23 +30,20 @@ import java.util.Objects;
  * A detailed description of a single consumer group in the cluster.
  */
 public class ConsumerGroupDescription {
-    private final static String PREPARING_REBALANCE = "PreparingRebalance";
-    private final static String COMPLETING_REBALANCE = "CompletingRebalance";
-    private final static String DEAD = "Dead";
-    private final static String STABLE = "Stable";
-
     private final String groupId;
     private final boolean isSimpleConsumerGroup;
     private final Collection<MemberDescription> members;
     private final String partitionAssignor;
-    private final String state;
+    private final ConsumerGroupState state;
+    private final Node coordinator;
 
     public static class Builder {
         private final String groupId;
         private boolean isSimpleConsumerGroup = true;
         private Collection<MemberDescription> members = null;
         private String partitionAssignor = "";
-        private String state = "";
+        private ConsumerGroupState state = ConsumerGroupState.UNKNOWN;
+        private Node coordinator = null;
 
         public Builder(String groupId) {
             this.groupId = groupId;
@@ -65,25 +64,32 @@ public class ConsumerGroupDescription {
             return this;
         }
 
-        public Builder state(String state) {
+        public Builder state(ConsumerGroupState state) {
             this.state = state;
+            return this;
+        }
+
+        public Builder coordinator(Node coordinator) {
+            this.coordinator = coordinator;
             return this;
         }
 
         public ConsumerGroupDescription build() {
             return new ConsumerGroupDescription(groupId, isSimpleConsumerGroup,
-                members, partitionAssignor, state);
+                members, partitionAssignor, state, coordinator);
         }
     }
 
     private ConsumerGroupDescription(String groupId, boolean isSimpleConsumerGroup,
-            Collection<MemberDescription> members, String partitionAssignor, String state) {
+            Collection<MemberDescription> members, String partitionAssignor, ConsumerGroupState state,
+            Node coordinator) {
         this.groupId = groupId == null ? "" : groupId;
         this.isSimpleConsumerGroup = isSimpleConsumerGroup;
         this.members = members == null ? Collections.<MemberDescription>emptyList() :
             Collections.unmodifiableList(new ArrayList<>(members));
         this.partitionAssignor = partitionAssignor == null ? "" : partitionAssignor;
-        this.state = state == null ? "" : state;
+        this.state = state;
+        this.coordinator = coordinator;
     }
 
     @Override
@@ -132,33 +138,17 @@ public class ConsumerGroupDescription {
     }
 
     /**
-     * The consumer group partition assignor.
+     * The consumer group state, or UNKNOWN if the state is too new for us to parse.
      */
-    public String state() {
+    public ConsumerGroupState state() {
         return state;
     }
 
     /**
-     * Returns true if the consumer group is currently rebalancing.
-     * If the consumer group is rebalancing, the member list will be empty.
+     * The consumer group coordinator, or null if the coordinator is not known.
      */
-    public boolean isRebalancing() {
-        return state.equals(PREPARING_REBALANCE) || state.equals(COMPLETING_REBALANCE);
-    }
-
-    /**
-     * Returns true if the consumer group is currently dead.
-     * If the consumer group is dead, the member list will be empty.
-     */
-    public boolean isDead() {
-        return state.equals(DEAD);
-    }
-
-    /**
-     * Returns true if the consumer group is currently stable.
-     */
-    public boolean isStable() {
-        return state.equals(STABLE);
+    public Node coordinator() {
+        return coordinator;
     }
 
     @Override
@@ -167,6 +157,8 @@ public class ConsumerGroupDescription {
             ", isSimpleConsumerGroup=" + isSimpleConsumerGroup +
             ", members=" + Utils.join(members, ",") +
             ", partitionAssignor=" + partitionAssignor +
-            ", state=" + state + ")";
+            ", state=" + state +
+            ", coordinator=" + coordinator +
+            ")";
     }
 }
