@@ -146,7 +146,7 @@ class InnerMeteredKeyValueStore<K, IK, V, IV> extends WrappedStateStore.Abstract
                                                                               name,
                                                                               "restore",
                                                                               Sensor.RecordingLevel.DEBUG,
-                                                                              tagKey,       taskName);
+                                                                              tagKey, taskName);
 
         // register and possibly restore the state from the logs
         if (restoreTime.shouldRecord()) {
