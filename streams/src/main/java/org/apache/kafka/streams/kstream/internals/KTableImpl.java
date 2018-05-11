@@ -32,7 +32,6 @@ import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.ValueMapperWithKey;
-import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
@@ -556,25 +555,41 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     }
 
     @Override
-    public <VR> KTable<K, VR> transformValues(final ValueTransformerSupplier<? super V, ? extends VR> valueTransformerSupplier,
-                                              final String... stateStoreNames) {
-        return transformValues(toInternalValueTransformerSupplier(valueTransformerSupplier), stateStoreNames);
+    public <VR> KTable<K, VR> transformValues(ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> valueTransformerSupplier, String... stateStoreNames) {
+        return transformValues(toInternalValueTransformerSupplier(valueTransformerSupplier), null, stateStoreNames);
     }
 
     @Override
-    public <VR> KTable<K, VR> transformValues(ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> valueTransformerSupplier, String... stateStoreNames) {
-        return transformValues(toInternalValueTransformerSupplier(valueTransformerSupplier), stateStoreNames);
+    public <VR> KTable<K, VR> transformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> valueTransformerSupplier,
+                                              final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized,
+                                              final String... stateStoreNames) {
+        Objects.requireNonNull(materialized, "materialized can't be null");
+        return transformValues(toInternalValueTransformerSupplier(valueTransformerSupplier), materialized, stateStoreNames);
     }
 
     private <VR> KTable<K, VR> transformValues(final InternalValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> transformerWithKeySupplier,
+                                               final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized,
                                                final String... stateStoreNames) {
+        Objects.requireNonNull(stateStoreNames, "stateStoreNames");
+
         final String name = builder.newProcessorName(TRANSFORMVALUES_NAME);
 
-        final KTableProcessorSupplier<K, V, VR> processorSupplier = new KTableTransformValues<>(this, transformerWithKeySupplier);
+        final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal =
+                materialized == null ? null : new MaterializedInternal<>(materialized, builder, TRANSFORMVALUES_NAME);
+
+        final String queryableName = materializedInternal == null ? null : materializedInternal.storeName();
+
+        final KTableProcessorSupplier<K, V, VR> processorSupplier = new KTableTransformValues<>(this, transformerWithKeySupplier, queryableName);
         builder.internalTopologyBuilder.addProcessor(name, processorSupplier, this.name);
 
-        if (stateStoreNames != null && stateStoreNames.length > 0) {
+        if (stateStoreNames.length > 0) {
             builder.internalTopologyBuilder.connectProcessorAndStateStores(name, stateStoreNames);
+        }
+
+        if (materializedInternal != null) {
+            builder.internalTopologyBuilder.addStateStore(
+                    new KeyValueStoreMaterializer<>(materializedInternal).materialize(),
+                    name);
         }
 
         return new KTableImpl<>(builder, name, processorSupplier, sourceNodes, queryableStoreName, isQueryable);

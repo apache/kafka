@@ -1272,69 +1272,6 @@ public interface KTable<K, V> {
 
     /**
      * Transform the value of each input record into a new value (with possible new type) of the output record.
-     * A {@link ValueTransformer} (provided by the given {@link ValueTransformerSupplier}) is applies to each input
-     * record value and computes a new value for it.
-     * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K,V'>}.
-     * This is a stateful record-by-record operation (cf. {@link #mapValues(ValueMapper)}).
-     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress can be observed and additional
-     * periodic actions get be performed.
-     * <p>
-     * In order to assign a state, the state must be created and registered beforehand:
-     * <pre>{@code
-     * // create store
-     * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
-     *         Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myValueTransformState"),
-     *                 Serdes.String(),
-     *                 Serdes.String());
-     * // register store
-     * builder.addStateStore(keyValueStoreBuilder);
-     *
-     * KTable outputTable = inputTable.transformValues(new ValueTransformerSupplier() { ... }, "myValueTransformState");
-     * }</pre>
-     * <p>
-     * Within the {@link ValueTransformer}, the state is obtained via the
-     * {@link ProcessorContext}.
-     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()}, a schedule must be
-     * registered.
-     * <pre>{@code
-     * new ValueTransformerSupplier() {
-     *     ValueTransformer get() {
-     *         return new ValueTransformer() {
-     *             private StateStore state;
-     *
-     *             void init(ProcessorContext context) {
-     *                 this.state = context.getStateStore("myValueTransformState");
-     *                 context.schedule(1000, PunctuationType.WALL_CLOCK_TIME, new Punctuator(..)); // punctuate each 1000ms, can access this.state
-     *             }
-     *
-     *             NewValueType transform(V value) {
-     *                 // can access this.state
-     *                 return new NewValueType(); // or null
-     *             }
-     *
-     *             void close() {
-     *                 // can access this.state
-     *             }
-     *         }
-     *     }
-     * }
-     * }</pre>
-     * <p>
-     * Setting a new value preserves data co-location with respect to the key.
-     *
-     * @param valueTransformerSupplier a instance of {@link ValueTransformerSupplier} that generates a
-     *                                 {@link ValueTransformer}
-     * @param stateStoreNames          the names of the state stores used by the processor
-     * @param <VR>                     the value type of the result table
-     * @return a {@code KTable} that contains records with unmodified key and new values (possibly of different type)
-     * @see #mapValues(ValueMapper)
-     * @see #mapValues(ValueMapperWithKey)
-     */
-    <VR> KTable<K, VR> transformValues(final ValueTransformerSupplier<? super V, ? extends VR> valueTransformerSupplier,
-                                        final String... stateStoreNames);
-
-    /**
-     * Transform the value of each input record into a new value (with possible new type) of the output record.
      * A {@link ValueTransformerWithKey} (provided by the given {@link ValueTransformerWithKeySupplier}) is applies to each input
      * record value and computes a new value for it.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
@@ -1395,6 +1332,79 @@ public interface KTable<K, V> {
      * @see #mapValues(ValueMapperWithKey)
      */
     <VR> KTable<K, VR> transformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> valueTransformerSupplier,
+                                       final String... stateStoreNames);
+
+    /**
+     * Transform the value of each input record into a new value (with possible new type) of the output record.
+     * A {@link ValueTransformerWithKey} (provided by the given {@link ValueTransformerWithKeySupplier}) is applies to each input
+     * record value and computes a new value for it.
+     * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
+     * This is a stateful record-by-record operation (cf. {@link #mapValues(ValueMapperWithKey)}).
+     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress can be observed and additional
+     * periodic actions can be performed.
+     * <p>
+     * In order to assign a state, the state must be created and registered beforehand:
+     * <pre>{@code
+     * // create store
+     * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
+     *         Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myValueTransformState"),
+     *                 Serdes.String(),
+     *                 Serdes.String());
+     * // register store
+     * builder.addStateStore(keyValueStoreBuilder);
+     *
+     * KTable outputTable = inputTable.transformValues(
+     *     new ValueTransformerWithKeySupplier() { ... },
+     *     Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("outputTable")
+     *                                 .withKeySerde(Serdes.String())
+     *                                 .withValueSerde(Serdes.String()),
+     *     "myValueTransformState");
+     * }</pre>
+     * <p>
+     * Within the {@link ValueTransformerWithKey}, the state is obtained via the
+     * {@link ProcessorContext}.
+     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
+     * a schedule must be registered.
+     * <pre>{@code
+     * new ValueTransformerWithKeySupplier() {
+     *     ValueTransformerWithKey get() {
+     *         return new ValueTransformerWithKey() {
+     *             private StateStore state;
+     *
+     *             void init(ProcessorContext context) {
+     *                 this.state = context.getStateStore("myValueTransformState");
+     *                 context.schedule(1000, PunctuationType.WALL_CLOCK_TIME, new Punctuator(..)); // punctuate each 1000ms, can access this.state
+     *             }
+     *
+     *             NewValueType transform(K readOnlyKey, V value) {
+     *                 // can access this.state and use read-only key
+     *                 return new NewValueType(readOnlyKey); // or null
+     *             }
+     *
+     *             void close() {
+     *                 // can access this.state
+     *             }
+     *         }
+     *     }
+     * }
+     * }</pre>
+     * <p>
+     * Note that the key is read-only and should not be modified, as this can lead to corrupt partitioning.
+     * Setting a new value preserves data co-location with respect to the key.
+     *
+     * @param valueTransformerSupplier a instance of {@link ValueTransformerWithKeySupplier} that generates a
+     *                                 {@link ValueTransformerWithKey}
+     * @param materialized             an instance of {@link Materialized} used to describe how the state store of the
+     *                                 resulting table should be materialized.
+     *                                 Cannot be {@code null}
+     * @param stateStoreNames          the names of the state stores used by the processor
+     * @param <VR>                     the value type of the result table
+     * @return a {@code KTable} that contains records with unmodified key and new values (possibly of different type)
+     * @see #mapValues(ValueMapper)
+     * @see #mapValues(ValueMapperWithKey)
+     */
+    <VR> KTable<K, VR> transformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> valueTransformerSupplier,
+                                       final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized,
                                        final String... stateStoreNames);
 
     /**

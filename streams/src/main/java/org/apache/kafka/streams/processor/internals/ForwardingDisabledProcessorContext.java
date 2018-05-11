@@ -80,7 +80,7 @@ public final class ForwardingDisabledProcessorContext implements ProcessorContex
     }
 
     @Override
-    public StateStore getStateStore(String name) {
+    public StateStore getStateStore(final String name) {
         return delegate.getStateStore(name);
     }
 

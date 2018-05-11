@@ -18,17 +18,18 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyTestDriver;
-import org.apache.kafka.streams.kstream.ValueTransformer;
-import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.ForwardingDisabledProcessorContext;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
@@ -56,10 +57,12 @@ import static org.easymock.EasyMock.verify;
 import static org.hamcrest.CoreMatchers.hasItems;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.isA;
+import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 
 @RunWith(EasyMockRunner.class)
 public class KTableTransformValuesTest {
+    private static final String QUERYABLE_NAME = "queryable-store";
     private static final String INPUT_TOPIC = "inputTopic";
     private static final String STORE_NAME = "someStore";
     private static final String OTHER_STORE_NAME = "otherStore";
@@ -75,11 +78,13 @@ public class KTableTransformValuesTest {
     @Mock(MockType.NICE)
     private KTableImpl<String, String, String> parent;
     @Mock(MockType.NICE)
-    private ProcessorContext context;
+    private InternalProcessorContext context;
     @Mock(MockType.NICE)
     private KTableValueGetterSupplier<String, String> parentGetterSupplier;
     @Mock(MockType.NICE)
     private KTableValueGetter<String, String> parentGetter;
+    @Mock(MockType.NICE)
+    private KeyValueStore<String, String> stateStore;
 
     @After
     public void cleanup() {
@@ -97,18 +102,18 @@ public class KTableTransformValuesTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowOnGetIfSupplierReturnsNull() {
-        new KTableTransformValues<>(parent, new NullSupplier()).get();
+        new KTableTransformValues<>(parent, new NullSupplier(), QUERYABLE_NAME).get();
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowOnViewGetIfSupplierReturnsNull() {
-        new KTableTransformValues<>(parent, new NullSupplier()).view().get();
+        new KTableTransformValues<>(parent, new NullSupplier(), null).view().get();
     }
 
     @Test
     public void shouldInitializeTransformerWithForwardDisabledProcessorContext() {
         final NoOpInternalValueTransformer<String, String> transformer = new NoOpInternalValueTransformer<>();
-        final KTableTransformValues<String, String, String> transformValues = new KTableTransformValues<>(parent, transformer);
+        final KTableTransformValues<String, String, String> transformValues = new KTableTransformValues<>(parent, transformer, null);
         final Processor<String, Change<String>> processor = transformValues.get();
 
         processor.init(context);
@@ -119,7 +124,7 @@ public class KTableTransformValuesTest {
     @Test
     public void shouldNotSendOldValuesByDefault() {
         final KTableTransformValues<String, String, String> transformValues = new KTableTransformValues<>(
-                parent, new ExclamationValueTransformerWithKeySupplier().asInternal());
+                parent, new ExclamationValueTransformerSupplier().asInternal(), null);
 
         final Processor<String, Change<String>> processor = transformValues.get();
         processor.init(context);
@@ -136,7 +141,7 @@ public class KTableTransformValuesTest {
     @Test
     public void shouldSendOldValuesIfConfigured() {
         final KTableTransformValues<String, String, String> transformValues = new KTableTransformValues<>(
-                parent, new ExclamationValueTransformerWithKeySupplier().asInternal());
+                parent, new ExclamationValueTransformerSupplier().asInternal(), null);
 
         transformValues.enableSendingOldValues();
         final Processor<String, Change<String>> processor = transformValues.get();
@@ -157,13 +162,73 @@ public class KTableTransformValuesTest {
         expectLastCall();
         replay(parent);
 
-        new KTableTransformValues<>(parent, new NoOpInternalValueTransformer<>()).enableSendingOldValues();
+        new KTableTransformValues<>(parent, new NoOpInternalValueTransformer<>(), QUERYABLE_NAME).enableSendingOldValues();
 
         verify(parent);
     }
 
+    @SuppressWarnings("unchecked")
     @Test
-    public void shouldTransformValues() {
+    public void shouldTransformOnGetIfNotMaterialized() {
+        final KTableTransformValues<String, String, String> transformValues = new KTableTransformValues<>(
+                parent, new ExclamationValueTransformerSupplier().asInternal(), null);
+
+        expect(parent.valueGetterSupplier()).andReturn(parentGetterSupplier);
+        expect(parentGetterSupplier.get()).andReturn(parentGetter);
+        expect(parentGetter.get("Key")).andReturn("Value");
+        replay(parent, parentGetterSupplier, parentGetter);
+
+        final KTableValueGetter<String, String> getter = transformValues.view().get();
+        getter.init(context);
+
+        final String result = getter.get("Key");
+
+        assertThat(result, is("Key->Value!"));
+    }
+
+    @Test
+    public void shouldGetFromStateStoreIfMaterialized() {
+        final KTableTransformValues<String, String, String> transformValues = new KTableTransformValues<>(
+                parent, new ExclamationValueTransformerSupplier().asInternal(), QUERYABLE_NAME);
+
+        expect(context.getStateStore(QUERYABLE_NAME)).andReturn(stateStore);
+        expect(stateStore.get("Key")).andReturn("something");
+        replay(context, stateStore);
+
+        final KTableValueGetter<String, String> getter = transformValues.view().get();
+        getter.init(context);
+
+        final String result = getter.get("Key");
+
+        assertThat(result, is("something"));
+    }
+
+    @Test
+    public void shouldGetStoreNamesFromParentIfNotMaterialized() {
+        final KTableTransformValues<String, String, String> transformValues = new KTableTransformValues<>(
+                parent, new ExclamationValueTransformerSupplier().asInternal(), null);
+
+        expect(parent.valueGetterSupplier()).andReturn(parentGetterSupplier);
+        expect(parentGetterSupplier.storeNames()).andReturn(new String[]{"store1", "store2"});
+        replay(parent, parentGetterSupplier);
+
+        final String[] storeNames = transformValues.view().storeNames();
+
+        assertThat(storeNames, is(new String[]{"store1", "store2"}));
+    }
+
+    @Test
+    public void shouldGetQueryableStoreNameIfMaterialized() {
+        final KTableTransformValues<String, String, String> transformValues = new KTableTransformValues<>(
+                parent, new ExclamationValueTransformerSupplier().asInternal(), QUERYABLE_NAME);
+
+        final String[] storeNames = transformValues.view().storeNames();
+
+        assertThat(storeNames, is(new String[]{QUERYABLE_NAME}));
+    }
+
+    @Test
+    public void shouldTransformValuesWithKey() {
         builder.addStateStore(storeBuilder(STORE_NAME))
                 .addStateStore(storeBuilder(OTHER_STORE_NAME))
                 .table(INPUT_TOPIC, CONSUMED)
@@ -180,17 +245,19 @@ public class KTableTransformValuesTest {
         driver.pipeInput(recordFactory.create(INPUT_TOPIC, "C", "c", 0L));
         driver.pipeInput(recordFactory.create(INPUT_TOPIC, "D", null, 0L));
 
-        assertThat(capture.processed, hasItems("A:a!", "B:b!", "C:c!", "D:null"));
+        assertThat(capture.processed, hasItems("A:A->a!", "B:B->b!", "C:C->c!", "D:null"));
     }
 
     @Test
-    public void shouldTransformValuesWithKey() {
+    public void shouldTransformValuesWithKeyAndMaterialize() {
         builder.addStateStore(storeBuilder(STORE_NAME))
-                .addStateStore(storeBuilder(OTHER_STORE_NAME))
                 .table(INPUT_TOPIC, CONSUMED)
                 .transformValues(
-                        new ExclamationValueTransformerWithKeySupplier(STORE_NAME, OTHER_STORE_NAME),
-                        STORE_NAME, OTHER_STORE_NAME)
+                        new ExclamationValueTransformerSupplier(STORE_NAME, QUERYABLE_NAME),
+                        Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as(QUERYABLE_NAME)
+                                .withKeySerde(Serdes.String())
+                                .withValueSerde(Serdes.String()),
+                        STORE_NAME)
                 .toStream()
                 .process(capture);
 
@@ -198,43 +265,14 @@ public class KTableTransformValuesTest {
 
         driver.pipeInput(recordFactory.create(INPUT_TOPIC, "A", "a", 0L));
         driver.pipeInput(recordFactory.create(INPUT_TOPIC, "B", "b", 0L));
-        driver.pipeInput(recordFactory.create(INPUT_TOPIC, "C", "c", 0L));
-        driver.pipeInput(recordFactory.create(INPUT_TOPIC, "D", null, 0L));
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC, "C", null, 0L));
 
-        assertThat(capture.processed, hasItems("A:A->a!", "B:B->b!", "C:C->c!", "D:null"));
-    }
+        assertThat(capture.processed, hasItems("A:A->a!", "B:B->b!", "C:null"));
 
-    @SuppressWarnings("unchecked")
-    @Test
-    public void shouldTransformOnGet() {
-        final KTableTransformValues<String, String, String> transformValues = new KTableTransformValues<>(
-                parent, new ExclamationValueTransformerWithKeySupplier().asInternal());
-
-        expect(parent.valueGetterSupplier()).andReturn(parentGetterSupplier);
-        expect(parentGetterSupplier.get()).andReturn(parentGetter);
-        expect(parentGetter.get("Key")).andReturn("Value");
-        replay(parent, parentGetterSupplier, parentGetter);
-
-        final KTableValueGetter<String, String> getter = transformValues.view().get();
-        getter.init(context);
-
-        final String result = getter.get("Key");
-
-        assertThat(result, is("Key->Value!"));
-    }
-
-    @Test
-    public void shouldGetStoreNamesFromParent() {
-        final KTableTransformValues<String, String, String> transformValues = new KTableTransformValues<>(
-                parent, new ExclamationValueTransformerWithKeySupplier().asInternal());
-
-        expect(parent.valueGetterSupplier()).andReturn(parentGetterSupplier);
-        expect(parentGetterSupplier.storeNames()).andReturn(new String[]{"store1", "store2"});
-        replay(parent, parentGetterSupplier);
-
-        final String[] storeNames = transformValues.view().storeNames();
-
-        assertThat(storeNames, is(new String[]{"store1", "store2"}));
+        final KeyValueStore<String, String> keyValueStore = driver.getKeyValueStore(QUERYABLE_NAME);
+        assertThat(keyValueStore.get("A"), is("A->a!"));
+        assertThat(keyValueStore.get("B"), is("B->b!"));
+        assertThat(keyValueStore.get("C"), is(nullValue()));
     }
 
     private static StoreBuilder<KeyValueStore<Long, Long>> storeBuilder(final String storeName) {
@@ -266,7 +304,7 @@ public class KTableTransformValuesTest {
         }
     }
 
-    public static class ExclamationValueTransformerSupplier implements ValueTransformerSupplier<String, String> {
+    public static class ExclamationValueTransformerSupplier implements ValueTransformerWithKeySupplier<Object, String, String> {
         private final List<String> expectedStoredNames;
 
         ExclamationValueTransformerSupplier(final String... expectedStoreNames) {
@@ -277,25 +315,12 @@ public class KTableTransformValuesTest {
         public ExclamationValueTransformer get() {
             return new ExclamationValueTransformer(expectedStoredNames);
         }
-    }
-
-    public static class ExclamationValueTransformerWithKeySupplier implements ValueTransformerWithKeySupplier<Object, String, String> {
-        private final List<String> expectedStoredNames;
-
-        ExclamationValueTransformerWithKeySupplier(final String... expectedStoreNames) {
-            this.expectedStoredNames = Arrays.asList(expectedStoreNames);
-        }
-
-        @Override
-        public ExclamationValueTransformerWithKey get() {
-            return new ExclamationValueTransformerWithKey(expectedStoredNames);
-        }
 
         InternalValueTransformerWithKeySupplier<String, String, String> asInternal() {
             return new InternalValueTransformerWithKeySupplier<String, String, String>() {
                 @Override
                 public InternalValueTransformerWithKey<String, String, String> get() {
-                    final ExclamationValueTransformerWithKey delegate = ExclamationValueTransformerWithKeySupplier.this.get();
+                    final ExclamationValueTransformer delegate = ExclamationValueTransformerSupplier.this.get();
                     return new InternalValueTransformerWithKey<String, String, String>() {
                         @Override
                         public String punctuate(long timestamp) {
@@ -321,37 +346,10 @@ public class KTableTransformValuesTest {
         }
     }
 
-    public static class ExclamationValueTransformer implements ValueTransformer<String, String> {
+    public static class ExclamationValueTransformer implements ValueTransformerWithKey<Object, String, String> {
         private final List<String> expectedStoredNames;
 
         ExclamationValueTransformer(final List<String> expectedStoredNames) {
-            this.expectedStoredNames = expectedStoredNames;
-        }
-
-        @Override
-        public void init(final ProcessorContext context) {
-            throwIfStoresNotAvailable(context, expectedStoredNames);
-        }
-
-        @Override
-        public String transform(final String value) {
-            return value + "!";
-        }
-
-        @Override
-        public String punctuate(final long timestamp) {
-            return null;
-        }
-
-        @Override
-        public void close() {
-        }
-    }
-
-    public static class ExclamationValueTransformerWithKey implements ValueTransformerWithKey<Object, String, String> {
-        private final List<String> expectedStoredNames;
-
-        ExclamationValueTransformerWithKey(final List<String> expectedStoredNames) {
             this.expectedStoredNames = expectedStoredNames;
         }
 
