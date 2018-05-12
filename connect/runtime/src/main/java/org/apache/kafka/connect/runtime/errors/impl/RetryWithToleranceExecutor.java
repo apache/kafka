@@ -127,6 +127,7 @@ public class RetryWithToleranceExecutor extends OperationExecutor {
                 case RETRY:
                     context.setException(response.ex);
                     retry = checkRetry(context);
+                    log.trace("Operation failed. For attempt={}, limit={}, retry={}", context.attempt(), config.retriesLimit(), retry);
                     break;
                 case UNHANDLED_EXCEPTION:
                     context.setException(response.ex);
@@ -159,7 +160,7 @@ public class RetryWithToleranceExecutor extends OperationExecutor {
             throw new ConnectException("Tolerance Limit Exceeded", response.ex);
         }
 
-        log.info("Returning default value={}", value);
+        log.trace("Operation failed but within tolerance limits. Returning default value={}", value);
         return value;
     }
 
