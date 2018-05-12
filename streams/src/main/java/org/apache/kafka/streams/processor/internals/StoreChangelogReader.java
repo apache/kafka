@@ -52,7 +52,6 @@ public class StoreChangelogReader implements ChangelogReader {
     private final Map<TopicPartition, StateRestorer> stateRestorers = new HashMap<>();
     private final Map<TopicPartition, StateRestorer> needsRestoring = new HashMap<>();
     private final Map<TopicPartition, StateRestorer> needsInitializing = new HashMap<>();
-    private boolean hasRetrievedOffsets;
     private Map<TopicPartition, Long> updatedEndOffsets;
 
     public StoreChangelogReader(final Consumer<byte[], byte[]> restoreConsumer,
@@ -61,7 +60,6 @@ public class StoreChangelogReader implements ChangelogReader {
         this.restoreConsumer = restoreConsumer;
         this.log = logContext.logger(getClass());
         this.userStateRestoreListener = userStateRestoreListener;
-        this.hasRetrievedOffsets = false;
     }
 
     @Override
@@ -86,8 +84,7 @@ public class StoreChangelogReader implements ChangelogReader {
 
         final Set<TopicPartition> restoringPartitions = new HashSet<>(needsRestoring.keySet());
         try {
-            if (!needsRestoring.isEmpty() && !hasRetrievedOffsets) {
-                hasRetrievedOffsets = true;
+            if (!needsRestoring.isEmpty()) {
                 updatedEndOffsets = restoreConsumer.endOffsets(restoringPartitions);
             }
             final ConsumerRecords<byte[], byte[]> records = poll(restoreConsumer, 10);
@@ -258,7 +255,6 @@ public class StoreChangelogReader implements ChangelogReader {
         needsRestoring.clear();
         endOffsets.clear();
         needsInitializing.clear();
-        hasRetrievedOffsets = false;
     }
 
     private long processNext(final List<ConsumerRecord<byte[], byte[]>> records,
