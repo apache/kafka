@@ -22,6 +22,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 
 import java.io.Closeable;
+import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -91,6 +92,11 @@ public interface Consumer<K, V> extends Closeable {
     public void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets);
 
     /**
+     * @see KafkaConsumer#commitSync(Map, long, TimeUnit)
+     */
+    public void commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets, 
+                           final Duration duration);
+    /**
      * @see KafkaConsumer#commitAsync()
      */
     public void commitAsync();
@@ -124,11 +130,21 @@ public interface Consumer<K, V> extends Closeable {
      * @see KafkaConsumer#position(TopicPartition)
      */
     public long position(TopicPartition partition);
+    
+    /**
+     * @see KafkaConsumer#position(TopicPartition, Long, TimeUnit)
+     */
+    public long position(TopicPartition partition, final Duration duration);
 
     /**
      * @see KafkaConsumer#committed(TopicPartition)
      */
     public OffsetAndMetadata committed(TopicPartition partition);
+
+    /**
+     * @see KafkaConsumer#committed(TopicPartition, long, TimeUnit)
+     */
+    public OffsetAndMetadata committed(TopicPartition partition, final Duration duration);
 
     /**
      * @see KafkaConsumer#metrics()

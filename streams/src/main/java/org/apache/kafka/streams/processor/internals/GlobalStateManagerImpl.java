@@ -266,7 +266,7 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
                 globalConsumer.seekToBeginning(Collections.singletonList(topicPartition));
             }
 
-            long offset = globalConsumer.position(topicPartition);
+            long offset = globalConsumer.position(topicPartition, DEFAULT_WAIT_TIME, TimeUnit.MILLISECONDS);
             final Long highWatermark = highWatermarks.get(topicPartition);
             final BatchingStateRestoreCallback stateRestoreAdapter =
                 (BatchingStateRestoreCallback) ((stateRestoreCallback instanceof BatchingStateRestoreCallback)
@@ -287,7 +287,7 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
                         if (record.key() != null) {
                             restoreRecords.add(KeyValue.pair(record.key(), record.value()));
                         }
-                        offset = globalConsumer.position(topicPartition);
+                        offset = globalConsumer.position(topicPartition, DEFAULT_WAIT_TIME, TimeUnit.MILLISECONDS);
                     }
                     stateRestoreAdapter.restoreAll(restoreRecords);
                     stateRestoreListener.onBatchRestored(topicPartition, storeName, offset, restoreRecords.size());
