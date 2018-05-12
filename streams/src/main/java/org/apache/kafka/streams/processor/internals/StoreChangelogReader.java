@@ -52,6 +52,8 @@ public class StoreChangelogReader implements ChangelogReader {
     private final Map<TopicPartition, StateRestorer> stateRestorers = new HashMap<>();
     private final Map<TopicPartition, StateRestorer> needsRestoring = new HashMap<>();
     private final Map<TopicPartition, StateRestorer> needsInitializing = new HashMap<>();
+    private boolean hasRetrievedOffsets;
+    private Map<TopicPartition, Long> updatedEndOffsets;
 
     public StoreChangelogReader(final Consumer<byte[], byte[]> restoreConsumer,
                                 final StateRestoreListener userStateRestoreListener,
@@ -59,6 +61,7 @@ public class StoreChangelogReader implements ChangelogReader {
         this.restoreConsumer = restoreConsumer;
         this.log = logContext.logger(getClass());
         this.userStateRestoreListener = userStateRestoreListener;
+        this.hasRetrievedOffsets = false;
     }
 
     @Override
@@ -83,10 +86,25 @@ public class StoreChangelogReader implements ChangelogReader {
 
         final Set<TopicPartition> restoringPartitions = new HashSet<>(needsRestoring.keySet());
         try {
-            final ConsumerRecords<byte[], byte[]> allRecords = poll(restoreConsumer, 10);
-            for (final TopicPartition partition : restoringPartitions) {
-                restorePartition(allRecords, partition, active.restoringTaskFor(partition));
+            if (!needsRestoring.isEmpty() && !hasRetrievedOffsets) {
+                hasRetrievedOffsets = true;
+                updatedEndOffsets = restoreConsumer.endOffsets(restoringPartitions);
             }
+            final ConsumerRecords<byte[], byte[]> records = poll(restoreConsumer, 10);
+            final Iterator<TopicPartition> iterator = restoringPartitions.iterator();
+            final Set<TopicPartition> completedPartitions = new HashSet<>();
+            while (iterator.hasNext()) {
+                final TopicPartition partition = iterator.next();
+                final StateRestorer restorer = stateRestorers.get(partition);
+                final long pos = processNext(records.records(partition), restorer, updatedEndOffsets.get(partition));
+                restorer.setRestoredOffset(pos);
+                if (restorer.hasCompleted(pos, updatedEndOffsets.get(partition))) {
+                    restorer.restoreDone();
+                    needsRestoring.remove(partition);
+                    completedPartitions.add(partition);
+                }
+            }
+            restoringPartitions.removeAll(completedPartitions);
         } catch (final InvalidOffsetException recoverableException) {
             log.warn("Restoring StreamTasks failed. Deleting StreamTasks stores to recreate from scratch.", recoverableException);
             final Set<TopicPartition> partitions = recoverableException.partitions();
@@ -240,41 +258,7 @@ public class StoreChangelogReader implements ChangelogReader {
         needsRestoring.clear();
         endOffsets.clear();
         needsInitializing.clear();
-    }
-
-    /**
-     * @throws TaskMigratedException if another thread wrote to the changelog topic that is currently restored
-     */
-    private void restorePartition(final ConsumerRecords<byte[], byte[]> allRecords,
-                                  final TopicPartition topicPartition,
-                                  final Task task) {
-        final StateRestorer restorer = stateRestorers.get(topicPartition);
-        final Long endOffset = endOffsets.get(topicPartition);
-        final long pos = processNext(allRecords.records(topicPartition), restorer, endOffset);
-        restorer.setRestoredOffset(pos);
-        if (restorer.hasCompleted(pos, endOffset)) {
-            if (pos > endOffset) {
-                throw new TaskMigratedException(task, topicPartition, endOffset, pos);
-            }
-
-            // need to check for changelog topic
-            if (restorer.offsetLimit() == Long.MAX_VALUE) {
-                final Long updatedEndOffset = restoreConsumer.endOffsets(Collections.singletonList(topicPartition)).get(topicPartition);
-                if (!restorer.hasCompleted(pos, updatedEndOffset)) {
-                    throw new TaskMigratedException(task, topicPartition, updatedEndOffset, pos);
-                }
-            }
-
-
-            log.debug("Completed restoring state from changelog {} with {} records ranging from offset {} to {}",
-                      topicPartition,
-                      restorer.restoredNumRecords(),
-                      restorer.startingOffset(),
-                      restorer.restoredOffset());
-
-            restorer.restoreDone();
-            needsRestoring.remove(topicPartition);
-        }
+        hasRetrievedOffsets = false;
     }
 
     private long processNext(final List<ConsumerRecord<byte[], byte[]>> records,
