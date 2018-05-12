@@ -186,6 +186,7 @@ public class ProcessorNode<K, V> {
 
             // these are all latency metrics
             this.nodeProcessTimeSensor = metrics.addLatencyAndThroughputSensor(
+                context.taskId().toString(),
                 "processor-node",
                 processorNodeName,
                 "process",
@@ -193,6 +194,7 @@ public class ProcessorNode<K, V> {
                 "task-id", context.taskId().toString()
             );
             this.nodePunctuateTimeSensor = metrics.addLatencyAndThroughputSensor(
+                context.taskId().toString(),
                 "processor-node",
                 processorNodeName,
                 "punctuate",
@@ -200,6 +202,7 @@ public class ProcessorNode<K, V> {
                 "task-id", context.taskId().toString()
             );
             this.nodeCreationSensor = metrics.addLatencyAndThroughputSensor(
+                context.taskId().toString(),
                 "processor-node",
                 processorNodeName,
                 "create",
@@ -207,6 +210,7 @@ public class ProcessorNode<K, V> {
                 "task-id", context.taskId().toString()
             );
             this.nodeDestructionSensor = metrics.addLatencyAndThroughputSensor(
+                context.taskId().toString(),
                 "processor-node",
                 processorNodeName,
                 "destroy",
@@ -214,6 +218,7 @@ public class ProcessorNode<K, V> {
                 "task-id", context.taskId().toString()
             );
             this.sourceNodeForwardSensor = metrics.addThroughputSensor(
+                context.taskId().toString(),
                 "processor-node",
                 processorNodeName,
                 "forward",

@@ -247,6 +247,20 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         return sensor;
     }
 
+    public Sensor addLatencyAndThroughputSensor(final String taskName,
+                                                final String scopeName,
+                                                final String entityName,
+                                                final String operationName,
+                                                final Sensor.RecordingLevel recordingLevel,
+                                                final String... tags) {
+        return addLatencyAndThroughputSensor(
+            scopeName,
+            entityName,
+            threadName + "." + taskName + "." + operationName,
+            recordingLevel,
+            tags);
+    }
+
     /**
      * @throws IllegalArgumentException if tags is not constructed in key-value pairs
      */
@@ -270,6 +284,21 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         parentSensors.put(sensor, parent);
 
         return sensor;
+    }
+
+    public Sensor addThroughputSensor(final String taskName,
+                                      final String scopeName,
+                                      final String entityName,
+                                      final String operationName,
+                                      final Sensor.RecordingLevel recordingLevel,
+                                      final String... tags) {
+        return addThroughputSensor(
+            scopeName,
+            entityName,
+            threadName + "." + taskName + "." + operationName,
+            recordingLevel,
+            tags
+        );
     }
 
     private void addLatencyMetrics(final String scopeName, final Sensor sensor, final String opName, final Map<String, String> tags) {
