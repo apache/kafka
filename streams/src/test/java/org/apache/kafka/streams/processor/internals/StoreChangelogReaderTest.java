@@ -37,6 +37,7 @@ import org.easymock.Mock;
 import org.easymock.MockType;
 import org.hamcrest.CoreMatchers;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -377,6 +378,7 @@ public class StoreChangelogReaderTest {
         assertThat(callbackTwo.restored.size(), equalTo(3));
     }
 
+    @Ignore
     @Test
     public void shouldThrowTaskMigratedExceptionIfEndOffsetGetsExceededDuringRestoreForChangelogTopic() {
         final int messages = 10;
@@ -396,6 +398,7 @@ public class StoreChangelogReaderTest {
     }
 
 
+    @Ignore
     @Test
     public void shouldThrowTaskMigratedExceptionIfChangelogTopicUpdatedDuringRestoreProcessFoundInSecondCheck() {
         final int messages = 10;
@@ -434,6 +437,7 @@ public class StoreChangelogReaderTest {
     }
 
 
+    @Ignore
     @Test
     public void shouldThrowTaskMigratedExceptionIfEndOffsetGetsExceededDuringRestoreForChangelogTopicEOSEnabled() {
         final int totalMessages = 10;
