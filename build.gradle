@@ -145,8 +145,8 @@ subprojects {
   if (!JavaVersion.current().isJava9Compatible())
     apply plugin: 'findbugs'
 
-  sourceCompatibility = 1.7
-  targetCompatibility = 1.7
+  sourceCompatibility = 1.8
+  targetCompatibility = 1.8
 
   compileJava {
     options.encoding = 'UTF-8'
