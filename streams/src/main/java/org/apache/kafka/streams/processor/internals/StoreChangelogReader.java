@@ -30,6 +30,7 @@ import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.slf4j.Logger;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -180,7 +181,7 @@ public class StoreChangelogReader implements ChangelogReader {
                 logRestoreOffsets(restorer.partition(),
                                   restorer.checkpoint(),
                                   endOffsets.get(restorer.partition()));
-                restorer.setStartingOffset(restoreConsumer.position(restorer.partition(), maxBlockMs, TimeUnit.MILLISECONDS));
+                restorer.setStartingOffset(restoreConsumer.position(restorer.partition(), Duration.ofMillis(maxBlockMs)));
                 restorer.restoreStarted();
             } else {
                 restoreConsumer.seekToBeginning(Collections.singletonList(restorer.partition()));
@@ -189,7 +190,7 @@ public class StoreChangelogReader implements ChangelogReader {
         }
 
         for (final StateRestorer restorer : needsPositionUpdate) {
-            final long position = restoreConsumer.position(restorer.partition(), maxBlockMs, TimeUnit.MILLISECONDS);
+            final long position = restoreConsumer.position(restorer.partition(), Duration.ofMillis(maxBlockMs));
             logRestoreOffsets(restorer.partition(),
                               position,
                               endOffsets.get(restorer.partition()));

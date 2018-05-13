@@ -40,6 +40,7 @@ import org.slf4j.Logger;
 
 import java.io.File;
 import java.io.IOException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -266,7 +267,7 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
                 globalConsumer.seekToBeginning(Collections.singletonList(topicPartition));
             }
 
-            long offset = globalConsumer.position(topicPartition, DEFAULT_WAIT_TIME, TimeUnit.MILLISECONDS);
+            long offset = globalConsumer.position(topicPartition, Duration.ofMillis(20000L));
             final Long highWatermark = highWatermarks.get(topicPartition);
             final BatchingStateRestoreCallback stateRestoreAdapter =
                 (BatchingStateRestoreCallback) ((stateRestoreCallback instanceof BatchingStateRestoreCallback)
@@ -287,7 +288,7 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
                         if (record.key() != null) {
                             restoreRecords.add(KeyValue.pair(record.key(), record.value()));
                         }
-                        offset = globalConsumer.position(topicPartition, DEFAULT_WAIT_TIME, TimeUnit.MILLISECONDS);
+                        offset = globalConsumer.position(topicPartition, Duration.ofMillis(20000L));
                     }
                     stateRestoreAdapter.restoreAll(restoreRecords);
                     stateRestoreListener.onBatchRestored(topicPartition, storeName, offset, restoreRecords.size());
