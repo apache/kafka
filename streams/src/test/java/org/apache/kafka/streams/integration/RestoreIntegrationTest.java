@@ -57,6 +57,7 @@ import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -307,7 +308,7 @@ public class RestoreIntegrationTest {
 
         final Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
         for (TopicPartition partition : partitions) {
-            final long position = consumer.position(partition, 2000L, TimeUnit.MILLISECONDS);
+            final long position = consumer.position(partition, Duration.ofMillis(20000L));
             offsets.put(partition, new OffsetAndMetadata(position + 1));
         }
 

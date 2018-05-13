@@ -1,4 +1,5 @@
 /**
+
  * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
  * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
  * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
@@ -14,6 +15,7 @@ package kafka.api
 
 import java.nio.ByteBuffer
 import java.util
+import java.time.Duration
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.ExecutionException
 import java.util.regex.Pattern
@@ -917,7 +919,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Describe)), groupResource)
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Describe)), topicResource)
     this.consumers.head.assign(List(tp).asJava)
-    this.consumers.head.position(tp, 2000L, TimeUnit.MILLISECONDS)
+    this.consumers.head.position(tp, Duration.ofMillis(20000L))
   }
 
   @Test(expected = classOf[org.apache.kafka.common.errors.TimeoutException])
@@ -925,7 +927,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), groupResource)
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), topicResource)
     this.consumers.head.assign(List(tp).asJava)
-    this.consumers.head.position(tp, 2000L, TimeUnit.MILLISECONDS)
+    this.consumers.head.position(tp, Duration.ofMillis(20000L))
   }
 
   @Test(expected = classOf[TopicAuthorizationException])

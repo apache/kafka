@@ -15,6 +15,7 @@ package kafka.api
 
 import java.util.concurrent._
 import java.util.{Collection, Collections}
+import java.time.Duration
 
 import kafka.admin.AdminClient
 import kafka.server.KafkaConfig
@@ -151,7 +152,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
       if (coin == 0) {
         info("Seeking to end of log")
         consumer.seekToEnd(Collections.emptyList())
-        assertEquals(numRecords.toLong, consumer.position(tp, 2000L, TimeUnit.MILLISECONDS))
+        assertEquals(numRecords.toLong, consumer.position(tp, Duration.ofMillis(20000L)))
       } else if (coin == 1) {
         val pos = TestUtils.random.nextInt(numRecords).toLong
         info("Seeking to " + pos)
