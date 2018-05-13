@@ -64,19 +64,19 @@ public class ConsumerProtocol {
 
     public static final short CONSUMER_PROTOCOL_V0 = 0;
     public static final Schema CONSUMER_PROTOCOL_HEADER_SCHEMA = new Schema(
-            new Field(VERSION_KEY_NAME, Type.INT16, "Version number of the consumer protocol."));
+            new Field(VERSION_KEY_NAME, Type.INT16, "Version number of consumer protocol."));
     private static final Struct CONSUMER_PROTOCOL_HEADER_V0 = new Struct(CONSUMER_PROTOCOL_HEADER_SCHEMA)
             .set(VERSION_KEY_NAME, CONSUMER_PROTOCOL_V0);
 
     public static final Schema SUBSCRIPTION_V0 = new Schema(
-            new Field(TOPICS_KEY_NAME, new ArrayOf(Type.STRING), "The topics the consumer subscribes to."),
-            new Field(USER_DATA_KEY_NAME, Type.NULLABLE_BYTES, "Custom user data sent to the partition assignor."));
+            new Field(TOPICS_KEY_NAME, new ArrayOf(Type.STRING), "Topics consumer subscribes to."),
+            new Field(USER_DATA_KEY_NAME, Type.NULLABLE_BYTES, "Custom user data sent to partition assignor."));
     public static final Schema TOPIC_ASSIGNMENT_V0 = new Schema(
-            new Field(TOPIC_KEY_NAME, Type.STRING, "The topic the consumer subscribed to."),
-            new Field(PARTITIONS_KEY_NAME, new ArrayOf(Type.INT32), "The partitions of the topic which are assigned to the consumer."));
+            new Field(TOPIC_KEY_NAME, Type.STRING, "Topic consumer subscribed to."),
+            new Field(PARTITIONS_KEY_NAME, new ArrayOf(Type.INT32), "Partitions of the topic which are assigned to consumer."));
     public static final Schema ASSIGNMENT_V0 = new Schema(
-            new Field(TOPIC_PARTITIONS_KEY_NAME, new ArrayOf(TOPIC_ASSIGNMENT_V0), "Topic partitions assigned to the consumer."),
-            new Field(USER_DATA_KEY_NAME, Type.NULLABLE_BYTES, "Custom user data sent by the partition assignor."));
+            new Field(TOPIC_PARTITIONS_KEY_NAME, new ArrayOf(TOPIC_ASSIGNMENT_V0), "Topic partitions assigned to consumer."),
+            new Field(USER_DATA_KEY_NAME, Type.NULLABLE_BYTES, "Custom user data sent by partition assignor."));
 
     public static ByteBuffer serializeSubscription(PartitionAssignor.Subscription subscription) {
         Struct struct = new Struct(SUBSCRIPTION_V0);

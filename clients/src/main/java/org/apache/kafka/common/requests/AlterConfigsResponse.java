@@ -45,13 +45,13 @@ public class AlterConfigsResponse extends AbstractResponse {
     private static final Schema ALTER_CONFIGS_RESPONSE_ENTITY_V0 = new Schema(
             ERROR_CODE,
             ERROR_MESSAGE,
-            new Field(RESOURCE_TYPE_KEY_NAME, INT8, "Type of the resource this response entity is for."),
-            new Field(RESOURCE_NAME_KEY_NAME, STRING, "Name of the resource this response entity is for."));
+            new Field(RESOURCE_TYPE_KEY_NAME, INT8, "Type of resource this response entity is for."),
+            new Field(RESOURCE_NAME_KEY_NAME, STRING, "Name of resource this response entity is for."));
 
     private static final Schema ALTER_CONFIGS_RESPONSE_V0 = new Schema(
             THROTTLE_TIME_MS,
             new Field(RESOURCES_KEY_NAME, new ArrayOf(ALTER_CONFIGS_RESPONSE_ENTITY_V0),
-                    "The result of the change for each resource."));
+                    "Result of change for each resource."));
 
     public static Schema[] schemaVersions() {
         return new Schema[]{ALTER_CONFIGS_RESPONSE_V0};
