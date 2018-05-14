@@ -20,10 +20,6 @@ import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.ProcessorContext;
 
-/**
- * @author andy
- * created 02/05/2018
- */
 public class NoOpInternalValueTransformer<K, V> implements ValueTransformerWithKeySupplier<K, V, V> {
     public ProcessorContext context;
 

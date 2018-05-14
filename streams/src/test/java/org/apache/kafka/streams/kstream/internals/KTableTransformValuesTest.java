@@ -85,6 +85,10 @@ public class KTableTransformValuesTest {
     private KTableValueGetter<String, String> parentGetter;
     @Mock(MockType.NICE)
     private KeyValueStore<String, String> stateStore;
+    @Mock(MockType.NICE)
+    private ValueTransformerWithKeySupplier<String, String, String> mockSupplier;
+    @Mock(MockType.NICE)
+    private ValueTransformerWithKey<String, String, String> transformer;
 
     @After
     public void cleanup() {
@@ -225,6 +229,22 @@ public class KTableTransformValuesTest {
         final String[] storeNames = transformValues.view().storeNames();
 
         assertThat(storeNames, is(new String[]{QUERYABLE_NAME}));
+    }
+
+    @Test
+    public void shouldCloseTransformerOnProcessorClose() {
+        final KTableTransformValues<String, String, String> transformValues =
+                new KTableTransformValues<>(parent, mockSupplier, null);
+
+        expect(mockSupplier.get()).andReturn(transformer);
+        transformer.close();
+        expectLastCall();
+        replay(mockSupplier, transformer);
+
+        final Processor<String, Change<String>> processor = transformValues.get();
+        processor.close();
+
+        verify(transformer);
     }
 
     @Test

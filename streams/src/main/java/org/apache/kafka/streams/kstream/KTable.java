@@ -384,11 +384,13 @@ public interface KTable<K, V> {
     <KR> KStream<KR, V> toStream(final KeyValueMapper<? super K, ? super V, ? extends KR> mapper);
 
     /**
-     * Transform the value of each input record into a new value (with possible new type) of the output record.
+     * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value,
+     * (with possibly new type).
      * A {@link ValueTransformerWithKey} (provided by the given {@link ValueTransformerWithKeySupplier}) is applies to each input
      * record value and computes a new value for it.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
-     * This is a stateful record-by-record operation (cf. {@link #mapValues(ValueMapperWithKey)}).
+     * This is similar to {@link #mapValues(ValueMapperWithKey)}, but more flexible, allowing stateful, rather than stateless,
+     * record-by-record operation, access to additional state-stores, and access to the {@link ProcessorContext}.
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress can be observed and additional
      * periodic actions get be performed.
      * <p>
@@ -448,13 +450,16 @@ public interface KTable<K, V> {
                                        final String... stateStoreNames);
 
     /**
-     * Transform the value of each input record into a new value (with possible new type) of the output record.
+     * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value,
+     * (with possibly new type).
      * A {@link ValueTransformerWithKey} (provided by the given {@link ValueTransformerWithKeySupplier}) is applies to each input
      * record value and computes a new value for it.
-     * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
-     * This is a stateful record-by-record operation (cf. {@link #mapValues(ValueMapperWithKey)}).
+     * This is similar to {@link #mapValues(ValueMapperWithKey)}, but more flexible, allowing stateful, rather than stateless,
+     * record-by-record operation, access to additional state-stores, and access to the {@link ProcessorContext}.
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress can be observed and additional
      * periodic actions can be performed.
+     * The resulting {@code KTable} is materialized into another state store (additional to the provided state store names)
+     * as specified by the user via {@link Materialized} parameter, and is queryable through its given name.
      * <p>
      * In order to assign a state, the state must be created and registered beforehand:
      * <pre>{@code

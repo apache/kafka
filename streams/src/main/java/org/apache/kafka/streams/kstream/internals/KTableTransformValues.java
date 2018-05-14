@@ -26,7 +26,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.util.Objects;
 
-
+// Todo(ac): Document how many times transform instances might be created.
 class KTableTransformValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
 
     private final KTableImpl<K, ?, V> parent;
@@ -59,7 +59,7 @@ class KTableTransformValues<K, V, V1> implements KTableProcessorSupplier<K, V, V
             public KTableValueGetter<K, V1> get() {
                 return new KTableTransformValuesGetter(
                         parentValueGetterSupplier.get(),
-                        transformerSupplier.get());
+                        transformerSupplier.get());     // Todo(ac): This needs closing!
             }
 
             @Override
@@ -109,7 +109,8 @@ class KTableTransformValues<K, V, V1> implements KTableProcessorSupplier<K, V, V
         }
 
         @Override
-        public void process(K key, Change<V> change) {
+        public void process(final K key, final Change<V> change) {
+            // Todo(ac): Use getter to get old value.
             final V1 newValue = computeValue(key, change.newValue, valueTransformer);
             final V1 oldValue = sendOldValues ? computeValue(key, change.oldValue, valueTransformer) : null;
 
@@ -119,6 +120,11 @@ class KTableTransformValues<K, V, V1> implements KTableProcessorSupplier<K, V, V
                 store.put(key, newValue);
                 tupleForwarder.maybeForward(key, newValue, oldValue);
             }
+        }
+
+        @Override
+        public void close() {
+            valueTransformer.close();
         }
     }
 

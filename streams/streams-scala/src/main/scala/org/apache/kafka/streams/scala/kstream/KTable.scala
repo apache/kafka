@@ -165,9 +165,12 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
     inner.toStream[KR](mapper.asKeyValueMapper)
 
   /**
+    * Create a new `KTable` by transforming the value of each record in this `KTable` into a new value, (with possibly new type).
     * Transform the value of each input record into a new value (with possible new type) of the output record.
     * A `ValueTransformer` (provided by the given `ValueTransformerSupplier`) is applied to each input
     * record value and computes a new value for it.
+    * This is similar to `#mapValues(ValueMapperWithKey)`, but more flexible, allowing stateful, rather than stateless,
+    * record-by-record operation, access to additional state-stores, and access to the `ProcessorContext`.
     * In order to assign a state, the state must be created and registered
     * beforehand via stores added via `addStateStore` or `addGlobalStore` before they can be connected to the `Transformer`
     *
@@ -182,11 +185,15 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
   }
 
   /**
-    * Transform the value of each input record into a new value (with possible new type) of the output record.
+    * Create a new `KTable` by transforming the value of each record in this `KTable` into a new value, (with possibly new type).
     * A `ValueTransformer` (provided by the given `ValueTransformerSupplier`) is applied to each input
     * record value and computes a new value for it.
+    * This is similar to `#mapValues(ValueMapperWithKey)`, but more flexible, allowing stateful, rather than stateless,
+    * record-by-record operation, access to additional state-stores, and access to the `ProcessorContext`.
     * In order to assign a state, the state must be created and registered
     * beforehand via stores added via `addStateStore` or `addGlobalStore` before they can be connected to the `Transformer`
+    * The resulting `KTable` is materialized into another state store (additional to the provided state store names)
+    * as specified by the user via `Materialized` parameter, and is queryable through its given name.
     *
     * @param valueTransformerSupplier a instance of `ValueTransformerWithKeySupplier` that generates a `ValueTransformerWithKey`
     * @param materialized             an instance of `Materialized` used to describe how the state store of the
@@ -307,3 +314,4 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
    */
   def queryableStoreName: String = inner.queryableStoreName
 }
+
