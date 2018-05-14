@@ -20,7 +20,7 @@ then
   exit 1
 fi
 
-# CYGINW == 1 if Cygwin is detected, else 0.
+# CYGWIN == 1 if Cygwin is detected, else 0.
 if [[ $(uname -a) =~ "CYGWIN" ]]; then
   CYGWIN=1
 else
@@ -32,7 +32,7 @@ if [ -z "$INCLUDE_TEST_JARS" ]; then
 fi
 
 # Exclude jars not necessary for running commands.
-regex="(-(test|src|scaladoc|javadoc)\.jar|jar.asc)$"
+regex="(-(test|sources|scaladoc|javadoc)\.jar|jar.asc)$"
 should_include_file() {
   if [ "$INCLUDE_TEST_JARS" = true ]; then
     return 0
