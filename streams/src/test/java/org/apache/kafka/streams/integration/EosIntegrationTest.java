@@ -644,11 +644,6 @@ public class EosIntegrationTest {
                     }
 
                     @Override
-                    public KeyValue<Long, Long> punctuate(final long timestamp) {
-                        return null;
-                    }
-
-                    @Override
                     public void close() { }
                 };
             } }, storeNames)

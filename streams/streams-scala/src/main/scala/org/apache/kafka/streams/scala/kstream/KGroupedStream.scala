@@ -21,7 +21,6 @@ package org.apache.kafka.streams.scala
 package kstream
 
 import org.apache.kafka.streams.kstream.{KGroupedStream => KGroupedStreamJ, _}
-import org.apache.kafka.common.serialization.Serde
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.FunctionConversions._
 
@@ -59,8 +58,9 @@ class KGroupedStream[K, V](val inner: KGroupedStreamJ[K, V]) {
    * represent the latest (rolling) count (i.e., number of records) for each key
    * @see `org.apache.kafka.streams.kstream.KGroupedStream#count`
    */ 
-  def count(materialized: Materialized[K, Long, ByteArrayKeyValueStore]): KTable[K, Long] = { 
-    val c: KTable[K, java.lang.Long] = inner.count(materialized.asInstanceOf[Materialized[K, java.lang.Long, ByteArrayKeyValueStore]])
+  def count(materialized: Materialized[K, Long, ByteArrayKeyValueStore]): KTable[K, Long] = {
+    val c: KTable[K, java.lang.Long] =
+      inner.count(materialized.asInstanceOf[Materialized[K, java.lang.Long, ByteArrayKeyValueStore]])
     c.mapValues[Long](Long2long _)
   }
 
@@ -72,9 +72,8 @@ class KGroupedStream[K, V](val inner: KGroupedStreamJ[K, V]) {
    * latest (rolling) aggregate for each key
    * @see `org.apache.kafka.streams.kstream.KGroupedStream#reduce`
    */ 
-  def reduce(reducer: (V, V) => V): KTable[K, V] = {
+  def reduce(reducer: (V, V) => V): KTable[K, V] =
     inner.reduce(reducer.asReducer)
-  }
 
   /**
    * Combine the values of records in this stream by the grouped key.
@@ -103,9 +102,8 @@ class KGroupedStream[K, V](val inner: KGroupedStreamJ[K, V]) {
    * @see `org.apache.kafka.streams.kstream.KGroupedStream#aggregate`
    */ 
   def aggregate[VR](initializer: () => VR,
-    aggregator: (K, V, VR) => VR): KTable[K, VR] = {
+    aggregator: (K, V, VR) => VR): KTable[K, VR] =
     inner.aggregate(initializer.asInitializer, aggregator.asAggregator)
-  }
 
   /**
    * Aggregate the values of records in this stream by the grouped key.
@@ -119,9 +117,8 @@ class KGroupedStream[K, V](val inner: KGroupedStreamJ[K, V]) {
    */ 
   def aggregate[VR](initializer: () => VR,
     aggregator: (K, V, VR) => VR,
-    materialized: Materialized[K, VR, ByteArrayKeyValueStore]): KTable[K, VR] = {
+    materialized: Materialized[K, VR, ByteArrayKeyValueStore]): KTable[K, VR] =
     inner.aggregate(initializer.asInitializer, aggregator.asAggregator, materialized)
-  }
 
   /**
    * Create a new [[SessionWindowedKStream]] instance that can be used to perform session windowed aggregations.

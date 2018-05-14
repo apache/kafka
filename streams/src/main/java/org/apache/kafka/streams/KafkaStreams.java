@@ -67,6 +67,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -377,12 +378,20 @@ public class KafkaStreams {
     }
 
     /**
-     * Get read-only handle on global metrics registry.
+     * Get read-only handle on global metrics registry, including streams client's own metrics plus
+     * its embedded consumer clients' metrics.
      *
      * @return Map of all metrics.
      */
+    // TODO: we can add metrics for producer and admin client as well
     public Map<MetricName, ? extends Metric> metrics() {
-        return Collections.unmodifiableMap(metrics.metrics());
+        final Map<MetricName, Metric> result = new LinkedHashMap<>();
+        for (final StreamThread thread : threads) {
+            result.putAll(thread.consumerMetrics());
+        }
+        if (globalStreamThread != null) result.putAll(globalStreamThread.consumerMetrics());
+        result.putAll(metrics.metrics());
+        return Collections.unmodifiableMap(result);
     }
 
     /**
@@ -588,34 +597,6 @@ public class KafkaStreams {
      * @deprecated use {@link #KafkaStreams(Topology, Properties)} instead
      */
     @Deprecated
-    public KafkaStreams(final org.apache.kafka.streams.processor.TopologyBuilder builder,
-                        final Properties props) {
-        this(builder.internalTopologyBuilder, new StreamsConfig(props), new DefaultKafkaClientSupplier());
-    }
-
-    /**
-     * @deprecated use {@link #KafkaStreams(Topology, Properties)} instead
-     */
-    @Deprecated
-    public KafkaStreams(final org.apache.kafka.streams.processor.TopologyBuilder builder,
-                        final StreamsConfig config) {
-        this(builder.internalTopologyBuilder, config, new DefaultKafkaClientSupplier());
-    }
-
-    /**
-     * @deprecated use {@link #KafkaStreams(Topology, Properties, KafkaClientSupplier)} instead
-     */
-    @Deprecated
-    public KafkaStreams(final org.apache.kafka.streams.processor.TopologyBuilder builder,
-                        final StreamsConfig config,
-                        final KafkaClientSupplier clientSupplier) {
-        this(builder.internalTopologyBuilder, config, clientSupplier);
-    }
-
-    /**
-     * @deprecated use {@link #KafkaStreams(Topology, Properties)} instead
-     */
-    @Deprecated
     public KafkaStreams(final Topology topology,
                         final StreamsConfig config) {
         this(topology.internalTopologyBuilder, config, new DefaultKafkaClientSupplier());
@@ -708,7 +689,7 @@ public class KafkaStreams {
             final String globalThreadId = clientId + "-GlobalStreamThread";
             globalStreamThread = new GlobalStreamThread(globalTaskTopology,
                                                         config,
-                                                        clientSupplier.getRestoreConsumer(config.getRestoreConsumerConfigs(clientId + "-global")),
+                                                        clientSupplier.getGlobalConsumer(config.getGlobalConsumerConfigs(clientId)),
                                                         stateDirectory,
                                                         cacheSizePerThread,
                                                         metrics,
@@ -867,10 +848,6 @@ public class KafkaStreams {
                         thread.setStateListener(null);
                         thread.shutdown();
                     }
-                    if (globalStreamThread != null) {
-                        globalStreamThread.setStateListener(null);
-                        globalStreamThread.shutdown();
-                    }
 
                     for (final StreamThread thread : threads) {
                         try {
@@ -881,6 +858,12 @@ public class KafkaStreams {
                             Thread.currentThread().interrupt();
                         }
                     }
+
+                    if (globalStreamThread != null) {
+                        globalStreamThread.setStateListener(null);
+                        globalStreamThread.shutdown();
+                    }
+
                     if (globalStreamThread != null && !globalStreamThread.stillRunning()) {
                         try {
                             globalStreamThread.join();
@@ -908,46 +891,6 @@ public class KafkaStreams {
             log.info("Streams client cannot stop completely within the timeout");
             return false;
         }
-    }
-
-    /**
-     * Produce a string representation containing useful information about this {@code KafkaStream} instance such as
-     * thread IDs, task IDs, and a representation of the topology DAG including {@link StateStore}s (cf.
-     * {@link Topology} and {@link StreamsBuilder}).
-     *
-     * @return A string representation of the Kafka Streams instance.
-     *
-     * @deprecated Use {@link #localThreadsMetadata()} to retrieve runtime information.
-     */
-    @Override
-    @Deprecated
-    public String toString() {
-        return toString("");
-    }
-
-    /**
-     * Produce a string representation containing useful information about this {@code KafkaStream} instance such as
-     * thread IDs, task IDs, and a representation of the topology DAG including {@link StateStore}s (cf.
-     * {@link Topology} and {@link StreamsBuilder}).
-     *
-     * @param indent the top-level indent for each line
-     * @return A string representation of the Kafka Streams instance.
-     *
-     * @deprecated Use {@link #localThreadsMetadata()} to retrieve runtime information.
-     */
-    @Deprecated
-    public String toString(final String indent) {
-        final StringBuilder sb = new StringBuilder()
-            .append(indent)
-            .append("KafkaStreams processID: ")
-            .append(processId)
-            .append("\n");
-        for (final StreamThread thread : threads) {
-            sb.append(thread.toString(indent + "\t"));
-        }
-        sb.append("\n");
-
-        return sb.toString();
     }
 
     /**

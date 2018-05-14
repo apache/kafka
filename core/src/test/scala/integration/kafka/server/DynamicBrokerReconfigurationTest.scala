@@ -701,7 +701,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     // Ensure connections are made to brokers before external listener is made inaccessible
     describeConfig(externalAdminClient)
 
-    // Update broker keystore for external listener to use invalid listener address
+    // Update broker external listener to use invalid listener address
     // any address other than localhost is sufficient to fail (either connection or host name verification failure)
     val invalidHost = "192.168.0.1"
     alterAdvertisedListener(adminClient, externalAdminClient, "localhost", invalidHost)

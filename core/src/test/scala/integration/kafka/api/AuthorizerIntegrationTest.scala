@@ -290,7 +290,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   private def offsetsForLeaderEpochRequest = {
-    new OffsetsForLeaderEpochRequest.Builder().add(tp, 7).build()
+    new OffsetsForLeaderEpochRequest.Builder(ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion()).add(tp, 7).build()
   }
 
   private def createOffsetFetchRequest = {

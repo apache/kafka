@@ -47,41 +47,38 @@ public class AbstractStreamTest {
 
     @Test
     public void testToInternlValueTransformerSupplierSuppliesNewTransformers() {
-        final ValueTransformerSupplier vts = createMock(ValueTransformerSupplier.class);
-        expect(vts.get()).andReturn(null).times(3);
-        final InternalValueTransformerWithKeySupplier ivtwks =
-            AbstractStream.toInternalValueTransformerSupplier(vts);
-        replay(vts);
-        ivtwks.get();
-        ivtwks.get();
-        ivtwks.get();
-        verify(vts);
+        final ValueTransformerSupplier valueTransformerSupplier = createMock(ValueTransformerSupplier.class);
+        expect(valueTransformerSupplier.get()).andReturn(null).times(3);
+        final ValueTransformerWithKeySupplier valueTransformerWithKeySupplier =
+            AbstractStream.toValueTransformerWithKeySupplier(valueTransformerSupplier);
+        replay(valueTransformerSupplier);
+        valueTransformerWithKeySupplier.get();
+        valueTransformerWithKeySupplier.get();
+        valueTransformerWithKeySupplier.get();
+        verify(valueTransformerSupplier);
     }
 
     @Test
     public void testToInternalValueTransformerSupplierSuppliesNewTransformers() {
-        final ValueTransformerWithKeySupplier vtwks =
-            createMock(ValueTransformerWithKeySupplier.class);
-        expect(vtwks.get()).andReturn(null).times(3);
-        final InternalValueTransformerWithKeySupplier ivtwks =
-            AbstractStream.toInternalValueTransformerSupplier(vtwks);
-        replay(vtwks);
-        ivtwks.get();
-        ivtwks.get();
-        ivtwks.get();
-        verify(vtwks);
+        final ValueTransformerWithKeySupplier valueTransformerWithKeySupplier = createMock(ValueTransformerWithKeySupplier.class);
+        expect(valueTransformerWithKeySupplier.get()).andReturn(null).times(3);
+        replay(valueTransformerWithKeySupplier);
+        valueTransformerWithKeySupplier.get();
+        valueTransformerWithKeySupplier.get();
+        valueTransformerWithKeySupplier.get();
+        verify(valueTransformerWithKeySupplier);
     }
 
     @Test
     public void testShouldBeExtensible() {
         final StreamsBuilder builder = new StreamsBuilder();
         final int[] expectedKeys = new int[]{1, 2, 3, 4, 5, 6, 7};
-        final MockProcessorSupplier<Integer, String> processor = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
         final String topicName = "topic";
 
         ExtendedKStream<Integer, String> stream = new ExtendedKStream<>(builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String())));
 
-        stream.randomFilter().process(processor);
+        stream.randomFilter().process(supplier);
 
         final Properties props = new Properties();
         props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "abstract-stream-test");
@@ -94,7 +91,7 @@ public class AbstractStreamTest {
             driver.pipeInput(recordFactory.create(topicName, expectedKey, "V" + expectedKey));
         }
 
-        assertTrue(processor.processed.size() <= expectedKeys.length);
+        assertTrue(supplier.theCapturedProcessor().processed.size() <= expectedKeys.length);
     }
 
     private class ExtendedKStream<K, V> extends AbstractStream<K> {

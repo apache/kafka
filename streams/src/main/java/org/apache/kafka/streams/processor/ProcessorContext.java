@@ -77,15 +77,12 @@ public interface ProcessorContext {
      * Registers and possibly restores the specified storage engine.
      *
      * @param store the storage engine
-     * @param loggingEnabledIsDeprecatedAndIgnored deprecated parameter {@code loggingEnabled} is ignored:
-     *                                             if you want to enable logging on a state stores call
-     *                                             {@link org.apache.kafka.streams.state.StoreBuilder#withLoggingEnabled(Map)}
-     *                                             when creating the store
+     * @param stateRestoreCallback the restoration callback logic for log-backed state stores upon restart
+     *
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException if the store's change log does not contain the partition
      */
     void register(final StateStore store,
-                  final boolean loggingEnabledIsDeprecatedAndIgnored,
                   final StateRestoreCallback stateRestoreCallback);
 
     /**
@@ -131,18 +128,6 @@ public interface ProcessorContext {
     Cancellable schedule(final long intervalMs,
                          final PunctuationType type,
                          final Punctuator callback);
-
-    /**
-     * Schedules a periodic operation for processors. A processor may call this method during
-     * {@link Processor#init(ProcessorContext) initialization} to
-     * schedule a periodic call - called a punctuation - to {@link Processor#punctuate(long)}.
-     *
-     * @deprecated Please use {@link #schedule(long, PunctuationType, Punctuator)} instead.
-     *
-     * @param interval the time interval between punctuations
-     */
-    @Deprecated
-    void schedule(final long interval);
 
     /**
      * Forwards a key/value pair to all downstream processors.

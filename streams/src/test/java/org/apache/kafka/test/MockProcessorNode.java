@@ -17,7 +17,6 @@
 package org.apache.kafka.test;
 
 import org.apache.kafka.streams.processor.PunctuationType;
-import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 
@@ -29,9 +28,9 @@ public class MockProcessorNode<K, V> extends ProcessorNode<K, V> {
     private static final String NAME = "MOCK-PROCESS-";
     private static final AtomicInteger INDEX = new AtomicInteger(1);
 
-    public final MockProcessorSupplier<K, V> supplier;
+    public final MockProcessor<K, V> mockProcessor;
+
     public boolean closed;
-    public long punctuatedAt;
     public boolean initialized;
 
     public MockProcessorNode(long scheduleInterval) {
@@ -39,13 +38,17 @@ public class MockProcessorNode<K, V> extends ProcessorNode<K, V> {
     }
 
     public MockProcessorNode(long scheduleInterval, PunctuationType punctuationType) {
-        this(new MockProcessorSupplier<K, V>(scheduleInterval, punctuationType));
+        this(new MockProcessor<K, V>(punctuationType, scheduleInterval));
     }
 
-    private MockProcessorNode(MockProcessorSupplier<K, V> supplier) {
-        super(NAME + INDEX.getAndIncrement(), supplier.get(), Collections.<String>emptySet());
+    public MockProcessorNode() {
+        this(new MockProcessor<K, V>());
+    }
 
-        this.supplier = supplier;
+    private MockProcessorNode(final MockProcessor<K, V> mockProcessor) {
+        super(NAME + INDEX.getAndIncrement(), mockProcessor, Collections.<String>emptySet());
+
+        this.mockProcessor = mockProcessor;
     }
 
     @Override
@@ -57,12 +60,6 @@ public class MockProcessorNode<K, V> extends ProcessorNode<K, V> {
     @Override
     public void process(K key, V value) {
         processor().process(key, value);
-    }
-
-    @Override
-    public void punctuate(final long timestamp, final Punctuator punctuator) {
-        super.punctuate(timestamp, punctuator);
-        this.punctuatedAt = timestamp;
     }
 
     @Override

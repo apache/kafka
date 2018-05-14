@@ -19,9 +19,9 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 
@@ -49,7 +49,7 @@ class InnerMeteredKeyValueStore<K, IK, V, IV> extends WrappedStateStore.Abstract
     private Sensor allTime;
     private Sensor rangeTime;
     private Sensor flushTime;
-    private StreamsMetrics metrics;
+    private StreamsMetricsImpl metrics;
     private ProcessorContext context;
     private StateStore root;
 
@@ -89,63 +89,64 @@ class InnerMeteredKeyValueStore<K, IK, V, IV> extends WrappedStateStore.Abstract
     public void init(ProcessorContext context, StateStore root) {
         final String name = name();
         final String tagKey = "task-id";
-        final String tagValue = context.taskId().toString();
+        final String taskName = context.taskId().toString();
         this.context = context;
         this.root = root;
-        this.metrics = context.metrics();
-        this.putTime = this.metrics.addLatencyAndThroughputSensor(metricScope,
+        this.metrics = (StreamsMetricsImpl) context.metrics();
+        this.putTime = this.metrics.addLatencyAndThroughputSensor(taskName,
+                                                                  metricScope,
                                                                   name,
                                                                   "put",
                                                                   Sensor.RecordingLevel.DEBUG,
-                                                                  tagKey, tagValue);
-        this.putIfAbsentTime = this.metrics.addLatencyAndThroughputSensor(metricScope,
+                                                                  tagKey, taskName);
+        this.putIfAbsentTime = this.metrics.addLatencyAndThroughputSensor(taskName,
+                                                                          metricScope,
                                                                           name,
                                                                           "put-if-absent",
                                                                           Sensor.RecordingLevel.DEBUG,
-                                                                          tagKey,
-                                                                          tagValue);
-        this.getTime = this.metrics.addLatencyAndThroughputSensor(metricScope,
+                                                                          tagKey, taskName);
+        this.getTime = this.metrics.addLatencyAndThroughputSensor(taskName,
+                                                                  metricScope,
                                                                   name,
                                                                   "get",
                                                                   Sensor.RecordingLevel.DEBUG,
-                                                                  tagKey,
-                                                                  tagValue);
-        this.deleteTime = this.metrics.addLatencyAndThroughputSensor(metricScope,
+                                                                  tagKey, taskName);
+        this.deleteTime = this.metrics.addLatencyAndThroughputSensor(taskName,
+                                                                     metricScope,
                                                                      name,
                                                                      "delete",
                                                                      Sensor.RecordingLevel.DEBUG,
-                                                                     tagKey,
-                                                                     tagValue);
-        this.putAllTime = this.metrics.addLatencyAndThroughputSensor(metricScope,
+                                                                     tagKey, taskName);
+        this.putAllTime = this.metrics.addLatencyAndThroughputSensor(taskName,
+                                                                     metricScope,
                                                                      name,
                                                                      "put-all",
                                                                      Sensor.RecordingLevel.DEBUG,
-                                                                     tagKey,
-                                                                     tagValue);
-        this.allTime = this.metrics.addLatencyAndThroughputSensor(metricScope,
+                                                                     tagKey, taskName);
+        this.allTime = this.metrics.addLatencyAndThroughputSensor(taskName,
+                                                                  metricScope,
                                                                   name,
                                                                   "all",
                                                                   Sensor.RecordingLevel.DEBUG,
-                                                                  tagKey,
-                                                                  tagValue);
-        this.rangeTime = this.metrics.addLatencyAndThroughputSensor(metricScope,
+                                                                  tagKey, taskName);
+        this.rangeTime = this.metrics.addLatencyAndThroughputSensor(taskName,
+                                                                    metricScope,
                                                                     name,
                                                                     "range",
                                                                     Sensor.RecordingLevel.DEBUG,
-                                                                    tagKey,
-                                                                    tagValue);
-        this.flushTime = this.metrics.addLatencyAndThroughputSensor(metricScope,
+                                                                    tagKey, taskName);
+        this.flushTime = this.metrics.addLatencyAndThroughputSensor(taskName,
+                                                                    metricScope,
                                                                     name,
                                                                     "flush",
                                                                     Sensor.RecordingLevel.DEBUG,
-                                                                    tagKey,
-                                                                    tagValue);
-        final Sensor restoreTime = this.metrics.addLatencyAndThroughputSensor(metricScope,
+                                                                    tagKey, taskName);
+        final Sensor restoreTime = this.metrics.addLatencyAndThroughputSensor(taskName,
+                                                                              metricScope,
                                                                               name,
                                                                               "restore",
                                                                               Sensor.RecordingLevel.DEBUG,
-                                                                              tagKey,
-                                                                              tagValue);
+                                                                              tagKey, taskName);
 
         // register and possibly restore the state from the logs
         if (restoreTime.shouldRecord()) {

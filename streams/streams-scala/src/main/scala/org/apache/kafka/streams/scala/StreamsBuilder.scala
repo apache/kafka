@@ -25,7 +25,6 @@ import org.apache.kafka.streams.kstream.{GlobalKTable, Materialized}
 import org.apache.kafka.streams.processor.{ProcessorSupplier, StateStore}
 import org.apache.kafka.streams.state.StoreBuilder
 import org.apache.kafka.streams.{Consumed, StreamsBuilder => StreamsBuilderJ, Topology}
-
 import org.apache.kafka.streams.scala.kstream._
 import ImplicitConversions._
 import scala.collection.JavaConverters._
@@ -48,7 +47,7 @@ class StreamsBuilder(inner: StreamsBuilderJ = new StreamsBuilderJ) {
    * import ImplicitConversions._
    *
    * // Bring implicit default serdes in scope
-   * import DefaultSerdes._
+   * import Serdes._
    *
    * val builder = new StreamsBuilder()
    *
@@ -98,7 +97,7 @@ class StreamsBuilder(inner: StreamsBuilderJ = new StreamsBuilderJ) {
    * import ImplicitConversions._
    *
    * // Bring implicit default serdes in scope
-   * import DefaultSerdes._
+   * import Serdes._
    *
    * val builder = new StreamsBuilder()
    *
