@@ -182,6 +182,8 @@ public class JsonConverterTest {
         prepareSchemalessJsonConverter();
         byte[] arrayJson = "[1, 2, 3]".getBytes();
         assertEquals(new SchemaAndValue(SchemaBuilder.array(Schema.INT64_SCHEMA).build(), Arrays.asList(1L, 2L, 3L)), converter.toConnectData(TOPIC, arrayJson));
+        arrayJson = "[]".getBytes();
+        assertEquals(new SchemaAndValue(SchemaBuilder.array(Schema.OPTIONAL_STRING_SCHEMA).build(), Arrays.asList()), converter.toConnectData(TOPIC, arrayJson));
     }
 
     @Test

@@ -41,7 +41,7 @@ public class JsonConverterConfig extends ConverterConfig {
 
     public static final String SCHEMAS_INFER_ENABLE_CONFIG = "schemas.infer.enable";
     public static final boolean SCHEMAS_INFER_ENABLE_DEFAULT = false;
-    private static final String SCHEMAS_INFER_ENABLE_DOC = "Infer the schemas when they are missing within each of the serialized values and keys.";
+    private static final String SCHEMAS_INFER_ENABLE_DOC = "Infer the schemas when they are missing within each of the serialized values and keys. Only applied when " + SCHEMAS_ENABLE_CONFIG + " is false.";
     private static final String SCHEMAS_INFER_ENABLE_DISPLAY = "Enable Infer Schemas";
 
     private final static ConfigDef CONFIG;

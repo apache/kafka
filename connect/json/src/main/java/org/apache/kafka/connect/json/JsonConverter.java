@@ -785,7 +785,7 @@ public class JsonConverter implements Converter, HeaderConverter {
                     return Schema.FLOAT64_SCHEMA;
                 }
             case ARRAY:
-                SchemaBuilder arrayBuilder = SchemaBuilder.array(inferSchema(jsonValue.elements().next()));
+                SchemaBuilder arrayBuilder = SchemaBuilder.array(jsonValue.elements().hasNext() ? inferSchema(jsonValue.elements().next()) : Schema.OPTIONAL_STRING_SCHEMA);
                 return arrayBuilder.build();
             case OBJECT:
                 SchemaBuilder structBuilder = SchemaBuilder.struct();
@@ -797,6 +797,10 @@ public class JsonConverter implements Converter, HeaderConverter {
                 return structBuilder.build();
             case STRING:
                 return Schema.STRING_SCHEMA;
+
+            case BINARY:
+            case MISSING:
+            case POJO:
             default:
                 return null;
         }
