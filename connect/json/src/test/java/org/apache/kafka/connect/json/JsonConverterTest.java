@@ -72,6 +72,13 @@ public class JsonConverterTest {
         converter.configure(Collections.EMPTY_MAP, false);
     }
 
+    private void prepareSchemalessJsonConverter() {
+        Map<String, Boolean> props = new HashMap<>();
+        props.put("schemas.enable", false);
+        props.put("schemas.infer.enable", true);
+        converter.configure(props, true);
+    }
+
     // Schema metadata
 
     @Test
@@ -91,6 +98,13 @@ public class JsonConverterTest {
     public void booleanToConnect() {
         assertEquals(new SchemaAndValue(Schema.BOOLEAN_SCHEMA, true), converter.toConnectData(TOPIC, "{ \"schema\": { \"type\": \"boolean\" }, \"payload\": true }".getBytes()));
         assertEquals(new SchemaAndValue(Schema.BOOLEAN_SCHEMA, false), converter.toConnectData(TOPIC, "{ \"schema\": { \"type\": \"boolean\" }, \"payload\": false }".getBytes()));
+    }
+
+    @Test
+    public void schemalessBooleanToConnect() {
+        prepareSchemalessJsonConverter();
+        assertEquals(new SchemaAndValue(Schema.BOOLEAN_SCHEMA, true), converter.toConnectData(TOPIC, "true".getBytes()));
+        assertEquals(new SchemaAndValue(Schema.BOOLEAN_SCHEMA, false), converter.toConnectData(TOPIC, "false".getBytes()));
     }
 
     @Test
@@ -115,6 +129,13 @@ public class JsonConverterTest {
     }
 
     @Test
+    public void schemalessLongToConnect() {
+        prepareSchemalessJsonConverter();
+        assertEquals(new SchemaAndValue(Schema.INT64_SCHEMA, 12L), converter.toConnectData(TOPIC, "12".getBytes()));
+        assertEquals(new SchemaAndValue(Schema.INT64_SCHEMA, 4398046511104L), converter.toConnectData(TOPIC, "4398046511104".getBytes()));
+    }
+
+    @Test
     public void floatToConnect() {
         assertEquals(new SchemaAndValue(Schema.FLOAT32_SCHEMA, 12.34f), converter.toConnectData(TOPIC, "{ \"schema\": { \"type\": \"float\" }, \"payload\": 12.34 }".getBytes()));
     }
@@ -124,6 +145,11 @@ public class JsonConverterTest {
         assertEquals(new SchemaAndValue(Schema.FLOAT64_SCHEMA, 12.34), converter.toConnectData(TOPIC, "{ \"schema\": { \"type\": \"double\" }, \"payload\": 12.34 }".getBytes()));
     }
 
+    @Test
+    public void schemalessDoubleToConnect() {
+        prepareSchemalessJsonConverter();
+        assertEquals(new SchemaAndValue(Schema.FLOAT64_SCHEMA, 12.34), converter.toConnectData(TOPIC, "12.34".getBytes()));
+    }
 
     @Test
     public void bytesToConnect() throws UnsupportedEncodingException {
@@ -140,9 +166,22 @@ public class JsonConverterTest {
     }
 
     @Test
+    public void schemalessStringToConnect() {
+        prepareSchemalessJsonConverter();
+        assertEquals(new SchemaAndValue(Schema.STRING_SCHEMA, "foo-bar-baz"), converter.toConnectData(TOPIC, "\"foo-bar-baz\"".getBytes()));
+    }
+
+    @Test
     public void arrayToConnect() {
         byte[] arrayJson = "{ \"schema\": { \"type\": \"array\", \"items\": { \"type\" : \"int32\" } }, \"payload\": [1, 2, 3] }".getBytes();
         assertEquals(new SchemaAndValue(SchemaBuilder.array(Schema.INT32_SCHEMA).build(), Arrays.asList(1, 2, 3)), converter.toConnectData(TOPIC, arrayJson));
+    }
+
+    @Test
+    public void schemalessArrayToConnect() {
+        prepareSchemalessJsonConverter();
+        byte[] arrayJson = "[1, 2, 3]".getBytes();
+        assertEquals(new SchemaAndValue(SchemaBuilder.array(Schema.INT64_SCHEMA).build(), Arrays.asList(1L, 2L, 3L)), converter.toConnectData(TOPIC, arrayJson));
     }
 
     @Test
@@ -166,6 +205,16 @@ public class JsonConverterTest {
     @Test
     public void structToConnect() {
         byte[] structJson = "{ \"schema\": { \"type\": \"struct\", \"fields\": [{ \"field\": \"field1\", \"type\": \"boolean\" }, { \"field\": \"field2\", \"type\": \"string\" }] }, \"payload\": { \"field1\": true, \"field2\": \"string\" } }".getBytes();
+        Schema expectedSchema = SchemaBuilder.struct().field("field1", Schema.BOOLEAN_SCHEMA).field("field2", Schema.STRING_SCHEMA).build();
+        Struct expected = new Struct(expectedSchema).put("field1", true).put("field2", "string");
+        SchemaAndValue converted = converter.toConnectData(TOPIC, structJson);
+        assertEquals(new SchemaAndValue(expectedSchema, expected), converted);
+    }
+
+    @Test
+    public void schemalessStructToConnect() {
+        prepareSchemalessJsonConverter();
+        byte[] structJson = "{ \"field1\": true, \"field2\": \"string\" }".getBytes();
         Schema expectedSchema = SchemaBuilder.struct().field("field1", Schema.BOOLEAN_SCHEMA).field("field2", Schema.STRING_SCHEMA).build();
         Struct expected = new Struct(expectedSchema).put("field1", true).put("field2", "string");
         SchemaAndValue converted = converter.toConnectData(TOPIC, structJson);
