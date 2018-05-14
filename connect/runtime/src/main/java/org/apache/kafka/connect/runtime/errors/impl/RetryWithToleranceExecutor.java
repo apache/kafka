@@ -24,6 +24,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.errors.OperationExecutor;
 import org.apache.kafka.connect.runtime.errors.ProcessingContext;
+import org.apache.kafka.connect.runtime.errors.ToleranceExceededException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -101,12 +102,12 @@ public class RetryWithToleranceExecutor extends OperationExecutor {
                 case HEADER_CONVERTER:
                 case KEY_CONVERTER:
                 case VALUE_CONVERTER:
-                    return handleExceptions(operation, value, context, Exception.class);
+                    return execAndHandleError(operation, value, context, Exception.class);
                 case KAFKA_PRODUCE:
                 case KAFKA_CONSUME:
-                    return handleExceptions(operation, value, context, org.apache.kafka.common.errors.RetriableException.class);
+                    return execAndHandleError(operation, value, context, org.apache.kafka.common.errors.RetriableException.class);
                 default:
-                    return handleExceptions(operation, value, context, org.apache.kafka.connect.errors.RetriableException.class);
+                    return execAndHandleError(operation, value, context, org.apache.kafka.connect.errors.RetriableException.class);
             }
         } finally {
             if (context.exception() != null) {
@@ -115,7 +116,7 @@ public class RetryWithToleranceExecutor extends OperationExecutor {
         }
     }
 
-    private <V> V handleExceptions(Operation<V> operation, V value, ProcessingContext context, Class<? extends Exception> handled) {
+    private <V> V execAndHandleError(Operation<V> operation, V value, ProcessingContext context, Class<? extends Exception> handled) {
         Response<V> response = new Response<>();
         boolean retry;
         do {
@@ -146,24 +147,36 @@ public class RetryWithToleranceExecutor extends OperationExecutor {
 
         // mark this record as failed.
         totalFailures++;
+        context.setTimeOfError(time.milliseconds());
 
-        long newDurationStart = context.timeOfError() - context.timeOfError() % durationWindow;
-        if (newDurationStart > durationStart) {
-            durationStart = newDurationStart;
-            totalFailuresInDuration = 0;
-        }
-        totalFailuresInDuration++;
-
-        log.debug("Marking the record as failed, totalFailures={}, totalFailuresInDuration={}", totalFailures, totalFailuresInDuration);
-
-        if (totalFailures > config.toleranceLimit() || totalFailuresInDuration > config.toleranceRateLimit()) {
-            throw new ConnectException("Tolerance Limit Exceeded", response.ex);
+        if (!withinToleranceLimits(context)) {
+            throw new ToleranceExceededException("Tolerance Limit Exceeded", response.ex);
         }
 
         log.trace("Operation failed but within tolerance limits. Returning default value={}", value);
         return value;
     }
 
+    // Visible for testing
+    protected boolean withinToleranceLimits(ProcessingContext context) {
+        final long timeOfError = context.timeOfError();
+        long newDurationStart = timeOfError - timeOfError % durationWindow;
+        if (newDurationStart > durationStart) {
+            durationStart = newDurationStart;
+            totalFailuresInDuration = 0;
+        }
+        totalFailuresInDuration++;
+
+        log.info("Marking the record as failed, totalFailures={}, totalFailuresInDuration={}", totalFailures, totalFailuresInDuration);
+
+        if (totalFailures > config.toleranceLimit() || totalFailuresInDuration > config.toleranceRateLimit()) {
+            return false;
+        }
+
+        return true;
+    }
+
+    // Visible for tests
     protected boolean checkRetry(ProcessingContext context) {
         long limit = config.retriesLimit();
         if (limit == -1) {
@@ -179,7 +192,7 @@ public class RetryWithToleranceExecutor extends OperationExecutor {
         }
     }
 
-    private void backoff(ProcessingContext context) {
+    protected void backoff(ProcessingContext context) {
         int numRetry = context.attempt() - 1;
         long delay = RETRIES_DELAY_MIN_MS << numRetry;
         if (delay > config.retriesDelayMax()) {
@@ -237,7 +250,7 @@ public class RetryWithToleranceExecutor extends OperationExecutor {
         }
 
         public long toleranceRateLimit() {
-            return getLong(TOLERANCE_LIMIT);
+            return getLong(TOLERANCE_RATE_LIMIT);
         }
 
         public TimeUnit toleranceRateDuration() {
