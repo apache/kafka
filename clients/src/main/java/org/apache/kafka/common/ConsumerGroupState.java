@@ -27,7 +27,8 @@ public enum ConsumerGroupState {
     PREPARING_REBALANCE("PreparingRebalance"),
     COMPLETING_REBALANCE("CompletingRebalance"),
     STABLE("Stable"),
-    DEAD("Dead");
+    DEAD("Dead"),
+    EMPTY("Empty");
 
     private final static HashMap<String, ConsumerGroupState> NAME_TO_ENUM;
 
