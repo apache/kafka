@@ -19,7 +19,7 @@
 
 <script id="upgrade-template" type="text/x-handlebars-template">
 
-<h4><a id="upgrade_2_0_0" href="#upgrade_2_0_0">Upgrading from 0.8.x, 0.9.x, 0.10.0.x, 0.10.1.x, 0.10.2.x, 0.11.0.x, 1.0.x or 1.1.x to 2.0.0</a></h4>
+<h4><a id="upgrade_2_0_0" href="#upgrade_2_0_0">Upgrading from 0.8.x, 0.9.x, 0.10.0.x, 0.10.1.x, 0.10.2.x, 0.11.0.x, 1.0.x, or 1.1.x to 2.0.0</a></h4>
 <p>Kafka 2.0.0 introduces wire protocol changes. By following the recommended rolling upgrade plan below,
     you guarantee no downtime during the upgrade. However, please review the <a href="#upgrade_200_notable">notable changes in 2.0.0</a> before upgrading.
 </p>
@@ -36,7 +36,7 @@
             <li>log.message.format.version=CURRENT_MESSAGE_FORMAT_VERSION  (See <a href="#upgrade_10_performance_impact">potential performance impact
                 following the upgrade</a> for the details on what this configuration does.)</li>
         </ul>
-        If you are upgrading from 0.11.0.x, 1.0.x, 1.1.x or 1.2.x and you have not overridden the message format, then you only need to override
+        If you are upgrading from 0.11.0.x, 1.0.x, 1.1.x, or 1.2.x and you have not overridden the message format, then you only need to override
         the inter-broker protocol format.
         <ul>
             <li>inter.broker.protocol.version=CURRENT_KAFKA_VERSION (0.11.0, 1.0, 1.1, 1.2).</li>
@@ -92,7 +92,7 @@
          See <a href="/{{version}}/documentation/streams/upgrade-guide#streams_api_changes_200">Streams API changes in 2.0.0</a> for more details. </li>
 </ul>
 
-<h4><a id="upgrade_1_1_0" href="#upgrade_1_1_0">Upgrading from 0.8.x, 0.9.x, 0.10.0.x, 0.10.1.x, 0.10.2.x, 0.11.0.x or 1.0.x to 1.1.x</a></h4>
+<h4><a id="upgrade_1_1_0" href="#upgrade_1_1_0">Upgrading from 0.8.x, 0.9.x, 0.10.0.x, 0.10.1.x, 0.10.2.x, 0.11.0.x, or 1.0.x to 1.1.x</a></h4>
 <p>Kafka 1.1.0 introduces wire protocol changes. By following the recommended rolling upgrade plan below,
     you guarantee no downtime during the upgrade. However, please review the <a href="#upgrade_110_notable">notable changes in 1.1.0</a> before upgrading.
 </p>
@@ -889,7 +889,7 @@ work with 0.10.0.x brokers. Therefore, 0.9.0.0 clients should be upgraded to 0.9
     <li> The new consumer API has been marked stable. </li>
 </ul>
 
-<h4><a id="upgrade_9" href="#upgrade_9">Upgrading from 0.8.0, 0.8.1.X or 0.8.2.X to 0.9.0.0</a></h4>
+<h4><a id="upgrade_9" href="#upgrade_9">Upgrading from 0.8.0, 0.8.1.X, or 0.8.2.X to 0.9.0.0</a></h4>
 
 0.9.0.0 has <a href="#upgrade_9_breaking">potential breaking changes</a> (please review before upgrading) and an inter-broker protocol change from previous versions. This means that upgraded brokers and clients may not be compatible with older versions. It is important that you upgrade your Kafka cluster before upgrading your clients. If you are using MirrorMaker downstream clusters should be upgraded first as well.
 
