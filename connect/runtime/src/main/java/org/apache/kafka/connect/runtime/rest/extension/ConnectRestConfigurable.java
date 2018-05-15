@@ -18,6 +18,8 @@
 package org.apache.kafka.connect.runtime.rest.extension;
 
 import org.glassfish.jersey.server.ResourceConfig;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 import java.util.Objects;
@@ -30,6 +32,8 @@ import javax.ws.rs.core.Configuration;
  * registrations deterministically by no re-registering them again.
  */
 public class ConnectRestConfigurable implements Configurable<ResourceConfig> {
+
+    private static final Logger log = LoggerFactory.getLogger(ConnectRestConfigurable.class);
 
     private ResourceConfig resourceConfig;
 
@@ -117,7 +121,7 @@ public class ConnectRestConfigurable implements Configurable<ResourceConfig> {
         if (resourceConfig.isRegistered(component)) {
             return true;
         }
-        //Log
+        log.warn("The resource {} is already registered", component);
         return false;
     }
 
@@ -125,7 +129,7 @@ public class ConnectRestConfigurable implements Configurable<ResourceConfig> {
         if (resourceConfig.isRegistered(componentClass)) {
             return true;
         }
-        //Log
+        log.warn("The resource {} is already registered", componentClass);
         return false;
     }
 }

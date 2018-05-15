@@ -20,16 +20,16 @@ package org.apache.kafka.connect.rest.extension;
 import javax.ws.rs.core.Configurable;
 
 /**
- * The interface provides ability for {@link ConnectRestExtension} implementations to access the
+ * The interface provides the ability for {@link ConnectRestExtension} implementations to access the
  * JAX-RS {@link javax.ws.rs.core.Configurable} and cluster state {@link ConnectClusterState}.
- * The implementation for the interface is provided by the framework.
+ * The implementation for the interface is provided by the connect framework.
  */
 public interface ConnectRestExtensionContext {
 
     /**
-     *
-     * @return return a  implementation of {@link javax.ws.rs.core.Configurable} that be used ot
+     * Provides an implementation of {@link javax.ws.rs.core.Configurable} that be used ot
      * register JAX-RS resources
+     * @return instance of {@link javax.ws.rs.core.Configurable}
      */
     Configurable<? extends Configurable> configurable();
 

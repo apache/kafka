@@ -314,14 +314,13 @@ public class DelegatingClassLoader extends URLClassLoader {
         return result;
     }
 
-    private <T> Collection<PluginDesc<T>> getServiceLoaderPluginDesc(
-        Class<T> klass,
-        ClassLoader loader
-    ) throws IllegalAccessException, InstantiationException {
+    private <T> Collection<PluginDesc<T>> getServiceLoaderPluginDesc(Class<T> klass,
+                                                                     ClassLoader loader) {
+
+        ServiceLoader<T> serviceLoader = loader instanceof PluginClassLoader
+                                         ? ServiceLoader.load(klass, loader)
+                                         : ServiceLoader.load(klass);
         Collection<PluginDesc<T>> result = new ArrayList<>();
-        ServiceLoader<T> serviceLoader =
-            loader instanceof PluginClassLoader ? ServiceLoader.load(klass, loader)
-                                                : ServiceLoader.load(klass);
         for (T impl : serviceLoader) {
             result.add(new PluginDesc<>(klass, versionFor(impl), loader));
         }

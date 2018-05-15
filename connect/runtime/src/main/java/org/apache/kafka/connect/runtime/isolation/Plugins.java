@@ -352,17 +352,13 @@ public class Plugins {
         try {
             klass = pluginClass(delegatingLoader, klassName, pluginKlass);
         } catch (ClassNotFoundException e) {
-            throw new ConnectException(
-                "Failed to find any class that implements ConnectRestExtension and which name matches "
-                + klassName
-                + ", available Rest Extensions are: "
-                + pluginNames(delegatingLoader.restExtensions())
-            );
+            String msg = String.format("Failed to find any class that implements %s and which "
+                                       + "name matches %s", pluginKlass, klassName);
+            throw new ConnectException(msg);
         }
         plugin = newPlugin(klass);
         if (plugin == null) {
-            throw new ConnectException(
-                "Unable to instantiate the ConnectRestExtension '" + klassName + "'");
+            throw new ConnectException("Unable to instantiate '" + klassName + "'");
         }
         if (plugin instanceof Configurable) {
             ((Configurable) plugin).configure(config.originals());

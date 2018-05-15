@@ -30,7 +30,7 @@ import javax.security.auth.spi.LoginModule;
 public class TestLoginModule implements LoginModule {
 
     CallbackHandler callbackHandler;
-    private String expectedUserName = "user";
+    private String expectedUsername = "user";
     private String expectedPassword = "password";
     private boolean authenticated;
 
@@ -49,9 +49,9 @@ public class TestLoginModule implements LoginModule {
             throw new LoginException(e.getMessage());
         }
 
-        String userName = ((NameCallback) callbacks[0]).getName();
+        String username = ((NameCallback) callbacks[0]).getName();
         String password = new String(((PasswordCallback) callbacks[1]).getPassword());
-        authenticated = expectedUserName.equals(userName) && expectedPassword.equals(password);
+        authenticated = expectedUsername.equals(username) && expectedPassword.equals(password);
         return authenticated;
     }
 
@@ -72,7 +72,7 @@ public class TestLoginModule implements LoginModule {
 
     private Callback[] configureCallbacks() {
 
-        Callback[] callbacks = new Callback[3];
+        Callback[] callbacks = new Callback[2];
         callbacks[0] = new NameCallback("Enter user name");
         callbacks[1] = new PasswordCallback("Enter password", false);
         return callbacks;

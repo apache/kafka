@@ -57,21 +57,24 @@ public class JaasBasicAuthFilter implements ContainerRequestFilter {
 
     public static class BasicAuthCallBackHandler implements CallbackHandler {
 
-        private String userName;
+        private static final String BASIC = "basic";
+        private static final char COLON = ':';
+        private static final char SPACE = ' ';
+        private String username;
         private String password;
 
         public BasicAuthCallBackHandler(String credentials) {
             if (credentials != null) {
-                int space = credentials.indexOf(32);
+                int space = credentials.indexOf(SPACE);
                 if (space > 0) {
                     String method = credentials.substring(0, space);
-                    if ("basic".equalsIgnoreCase(method)) {
+                    if (BASIC.equalsIgnoreCase(method)) {
                         credentials = credentials.substring(space + 1);
                         credentials = new String(Base64.decoder().decode(credentials),
                                                  StandardCharsets.UTF_8);
-                        int i = credentials.indexOf(":");
+                        int i = credentials.indexOf(COLON);
                         if (i > 0) {
-                            userName = credentials.substring(0, i);
+                            username = credentials.substring(0, i);
                             password = credentials.substring(i + 1);
                         }
                     }
@@ -80,12 +83,15 @@ public class JaasBasicAuthFilter implements ContainerRequestFilter {
         }
 
         @Override
-        public void handle(Callback[] callbacks) throws IOException, UnsupportedCallbackException {
+        public void handle(Callback[] callbacks) throws UnsupportedCallbackException {
             for (Callback callback : callbacks) {
                 if (callback instanceof NameCallback) {
-                    ((NameCallback) callback).setName(userName);
+                    ((NameCallback) callback).setName(username);
                 } else if (callback instanceof PasswordCallback) {
                     ((PasswordCallback) callback).setPassword(password.toCharArray());
+                } else {
+                    throw new UnsupportedCallbackException(callback, "Supports only NameCallback "
+                                                                     + "and PasswordCallback");
                 }
             }
         }

@@ -38,21 +38,17 @@ public class ConnectorHealth {
         this.type = type;
     }
 
-
     public String name() {
         return name;
     }
-
 
     public ConnectorState connectorState() {
         return connector;
     }
 
-
     public Map<Integer, TaskState> tasksState() {
         return tasks;
     }
-
 
     public ConnectorType type() {
         return type;
@@ -74,7 +70,6 @@ public class ConnectorHealth {
             return state;
         }
 
-
         public String workerId() {
             return workerId;
         }
@@ -93,20 +88,20 @@ public class ConnectorHealth {
 
     public static class TaskState extends AbstractState implements Comparable<TaskState> {
 
-        private final int id;
+        private final int taskId;
 
-        public TaskState(int id, String state, String worker, String msg) {
+        public TaskState(int taskId, String state, String worker, String msg) {
             super(state, worker, msg);
-            this.id = id;
+            this.taskId = taskId;
         }
 
-        public int id() {
-            return id;
+        public int taskId() {
+            return taskId;
         }
 
         @Override
         public int compareTo(TaskState that) {
-            return Integer.compare(this.id, that.id);
+            return Integer.compare(this.taskId, that.taskId);
         }
 
         @Override
@@ -123,7 +118,7 @@ public class ConnectorHealth {
 
         @Override
         public int hashCode() {
-            return Objects.hash(id);
+            return Objects.hash(taskId);
         }
     }
 
