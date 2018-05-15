@@ -85,9 +85,6 @@ class WorkerSourceTask extends WorkerTask {
     private CountDownLatch stopRequestedLatch;
 
     private Map<String, String> taskConfig;
-    private boolean finishedStart = false;
-    private boolean startedShutdownBeforeStartCompleted = false;
-    private boolean stopped = false;
 
     public WorkerSourceTask(ConnectorTaskId id,
                             SourceTask task,
@@ -138,7 +135,11 @@ class WorkerSourceTask extends WorkerTask {
 
     @Override
     protected void close() {
-        tryStop();
+        try {
+            task.stop();
+        } catch (Throwable t) {
+            log.warn("Could not stop task", t);
+        }
         if (producer != null) {
             try {
                 producer.close(30, TimeUnit.SECONDS);
@@ -162,23 +163,6 @@ class WorkerSourceTask extends WorkerTask {
     public void stop() {
         super.stop();
         stopRequestedLatch.countDown();
-        synchronized (this) {
-            if (finishedStart)
-                tryStop();
-            else
-                startedShutdownBeforeStartCompleted = true;
-        }
-    }
-
-    private void tryStop() {
-        if (!stopped) {
-            try {
-                task.stop();
-                stopped = true;
-            } catch (Throwable t) {
-                log.warn("Could not stop task", t);
-            }
-        }
     }
 
     @Override
@@ -187,13 +171,6 @@ class WorkerSourceTask extends WorkerTask {
             task.initialize(new WorkerSourceTaskContext(offsetReader));
             task.start(taskConfig);
             log.info("{} Source task finished initialization and start", this);
-            synchronized (this) {
-                if (startedShutdownBeforeStartCompleted) {
-                    tryStop();
-                    return;
-                }
-                finishedStart = true;
-            }
 
             while (!isStopping()) {
                 if (shouldPause()) {

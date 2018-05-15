@@ -88,7 +88,6 @@ class WorkerSinkTask extends WorkerTask {
     private int commitFailures;
     private boolean pausedForRedelivery;
     private boolean committing;
-    private boolean stopped;
 
     public WorkerSinkTask(ConnectorTaskId id,
                           SinkTask task,
@@ -122,7 +121,6 @@ class WorkerSinkTask extends WorkerTask {
         this.commitSeqno = 0;
         this.commitStarted = -1;
         this.commitFailures = 0;
-        this.stopped = false;
         this.sinkTaskMetricsGroup = new SinkTaskMetricsGroup(id, connectMetrics);
         this.sinkTaskMetricsGroup.recordOffsetSequenceNumber(commitSeqno);
     }
@@ -143,26 +141,18 @@ class WorkerSinkTask extends WorkerTask {
     public void stop() {
         // Offset commit is handled upon exit in work thread
         super.stop();
-        tryStop();
         consumer.wakeup();
-    }
-
-    private void tryStop() {
-        if (!stopped) {
-            try {
-                task.stop();
-                stopped = true;
-            } catch (Throwable t) {
-                log.warn("Could not stop task", t);
-            }
-        }
     }
 
     @Override
     protected void close() {
         // FIXME Kafka needs to add a timeout parameter here for us to properly obey the timeout
         // passed in
-        tryStop();
+        try {
+            task.stop();
+        } catch (Throwable t) {
+            log.warn("Could not stop task", t);
+        }
         if (consumer != null) {
             try {
                 consumer.close();
