@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.internals.ChangedSerializer;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StreamPartitioner;
@@ -28,20 +29,36 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
     private Serializer<K> keySerializer;
     private Serializer<V> valSerializer;
     private final StreamPartitioner<? super K, ? super V> partitioner;
+    private final KeyValueMapper<? super K, ? super V, String> topicChooser;
 
     private ProcessorContext context;
 
-    public SinkNode(final String name,
-                    final String topic,
-                    final Serializer<K> keySerializer,
-                    final Serializer<V> valSerializer,
-                    final StreamPartitioner<? super K, ? super V> partitioner) {
+    SinkNode(final String name,
+             final String topic,
+             final Serializer<K> keySerializer,
+             final Serializer<V> valSerializer,
+             final StreamPartitioner<? super K, ? super V> partitioner) {
         super(name);
 
         this.topic = topic;
         this.keySerializer = keySerializer;
         this.valSerializer = valSerializer;
         this.partitioner = partitioner;
+        this.topicChooser = null;
+    }
+
+    SinkNode(final String name,
+             final KeyValueMapper<? super K, ? super V, String> topicChooser,
+             final Serializer<K> keySerializer,
+             final Serializer<V> valSerializer,
+             final StreamPartitioner<? super K, ? super V> partitioner) {
+        super(name);
+
+        this.topicChooser = topicChooser;
+        this.keySerializer = keySerializer;
+        this.valSerializer = valSerializer;
+        this.partitioner = partitioner;
+        this.topic = null;
     }
 
     /**
@@ -82,6 +99,8 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
         if (timestamp < 0) {
             throw new StreamsException("Invalid (negative) timestamp of " + timestamp + " for output record <" + key + ":" + value + ">.");
         }
+
+        final String topic = topicChooser != null ? topicChooser.apply(key, value) : this.topic;
 
         try {
             collector.send(topic, key, value, timestamp, keySerializer, valSerializer, partitioner);

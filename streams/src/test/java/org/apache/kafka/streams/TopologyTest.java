@@ -18,6 +18,7 @@ package org.apache.kafka.streams;
 
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TopologyException;
+import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
@@ -95,7 +96,12 @@ public class TopologyTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullTopicWhenAddingSink() {
-        topology.addSink("name", null);
+        topology.addSink("name", (String) null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullTopicChooserWhenAddingSink() {
+        topology.addSink("name", (KeyValueMapper) null);
     }
 
     @Test(expected = NullPointerException.class)

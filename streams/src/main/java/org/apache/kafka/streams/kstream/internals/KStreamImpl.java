@@ -305,13 +305,23 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         to(topic, Produced.<K, V>with(null, null, null));
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public void to(final String topic, final Produced<K, V> produced) {
-        Objects.requireNonNull(topic, "topic can't be null");
+        Objects.requireNonNull(topic, "topic chooser can't be null");
         Objects.requireNonNull(produced, "Produced can't be null");
         to(topic, new ProducedInternal<>(produced));
+    }
 
+    @Override
+    public void to(final KeyValueMapper<? super K, ? super V, String> topicChooser) {
+        to(topicChooser, Produced.<K, V>with(null, null, null));
+    }
+
+    @Override
+    public void to(final KeyValueMapper<? super K, ? super V, String> topicChooser, final Produced<K, V> produced) {
+        Objects.requireNonNull(topicChooser, "topic chooser can't be null");
+        Objects.requireNonNull(produced, "Produced can't be null");
+        to(topicChooser, new ProducedInternal<>(produced));
     }
 
     @SuppressWarnings("unchecked")
@@ -326,6 +336,21 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
             builder.internalTopologyBuilder.addSink(name, topic, keySerializer, valSerializer, windowedPartitioner, this.name);
         } else {
             builder.internalTopologyBuilder.addSink(name, topic, keySerializer, valSerializer, partitioner, this.name);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void to(final KeyValueMapper<? super K, ? super V, String> topicChooser, final ProducedInternal<K, V> produced) {
+        final String name = builder.newProcessorName(SINK_NAME);
+        final Serializer<K> keySerializer = produced.keySerde() == null ? null : produced.keySerde().serializer();
+        final Serializer<V> valSerializer = produced.valueSerde() == null ? null : produced.valueSerde().serializer();
+        final StreamPartitioner<? super K, ? super V> partitioner = produced.streamPartitioner();
+
+        if (partitioner == null && keySerializer instanceof WindowedSerializer) {
+            final StreamPartitioner<K, V> windowedPartitioner = (StreamPartitioner<K, V>) new WindowedStreamPartitioner<Object, V>((WindowedSerializer) keySerializer);
+            builder.internalTopologyBuilder.addSink(name, topicChooser, keySerializer, valSerializer, windowedPartitioner, this.name);
+        } else {
+            builder.internalTopologyBuilder.addSink(name, topicChooser, keySerializer, valSerializer, partitioner, this.name);
         }
     }
 

@@ -259,6 +259,38 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
     inner.to(topic, produced)
 
   /**
+    * Dynamically materialize this stream to topics using the `Produced` instance for
+    * configuration of the `Serde key serde`, `Serde value serde`, and `StreamPartitioner`.
+    * The topic names for each record to send to is dynamically determined based on the given mapper.
+    * <p>
+    * The user can either supply the `Produced` instance as an implicit in scope or she can also provide implicit
+    * key and value serdes that will be converted to a `Produced` instance implicitly.
+    * <p>
+    * {{{
+    * Example:
+    *
+    * // brings implicit serdes in scope
+    * import Serdes._
+    *
+    * //..
+    * val clicksPerRegion: KTable[String, Long] = //..
+    *
+    * // Implicit serdes in scope will generate an implicit Produced instance, which
+    * // will be passed automatically to the call of through below
+    * clicksPerRegion.to(topicChooser)
+    *
+    * // Similarly you can create an implicit Produced and it will be passed implicitly
+    * // to the through call
+    * }}}
+    *
+    * @param mapper the mapper from key value to topic name
+    * @param (implicit) produced the instance of Produced that gives the serdes and `StreamPartitioner`
+    * @see `org.apache.kafka.streams.kstream.KStream#to`
+    */
+  def to(mapper: (K, V) => String)(implicit produced: Produced[K, V]): Unit =
+    inner.to(mapper.asKeyValueMapper, produced)
+
+  /**
    * Transform each record of the input stream into zero or more records in the output stream (both key and value type
    * can be altered arbitrarily).
    * A `Transformer` is applied to each input record and computes zero or more output records. In order to assign a

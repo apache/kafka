@@ -462,10 +462,30 @@ public interface KStream<K, V> {
      * The specified topic should be manually created before it is used (i.e., before the Kafka Streams application is
      * started).
      *
-     * @param produced    the options to use when producing to the topic
      * @param topic       the topic name
+     * @param produced    the options to use when producing to the topic
      */
     void to(final String topic,
+            final Produced<K, V> produced);
+
+    /**
+     * Dynamically materialize this stream to topics using default serializers specified in the config and producer's
+     * {@link DefaultPartitioner}.
+     * The topic names for each record to send to is dynamically determined based on the {@link KeyValueMapper}.
+     *
+     * @param topicChooser the dynamic topic chooser
+     */
+    void to(final KeyValueMapper<? super K, ? super V, String> topicChooser);
+
+    /**
+     * Dynamically materialize this stream to topics using default serializers specified in the config and producer's
+     * {@link DefaultPartitioner}.
+     * The topic names for each record to send to is dynamically determined based on the {@link KeyValueMapper}.
+     *
+     * @param topicChooser the dynamic topic chooser
+     * @param produced    the options to use when producing to the topic
+     */
+    void to(final KeyValueMapper<? super K, ? super V, String> topicChooser,
             final Produced<K, V> produced);
 
     /**

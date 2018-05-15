@@ -21,6 +21,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.errors.TopologyException;
+import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
@@ -324,6 +325,7 @@ public class InternalTopologyBuilder {
         private final Serializer<K> keySerializer;
         private final Serializer<V> valSerializer;
         private final StreamPartitioner<? super K, ? super V> partitioner;
+        private final KeyValueMapper<? super K, ? super V, String> topicChooser;
 
         private SinkNodeFactory(final String name,
                                 final String[] predecessors,
@@ -336,15 +338,34 @@ public class InternalTopologyBuilder {
             this.keySerializer = keySerializer;
             this.valSerializer = valSerializer;
             this.partitioner = partitioner;
+            this.topicChooser = null;
+        }
+
+        private SinkNodeFactory(final String name,
+                                final String[] predecessors,
+                                final KeyValueMapper<? super K, ? super V, String> topicChooser,
+                                final Serializer<K> keySerializer,
+                                final Serializer<V> valSerializer,
+                                final StreamPartitioner<? super K, ? super V> partitioner) {
+            super(name, predecessors.clone());
+            this.topicChooser = topicChooser;
+            this.keySerializer = keySerializer;
+            this.valSerializer = valSerializer;
+            this.partitioner = partitioner;
+            this.topic = null;
         }
 
         @Override
         public ProcessorNode build() {
-            if (internalTopicNames.contains(topic)) {
-                // prefix the internal topic name with the application id
-                return new SinkNode<>(name, decorateTopic(topic), keySerializer, valSerializer, partitioner);
+            if (topic != null) {
+                if (internalTopicNames.contains(topic)) {
+                    // prefix the internal topic name with the application id
+                    return new SinkNode<>(name, decorateTopic(topic), keySerializer, valSerializer, partitioner);
+                } else {
+                    return new SinkNode<>(name, topic, keySerializer, valSerializer, partitioner);
+                }
             } else {
-                return new SinkNode<>(name, topic, keySerializer, valSerializer, partitioner);
+                return new SinkNode<>(name, topicChooser, keySerializer, valSerializer, partitioner);
             }
         }
 
@@ -452,6 +473,36 @@ public class InternalTopologyBuilder {
 
         nodeFactories.put(name, new SinkNodeFactory<>(name, predecessorNames, topic, keySerializer, valSerializer, partitioner));
         nodeToSinkTopic.put(name, topic);
+        nodeGrouper.add(name);
+        nodeGrouper.unite(name, predecessorNames);
+    }
+
+    public final <K, V> void addSink(final String name,
+                                     final KeyValueMapper<? super K, ? super V, String> topicChooser,
+                                     final Serializer<K> keySerializer,
+                                     final Serializer<V> valSerializer,
+                                     final StreamPartitioner<? super K, ? super V> partitioner,
+                                     final String... predecessorNames) {
+        Objects.requireNonNull(name, "name must not be null");
+        Objects.requireNonNull(topicChooser, "topic must not be null");
+        if (nodeFactories.containsKey(name)) {
+            throw new TopologyException("Processor " + name + " is already added.");
+        }
+
+        for (final String predecessor : predecessorNames) {
+            Objects.requireNonNull(predecessor, "predecessor name can't be null");
+            if (predecessor.equals(name)) {
+                throw new TopologyException("Processor " + name + " cannot be a predecessor of itself.");
+            }
+            if (!nodeFactories.containsKey(predecessor)) {
+                throw new TopologyException("Predecessor processor " + predecessor + " is not added yet.");
+            }
+            if (nodeToSinkTopic.containsKey(predecessor)) {
+                throw new TopologyException("Sink " + predecessor + " cannot be used a parent.");
+            }
+        }
+
+        nodeFactories.put(name, new SinkNodeFactory<>(name, predecessorNames, topicChooser, keySerializer, valSerializer, partitioner));
         nodeGrouper.add(name);
         nodeGrouper.unite(name, predecessorNames);
     }

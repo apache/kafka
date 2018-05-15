@@ -32,6 +32,11 @@ public class WindowedStreamPartitioner<K, V> implements StreamPartitioner<Window
         this.serializer = serializer;
     }
 
+    WindowedStreamPartitioner(final WindowedSerializer<K> serializer) {
+        this.topic = null;
+        this.serializer = serializer;
+    }
+
     /**
      * WindowedStreamPartitioner determines the partition number for a record with the given windowed key and value
      * and the current number of partitions. The partition number id determined by the original key of the windowed key
