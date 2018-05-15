@@ -157,13 +157,13 @@ class WorkerSinkTask extends WorkerTask {
             try {
                 consumer.close();
             } catch (Throwable t) {
-                log.warn("Could not stop consumer", t);
+                log.warn("Could not close consumer", t);
             }
         }
         try {
             transformationChain.close();
         } catch (Throwable t) {
-            log.warn("Could not stop transformation chain", t);
+            log.warn("Could not close transformation chain", t);
         }
     }
 

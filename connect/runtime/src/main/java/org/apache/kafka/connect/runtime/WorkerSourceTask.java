@@ -138,20 +138,18 @@ class WorkerSourceTask extends WorkerTask {
 
     @Override
     protected void close() {
-        synchronized (this) {
-            tryStop();
-        }
+        tryStop();
         if (producer != null) {
             try {
                 producer.close(30, TimeUnit.SECONDS);
             } catch (Throwable t) {
-                log.warn("Could not stop producer", t);
+                log.warn("Could not close producer", t);
             }
         }
         try {
             transformationChain.close();
         } catch (Throwable t) {
-            log.warn("Could not stop transformation chain", t);
+            log.warn("Could not close transformation chain", t);
         }
     }
 
@@ -172,7 +170,7 @@ class WorkerSourceTask extends WorkerTask {
         }
     }
 
-    private void tryStop() {
+    private synchronized void tryStop() {
         if (!stopped) {
             try {
                 task.stop();
