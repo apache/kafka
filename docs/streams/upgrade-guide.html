@@ -34,8 +34,9 @@
     </div>
 
     <p>
-        Upgrading from any older version to 2.0.0 is possible: (1) you need to make sure to update you code accordingly, because some APIs got changes in non-compatible way since older releases (see below for the details),
-        (2) upgrading to 2.0.0 in the online mode required two rolling bounces.
+        Upgrading from any older version to 2.0.0 is possible: (1) you need to make sure to update you code accordingly, because there are some minor non-compatible API changes since older
+        releases (the code changes are expected to be minimal, please see below for the details),
+        (2) upgrading to 2.0.0 in the online mode requires two rolling bounces.
         For (2), in the first rolling bounce phase users need to set config <code>upgrade.from="older version"</code> (possible values are <code>"0.10.0", "0.10.1", "0.10.2", "0.11.0", "1.0", and "1.1"</code>)
         (cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-268%3A+Simplify+Kafka+Streams+Rebalance+Metadata+Upgrade">KIP-268</a>):
     </p>
@@ -64,12 +65,12 @@
     </p>
 
     <p>
-        We have also removed some public APIs that are deprecated prior to 1.0.x in 2.0.0 as well; users leveraging on those deprecated APIs need to make code changes accordingly.
+        We have also removed some public APIs that are deprecated prior to 1.0.x in 2.0.0.
         See below for a detailed list of removed APIs.
     </p>
     <p>
         In addition, if you using Java 8 method references in your Kafka Streams code you might need to update your code to resolve method ambiguities.
-        Hot-swaping the jar-file only might not work for this case.
+        Hot-swapping the jar-file only might not work for this case.
         See below a complete list of <a href="#streams_api_changes_200">2.0.0</a>
         API and semantic changes that allow you to advance your application and/or simplify your code base.
     </p>
@@ -145,19 +146,19 @@
         <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-270+-+A+Scala+Wrapper+Library+for+Kafka+Streams">KIP-270</a>.
     </p>
     <p>
-        We have removed a list of deprecated APIs prior to 1.0.x:
+        We have removed these deprecated APIs:
     </p>
     <ul>
+        <li><code>KafkaStreams#toString</code> no longer returns the topology and runtime metadata; to get topology metadata users can call <code>Topology#describe()</code> and to get thread runtime metadata users can call <code>KafkaStreams#localThreadsMetadata</code> (they are deprecated since 1.0.0).
+            For detailed guidance on how to update your code please read <a href="#streams_api_changes_100">here</a></li>
         <li><code>TopologyBuilder</code> and <code>KStreamBuilder</code> are removed and replaced by <code>Topology</code> and <code>StreamsBuidler</code> respectively (they are deprecated since 1.0.0).
             For detailed guidance on how to update your code please read <a href="#streams_api_changes_100">here</a></li>
         <li><code>StateStoreSupplier</code> are removed and replaced with <code>StoreBuilder</code> (they are deprecated since 1.0.0);
-            and the corresponding <code>Stores#create</code> and <code>KStream, KTable, KGroupedStream</code> overloaded functions that leverage on it have also been removed.
+            and the corresponding <code>Stores#create</code> and <code>KStream, KTable, KGroupedStream</code> overloaded functions that use it have also been removed.
             For detailed guidance on how to update your code please read <a href="#streams_api_changes_100">here</a></li>
-        <li><code>KStream, KTable, KGroupedStream</code> overloaded functions that requires serde and other specifications explicitly are removed and replaced with simpler overloaded functions that leverage <code>Consumed, Produced, Serialized, Materialized, Joined</code> (they are deprecated since 1.0.0).
+        <li><code>KStream, KTable, KGroupedStream</code> overloaded functions that requires serde and other specifications explicitly are removed and replaced with simpler overloaded functions that use <code>Consumed, Produced, Serialized, Materialized, Joined</code> (they are deprecated since 1.0.0).
             For detailed guidance on how to update your code please read <a href="#streams_api_changes_100">here</a></li>
-        <li><code>Processor#punctuate</code>, <code>ValuTransformer#punctuate</code>, <code>ValueTransformer#punctuate</code> and <code>RecordContext#schedule(long)</code> are removed and replaced by <code>RecordContext#schedule(long, PunctuationType, Punctuator)</code> (they are deprecated in 1.0.0). </li>
-        <li><code>KafkaStreams#toString</code> are removed; to get topology metadata users can call <code>Topology#describe()</code> and to get thread runtime metadata users can call <code>KafkaStreams#localThreadsMetadata</code> (they are deprecated since 1.0.0).
-            For detailed guidance on how to update your code please read <a href="#streams_api_changes_100">here</a></li>
+        <li><code>Processor#punctuate</code>, <code>ValueTransformer#punctuate</code>, <code>ValueTransformer#punctuate</code> and <code>RecordContext#schedule(long)</code> are removed and replaced by <code>RecordContext#schedule(long, PunctuationType, Punctuator)</code> (they are deprecated in 1.0.0). </li>
         <li>The second <code>boolean</code> typed parameter "loggingEnabled" in <code>ProcessorContext#register</code> has been removed; users can now use <code>StoreBuilder#withLoggingEnabled, withLoggingDisabled</code> to specify the behavior when they create the state store. </li>
         <li><code>KTable#writeAs, print, foreach, to, through</code> are removed, users can call <code>KTable#tostream()#writeAs</code> instead for the same purpose (they are deprecated since 0.11.0.0).
             For detailed list of removed APIs please read <a href="#streams_api_changes_0110">here</a></li>
