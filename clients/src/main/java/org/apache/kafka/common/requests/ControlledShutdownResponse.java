@@ -50,14 +50,8 @@ public class ControlledShutdownResponse extends AbstractResponse {
 
     private static final Schema CONTROLLED_SHUTDOWN_RESPONSE_V1 = CONTROLLED_SHUTDOWN_RESPONSE_V0;
 
-    /**
-     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
-     */
-    private static final Schema CONTROLLED_SHUTDOWN_RESPONSE_V2 = CONTROLLED_SHUTDOWN_RESPONSE_V1;
-
     public static Schema[] schemaVersions() {
-        return new Schema[]{CONTROLLED_SHUTDOWN_RESPONSE_V0, CONTROLLED_SHUTDOWN_RESPONSE_V1,
-            CONTROLLED_SHUTDOWN_RESPONSE_V2};
+        return new Schema[]{CONTROLLED_SHUTDOWN_RESPONSE_V0, CONTROLLED_SHUTDOWN_RESPONSE_V1};
     }
 
     /**
@@ -120,10 +114,5 @@ public class ControlledShutdownResponse extends AbstractResponse {
         struct.set(PARTITIONS_REMAINING_KEY_NAME, partitionsRemainingList.toArray());
 
         return struct;
-    }
-
-    @Override
-    public boolean shouldClientThrottle(short version) {
-        return version >= 2;
     }
 }

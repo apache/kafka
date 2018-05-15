@@ -56,13 +56,8 @@ public class WriteTxnMarkersResponse extends AbstractResponse {
             new Field(TXN_MARKERS_KEY_NAME, new ArrayOf(WRITE_TXN_MARKERS_ENTRY_V0), "Errors per partition from " +
                     "writing markers."));
 
-    /**
-     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
-     */
-    private static final Schema WRITE_TXN_MARKERS_RESPONSE_V1 = WRITE_TXN_MARKERS_RESPONSE_V0;
-
     public static Schema[] schemaVersions() {
-        return new Schema[]{WRITE_TXN_MARKERS_RESPONSE_V0, WRITE_TXN_MARKERS_RESPONSE_V1};
+        return new Schema[]{WRITE_TXN_MARKERS_RESPONSE_V0};
     }
 
     // Possible error codes:

@@ -95,6 +95,7 @@ public class ExpireDelegationTokenResponse extends AbstractResponse {
         return struct;
     }
 
+    @Override
     public int throttleTimeMs() {
         return throttleTimeMs;
     }

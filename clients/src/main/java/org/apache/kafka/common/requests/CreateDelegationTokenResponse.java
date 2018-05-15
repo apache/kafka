@@ -163,6 +163,7 @@ public class CreateDelegationTokenResponse extends AbstractResponse {
         return byteArray;
     }
 
+    @Override
     public int throttleTimeMs() {
         return throttleTimeMs;
     }

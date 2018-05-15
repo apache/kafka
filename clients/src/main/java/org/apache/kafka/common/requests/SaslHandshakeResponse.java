@@ -46,13 +46,8 @@ public class SaslHandshakeResponse extends AbstractResponse {
 
     private static final Schema SASL_HANDSHAKE_RESPONSE_V1 = SASL_HANDSHAKE_RESPONSE_V0;
 
-    /**
-     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
-     */
-    private static final Schema SASL_HANDSHAKE_RESPONSE_V2 = SASL_HANDSHAKE_RESPONSE_V1;
-
     public static Schema[] schemaVersions() {
-        return new Schema[]{SASL_HANDSHAKE_RESPONSE_V0, SASL_HANDSHAKE_RESPONSE_V1, SASL_HANDSHAKE_RESPONSE_V2};
+        return new Schema[]{SASL_HANDSHAKE_RESPONSE_V0, SASL_HANDSHAKE_RESPONSE_V1};
     }
 
     /**

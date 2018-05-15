@@ -295,6 +295,7 @@ public class DescribeConfigsResponse extends AbstractResponse {
         return configs.get(resource);
     }
 
+    @Override
     public int throttleTimeMs() {
         return throttleTimeMs;
     }

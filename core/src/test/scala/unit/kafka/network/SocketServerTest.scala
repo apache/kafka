@@ -432,7 +432,7 @@ class SocketServerTest extends JUnitSuite {
     // receive response
     assertEquals(serializedBytes.toSeq, receiveResponse(socket).toSeq)
     // Processor should have incremented the unmute ref count of the channel to 1 when it muted the channel.
-    TestUtils.waitUntilTrue(() => openOrClosingChannel(request).exists(c => c.getMuteRefCount() == 1), "fail")
+    TestUtils.waitUntilTrue(() => openOrClosingChannel(request).exists(c => c.muteRefCount() == 1), "fail")
     // Channel should still be muted.
     assertTrue(openOrClosingChannel(request).exists(c => c.isMute()))
   }
@@ -447,7 +447,7 @@ class SocketServerTest extends JUnitSuite {
     // receive response
     assertEquals(serializedBytes.toSeq, receiveResponse(socket).toSeq)
     // Since throttling is already done, the channel can be unmuted after sending out the response.
-    TestUtils.waitUntilTrue(() => openOrClosingChannel(request).exists(c => c.getMuteRefCount() == 0), "fail")
+    TestUtils.waitUntilTrue(() => openOrClosingChannel(request).exists(c => c.muteRefCount() == 0), "fail")
     // Channel is now unmuted.
     assertFalse(openOrClosingChannel(request).exists(c => c.isMute()))
   }
@@ -460,7 +460,7 @@ class SocketServerTest extends JUnitSuite {
     val request = throttledChannelTestSetUp(socket, serializedBytes, NoOpAction, true)
 
     // Processor should have called throttledChannel.maybeUnmute() and increased the count to 1.
-    TestUtils.waitUntilTrue(() => openOrClosingChannel(request).exists(c => c.getMuteRefCount() == 1), "fail")
+    TestUtils.waitUntilTrue(() => openOrClosingChannel(request).exists(c => c.muteRefCount() == 1), "fail")
     // Channel should still be muted.
     assertTrue(openOrClosingChannel(request).exists(c => c.isMute()))
   }
@@ -473,7 +473,7 @@ class SocketServerTest extends JUnitSuite {
     val request = throttledChannelTestSetUp(socket, serializedBytes, NoOpAction, false)
 
     // Since throttling is already done, the channel can be unmuted.
-    TestUtils.waitUntilTrue(() => openOrClosingChannel(request).exists(c => c.getMuteRefCount() == 0), "fail")
+    TestUtils.waitUntilTrue(() => openOrClosingChannel(request).exists(c => c.muteRefCount() == 0), "fail")
     // Channel is now unmuted.
     assertFalse(openOrClosingChannel(request).exists(c => c.isMute()))
   }

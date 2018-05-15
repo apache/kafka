@@ -121,6 +121,7 @@ public class AlterReplicaLogDirsResponse extends AbstractResponse {
         return struct;
     }
 
+    @Override
     public int throttleTimeMs() {
         return throttleTimeMs;
     }

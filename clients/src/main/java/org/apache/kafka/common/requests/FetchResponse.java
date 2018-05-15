@@ -380,6 +380,7 @@ public class FetchResponse extends AbstractResponse {
         return responseData;
     }
 
+    @Override
     public int throttleTimeMs() {
         return this.throttleTimeMs;
     }

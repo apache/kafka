@@ -178,6 +178,7 @@ public class DescribeDelegationTokenResponse extends AbstractResponse {
         return new Schema[]{TOKEN_DESCRIBE_RESPONSE_V0, TOKEN_DESCRIBE_RESPONSE_V1};
     }
 
+    @Override
     public int throttleTimeMs() {
         return throttleTimeMs;
     }

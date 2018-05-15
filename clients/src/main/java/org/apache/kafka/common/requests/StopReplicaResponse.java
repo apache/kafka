@@ -46,13 +46,8 @@ public class StopReplicaResponse extends AbstractResponse {
             ERROR_CODE,
             new Field(PARTITIONS_KEY_NAME, new ArrayOf(STOP_REPLICA_RESPONSE_PARTITION_V0)));
 
-    /**
-     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
-     */
-    private static final Schema STOP_REPLICA_RESPONSE_V1 = STOP_REPLICA_RESPONSE_V0;
-
     public static Schema[] schemaVersions() {
-        return new Schema[] {STOP_REPLICA_RESPONSE_V0, STOP_REPLICA_RESPONSE_V1};
+        return new Schema[] {STOP_REPLICA_RESPONSE_V0};
     }
 
     private final Map<TopicPartition, Errors> responses;

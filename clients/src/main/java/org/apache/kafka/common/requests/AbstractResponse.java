@@ -167,7 +167,13 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
      * throttle time. Client-side throttling is needed when communicating with a newer version of broker which, on
      * quota violation, sends out responses before throttling.
      */
-    public abstract boolean shouldClientThrottle(short version);
+    public boolean shouldClientThrottle(short version) {
+        return false;
+    }
+
+    public int throttleTimeMs() {
+        return DEFAULT_THROTTLE_TIME;
+    }
 
     public String toString(short version) {
         return toStruct(version).toString();

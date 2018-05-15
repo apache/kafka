@@ -144,6 +144,7 @@ public class JoinGroupResponse extends AbstractResponse {
         leaderId = struct.getString(LEADER_ID_KEY_NAME);
     }
 
+    @Override
     public int throttleTimeMs() {
         return throttleTimeMs;
     }

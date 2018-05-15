@@ -53,14 +53,8 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
     /* v1 request is the same as v0. Per-partition leader epoch has been added to response */
     private static final Schema OFFSET_FOR_LEADER_EPOCH_REQUEST_V1 = OFFSET_FOR_LEADER_EPOCH_REQUEST_V0;
 
-    /**
-     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
-     */
-    private static final Schema OFFSET_FOR_LEADER_EPOCH_REQUEST_V2 = OFFSET_FOR_LEADER_EPOCH_REQUEST_V1;
-
     public static Schema[] schemaVersions() {
-        return new Schema[]{OFFSET_FOR_LEADER_EPOCH_REQUEST_V0, OFFSET_FOR_LEADER_EPOCH_REQUEST_V1,
-            OFFSET_FOR_LEADER_EPOCH_REQUEST_V2};
+        return new Schema[]{OFFSET_FOR_LEADER_EPOCH_REQUEST_V0, OFFSET_FOR_LEADER_EPOCH_REQUEST_V1};
     }
 
     private Map<TopicPartition, Integer> epochsByPartition;

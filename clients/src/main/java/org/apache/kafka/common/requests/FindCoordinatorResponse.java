@@ -102,6 +102,7 @@ public class FindCoordinatorResponse extends AbstractResponse {
         node = new Node(nodeId, host, port);
     }
 
+    @Override
     public int throttleTimeMs() {
         return throttleTimeMs;
     }

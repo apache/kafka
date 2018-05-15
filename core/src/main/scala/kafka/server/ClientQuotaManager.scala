@@ -213,31 +213,31 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
   def quotasEnabled: Boolean = quotaTypesEnabled != QuotaTypes.NoQuotas
 
   /**
-    * Records that a user/clientId changed some metric being throttled (produced/consumed bytes, request processing
-    * time, etc.) If quota has been violated, return throttle time in milliseconds. Throttle time calculation may be
-    * overridden by sub-classes.
+    * Records that a user/clientId changed produced/consumed bytes being throttled at the specified time. If quota has
+    * been violated, return throttle time in milliseconds. Throttle time calculation may be overridden by sub-classes.
     * @param request client request
     * @param value amount of data in bytes or request processing time as a percentage
+    * @param timeMs time to record the value at
     * @return throttle time in milliseconds
     */
-  def maybeRecordAndGetThrottleTimeMs(request: RequestChannel.Request, value: Double): Int = {
-    maybeRecordAndGetThrottleTimeMs(request.session, request.header.clientId, value)
+  def maybeRecordAndGetThrottleTimeMs(request: RequestChannel.Request, value: Double, timeMs: Long): Int = {
+    maybeRecordAndGetThrottleTimeMs(request.session, request.header.clientId, value, timeMs)
   }
 
-  def maybeRecordAndGetThrottleTimeMs(session: Session, clientId: String, value: Double): Int = {
+  def maybeRecordAndGetThrottleTimeMs(session: Session, clientId: String, value: Double, timeMs: Long): Int = {
     // Record metrics only if quotas are enabled.
     if (quotasEnabled) {
-      recordAndGetThrottleTimeMs(session, clientId, value)
+      recordAndGetThrottleTimeMs(session, clientId, value, timeMs)
     } else {
       0
     }
   }
 
-  def recordAndGetThrottleTimeMs(session: Session, clientId: String, value: Double): Int = {
+  def recordAndGetThrottleTimeMs(session: Session, clientId: String, value: Double, timeMs: Long): Int = {
     var throttleTimeMs = 0
     val clientSensors = getOrCreateQuotaSensors(session, clientId)
     try {
-      clientSensors.quotaSensor.record(value)
+      clientSensors.quotaSensor.record(value, timeMs)
     } catch {
       case _: QuotaViolationException =>
         // Compute the delay
@@ -257,10 +257,10 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
     * in case of throttling. Rate keeps the sum of values that fall in each time window, so this should bring the
     * overall sum back to the previous value.
     */
-  def maybeUnrecord(request: RequestChannel.Request, value: Double): Unit = {
+  def maybeUnrecord(request: RequestChannel.Request, value: Double, timeMs: Long): Unit = {
     if (quotasEnabled) {
       val clientSensors = getOrCreateQuotaSensors(request.session, request.header.clientId)
-      clientSensors.quotaSensor.record(value * (-1), time.milliseconds(), false)
+      clientSensors.quotaSensor.record(value * (-1), timeMs, false)
     }
   }
 

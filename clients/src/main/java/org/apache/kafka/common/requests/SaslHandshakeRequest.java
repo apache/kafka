@@ -46,13 +46,8 @@ public class SaslHandshakeRequest extends AbstractRequest {
     // SASL_HANDSHAKE_REQUEST_V1 added to support SASL_AUTHENTICATE request to improve diagnostics
     private static final Schema SASL_HANDSHAKE_REQUEST_V1 = SASL_HANDSHAKE_REQUEST_V0;
 
-    /**
-     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
-     */
-    private static final Schema SASL_HANDSHAKE_REQUEST_V2 = SASL_HANDSHAKE_REQUEST_V1;
-
     public static Schema[] schemaVersions() {
-        return new Schema[]{SASL_HANDSHAKE_REQUEST_V0, SASL_HANDSHAKE_REQUEST_V1, SASL_HANDSHAKE_REQUEST_V2};
+        return new Schema[]{SASL_HANDSHAKE_REQUEST_V0, SASL_HANDSHAKE_REQUEST_V1};
     }
 
     private final String mechanism;
@@ -104,7 +99,6 @@ public class SaslHandshakeRequest extends AbstractRequest {
         switch (versionId) {
             case 0:
             case 1:
-            case 2:
                 List<String> enabledMechanisms = Collections.emptyList();
                 return new SaslHandshakeResponse(Errors.forException(e), enabledMechanisms);
             default:

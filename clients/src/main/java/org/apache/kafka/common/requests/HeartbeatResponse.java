@@ -72,6 +72,7 @@ public class HeartbeatResponse extends AbstractResponse {
         error = Errors.forCode(struct.get(ERROR_CODE));
     }
 
+    @Override
     public int throttleTimeMs() {
         return throttleTimeMs;
     }

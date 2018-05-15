@@ -163,14 +163,9 @@ public class UpdateMetadataRequest extends AbstractRequest {
             new Field(PARTITION_STATES_KEY_NAME, new ArrayOf(UPDATE_METADATA_REQUEST_PARTITION_STATE_V4)),
             new Field(LIVE_BROKERS_KEY_NAME, new ArrayOf(UPDATE_METADATA_REQUEST_BROKER_V3)));
 
-    /**
-     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
-     */
-    private static final Schema UPDATE_METADATA_REQUEST_V5 = UPDATE_METADATA_REQUEST_V4;
-
     public static Schema[] schemaVersions() {
         return new Schema[] {UPDATE_METADATA_REQUEST_V0, UPDATE_METADATA_REQUEST_V1, UPDATE_METADATA_REQUEST_V2,
-            UPDATE_METADATA_REQUEST_V3, UPDATE_METADATA_REQUEST_V4, UPDATE_METADATA_REQUEST_V5};
+            UPDATE_METADATA_REQUEST_V3, UPDATE_METADATA_REQUEST_V4};
     }
 
     public static class Builder extends AbstractRequest.Builder<UpdateMetadataRequest> {
@@ -436,7 +431,7 @@ public class UpdateMetadataRequest extends AbstractRequest {
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         short versionId = version();
-        if (versionId <= 5)
+        if (versionId <= 4)
             return new UpdateMetadataResponse(Errors.forException(e));
         else
             throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",

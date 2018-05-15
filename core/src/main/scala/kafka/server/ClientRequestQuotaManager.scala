@@ -41,9 +41,8 @@ class ClientRequestQuotaManager(private val config: ClientQuotaManagerConfig,
   }
 
   /**
-    * Records that a user/clientId changed some metric being throttled (produced/consumed bytes, request processing
-    * time, etc.) If quota has been violated, return throttle time in milliseconds. Throttle time calculation may be
-    * overridden by sub-classes.
+    * Records that a user/clientId changed request processing time being throttled. If quota has been violated, return
+    * throttle time in milliseconds. Throttle time calculation may be overridden by sub-classes.
     * @param request client request
     * @return Number of milliseconds to throttle in case of quota violation. Zero otherwise
     */
@@ -57,7 +56,7 @@ class ClientRequestQuotaManager(private val config: ClientQuotaManagerConfig,
       request.recordNetworkThreadTimeCallback = Some(timeNanos => recordNoThrottle(
         getOrCreateQuotaSensors(request.session, request.header.clientId), nanosToPercentage(timeNanos)))
       recordAndGetThrottleTimeMs(request.session, request.header.clientId,
-        nanosToPercentage(request.requestThreadTimeNanos))
+        nanosToPercentage(request.requestThreadTimeNanos), time.milliseconds())
     } else {
       0
     }

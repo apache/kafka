@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.network;
 
-import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
@@ -47,7 +46,7 @@ public class KafkaChannel {
 
     // SocketServer can unmute channel after a response has been sent out to the client. Also, in case of client-side
     // throttling due to quota violation, the channel cannot be unmuted until the throttling is done. SocketServer
-    // tracks this unmute eligiblity by keeping a reference count. More specifically,
+    // tracks this unmute eligibility by keeping a reference count. More specifically,
     // - increase the count when
     //    (1) mute() is called
     //    (2) throttling is requested for this channel due to quota violation
@@ -56,7 +55,7 @@ public class KafkaChannel {
     //    (2) throttling is done
     //
     // The channel can be unmuted only when the count is 0.
-    private AtomicInteger muteRefCount = new AtomicInteger(0);
+    private int muteRefCount = 0;
 
     public KafkaChannel(String id, TransportLayer transportLayer, Authenticator authenticator, int maxReceiveSize, MemoryPool memoryPool) throws IOException {
         this.id = id;
@@ -151,16 +150,16 @@ public class KafkaChannel {
     }
 
     public void incrementMuteRefCount() {
-        muteRefCount.incrementAndGet();
+        muteRefCount++;
     }
 
     public int decrementMuteRefCountAndGet() {
-        return muteRefCount.decrementAndGet();
+        return --muteRefCount;
     }
 
     /* Used for tests */
-    public int getMuteRefCount() {
-        return muteRefCount.get();
+    public int muteRefCount() {
+        return muteRefCount;
     }
 
     /**

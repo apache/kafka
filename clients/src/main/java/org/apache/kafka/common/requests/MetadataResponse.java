@@ -282,6 +282,7 @@ public class MetadataResponse extends AbstractResponse {
         return null;
     }
 
+    @Override
     public int throttleTimeMs() {
         return throttleTimeMs;
     }
