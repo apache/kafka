@@ -1335,9 +1335,9 @@ class Log(@volatile var dir: File,
 
     if (segment.shouldRoll(messagesSize, maxTimestampInMessages, maxOffsetInMessages, now)) {
       debug(s"Rolling new log segment (log_size = ${segment.size}/${config.segmentSize}}, " +
-         s"offset_index_size = ${segment.offsetIndex.entries}/${segment.offsetIndex.maxEntries}, " +
-         s"time_index_size = ${segment.timeIndex.entries}/${segment.timeIndex.maxEntries}, " +
-         s"inactive_time_ms = ${segment.timeWaitedForRoll(now, maxTimestampInMessages)}/${config.segmentMs - segment.rollJitterMs}).")
+          s"offset_index_size = ${segment.offsetIndex.entries}/${segment.offsetIndex.maxEntries}, " +
+          s"time_index_size = ${segment.timeIndex.entries}/${segment.timeIndex.maxEntries}, " +
+          s"inactive_time_ms = ${segment.timeWaitedForRoll(now, maxTimestampInMessages)}/${config.segmentMs - segment.rollJitterMs}).")
 
       /*
         maxOffsetInMessages - Integer.MAX_VALUE is a heuristic value for the first offset in the set of messages.
@@ -1973,7 +1973,7 @@ object Log extends Logging {
   private[log] def maybeHandleOffsetOverflow[T](log: Log, segment: LogSegment, retries: Int = 1)(fn: => T): T = {
     try fn
     catch {
-      case e: OffsetOverflowException if (retries > 1) => {
+      case e: OffsetOverflowException if (retries > 0) => {
         info(s"Caught OffsetOverflowException ${e.getMessage}")
         Log.splitSegmentOnOffsetOverflow(log, segment)
         maybeHandleOffsetOverflow(log, segment, retries - 1)(fn)
