@@ -76,6 +76,7 @@ public class InitProducerIdResponse extends AbstractResponse {
         this(throttleTimeMs, errors, RecordBatch.NO_PRODUCER_ID, (short) 0);
     }
 
+    @Override
     public int throttleTimeMs() {
         return throttleTimeMs;
     }

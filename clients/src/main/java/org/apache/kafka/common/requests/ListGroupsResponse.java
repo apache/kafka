@@ -92,6 +92,7 @@ public class ListGroupsResponse extends AbstractResponse {
         }
     }
 
+    @Override
     public int throttleTimeMs() {
         return throttleTimeMs;
     }

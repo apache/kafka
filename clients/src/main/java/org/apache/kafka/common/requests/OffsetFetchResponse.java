@@ -184,6 +184,7 @@ public class OffsetFetchResponse extends AbstractResponse {
         }
     }
 
+    @Override
     public int throttleTimeMs() {
         return throttleTimeMs;
     }

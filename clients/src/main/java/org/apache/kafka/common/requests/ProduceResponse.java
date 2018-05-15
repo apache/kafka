@@ -150,7 +150,7 @@ public class ProduceResponse extends AbstractResponse {
     }
 
     private final Map<TopicPartition, PartitionResponse> responses;
-    private final int throttleTime;
+    private final int throttleTimeMs;
 
     /**
      * Constructor for Version 0
@@ -163,11 +163,11 @@ public class ProduceResponse extends AbstractResponse {
     /**
      * Constructor for the latest version
      * @param responses Produced data grouped by topic-partition
-     * @param throttleTime Time in milliseconds the response was throttled
+     * @param throttleTimeMs Time in milliseconds the response was throttled
      */
-    public ProduceResponse(Map<TopicPartition, PartitionResponse> responses, int throttleTime) {
+    public ProduceResponse(Map<TopicPartition, PartitionResponse> responses, int throttleTimeMs) {
         this.responses = responses;
-        this.throttleTime = throttleTime;
+        this.throttleTimeMs = throttleTimeMs;
     }
 
     /**
@@ -189,7 +189,7 @@ public class ProduceResponse extends AbstractResponse {
                 responses.put(tp, new PartitionResponse(error, offset, logAppendTime, logStartOffset));
             }
         }
-        this.throttleTime = struct.getOrElse(THROTTLE_TIME_MS, DEFAULT_THROTTLE_TIME);
+        this.throttleTimeMs = struct.getOrElse(THROTTLE_TIME_MS, DEFAULT_THROTTLE_TIME);
     }
 
     @Override
@@ -224,7 +224,7 @@ public class ProduceResponse extends AbstractResponse {
             topicDatas.add(topicData);
         }
         struct.set(RESPONSES_KEY_NAME, topicDatas.toArray());
-        struct.setIfExists(THROTTLE_TIME_MS, throttleTime);
+        struct.setIfExists(THROTTLE_TIME_MS, throttleTimeMs);
 
         return struct;
     }
@@ -233,8 +233,9 @@ public class ProduceResponse extends AbstractResponse {
         return this.responses;
     }
 
-    public int getThrottleTime() {
-        return this.throttleTime;
+    @Override
+    public int throttleTimeMs() {
+        return this.throttleTimeMs;
     }
 
     @Override

@@ -35,14 +35,8 @@ public class ControlledShutdownRequest extends AbstractRequest {
             new Field(BROKER_ID_KEY_NAME, INT32, "The id of the broker for which controlled shutdown has been requested."));
     private static final Schema CONTROLLED_SHUTDOWN_REQUEST_V1 = CONTROLLED_SHUTDOWN_REQUEST_V0;
 
-    /**
-     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
-     */
-    private static final Schema CONTROLLED_SHUTDOWN_REQUEST_V2 = CONTROLLED_SHUTDOWN_REQUEST_V1;
-
     public static Schema[] schemaVersions() {
-        return new Schema[] {CONTROLLED_SHUTDOWN_REQUEST_V0, CONTROLLED_SHUTDOWN_REQUEST_V1,
-            CONTROLLED_SHUTDOWN_REQUEST_V2};
+        return new Schema[] {CONTROLLED_SHUTDOWN_REQUEST_V0, CONTROLLED_SHUTDOWN_REQUEST_V1};
     }
 
     public static class Builder extends AbstractRequest.Builder<ControlledShutdownRequest> {
@@ -85,7 +79,6 @@ public class ControlledShutdownRequest extends AbstractRequest {
         switch (versionId) {
             case 0:
             case 1:
-            case 2:
                 return new ControlledShutdownResponse(Errors.forException(e), Collections.<TopicPartition>emptySet());
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",

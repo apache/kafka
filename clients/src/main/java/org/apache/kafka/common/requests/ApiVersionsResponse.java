@@ -148,6 +148,7 @@ public class ApiVersionsResponse extends AbstractResponse {
         return createApiVersionsResponse(throttleTimeMs, maxMagic);
     }
 
+    @Override
     public int throttleTimeMs() {
         return throttleTimeMs;
     }

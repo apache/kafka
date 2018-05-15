@@ -53,14 +53,8 @@ public class StopReplicaRequest extends AbstractRequest {
             new Field(DELETE_PARTITIONS_KEY_NAME, BOOLEAN, "Boolean which indicates if replica's partitions must be deleted."),
             new Field(PARTITIONS_KEY_NAME, new ArrayOf(STOP_REPLICA_REQUEST_PARTITION_V0)));
 
-
-    /**
-     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
-     */
-    private static final Schema STOP_REPLICA_REQUEST_V1 = STOP_REPLICA_REQUEST_V0;
-
     public static Schema[] schemaVersions() {
-        return new Schema[] {STOP_REPLICA_REQUEST_V0, STOP_REPLICA_REQUEST_V1};
+        return new Schema[] {STOP_REPLICA_REQUEST_V0};
     }
 
     public static class Builder extends AbstractRequest.Builder<StopReplicaRequest> {
@@ -139,7 +133,6 @@ public class StopReplicaRequest extends AbstractRequest {
         short versionId = version();
         switch (versionId) {
             case 0:
-            case 1:
                 return new StopReplicaResponse(error, responses);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",

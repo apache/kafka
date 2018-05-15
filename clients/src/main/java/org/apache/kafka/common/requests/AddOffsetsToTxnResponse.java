@@ -64,6 +64,7 @@ public class AddOffsetsToTxnResponse extends AbstractResponse {
         this.error = Errors.forCode(struct.get(ERROR_CODE));
     }
 
+    @Override
     public int throttleTimeMs() {
         return throttleTimeMs;
     }

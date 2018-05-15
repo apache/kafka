@@ -138,6 +138,7 @@ public class DescribeGroupsResponse extends AbstractResponse {
         }
     }
 
+    @Override
     public int throttleTimeMs() {
         return throttleTimeMs;
     }

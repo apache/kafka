@@ -91,6 +91,7 @@ public class AddPartitionsToTxnResponse extends AbstractResponse {
         }
     }
 
+    @Override
     public int throttleTimeMs() {
         return throttleTimeMs;
     }

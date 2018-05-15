@@ -71,6 +71,7 @@ public class LeaveGroupResponse extends AbstractResponse {
         this.error = Errors.forCode(struct.get(ERROR_CODE));
     }
 
+    @Override
     public int throttleTimeMs() {
         return throttleTimeMs;
     }

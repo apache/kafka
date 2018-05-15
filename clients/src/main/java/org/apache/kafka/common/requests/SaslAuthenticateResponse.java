@@ -42,13 +42,8 @@ public class SaslAuthenticateResponse extends AbstractResponse {
             ERROR_MESSAGE,
             new Field(SASL_AUTH_BYTES_KEY_NAME, BYTES, "SASL authentication bytes from server as defined by the SASL mechanism."));
 
-    /**
-     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
-     */
-    private static final Schema SASL_AUTHENTICATE_RESPONSE_V1 = SASL_AUTHENTICATE_RESPONSE_V0;
-
     public static Schema[] schemaVersions() {
-        return new Schema[]{SASL_AUTHENTICATE_RESPONSE_V0, SASL_AUTHENTICATE_RESPONSE_V1};
+        return new Schema[]{SASL_AUTHENTICATE_RESPONSE_V0};
     }
 
     private static final ByteBuffer EMPTY_BUFFER = ByteBuffer.allocate(0);

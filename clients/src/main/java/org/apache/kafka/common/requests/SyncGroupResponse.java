@@ -85,6 +85,7 @@ public class SyncGroupResponse extends AbstractResponse {
         this.memberState = struct.getBytes(MEMBER_ASSIGNMENT_KEY_NAME);
     }
 
+    @Override
     public int throttleTimeMs() {
         return throttleTimeMs;
     }

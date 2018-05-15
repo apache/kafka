@@ -189,6 +189,7 @@ public class ListOffsetResponse extends AbstractResponse {
         }
     }
 
+    @Override
     public int throttleTimeMs() {
         return throttleTimeMs;
     }

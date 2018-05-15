@@ -92,6 +92,7 @@ public class AlterConfigsResponse extends AbstractResponse {
         return apiErrorCounts(errors);
     }
 
+    @Override
     public int throttleTimeMs() {
         return throttleTimeMs;
     }
