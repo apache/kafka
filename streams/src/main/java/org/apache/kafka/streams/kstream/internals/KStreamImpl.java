@@ -110,8 +110,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     public KStreamImpl(final InternalStreamsBuilder builder,
                        final String name,
                        final Set<String> sourceNodes,
-                       final boolean repartitionRequired) {
-        super(builder, name, sourceNodes);
+                       final boolean repartitionRequired,
+                       final StreamsGraphNode streamsGraphNode) {
+        super(builder, name, sourceNodes, streamsGraphNode);
         this.repartitionRequired = repartitionRequired;
     }
 
@@ -126,7 +127,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                                                                         repartitionRequired);
         builder.addNode(filterProcessorNode);
 
-        return new KStreamImpl<>(builder, name, sourceNodes, this.repartitionRequired);
+        return new KStreamImpl<>(builder, name, sourceNodes, this.repartitionRequired, null);
     }
 
     @Override
@@ -142,13 +143,13 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         builder.addNode(filterNotProcessorNode);
 
-        return new KStreamImpl<>(builder, name, sourceNodes, this.repartitionRequired);
+        return new KStreamImpl<>(builder, name, sourceNodes, this.repartitionRequired, null);
     }
 
     @Override
     public <K1> KStream<K1, V> selectKey(final KeyValueMapper<? super K, ? super V, ? extends K1> mapper) {
         Objects.requireNonNull(mapper, "mapper can't be null");
-        return new KStreamImpl<>(builder, internalSelectKey(mapper), sourceNodes, true);
+        return new KStreamImpl<>(builder, internalSelectKey(mapper), sourceNodes, true, null);
     }
 
     private <K1> String internalSelectKey(final KeyValueMapper<? super K, ? super V, ? extends K1> mapper) {
@@ -183,7 +184,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         mapProcessorNode.setTriggersRepartitioning(true);
         builder.addNode(mapProcessorNode);
 
-        return new KStreamImpl<>(builder, name, sourceNodes, true);
+        return new KStreamImpl<>(builder, name, sourceNodes, true, null);
     }
 
 
@@ -204,7 +205,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                                                                            repartitionRequired);
         builder.addNode(mapValuesProcessorNode);
 
-        return new KStreamImpl<>(builder, name, sourceNodes, this.repartitionRequired);
+        return new KStreamImpl<>(builder, name, sourceNodes, this.repartitionRequired, null);
     }
 
     @Override
@@ -235,7 +236,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         builder.addNode(flatMapNode);
 
-        return new KStreamImpl<>(builder, name, sourceNodes, true);
+        return new KStreamImpl<>(builder, name, sourceNodes, true, null);
     }
 
     @Override
@@ -255,7 +256,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                                                                        repartitionRequired);
         builder.addNode(flatMapValuesNode);
 
-        return new KStreamImpl<>(builder, name, sourceNodes, this.repartitionRequired);
+        return new KStreamImpl<>(builder, name, sourceNodes, this.repartitionRequired, null);
     }
 
     @Override
@@ -291,7 +292,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                                                                         innerProcessorParameters,
                                                                                         repartitionRequired);
             builder.addNode(branchChildNode);
-            branchChildren[i] = new KStreamImpl<>(builder, childNames[i], sourceNodes, this.repartitionRequired);
+            branchChildren[i] = new KStreamImpl<>(builder, childNames[i], sourceNodes, this.repartitionRequired, null);
         }
 
         return branchChildren;
@@ -323,7 +324,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         builder.addNode(mergeNode);
 
-        return new KStreamImpl<>(builder, name, allSourceNodes, requireRepartitioning);
+        return new KStreamImpl<>(builder, name, allSourceNodes, requireRepartitioning, null);
     }
 
     @Override
@@ -362,7 +363,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                                                              repartitionRequired);
         builder.addNode(peekNode);
 
-        return new KStreamImpl<>(builder, name, sourceNodes, repartitionRequired);
+        return new KStreamImpl<>(builder, name, sourceNodes, repartitionRequired, null);
     }
 
     @Override
@@ -431,7 +432,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                                                                   true);
         builder.addNode(transformNode);
 
-        return new KStreamImpl<>(builder, name, sourceNodes, true);
+        return new KStreamImpl<>(builder, name, sourceNodes, true, null);
     }
 
     @Override
@@ -472,7 +473,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                                                                  repartitionRequired);
         builder.addNode(transformNode);
 
-        return new KStreamImpl<>(builder, name, sourceNodes, this.repartitionRequired);
+        return new KStreamImpl<>(builder, name, sourceNodes, this.repartitionRequired, null);
     }
 
     @Override
@@ -570,7 +571,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                                                    name);
 
         return new KStreamImpl<>(builder, repartitionedSourceName, Collections
-            .singleton(repartitionedSourceName), false);
+            .singleton(repartitionedSourceName), false, null);
     }
 
     static <K1, V1> String createRepartitionedSource(final InternalStreamsBuilder builder,
@@ -687,7 +688,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                                                                   new String[]{});
         builder.addNode(streamTableJoinNode);
 
-        return new KStreamImpl<>(builder, name, sourceNodes, false);
+        return new KStreamImpl<>(builder, name, sourceNodes, false, null);
     }
 
     @SuppressWarnings("unchecked")
@@ -712,7 +713,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         builder.addNode(streamTableJoinNode);
 
-        return new KStreamImpl<>(builder, name, allSourceNodes, false);
+        return new KStreamImpl<>(builder, name, allSourceNodes, false, null);
     }
 
     @Override
@@ -757,7 +758,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                         sourceNodes,
                                         serializedInternal.keySerde(),
                                         serializedInternal.valueSerde(),
-                                        true);
+                                        true, null);
     }
 
     @Override
@@ -780,7 +781,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                         sourceNodes,
                                         serializedInternal.keySerde(),
                                         serializedInternal.valueSerde(),
-                                        this.repartitionRequired);
+                                        this.repartitionRequired, null);
 
     }
 
@@ -869,7 +870,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
             Set<String> allSourceNodes = new HashSet<>(((AbstractStream<K>) lhs).sourceNodes);
             allSourceNodes.addAll(((KStreamImpl<K1, V2>) other).sourceNodes);
-            return new KStreamImpl<>(builder, joinMergeName, allSourceNodes, false);
+            return new KStreamImpl<>(builder, joinMergeName, allSourceNodes, false, null);
         }
     }
 

@@ -52,8 +52,9 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
                             final String name,
                             final Serde<K> keySerde,
                             final Serde<V> valSerde,
-                            final boolean repartitionRequired) {
-        super(builder, name, sourceNodes);
+                            final boolean repartitionRequired,
+                            final StreamsGraphNode streamsGraphNode) {
+        super(builder, name, sourceNodes, streamsGraphNode);
         Objects.requireNonNull(windows, "windows can't be null");
         this.valSerde = valSerde;
         this.keySerde = keySerde;

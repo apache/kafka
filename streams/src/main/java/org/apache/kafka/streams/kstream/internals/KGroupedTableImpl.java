@@ -70,8 +70,9 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
                       final String name,
                       final String sourceName,
                       final Serde<K> keySerde,
-                      final Serde<V> valSerde) {
-        super(builder, name, Collections.singleton(sourceName));
+                      final Serde<V> valSerde,
+                      final StreamsGraphNode streamsGraphNode) {
+        super(builder, name, Collections.singleton(sourceName), streamsGraphNode);
         this.keySerde = keySerde;
         this.valSerde = valSerde;
     }
@@ -115,7 +116,8 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
         builder.addNode(statefulRepartitionNodeBuilder.build());
 
         // return the KTable representation with the intermediate topic as the sources
-        return new KTableImpl<>(builder, funcName, aggregateSupplier, Collections.singleton(sourceName), materialized.storeName(), materialized.isQueryable());
+        return new KTableImpl<>(builder, funcName, aggregateSupplier, Collections.singleton(sourceName), materialized.storeName(), materialized.isQueryable(),
+                                null);
     }
 
     @Override

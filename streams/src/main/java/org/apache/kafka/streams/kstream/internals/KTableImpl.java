@@ -80,8 +80,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                       final ProcessorSupplier<?, ?> processorSupplier,
                       final Set<String> sourceNodes,
                       final String queryableStoreName,
-                      final boolean isQueryable) {
-        super(builder, name, sourceNodes);
+                      final boolean isQueryable,
+                      final StreamsGraphNode streamsGraphNode) {
+        super(builder, name, sourceNodes, streamsGraphNode);
         this.processorSupplier = processorSupplier;
         this.queryableStoreName = queryableStoreName;
         this.keySerde = null;
@@ -97,7 +98,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                       final Set<String> sourceNodes,
                       final String queryableStoreName,
                       final boolean isQueryable) {
-        super(builder, name, sourceNodes);
+        super(builder, name, sourceNodes, null);
         this.processorSupplier = processorSupplier;
         this.queryableStoreName = queryableStoreName;
         this.keySerde = keySerde;
@@ -196,7 +197,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
         builder.addNode(graphNode);
 
-        return new KTableImpl<>(builder, name, processorSupplier, sourceNodes, shouldMaterialize ? materializedInternal.storeName() : this.queryableStoreName, shouldMaterialize);
+        return new KTableImpl<>(builder, name, processorSupplier, sourceNodes, shouldMaterialize ? materializedInternal.storeName() : this.queryableStoreName, shouldMaterialize,
+                                null);
     }
 
     @Override
@@ -305,7 +307,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
         builder.addNode(toStreamNode);
 
-        return new KStreamImpl<>(builder, name, sourceNodes, false);
+        return new KStreamImpl<>(builder, name, sourceNodes, false, null);
     }
 
     @Override
@@ -428,9 +430,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         }
 
         final KTableKTableJoinMerger<K, R> joinMerge = new KTableKTableJoinMerger<>(
-            new KTableImpl<K, V, R>(builder, joinThisName, joinThis, sourceNodes, this.queryableStoreName, false),
+            new KTableImpl<K, V, R>(builder, joinThisName, joinThis, sourceNodes, this.queryableStoreName, false, null),
             new KTableImpl<K, V1, R>(builder, joinOtherName, joinOther, ((KTableImpl<K, ?, ?>) other).sourceNodes,
-                                     ((KTableImpl<K, ?, ?>) other).queryableStoreName, false),
+                                     ((KTableImpl<K, ?, ?>) other).queryableStoreName, false, null),
             internalQueryableName
         );
 
@@ -444,7 +446,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
             .withJoinThisStoreNames(valueGetterSupplier().storeNames())
             .withJoinOtherStoreNames(((KTableImpl) other).valueGetterSupplier().storeNames());
 
-        return new KTableImpl<>(builder, joinMergeName, joinMerge, allSourceNodes, internalQueryableName, internalQueryableName != null);
+        return new KTableImpl<>(builder, joinMergeName, joinMerge, allSourceNodes, internalQueryableName, internalQueryableName != null, null);
     }
 
     @Override
@@ -475,7 +477,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                                        selectName,
                                        this.name,
                                        serializedInternal.keySerde(),
-                                       serializedInternal.valueSerde());
+                                       serializedInternal.valueSerde(), null);
     }
 
     @SuppressWarnings("unchecked")

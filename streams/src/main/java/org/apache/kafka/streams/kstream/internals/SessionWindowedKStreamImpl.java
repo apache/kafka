@@ -57,8 +57,9 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K> implemen
                                final String name,
                                final Serde<K> keySerde,
                                final Serde<V> valSerde,
-                               final GroupedStreamAggregateBuilder<K, V> aggregateBuilder) {
-        super(builder, name, sourceNodes);
+                               final GroupedStreamAggregateBuilder<K, V> aggregateBuilder,
+                               final StreamsGraphNode streamsGraphNode) {
+        super(builder, name, sourceNodes, streamsGraphNode);
         Objects.requireNonNull(windows, "windows can't be null");
         this.windows = windows;
         this.keySerde = keySerde;

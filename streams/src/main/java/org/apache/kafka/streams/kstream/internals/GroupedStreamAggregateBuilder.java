@@ -89,12 +89,12 @@ class GroupedStreamAggregateBuilder<K, V> {
 
 
         return new KTableImpl<>(
-                builder,
-                aggFunctionName,
-                aggregateSupplier,
+            builder,
+            aggFunctionName,
+            aggregateSupplier,
                 sourceName.equals(this.name) ? sourceNodes : Collections.singleton(sourceName),
-                storeBuilder.name(),
-                isQueryable);
+            storeBuilder.name(),
+            isQueryable, null);
     }
 
     /**
