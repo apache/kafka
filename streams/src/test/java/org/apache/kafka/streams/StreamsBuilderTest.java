@@ -58,13 +58,6 @@ public class StreamsBuilderTest {
     private final StreamsBuilder builder = new StreamsBuilder();
     private final Properties props = StreamsTestUtils.topologyTestConfig(Serdes.String(), Serdes.String());
 
-    @Test(expected = TopologyException.class)
-    public void testFrom() {
-        builder.stream(Arrays.asList("topic-1", "topic-2"));
-
-        builder.build().addSource(KStreamImpl.SOURCE_NAME + "0000000000", "topic-3");
-    }
-
     @Test
     public void shouldAllowJoinUnmaterializedFilteredKTable() {
         final KTable<Bytes, String> filteredKTable = builder.<Bytes, String>table("table-topic").filter(MockPredicate.<Bytes, String>allGoodPredicate());
