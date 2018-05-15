@@ -62,7 +62,6 @@ class ControllerEventManager(controllerId: Int, rateAndTimeMetrics: Map[Controll
   }
 
   def put(event: ControllerEvent): Unit = inLock(putLock) {
-    event.enqueueTimeMs = time.milliseconds()
     queue.put(event)
   }
 
