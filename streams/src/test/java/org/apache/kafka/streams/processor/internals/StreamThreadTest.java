@@ -29,7 +29,11 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.metrics.KafkaMetric;
+import org.apache.kafka.common.metrics.Measurable;
+import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
@@ -286,6 +290,7 @@ public class StreamThreadTest {
         final StreamThread thread = new StreamThread(
             mockTime,
             config,
+            null,
             consumer,
             consumer,
             null,
@@ -318,6 +323,7 @@ public class StreamThreadTest {
         final StreamThread thread = new StreamThread(
             mockTime,
             config,
+            null,
             consumer,
             consumer,
             null,
@@ -350,6 +356,7 @@ public class StreamThreadTest {
         final StreamThread thread = new StreamThread(
             mockTime,
             config,
+            null,
             consumer,
             consumer,
             null,
@@ -496,6 +503,7 @@ public class StreamThreadTest {
         final StreamThread thread = new StreamThread(
             mockTime,
             config,
+            null,
             consumer,
             consumer,
             null,
@@ -531,6 +539,7 @@ public class StreamThreadTest {
         final StreamThread thread = new StreamThread(
             mockTime,
             config,
+            null,
             consumer,
             consumer,
             null,
@@ -557,6 +566,7 @@ public class StreamThreadTest {
         final StreamThread thread = new StreamThread(
             mockTime,
             config,
+            null,
             consumer,
             consumer,
             null,
@@ -1242,6 +1252,40 @@ public class StreamThreadTest {
         assertTrue(metadata.standbyTasks().isEmpty());
     }
 
+    @Test
+    // TODO: Need to add a test case covering EOS when we create a mock taskManager class
+    public void producerMetricsVerificationWithoutEOS() {
+        final MockProducer<byte[], byte[]> producer = new MockProducer();
+        final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
+        final TaskManager taskManager = mockTaskManagerCommit(consumer, 1, 0);
 
-
+        final StreamThread.StreamsMetricsThreadImpl streamsMetrics = new StreamThread.StreamsMetricsThreadImpl(metrics, "");
+        final StreamThread thread = new StreamThread(
+                mockTime,
+                config,
+                producer,
+                consumer,
+                consumer,
+                null,
+                taskManager,
+                streamsMetrics,
+                internalTopologyBuilder,
+                clientId,
+                new LogContext(""));
+        final MetricName testMetricName = new MetricName("test_metric", "", "", new HashMap<String, String>());
+        final Metric testMetric = new KafkaMetric(
+                new Object(),
+                testMetricName,
+                new Measurable() {
+                    @Override
+                    public double measure(MetricConfig config, long now) {
+                        return 0;
+                    }
+                },
+                null,
+                new MockTime());
+        producer.setMockMetrics(testMetricName, testMetric);
+        Map<MetricName, Metric> producerMetrics = thread.producerMetrics();
+        assertEquals(testMetricName, producerMetrics.get(testMetricName).metricName());
+    }
 }
