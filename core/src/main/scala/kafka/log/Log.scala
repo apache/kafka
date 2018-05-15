@@ -1335,9 +1335,9 @@ class Log(@volatile var dir: File,
 
     if (segment.shouldRoll(messagesSize, maxTimestampInMessages, maxOffsetInMessages, now)) {
       debug(s"Rolling new log segment (log_size = ${segment.size}/${config.segmentSize}}, " +
-        s"offset_index_size = ${segment.offsetIndex.entries}/${segment.offsetIndex.maxEntries}, " +
-        s"time_index_size = ${segment.timeIndex.entries}/${segment.timeIndex.maxEntries}, " +
-        s"inactive_time_ms = ${segment.timeWaitedForRoll(now, maxTimestampInMessages)}/${config.segmentMs - segment.rollJitterMs}).")
+         s"offset_index_size = ${segment.offsetIndex.entries}/${segment.offsetIndex.maxEntries}, " +
+         s"time_index_size = ${segment.timeIndex.entries}/${segment.timeIndex.maxEntries}, " +
+         s"inactive_time_ms = ${segment.timeWaitedForRoll(now, maxTimestampInMessages)}/${config.segmentMs - segment.rollJitterMs}).")
 
       /*
         maxOffsetInMessages - Integer.MAX_VALUE is a heuristic value for the first offset in the set of messages.
@@ -1674,7 +1674,7 @@ class Log(@volatile var dir: File,
    * <ol>
    *   <li> Cleaner creates one or more new segments with suffix .cleaned and invokes replaceSegments().
    *        If broker crashes at this point, the clean-and-swap operation is aborted and
-   *        the .cleaned file is deleted on recovery in loadSegments().
+   *        the .cleaned files are deleted on recovery in loadSegments().
    *   <li> New segments are renamed .swap. If the broker crashes before all segments were renamed to .swap, the
    *        clean-and-swap operation is aborted - .cleaned as well as .swap files are deleted on recovery in
    *        loadSegments(). We detect this situation by maintaining a specific order in which files are renamed from
@@ -1696,24 +1696,27 @@ class Log(@volatile var dir: File,
    * @param isRecoveredSwapFile true if the new segment was created from a swap file during recovery after a crash
    */
   private[log] def replaceSegments(newSegments: Seq[LogSegment], oldSegments: Seq[LogSegment], isRecoveredSwapFile: Boolean = false) {
+    val sortedNewSegments = newSegments.sortBy(_.baseOffset)
+    val sortedOldSegments = oldSegments.sortBy(_.baseOffset)
+
     lock synchronized {
       checkIfMemoryMappedBufferClosed()
       // need to do this in two phases to be crash safe AND do the delete asynchronously
       // if we crash in the middle of this we complete the swap in loadSegments()
       if (!isRecoveredSwapFile)
-        newSegments.reverse.foreach(_.changeFileSuffixes(Log.CleanedFileSuffix, Log.SwapFileSuffix))
-      newSegments.foreach(addSegment(_))
+        sortedNewSegments.reverse.foreach(_.changeFileSuffixes(Log.CleanedFileSuffix, Log.SwapFileSuffix))
+      sortedNewSegments.reverse.foreach(addSegment(_))
 
       // delete the old files
-      for (seg <- oldSegments) {
+      for (seg <- sortedOldSegments) {
         // remove the index entry
-        if (seg.baseOffset != newSegments.head.baseOffset)
+        if (seg.baseOffset != sortedNewSegments.head.baseOffset)
           segments.remove(seg.baseOffset)
         // delete segment
         asyncDeleteSegment(seg)
       }
       // okay we are safe now, remove the swap suffix
-      newSegments.foreach(_.changeFileSuffixes(Log.SwapFileSuffix, ""))
+      sortedNewSegments.foreach(_.changeFileSuffixes(Log.SwapFileSuffix, ""))
     }
   }
 
@@ -1939,7 +1942,7 @@ object Log extends Logging {
     if (dirName == null || dirName.isEmpty || !dirName.contains('-'))
       throw exception(dir)
     if (dirName.endsWith(DeleteDirSuffix) && !DeleteDirPattern.matcher(dirName).matches ||
-      dirName.endsWith(FutureDirSuffix) && !FutureDirPattern.matcher(dirName).matches)
+        dirName.endsWith(FutureDirSuffix) && !FutureDirPattern.matcher(dirName).matches)
       throw exception(dir)
 
     val name: String =
@@ -1971,7 +1974,7 @@ object Log extends Logging {
     try fn
     catch {
       case e: OffsetOverflowException if (retries > 1) => {
-        info(s"Caught OffsetOverflowException $e")
+        info(s"Caught OffsetOverflowException ${e.getMessage}")
         Log.splitSegmentOnOffsetOverflow(log, segment)
         maybeHandleOffsetOverflow(log, segment, retries - 1)(fn)
       }
@@ -1994,7 +1997,7 @@ object Log extends Logging {
     val sourceRecords = segment.log
     var readBuffer = ByteBuffer.allocate(1024 * 1024)
 
-    class CopyResult(val bytesRead: Option[Int], val overflowOffset: Option[Long])
+    case class CopyResult(val bytesRead: Option[Int], val overflowOffset: Option[Long])
 
     // Helper method to copy `records` into `segment`. Makes sure records being appended do not result in offset overflow.
     def copyRecordsToSegment(records: FileRecords, segment: LogSegment, readBuffer: ByteBuffer): CopyResult = {
@@ -2013,7 +2016,7 @@ object Log extends Logging {
 
       // return early if no valid batches were found
       if (validBatches.size == 0)
-        return new CopyResult(None, overflowOffset)
+        return CopyResult(None, overflowOffset)
 
       // read all the valid batches
       val lastValidBatch = validBatches.last
@@ -2039,7 +2042,7 @@ object Log extends Logging {
       readBuffer.clear()
       log.info(s"Appended messages till $maxOffset to segment $segment during split")
 
-      return new CopyResult(Some(bytesRead), overflowOffset)
+      return CopyResult(Some(bytesRead), overflowOffset)
     }
 
     log.info(s"Splitting segment $segment in log $log")

@@ -2712,12 +2712,12 @@ class LogTest {
     * Wrap a single record log buffer with leader epoch.
     */
   private def singletonRecordsWithLeaderEpoch(value: Array[Byte],
-                                       key: Array[Byte] = null,
-                                       leaderEpoch: Int,
-                                       offset: Long,
-                                       codec: CompressionType = CompressionType.NONE,
-                                       timestamp: Long = RecordBatch.NO_TIMESTAMP,
-                                       magicValue: Byte = RecordBatch.CURRENT_MAGIC_VALUE): MemoryRecords = {
+                                      key: Array[Byte] = null,
+                                      leaderEpoch: Int,
+                                      offset: Long,
+                                      codec: CompressionType = CompressionType.NONE,
+                                      timestamp: Long = RecordBatch.NO_TIMESTAMP,
+                                      magicValue: Byte = RecordBatch.CURRENT_MAGIC_VALUE): MemoryRecords = {
     val records = Seq(new SimpleRecord(timestamp, key, value))
 
     val buf = ByteBuffer.allocate(DefaultRecordBatch.sizeInBytes(records.asJava))
