@@ -97,8 +97,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                       final Serde<V> valSerde,
                       final Set<String> sourceNodes,
                       final String queryableStoreName,
-                      final boolean isQueryable) {
-        super(builder, name, sourceNodes, null);
+                      final boolean isQueryable,
+                      final StreamsGraphNode streamsGraphNode) {
+        super(builder, name, sourceNodes, streamsGraphNode);
         this.processorSupplier = processorSupplier;
         this.queryableStoreName = queryableStoreName;
         this.keySerde = keySerde;
@@ -135,13 +136,13 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         builder.addNode(graphNode);
 
         return new KTableImpl<>(builder,
-                name,
-                processorSupplier,
-                this.keySerde,
-                this.valSerde,
-                sourceNodes,
+                                name,
+                                processorSupplier,
+                                this.keySerde,
+                                this.valSerde,
+                                sourceNodes,
                 shouldMaterialize ? materializedInternal.storeName() : this.queryableStoreName,
-                shouldMaterialize);
+                                shouldMaterialize, null);
     }
 
     @Override
