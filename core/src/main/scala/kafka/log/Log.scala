@@ -29,7 +29,7 @@ import java.util.regex.Pattern
 
 import com.yammer.metrics.core.Gauge
 import kafka.api.KAFKA_0_10_0_IV0
-import kafka.common.{InvalidOffsetException, KafkaException, LongRef, OffsetOverflowException}
+import kafka.common.{InvalidOffsetException, KafkaException, LongRef}
 import kafka.message.{BrokerCompressionCodec, CompressionCodec, NoCompressionCodec}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.checkpoints.{LeaderEpochCheckpointFile, LeaderEpochFile}
@@ -37,7 +37,7 @@ import kafka.server.epoch.{LeaderEpochCache, LeaderEpochFileCache}
 import kafka.server.{BrokerTopicStats, FetchDataInfo, LogDirFailureChannel, LogOffsetMetadata}
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.{CorruptRecordException, KafkaStorageException, OffsetOutOfRangeException, RecordBatchTooLargeException, RecordTooLargeException, UnsupportedForMessageFormatException}
+import org.apache.kafka.common.errors.{CorruptRecordException, IndexOffsetOverflowException, KafkaStorageException, OffsetOutOfRangeException, RecordBatchTooLargeException, RecordTooLargeException, UnsupportedForMessageFormatException}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import org.apache.kafka.common.requests.{IsolationLevel, ListOffsetRequest}
@@ -1973,8 +1973,8 @@ object Log extends Logging {
   private[log] def maybeHandleOffsetOverflow[T](log: Log, segment: LogSegment, retries: Int = 1)(fn: => T): T = {
     try fn
     catch {
-      case e: OffsetOverflowException if (retries > 0) => {
-        info(s"Caught OffsetOverflowException ${e.getMessage}")
+      case e: IndexOffsetOverflowException if (retries > 0) => {
+        info(s"Caught IndexOffsetOverflowException ${e.getMessage}")
         Log.splitSegmentOnOffsetOverflow(log, segment)
         maybeHandleOffsetOverflow(log, segment, retries - 1)(fn)
       }
@@ -1997,7 +1997,7 @@ object Log extends Logging {
     val sourceRecords = segment.log
     var readBuffer = ByteBuffer.allocate(1024 * 1024)
 
-    case class CopyResult(val bytesRead: Option[Int], val overflowOffset: Option[Long])
+    class CopyResult(val bytesRead: Option[Int], val overflowOffset: Option[Long])
 
     // Helper method to copy `records` into `segment`. Makes sure records being appended do not result in offset overflow.
     def copyRecordsToSegment(records: FileRecords, segment: LogSegment, readBuffer: ByteBuffer): CopyResult = {
@@ -2016,7 +2016,7 @@ object Log extends Logging {
 
       // return early if no valid batches were found
       if (validBatches.size == 0)
-        return CopyResult(None, overflowOffset)
+        return new CopyResult(None, overflowOffset)
 
       // read all the valid batches
       val lastValidBatch = validBatches.last
@@ -2042,7 +2042,7 @@ object Log extends Logging {
       readBuffer.clear()
       log.info(s"Appended messages till $maxOffset to segment $segment during split")
 
-      return CopyResult(Some(bytesRead), overflowOffset)
+      return new CopyResult(Some(bytesRead), overflowOffset)
     }
 
     log.info(s"Splitting segment $segment in log $log")

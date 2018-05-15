@@ -18,15 +18,15 @@
 package kafka.log
 
 import java.io.{File, RandomAccessFile}
-import java.nio.{ByteBuffer, MappedByteBuffer}
 import java.nio.channels.FileChannel
 import java.nio.file.Files
+import java.nio.{ByteBuffer, MappedByteBuffer}
 import java.util.concurrent.locks.{Lock, ReentrantLock}
 
-import kafka.common.{InvalidOffsetException, OffsetOverflowException}
 import kafka.log.IndexSearchType.IndexSearchEntity
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.{CoreUtils, Logging}
+import org.apache.kafka.common.errors.IndexOffsetOverflowException
 import org.apache.kafka.common.utils.{MappedByteBuffers, OperatingSystem, Utils}
 
 import scala.math.ceil
@@ -229,12 +229,13 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
 
   /**
    * Get offset relative to base offset of this index
-   * @throws OffsetOverflowException
+ *
+   * @throws IndexOffsetOverflowException
    */
   def relativeOffset(offset: Long): Int = {
     val relativeOffset = offset - baseOffset
     if (relativeOffset < 0 || relativeOffset > Int.MaxValue)
-      throw new OffsetOverflowException(s"Integer overflow for offset: $offset baseOffset: $baseOffset")
+      throw new IndexOffsetOverflowException(s"Integer overflow for offset: $offset baseOffset: $baseOffset")
     relativeOffset.toInt
   }
 

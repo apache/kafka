@@ -21,12 +21,11 @@ import java.nio.file.{Files, NoSuchFileException}
 import java.nio.file.attribute.FileTime
 import java.util.concurrent.TimeUnit
 
-import kafka.common.OffsetOverflowException
 import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
 import kafka.server.epoch.LeaderEpochCache
 import kafka.server.{FetchDataInfo, LogOffsetMetadata}
 import kafka.utils._
-import org.apache.kafka.common.errors.{CorruptRecordException, InvalidOffsetException}
+import org.apache.kafka.common.errors.{CorruptRecordException, InvalidOffsetException, IndexOffsetOverflowException}
 import org.apache.kafka.common.record.FileRecords.LogOffsetPosition
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Time
@@ -133,7 +132,7 @@ class LogSegment private[log] (val log: FileRecords,
         rollingBasedTimestamp = Some(largestTimestamp)
 
       if (!canConvertToRelativeOffset(largestOffset))
-        throw new OffsetOverflowException(
+        throw new IndexOffsetOverflowException(
           s"largest offset $largestOffset cannot be safely converted to relative offset for segment with baseOffset $baseOffset")
 
       // append the messages

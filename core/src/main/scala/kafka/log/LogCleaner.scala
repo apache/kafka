@@ -32,7 +32,7 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.ConfigException
-import org.apache.kafka.common.errors.{CorruptRecordException, KafkaStorageException}
+import org.apache.kafka.common.errors.{CorruptRecordException, KafkaStorageException, IndexOffsetOverflowException}
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention
 
@@ -511,10 +511,10 @@ private[log] class Cleaner(val id: Int,
           cleanInto(log.topicPartition, currentSegment.log, cleaned, map, retainDeletes, log.config.maxMessageSize,
             transactionMetadata, log.activeProducersWithLastSequence, stats)
         } catch {
-          case e: OffsetOverflowException =>
-            // KAFKA-6264: if we got an OffsetOverflowException, split the current segment. It's also safest to abort
+          case e: IndexOffsetOverflowException =>
+            // KAFKA-6264: if we got an IndexOffsetOverflowException, split the current segment. It's also safest to abort
             // the current cleaning process, so that we retry from scratch once the split is complete.
-            info(s"Caught OffsetOverflowException during log cleaning $e")
+            info(s"Caught IndexOffsetOverflowException during log cleaning $e")
             Log.splitSegmentOnOffsetOverflow(log, currentSegment)
             throw new LogCleaningAbortedException()
         }
@@ -539,8 +539,7 @@ private[log] class Cleaner(val id: Int,
         catch {
           case deleteException: Exception =>
             e.addSuppressed(deleteException)
-        }
-        finally throw e
+        } finally throw e
     }
   }
 
