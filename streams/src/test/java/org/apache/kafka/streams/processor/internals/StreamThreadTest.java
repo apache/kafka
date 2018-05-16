@@ -1265,7 +1265,7 @@ public class StreamThreadTest {
     @Test
     // TODO: Need to add a test case covering EOS when we create a mock taskManager class
     public void producerMetricsVerificationWithoutEOS() {
-        final MockProducer<byte[], byte[]> producer = new MockProducer();
+        final MockProducer<byte[], byte[]> producer = new MockProducer<>();
         final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
         final TaskManager taskManager = mockTaskManagerCommit(consumer, 1, 0);
 
@@ -1281,7 +1281,8 @@ public class StreamThreadTest {
                 streamsMetrics,
                 internalTopologyBuilder,
                 clientId,
-                new LogContext(""));
+                new LogContext(""),
+                new AtomicBoolean());
         final MetricName testMetricName = new MetricName("test_metric", "", "", new HashMap<String, String>());
         final Metric testMetric = new KafkaMetric(
                 new Object(),
