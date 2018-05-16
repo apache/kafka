@@ -50,12 +50,12 @@ class StatelessProcessorNode<K, V> extends StreamsGraphNode {
         this.processorParameters = processorParameters;
     }
 
-    StatelessProcessorNode(final String processorNodeName,
+    StatelessProcessorNode(final String nodeName,
                            final ProcessorParameters processorParameters,
                            final boolean repartitionRequired,
                            final List<String> multipleParentNames) {
 
-        this(processorNodeName, processorParameters, repartitionRequired);
+        this(nodeName, processorParameters, repartitionRequired);
 
         this.multipleParentNames = multipleParentNames;
     }
