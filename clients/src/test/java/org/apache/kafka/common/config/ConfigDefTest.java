@@ -29,6 +29,8 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -416,6 +418,27 @@ public class ConfigDefTest {
         final ConfigDef configDef = new ConfigDef()
                 .define("parent", Type.STRING, Importance.HIGH, "parent docs", "group", 1, Width.LONG, "Parent", Collections.singletonList("child"));
         configDef.parse(Collections.emptyMap());
+    }
+
+    void assertList(List<String> expected, Object actual) {
+        assertTrue("actual should be a List", actual instanceof List);
+        final List<String> actualList = (List<String>) actual;
+        final Set<String> expectedSet = new LinkedHashSet<>(expected);
+        final Set<String> actualSet = new LinkedHashSet<>(actualList);
+        assertEquals("Lists do not match.", expectedSet, actualSet);
+    }
+
+    @Test
+    public void testEscapedComma() {
+        final ConfigDef configdef = new ConfigDef()
+            .define("test", Type.LIST, Importance.HIGH, "test");
+        final Map<String, String> settings = new LinkedHashMap<>();
+        settings.put("test", "one,two,three");
+
+        assertList(Arrays.asList("one", "two", "three"), configdef.parse(settings).get("test"));
+
+        settings.put("test", "'first' , 'second\\,escaped',normal,value");
+        assertList(Arrays.asList("'first'", "'second,escaped'", "normal", "value"), configdef.parse(settings).get("test"));
     }
 
     @Test

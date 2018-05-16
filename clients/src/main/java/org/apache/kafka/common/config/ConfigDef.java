@@ -704,8 +704,12 @@ public class ConfigDef {
                     else if (value instanceof String)
                         if (trimmed.isEmpty())
                             return Collections.emptyList();
-                        else
-                            return Arrays.asList(trimmed.split("\\s*,\\s*", -1));
+                        else {
+                            final String[] parts = trimmed.split("\\s*(?<!\\\\),\\s*", -1);
+                            for (int i = 0; i < parts.length; i++)
+                                parts[i] = parts[i].replace("\\,", ",");
+                            return Arrays.asList(parts);
+                        }
                     else
                         throw new ConfigException(name, value, "Expected a comma separated list.");
                 case CLASS:
