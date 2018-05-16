@@ -34,14 +34,14 @@ class StatefulProcessorNode<K, V> extends StatelessProcessorNode<K, V> {
                           final ProcessorParameters processorParameters,
                           final String[] storeNames,
                           final String maybeRepartitionedSourceName,
-                          final StoreBuilder<KeyValueStore<K, V>> storeBuilder,
+                          final StoreBuilder<KeyValueStore<K, V>> materializedKTableStoreBuilder,
                           final boolean repartitionRequired) {
         super(nodeName,
               processorParameters,
               repartitionRequired);
 
         this.storeNames = storeNames;
-        this.storeBuilder = storeBuilder;
+        this.storeBuilder = materializedKTableStoreBuilder;
         this.maybeRepartitionedSourceName = maybeRepartitionedSourceName;
     }
 
