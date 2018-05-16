@@ -55,4 +55,9 @@ class KTableKTableLeftJoinValueGetter<K1, K2, V1, V2, R> implements KTableValueG
         }
     }
 
+    @Override
+    public void close() {
+        valueGetter1.close();
+        valueGetter2.close();
+    }
 }

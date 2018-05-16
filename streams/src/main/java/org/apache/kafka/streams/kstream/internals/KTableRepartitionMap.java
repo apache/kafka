@@ -115,6 +115,11 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableProcessorSuppli
         public KeyValue<K1, V1> get(final K key) {
             return mapper.apply(key, parentGetter.get(key));
         }
+
+        @Override
+        public void close() {
+            parentGetter.close();
+        }
     }
 
 }

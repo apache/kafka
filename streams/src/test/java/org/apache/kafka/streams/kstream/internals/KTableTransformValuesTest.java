@@ -248,6 +248,46 @@ public class KTableTransformValuesTest {
     }
 
     @Test
+    public void shouldCloseTransformerOnGetterClose() {
+        final KTableTransformValues<String, String, String> transformValues =
+                new KTableTransformValues<>(parent, mockSupplier, null);
+
+        expect(mockSupplier.get()).andReturn(transformer);
+        expect(parent.valueGetterSupplier()).andReturn(parentGetterSupplier);
+        expect(parentGetterSupplier.get()).andReturn(parentGetter);
+
+        transformer.close();
+        expectLastCall();
+
+        replay(mockSupplier, transformer, parent, parentGetterSupplier);
+
+        final KTableValueGetter<String, String> getter = transformValues.view().get();
+        getter.close();
+
+        verify(transformer);
+    }
+
+    @Test
+    public void shouldCloseParentGetterClose() {
+        final KTableTransformValues<String, String, String> transformValues =
+                new KTableTransformValues<>(parent, mockSupplier, null);
+
+        expect(mockSupplier.get()).andReturn(transformer);
+        expect(parent.valueGetterSupplier()).andReturn(parentGetterSupplier);
+        expect(parentGetterSupplier.get()).andReturn(parentGetter);
+
+        parentGetter.close();
+        expectLastCall();
+
+        replay(mockSupplier, parent, parentGetterSupplier, parentGetter);
+
+        final KTableValueGetter<String, String> getter = transformValues.view().get();
+        getter.close();
+
+        verify(parentGetter);
+    }
+
+    @Test
     public void shouldTransformValuesWithKey() {
         builder.addStateStore(storeBuilder(STORE_NAME))
                 .addStateStore(storeBuilder(OTHER_STORE_NAME))

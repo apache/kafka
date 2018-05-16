@@ -59,7 +59,7 @@ class KTableTransformValues<K, V, V1> implements KTableProcessorSupplier<K, V, V
             public KTableValueGetter<K, V1> get() {
                 return new KTableTransformValuesGetter(
                         parentValueGetterSupplier.get(),
-                        transformerSupplier.get());     // Todo(ac): This needs closing!
+                        transformerSupplier.get());
             }
 
             @Override
@@ -149,6 +149,12 @@ class KTableTransformValues<K, V, V1> implements KTableProcessorSupplier<K, V, V
         @Override
         public V1 get(final K key) {
             return computeValue(key, parentGetter.get(key), valueTransformer);
+        }
+
+        @Override
+        public void close() {
+            parentGetter.close();
+            valueTransformer.close();
         }
     }
 }
