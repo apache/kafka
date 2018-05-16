@@ -165,7 +165,7 @@
                             be populated with data from only <strong>a subset</strong> of the partitions of the input topic.  Collectively, across
                             all application instances, all input topic partitions are read and processed.</p>
                         <p>You must provide a name for the table (more precisely, for the internal
-                            <a class="reference internal" href="../architecture.html#streams-architecture-state"><span class="std std-ref">state store</span></a> that backs the table).  This is required for
+                            <a class="reference internal" href="../architecture.html#streams_architecture_state"><span class="std std-ref">state store</span></a> that backs the table).  This is required for
                             supporting <a class="reference internal" href="interactive-queries.html#streams-developer-guide-interactive-queries"><span class="std std-ref">interactive queries</span></a> against the table. When a
                             name is not provided the table will not queryable and an internal name will be provided for the state store.</p>
                         <p>If you do not specify SerDes explicitly, the default SerDes from the
@@ -189,7 +189,7 @@
                         <p>In the case of a GlobalKTable, the local GlobalKTable instance of every application instance will
                             be populated with data from <strong>all</strong> the partitions of the input topic.</p>
                         <p>You must provide a name for the table (more precisely, for the internal
-                            <a class="reference internal" href="../architecture.html#streams-architecture-state"><span class="std std-ref">state store</span></a> that backs the table).  This is required for
+                            <a class="reference internal" href="../architecture.html#streams_architecture_state"><span class="std std-ref">state store</span></a> that backs the table).  This is required for
                             supporting <a class="reference internal" href="interactive-queries.html#streams-developer-guide-interactive-queries"><span class="std std-ref">interactive queries</span></a> against the table. When a
                             name is not provided the table will not queryable and an internal name will be provided for the state store.</p>
                         <div class="highlight-java"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">org.apache.kafka.common.serialization.Serdes</span><span class="o">;</span>
@@ -690,12 +690,12 @@
             </div>
             <div class="section" id="stateful-transformations">
                 <span id="streams-developer-guide-dsl-transformations-stateful"></span><h3><a class="toc-backref" href="#id11">Stateful transformations</a><a class="headerlink" href="#stateful-transformations" title="Permalink to this headline"></a></h3>
-                <p id="streams-developer-guide-dsl-transformations-stateful-overview">Stateful transformations depend on state for processing inputs and producing outputs and require a <a class="reference internal" href="../architecture.html#streams-architecture-state"><span class="std std-ref">state store</span></a> associated with the stream processor. For example, in aggregating operations, a windowing state store is used to collect the latest aggregation results per
+                <p id="streams-developer-guide-dsl-transformations-stateful-overview">Stateful transformations depend on state for processing inputs and producing outputs and require a <a class="reference internal" href="../architecture.html#streams_architecture_state"><span class="std std-ref">state store</span></a> associated with the stream processor. For example, in aggregating operations, a windowing state store is used to collect the latest aggregation results per
                     window. In join operations, a windowing state store is used to collect all of the records received so far within the
                     defined window boundary.</p>
                 <p>Note, that state stores are fault-tolerant.
                     In case of failure, Kafka Streams guarantees to fully restore all state stores prior to resuming the processing.
-                    See <a class="reference internal" href="../architecture.html#streams-architecture-fault-tolerance"><span class="std std-ref">Fault Tolerance</span></a> for further information.</p>
+                    See <a class="reference internal" href="../architecture.html#streams_architecture_recovery"><span class="std std-ref">Fault Tolerance</span></a> for further information.</p>
                 <p>Available stateful transformations in the DSL include:</p>
                 <ul class="simple">
                     <li><a class="reference internal" href="#streams-developer-guide-dsl-aggregating"><span class="std std-ref">Aggregating</span></a></li>
