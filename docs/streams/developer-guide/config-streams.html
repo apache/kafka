@@ -75,6 +75,7 @@
             <li><a class="reference internal" href="#num-standby-replicas" id="id10">num.standby.replicas</a></li>
             <li><a class="reference internal" href="#num-stream-threads" id="id11">num.stream.threads</a></li>
             <li><a class="reference internal" href="#partition-grouper" id="id12">partition.grouper</a></li>
+            <li><a class="reference internal" href="#processing-guarantee" id="id25">processing.guarantee</a></li>
             <li><a class="reference internal" href="#replication-factor" id="id13">replication.factor</a></li>
             <li><a class="reference internal" href="#state-dir" id="id14">state.dir</a></li>
             <li><a class="reference internal" href="#timestamp-extractor" id="id15">timestamp.extractor</a></li>
@@ -248,6 +249,11 @@
             <td colspan="2">Partition grouper class that implements the <code class="docutils literal"><span class="pre">PartitionGrouper</span></code> interface.</td>
             <td>See <a class="reference internal" href="#streams-developer-guide-partition-grouper"><span class="std std-ref">Partition Grouper</span></a></td>
           </tr>
+          <tr class="row-even"><td>processing.guarantee</td>
+            <td>Low</td>
+            <td colspan="2">The processing mode. Can be either <code class="docutils literal"><span class="pre">"at_least_once"</span></code> (default) or <code class="docutils literal"><span class="pre">"exactly_once"</span></code>.
+            <td>See <a class="reference internal" href="#streams-developer-guide-processing-guarantedd"><span class="std std-ref">Processing Guarantee</span></a></td>
+          </tr>
           <tr class="row-odd"><td>poll.ms</td>
             <td>Low</td>
             <td colspan="2">The amount of time in milliseconds to block waiting for input.</td>
@@ -388,6 +394,19 @@
               The default implementation provided by Kafka Streams is <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/processor/DefaultPartitionGrouper.html">DefaultPartitionGrouper</a>.
               It assigns each task with one partition for each of the source topic partitions. The generated number of tasks equals the largest
               number of partitions among the input topics. Usually an application does not need to customize the partition grouper.</div></blockquote>
+        </div>
+        <div class="section" id="processing-guarantee">
+          <span id="streams-developer-guide-processing-guarantee"></span><h4><a class="toc-backref" href="#id25">processing.guarantee</a><a class="headerlink" href="#processing-guarantee" title="Permalink to this headline"></a></h4>
+          <blockquote>
+            <div>The processing guarantee that should be used. Possible values are <code class="docutils literal"><span class="pre">"at_least_once"</span></code> (default) and <code class="docutils literal"><span class="pre">"exactly_once"</span></code>.
+                 Note that if exactly-once processing is enabled, the default for parameter <code class="docutils literal"><span class="pre">commit.interval.ms</span></code> changes to 100ms.
+                 Additionally, consumers are configured with <code class="docutils literal"><span class="pre">isolation.level="read_committed"</span></code>
+                 and producers are configured with <code class="docutils literal"><span class="pre">retries=Integer.MAX_VALUE</span></code>, <code class="docutils literal"><span class="pre">enable.idempotence=true</span></code>,
+                 and <code class="docutils literal"><span class="pre">max.in.flight.requests.per.connection=1</span></code> per default.
+                 Note that by default exactly-once processing requires a cluster of at least three brokers what is the recommended setting for production.
+                 For development you can change this, by adjusting broker setting <code class="docutils literal"><span class="pre">transaction.state.log.replication.factor</span></code> to the number of broker you want to use.
+                 For more details see <a href="../core-concepts#streams_processing_guarantee">Processing Guarantees</a>.
+            </div></blockquote>
         </div>
         <div class="section" id="replication-factor">
           <span id="replication-factor-parm"></span><h4><a class="toc-backref" href="#id13">replication.factor</a><a class="headerlink" href="#replication-factor" title="Permalink to this headline"></a></h4>
