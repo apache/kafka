@@ -30,18 +30,18 @@ import java.util.regex.Pattern;
 
 class StreamSourceNode<K, V> extends StreamsGraphNode {
 
-    private Collection<String> topics;
+    private Collection<String> topicNames;
     private Pattern topicPattern;
     private final ConsumedInternal<K, V> consumedInternal;
 
 
     StreamSourceNode(final String nodeName,
-                     final Collection<String> topics,
+                     final Collection<String> topicNames,
                      final ConsumedInternal<K, V> consumedInternal) {
         super(nodeName,
               false);
 
-        this.topics = topics;
+        this.topicNames = topicNames;
         this.consumedInternal = consumedInternal;
     }
 
@@ -56,8 +56,8 @@ class StreamSourceNode<K, V> extends StreamsGraphNode {
         this.consumedInternal = consumedInternal;
     }
 
-    List<String> getTopics() {
-        return new ArrayList<>(topics);
+    List<String> getTopicNames() {
+        return new ArrayList<>(topicNames);
     }
 
     Pattern getTopicPattern() {
