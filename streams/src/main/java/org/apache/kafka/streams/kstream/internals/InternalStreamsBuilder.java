@@ -48,23 +48,25 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                        final ConsumedInternal<K, V> consumed) {
         final String name = newProcessorName(KStreamImpl.SOURCE_NAME);
 
-        addNode(new StreamSourceNode<>(
-            name,
-                                       topics,
-                                       consumed));
+        StreamSourceNode<K, V> streamSourceNode = new StreamSourceNode<>(name,
+                                                                         topics,
+                                                                         consumed);
 
-        return new KStreamImpl<>(this, name, Collections.singleton(name), false);
+        addNode(streamSourceNode);
+
+        return new KStreamImpl<>(this, name, Collections.singleton(name), false, streamSourceNode);
     }
 
     public <K, V> KStream<K, V> stream(final Pattern topicPattern, final ConsumedInternal<K, V> consumed) {
         final String name = newProcessorName(KStreamImpl.SOURCE_NAME);
 
-        addNode(new StreamSourceNode<>(
-            name,
-                                       topicPattern,
-                                       consumed));
+        StreamSourceNode<K, V> streamSourceNode = new StreamSourceNode<>(name,
+                                                                         topicPattern,
+                                                                         consumed);
 
-        return new KStreamImpl<>(this, name, Collections.singleton(name), false);
+        addNode(streamSourceNode);
+
+        return new KStreamImpl<>(this, name, Collections.singleton(name), false, streamSourceNode);
     }
 
     @SuppressWarnings("unchecked")
@@ -76,44 +78,35 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
         final String source = newProcessorName(KStreamImpl.SOURCE_NAME);
         final String name = newProcessorName(KTableImpl.SOURCE_NAME);
+        final ProcessorSupplier<K, V> processorSupplier = new KTableSource<>(storeBuilder.name());
+        final ProcessorParameters processorParameters = new ProcessorParameters<>(processorSupplier, name);
 
         StatefulSourceNode.StatefulSourceNodeBuilder<K, V> statefulSourceNodeBuilder = StatefulSourceNode.statefulSourceNodeBuilder();
 
-        final KTable<K, V> kTable = createKTable(consumed,
-                                                 storeBuilder.name(),
-                                                 materialized.isQueryable(),
-                                                 source,
-                                                 name,
-                                                 statefulSourceNodeBuilder);
 
         StatefulSourceNode<K, V> statefulSourceNode = statefulSourceNodeBuilder.withNodeName(name)
                                                                                .withSourceName(source)
                                                                                .withStoreBuilder(storeBuilder)
                                                                                .withConsumedInternal(consumed)
+                                                                               .withProcessorParameters(processorParameters)
                                                                                .withTopic(topic)
                                                                                .build();
 
         addNode(statefulSourceNode);
 
-
+        
         internalTopologyBuilder.addStateStore(storeBuilder, name);
         internalTopologyBuilder.markSourceStoreAndTopic(storeBuilder, topic);
-        return kTable;
-    }
 
-
-    private <K, V> KTable<K, V> createKTable(final ConsumedInternal<K, V> consumed,
-                                             final String storeName,
-                                             final boolean isQueryable,
-                                             final String source,
-                                             final String name,
-                                             final StatefulSourceNode.StatefulSourceNodeBuilder<K, V> statefulSourceNodeBuilder) {
-        final ProcessorSupplier<K, V> processorSupplier = new KTableSource<>(storeName);
-        final ProcessorParameters processorParameters = new ProcessorParameters<>(processorSupplier, name);
-        statefulSourceNodeBuilder.withProcessorParameters(processorParameters);
-
-        return new KTableImpl<>(this, name, processorSupplier,
-                                consumed.keySerde(), consumed.valueSerde(), Collections.singleton(source), storeName, isQueryable);
+        return new KTableImpl<>(this,
+                                       name,
+                                       processorSupplier,
+                                       consumed.keySerde(),
+                                       consumed.valueSerde(),
+                                       Collections.singleton(source),
+                                       storeBuilder.name(),
+                                       materialized.isQueryable(),
+                                       statefulSourceNode);
     }
 
     @SuppressWarnings("unchecked")
