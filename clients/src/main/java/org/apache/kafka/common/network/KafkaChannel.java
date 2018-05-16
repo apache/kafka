@@ -28,6 +28,52 @@ import java.nio.channels.SelectionKey;
 import java.util.Objects;
 
 public class KafkaChannel {
+    /**
+     * Mute States for KafkaChannel:
+     * <ul>
+     *   <li> NOT_MUTED: Channel is not muted. This is the default state. </li>
+     *   <li> MUTED: Channel is muted. Channel must be in this state to be unmuted. </li>
+     *   <li> MUTED_AND_RESPONSE_PENDING: (SocketServer only) Channel is muted and currently waiting to receive a
+     *                                   response from the API layer. </li>
+     *   <li> MUTED_AND_THROTTLED: (SocketServer only) Channel is muted and throttling is in progress due to quota
+     *                             violation. </li>
+     *   <li> MUTED_AND_THROTTLED_AND_RESPONSE_PENDING: (SocketServer only) Channel is muted, throttling is in progress,
+     *                                                 and waiting for a response from the API layer. </li>
+     * </ul>
+     */
+    public enum ChannelMuteState {
+        NOT_MUTED,
+        MUTED,
+        MUTED_AND_RESPONSE_PENDING,
+        MUTED_AND_THROTTLED,
+        MUTED_AND_THROTTLED_AND_RESPONSE_PENDING
+    };
+
+    /** Socket server events that will change the mute state. Valid transitions are:
+     * <ul>
+     *   <li> REQUEST_SENT: A request has been sent to the API layer. </li>
+     *   <li> RESPONSE_RECEIVED: A response has been received from the API layer. </li>
+     *   <li> THROTTLE_STARTED: Throttling started due to quota violation. </li>
+     *   <li> THROTTLE_ENDED: Throttling ended. </li>
+     * </ul>
+     *
+     * Valid transitions on each event are:
+     * <ul>
+     *   <li> REQUEST_SENT:      MUTED => MUTED_AND_RESPONSE_PENDING </li>
+     *   <li> RESPONSE_RECEIVED: MUTED_AND_RESPONSE_PENDING => MUTED, MUTED_AND_THROTTLED_AND_RESPONSE_PENDING =>
+     *                           MUTED_AND_THROTTLED </li>
+     *   <li> THROTTLE_STARTED:  MUTED_AND_RESPONSE_PENDING => MUTED_AND_THROTTLED_AND_RESPONSE_PENDING </li>
+     *   <li> THROTTLE_ENDED:    MUTED_AND_THROTTLED => MUTED, MUTED_AND_THROTTLED_AND_RESPONSE_PENDING =>
+     *                           MUTED_AND_RESPONSE_PENDING </li>
+     * </ul>
+     */
+    public enum ChannelMuteEvent {
+        REQUEST_SENT,
+        RESPONSE_RECEIVED,
+        THROTTLE_STARTED,
+        THROTTLE_ENDED
+    };
+
     private final String id;
     private final TransportLayer transportLayer;
     private final Authenticator authenticator;
@@ -41,21 +87,8 @@ public class KafkaChannel {
     // Track connection and mute state of channels to enable outstanding requests on channels to be
     // processed after the channel is disconnected.
     private boolean disconnected;
-    private boolean muted;
+    private ChannelMuteState muteState;
     private ChannelState state;
-
-    // SocketServer can unmute channel after a response has been sent out to the client. Also, in case of client-side
-    // throttling due to quota violation, the channel cannot be unmuted until the throttling is done. SocketServer
-    // tracks this unmute eligibility by keeping a reference count. More specifically,
-    // - increase the count when
-    //    (1) mute() is called
-    //    (2) throttling is requested for this channel due to quota violation
-    // - the count is decreased after any of the event mentioned above
-    //    (1) a response is sent
-    //    (2) throttling is done
-    //
-    // The channel can be unmuted only when the count is 0.
-    private int muteRefCount = 0;
 
     public KafkaChannel(String id, TransportLayer transportLayer, Authenticator authenticator, int maxReceiveSize, MemoryPool memoryPool) throws IOException {
         this.id = id;
@@ -65,7 +98,7 @@ public class KafkaChannel {
         this.maxReceiveSize = maxReceiveSize;
         this.memoryPool = memoryPool;
         this.disconnected = false;
-        this.muted = false;
+        this.muteState = ChannelMuteState.NOT_MUTED;
         this.state = ChannelState.NOT_CONNECTED;
     }
 
@@ -138,35 +171,69 @@ public class KafkaChannel {
      * externally muting a channel should be done via selector to ensure proper state handling
      */
     void mute() {
-        if (!disconnected)
-            transportLayer.removeInterestOps(SelectionKey.OP_READ);
-        muted = true;
+        if (muteState == ChannelMuteState.NOT_MUTED) {
+            if (!disconnected) transportLayer.removeInterestOps(SelectionKey.OP_READ);
+            muteState = ChannelMuteState.MUTED;
+        }
     }
 
     void unmute() {
-        if (!disconnected)
-            transportLayer.addInterestOps(SelectionKey.OP_READ);
-        muted = false;
+        if (muteState == ChannelMuteState.MUTED) {
+            if (!disconnected) transportLayer.addInterestOps(SelectionKey.OP_READ);
+            muteState = ChannelMuteState.NOT_MUTED;
+        }
     }
 
-    public void incrementMuteRefCount() {
-        muteRefCount++;
+    // Handle the specified channel mute-related event and transition the mute state according to the state machine.
+    public void handleChannelMuteEvent(ChannelMuteEvent event) {
+        boolean stateChanged = false;
+        switch (event) {
+            case REQUEST_SENT:
+                if (muteState == ChannelMuteState.MUTED) {
+                    muteState = ChannelMuteState.MUTED_AND_RESPONSE_PENDING;
+                    stateChanged = true;
+                }
+                break;
+            case RESPONSE_RECEIVED:
+                if (muteState == ChannelMuteState.MUTED_AND_RESPONSE_PENDING) {
+                    muteState = ChannelMuteState.MUTED;
+                    stateChanged = true;
+                }
+                if (muteState == ChannelMuteState.MUTED_AND_THROTTLED_AND_RESPONSE_PENDING) {
+                    muteState = ChannelMuteState.MUTED_AND_THROTTLED;
+                    stateChanged = true;
+                }
+                break;
+            case THROTTLE_STARTED:
+                if (muteState == ChannelMuteState.MUTED_AND_RESPONSE_PENDING) {
+                    muteState = ChannelMuteState.MUTED_AND_THROTTLED_AND_RESPONSE_PENDING;
+                    stateChanged = true;
+                }
+                break;
+            case THROTTLE_ENDED:
+                if (muteState == ChannelMuteState.MUTED_AND_THROTTLED) {
+                    muteState = ChannelMuteState.MUTED;
+                    stateChanged = true;
+                }
+                if (muteState == ChannelMuteState.MUTED_AND_THROTTLED_AND_RESPONSE_PENDING) {
+                    muteState = ChannelMuteState.MUTED_AND_RESPONSE_PENDING;
+                    stateChanged = true;
+                }
+        }
+        if (!stateChanged) {
+            throw new IllegalStateException("Cannot transition from " + muteState.name() + " for " + event.name());
+        }
     }
 
-    public int decrementMuteRefCountAndGet() {
-        return --muteRefCount;
-    }
-
-    /* Used for tests */
-    public int muteRefCount() {
-        return muteRefCount;
+    public ChannelMuteState muteState() {
+        return muteState;
     }
 
     /**
      * Returns true if this channel has been explicitly muted using {@link KafkaChannel#mute()}
      */
     public boolean isMute() {
-        return muted;
+        return muteState != ChannelMuteState.NOT_MUTED;
     }
 
     public boolean isInMutableState() {
