@@ -173,7 +173,7 @@ public class KStreamImplTest {
             1 + // to
             2 + // through
             1, // process
-                TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").build(null).processors().size());
+            TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").build(null).processors().size());
     }
 
     @Test
