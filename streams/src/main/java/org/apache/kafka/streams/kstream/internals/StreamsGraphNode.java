@@ -30,7 +30,7 @@ abstract class StreamsGraphNode {
     private boolean repartitionRequired;
     private boolean triggersRepartitioning;
     private Integer id;
-    private StreamsTopologyGraph streamsTopologyGraph;
+    protected InternalStreamsBuilder internalStreamsBuilder;
 
     StreamsGraphNode(final String nodeName,
                      final boolean repartitionRequired) {
@@ -86,12 +86,8 @@ abstract class StreamsGraphNode {
         return this.id;
     }
 
-    public void setStreamsTopologyGraph(final StreamsTopologyGraph streamsTopologyGraph) {
-        this.streamsTopologyGraph = streamsTopologyGraph;
-    }
-
-    StreamsTopologyGraph streamsTopologyGraph() {
-        return streamsTopologyGraph;
+    void setInternalStreamsBuilder(final InternalStreamsBuilder internalStreamsBuilder) {
+        this.internalStreamsBuilder = internalStreamsBuilder;
     }
 
     abstract void writeToTopology(final InternalTopologyBuilder topologyBuilder);

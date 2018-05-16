@@ -60,7 +60,7 @@ public abstract class AbstractStream<K> {
         this.parentGraphNode = parentGraphNode;
     }
 
-    void updateStreamsGraph(final StreamsGraphNode newNode) {
+    void addGraphNode(final StreamsGraphNode newNode) {
         parentGraphNode.addChildNode(newNode);
         newNode.setParentNode(parentGraphNode);
         builder.addNode(newNode);
