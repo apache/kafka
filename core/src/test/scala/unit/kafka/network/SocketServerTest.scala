@@ -33,6 +33,7 @@ import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.network.KafkaChannel.ChannelMuteState
 import org.apache.kafka.common.network.{ChannelBuilder, ChannelState, KafkaChannel, ListenerName, NetworkReceive, NetworkSend, Selector, Send}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.MemoryRecords
@@ -431,8 +432,7 @@ class SocketServerTest extends JUnitSuite {
 
     // receive response
     assertEquals(serializedBytes.toSeq, receiveResponse(socket).toSeq)
-    // Processor should have incremented the unmute ref count of the channel to 1 when it muted the channel.
-    TestUtils.waitUntilTrue(() => openOrClosingChannel(request).exists(c => c.muteRefCount() == 1), "fail")
+    TestUtils.waitUntilTrue(() => openOrClosingChannel(request).exists(c => c.muteState() == ChannelMuteState.MUTED_AND_THROTTLED), "fail")
     // Channel should still be muted.
     assertTrue(openOrClosingChannel(request).exists(c => c.isMute()))
   }
@@ -447,7 +447,7 @@ class SocketServerTest extends JUnitSuite {
     // receive response
     assertEquals(serializedBytes.toSeq, receiveResponse(socket).toSeq)
     // Since throttling is already done, the channel can be unmuted after sending out the response.
-    TestUtils.waitUntilTrue(() => openOrClosingChannel(request).exists(c => c.muteRefCount() == 0), "fail")
+    TestUtils.waitUntilTrue(() => openOrClosingChannel(request).exists(c => c.muteState() == ChannelMuteState.NOT_MUTED), "fail")
     // Channel is now unmuted.
     assertFalse(openOrClosingChannel(request).exists(c => c.isMute()))
   }
@@ -459,8 +459,7 @@ class SocketServerTest extends JUnitSuite {
     // SendAction with throttling in progress
     val request = throttledChannelTestSetUp(socket, serializedBytes, NoOpAction, true)
 
-    // Processor should have called throttledChannel.maybeUnmute() and increased the count to 1.
-    TestUtils.waitUntilTrue(() => openOrClosingChannel(request).exists(c => c.muteRefCount() == 1), "fail")
+    TestUtils.waitUntilTrue(() => openOrClosingChannel(request).exists(c => c.muteState() == ChannelMuteState.MUTED_AND_THROTTLED), "fail")
     // Channel should still be muted.
     assertTrue(openOrClosingChannel(request).exists(c => c.isMute()))
   }
@@ -473,7 +472,7 @@ class SocketServerTest extends JUnitSuite {
     val request = throttledChannelTestSetUp(socket, serializedBytes, NoOpAction, false)
 
     // Since throttling is already done, the channel can be unmuted.
-    TestUtils.waitUntilTrue(() => openOrClosingChannel(request).exists(c => c.muteRefCount() == 0), "fail")
+    TestUtils.waitUntilTrue(() => openOrClosingChannel(request).exists(c => c.muteState() == ChannelMuteState.NOT_MUTED), "fail")
     // Channel is now unmuted.
     assertFalse(openOrClosingChannel(request).exists(c => c.isMute()))
   }
