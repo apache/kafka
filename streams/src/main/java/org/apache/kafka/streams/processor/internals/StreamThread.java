@@ -569,6 +569,7 @@ public class StreamThread extends Thread {
 
     // package-private for testing
     final ConsumerRebalanceListener rebalanceListener;
+    final Producer<byte[], byte[]> producer;
     final Consumer<byte[], byte[]> restoreConsumer;
     final Consumer<byte[], byte[]> consumer;
     final InternalTopologyBuilder builder;
@@ -658,6 +659,7 @@ public class StreamThread extends Thread {
         return new StreamThread(
             time,
             config,
+            threadProducer,
             restoreConsumer,
             consumer,
             originalReset,
@@ -670,6 +672,7 @@ public class StreamThread extends Thread {
 
     public StreamThread(final Time time,
                         final StreamsConfig config,
+                        final Producer<byte[], byte[]> producer,
                         final Consumer<byte[], byte[]> restoreConsumer,
                         final Consumer<byte[], byte[]> consumer,
                         final String originalReset,
@@ -690,6 +693,7 @@ public class StreamThread extends Thread {
         this.log = logContext.logger(StreamThread.class);
         this.rebalanceListener = new RebalanceListener(time, taskManager, this, this.log);
         this.taskManager = taskManager;
+        this.producer = producer;
         this.restoreConsumer = restoreConsumer;
         this.consumer = consumer;
         this.originalReset = originalReset;
@@ -1215,6 +1219,25 @@ public class StreamThread extends Thread {
 
     Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> standbyRecords() {
         return standbyRecords;
+    }
+
+    public Map<MetricName, Metric> producerMetrics() {
+        final LinkedHashMap<MetricName, Metric> result = new LinkedHashMap<>();
+        if (producer != null) {
+            final Map<MetricName, ? extends Metric> producerMetrics = producer.metrics();
+            if (producerMetrics != null) {
+                result.putAll(producerMetrics);
+            }
+        } else {
+            // When EOS is turned on, each task will has its own producer client
+            // and the producer object passed in here will be null. We would then iterate through
+            // all the active tasks and add their metrics to the output metrics map.
+            for (StreamTask task: taskManager.activeTasks().values()) {
+                final Map<MetricName, ? extends Metric> taskProducerMetrics = task.getProducer().metrics();
+                result.putAll(taskProducerMetrics);
+            }
+        }
+        return result;
     }
 
     public Map<MetricName, Metric> consumerMetrics() {
