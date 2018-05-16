@@ -59,7 +59,7 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
         this.valSerde = valSerde;
         this.keySerde = keySerde;
         this.windows = windows;
-        this.aggregateBuilder = new GroupedStreamAggregateBuilder<>(builder, keySerde, valSerde, repartitionRequired, sourceNodes, name);
+        this.aggregateBuilder = new GroupedStreamAggregateBuilder<>(builder, keySerde, valSerde, repartitionRequired, sourceNodes, name, streamsGraphNode);
     }
 
     @Override
