@@ -29,6 +29,7 @@ class StreamTableJoinNode<K, V> extends StreamsGraphNode {
 
     private final String[] storeNames;
     private final ProcessorParameters<K, V> processorParameters;
+    private boolean isGlobalKTableJoin;
 
     StreamTableJoinNode(final String nodeName,
                         final ProcessorParameters<K, V> processorParameters,
@@ -47,6 +48,10 @@ class StreamTableJoinNode<K, V> extends StreamsGraphNode {
 
     ProcessorParameters<K, V> processorParameters() {
         return processorParameters;
+    }
+
+    void setGlobalKTableJoin(boolean globalKTableJoin) {
+        isGlobalKTableJoin = globalKTableJoin;
     }
 
     @Override
