@@ -179,7 +179,9 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
     * In order to assign a state, the state must be created and registered
     * beforehand via stores added via `addStateStore` or `addGlobalStore` before they can be connected to the `Transformer`
     *
-    * @param valueTransformerSupplier a instance of `ValueTransformerWithKeySupplier` that generates a `ValueTransformerWithKey`
+    * @param valueTransformerSupplier a instance of `ValueTransformerWithKeySupplier` that generates a `ValueTransformerWithKey`.
+    *                                 At least one transformer instance will be created per streaming task.
+    *                                 Transformer implementations doe not need to be thread-safe.
     * @param stateStoreNames          the names of the state stores used by the processor
     * @return a [[KStream]] that contains records with unmodified key and new values (possibly of different type)
     * @see `org.apache.kafka.streams.kstream.KStream#transformValues`
@@ -201,6 +203,8 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
     * as specified by the user via `Materialized` parameter, and is queryable through its given name.
     *
     * @param valueTransformerSupplier a instance of `ValueTransformerWithKeySupplier` that generates a `ValueTransformerWithKey`
+    *                                 At least one transformer instance will be created per streaming task.
+    *                                 Transformer implementations doe not need to be thread-safe.
     * @param materialized             an instance of `Materialized` used to describe how the state store of the
     *                                 resulting table should be materialized.
     * @param stateStoreNames          the names of the state stores used by the processor

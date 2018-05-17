@@ -444,9 +444,11 @@ public interface KTable<K, V> {
      * Setting a new value preserves data co-location with respect to the key.
      *
      * @param transformerSupplier a instance of {@link ValueTransformerWithKeySupplier} that generates a
-     *                                 {@link ValueTransformerWithKey}
-     * @param stateStoreNames          the names of the state stores used by the processor
-     * @param <VR>                     the value type of the result table
+     *                            {@link ValueTransformerWithKey}.
+     *                            At least one transformer instance will be created per streaming task.
+     *                            Transformers do not need to be thread-safe.
+     * @param stateStoreNames     the names of the state stores used by the processor
+     * @param <VR>                the value type of the result table
      * @return a {@code KTable} that contains records with unmodified key and new values (possibly of different type)
      * @see #mapValues(ValueMapper)
      * @see #mapValues(ValueMapperWithKey)
@@ -516,12 +518,14 @@ public interface KTable<K, V> {
      * Setting a new value preserves data co-location with respect to the key.
      *
      * @param transformerSupplier a instance of {@link ValueTransformerWithKeySupplier} that generates a
-     *                                 {@link ValueTransformerWithKey}
-     * @param materialized             an instance of {@link Materialized} used to describe how the state store of the
-     *                                 resulting table should be materialized.
-     *                                 Cannot be {@code null}
-     * @param stateStoreNames          the names of the state stores used by the processor
-     * @param <VR>                     the value type of the result table
+     *                            {@link ValueTransformerWithKey}.
+     *                            At least one transformer instance will be created per streaming task.
+     *                            Transformers do not need to be thread-safe.
+     * @param materialized        an instance of {@link Materialized} used to describe how the state store of the
+     *                            resulting table should be materialized.
+     *                            Cannot be {@code null}
+     * @param stateStoreNames     the names of the state stores used by the processor
+     * @param <VR>                the value type of the result table
      * @return a {@code KTable} that contains records with unmodified key and new values (possibly of different type)
      * @see #mapValues(ValueMapper)
      * @see #mapValues(ValueMapperWithKey)

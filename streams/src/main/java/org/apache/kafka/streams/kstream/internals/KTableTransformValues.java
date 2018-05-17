@@ -26,7 +26,6 @@ import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.util.Objects;
 
-// Todo(ac): Document how many times transform instances might be created.
 class KTableTransformValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
 
     private final KTableImpl<K, ?, V> parent;
