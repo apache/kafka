@@ -167,10 +167,15 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
   /**
     * Create a new `KTable` by transforming the value of each record in this `KTable` into a new value, (with possibly new type).
     * Transform the value of each input record into a new value (with possible new type) of the output record.
-    * A `ValueTransformer` (provided by the given `ValueTransformerSupplier`) is applied to each input
+    * A `ValueTransformerWithKey` (provided by the given `ValueTransformerWithKeySupplier`) is applied to each input
     * record value and computes a new value for it.
-    * This is similar to `#mapValues(ValueMapperWithKey)`, but more flexible, allowing stateful, rather than stateless,
-    * record-by-record operation, access to additional state-stores, and access to the `ProcessorContext`.
+    * This is similar to `#mapValues(ValueMapperWithKey)`, but more flexible, allowing access to additional state-stores,
+    * and to the `ProcessorContext`.
+    * If the downstream topology uses aggregation functions, (e.g. `KGroupedTable#reduce`, `KGroupedTable#aggregate`, etc),
+    * care must be taken when dealing with state, (either held in state-stores or transformer instances), to ensure correct
+    * aggregate results.
+    * In contrast, if the resulting KTable is materialized, (cf. `#transformValues(ValueTransformerWithKeySupplier, Materialized, String...)`),
+    * such concerns are handled for you.
     * In order to assign a state, the state must be created and registered
     * beforehand via stores added via `addStateStore` or `addGlobalStore` before they can be connected to the `Transformer`
     *

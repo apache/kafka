@@ -20,10 +20,14 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.Consumed;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.Serialized;
+import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.Processor;
@@ -35,6 +39,7 @@ import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.MockReducer;
 import org.apache.kafka.test.NoOpInternalValueTransformer;
 import org.apache.kafka.test.TestUtils;
 import org.easymock.EasyMockRunner;
@@ -57,6 +62,7 @@ import static org.easymock.EasyMock.verify;
 import static org.hamcrest.CoreMatchers.hasItems;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.isA;
+import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 
@@ -334,8 +340,96 @@ public class KTableTransformValuesTest {
         assertThat(keyValueStore.get("C"), is(nullValue()));
     }
 
+    @Test
+    public void shouldCalculateCorrectOldValuesIfMaterializedEvenIfStateful() {
+
+        builder.addStateStore(storeBuilder(STORE_NAME))
+                .table(INPUT_TOPIC, CONSUMED)
+                .transformValues(
+                        new StatefulTransformerSupplier(),
+                        Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as(QUERYABLE_NAME)
+                                .withKeySerde(Serdes.String())
+                                .withValueSerde(Serdes.Integer()))
+                .groupBy(toForceSendingOfOldValues(), Serialized.with(Serdes.String(), Serdes.Integer()))
+                .reduce(MockReducer.INTEGER_ADDER, MockReducer.INTEGER_SUBTRACTOR)
+                .mapValues(mapBackToStrings())
+                .toStream()
+                .process(capture);
+
+        driver = new TopologyTestDriver(builder.build(), props());
+
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC, "A", "a", 0L));
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC, "A", "aa", 0L));
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC, "A", "aaa", 0L));
+
+        assertThat(output(), hasItems("A:1", "A:0", "A:2", "A:0", "A:3"));
+
+        final KeyValueStore<String, Integer> keyValueStore = driver.getKeyValueStore(QUERYABLE_NAME);
+        assertThat(keyValueStore.get("A"), is(3));
+    }
+
+    @Test
+    public void shouldCalculateCorrectOldValuesIfNotStatefulEvenIfNotMaterialized() {
+
+        builder.addStateStore(storeBuilder(STORE_NAME))
+                .table(INPUT_TOPIC, CONSUMED)
+                .transformValues(new StatelessTransformerSupplier())
+                .groupBy(toForceSendingOfOldValues(), Serialized.with(Serdes.String(), Serdes.Integer()))
+                .reduce(MockReducer.INTEGER_ADDER, MockReducer.INTEGER_SUBTRACTOR)
+                .mapValues(mapBackToStrings())
+                .toStream()
+                .process(capture);
+
+        driver = new TopologyTestDriver(builder.build(), props());
+
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC, "A", "a", 0L));
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC, "A", "aa", 0L));
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC, "A", "aaa", 0L));
+
+        assertThat(output(), hasItems("A:1", "A:0", "A:2", "A:0", "A:3"));
+    }
+
+    @Test
+    public void willUnfortunatelyCalculateIncorrectOldValuesIfStatefulAndNotMaterialized() {
+        builder.addStateStore(storeBuilder(STORE_NAME))
+                .table(INPUT_TOPIC, CONSUMED)
+                .transformValues(new StatefulTransformerSupplier())
+                .groupBy(toForceSendingOfOldValues(), Serialized.with(Serdes.String(), Serdes.Integer()))
+                .reduce(MockReducer.INTEGER_ADDER, MockReducer.INTEGER_SUBTRACTOR)
+                .mapValues(mapBackToStrings())
+                .toStream()
+                .process(capture);
+
+        driver = new TopologyTestDriver(builder.build(), props());
+
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC, "A", "a", 0L));
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC, "A", "aa", 0L));
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC, "A", "aaa", 0L));
+
+        assertThat(output(), not(hasItems("A:1", "A:0", "A:2", "A:0", "A:3")));
+        // Output more likely to be "A:1", "A:-2", "A:0", "A:-5", "A:-1"
+    }
+
     private ArrayList<String> output() {
         return capture.capturedProcessors(1).get(0).processed;
+    }
+
+    private static KeyValueMapper<String, Integer, KeyValue<String, Integer>> toForceSendingOfOldValues() {
+        return new KeyValueMapper<String, Integer, KeyValue<String, Integer>>() {
+            @Override
+            public KeyValue<String, Integer> apply(String key, Integer value) {
+                return new KeyValue<>(key, value);
+            }
+        };
+    }
+
+    private static ValueMapper<Integer, String> mapBackToStrings() {
+        return new ValueMapper<Integer, String>() {
+            @Override
+            public String apply(Integer value) {
+                return value.toString();
+            }
+        };
     }
 
     private static StoreBuilder<KeyValueStore<Long, Long>> storeBuilder(final String storeName) {
@@ -406,6 +500,54 @@ public class KTableTransformValuesTest {
         @Override
         public ValueTransformerWithKey<String, String, String> get() {
             return null;
+        }
+    }
+
+    private static class StatefulTransformerSupplier implements ValueTransformerWithKeySupplier<String, String, Integer> {
+        @Override
+        public ValueTransformerWithKey<String, String, Integer> get() {
+            return new StatefulTransformer();
+        }
+    }
+
+    private static class StatefulTransformer implements ValueTransformerWithKey<String, String, Integer> {
+        private int counter;
+
+        @Override
+        public void init(ProcessorContext context) {
+        }
+
+        @Override
+        public Integer transform(String readOnlyKey, String value) {
+            return ++counter;
+        }
+
+        @Override
+        public void close() {
+        }
+    }
+
+    private static class StatelessTransformerSupplier implements ValueTransformerWithKeySupplier<String, String, Integer> {
+        @Override
+        public ValueTransformerWithKey<String, String, Integer> get() {
+            return new StatelessTransformer();
+        }
+    }
+
+    private static class StatelessTransformer implements ValueTransformerWithKey<String, String, Integer> {
+        private int counter;
+
+        @Override
+        public void init(ProcessorContext context) {
+        }
+
+        @Override
+        public Integer transform(String readOnlyKey, String value) {
+            return value.length();
+        }
+
+        @Override
+        public void close() {
         }
     }
 }

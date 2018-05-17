@@ -389,10 +389,15 @@ public interface KTable<K, V> {
      * A {@link ValueTransformerWithKey} (provided by the given {@link ValueTransformerWithKeySupplier}) is applies to each input
      * record value and computes a new value for it.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
-     * This is similar to {@link #mapValues(ValueMapperWithKey)}, but more flexible, allowing stateful, rather than stateless,
-     * record-by-record operation, access to additional state-stores, and access to the {@link ProcessorContext}.
+     * This is similar to {@link #mapValues(ValueMapperWithKey)}, but more flexible, allowing access to additional state-stores,
+     * and access to the {@link ProcessorContext}.
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress can be observed and additional
      * periodic actions get be performed.
+     * <p>
+     * If the downstream topology uses aggregation functions, (e.g. {@link KGroupedTable#reduce}, {@link KGroupedTable#aggregate}, etc),
+     * care must be taken when dealing with state, (either held in state-stores or transformer instances), to ensure correct aggregate results.
+     * In contrast, if the resulting KTable is materialized, (cf. {@link #transformValues(ValueTransformerWithKeySupplier, Materialized, String...)}),
+     * such concerns are handled for you.
      * <p>
      * In order to assign a state, the state must be created and registered beforehand:
      * <pre>{@code
