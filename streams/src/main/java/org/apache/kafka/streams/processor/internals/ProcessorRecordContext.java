@@ -76,11 +76,12 @@ public class ProcessorRecordContext implements RecordContext {
         return timestamp == that.timestamp &&
                 offset == that.offset &&
                 partition == that.partition &&
-                Objects.equals(topic, that.topic);
+                Objects.equals(topic, that.topic) &&
+                Objects.equals(headers, that.headers);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(timestamp, offset, topic, partition);
+        return Objects.hash(timestamp, offset, topic, partition, headers);
     }
 }
