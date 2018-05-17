@@ -138,7 +138,9 @@ class WorkerSourceTask extends WorkerTask {
 
     @Override
     protected void close() {
-        tryStop();
+        if (!shouldPause()) {
+            tryStop();
+        }
         if (producer != null) {
             try {
                 producer.close(30, TimeUnit.SECONDS);

@@ -164,9 +164,6 @@ public class WorkerSourceTaskTest extends ThreadedTest {
             }
         });
 
-        sourceTask.stop();
-        EasyMock.expectLastCall();
-
         producer.close(EasyMock.anyLong(), EasyMock.anyObject(TimeUnit.class));
         EasyMock.expectLastCall();
 
