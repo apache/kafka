@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.connect.runtime.isolation;
 
-import org.apache.kafka.connect.components.Versionable;
+import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.rest.ConnectRestExtension;
 import org.apache.kafka.connect.storage.Converter;
@@ -328,8 +328,8 @@ public class DelegatingClassLoader extends URLClassLoader {
     }
 
     private <T> String versionFor(T pluginImpl) {
-        return pluginImpl instanceof Versionable ? ((Versionable) pluginImpl).version()
-                                                 : "undefined";
+        return pluginImpl instanceof Versioned ? ((Versioned) pluginImpl).version()
+                                               : "undefined";
     }
 
     @Override

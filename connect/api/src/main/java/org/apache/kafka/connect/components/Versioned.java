@@ -17,7 +17,7 @@
 
 package org.apache.kafka.connect.components;
 
-public interface Versionable {
+public interface Versioned {
     /**
      * Get the version of this component.
      *

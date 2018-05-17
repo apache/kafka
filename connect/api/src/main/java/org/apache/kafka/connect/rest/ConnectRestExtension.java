@@ -18,7 +18,7 @@
 package org.apache.kafka.connect.rest;
 
 import org.apache.kafka.common.Configurable;
-import org.apache.kafka.connect.components.Versionable;
+import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.health.ConnectClusterState;
 
 import java.io.Closeable;
@@ -35,7 +35,7 @@ import java.util.Map;
  * <p> Typical use cases that can be implemented using this interface include things like security
  * (authentication and authorization), logging, request validations, etc.
  */
-public interface ConnectRestExtension extends Configurable, Versionable, Closeable {
+public interface ConnectRestExtension extends Configurable, Versioned, Closeable {
 
     /**
      * ConnectRestExtension implementations register custom JAX-RS resources via the {@link

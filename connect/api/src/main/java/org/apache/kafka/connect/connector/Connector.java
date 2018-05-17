@@ -20,7 +20,7 @@ import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.connect.errors.ConnectException;
-import org.apache.kafka.connect.components.Versionable;
+import org.apache.kafka.connect.components.Versioned;
 
 import java.util.List;
 import java.util.Map;
@@ -42,7 +42,7 @@ import java.util.Map;
  * Tasks.
  * </p>
  */
-public abstract class Connector implements Versionable {
+public abstract class Connector implements Versioned {
 
     protected ConnectorContext context;
 
