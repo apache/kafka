@@ -16,8 +16,10 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
@@ -25,6 +27,7 @@ import org.apache.kafka.streams.kstream.KGroupedTable;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Reducer;
+import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 
@@ -84,6 +87,24 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
                                 final String sinkName,
                                 final StatefulRepartitionNode.StatefulRepartitionNodeBuilder<K, V, T> statefulRepartitionNodeBuilder) {
 
+        final Serializer<? extends K> keySerializer = keySerde == null ? null : keySerde.serializer();
+        final Deserializer<? extends K> keyDeserializer = keySerde == null ? null : keySerde.deserializer();
+        final Serializer<? extends V> valueSerializer = valSerde == null ? null : valSerde.serializer();
+        final Deserializer<? extends V> valueDeserializer = valSerde == null ? null : valSerde.deserializer();
+
+        final ChangedSerializer<? extends V> changedValueSerializer = new ChangedSerializer<>(valueSerializer);
+        final ChangedDeserializer<? extends V> changedValueDeserializer = new ChangedDeserializer<>(valueDeserializer);
+
+        // send the aggregate key-value pairs to the intermediate topic for partitioning
+        builder.internalTopologyBuilder.addInternalTopic(topic);
+        builder.internalTopologyBuilder.addSink(sinkName, topic, keySerializer, changedValueSerializer, null, this.name);
+
+        // read the intermediate topic with RecordMetadataTimestampExtractor
+        builder.internalTopologyBuilder.addSource(null, sourceName, new FailOnInvalidTimestamp(), keyDeserializer, changedValueDeserializer, topic);
+
+        // aggregate the values with the aggregator and local store
+        builder.internalTopologyBuilder.addProcessor(funcName, aggregateSupplier, sourceName);
+
         ProcessorParameters processorParameters = new ProcessorParameters<>(aggregateSupplier, funcName);
 
         statefulRepartitionNodeBuilder.withRepartitionTopic(topic)
@@ -109,15 +130,23 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
                        sourceName,
                        sinkName,
                        statefulRepartitionNodeBuilder);
+        builder.internalTopologyBuilder.addStateStore(new KeyValueStoreMaterializer<>(materialized)
+                                                          .materialize(), funcName);
 
         statefulRepartitionNodeBuilder.withMaterialized(materialized)
             .withNodeName(funcName);
 
-        builder.addNode(statefulRepartitionNodeBuilder.build());
+        StatefulRepartitionNode statefulRepartitionNode = statefulRepartitionNodeBuilder.build();
+        addGraphNode(statefulRepartitionNode);
 
         // return the KTable representation with the intermediate topic as the sources
-        return new KTableImpl<>(builder, funcName, aggregateSupplier, Collections.singleton(sourceName), materialized.storeName(), materialized.isQueryable(),
-                                null);
+        return new KTableImpl<>(builder,
+                                funcName,
+                                aggregateSupplier,
+                                Collections.singleton(sourceName),
+                                materialized.storeName(),
+                                materialized.isQueryable(),
+                                statefulRepartitionNode);
     }
 
     @Override

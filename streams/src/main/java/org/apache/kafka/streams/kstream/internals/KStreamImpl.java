@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.KeyValue;
@@ -126,6 +127,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                                                                         processorParameters,
                                                                                         repartitionRequired);
         addGraphNode(filterProcessorNode);
+        builder.internalTopologyBuilder.addProcessor(name, new KStreamFilter<>(predicate, false), this.name);
 
         return new KStreamImpl<>(builder, name, sourceNodes, this.repartitionRequired, filterProcessorNode);
     }
@@ -142,6 +144,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                                                                            repartitionRequired);
 
         addGraphNode(filterNotProcessorNode);
+        builder.internalTopologyBuilder.addProcessor(name, new KStreamFilter<>(predicate, true), this.name);
 
         return new KStreamImpl<>(builder, name, sourceNodes, this.repartitionRequired, filterNotProcessorNode);
     }
@@ -167,6 +170,19 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                 }
             }), name);
 
+        builder.internalTopologyBuilder.addProcessor(
+            name,
+            new KStreamMap<>(
+                new KeyValueMapper<K, V, KeyValue<K1, V>>() {
+                    @Override
+                    public KeyValue<K1, V> apply(K key, V value) {
+                        return new KeyValue<>(mapper.apply(key, value), value);
+                    }
+                }
+            ),
+            this.name
+        );
+
         return  new StatelessProcessorNode<>(name,
                                              processorParameters,
                                              repartitionRequired);
@@ -185,6 +201,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                                                                        true);
         mapProcessorNode.setTriggersRepartitioning(true);
         addGraphNode(mapProcessorNode);
+
+        builder.internalTopologyBuilder.addProcessor(name, new KStreamMap<>(mapper), this.name);
 
         return new KStreamImpl<>(builder, name, sourceNodes, true, mapProcessorNode);
     }
@@ -206,6 +224,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                                                                            processorParameters,
                                                                                            repartitionRequired);
         addGraphNode(mapValuesProcessorNode);
+        builder.internalTopologyBuilder.addProcessor(name, new KStreamMapValues<>(mapper), this.name);
 
         return new KStreamImpl<>(builder, name, sourceNodes, this.repartitionRequired, mapValuesProcessorNode);
     }
@@ -222,6 +241,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                                                               processorParameters,
                                                                               false);
         addGraphNode(printNode);
+        builder.internalTopologyBuilder.addProcessor(name, printedInternal.build(this.name), this.name);
     }
 
     @Override
@@ -238,6 +258,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         flatMapNode.setTriggersRepartitioning(true);
 
         addGraphNode(flatMapNode);
+        builder.internalTopologyBuilder.addProcessor(name, new KStreamFlatMap<>(mapper), this.name);
 
         return new KStreamImpl<>(builder, name, sourceNodes, true, flatMapNode);
     }
@@ -258,6 +279,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                                                                        processorParameters,
                                                                                        repartitionRequired);
         addGraphNode(flatMapValuesNode);
+        builder.internalTopologyBuilder.addProcessor(name, new KStreamFlatMapValues<>(mapper), this.name);
 
         return new KStreamImpl<>(builder, name, sourceNodes, this.repartitionRequired, flatMapValuesNode);
     }
@@ -279,6 +301,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
             childNames[i] = builder.newProcessorName(BRANCHCHILD_NAME);
         }
 
+        builder.internalTopologyBuilder.addProcessor(branchName, new KStreamBranch(predicates.clone(), childNames), this.name);
+
         ProcessorParameters processorParameters = new ProcessorParameters<>(new KStreamBranch(predicates.clone(), childNames), branchName);
 
         StatelessProcessorNode<K, V> branchNode = new StatelessProcessorNode<>(branchName,
@@ -295,6 +319,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                                                                         innerProcessorParameters,
                                                                                         repartitionRequired);
             branchNode.addChildNode(branchChildNode);
+            builder.internalTopologyBuilder.addProcessor(childNames[i], new KStreamPassThrough<K, V>(), branchName);
             branchChildren[i] = new KStreamImpl<>(builder, childNames[i], sourceNodes, this.repartitionRequired, branchChildNode);
         }
 
@@ -326,6 +351,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                                                               Arrays.asList(parentNames));
 
         addGraphNode(mergeNode);
+        builder.internalTopologyBuilder.addProcessor(name, new KStreamPassThrough<>(), parentNames);
 
         return new KStreamImpl<>(builder, name, allSourceNodes, requireRepartitioning, mergeNode);
     }
@@ -352,6 +378,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                                                                 processorParameters,
                                                                                 repartitionRequired);
         addGraphNode(foreachNode);
+        builder.internalTopologyBuilder.addProcessor(name, new KStreamPeek<>(action, false), this.name);
     }
 
     @Override
@@ -365,6 +392,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                                                              processorParameters,
                                                                              repartitionRequired);
         addGraphNode(peekNode);
+        builder.internalTopologyBuilder.addProcessor(name, new KStreamPeek<>(action, true), this.name);
 
         return new KStreamImpl<>(builder, name, sourceNodes, repartitionRequired, peekNode);
     }
@@ -411,7 +439,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         } else {
             builder.internalTopologyBuilder.addSink(name, topicExtractor, keySerializer, valSerializer, partitioner, this.name);
         }
-
         StreamSinkNode<K, V> sinkNode = new StreamSinkNode<>(
             name,
             topic,
@@ -435,6 +462,11 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                                                                   true);
         transformNode.setTriggersRepartitioning(true);
         addGraphNode(transformNode);
+
+        builder.internalTopologyBuilder.addProcessor(name, new KStreamTransform<>(transformerSupplier), this.name);
+        if (stateStoreNames != null && stateStoreNames.length > 0) {
+            builder.internalTopologyBuilder.connectProcessorAndStateStores(name, stateStoreNames);
+        }
 
         return new KStreamImpl<>(builder, name, sourceNodes, true, null);
     }
@@ -494,6 +526,11 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                                                                 null,
                                                                                 false);
         addGraphNode(transformNode);
+
+        builder.internalTopologyBuilder.addProcessor(name, processorSupplier, this.name);
+        if (stateStoreNames != null && stateStoreNames.length > 0) {
+            builder.internalTopologyBuilder.connectProcessorAndStateStores(name, stateStoreNames);
+        }
     }
 
     @Override
@@ -589,6 +626,10 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                                      final String name,
                                                      final RepartitionNode.RepartitionNodeBuilder<K1, V1> repartitionNodeBuilder) {
 
+        Serializer<K1> keySerializer = keySerde != null ? keySerde.serializer() : null;
+        Serializer<V1> valSerializer = valSerde != null ? valSerde.serializer() : null;
+        Deserializer<K1> keyDeserializer = keySerde != null ? keySerde.deserializer() : null;
+        Deserializer<V1> valDeserializer = valSerde != null ? valSerde.deserializer() : null;
         String baseName = topicNamePrefix != null ? topicNamePrefix : name;
 
         String repartitionTopic = baseName + REPARTITION_TOPIC_SUFFIX;
@@ -612,6 +653,19 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
             // reusing the source name for the graph node name
             // adding explicit variable as it simplifies logic
             .withNodeName(sourceName);
+
+        builder.internalTopologyBuilder.addInternalTopic(repartitionTopic);
+        builder.internalTopologyBuilder.addProcessor(nullKeyFilterProcessorName, new KStreamFilter<>(new Predicate<K1, V1>() {
+            @Override
+            public boolean test(final K1 key, final V1 value) {
+                return key != null;
+            }
+        }, false), name);
+
+        builder.internalTopologyBuilder.addSink(sinkName, repartitionTopic, keySerializer, valSerializer,
+                                                null, nullKeyFilterProcessorName);
+        builder.internalTopologyBuilder.addSource(null, sourceName, new FailOnInvalidTimestamp(),
+                                                  keyDeserializer, valDeserializer, repartitionTopic);
 
         return sourceName;
     }
@@ -681,6 +735,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         final KTableValueGetterSupplier<K1, V1> valueGetterSupplier = ((GlobalKTableImpl<K1, V1>) globalTable).valueGetterSupplier();
         final String name = builder.newProcessorName(LEFTJOIN_NAME);
+        builder.internalTopologyBuilder.addProcessor(name, new KStreamGlobalKTableJoin<>(valueGetterSupplier, joiner, keyMapper, leftJoin), this.name);
 
         ProcessorSupplier<K, V> processorSupplier = new KStreamGlobalKTableJoin<>(valueGetterSupplier,
                                                                                   joiner,
@@ -708,6 +763,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         final Set<String> allSourceNodes = ensureJoinableWith((AbstractStream<K>) other);
 
         final String name = builder.newProcessorName(leftJoin ? LEFTJOIN_NAME : JOIN_NAME);
+        builder.internalTopologyBuilder.addProcessor(name, new KStreamKTableJoin<>(((KTableImpl<K, ?, V1>) other).valueGetterSupplier(), joiner, leftJoin), this.name);
+        builder.internalTopologyBuilder.connectProcessorAndStateStores(name, ((KTableImpl) other).valueGetterSupplier().storeNames());
+        builder.internalTopologyBuilder.connectProcessors(this.name, ((KTableImpl<K, ?, V1>) other).name);
 
         ProcessorSupplier<K, V> processorSupplier = new KStreamKTableJoin<>(((KTableImpl<K, ?, V1>) other).valueGetterSupplier(),
                                                                             joiner,
@@ -778,7 +836,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         final SerializedInternal<K, V> serializedInternal = new SerializedInternal<>(serialized);
 
         final StatelessProcessorNode<K, V> graphNode = new StatelessProcessorNode<>(
-            this.name ,
+            this.name,
             null,
             repartitionRequired,
             Collections.<String>emptyList());
@@ -877,6 +935,14 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                 .withNodeName(joinMergeName);
 
             addGraphNode(joinBuilder.build());
+
+            builder.internalTopologyBuilder.addProcessor(thisWindowStreamName, thisWindowedStream, ((AbstractStream) lhs).name);
+            builder.internalTopologyBuilder.addProcessor(otherWindowStreamName, otherWindowedStream, ((AbstractStream) other).name);
+            builder.internalTopologyBuilder.addProcessor(joinThisName, joinThis, thisWindowStreamName);
+            builder.internalTopologyBuilder.addProcessor(joinOtherName, joinOther, otherWindowStreamName);
+            builder.internalTopologyBuilder.addProcessor(joinMergeName, joinMerge, joinThisName, joinOtherName);
+            builder.internalTopologyBuilder.addStateStore(thisWindow, thisWindowStreamName, joinOtherName);
+            builder.internalTopologyBuilder.addStateStore(otherWindow, otherWindowStreamName, joinThisName);
 
             Set<String> allSourceNodes = new HashSet<>(((AbstractStream<K>) lhs).sourceNodes);
             allSourceNodes.addAll(((KStreamImpl<K1, V2>) other).sourceNodes);

@@ -54,6 +54,10 @@ class StreamTableJoinNode<K, V> extends StreamsGraphNode {
         isGlobalKTableJoin = globalKTableJoin;
     }
 
+    boolean isGlobalKTableJoin() {
+        return isGlobalKTableJoin;
+    }
+
     @Override
     void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
         //TODO will implement in follow-up pr

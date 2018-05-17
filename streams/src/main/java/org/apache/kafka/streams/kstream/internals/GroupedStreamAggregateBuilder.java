@@ -80,6 +80,8 @@ class GroupedStreamAggregateBuilder<K, V> {
 
         final RepartitionNode.RepartitionNodeBuilder<K, T> repartitionNodeBuilder = RepartitionNode.repartitionNodeBuilder();
         final String sourceName = repartitionIfRequired(storeBuilder.name(), repartitionNodeBuilder);
+        builder.internalTopologyBuilder.addProcessor(aggFunctionName, aggregateSupplier, sourceName);
+        builder.internalTopologyBuilder.addStateStore(storeBuilder, aggFunctionName);
 
         // if the returned source name is different a repartition occurred and the operation
         // captured needs to be set in the graph

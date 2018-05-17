@@ -61,9 +61,12 @@ public abstract class AbstractStream<K> {
     }
 
     protected void addGraphNode(final StreamsGraphNode newNode) {
-        parentGraphNode.addChildNode(newNode);
-        newNode.setParentNode(parentGraphNode);
-        builder.addNode(newNode);
+        //TODO remove this once actually building the topology with Graph
+        if (parentGraphNode != null) {
+            parentGraphNode.addChildNode(newNode);
+            newNode.setParentNode(parentGraphNode);
+            builder.addNode(newNode);
+        }
     }
 
     // This method allows to expose the InternalTopologyBuilder instance

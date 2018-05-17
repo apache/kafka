@@ -30,7 +30,6 @@ import org.slf4j.LoggerFactory;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -73,6 +72,13 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
         addNode(streamSourceNode);
 
+        internalTopologyBuilder.addSource(consumed.offsetResetPolicy(),
+                                          name,
+                                          consumed.timestampExtractor(),
+                                          consumed.keyDeserializer(),
+                                          consumed.valueDeserializer(),
+                                          topics.toArray(new String[topics.size()]));
+
         return new KStreamImpl<>(this, name, Collections.singleton(name), false, streamSourceNode);
     }
 
@@ -87,6 +93,12 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         streamPatternSourceNode.setParentNode(root);
 
         addNode(streamPatternSourceNode);
+        internalTopologyBuilder.addSource(consumed.offsetResetPolicy(),
+                                          name,
+                                          consumed.timestampExtractor(),
+                                          consumed.keyDeserializer(),
+                                          consumed.valueDeserializer(),
+                                          topicPattern);
 
         return new KStreamImpl<>(this,
                                  name,
@@ -125,6 +137,14 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         
         internalTopologyBuilder.addStateStore(storeBuilder, name);
         internalTopologyBuilder.markSourceStoreAndTopic(storeBuilder, topic);
+
+        internalTopologyBuilder.addSource(consumed.offsetResetPolicy(),
+                                          source,
+                                          consumed.timestampExtractor(),
+                                          consumed.keyDeserializer(),
+                                          consumed.valueDeserializer(),
+                                          topic);
+        internalTopologyBuilder.addProcessor(name, processorSupplier, source);
 
         return new KTableImpl<>(this,
                                        name,
@@ -165,6 +185,15 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         addNode(statefulSourceNode);
 
         addNode(statefulSourceNode);
+
+        internalTopologyBuilder.addGlobalStore(storeBuilder,
+                                               sourceName,
+                                               consumed.timestampExtractor(),
+                                               consumed.keyDeserializer(),
+                                               consumed.valueDeserializer(),
+                                               topic,
+                                               processorName,
+                                               tableSource);
 
         return new GlobalKTableImpl<>(new KTableSourceValueGetterSupplier<K, V>(storeBuilder.name()), materialized.isQueryable());
     }
@@ -219,31 +248,31 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
 
     void addNode(final StreamsGraphNode node) {
-        node.setId(nodeIdCounter.getAndIncrement());
-        node.setInternalStreamsBuilder(this);
-
-        LOG.debug("Adding node {}", node);
-
-
-        if (node.parentNode() == null && !node.nodeName().equals(TOPOLOGY_ROOT)) {
-            throw new IllegalStateException(
-                "Nodes should not have a null parent node.  Name: " + node.nodeName() + " Type: "
-                + node.getClass().getSimpleName());
-        }
-
-        if (node.triggersRepartitioning()) {
-            repartitioningNodeToRepartitioned.put(node, new HashSet<StreamsGraphNode>());
-        } else if (node.repartitionRequired()) {
-            StreamsGraphNode currentNode = node;
-            while (currentNode != null) {
-                final StreamsGraphNode parentNode = currentNode.parentNode();
-                if (parentNode.triggersRepartitioning()) {
-                    repartitioningNodeToRepartitioned.get(parentNode).add(node);
-                    break;
-                }
-                currentNode = parentNode.parentNode();
-            }
-        }
+        //TODO uncomment when actually building graph
+//        node.setId(nodeIdCounter.getAndIncrement());
+//        node.setInternalStreamsBuilder(this);
+//
+//        LOG.debug("Adding node {}", node);
+//
+//        if (node.parentNode() == null && !node.nodeName().equals(TOPOLOGY_ROOT)) {
+//            throw new IllegalStateException(
+//                "Nodes should not have a null parent node.  Name: " + node.nodeName() + " Type: "
+//                + node.getClass().getSimpleName());
+//        }
+//
+//        if (node.triggersRepartitioning()) {
+//            repartitioningNodeToRepartitioned.put(node, new HashSet<StreamsGraphNode>());
+//        } else if (node.repartitionRequired()) {
+//            StreamsGraphNode currentNode = node;
+//            while (currentNode != null) {
+//                final StreamsGraphNode parentNode = currentNode.parentNode();
+//                if (parentNode.triggersRepartitioning()) {
+//                    repartitioningNodeToRepartitioned.get(parentNode).add(node);
+//                    break;
+//                }
+//                currentNode = parentNode.parentNode();
+//            }
+//        }
     }
 
     public StreamsGraphNode root() {
