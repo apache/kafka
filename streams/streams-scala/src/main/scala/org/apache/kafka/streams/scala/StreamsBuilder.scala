@@ -21,12 +21,13 @@ package org.apache.kafka.streams.scala
 
 import java.util.regex.Pattern
 
-import org.apache.kafka.streams.kstream.{GlobalKTable, Materialized}
+import org.apache.kafka.streams.kstream.{Consumed, GlobalKTable, Materialized}
 import org.apache.kafka.streams.processor.{ProcessorSupplier, StateStore}
 import org.apache.kafka.streams.state.StoreBuilder
-import org.apache.kafka.streams.{Consumed, StreamsBuilder => StreamsBuilderJ, Topology}
+import org.apache.kafka.streams.{Topology, StreamsBuilder => StreamsBuilderJ}
 import org.apache.kafka.streams.scala.kstream._
 import ImplicitConversions._
+
 import scala.collection.JavaConverters._
 
 /**
