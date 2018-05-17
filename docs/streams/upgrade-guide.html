@@ -34,70 +34,46 @@
     </div>
 
     <p>
-        If you want to upgrade from 1.1.x to 2.0.0 and you have customized window store implementations on the <code>ReadOnlyWindowStore</code> interface
-        you'd need to update your code to incorporate the newly added public APIs; otherwise you don't need to make any code changes.
-        See <a href="#streams_api_changes_200">below</a> for a complete list of 2.0.0 API and semantic changes that allow you to advance your application and/or simplify your code base.
-    </p>
-
-    <p>
-        If you want to upgrade from 1.0.x to 2.0.0 and you have customized window store implementations on the <code>ReadOnlyWindowStore</code> interface
-        you'd need to update your code to incorporate the newly added public APIs.
-        Otherwise, if you are using Java 7 you don't need to make any code changes as the public API is fully backward compatible;
-        but if you are using Java 8 method references in your Kafka Streams code you might need to update your code to resolve method ambiguities.
-        Hot-swaping the jar-file only might not work for this case.
-        See below a complete list of <a href="#streams_api_changes_200">2.0.0</a> and <a href="#streams_api_changes_110">1.1.0</a>
-        API and semantic changes that allow you to advance your application and/or simplify your code base.
-    </p>
-
-    <p>
-        If you want to upgrade from 0.10.2.x or 0.11.0.x to 2.0.x and you have customized window store implementations on the <code>ReadOnlyWindowStore</code> interface
-        you'd need to update your code to incorporate the newly added public APIs.
-        Otherwise, if you are using Java 7 you don't need to do any code changes as the public API is fully backward compatible;
-        but if you are using Java 8 method references in your Kafka Streams code you might need to update your code to resolve method ambiguities.
-        However, some public APIs were deprecated and thus it is recommended to update your code eventually to allow for future upgrades.
-        See below a complete list of <a href="#streams_api_changes_200">2.0</a>, <a href="#streams_api_changes_110">1.1</a>,
-        <a href="#streams_api_changes_100">1.0</a>, and <a href="#streams_api_changes_0110">0.11.0</a> API
-        and semantic changes that allow you to advance your application and/or simplify your code base, including the usage of new features.
-        Additionally, Streams API 1.1.x requires broker on-disk message format version 0.10 or higher; thus, you need to make sure that the message
-        format is configured correctly before you upgrade your Kafka Streams application.
-    </p>
-
-    <p>
-        If you want to upgrade from 0.10.1.x to 2.0.x see the Upgrade Sections for <a href="/{{version}}/documentation/#upgrade_1020_streams"><b>0.10.2</b></a>,
-        <a href="/{{version}}/documentation/#upgrade_1100_streams"><b>0.11.0</b></a>,
-        <a href="/{{version}}/documentation/#upgrade_100_streams"><b>1.0</b></a>,
-        <a href="/{{version}}/documentation/#upgrade_110_streams"><b>1.1</b></a>, and
-        <a href="/{{version}}/documentation/#upgrade_200_streams"><b>2.0</b></a>.
-        Note, that a brokers on-disk message format must be on version 0.10 or higher to run a Kafka Streams application version 2.0 or higher.
-        See below a complete list of <a href="#streams_api_changes_0102">0.10.2</a>, <a href="#streams_api_changes_0110">0.11.0</a>,
-        <a href="#streams_api_changes_100">1.0</a>, <a href="#streams_api_changes_110">1.1</a>, and <a href="#streams_api_changes_200">2.0</a>
-        API and semantical changes that allow you to advance your application and/or simplify your code base, including the usage of new features.
-    </p>
-
-    <p>
-        Upgrading from 0.10.0.x to 2.0.0 directly is also possible.
-        Note, that a brokers must be on version 0.10.1 or higher and on-disk message format must be on version 0.10 or higher
-        to run a Kafka Streams application version 2.0 or higher.
-        See <a href="#streams_api_changes_0101">Streams API changes in 0.10.1</a>, <a href="#streams_api_changes_0102">Streams API changes in 0.10.2</a>,
-        <a href="#streams_api_changes_0110">Streams API changes in 0.11.0</a>, <a href="#streams_api_changes_100">Streams API changes in 1.0</a>, and
-        <a href="#streams_api_changes_110">Streams API changes in 1.1</a>, and <a href="#streams_api_changes_200">Streams API changes in 2.0</a>
-        for a complete list of API changes.
-        Upgrading to 2.0.0 requires two rolling bounces with config <code>upgrade.from="0.10.0"</code> set for first upgrade phase
-        (cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-268%3A+Simplify+Kafka+Streams+Rebalance+Metadata+Upgrade">KIP-268</a>).
-        As an alternative, an offline upgrade is also possible.
+        Upgrading from any older version to 2.0.0 is possible: (1) you need to make sure to update you code accordingly, because there are some minor non-compatible API changes since older
+        releases (the code changes are expected to be minimal, please see below for the details),
+        (2) upgrading to 2.0.0 in the online mode requires two rolling bounces.
+        For (2), in the first rolling bounce phase users need to set config <code>upgrade.from="older version"</code> (possible values are <code>"0.10.0", "0.10.1", "0.10.2", "0.11.0", "1.0", and "1.1"</code>)
+        (cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-268%3A+Simplify+Kafka+Streams+Rebalance+Metadata+Upgrade">KIP-268</a>):
     </p>
     <ul>
-        <li> prepare your application instances for a rolling bounce and make sure that config <code>upgrade.from</code> is set to <code>"0.10.0"</code> for new version 2.0.0</li>
+        <li> prepare your application instances for a rolling bounce and make sure that config <code>upgrade.from</code> is set to the version from which it is being upgrade to new version 2.0.0</li>
         <li> bounce each instance of your application once </li>
         <li> prepare your newly deployed 2.0.0 application instances for a second round of rolling bounces; make sure to remove the value for config <code>upgrade.mode</code> </li>
         <li> bounce each instance of your application once more to complete the upgrade </li>
     </ul>
-    <p> Upgrading from 0.10.0.x to 2.0.0 in offline mode: </p>
+    <p> As an alternative, an offline upgrade is also possible. Upgrading from any versions as old as 0.10.0.x to 2.0.0 in offline mode require the following steps: </p>
     <ul>
-        <li> stop all old (0.10.0.x) application instances </li>
+        <li> stop all old (e.g., 0.10.0.x) application instances </li>
         <li> update your code and swap old code and jar file with new code and new jar file </li>
         <li> restart all new (2.0.0) application instances </li>
     </ul>
+
+    <p>
+        Note, that a brokers must be on version 0.10.1 or higher to run a Kafka Streams application version 0.10.1 or higher;
+        On-disk message format must be 0.10 or higher to run a Kafka Streams application version 1.0 or higher.
+        For Kafka Streams 0.10.0, broker version 0.10.0 or higher is required.
+    </p>
+
+    <p>
+        In 2.0.0 we have added a few new APIs on the <code>ReadOnlyWindowStore</code> interface (for details please read <a href="#streams_api_changes_200">Streams API changes</a> below).
+        If you have customized window store implementations that extends the <code>ReadOnlyWindowStore</code> interface you need to make code changes.
+    </p>
+
+    <p>
+        We have also removed some public APIs that are deprecated prior to 1.0.x in 2.0.0.
+        See below for a detailed list of removed APIs.
+    </p>
+    <p>
+        In addition, if you using Java 8 method references in your Kafka Streams code you might need to update your code to resolve method ambiguities.
+        Hot-swapping the jar-file only might not work for this case.
+        See below a complete list of <a href="#streams_api_changes_200">2.0.0</a>
+        API and semantic changes that allow you to advance your application and/or simplify your code base.
+    </p>
 
     <h3><a id="streams_api_changes_200" href="#streams_api_changes_200">Streams API changes in 2.0.0</a></h3>
     <p>
@@ -169,6 +145,26 @@
         <a href="/{{version}}/documentation/streams/developer-guide/dsl-api.html#scala-dsl">Kafka Streams DSL for Scala documentation</a> and
         <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-270+-+A+Scala+Wrapper+Library+for+Kafka+Streams">KIP-270</a>.
     </p>
+    <p>
+        We have removed these deprecated APIs:
+    </p>
+    <ul>
+        <li><code>KafkaStreams#toString</code> no longer returns the topology and runtime metadata; to get topology metadata users can call <code>Topology#describe()</code> and to get thread runtime metadata users can call <code>KafkaStreams#localThreadsMetadata</code> (they are deprecated since 1.0.0).
+            For detailed guidance on how to update your code please read <a href="#streams_api_changes_100">here</a></li>
+        <li><code>TopologyBuilder</code> and <code>KStreamBuilder</code> are removed and replaced by <code>Topology</code> and <code>StreamsBuidler</code> respectively (they are deprecated since 1.0.0).
+            For detailed guidance on how to update your code please read <a href="#streams_api_changes_100">here</a></li>
+        <li><code>StateStoreSupplier</code> are removed and replaced with <code>StoreBuilder</code> (they are deprecated since 1.0.0);
+            and the corresponding <code>Stores#create</code> and <code>KStream, KTable, KGroupedStream</code> overloaded functions that use it have also been removed.
+            For detailed guidance on how to update your code please read <a href="#streams_api_changes_100">here</a></li>
+        <li><code>KStream, KTable, KGroupedStream</code> overloaded functions that requires serde and other specifications explicitly are removed and replaced with simpler overloaded functions that use <code>Consumed, Produced, Serialized, Materialized, Joined</code> (they are deprecated since 1.0.0).
+            For detailed guidance on how to update your code please read <a href="#streams_api_changes_100">here</a></li>
+        <li><code>Processor#punctuate</code>, <code>ValueTransformer#punctuate</code>, <code>ValueTransformer#punctuate</code> and <code>RecordContext#schedule(long)</code> are removed and replaced by <code>RecordContext#schedule(long, PunctuationType, Punctuator)</code> (they are deprecated in 1.0.0). </li>
+        <li>The second <code>boolean</code> typed parameter "loggingEnabled" in <code>ProcessorContext#register</code> has been removed; users can now use <code>StoreBuilder#withLoggingEnabled, withLoggingDisabled</code> to specify the behavior when they create the state store. </li>
+        <li><code>KTable#writeAs, print, foreach, to, through</code> are removed, users can call <code>KTable#tostream()#writeAs</code> instead for the same purpose (they are deprecated since 0.11.0.0).
+            For detailed list of removed APIs please read <a href="#streams_api_changes_0110">here</a></li>
+        <li><code>StreamsConfig#KEY_SERDE_CLASS_CONFIG, VALUE_SERDE_CLASS_CONFIG, TIMESTAMP_EXTRACTOR_CLASS_CONFIG</code> are removed and replaced with <code>StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG, DEFAULT_VALUE_SERDE_CLASS_CONFIG, DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG</code> respectively (they are deprecated since 0.11.0.0). </li>
+        <li><code>StreamsConfig#ZOOKEEPER_CONNECT_CONFIG</code> are removed as we do not need ZooKeeper dependency in Streams any more (it is deprecated since 0.10.2.0). </li>
+    </ul>
 
     <h3><a id="streams_api_changes_110" href="#streams_api_changes_110">Streams API changes in 1.1.0</a></h3>
     <p>
