@@ -79,7 +79,11 @@
                 instance, which provides access to the metadata of the currently processed record, including its source Kafka topic and partition,
                 its corresponding message offset, and further such information. You can also use this context instance to schedule a punctuation
                 function (via <code class="docutils literal"><span class="pre">ProcessorContext#schedule()</span></code>), to forward a new record as a key-value pair to the downstream processors (via <code class="docutils literal"><span class="pre">ProcessorContext#forward()</span></code>),
-                and to commit the current processing progress (via <code class="docutils literal"><span class="pre">ProcessorContext#commit()</span></code>).</p>
+              and to commit the current processing progress (via <code class="docutils literal"><span class="pre">ProcessorContext#commit()</span></code>).
+              Any resources you set up in <code class="docutils literal"><span class="pre">init()</span></code> can be cleaned up in the
+              <code class="docutils literal"><span class="pre">close()</span></code> method. Note that Kafka Streams may re-use a single
+              <code class="docutils literal"><span class="pre">Processor</span></code> object by calling
+              <code class="docutils literal"><span class="pre">init()</span></code> on it again after <code class="docutils literal"><span class="pre">close()</span></code>.</p>
             <p>When records are forwarded via downstream processors they also get a timestamp assigned. There are two different default behaviors:
 	       (1) If <code class="docutils literal"><span class="pre">#forward()</span></code> is called within <code class="docutils literal"><span class="pre">#process()</span></code> the output record inherits the input record timestamp.
 	       (2) If <code class="docutils literal"><span class="pre">#forward()</span></code> is called within <code class="docutils literal"><span class="pre">punctuate()</span></code></p> the output record inherits the current punctuation timestamp (either current 'stream time' or system wall-clock time).
