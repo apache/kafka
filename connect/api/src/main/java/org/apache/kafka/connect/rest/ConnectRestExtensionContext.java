@@ -15,7 +15,9 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.connect.rest.extension;
+package org.apache.kafka.connect.rest;
+
+import org.apache.kafka.connect.health.ConnectClusterState;
 
 import javax.ws.rs.core.Configurable;
 

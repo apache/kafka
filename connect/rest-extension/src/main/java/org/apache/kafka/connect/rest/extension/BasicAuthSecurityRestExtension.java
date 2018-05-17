@@ -18,6 +18,8 @@
 package org.apache.kafka.connect.rest.extension;
 
 import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.connect.rest.ConnectRestExtension;
+import org.apache.kafka.connect.rest.ConnectRestExtensionContext;
 
 import java.io.IOException;
 import java.util.Map;

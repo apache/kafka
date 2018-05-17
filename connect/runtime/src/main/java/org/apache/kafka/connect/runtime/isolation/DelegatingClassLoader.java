@@ -18,7 +18,7 @@ package org.apache.kafka.connect.runtime.isolation;
 
 import org.apache.kafka.connect.components.Versionable;
 import org.apache.kafka.connect.connector.Connector;
-import org.apache.kafka.connect.rest.extension.ConnectRestExtension;
+import org.apache.kafka.connect.rest.ConnectRestExtension;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.transforms.Transformation;

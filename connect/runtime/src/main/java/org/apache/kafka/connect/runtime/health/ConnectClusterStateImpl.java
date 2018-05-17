@@ -15,11 +15,13 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.connect.runtime.rest.extension;
+package org.apache.kafka.connect.runtime.health;
 
-import org.apache.kafka.connect.rest.extension.ConnectClusterState;
-import org.apache.kafka.connect.rest.extension.entities.ConnectorHealth;
-import org.apache.kafka.connect.rest.extension.entities.ConnectorType;
+import org.apache.kafka.connect.health.ConnectClusterState;
+import org.apache.kafka.connect.health.ConnectorHealth;
+import org.apache.kafka.connect.health.ConnectorState;
+import org.apache.kafka.connect.health.ConnectorType;
+import org.apache.kafka.connect.health.TaskState;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.util.Callback;
@@ -54,13 +56,13 @@ public class ConnectClusterStateImpl implements ConnectClusterState {
     public ConnectorHealth connectorHealth(String connName) {
 
         ConnectorStateInfo connectorStateFromHerder = herder.connectorStatus(connName);
-        ConnectorHealth.ConnectorState connectorState =
-            new ConnectorHealth.ConnectorState(
+        ConnectorState connectorState =
+            new ConnectorState(
                 connectorStateFromHerder.connector().state(),
                 connectorStateFromHerder.connector().workerId(),
                 connectorStateFromHerder.connector().trace()
             );
-        Map<Integer, ConnectorHealth.TaskState> taskStates =
+        Map<Integer, TaskState> taskStates =
             taskStates(connectorStateFromHerder.tasks());
         ConnectorHealth connectorHealth = new ConnectorHealth(
             connName,
@@ -71,14 +73,14 @@ public class ConnectClusterStateImpl implements ConnectClusterState {
         return connectorHealth;
     }
 
-    private Map<Integer, ConnectorHealth.TaskState> taskStates(
+    private Map<Integer, TaskState> taskStates(
         List<ConnectorStateInfo.TaskState> taskStatesFromHerder) {
 
-        Map<Integer, ConnectorHealth.TaskState> taskStates = new HashMap<>();
+        Map<Integer, TaskState> taskStates = new HashMap<>();
 
         for (ConnectorStateInfo.TaskState taskStateFromHerder : taskStatesFromHerder) {
             taskStates.put(taskStateFromHerder.id(),
-                           new ConnectorHealth.TaskState(
+                           new TaskState(
                                taskStateFromHerder.id(),
                                taskStateFromHerder.workerId(),
                                taskStateFromHerder.state(),

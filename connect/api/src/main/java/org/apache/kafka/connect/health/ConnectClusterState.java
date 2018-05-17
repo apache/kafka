@@ -15,9 +15,9 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.connect.rest.extension;
+package org.apache.kafka.connect.health;
 
-import org.apache.kafka.connect.rest.extension.entities.ConnectorHealth;
+import org.apache.kafka.connect.rest.ConnectRestExtension;
 
 import java.util.Collection;
 

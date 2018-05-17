@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.connect.runtime.rest.extension;
+package org.apache.kafka.connect.runtime.rest;
 
 import org.glassfish.jersey.server.ResourceConfig;
 import org.slf4j.Logger;

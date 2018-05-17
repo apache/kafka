@@ -15,10 +15,11 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.connect.rest.extension;
+package org.apache.kafka.connect.rest;
 
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.connect.components.Versionable;
+import org.apache.kafka.connect.health.ConnectClusterState;
 
 import java.io.Closeable;
 import java.util.Map;
@@ -28,7 +29,7 @@ import java.util.Map;
  * providers, etc. The implementations will be discovered by the standard Java {@link
  * java.util.ServiceLoader} mechanism by the Connect's class loader's.
  * The implementation need to be packaged in a jar and should provide the file
- * META-INF/services/org.apache.kafka.connect.rest.extension.ConnectRestExtension containing the
+ * META-INF/services/org.apache.kafka.connect.rest.ConnectRestExtension containing the
  * fully qualified implementation class name. <p> The implementations would be configured with the
  * Worker's Config through {@link Configurable#configure(Map)} by the connect framework.
  * <p> Typical use cases that can be implemented using this interface include things like security

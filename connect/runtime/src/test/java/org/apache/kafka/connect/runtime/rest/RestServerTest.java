@@ -17,7 +17,7 @@
 package org.apache.kafka.connect.runtime.rest;
 
 import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.connect.rest.extension.ConnectRestExtension;
+import org.apache.kafka.connect.rest.ConnectRestExtension;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
