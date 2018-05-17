@@ -31,7 +31,7 @@ import kafka.utils.{CommandLineUtils, CoreUtils, Logging, Whitelist}
 import org.apache.kafka.clients.consumer.{CommitFailedException, Consumer, ConsumerConfig, ConsumerRebalanceListener, ConsumerRecord, KafkaConsumer, OffsetAndMetadata}
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord, RecordMetadata}
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.errors.WakeupException
@@ -357,6 +357,8 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
               trace("Caught NoRecordsException, continue iteration.")
             case _: WakeupException =>
               trace("Caught WakeupException, continue iteration.")
+            case e: KafkaException if (shuttingDown || exitingOnSendFailure) =>
+              trace(s"Ignoring caught KafkaException during shutdown. sendFailure: $exitingOnSendFailure.", e)
           }
           maybeFlushAndCommitOffsets()
         }

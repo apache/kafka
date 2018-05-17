@@ -35,6 +35,7 @@ import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
 import scala.collection.mutable.{ArrayBuffer, Buffer}
+import scala.concurrent.ExecutionException
 
 abstract class BaseProducerSendTest extends KafkaServerTestHarness {
 
@@ -446,8 +447,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
           future.get()
           fail("No message should be sent successfully.")
         } catch {
-          case e: Exception =>
-            assertEquals("java.lang.IllegalStateException: Producer is closed forcefully.", e.getMessage)
+          case e: ExecutionException => assertEquals(classOf[KafkaException], e.getCause.getClass)
         }
       }
       assertEquals("Fetch response should have no message returned.", 0, consumer.poll(50).count)

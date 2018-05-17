@@ -533,6 +533,7 @@ public class MockClient implements KafkaClient {
 
     @Override
     public void close() {
+        metadata.close();
     }
 
     @Override
