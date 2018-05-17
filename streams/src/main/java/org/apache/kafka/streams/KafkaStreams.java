@@ -626,6 +626,7 @@ public class KafkaStreams {
 
         // save the current thread so that if it is a stream thread
         // we don't attempt to join it and cause a deadlock
+//        final Thread callingThread = Thread.currentThread()
         final Thread shutdown = new Thread(new Runnable() {
             @Override
             public void run() {
@@ -639,6 +640,7 @@ public class KafkaStreams {
                 closeGlobalStreamThread();
                 for (final StreamThread thread : threads) {
                     try {
+//                        if (!thread.stillRunning() && thread != callingThread) {
                         if (!thread.stillRunning()) {
                             thread.join();
                         }
