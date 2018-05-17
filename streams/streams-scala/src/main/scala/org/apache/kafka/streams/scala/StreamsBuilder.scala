@@ -70,7 +70,7 @@ class StreamsBuilder(inner: StreamsBuilderJ = new StreamsBuilderJ) {
    * @see #stream(String)
    * @see `org.apache.kafka.streams.StreamsBuilder#stream`
    */
-  def stream[K, V](topics: List[String])(implicit consumed: Consumed[K, V]): KStream[K, V] =
+  def stream[K, V](topics: Set[String])(implicit consumed: Consumed[K, V]): KStream[K, V] =
     inner.stream[K, V](topics.asJava, consumed)
 
   /**
