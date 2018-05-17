@@ -121,6 +121,16 @@ class AdminClient(val time: Time,
     listAllGroupsFlattened.filter(_.protocolType == ConsumerProtocol.PROTOCOL_TYPE)
   }
 
+  def getListOffset(req: ListOffsetRequest, node: Node): Map[TopicPartition, ListOffsetResponse.PartitionData] = {
+    val responseBody = send(node, ApiKeys.LIST_OFFSETS, req)
+    new ListOffsetResponse(responseBody).responseData().asScala.toMap
+  }
+
+  def getMetadata(req: MetadataRequest, node: Node): MetadataResponse = {
+    val responseBody = send(node, ApiKeys.METADATA, req)
+    new MetadataResponse(responseBody)
+  }
+
   def describeGroup(groupId: String): GroupSummary = {
     val coordinator = findCoordinator(groupId)
     val responseBody = send(coordinator, ApiKeys.DESCRIBE_GROUPS, new DescribeGroupsRequest(List(groupId).asJava))
