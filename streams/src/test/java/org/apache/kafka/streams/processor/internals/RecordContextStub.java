@@ -47,12 +47,9 @@ public class RecordContextStub implements RecordContext {
                              final long timestamp,
                              final int partition,
                              final String topic) {
-        this.offset = offset;
-        this.timestamp = timestamp;
-        this.partition = partition;
-        this.topic = topic;
-        this.headers = new RecordHeaders();
+        this(offset, timestamp, partition, topic, null);
     }
+
     @Override
     public long offset() {
         return offset;
