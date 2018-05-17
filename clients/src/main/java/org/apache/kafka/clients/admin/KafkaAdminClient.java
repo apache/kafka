@@ -2379,18 +2379,19 @@ public class KafkaAdminClient extends AdminClient {
                                     final List<MemberDescription> memberDescriptions = new ArrayList<>(members.size());
 
                                     for (DescribeGroupsResponse.GroupMember groupMember : members) {
+                                        List<TopicPartition> partitions = Collections.<TopicPartition>emptyList();
                                         if (groupMember.memberAssignment().remaining() > 0) {
                                             final PartitionAssignor.Assignment assignment =
                                                 ConsumerProtocol.deserializeAssignment(
                                                     ByteBuffer.wrap(Utils.readBytes(groupMember.memberAssignment())));
-
-                                            final MemberDescription memberDescription =
-                                                new MemberDescription.Builder(groupMember.memberId()).
-                                                    clientId(groupMember.clientId()).
-                                                    host(groupMember.clientHost()).
-                                                    assignment(new MemberAssignment(assignment.partitions())).build();
-                                            memberDescriptions.add(memberDescription);
+                                            partitions = assignment.partitions();
                                         }
+                                        final MemberDescription memberDescription =
+                                            new MemberDescription.Builder(groupMember.memberId()).
+                                                clientId(groupMember.clientId()).
+                                                host(groupMember.clientHost()).
+                                                assignment(new MemberAssignment(partitions)).build();
+                                        memberDescriptions.add(memberDescription);
                                     }
                                     final ConsumerGroupDescription consumerGroupDescription =
                                             new ConsumerGroupDescription.Builder(groupId).
