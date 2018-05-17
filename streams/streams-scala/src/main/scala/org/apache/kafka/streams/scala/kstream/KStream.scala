@@ -22,7 +22,7 @@ package kstream
 
 import org.apache.kafka.streams.KeyValue
 import org.apache.kafka.streams.kstream.{KStream => KStreamJ, _}
-import org.apache.kafka.streams.processor.{Processor, ProcessorContext, ProcessorSupplier}
+import org.apache.kafka.streams.processor.{Processor, ProcessorContext, ProcessorSupplier, TopicNameExtractor}
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.FunctionConversions._
 
@@ -283,12 +283,12 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
     * // to the through call
     * }}}
     *
-    * @param mapper the mapper from key value to topic name
+    * @param extractor the mapper from key value to topic name
     * @param (implicit) produced the instance of Produced that gives the serdes and `StreamPartitioner`
     * @see `org.apache.kafka.streams.kstream.KStream#to`
     */
-  def to(mapper: (K, V) => String)(implicit produced: Produced[K, V]): Unit =
-    inner.to(mapper.asKeyValueMapper, produced)
+  def to(extractor: TopicNameExtractor[K, V])(implicit produced: Produced[K, V]): Unit =
+    inner.to(extractor, produced)
 
   /**
    * Transform each record of the input stream into zero or more records in the output stream (both key and value type
