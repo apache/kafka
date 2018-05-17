@@ -402,21 +402,13 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         final String internalQueryableName = materializedInternal == null ? null : materializedInternal.storeName();
         final String joinMergeName = builder.newProcessorName(MERGE_NAME);
 
-        final KTableKTableJoinNode.KTableKTableJoinNodeBuilder kTableJoinNodeBuilder = KTableKTableJoinNode.kTableKTableJoinNodeBuilder();
-
-        // only materialize if specified in Materialized
-        if (materializedInternal != null) {
-            kTableJoinNodeBuilder.withMaterializedInternal(materializedInternal);
-        }
-        kTableJoinNodeBuilder.withNodeName(joinMergeName);
-
         KTable<K, VR> kTable = buildJoin((AbstractStream<K>) other,
                                                joiner,
                                                leftOuter,
                                                rightOuter,
                                                joinMergeName,
                                                internalQueryableName,
-                                               kTableJoinNodeBuilder);
+                                               materializedInternal);
 
         if (materializedInternal != null) {
             final StoreBuilder<KeyValueStore<K, VR>> storeBuilder
@@ -434,7 +426,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                                            final boolean rightOuter,
                                            final String joinMergeName,
                                            final String internalQueryableName,
-                                           final KTableKTableJoinNode.KTableKTableJoinNodeBuilder kTableJoinNodeBuilder) {
+                                           final MaterializedInternal materializedInternal) {
         final Set<String> allSourceNodes = ensureJoinableWith(other);
 
         if (leftOuter) {
@@ -468,6 +460,14 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                                      ((KTableImpl<K, ?, ?>) other).queryableStoreName, false, null),
             internalQueryableName
         );
+
+        final KTableKTableJoinNode.KTableKTableJoinNodeBuilder kTableJoinNodeBuilder = KTableKTableJoinNode.kTableKTableJoinNodeBuilder();
+
+        // only materialize if specified in Materialized
+        if (materializedInternal != null) {
+            kTableJoinNodeBuilder.withMaterializedInternal(materializedInternal);
+        }
+        kTableJoinNodeBuilder.withNodeName(joinMergeName);
 
         ProcessorParameters joinThisProcessorParameters = new ProcessorParameters(joinThis, joinThisName);
         ProcessorParameters joinOtherProcessorParameters = new ProcessorParameters(joinOther, joinOtherName);

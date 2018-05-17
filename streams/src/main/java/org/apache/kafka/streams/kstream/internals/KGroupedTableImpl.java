@@ -81,11 +81,10 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
     }
 
     private <T> void buildAggregate(final ProcessorSupplier<K, Change<V>> aggregateSupplier,
-                                final String topic,
-                                final String funcName,
-                                final String sourceName,
-                                final String sinkName,
-                                final StatefulRepartitionNode.StatefulRepartitionNodeBuilder<K, V, T> statefulRepartitionNodeBuilder) {
+                                    final String topic,
+                                    final String funcName,
+                                    final String sourceName,
+                                    final String sinkName) {
 
         final Serializer<? extends K> keySerializer = keySerde == null ? null : keySerde.serializer();
         final Deserializer<? extends K> keyDeserializer = keySerde == null ? null : keySerde.deserializer();
@@ -104,6 +103,27 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
 
         // aggregate the values with the aggregator and local store
         builder.internalTopologyBuilder.addProcessor(funcName, aggregateSupplier, sourceName);
+    }
+
+    private <T> KTable<K, T> doAggregate(final ProcessorSupplier<K, Change<V>> aggregateSupplier,
+                                         final String functionName,
+                                         final MaterializedInternal<K, T, KeyValueStore<Bytes, byte[]>> materialized) {
+        final String sinkName = builder.newProcessorName(KStreamImpl.SINK_NAME);
+        final String sourceName = builder.newProcessorName(KStreamImpl.SOURCE_NAME);
+        final String funcName = builder.newProcessorName(functionName);
+        final String topic = materialized.storeName() + KStreamImpl.REPARTITION_TOPIC_SUFFIX;
+
+        StatefulRepartitionNode.StatefulRepartitionNodeBuilder<K, V, T> statefulRepartitionNodeBuilder = StatefulRepartitionNode.statefulRepartitionNodeBuilder();
+
+        buildAggregate(aggregateSupplier,
+                       topic,
+                       funcName,
+                       sourceName,
+                       sinkName
+        );
+
+        builder.internalTopologyBuilder.addStateStore(new KeyValueStoreMaterializer<>(materialized)
+                                                          .materialize(), funcName);
 
         ProcessorParameters processorParameters = new ProcessorParameters<>(aggregateSupplier, funcName);
 
@@ -113,25 +133,6 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
             .withProcessorParameters(processorParameters)
             .withKeySerde(keySerde)
             .withValueSerde(valSerde);
-    }
-
-    private <T> KTable<K, T> doAggregate(final ProcessorSupplier<K, Change<V>> aggregateSupplier,
-                                         final String functionName,
-                                         final MaterializedInternal<K, T, KeyValueStore<Bytes, byte[]>> materialized) {
-        final String sinkName = builder.newProcessorName(KStreamImpl.SINK_NAME);
-        final String sourceName = builder.newProcessorName(KStreamImpl.SOURCE_NAME);
-        final String funcName = builder.newProcessorName(functionName);
-
-        StatefulRepartitionNode.StatefulRepartitionNodeBuilder<K, V, T> statefulRepartitionNodeBuilder = StatefulRepartitionNode.statefulRepartitionNodeBuilder();
-
-        buildAggregate(aggregateSupplier,
-                       materialized.storeName() + KStreamImpl.REPARTITION_TOPIC_SUFFIX,
-                       funcName,
-                       sourceName,
-                       sinkName,
-                       statefulRepartitionNodeBuilder);
-        builder.internalTopologyBuilder.addStateStore(new KeyValueStoreMaterializer<>(materialized)
-                                                          .materialize(), funcName);
 
         statefulRepartitionNodeBuilder.withMaterialized(materialized)
             .withNodeName(funcName);
