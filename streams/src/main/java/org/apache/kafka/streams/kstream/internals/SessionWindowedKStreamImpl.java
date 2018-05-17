@@ -68,15 +68,27 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K> implemen
 
     @Override
     public KTable<Windowed<K>, Long> count() {
-        return count(Materialized.<K, Long, SessionStore<Bytes, byte[]>>with(keySerde, Serdes.Long()));
+        return doCount(Materialized.with(keySerde, Serdes.Long()));
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public KTable<Windowed<K>, Long> count(final Materialized<K, Long, SessionStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(materialized, "materialized can't be null");
+
+        // TODO: remove this when we do a topology-incompatible release
+        // we used to burn a topology name here, so we have to keep doing it for compatibility
+        final String givenStoreName = new MaterializedPeek<>(materialized).givenStoreName();
+        if (givenStoreName == null) {
+            builder.newStoreName(AGGREGATE_NAME);
+        }
+
+        return doCount(materialized);
+    }
+
+    @SuppressWarnings("unchecked")
+    private KTable<Windowed<K>, Long> doCount(final Materialized<K, Long, SessionStore<Bytes, byte[]>> materialized) {
         final MaterializedInternal<K, Long, SessionStore<Bytes, byte[]>> materializedInternal
-                = new MaterializedInternal<>(materialized, builder, AGGREGATE_NAME);
+            = new MaterializedInternal<>(materialized, builder, AGGREGATE_NAME);
         if (materializedInternal.keySerde() == null) {
             materializedInternal.withKeySerde(keySerde);
         }
@@ -85,10 +97,10 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K> implemen
         }
 
         return (KTable<Windowed<K>, Long>) aggregateBuilder.build(
-                new KStreamSessionWindowAggregate<>(windows, materializedInternal.storeName(), aggregateBuilder.countInitializer, aggregateBuilder.countAggregator, countMerger),
-                AGGREGATE_NAME,
-                materialize(materializedInternal),
-                materializedInternal.isQueryable());
+            new KStreamSessionWindowAggregate<>(windows, materializedInternal.storeName(), aggregateBuilder.countInitializer, aggregateBuilder.countAggregator, countMerger),
+            AGGREGATE_NAME,
+            materialize(materializedInternal),
+            materializedInternal.isQueryable());
     }
 
     @Override
