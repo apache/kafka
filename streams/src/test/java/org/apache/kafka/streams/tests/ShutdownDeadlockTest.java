@@ -56,16 +56,16 @@ public class ShutdownDeadlockTest {
         streams.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
             @Override
             public void uncaughtException(final Thread t, final Throwable e) {
-                System.exit(-1);
+                streams.close();
             }
         });
 
-        Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
-            @Override
-            public void run() {
-                streams.close(5, TimeUnit.SECONDS);
-            }
-        }));
+//        Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
+//            @Override
+//            public void run() {
+//                streams.close(5, TimeUnit.SECONDS);
+////            }
+////        }));
 
         final Properties producerProps = new Properties();
         producerProps.put(ProducerConfig.CLIENT_ID_CONFIG, "SmokeTest");
