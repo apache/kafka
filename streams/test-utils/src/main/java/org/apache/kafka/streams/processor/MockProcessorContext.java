@@ -332,9 +332,6 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
 
     @Override
     public Headers headers() {
-        if (headers == null) {
-            throw new IllegalStateException("Headers must be set before use via setRecordMetadata() or setHeaders()");
-        }
         return headers;
     }
 
