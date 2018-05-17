@@ -28,6 +28,7 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.processor.TopicNameExtractor;
 
 /**
  * {@code KStream} is an abstraction of a <i>record stream</i> of {@link KeyValue} pairs, i.e., each record is an
@@ -473,19 +474,19 @@ public interface KStream<K, V> {
      * {@link DefaultPartitioner}.
      * The topic names for each record to send to is dynamically determined based on the {@link KeyValueMapper}.
      *
-     * @param topicChooser the dynamic topic chooser
+     * @param topicExtractor    the dynamic topic chooser
      */
-    void to(final KeyValueMapper<? super K, ? super V, String> topicChooser);
+    void to(final TopicNameExtractor<K, V> topicExtractor);
 
     /**
      * Dynamically materialize this stream to topics using default serializers specified in the config and producer's
      * {@link DefaultPartitioner}.
      * The topic names for each record to send to is dynamically determined based on the {@link KeyValueMapper}.
      *
-     * @param topicChooser the dynamic topic chooser
-     * @param produced    the options to use when producing to the topic
+     * @param topicExtractor    the dynamic topic chooser
+     * @param produced          the options to use when producing to the topic
      */
-    void to(final KeyValueMapper<? super K, ? super V, String> topicChooser,
+    void to(final TopicNameExtractor<K, V> topicExtractor,
             final Produced<K, V> produced);
 
     /**

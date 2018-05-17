@@ -18,10 +18,9 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.internals.ChangedSerializer;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.processor.TopicNameExtractor;
 
 public class SinkNode<K, V> extends ProcessorNode<K, V> {
 
@@ -29,9 +28,9 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
     private Serializer<K> keySerializer;
     private Serializer<V> valSerializer;
     private final StreamPartitioner<? super K, ? super V> partitioner;
-    private final KeyValueMapper<? super K, ? super V, String> topicChooser;
+    private final TopicNameExtractor<K, V> topicExtractor;
 
-    private ProcessorContext context;
+    private InternalProcessorContext context;
 
     SinkNode(final String name,
              final String topic,
@@ -44,17 +43,17 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
         this.keySerializer = keySerializer;
         this.valSerializer = valSerializer;
         this.partitioner = partitioner;
-        this.topicChooser = null;
+        this.topicExtractor = null;
     }
 
     SinkNode(final String name,
-             final KeyValueMapper<? super K, ? super V, String> topicChooser,
+             final TopicNameExtractor<K, V> topicExtractor,
              final Serializer<K> keySerializer,
              final Serializer<V> valSerializer,
              final StreamPartitioner<? super K, ? super V> partitioner) {
         super(name);
 
-        this.topicChooser = topicChooser;
+        this.topicExtractor = topicExtractor;
         this.keySerializer = keySerializer;
         this.valSerializer = valSerializer;
         this.partitioner = partitioner;
@@ -100,7 +99,7 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
             throw new StreamsException("Invalid (negative) timestamp of " + timestamp + " for output record <" + key + ":" + value + ">.");
         }
 
-        final String topic = topicChooser != null ? topicChooser.apply(key, value) : this.topic;
+        final String topic = topicExtractor != null ? topicExtractor.extract(key, value, this.context.recordContext()) : this.topic;
 
         try {
             collector.send(topic, key, value, timestamp, keySerializer, valSerializer, partitioner);

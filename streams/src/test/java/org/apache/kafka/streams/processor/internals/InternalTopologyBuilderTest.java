@@ -22,10 +22,10 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyDescription;
 import org.apache.kafka.streams.errors.TopologyException;
-import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
@@ -417,7 +417,7 @@ public class InternalTopologyBuilderTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullTopicChooserWhenAddingSink() {
-        builder.addSink("name", (KeyValueMapper<? super Object, ? super Object, String>) null, null, null, null);
+        builder.addSink("name", (TopicNameExtractor) null, null, null, null);
     }
 
     @Test(expected = NullPointerException.class)

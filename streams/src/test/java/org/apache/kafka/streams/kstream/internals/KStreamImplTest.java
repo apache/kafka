@@ -39,7 +39,9 @@ import org.apache.kafka.streams.kstream.ValueMapperWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
+import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
+import org.apache.kafka.streams.processor.internals.RecordContext;
 import org.apache.kafka.streams.processor.internals.SourceNode;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockMapper;
@@ -228,14 +230,14 @@ public class KStreamImplTest {
         final StreamsBuilder builder = new StreamsBuilder();
         final String input = "topic";
         final KStream<String, String> stream = builder.stream(input, stringConsumed);
-        stream.to(new KeyValueMapper<String, String, String>() {
+        stream.to(new TopicNameExtractor<String, String>() {
             @Override
-            public String apply(String key, String value) {
-                return key + "-topic";
+            public String extract(String key, String value, RecordContext recordContext) {
+                return recordContext.topic() + "-" + key + "-topic";
             }
         }, Produced.with(Serdes.String(), Serdes.String()));
-        builder.stream("a-topic", stringConsumed).process(processorSupplier);
-        builder.stream("b-topic", stringConsumed).process(processorSupplier);
+        builder.stream(input + "-a-topic", stringConsumed).process(processorSupplier);
+        builder.stream(input + "-b-topic", stringConsumed).process(processorSupplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             driver.pipeInput(recordFactory.create(input, "a", "v1"));
@@ -357,7 +359,7 @@ public class KStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullTopicChooserOnTo() {
-        testStream.to((KeyValueMapper<? super String, ? super String, String>) null);
+        testStream.to((TopicNameExtractor<String, String>) null);
     }
 
     @Test(expected = NullPointerException.class)

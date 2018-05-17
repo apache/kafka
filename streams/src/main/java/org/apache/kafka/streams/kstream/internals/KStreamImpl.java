@@ -41,6 +41,7 @@ import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowStore;
@@ -313,15 +314,15 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
     @Override
-    public void to(final KeyValueMapper<? super K, ? super V, String> topicChooser) {
-        to(topicChooser, Produced.<K, V>with(null, null, null));
+    public void to(final TopicNameExtractor<K, V> topicExtractor) {
+        to(topicExtractor, Produced.<K, V>with(null, null, null));
     }
 
     @Override
-    public void to(final KeyValueMapper<? super K, ? super V, String> topicChooser, final Produced<K, V> produced) {
-        Objects.requireNonNull(topicChooser, "topic chooser can't be null");
+    public void to(final TopicNameExtractor<K, V> topicExtractor, final Produced<K, V> produced) {
+        Objects.requireNonNull(topicExtractor, "topic extractor can't be null");
         Objects.requireNonNull(produced, "Produced can't be null");
-        to(topicChooser, new ProducedInternal<>(produced));
+        to(topicExtractor, new ProducedInternal<>(produced));
     }
 
     @SuppressWarnings("unchecked")
@@ -340,7 +341,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
     @SuppressWarnings("unchecked")
-    private void to(final KeyValueMapper<? super K, ? super V, String> topicChooser, final ProducedInternal<K, V> produced) {
+    private void to(final TopicNameExtractor<K, V> topicExtractor, final ProducedInternal<K, V> produced) {
         final String name = builder.newProcessorName(SINK_NAME);
         final Serializer<K> keySerializer = produced.keySerde() == null ? null : produced.keySerde().serializer();
         final Serializer<V> valSerializer = produced.valueSerde() == null ? null : produced.valueSerde().serializer();
@@ -348,9 +349,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         if (partitioner == null && keySerializer instanceof WindowedSerializer) {
             final StreamPartitioner<K, V> windowedPartitioner = (StreamPartitioner<K, V>) new WindowedStreamPartitioner<Object, V>((WindowedSerializer) keySerializer);
-            builder.internalTopologyBuilder.addSink(name, topicChooser, keySerializer, valSerializer, windowedPartitioner, this.name);
+            builder.internalTopologyBuilder.addSink(name, topicExtractor, keySerializer, valSerializer, windowedPartitioner, this.name);
         } else {
-            builder.internalTopologyBuilder.addSink(name, topicChooser, keySerializer, valSerializer, partitioner, this.name);
+            builder.internalTopologyBuilder.addSink(name, topicExtractor, keySerializer, valSerializer, partitioner, this.name);
         }
     }
 

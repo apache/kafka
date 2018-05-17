@@ -21,11 +21,11 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.errors.TopologyException;
-import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TimestampExtractor;
+import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.WindowStoreBuilder;
@@ -325,7 +325,7 @@ public class InternalTopologyBuilder {
         private final Serializer<K> keySerializer;
         private final Serializer<V> valSerializer;
         private final StreamPartitioner<? super K, ? super V> partitioner;
-        private final KeyValueMapper<? super K, ? super V, String> topicChooser;
+        private final TopicNameExtractor<K, V> topicExtractor;
 
         private SinkNodeFactory(final String name,
                                 final String[] predecessors,
@@ -338,17 +338,17 @@ public class InternalTopologyBuilder {
             this.keySerializer = keySerializer;
             this.valSerializer = valSerializer;
             this.partitioner = partitioner;
-            this.topicChooser = null;
+            this.topicExtractor = null;
         }
 
         private SinkNodeFactory(final String name,
                                 final String[] predecessors,
-                                final KeyValueMapper<? super K, ? super V, String> topicChooser,
+                                final TopicNameExtractor<K, V> topicExtractor,
                                 final Serializer<K> keySerializer,
                                 final Serializer<V> valSerializer,
                                 final StreamPartitioner<? super K, ? super V> partitioner) {
             super(name, predecessors.clone());
-            this.topicChooser = topicChooser;
+            this.topicExtractor = topicExtractor;
             this.keySerializer = keySerializer;
             this.valSerializer = valSerializer;
             this.partitioner = partitioner;
@@ -365,7 +365,7 @@ public class InternalTopologyBuilder {
                     return new SinkNode<>(name, topic, keySerializer, valSerializer, partitioner);
                 }
             } else {
-                return new SinkNode<>(name, topicChooser, keySerializer, valSerializer, partitioner);
+                return new SinkNode<>(name, topicExtractor, keySerializer, valSerializer, partitioner);
             }
         }
 
@@ -478,13 +478,13 @@ public class InternalTopologyBuilder {
     }
 
     public final <K, V> void addSink(final String name,
-                                     final KeyValueMapper<? super K, ? super V, String> topicChooser,
+                                     final TopicNameExtractor<K, V> topicExtractor,
                                      final Serializer<K> keySerializer,
                                      final Serializer<V> valSerializer,
                                      final StreamPartitioner<? super K, ? super V> partitioner,
                                      final String... predecessorNames) {
         Objects.requireNonNull(name, "name must not be null");
-        Objects.requireNonNull(topicChooser, "topic must not be null");
+        Objects.requireNonNull(topicExtractor, "topic extractor must not be null");
         if (nodeFactories.containsKey(name)) {
             throw new TopologyException("Processor " + name + " is already added.");
         }
@@ -502,7 +502,7 @@ public class InternalTopologyBuilder {
             }
         }
 
-        nodeFactories.put(name, new SinkNodeFactory<>(name, predecessorNames, topicChooser, keySerializer, valSerializer, partitioner));
+        nodeFactories.put(name, new SinkNodeFactory<>(name, predecessorNames, topicExtractor, keySerializer, valSerializer, partitioner));
         nodeGrouper.add(name);
         nodeGrouper.unite(name, predecessorNames);
     }
