@@ -65,14 +65,20 @@
     </p>
 
     <p>
-        We have also removed some public APIs that are deprecated prior to 1.0.x in 2.0.0.
-        See below for a detailed list of removed APIs.
-    </p>
-    <p>
         In addition, if you using Java 8 method references in your Kafka Streams code you might need to update your code to resolve method ambiguities.
         Hot-swapping the jar-file only might not work for this case.
         See below a complete list of <a href="#streams_api_changes_200">2.0.0</a>
         API and semantic changes that allow you to advance your application and/or simplify your code base.
+    </p>
+
+    <p>
+        We moved <code>Consumed</code> interface from <code>org.apache.kafka.streams</code> to <code>org.apache.kafka.streams.kstream</code>
+        as it was mistakenly placed in the previous release. If your code has already used it there is a simple one-liner change needed in your import statement.
+    </p>
+
+    <p>
+        We have also removed some public APIs that are deprecated prior to 1.0.x in 2.0.0.
+        See below for a detailed list of removed APIs.
     </p>
 
     <h3><a id="streams_api_changes_200" href="#streams_api_changes_200">Streams API changes in 2.0.0</a></h3>
