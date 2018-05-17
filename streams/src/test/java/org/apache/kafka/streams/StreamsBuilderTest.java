@@ -182,7 +182,7 @@ public class StreamsBuilderTest {
     }
     
     @Test
-    public void ShouldMergeStreams() {
+    public void shouldMergeStreams() {
         final String topic1 = "topic-1";
         final String topic2 = "topic-2";
 
