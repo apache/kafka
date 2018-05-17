@@ -78,7 +78,7 @@ class GetOffsetShellTest(Test):
         self.start_producer()
 
         # Assert that offset fetched without any consumers consuming is 0
-        assert self.kafka.get_offset_shell(TOPIC, None, 1000, 1, -1), "%s:%s:%s" % (TOPIC, NUM_PARTITIONS - 1, 0)
+        assert self.kafka.get_offset_shell(TOPIC, None, -1), "%s:%s:%s" % (TOPIC, NUM_PARTITIONS - 1, 0)
 
         self.start_consumer(security_protocol)
 
@@ -87,5 +87,5 @@ class GetOffsetShellTest(Test):
         wait_until(lambda: self.consumer.alive(node), timeout_sec=10, backoff_sec=.2, err_msg="Consumer was too slow to start")
 
         # Assert that offset is correctly indicated by GetOffsetShell tool
-        wait_until(lambda: "%s:%s:%s" % (TOPIC, NUM_PARTITIONS - 1, MAX_MESSAGES) in self.kafka.get_offset_shell(TOPIC, None, 1000, 1, -1), timeout_sec=10,
+        wait_until(lambda: "%s:%s:%s" % (TOPIC, NUM_PARTITIONS - 1, MAX_MESSAGES) in self.kafka.get_offset_shell(TOPIC, None, -1), timeout_sec=10,
                    err_msg="Timed out waiting to reach expected offset.")
