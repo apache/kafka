@@ -464,11 +464,8 @@ class WorkerSinkTask extends WorkerTask {
         for (ConsumerRecord<byte[], byte[]> msg : msgs) {
             log.trace("{} Consuming and converting message in topic '{}' partition {} at offset {} and timestamp {}",
                     this, msg.topic(), msg.partition(), msg.offset(), msg.timestamp());
-            final SchemaAndValue keyAndSchema;
-            final SchemaAndValue valueAndSchema;
-
-            keyAndSchema = toConnectData(keyConverter, "key", msg, msg.key());
-            valueAndSchema = toConnectData(valueConverter, "value", msg, msg.value());
+            SchemaAndValue keyAndSchema = toConnectData(keyConverter, "key", msg, msg.key());
+            SchemaAndValue valueAndSchema = toConnectData(valueConverter, "value", msg, msg.value());
             Headers headers = convertHeadersFor(msg);
             Long timestamp = ConnectUtils.checkAndConvertTimestamp(msg.timestamp());
             SinkRecord origRecord = new SinkRecord(msg.topic(), msg.partition(),
