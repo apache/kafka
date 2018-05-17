@@ -68,27 +68,6 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         return new KStreamImpl<>(this, name, Collections.singleton(name), false);
     }
 
-    @SuppressWarnings("deprecation")
-    public <K, V> KTable<K, V> table(final String topic,
-                                     final ConsumedInternal<K, V> consumed,
-                                     final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier) {
-        Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
-        final String source = newProcessorName(KStreamImpl.SOURCE_NAME);
-        final String name = newProcessorName(KTableImpl.SOURCE_NAME);
-
-        final KTable<K, V> kTable = createKTable(consumed,
-                                                 topic,
-                                                 storeSupplier.name(),
-                                                 true,
-                                                 source,
-                                                 name);
-
-        internalTopologyBuilder.addStateStore(storeSupplier, name);
-        internalTopologyBuilder.connectSourceStoreAndTopic(storeSupplier.name(), topic);
-
-        return kTable;
-    }
-
     @SuppressWarnings("unchecked")
     public <K, V> KTable<K, V> table(final String topic,
                                      final ConsumedInternal<K, V> consumed,

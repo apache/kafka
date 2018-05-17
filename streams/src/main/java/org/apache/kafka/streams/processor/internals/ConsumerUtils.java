@@ -14,18 +14,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.state.internals;
+package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.WakeupException;
 
-/**
- * A windowed state store supplier that extends the {@link org.apache.kafka.streams.processor.StateStoreSupplier} interface.
- *
- * @param <T> State store type
- */
-@Deprecated
-public interface WindowStoreSupplier<T extends StateStore> extends org.apache.kafka.streams.processor.StateStoreSupplier<T> {
+import java.util.Collections;
+import java.util.List;
 
-    // window retention period in milli-second
-    long retentionPeriod();
+public final class ConsumerUtils {
+    private ConsumerUtils() {}
+
+    public static <K, V> ConsumerRecords<K, V> poll(final Consumer<K, V> consumer, final long maxDurationMs) {
+        try {
+            return consumer.poll(maxDurationMs);
+        } catch (final WakeupException e) {
+            return new ConsumerRecords<>(Collections.<TopicPartition, List<ConsumerRecord<K, V>>>emptyMap());
+        }
+    }
 }

@@ -755,38 +755,6 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         }
     }
 
-    /**
-     * Used to capture subscribed topic via Patterns discovered during the
-     * partition assignment process.
-     *
-     * // TODO: this is a duplicate of the InternalTopologyBuilder#SubscriptionUpdates
-     *          and is maintained only for compatibility of the deprecated TopologyBuilder API
-     */
-    public static class SubscriptionUpdates {
-
-        private final Set<String> updatedTopicSubscriptions = new HashSet<>();
-
-        public void updateTopics(final Collection<String> topicNames) {
-            updatedTopicSubscriptions.clear();
-            updatedTopicSubscriptions.addAll(topicNames);
-        }
-
-        public Collection<String> getUpdates() {
-            return Collections.unmodifiableSet(updatedTopicSubscriptions);
-        }
-
-        public boolean hasUpdates() {
-            return !updatedTopicSubscriptions.isEmpty();
-        }
-
-        @Override
-        public String toString() {
-            return "SubscriptionUpdates{" +
-                    "updatedTopicSubscriptions=" + updatedTopicSubscriptions +
-                    '}';
-        }
-    }
-
     static class CopartitionedTopicsValidator {
         private final String logPrefix;
 
@@ -794,7 +762,6 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
             this.logPrefix = logPrefix;
         }
 
-        @SuppressWarnings("deprecation")
         void validate(final Set<String> copartitionGroup,
                       final Map<String, InternalTopicMetadata> allRepartitionTopicsNumPartitions,
                       final Cluster metadata) {
@@ -805,7 +772,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                     final Integer partitions = metadata.partitionCountForTopic(topic);
 
                     if (partitions == null) {
-                        throw new org.apache.kafka.streams.errors.TopologyBuilderException(String.format("%sTopic not found: %s", logPrefix, topic));
+                        throw new org.apache.kafka.streams.errors.TopologyException(String.format("%sTopic not found: %s", logPrefix, topic));
                     }
 
                     if (numPartitions == UNKNOWN) {
@@ -813,7 +780,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                     } else if (numPartitions != partitions) {
                         final String[] topics = copartitionGroup.toArray(new String[copartitionGroup.size()]);
                         Arrays.sort(topics);
-                        throw new org.apache.kafka.streams.errors.TopologyBuilderException(String.format("%sTopics not co-partitioned: [%s]", logPrefix, Utils.join(Arrays.asList(topics), ",")));
+                        throw new org.apache.kafka.streams.errors.TopologyException(String.format("%sTopics not co-partitioned: [%s]", logPrefix, Utils.join(Arrays.asList(topics), ",")));
                     }
                 } else if (allRepartitionTopicsNumPartitions.get(topic).numPartitions == NOT_AVAILABLE) {
                     numPartitions = NOT_AVAILABLE;

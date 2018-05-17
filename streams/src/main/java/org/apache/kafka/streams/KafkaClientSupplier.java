@@ -19,6 +19,7 @@ package org.apache.kafka.streams;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.processor.StateStore;
 
 import java.util.Map;
@@ -32,7 +33,7 @@ public interface KafkaClientSupplier {
     /**
      * Create an {@link AdminClient} which is used for internal topic management.
      *
-     * @param config Supplied by the {@link StreamsConfig} given to the {@link KafkaStreams}
+     * @param config Supplied by the {@link java.util.Properties} given to the {@link KafkaStreams}
      * @return an instance of {@link AdminClient}
      */
     AdminClient getAdminClient(final Map<String, Object> config);
@@ -41,7 +42,7 @@ public interface KafkaClientSupplier {
      * Create a {@link Producer} which is used to write records to sink topics.
      *
      * @param config {@link StreamsConfig#getProducerConfigs(String) producer config} which is supplied by the
-     *               {@link StreamsConfig} given to the {@link KafkaStreams} instance
+     *               {@link java.util.Properties} given to the {@link KafkaStreams} instance
      * @return an instance of Kafka producer
      */
     Producer<byte[], byte[]> getProducer(final Map<String, Object> config);
@@ -49,8 +50,8 @@ public interface KafkaClientSupplier {
     /**
      * Create a {@link Consumer} which is used to read records of source topics.
      *
-     * @param config {@link StreamsConfig#getConsumerConfigs(String, String) consumer config} which is
-     *               supplied by the {@link StreamsConfig} given to the {@link KafkaStreams} instance
+     * @param config {@link StreamsConfig#getMainConsumerConfigs(String, String) consumer config} which is
+     *               supplied by the {@link java.util.Properties} given to the {@link KafkaStreams} instance
      * @return an instance of Kafka consumer
      */
     Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config);
@@ -59,8 +60,17 @@ public interface KafkaClientSupplier {
      * Create a {@link Consumer} which is used to read records to restore {@link StateStore}s.
      *
      * @param config {@link StreamsConfig#getRestoreConsumerConfigs(String) restore consumer config} which is supplied
-     *               by the {@link StreamsConfig} given to the {@link KafkaStreams}
+     *               by the {@link java.util.Properties} given to the {@link KafkaStreams}
      * @return an instance of Kafka consumer
      */
     Consumer<byte[], byte[]> getRestoreConsumer(final Map<String, Object> config);
+
+    /**
+     * Create a {@link Consumer} which is used to consume records for {@link GlobalKTable}.
+     *
+     * @param config {@link StreamsConfig#getGlobalConsumerConfigs(String) global consumer config} which is supplied
+     *               by the {@link java.util.Properties} given to the {@link KafkaStreams}
+     * @return an instance of Kafka consumer
+     */
+    Consumer<byte[], byte[]> getGlobalConsumer(final Map<String, Object> config);
 }

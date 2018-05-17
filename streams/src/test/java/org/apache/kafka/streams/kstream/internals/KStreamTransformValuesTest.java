@@ -17,11 +17,9 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.IntegerSerializer;
-import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.KStream;
@@ -34,9 +32,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockProcessorSupplier;
-import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.Before;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
 
 import java.util.Properties;
@@ -47,29 +43,9 @@ import static org.junit.Assert.fail;
 public class KStreamTransformValuesTest {
 
     private String topicName = "topic";
-
-    final private Serde<Integer> intSerde = Serdes.Integer();
+    private final MockProcessorSupplier<Integer, Integer> supplier = new MockProcessorSupplier<>();
     private final ConsumerRecordFactory<Integer, Integer> recordFactory = new ConsumerRecordFactory<>(new IntegerSerializer(), new IntegerSerializer());
-    private TopologyTestDriver driver;
-    private final Properties props = new Properties();
-
-    @Before
-    public void setup() {
-        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "kstream-transform-values-test");
-        props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9091");
-        props.setProperty(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
-        props.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass().getName());
-        props.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass().getName());
-    }
-
-    @After
-    public void cleanup() {
-        props.clear();
-        if (driver != null) {
-            driver.close();
-        }
-        driver = null;
-    }
+    private final Properties props = StreamsTestUtils.topologyTestConfig(Serdes.Integer(), Serdes.Integer());
 
     @Test
     public void testTransform() {
@@ -93,11 +69,6 @@ public class KStreamTransformValuesTest {
                         }
 
                         @Override
-                        public Integer punctuate(long timestamp) {
-                            return null;
-                        }
-
-                        @Override
                         public void close() {
                         }
                     };
@@ -107,18 +78,17 @@ public class KStreamTransformValuesTest {
         final int[] expectedKeys = {1, 10, 100, 1000};
 
         KStream<Integer, Integer> stream;
-        MockProcessorSupplier<Integer, Integer> processor = new MockProcessorSupplier<>();
-        stream = builder.stream(topicName, Consumed.with(intSerde, intSerde));
-        stream.transformValues(valueTransformerSupplier).process(processor);
+        stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.Integer()));
+        stream.transformValues(valueTransformerSupplier).process(supplier);
 
-        driver = new TopologyTestDriver(builder.build(), props);
-
-        for (int expectedKey : expectedKeys) {
-            driver.pipeInput(recordFactory.create(topicName, expectedKey, expectedKey * 10, 0L));
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props, 0L)) {
+            for (int expectedKey : expectedKeys) {
+                driver.pipeInput(recordFactory.create(topicName, expectedKey, expectedKey * 10, 0L));
+            }
         }
         String[] expected = {"1:10", "10:110", "100:1110", "1000:11110"};
 
-        assertArrayEquals(expected, processor.processed.toArray());
+        assertArrayEquals(expected, supplier.theCapturedProcessor().processed.toArray());
     }
 
     @Test
@@ -151,33 +121,27 @@ public class KStreamTransformValuesTest {
         final int[] expectedKeys = {1, 10, 100, 1000};
 
         KStream<Integer, Integer> stream;
-        MockProcessorSupplier<Integer, Integer> processor = new MockProcessorSupplier<>();
-        stream = builder.stream(topicName, Consumed.with(intSerde, intSerde));
-        stream.transformValues(valueTransformerSupplier).process(processor);
+        stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.Integer()));
+        stream.transformValues(valueTransformerSupplier).process(supplier);
 
-        driver = new TopologyTestDriver(builder.build(), props);
-
-        for (int expectedKey : expectedKeys) {
-            driver.pipeInput(recordFactory.create(topicName, expectedKey, expectedKey * 10, 0L));
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props, 0L)) {
+            for (int expectedKey : expectedKeys) {
+                driver.pipeInput(recordFactory.create(topicName, expectedKey, expectedKey * 10, 0L));
+            }
         }
         String[] expected = {"1:11", "10:121", "100:1221", "1000:12221"};
 
-        assertArrayEquals(expected, processor.processed.toArray());
+        assertArrayEquals(expected, supplier.theCapturedProcessor().processed.toArray());
     }
 
 
     @Test
     public void shouldNotAllowValueTransformerToCallInternalProcessorContextMethods() {
         final BadValueTransformer badValueTransformer = new BadValueTransformer();
-        final KStreamTransformValues<Integer, Integer, Integer> transformValue = new KStreamTransformValues<>(new InternalValueTransformerWithKeySupplier<Integer, Integer, Integer>() {
+        final KStreamTransformValues<Integer, Integer, Integer> transformValue = new KStreamTransformValues<>(new ValueTransformerWithKeySupplier<Integer, Integer, Integer>() {
             @Override
-            public InternalValueTransformerWithKey<Integer, Integer, Integer> get() {
-                return new InternalValueTransformerWithKey<Integer, Integer, Integer>() {
-                    @Override
-                    public Integer punctuate(long timestamp) {
-                        throw new StreamsException("ValueTransformerWithKey#punctuate should not be called.");
-                    }
-
+            public ValueTransformerWithKey<Integer, Integer, Integer> get() {
+                return new ValueTransformerWithKey<Integer, Integer, Integer>() {
                     @Override
                     public void init(final ProcessorContext context) {
                         badValueTransformer.init(context);
@@ -223,13 +187,6 @@ public class KStreamTransformValuesTest {
         try {
             transformValueProcessor.process(null, 3);
             fail("should not allow call to context.forward() within ValueTransformer");
-        } catch (final StreamsException e) {
-            // expected
-        }
-
-        try {
-            transformValueProcessor.punctuate(0);
-            fail("should not allow ValueTransformer#puntuate() to return not-null value");
         } catch (final StreamsException e) {
             // expected
         }

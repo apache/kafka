@@ -31,7 +31,6 @@ import org.apache.kafka.streams.scala.kstream._
 import org.apache.kafka.common.serialization._
 
 import ImplicitConversions._
-import com.typesafe.scalalogging.LazyLogging
 
 import org.apache.kafka.streams.{KafkaStreams => KafkaStreamsJ, StreamsBuilder => StreamsBuilderJ, _}
 import org.apache.kafka.streams.kstream.{KTable => KTableJ, KStream => KStreamJ, KGroupedStream => KGroupedStreamJ, _}
@@ -40,7 +39,7 @@ import collection.JavaConverters._
 /**
  * Test suite that verifies that the topology built by the Java and Scala APIs match.
  */ 
-class TopologyTest extends JUnitSuite with LazyLogging {
+class TopologyTest extends JUnitSuite {
 
   val inputTopic = "input-topic"
   val userClicksTopic = "user-clicks-topic"
@@ -53,7 +52,7 @@ class TopologyTest extends JUnitSuite with LazyLogging {
     // build the Scala topology
     def getTopologyScala(): TopologyDescription = {
 
-      import DefaultSerdes._
+      import Serdes._
       import collection.JavaConverters._
   
       val streamBuilder = new StreamsBuilder
@@ -88,7 +87,7 @@ class TopologyTest extends JUnitSuite with LazyLogging {
     // build the Scala topology
     def getTopologyScala(): TopologyDescription = {
 
-      import DefaultSerdes._
+      import Serdes._
       import collection.JavaConverters._
   
       val streamBuilder = new StreamsBuilder
@@ -133,7 +132,7 @@ class TopologyTest extends JUnitSuite with LazyLogging {
 
     // build the Scala topology
     def getTopologyScala(): TopologyDescription = {
-      import DefaultSerdes._
+      import Serdes._
   
       val builder = new StreamsBuilder()
   
@@ -159,10 +158,10 @@ class TopologyTest extends JUnitSuite with LazyLogging {
       val builder: StreamsBuilderJ = new StreamsBuilderJ()
   
       val userClicksStream: KStreamJ[String, JLong] = 
-        builder.stream[String, JLong](userClicksTopic, Consumed.`with`(Serdes.String(), Serdes.Long()))
+        builder.stream[String, JLong](userClicksTopic, Consumed.`with`(Serdes.String, Serdes.JavaLong))
   
       val userRegionsTable: KTableJ[String, String] = 
-        builder.table[String, String](userRegionsTopic, Consumed.`with`(Serdes.String(), Serdes.String()))
+        builder.table[String, String](userRegionsTopic, Consumed.`with`(Serdes.String, Serdes.String))
   
       // Join the stream against the table.
       val userClicksJoinRegion: KStreamJ[String, (String, JLong)] = userClicksStream
@@ -171,7 +170,7 @@ class TopologyTest extends JUnitSuite with LazyLogging {
             def apply(clicks: JLong, region: String): (String, JLong) = 
               (if (region == null) "UNKNOWN" else region, clicks)
           }, 
-          Joined.`with`[String, JLong, String](Serdes.String(), Serdes.Long(), Serdes.String())) 
+          Joined.`with`[String, JLong, String](Serdes.String, Serdes.JavaLong, Serdes.String))
   
       // Change the stream from <user> -> <region, clicks> to <region> -> <clicks>
       val clicksByRegion : KStreamJ[String, JLong] = userClicksJoinRegion
@@ -183,7 +182,7 @@ class TopologyTest extends JUnitSuite with LazyLogging {
           
       // Compute the total per region by summing the individual click counts per region.
       val clicksPerRegion: KTableJ[String, JLong] = clicksByRegion
-        .groupByKey(Serialized.`with`(Serdes.String(), Serdes.Long()))
+        .groupByKey(Serialized.`with`(Serdes.String, Serdes.JavaLong))
         .reduce {
           new Reducer[JLong] {
             def apply(v1: JLong, v2: JLong) = v1 + v2

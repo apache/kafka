@@ -16,25 +16,31 @@
  */
 package org.apache.kafka.common.record;
 
-public enum RecordFormat {
+/**
+ * Defines the record format versions supported by Kafka.
+ *
+ * For historical reasons, the record format version is also known as `magic` and `message format version`. Note that
+ * the version actually applies to the {@link RecordBatch} (instead of the {@link Record}). Finally, the
+ * `message.format.version` topic config confusingly expects an ApiVersion instead of a RecordVersion.
+ */
+public enum RecordVersion {
     V0(0), V1(1), V2(2);
+
+    private static final RecordVersion[] VALUES = values();
 
     public final byte value;
 
-    RecordFormat(int value) {
+    RecordVersion(int value) {
         this.value = (byte) value;
     }
 
-    public static RecordFormat lookup(byte version) {
-        switch (version) {
-            case 0: return V0;
-            case 1: return V1;
-            case 2: return V2;
-            default: throw new IllegalArgumentException("Unknown format version: " + version);
-        }
+    public static RecordVersion lookup(byte value) {
+        if (value < 0 || value >= VALUES.length)
+            throw new IllegalArgumentException("Unknown record version: " + value);
+        return VALUES[value];
     }
 
-    public static RecordFormat current() {
+    public static RecordVersion current() {
         return V2;
     }
 

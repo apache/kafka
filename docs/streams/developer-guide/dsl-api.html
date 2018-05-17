@@ -165,7 +165,7 @@
                             be populated with data from only <strong>a subset</strong> of the partitions of the input topic.  Collectively, across
                             all application instances, all input topic partitions are read and processed.</p>
                         <p>You must provide a name for the table (more precisely, for the internal
-                            <a class="reference internal" href="../architecture.html#streams-architecture-state"><span class="std std-ref">state store</span></a> that backs the table).  This is required for
+                            <a class="reference internal" href="../architecture.html#streams_architecture_state"><span class="std std-ref">state store</span></a> that backs the table).  This is required for
                             supporting <a class="reference internal" href="interactive-queries.html#streams-developer-guide-interactive-queries"><span class="std std-ref">interactive queries</span></a> against the table. When a
                             name is not provided the table will not queryable and an internal name will be provided for the state store.</p>
                         <p>If you do not specify SerDes explicitly, the default SerDes from the
@@ -189,7 +189,7 @@
                         <p>In the case of a GlobalKTable, the local GlobalKTable instance of every application instance will
                             be populated with data from <strong>all</strong> the partitions of the input topic.</p>
                         <p>You must provide a name for the table (more precisely, for the internal
-                            <a class="reference internal" href="../architecture.html#streams-architecture-state"><span class="std std-ref">state store</span></a> that backs the table).  This is required for
+                            <a class="reference internal" href="../architecture.html#streams_architecture_state"><span class="std std-ref">state store</span></a> that backs the table).  This is required for
                             supporting <a class="reference internal" href="interactive-queries.html#streams-developer-guide-interactive-queries"><span class="std std-ref">interactive queries</span></a> against the table. When a
                             name is not provided the table will not queryable and an internal name will be provided for the state store.</p>
                         <div class="highlight-java"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">org.apache.kafka.common.serialization.Serdes</span><span class="o">;</span>
@@ -690,12 +690,12 @@
             </div>
             <div class="section" id="stateful-transformations">
                 <span id="streams-developer-guide-dsl-transformations-stateful"></span><h3><a class="toc-backref" href="#id11">Stateful transformations</a><a class="headerlink" href="#stateful-transformations" title="Permalink to this headline"></a></h3>
-                <p id="streams-developer-guide-dsl-transformations-stateful-overview">Stateful transformations depend on state for processing inputs and producing outputs and require a <a class="reference internal" href="../architecture.html#streams-architecture-state"><span class="std std-ref">state store</span></a> associated with the stream processor. For example, in aggregating operations, a windowing state store is used to collect the latest aggregation results per
+                <p id="streams-developer-guide-dsl-transformations-stateful-overview">Stateful transformations depend on state for processing inputs and producing outputs and require a <a class="reference internal" href="../architecture.html#streams_architecture_state"><span class="std std-ref">state store</span></a> associated with the stream processor. For example, in aggregating operations, a windowing state store is used to collect the latest aggregation results per
                     window. In join operations, a windowing state store is used to collect all of the records received so far within the
                     defined window boundary.</p>
                 <p>Note, that state stores are fault-tolerant.
                     In case of failure, Kafka Streams guarantees to fully restore all state stores prior to resuming the processing.
-                    See <a class="reference internal" href="../architecture.html#streams-architecture-fault-tolerance"><span class="std std-ref">Fault Tolerance</span></a> for further information.</p>
+                    See <a class="reference internal" href="../architecture.html#streams_architecture_recovery"><span class="std std-ref">Fault Tolerance</span></a> for further information.</p>
                 <p>Available stateful transformations in the DSL include:</p>
                 <ul class="simple">
                     <li><a class="reference internal" href="#streams-developer-guide-dsl-aggregating"><span class="std std-ref">Aggregating</span></a></li>
@@ -2133,7 +2133,7 @@
                             </thead>
                             <tbody valign="top">
                             <tr class="row-even"><td>1</td>
-                                <td>null (tombstone)</td>
+                                <td>null</td>
                                 <td>&nbsp;</td>
                                 <td>&nbsp;</td>
                                 <td>&nbsp;</td>
@@ -2141,7 +2141,7 @@
                             </tr>
                             <tr class="row-odd"><td>2</td>
                                 <td>&nbsp;</td>
-                                <td>null (tombstone)</td>
+                                <td>null</td>
                                 <td>&nbsp;</td>
                                 <td>&nbsp;</td>
                                 <td>&nbsp;</td>
@@ -2175,18 +2175,18 @@
                                 <td>[B, b]</td>
                             </tr>
                             <tr class="row-even"><td>7</td>
-                                <td>null (tombstone)</td>
+                                <td>null</td>
                                 <td>&nbsp;</td>
-                                <td>null (tombstone)</td>
-                                <td>null (tombstone)</td>
+                                <td>null</td>
+                                <td>null</td>
                                 <td>[null, b]</td>
                             </tr>
                             <tr class="row-odd"><td>8</td>
                                 <td>&nbsp;</td>
-                                <td>null (tombstone)</td>
+                                <td>null</td>
                                 <td>&nbsp;</td>
                                 <td>&nbsp;</td>
-                                <td>null (tombstone)</td>
+                                <td>null</td>
                             </tr>
                             <tr class="row-even"><td>9</td>
                                 <td>C</td>
@@ -2204,21 +2204,21 @@
                             </tr>
                             <tr class="row-even"><td>11</td>
                                 <td>&nbsp;</td>
-                                <td>null (tombstone)</td>
-                                <td>null (tombstone)</td>
+                                <td>null</td>
+                                <td>null</td>
                                 <td>[C, null]</td>
                                 <td>[C, null]</td>
                             </tr>
                             <tr class="row-odd"><td>12</td>
-                                <td>null (tombstone)</td>
+                                <td>null</td>
                                 <td>&nbsp;</td>
                                 <td>&nbsp;</td>
-                                <td>null (tombstone)</td>
-                                <td>null (tombstone)</td>
+                                <td>null</td>
+                                <td>null</td>
                             </tr>
                             <tr class="row-even"><td>13</td>
                                 <td>&nbsp;</td>
-                                <td>null (tombstone)</td>
+                                <td>null</td>
                                 <td>&nbsp;</td>
                                 <td>&nbsp;</td>
                                 <td>&nbsp;</td>
@@ -2388,11 +2388,11 @@
                             cell denotes that the <code class="docutils literal"><span class="pre">ValueJoiner</span></code> is not called at all.</p>
                         <table border="1" class="docutils">
                             <colgroup>
-                                <col width="10%" />
-                                <col width="16%" />
-                                <col width="16%" />
-                                <col width="29%" />
-                                <col width="29%" />
+                                <col>
+                                <col>
+                                <col>
+                                <col>
+                                <col>
                             </colgroup>
                             <thead valign="bottom">
                             <tr class="row-odd"><th class="head">Timestamp</th>
@@ -2411,7 +2411,7 @@
                             </tr>
                             <tr class="row-odd"><td>2</td>
                                 <td>&nbsp;</td>
-                                <td>null (tombstone)</td>
+                                <td>null</td>
                                 <td>&nbsp;</td>
                                 <td>&nbsp;</td>
                             </tr>
@@ -2447,7 +2447,7 @@
                             </tr>
                             <tr class="row-odd"><td>8</td>
                                 <td>&nbsp;</td>
-                                <td>null (tombstone)</td>
+                                <td>null</td>
                                 <td>&nbsp;</td>
                                 <td>&nbsp;</td>
                             </tr>
@@ -3165,8 +3165,7 @@ t=5 (blue), which lead to a merge of sessions and an extension of a session, res
             <p>The library also has several utility abstractions and modules that the user needs to use for proper semantics.</p>
             <ul>
               <li><code class="docutils literal"><span class="pre">org.apache.kafka.streams.scala.ImplicitConversions</span></code>: Module that brings into scope the implicit conversions between the Scala and Java classes.</li>
-              <li><code class="docutils literal"><span class="pre">org.apache.kafka.streams.scala.DefaultSerdes</span></code>: Module that brings into scope the implicit values of all primitive SerDes.</li>
-              <li><code class="docutils literal"><span class="pre">org.apache.kafka.streams.scala.ScalaSerde</span></code>: Base abstraction that can be used to implement custom SerDes in a type safe way.</li>
+              <li><code class="docutils literal"><span class="pre">org.apache.kafka.streams.scala.Serdes</span></code>: Module that contains all primitive SerDes that can be imported as implicits and a helper to create custom SerDes.</li>
             </ul>
             <p>The library is cross-built with Scala 2.11 and 2.12.  To reference the library compiled against Scala 2.11 include the following in your maven <code>pom.xml</code> add the following:</p>
             <pre class="brush: xml;">
@@ -3191,11 +3190,13 @@ import java.util.Properties
 import java.util.concurrent.TimeUnit
 
 import org.apache.kafka.streams.kstream.Materialized
+import org.apache.kafka.streams.scala.ImplicitConversions._
+import org.apache.kafka.streams.scala._
+import org.apache.kafka.streams.scala.kstream._
 import org.apache.kafka.streams.{KafkaStreams, StreamsConfig}
 
 object WordCountApplication extends App {
-  import DefaultSerdes._
-  import ImplicitConversions._
+  import Serdes._
 
   val config: Properties = {
     val p = new Properties()
@@ -3204,9 +3205,9 @@ object WordCountApplication extends App {
     p
   }
 
-  val builder = new StreamsBuilder()
-  val textLines = builder.stream[String, String]("TextLinesTopic")
-  val wordCounts = textLines
+  val builder: StreamsBuilder = new StreamsBuilder
+  val textLines: KStream[String, String] = builder.stream[String, String]("TextLinesTopic")
+  val wordCounts: KTable[String, Long] = textLines
     .flatMapValues(textLine => textLine.toLowerCase.split("\\W+"))
     .groupBy((_, word) => word)
     .count(Materialized.as("counts-store"))
@@ -3216,7 +3217,7 @@ object WordCountApplication extends App {
   streams.start()
 
   sys.ShutdownHookThread {
-    streams.close(10, TimeUnit.SECONDS)
+     streams.close(10, TimeUnit.SECONDS)
   }
 }
               </pre>
@@ -3233,7 +3234,7 @@ object WordCountApplication extends App {
 // that will set up all Serialized, Produced, Consumed and Joined instances.
 // So all APIs below that accept Serialized, Produced, Consumed or Joined will
 // get these instances automatically
-import DefaultSerdes._
+import Serdes._
 
 val builder = new StreamsBuilder()
 
@@ -3258,7 +3259,7 @@ clicksPerRegion.toStream.to(outputTopic)
               <p>Quite a few things are going on in the above code snippet that may warrant a few lines of elaboration:</p>
               <ol>
                 <li>The code snippet does not depend on any config defined SerDes. In fact any SerDes defined as part of the config will be ignored.</li>
-                <li>All SerDes are picked up from the implicits in scope. And <code class="docutils literal"><span class="pre">import DefaultSerdes._</span></code> brings all necessary SerDes in scope.</li>
+                <li>All SerDes are picked up from the implicits in scope. And <code class="docutils literal"><span class="pre">import Serdes._</span></code> brings all necessary SerDes in scope.</li>
                 <li>This is an example of compile time type safety that we don't have in the Java APIs.</li>
                 <li>The code looks less verbose and more focused towards the actual transformation that it does on the data stream.</li>
               </ol>
@@ -3275,7 +3276,7 @@ case class UserClicks(clicks: Long)
 implicit val userClicksSerde: Serde[UserClicks] = new AvroSerde
 
 // Primitive SerDes
-import DefaultSerdes._
+import Serdes._
 
 // And then business as usual ..
 
@@ -3290,7 +3291,7 @@ val clicksPerRegion: KTable[String, Long] =
    // Join the stream against the table.
    .leftJoin(userRegionsTable, (clicks: UserClicks, region: String) => (if (region == null) "UNKNOWN" else region, clicks.clicks))
 
-   // Change the stream from <user> -> <region, clicks> to <region> -> <clicks>
+   // Change the stream from &lt;user&gt; -&gt; &lt;region, clicks&gt; to &lt;region&gt; -&gt; &lt;clicks&gt;
    .map((_, regionWithClicks) => regionWithClicks)
 
    // Compute the total per region by summing the individual click counts per region.

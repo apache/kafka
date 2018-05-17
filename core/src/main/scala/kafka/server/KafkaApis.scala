@@ -1365,7 +1365,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         apiVersionRequest.getErrorResponse(requestThrottleMs, Errors.UNSUPPORTED_VERSION.exception)
       else
         ApiVersionsResponse.apiVersionsResponse(requestThrottleMs,
-          config.interBrokerProtocolVersion.messageFormatVersion.value)
+          config.interBrokerProtocolVersion.recordVersion.value)
     }
     sendResponseMaybeThrottle(request, createResponseCallback)
   }

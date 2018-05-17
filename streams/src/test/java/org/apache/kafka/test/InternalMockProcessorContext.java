@@ -181,7 +181,6 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
 
     @Override
     public void register(final StateStore store,
-                         final boolean deprecatedAndIgnoredLoggingEnabled,
                          final StateRestoreCallback func) {
         storeMap.put(store.name(), store);
         restoreFuncs.put(store.name(), func);
@@ -196,9 +195,6 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
     public Cancellable schedule(long interval, PunctuationType type, Punctuator callback) {
         throw new UnsupportedOperationException("schedule() not supported.");
     }
-
-    @Override
-    public void schedule(final long interval) { }
 
     @Override
     public void commit() { }

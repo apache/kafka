@@ -17,7 +17,7 @@
 
 package kafka.log
 
-import java.io.File
+import java.io.{File, RandomAccessFile}
 import java.nio._
 import java.nio.file.Paths
 import java.util.Properties
@@ -26,6 +26,7 @@ import kafka.common._
 import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
 import org.junit.Assert._
@@ -300,6 +301,39 @@ class LogCleanerTest extends JUnitSuite {
     assertEquals(List(4, 5, 6, 7, 8), offsetsInLog(log))
   }
 
+  /**
+   * Tests log cleaning with batches that are deleted where no additional messages
+   * are available to read in the buffer. Cleaning should continue from the next offset.
+   */
+  @Test
+  def testDeletedBatchesWithNoMessagesRead(): Unit = {
+    val tp = new TopicPartition("test", 0)
+    val cleaner = makeCleaner(capacity = Int.MaxValue, maxMessageSize = 100)
+    val logProps = new Properties()
+    logProps.put(LogConfig.MaxMessageBytesProp, 100: java.lang.Integer)
+    logProps.put(LogConfig.SegmentBytesProp, 1000: java.lang.Integer)
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
+
+    val producerEpoch = 0.toShort
+    val producerId = 1L
+    val appendProducer = appendTransactionalAsLeader(log, producerId, producerEpoch)
+
+    appendProducer(Seq(1))
+    log.appendAsLeader(abortMarker(producerId, producerEpoch), leaderEpoch = 0, isFromClient = false)
+    appendProducer(Seq(2))
+    appendProducer(Seq(2))
+    log.appendAsLeader(commitMarker(producerId, producerEpoch), leaderEpoch = 0, isFromClient = false)
+    log.roll()
+
+    cleaner.doClean(LogToClean(tp, log, 0L, 100L), deleteHorizonMs = Long.MaxValue)
+    assertEquals(List(2), keysInLog(log))
+    assertEquals(List(1, 3, 4), offsetsInLog(log))
+
+    cleaner.doClean(LogToClean(tp, log, 0L, 100L), deleteHorizonMs = Long.MaxValue)
+    assertEquals(List(2), keysInLog(log))
+    assertEquals(List(3, 4), offsetsInLog(log))
+  }
+
   @Test
   def testCommitMarkerRetentionWithEmptyBatch(): Unit = {
     val tp = new TopicPartition("test", 0)
@@ -465,6 +499,78 @@ class LogCleanerTest extends JUnitSuite {
     cleaner.cleanSegments(log, Seq(log.logSegments.head), map, 0L, stats)
     val shouldRemain = keysInLog(log).filter(!keys.contains(_))
     assertEquals(shouldRemain, keysInLog(log))
+  }
+
+  /**
+   * Test log cleaning with logs containing messages larger than topic's max message size
+   */
+  @Test
+  def testMessageLargerThanMaxMessageSize() {
+    val (log, offsetMap) = createLogWithMessagesLargerThanMaxSize(largeMessageSize = 1024 * 1024)
+
+    val cleaner = makeCleaner(Int.MaxValue, maxMessageSize=1024)
+    cleaner.cleanSegments(log, Seq(log.logSegments.head), offsetMap, 0L, new CleanerStats)
+    val shouldRemain = keysInLog(log).filter(k => !offsetMap.map.containsKey(k.toString))
+    assertEquals(shouldRemain, keysInLog(log))
+  }
+
+  /**
+   * Test log cleaning with logs containing messages larger than topic's max message size
+   * where header is corrupt
+   */
+  @Test
+  def testMessageLargerThanMaxMessageSizeWithCorruptHeader() {
+    val (log, offsetMap) = createLogWithMessagesLargerThanMaxSize(largeMessageSize = 1024 * 1024)
+    val file = new RandomAccessFile(log.logSegments.head.log.file, "rw")
+    file.seek(SerializableRecords.MAGIC_OFFSET)
+    file.write(0xff)
+    file.close()
+
+    val cleaner = makeCleaner(Int.MaxValue, maxMessageSize=1024)
+    intercept[CorruptRecordException] {
+      cleaner.cleanSegments(log, Seq(log.logSegments.head), offsetMap, 0L, new CleanerStats)
+    }
+  }
+
+  /**
+   * Test log cleaning with logs containing messages larger than topic's max message size
+   * where message size is corrupt and larger than bytes available in log segment.
+   */
+  @Test
+  def testCorruptMessageSizeLargerThanBytesAvailable() {
+    val (log, offsetMap) = createLogWithMessagesLargerThanMaxSize(largeMessageSize = 1024 * 1024)
+    val file = new RandomAccessFile(log.logSegments.head.log.file, "rw")
+    file.setLength(1024)
+    file.close()
+
+    val cleaner = makeCleaner(Int.MaxValue, maxMessageSize=1024)
+    intercept[CorruptRecordException] {
+      cleaner.cleanSegments(log, Seq(log.logSegments.head), offsetMap, 0L, new CleanerStats)
+    }
+  }
+
+  def createLogWithMessagesLargerThanMaxSize(largeMessageSize: Int): (Log, FakeOffsetMap) = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, largeMessageSize * 16: java.lang.Integer)
+    logProps.put(LogConfig.MaxMessageBytesProp, largeMessageSize * 2: java.lang.Integer)
+
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
+
+    while(log.numberOfSegments < 2)
+      log.appendAsLeader(record(log.logEndOffset.toInt, Array.fill(largeMessageSize)(0: Byte)), leaderEpoch = 0)
+    val keysFound = keysInLog(log)
+    assertEquals(0L until log.logEndOffset, keysFound)
+
+    // Decrease the log's max message size
+    logProps.put(LogConfig.MaxMessageBytesProp, largeMessageSize / 2: java.lang.Integer)
+    log.config = LogConfig.fromProps(logConfig.originals, logProps)
+
+    // pretend we have the following keys
+    val keys = immutable.ListSet(1, 3, 5, 7, 9)
+    val map = new FakeOffsetMap(Int.MaxValue)
+    keys.foreach(k => map.put(key(k), Long.MaxValue))
+
+    (log, map)
   }
 
   @Test

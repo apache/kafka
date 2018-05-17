@@ -16,48 +16,24 @@
  */
 package org.apache.kafka.test;
 
+import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.StateStoreSupplier;
+import org.apache.kafka.streams.state.internals.AbstractStoreBuilder;
 
-import java.util.Collections;
-import java.util.Map;
+public class MockStoreBuilder extends AbstractStoreBuilder<Integer, byte[], StateStore> {
 
-@Deprecated
-public class MockStateStoreSupplier implements StateStoreSupplier {
-    private String name;
-    private boolean persistent;
-    private boolean loggingEnabled;
+    private final boolean persistent;
 
-    public MockStateStoreSupplier(final String name,
-                                  final boolean persistent) {
-        this(name, persistent, true);
-    }
+    public MockStoreBuilder(final String storeName, final boolean persistent) {
+        super(storeName, Serdes.Integer(), Serdes.ByteArray(), new MockTime());
 
-    public MockStateStoreSupplier(final String name,
-                                  final boolean persistent,
-                                  final boolean loggingEnabled) {
-        this.name = name;
         this.persistent = persistent;
-        this.loggingEnabled = loggingEnabled;
     }
 
     @Override
-    public String name() {
-        return name;
-    }
-
-    @Override
-    public StateStore get() {
+    public StateStore build() {
         return new MockStateStore(name, persistent);
     }
-
-    @Override
-    public Map<String, String> logConfig() {
-        return Collections.emptyMap();
-    }
-
-    @Override
-    public boolean loggingEnabled() {
-        return loggingEnabled;
-    }
 }
+

@@ -14,11 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.kstream.internals;
+package org.apache.kafka.streams.errors;
 
+public class ShutdownException extends StreamsException {
+    public ShutdownException(final String message) {
+        super(message);
+    }
 
-import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
+    public ShutdownException(final String message, final Throwable throwable) {
+        super(message, throwable);
+    }
 
-public interface InternalValueTransformerWithKey<K, V, VR> extends ValueTransformerWithKey<K, V, VR> {
-    VR punctuate(final long timestamp);
+    public ShutdownException(final Throwable throwable) {
+        super(throwable);
+    }
 }

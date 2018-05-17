@@ -17,20 +17,20 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.IntegerSerializer;
-import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsBuilderTest;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
+import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
-import org.apache.kafka.test.TestUtils;
+import org.apache.kafka.test.StreamsTestUtils;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -47,11 +47,10 @@ public class KStreamKTableLeftJoinTest {
     final private String streamTopic = "streamTopic";
     final private String tableTopic = "tableTopic";
 
-    final private Serde<Integer> intSerde = Serdes.Integer();
-    final private Serde<String> stringSerde = Serdes.String();
     private final ConsumerRecordFactory<Integer, String> recordFactory = new ConsumerRecordFactory<>(new IntegerSerializer(), new StringSerializer());
     private TopologyTestDriver driver;
-    private MockProcessorSupplier<Integer, String> processor;
+    private MockProcessor<Integer, String> processor;
+
     private final int[] expectedKeys = {0, 1, 2, 3};
     private StreamsBuilder builder;
 
@@ -63,20 +62,21 @@ public class KStreamKTableLeftJoinTest {
         final KStream<Integer, String> stream;
         final KTable<Integer, String> table;
 
-        processor = new MockProcessorSupplier<>();
-        final Consumed<Integer, String> consumed = Consumed.with(intSerde, stringSerde);
+        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
+        final Consumed<Integer, String> consumed = Consumed.with(Serdes.Integer(), Serdes.String());
         stream = builder.stream(streamTopic, consumed);
         table = builder.table(tableTopic, consumed);
-        stream.leftJoin(table, MockValueJoiner.TOSTRING_JOINER).process(processor);
+        stream.leftJoin(table, MockValueJoiner.TOSTRING_JOINER).process(supplier);
 
-        final Properties props = new Properties();
-        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "kstream-ktable-left-join-test");
-        props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9091");
-        props.setProperty(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
-        props.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
-        props.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
-
+        final Properties props = StreamsTestUtils.topologyTestConfig(Serdes.Integer(), Serdes.String());
         driver = new TopologyTestDriver(builder.build(), props, 0L);
+
+        processor = supplier.theCapturedProcessor();
+    }
+
+    @After
+    public void cleanup() {
+        driver.close();
     }
 
     private void pushToStream(final int messageCount, final String valuePrefix) {

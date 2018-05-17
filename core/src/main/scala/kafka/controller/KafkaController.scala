@@ -160,7 +160,10 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
       override def beforeInitializingSession(): Unit = {
         val expireEvent = new Expire
         eventManager.clearAndPut(expireEvent)
-        expireEvent.waitUntilProcessed()
+
+        // Block initialization of the new session until the expiration event is being handled,
+        // which ensures that all pending events have been processed before creating the new session
+        expireEvent.waitUntilProcessingStarted()
       }
     })
     eventManager.put(Startup)
@@ -193,6 +196,10 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
   private[kafka] def updateBrokerInfo(newBrokerInfo: BrokerInfo): Unit = {
     this.brokerInfo = newBrokerInfo
     zkClient.updateBrokerInfoInZk(newBrokerInfo)
+  }
+
+  private[kafka] def enableDefaultUncleanLeaderElection(): Unit = {
+    eventManager.put(UncleanLeaderElectionEnable)
   }
 
   private def state: ControllerState = eventManager.state
@@ -1009,6 +1016,16 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     }
   }
 
+  case object UncleanLeaderElectionEnable extends ControllerEvent {
+
+    def state = ControllerState.UncleanLeaderElectionEnable
+
+    override def process(): Unit = {
+      if (!isActive) return
+      partitionStateMachine.triggerOnlinePartitionStateChange()
+    }
+  }
+
   case class ControlledShutdown(id: Int, controlledShutdownCallback: Try[Set[TopicPartition]] => Unit) extends ControllerEvent {
 
     def state = ControllerState.ControlledShutdown
@@ -1504,17 +1521,17 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
 
   // We can't make this a case object due to the countDownLatch field
   class Expire extends ControllerEvent {
-    private val countDownLatch = new CountDownLatch(1)
+    private val processingStarted = new CountDownLatch(1)
     override def state = ControllerState.ControllerChange
 
     override def process(): Unit = {
-      countDownLatch.countDown()
+      processingStarted.countDown()
       activeControllerId = -1
       onControllerResignation()
     }
 
-    def waitUntilProcessed(): Unit = {
-      countDownLatch.await()
+    def waitUntilProcessingStarted(): Unit = {
+      processingStarted.await()
     }
   }
 
@@ -1646,6 +1663,8 @@ private[controller] class ControllerStats extends KafkaMetricsGroup {
 }
 
 sealed trait ControllerEvent {
+  val enqueueTimeMs: Long = Time.SYSTEM.milliseconds()
+
   def state: ControllerState
   def process(): Unit
 }

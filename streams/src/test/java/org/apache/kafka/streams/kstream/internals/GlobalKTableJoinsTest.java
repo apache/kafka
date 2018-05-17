@@ -20,7 +20,6 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.GlobalKTable;
@@ -28,8 +27,7 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockValueJoiner;
-import org.apache.kafka.test.TestUtils;
-import org.junit.After;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -50,7 +48,6 @@ public class GlobalKTableJoinsTest {
     private KStream<String, String> stream;
     private KeyValueMapper<String, String, String> keyValueMapper;
     private ForeachAction<String, String> action;
-    private TopologyTestDriver driver;
 
 
     @Before
@@ -70,14 +67,6 @@ public class GlobalKTableJoinsTest {
                 results.put(key, value);
             }
         };
-    }
-
-    @After
-    public void cleanup() {
-        if (driver != null) {
-            driver.close();
-        }
-        driver = null;
     }
 
     @Test
@@ -110,21 +99,17 @@ public class GlobalKTableJoinsTest {
 
     private void verifyJoin(final Map<String, String> expected) {
         final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
+        final Properties props = StreamsTestUtils.topologyTestConfig(Serdes.String(), Serdes.String());
 
-        final Properties props = new Properties();
-        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "global-ktable-joins-test");
-        props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9091");
-        props.setProperty(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
-
-        driver = new TopologyTestDriver(builder.build(), props);
-
-        // write some data to the global table
-        driver.pipeInput(recordFactory.create(globalTopic, "a", "A"));
-        driver.pipeInput(recordFactory.create(globalTopic, "b", "B"));
-        //write some data to the stream
-        driver.pipeInput(recordFactory.create(streamTopic, "1", "a"));
-        driver.pipeInput(recordFactory.create(streamTopic, "2", "b"));
-        driver.pipeInput(recordFactory.create(streamTopic, "3", "c"));
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            // write some data to the global table
+            driver.pipeInput(recordFactory.create(globalTopic, "a", "A"));
+            driver.pipeInput(recordFactory.create(globalTopic, "b", "B"));
+            //write some data to the stream
+            driver.pipeInput(recordFactory.create(streamTopic, "1", "a"));
+            driver.pipeInput(recordFactory.create(streamTopic, "2", "b"));
+            driver.pipeInput(recordFactory.create(streamTopic, "3", "c"));
+        }
 
         assertEquals(expected, results);
     }

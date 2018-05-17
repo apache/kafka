@@ -19,6 +19,7 @@ package org.apache.kafka.common.record;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionRecordsStats;
+import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention;
 import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
@@ -130,6 +131,18 @@ public class MemoryRecords extends AbstractRecords {
     }
 
     /**
+     * Validates the header of the first batch and returns batch size.
+     * @return first batch size including LOG_OVERHEAD if buffer contains header up to
+     *         magic byte, null otherwise
+     * @throws CorruptRecordException if record size or magic is invalid
+     */
+    public Integer firstBatchSize() {
+        if (buffer.remaining() < HEADER_SIZE_UP_TO_MAGIC)
+            return null;
+        return new ByteBufferLogInputStream(buffer, Integer.MAX_VALUE).nextBatchSize();
+    }
+
+    /**
      * Filter the records into the provided ByteBuffer.
      *
      * @param partition                   The partition that is filtered (used only for logging)
@@ -157,7 +170,7 @@ public class MemoryRecords extends AbstractRecords {
         long maxOffset = -1L;
         long shallowOffsetOfMaxTimestamp = -1L;
         int messagesRead = 0;
-        int bytesRead = 0;
+        int bytesRead = 0; // bytes processed from `batches`
         int messagesRetained = 0;
         int bytesRetained = 0;
 
@@ -371,6 +384,8 @@ public class MemoryRecords extends AbstractRecords {
         public final long maxTimestamp;
         public final long shallowOffsetOfMaxTimestamp;
 
+        // Note that `bytesRead` should contain only bytes from batches that have been processed,
+        // i.e. bytes from `messagesRead` and any discarded batches.
         public FilterResult(ByteBuffer output,
                             int messagesRead,
                             int bytesRead,

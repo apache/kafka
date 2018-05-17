@@ -337,7 +337,6 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
 
     @Override
     public void register(final StateStore store,
-                         final boolean loggingEnabledIsDeprecatedAndIgnored,
                          final StateRestoreCallback stateRestoreCallbackIsIgnoredInMock) {
         stateStores.put(store.name(), store);
     }
@@ -359,14 +358,6 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
                 capturedPunctuator.cancel();
             }
         };
-    }
-
-    @Override
-    public void schedule(final long interval) {
-        throw new UnsupportedOperationException(
-            "schedule() is deprecated and not supported in Mock. " +
-                "Use schedule(final long intervalMs, final PunctuationType type, final Punctuator callback) instead."
-        );
     }
 
     /**

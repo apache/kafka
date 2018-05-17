@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from kafkatest.services.streams import StreamsRepeatingIntegerKeyProducerService
+from ducktape.utils.util import wait_until
 from kafkatest.services.streams import StreamsStandbyTaskService
 from kafkatest.tests.streams.base_streams_test import BaseStreamsTest
 
@@ -30,7 +30,7 @@ class StreamsStandbyTask(BaseStreamsTest):
     streams_sink_topic_2 = "standbyTaskSink2"
     client_id = "stream-broker-resilience-verify-consumer"
 
-    num_messages = 60000
+    num_messages = 300000
 
     def __init__(self, test_context):
         super(StreamsStandbyTask, self).__init__(test_context,
@@ -42,14 +42,12 @@ class StreamsStandbyTask(BaseStreamsTest):
 
     def test_standby_tasks_rebalance(self):
 
-        driver_configs = "num_messages=%s,topics=%s" % (str(self.num_messages), self.streams_source_topic)
-
-        driver = StreamsRepeatingIntegerKeyProducerService(self.test_context, self.kafka, driver_configs)
-        driver.start()
-
         configs = self.get_configs(",sourceTopic=%s,sinkTopic1=%s,sinkTopic2=%s" % (self.streams_source_topic,
                                                                                     self.streams_sink_topic_1,
                                                                                     self.streams_sink_topic_2))
+
+        producer = self.get_producer(self.streams_source_topic, self.num_messages, repeating_keys=6)
+        producer.start()
 
         processor_1 = StreamsStandbyTaskService(self.test_context, self.kafka, configs)
         processor_2 = StreamsStandbyTaskService(self.test_context, self.kafka, configs)
@@ -113,7 +111,10 @@ class StreamsStandbyTask(BaseStreamsTest):
         self.assert_consume(self.client_id, "assert all messages consumed from %s" % self.streams_sink_topic_1, self.streams_sink_topic_1, self.num_messages)
         self.assert_consume(self.client_id, "assert all messages consumed from %s" % self.streams_sink_topic_2, self.streams_sink_topic_2, self.num_messages)
 
-        self.wait_for_verification(driver, "Producer shut down now, sent total {0} of requested {0}".format(str(self.num_messages)),
-                                   driver.STDOUT_FILE)
+        wait_until(lambda: producer.num_acked >= self.num_messages,
+                   timeout_sec=60,
+                   err_msg="Failed to send all %s messages" % str(self.num_messages))
+
+        producer.stop()
 
 

@@ -226,7 +226,7 @@ public class TopologyTestDriver implements Closeable {
      * @param builder builder for the topology to be tested
      * @param config the configuration for the topology
      */
-    protected TopologyTestDriver(final InternalTopologyBuilder builder,
+    TopologyTestDriver(final InternalTopologyBuilder builder,
                               final Properties config) {
         this(builder, config,  System.currentTimeMillis());
 
@@ -309,7 +309,13 @@ public class TopologyTestDriver implements Closeable {
                 consumer,
                 stateDirectory,
                 stateRestoreListener,
-                streamsConfig);
+                streamsConfig,
+                new GlobalStateManagerImpl.IsRunning() {
+                    @Override
+                    public boolean check() {
+                        return true;
+                    }
+                });
 
             final GlobalProcessorContextImpl globalProcessorContext
                 = new GlobalProcessorContextImpl(streamsConfig, globalStateManager, streamsMetrics, cache);
