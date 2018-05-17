@@ -81,6 +81,7 @@ public class MockClient implements KafkaClient {
     private Node node = null;
     private final Set<String> ready = new HashSet<>();
     private final Map<Node, Long> blackedOut = new HashMap<>();
+    private final Map<Node, Long> pendingAuthenticationErrors = new HashMap<>();
     private final Map<Node, AuthenticationException> authenticationErrors = new HashMap<>();
     // Use concurrent queue for requests so that requests may be queried from a different thread
     private final Queue<ClientRequest> requests = new ConcurrentLinkedDeque<>();
@@ -128,9 +129,14 @@ public class MockClient implements KafkaClient {
     }
 
     public void authenticationFailed(Node node, long duration) {
+        pendingAuthenticationErrors.remove(node);
         authenticationErrors.put(node, (AuthenticationException) Errors.SASL_AUTHENTICATION_FAILED.exception());
         disconnect(node.idString());
         blackout(node, duration);
+    }
+
+    public void createPendingAuthenticationError(Node node, long blackoutMs) {
+        pendingAuthenticationErrors.put(node, blackoutMs);
     }
 
     private boolean isBlackedOut(Node node) {
@@ -174,6 +180,26 @@ public class MockClient implements KafkaClient {
 
     @Override
     public void send(ClientRequest request, long now) {
+        // Check if the request is directed to a node with a pending authentication error.
+        for (Iterator<Map.Entry<Node, Long>> authErrorIter =
+             pendingAuthenticationErrors.entrySet().iterator(); authErrorIter.hasNext(); ) {
+            Map.Entry<Node, Long> entry = authErrorIter.next();
+            Node node = entry.getKey();
+            long blackoutMs = entry.getValue();
+            if (node.idString().equals(request.destination())) {
+                authErrorIter.remove();
+                // Set up a disconnected ClientResponse and create an authentication error
+                // for the affected node.
+                authenticationFailed(node, blackoutMs);
+                AbstractRequest.Builder<?> builder = request.requestBuilder();
+                short version = nodeApiVersions.latestUsableVersion(request.apiKey(), builder.oldestAllowedVersion(),
+                    builder.latestAllowedVersion());
+                ClientResponse resp = new ClientResponse(request.makeHeader(version), request.callback(), request.destination(),
+                    request.createdTimeMs(), time.milliseconds(), true, null, null);
+                responses.add(resp);
+                return;
+            }
+        }
         Iterator<FutureResponse> iterator = futureResponses.iterator();
         while (iterator.hasNext()) {
             FutureResponse futureResp = iterator.next();

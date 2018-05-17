@@ -445,8 +445,22 @@ class TaskManager {
         }
     }
 
+    /**
+     * Produces a string representation containing useful information about the TaskManager.
+     * This is useful in debugging scenarios.
+     *
+     * @return A string representation of the TaskManager instance.
+     */
+    @Override
+    public String toString() {
+        return toString("");
+    }
+
     public String toString(final String indent) {
         final StringBuilder builder = new StringBuilder();
+        builder.append("TaskManager\n");
+        builder.append(indent).append("\tMetadataState:\n");
+        builder.append(streamsMetadataState.toString(indent + "\t\t"));
         builder.append(indent).append("\tActive tasks:\n");
         builder.append(active.toString(indent + "\t\t"));
         builder.append(indent).append("\tStandby tasks:\n");

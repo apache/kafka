@@ -132,7 +132,7 @@ public class SslFactory implements Reconfigurable {
                          (String) configs.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG),
                          (Password) configs.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG));
         try {
-            this.sslContext = createSSLContext(keystore);
+            this.sslContext = createSSLContext(keystore, truststore);
         } catch (Exception e) {
             throw new KafkaException(e);
         }
@@ -147,8 +147,12 @@ public class SslFactory implements Reconfigurable {
     public void validateReconfiguration(Map<String, ?> configs) {
         try {
             SecurityStore newKeystore = maybeCreateNewKeystore(configs);
-            if (newKeystore != null)
-                createSSLContext(newKeystore);
+            SecurityStore newTruststore = maybeCreateNewTruststore(configs);
+            if (newKeystore != null || newTruststore != null) {
+                SecurityStore keystore = newKeystore != null ? newKeystore : this.keystore;
+                SecurityStore truststore = newTruststore != null ? newTruststore : this.truststore;
+                createSSLContext(keystore, truststore);
+            }
         } catch (Exception e) {
             throw new ConfigException("Validation of dynamic config update failed", e);
         }
@@ -157,12 +161,16 @@ public class SslFactory implements Reconfigurable {
     @Override
     public void reconfigure(Map<String, ?> configs) throws KafkaException {
         SecurityStore newKeystore = maybeCreateNewKeystore(configs);
-        if (newKeystore != null) {
+        SecurityStore newTruststore = maybeCreateNewTruststore(configs);
+        if (newKeystore != null || newTruststore != null) {
             try {
-                this.sslContext = createSSLContext(newKeystore);
-                this.keystore = newKeystore;
+                SecurityStore keystore = newKeystore != null ? newKeystore : this.keystore;
+                SecurityStore truststore = newTruststore != null ? newTruststore : this.truststore;
+                this.sslContext = createSSLContext(keystore, truststore);
+                this.keystore = keystore;
+                this.truststore = truststore;
             } catch (Exception e) {
-                throw new ConfigException("Reconfiguration of SSL keystore failed", e);
+                throw new ConfigException("Reconfiguration of SSL keystore/truststore failed", e);
             }
         }
     }
@@ -182,8 +190,21 @@ public class SslFactory implements Reconfigurable {
             return null;
     }
 
+    private SecurityStore maybeCreateNewTruststore(Map<String, ?> configs) {
+        boolean truststoreChanged = Objects.equals(configs.get(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG), truststore.type) ||
+                Objects.equals(configs.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG), truststore.path) ||
+                Objects.equals(configs.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG), truststore.password);
+
+        if (truststoreChanged) {
+            return createTruststore((String) configs.get(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG),
+                    (String) configs.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG),
+                    (Password) configs.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG));
+        } else
+            return null;
+    }
+
     // package access for testing
-    SSLContext createSSLContext(SecurityStore keystore) throws GeneralSecurityException, IOException  {
+    SSLContext createSSLContext(SecurityStore keystore, SecurityStore truststore) throws GeneralSecurityException, IOException  {
         SSLContext sslContext;
         if (provider != null)
             sslContext = SSLContext.getInstance(protocol, provider);
@@ -206,12 +227,17 @@ public class SslFactory implements Reconfigurable {
         tmf.init(ts);
 
         sslContext.init(keyManagers, tmf.getTrustManagers(), this.secureRandomImplementation);
-        if (keystore != null && keystore != this.keystore) {
+        boolean verifyKeystore = keystore != null && keystore != this.keystore;
+        boolean verifyTruststore = truststore != null && truststore != this.truststore;
+        if (verifyKeystore || verifyTruststore) {
             if (this.keystore == null)
                 throw new ConfigException("Cannot add SSL keystore to an existing listener for which no keystore was configured.");
-            if (keystoreVerifiableUsingTruststore)
-                SSLConfigValidatorEngine.validate(this, sslContext);
-            if (!CertificateEntries.create(this.keystore.load()).equals(CertificateEntries.create(keystore.load()))) {
+            if (keystoreVerifiableUsingTruststore) {
+                SSLConfigValidatorEngine.validate(this, sslContext, this.sslContext);
+                SSLConfigValidatorEngine.validate(this, this.sslContext, sslContext);
+            }
+            if (verifyKeystore &&
+                    !CertificateEntries.create(this.keystore.load()).equals(CertificateEntries.create(keystore.load()))) {
                 throw new ConfigException("Keystore DistinguishedName or SubjectAltNames do not match");
             }
         }
@@ -311,16 +337,16 @@ public class SslFactory implements Reconfigurable {
      * The validator checks that a successful handshake can be performed using the keystore and
      * truststore configured on this SslFactory.
      */
-    static class SSLConfigValidatorEngine {
+    private static class SSLConfigValidatorEngine {
         private static final ByteBuffer EMPTY_BUF = ByteBuffer.allocate(0);
         private final SSLEngine sslEngine;
         private SSLEngineResult handshakeResult;
         private ByteBuffer appBuffer;
         private ByteBuffer netBuffer;
 
-        static void validate(SslFactory sslFactory, SSLContext sslContext) throws SSLException {
-            SSLConfigValidatorEngine clientEngine = new SSLConfigValidatorEngine(sslFactory, sslContext, Mode.CLIENT);
-            SSLConfigValidatorEngine serverEngine = new SSLConfigValidatorEngine(sslFactory, sslContext, Mode.SERVER);
+        static void validate(SslFactory sslFactory, SSLContext clientSslContext, SSLContext serverSslContext) throws SSLException {
+            SSLConfigValidatorEngine clientEngine = new SSLConfigValidatorEngine(sslFactory, clientSslContext, Mode.CLIENT);
+            SSLConfigValidatorEngine serverEngine = new SSLConfigValidatorEngine(sslFactory, serverSslContext, Mode.SERVER);
             try {
                 clientEngine.beginHandshake();
                 serverEngine.beginHandshake();

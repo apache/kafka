@@ -38,13 +38,14 @@ class BaseStreamsTest(KafkaTest):
                                   client_id,
                                   max_messages=num_messages)
 
-    def get_producer(self, topic, num_messages):
+    def get_producer(self, topic, num_messages, repeating_keys=None):
         return VerifiableProducer(self.test_context,
                                   1,
                                   self.kafka,
                                   topic,
                                   max_messages=num_messages,
-                                  acks=1)
+                                  acks=1,
+                                  repeating_keys=repeating_keys)
 
     def assert_produce_consume(self,
                                streams_source_topic,

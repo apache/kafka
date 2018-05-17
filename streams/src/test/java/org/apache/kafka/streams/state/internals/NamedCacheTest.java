@@ -20,6 +20,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -31,6 +32,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.kafka.test.StreamsTestUtils.getMetricByNameFilterByTags;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -41,13 +43,14 @@ import static org.junit.Assert.assertSame;
 public class NamedCacheTest {
 
     private NamedCache cache;
-    private MockStreamsMetrics streamMetrics;
+    private StreamsMetricsImpl metrics;
     private final String taskIDString = "0.0";
     private final String underlyingStoreName = "storeName";
+
     @Before
     public void setUp() {
-        streamMetrics = new MockStreamsMetrics(new Metrics());
-        cache = new NamedCache(taskIDString + "-" + underlyingStoreName, streamMetrics);
+        metrics = new MockStreamsMetrics(new Metrics());
+        cache = new NamedCache(taskIDString + "-" + underlyingStoreName, metrics);
     }
 
     @Test
@@ -73,33 +76,22 @@ public class NamedCacheTest {
         }
     }
 
-    private void testSpecificMetrics(final String groupName, final String entityName, final String opName,
-                                     final Map<String, String> metricTags) {
-        assertNotNull(streamMetrics.registry().metrics().get(streamMetrics.registry().metricName(opName + "-avg",
-                groupName, "The average cache hit ratio of " + entityName, metricTags)));
-        assertNotNull(streamMetrics.registry().metrics().get(streamMetrics.registry().metricName(opName + "-min",
-                groupName, "The minimum cache hit ratio of " + entityName, metricTags)));
-        assertNotNull(streamMetrics.registry().metrics().get(streamMetrics.registry().metricName(opName + "-max",
-                groupName, "The maximum cache hit ratio of " + entityName, metricTags)));
-    }
     @Test
     public void testMetrics() {
-        final String scope = "record-cache";
-        final String entityName = cache.name();
-        final String opName = "hitRatio";
-        final String tagKey = "record-cache-id";
-        final String tagValue = underlyingStoreName;
-        final String groupName = "stream-" + scope + "-metrics";
         final Map<String, String> metricTags = new LinkedHashMap<>();
-        metricTags.put(tagKey, tagValue);
+        metricTags.put("record-cache-id", underlyingStoreName);
         metricTags.put("task-id", taskIDString);
+        metricTags.put("client-id", "test");
 
-        assertNotNull(streamMetrics.registry().getSensor(opName));
-        testSpecificMetrics(groupName, entityName, opName, metricTags);
+        getMetricByNameFilterByTags(metrics.metrics(), "hitRatio-avg", "stream-record-cache-metrics", metricTags);
+        getMetricByNameFilterByTags(metrics.metrics(), "hitRatio-min", "stream-record-cache-metrics", metricTags);
+        getMetricByNameFilterByTags(metrics.metrics(), "hitRatio-max", "stream-record-cache-metrics", metricTags);
 
         // test "all"
-        metricTags.put(tagKey, "all");
-        testSpecificMetrics(groupName, entityName, opName, metricTags);
+        metricTags.put("record-cache-id", "all");
+        getMetricByNameFilterByTags(metrics.metrics(), "hitRatio-avg", "stream-record-cache-metrics", metricTags);
+        getMetricByNameFilterByTags(metrics.metrics(), "hitRatio-min", "stream-record-cache-metrics", metricTags);
+        getMetricByNameFilterByTags(metrics.metrics(), "hitRatio-max", "stream-record-cache-metrics", metricTags);
     }
 
     @Test
