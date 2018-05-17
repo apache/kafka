@@ -179,16 +179,16 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
     * In order to assign a state, the state must be created and registered
     * beforehand via stores added via `addStateStore` or `addGlobalStore` before they can be connected to the `Transformer`
     *
-    * @param valueTransformerSupplier a instance of `ValueTransformerWithKeySupplier` that generates a `ValueTransformerWithKey`.
+    * @param valueTransformerWithKeySupplier a instance of `ValueTransformerWithKeySupplier` that generates a `ValueTransformerWithKey`.
     *                                 At least one transformer instance will be created per streaming task.
     *                                 Transformer implementations doe not need to be thread-safe.
     * @param stateStoreNames          the names of the state stores used by the processor
     * @return a [[KStream]] that contains records with unmodified key and new values (possibly of different type)
     * @see `org.apache.kafka.streams.kstream.KStream#transformValues`
     */
-  def transformValues[VR](valueTransformerSupplier: ValueTransformerWithKeySupplier[K, V, VR],
+  def transformValues[VR](valueTransformerWithKeySupplier: ValueTransformerWithKeySupplier[K, V, VR],
                           stateStoreNames: String*): KTable[K, VR] = {
-    inner.transformValues[VR](valueTransformerSupplier, stateStoreNames: _*)
+    inner.transformValues[VR](valueTransformerWithKeySupplier, stateStoreNames: _*)
   }
 
   /**
@@ -202,7 +202,7 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
     * The resulting `KTable` is materialized into another state store (additional to the provided state store names)
     * as specified by the user via `Materialized` parameter, and is queryable through its given name.
     *
-    * @param valueTransformerSupplier a instance of `ValueTransformerWithKeySupplier` that generates a `ValueTransformerWithKey`
+    * @param valueTransformerWithKeySupplier a instance of `ValueTransformerWithKeySupplier` that generates a `ValueTransformerWithKey`
     *                                 At least one transformer instance will be created per streaming task.
     *                                 Transformer implementations doe not need to be thread-safe.
     * @param materialized             an instance of `Materialized` used to describe how the state store of the
@@ -211,10 +211,10 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
     * @return a [[KStream]] that contains records with unmodified key and new values (possibly of different type)
     * @see `org.apache.kafka.streams.kstream.KStream#transformValues`
     */
-  def transformValues[VR](valueTransformerSupplier: ValueTransformerWithKeySupplier[K, V, VR],
+  def transformValues[VR](valueTransformerWithKeySupplier: ValueTransformerWithKeySupplier[K, V, VR],
                           materialized: Materialized[K, VR, KeyValueStore[Bytes, Array[Byte]]],
                           stateStoreNames: String*): KTable[K, VR] = {
-    inner.transformValues[VR](valueTransformerSupplier, materialized, stateStoreNames: _*)
+    inner.transformValues[VR](valueTransformerWithKeySupplier, materialized, stateStoreNames: _*)
   }
 
   /**

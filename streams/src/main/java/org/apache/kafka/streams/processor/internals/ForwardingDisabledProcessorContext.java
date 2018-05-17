@@ -95,7 +95,7 @@ public final class ForwardingDisabledProcessorContext implements ProcessorContex
 
     @Override
     public <K, V> void forward(final K key, final V value) {
-        throw new StreamsException("ProcessorContext#forward() not supported.");    // Todo(ac): possible better error message.
+        throw new StreamsException("ProcessorContext#forward() not supported.");
     }
 
     @Override
