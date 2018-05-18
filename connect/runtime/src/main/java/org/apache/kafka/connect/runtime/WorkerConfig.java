@@ -252,7 +252,7 @@ public class WorkerConfig extends AbstractConfig {
         String locationList = props.get(WorkerConfig.PLUGIN_PATH_CONFIG);
         return locationList == null
                          ? new ArrayList<String>()
-                         : Arrays.asList(SPLIT_COMMA_WITH_WHITESPACE.split(locationList.trim(),-1));
+                         : Arrays.asList(SPLIT_COMMA_WITH_WHITESPACE.split(locationList.trim(), -1));
     }
 
     public WorkerConfig(ConfigDef definition, Map<String, String> props) {
