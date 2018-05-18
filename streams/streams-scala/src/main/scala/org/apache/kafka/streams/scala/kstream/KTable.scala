@@ -211,9 +211,8 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
     * @return a [[KStream]] that contains records with unmodified key and new values (possibly of different type)
     * @see `org.apache.kafka.streams.kstream.KStream#transformValues`
     */
-  def transformValues[VR](valueTransformerWithKeySupplier: ValueTransformerWithKeySupplier[K, V, VR],
-                          materialized: Materialized[K, VR, KeyValueStore[Bytes, Array[Byte]]],
-                          stateStoreNames: String*): KTable[K, VR] = {
+  def transformValues[VR](valueTransformerWithKeySupplier: ValueTransformerWithKeySupplier[K, V, VR])
+                         (materialized: Materialized[K, VR, KeyValueStore[Bytes, Array[Byte]]], stateStoreNames: String*): KTable[K, VR] = {
     inner.transformValues[VR](valueTransformerWithKeySupplier, materialized, stateStoreNames: _*)
   }
 
