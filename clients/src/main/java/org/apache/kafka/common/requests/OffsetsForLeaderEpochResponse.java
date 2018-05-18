@@ -23,6 +23,7 @@ import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.CollectionUtils;
 
 import java.nio.ByteBuffer;
@@ -34,6 +35,7 @@ import java.util.Map;
 import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
 import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
 import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
+import static org.apache.kafka.common.protocol.CommonFields.LEADER_EPOCH;
 import static org.apache.kafka.common.protocol.types.Type.INT64;
 
 public class OffsetsForLeaderEpochResponse extends AbstractResponse {
@@ -52,8 +54,23 @@ public class OffsetsForLeaderEpochResponse extends AbstractResponse {
             new Field(TOPICS_KEY_NAME, new ArrayOf(OFFSET_FOR_LEADER_EPOCH_RESPONSE_TOPIC_V0),
                     "An array of topics for which we have leader offsets for some requested Partition Leader Epoch"));
 
+
+    // OFFSET_FOR_LEADER_EPOCH_RESPONSE_PARTITION_V1 added a per-partition leader epoch field,
+    // which specifies which leader epoch the end offset belongs to
+    private static final Schema OFFSET_FOR_LEADER_EPOCH_RESPONSE_PARTITION_V1 = new Schema(
+            ERROR_CODE,
+            PARTITION_ID,
+            LEADER_EPOCH,
+            new Field(END_OFFSET_KEY_NAME, INT64, "The end offset"));
+    private static final Schema OFFSET_FOR_LEADER_EPOCH_RESPONSE_TOPIC_V1 = new Schema(
+            TOPIC_NAME,
+            new Field(PARTITIONS_KEY_NAME, new ArrayOf(OFFSET_FOR_LEADER_EPOCH_RESPONSE_PARTITION_V1)));
+    private static final Schema OFFSET_FOR_LEADER_EPOCH_RESPONSE_V1 = new Schema(
+            new Field(TOPICS_KEY_NAME, new ArrayOf(OFFSET_FOR_LEADER_EPOCH_RESPONSE_TOPIC_V1),
+                  "An array of topics for which we have leader offsets for some requested Partition Leader Epoch"));
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{OFFSET_FOR_LEADER_EPOCH_RESPONSE_V0};
+        return new Schema[]{OFFSET_FOR_LEADER_EPOCH_RESPONSE_V0, OFFSET_FOR_LEADER_EPOCH_RESPONSE_V1};
     }
 
     private Map<TopicPartition, EpochEndOffset> epochEndOffsetsByPartition;
@@ -68,8 +85,9 @@ public class OffsetsForLeaderEpochResponse extends AbstractResponse {
                 Errors error = Errors.forCode(partitionAndEpoch.get(ERROR_CODE));
                 int partitionId = partitionAndEpoch.get(PARTITION_ID);
                 TopicPartition tp = new TopicPartition(topic, partitionId);
+                int leaderEpoch = partitionAndEpoch.getOrElse(LEADER_EPOCH, RecordBatch.NO_PARTITION_LEADER_EPOCH);
                 long endOffset = partitionAndEpoch.getLong(END_OFFSET_KEY_NAME);
-                epochEndOffsetsByPartition.put(tp, new EpochEndOffset(error, endOffset));
+                epochEndOffsetsByPartition.put(tp, new EpochEndOffset(error, leaderEpoch, endOffset));
             }
         }
     }
@@ -110,6 +128,7 @@ public class OffsetsForLeaderEpochResponse extends AbstractResponse {
                 Struct partitionStruct = topicStruct.instance(PARTITIONS_KEY_NAME);
                 partitionStruct.set(ERROR_CODE, partitionEndOffset.getValue().error().code());
                 partitionStruct.set(PARTITION_ID, partitionEndOffset.getKey());
+                partitionStruct.setIfExists(LEADER_EPOCH, partitionEndOffset.getValue().leaderEpoch());
                 partitionStruct.set(END_OFFSET_KEY_NAME, partitionEndOffset.getValue().endOffset());
                 partitions.add(partitionStruct);
             }

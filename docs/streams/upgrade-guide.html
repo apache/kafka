@@ -18,31 +18,210 @@
 <script><!--#include virtual="../js/templateData.js" --></script>
 
 <script id="content-template" type="text/x-handlebars-template">
-    <h1>Upgrade Guide &amp; API Changes</h1>
+    <h1>Upgrade Guide and API Changes</h1>
+    <div class="sub-nav-sticky">
+        <div class="sticky-top">
+            <div style="height:35px">
+                <a href="/{{version}}/documentation/streams/">Introduction</a>
+                <a href="/{{version}}/documentation/streams/quickstart">Run Demo App</a>
+                <a href="/{{version}}/documentation/streams/tutorial">Tutorial: Write App</a>
+                <a href="/{{version}}/documentation/streams/core-concepts">Concepts</a>
+                <a href="/{{version}}/documentation/streams/architecture">Architecture</a>
+                <a href="/{{version}}/documentation/streams/developer-guide/">Developer Guide</a>
+                <a class="active-menu-item" href="/{{version}}/documentation/streams/upgrade-guide">Upgrade</a>
+            </div>
+        </div>
+    </div>
 
     <p>
-        If you want to upgrade from 0.11.0.x to 1.0.0 you don't need to do any code changes as the public API is fully backward compatible.
-        However, some public APIs were deprecated and thus it is recommended to update your code eventually to allow for future upgrades.
-        See <a href="#streams_api_changes_100">below</a> a complete list of 1.0.0 API and semantic changes that allow you to advance your application and/or simplify your code base, including the usage of new features.
+        Upgrading from any older version to 2.0.0 is possible: (1) you need to make sure to update you code accordingly, because there are some minor non-compatible API changes since older
+        releases (the code changes are expected to be minimal, please see below for the details),
+        (2) upgrading to 2.0.0 in the online mode requires two rolling bounces.
+        For (2), in the first rolling bounce phase users need to set config <code>upgrade.from="older version"</code> (possible values are <code>"0.10.0", "0.10.1", "0.10.2", "0.11.0", "1.0", and "1.1"</code>)
+        (cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-268%3A+Simplify+Kafka+Streams+Rebalance+Metadata+Upgrade">KIP-268</a>):
+    </p>
+    <ul>
+        <li> prepare your application instances for a rolling bounce and make sure that config <code>upgrade.from</code> is set to the version from which it is being upgrade to new version 2.0.0</li>
+        <li> bounce each instance of your application once </li>
+        <li> prepare your newly deployed 2.0.0 application instances for a second round of rolling bounces; make sure to remove the value for config <code>upgrade.mode</code> </li>
+        <li> bounce each instance of your application once more to complete the upgrade </li>
+    </ul>
+    <p> As an alternative, an offline upgrade is also possible. Upgrading from any versions as old as 0.10.0.x to 2.0.0 in offline mode require the following steps: </p>
+    <ul>
+        <li> stop all old (e.g., 0.10.0.x) application instances </li>
+        <li> update your code and swap old code and jar file with new code and new jar file </li>
+        <li> restart all new (2.0.0) application instances </li>
+    </ul>
+
+    <p>
+        Note, that a brokers must be on version 0.10.1 or higher to run a Kafka Streams application version 0.10.1 or higher;
+        On-disk message format must be 0.10 or higher to run a Kafka Streams application version 1.0 or higher.
+        For Kafka Streams 0.10.0, broker version 0.10.0 or higher is required.
     </p>
 
     <p>
-        If you want to upgrade from 0.10.2.x to 0.11.0 you don't need to do any code changes as the public API is fully backward compatible.
-        However, some configuration parameters were deprecated and thus it is recommended to update your code eventually to allow for future upgrades.
-        See <a href="#streams_api_changes_0110">below</a> a complete list of 0.11.0 API and semantic changes that allow you to advance your application and/or simplify your code base, including the usage of new features.
+        In 2.0.0 we have added a few new APIs on the <code>ReadOnlyWindowStore</code> interface (for details please read <a href="#streams_api_changes_200">Streams API changes</a> below).
+        If you have customized window store implementations that extends the <code>ReadOnlyWindowStore</code> interface you need to make code changes.
     </p>
 
     <p>
-        If you want to upgrade from 0.10.1.x to 0.10.2, see the <a href="/{{version}}/documentation/#upgrade_1020_streams"><b>Upgrade Section for 0.10.2</b></a>.
-        It highlights incompatible changes you need to consider to upgrade your code and application.
-        See <a href="#streams_api_changes_0102">below</a> a complete list of 0.10.2 API and semantic changes that allow you to advance your application and/or simplify your code base, including the usage of new features.
+        In addition, if you using Java 8 method references in your Kafka Streams code you might need to update your code to resolve method ambiguities.
+        Hot-swapping the jar-file only might not work for this case.
+        See below a complete list of <a href="#streams_api_changes_200">2.0.0</a>
+        API and semantic changes that allow you to advance your application and/or simplify your code base.
     </p>
 
     <p>
-        If you want to upgrade from 0.10.0.x to 0.10.1, see the <a href="/{{version}}/documentation/#upgrade_1010_streams"><b>Upgrade Section for 0.10.1</b></a>.
-        It highlights incompatible changes you need to consider to upgrade your code and application.
-        See <a href="#streams_api_changes_0101">below</a> a complete list of 0.10.1 API changes that allow you to advance your application and/or simplify your code base, including the usage of new features.
+        We moved <code>Consumed</code> interface from <code>org.apache.kafka.streams</code> to <code>org.apache.kafka.streams.kstream</code>
+        as it was mistakenly placed in the previous release. If your code has already used it there is a simple one-liner change needed in your import statement.
     </p>
+
+    <p>
+        We have also removed some public APIs that are deprecated prior to 1.0.x in 2.0.0.
+        See below for a detailed list of removed APIs.
+    </p>
+
+    <h3><a id="streams_api_changes_200" href="#streams_api_changes_200">Streams API changes in 2.0.0</a></h3>
+    <p>
+        We have removed the <code>skippedDueToDeserializationError-rate</code> and <code>skippedDueToDeserializationError-total</code> metrics.
+        Deserialization errors, and all other causes of record skipping, are now accounted for in the pre-existing metrics
+        <code>skipped-records-rate</code> and <code>skipped-records-total</code>. When a record is skipped, the event is
+        now logged at WARN level. If these warnings become burdensome, we recommend explicitly filtering out unprocessable
+        records instead of depending on record skipping semantics. For more details, see
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-274%3A+Kafka+Streams+Skipped+Records+Metrics">KIP-274</a>.
+        As of right now, the potential causes of skipped records are:
+    </p>
+    <ul>
+        <li><code>null</code> keys in table sources</li>
+        <li><code>null</code> keys in table-table inner/left/outer/right joins</li>
+        <li><code>null</code> keys or values in stream-table joins</li>
+        <li><code>null</code> keys or values in stream-stream joins</li>
+        <li><code>null</code> keys or values in aggregations on grouped streams</li>
+        <li><code>null</code> keys or values in reductions on grouped streams</li>
+        <li><code>null</code> keys in aggregations on windowed streams</li>
+        <li><code>null</code> keys in reductions on windowed streams</li>
+        <li><code>null</code> keys in aggregations on session-windowed streams</li>
+        <li>
+            Errors producing results, when the configured <code>default.production.exception.handler</code> decides to
+            <code>CONTINUE</code> (the default is to <code>FAIL</code> and throw an exception).
+        </li>
+        <li>
+            Errors deserializing records, when the configured <code>default.deserialization.exception.handler</code>
+            decides to <code>CONTINUE</code> (the default is to <code>FAIL</code> and throw an exception).
+            This was the case previously captured in the <code>skippedDueToDeserializationError</code> metrics.
+        </li>
+        <li>Fetched records having a negative timestamp.</li>
+    </ul>
+
+    <p>
+        We have added support for methods in <code>ReadOnlyWindowStore</code> which allows for querying a single window's key-value pair.
+        For users who have customized window store implementations on the above interface, they'd need to update their code to implement the newly added method as well.
+        For more details, see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-261%3A+Add+Single+Value+Fetch+in+Window+Stores">KIP-261</a>.
+    </p>
+    <p>
+        We have added public <code>WindowedSerdes</code> to allow users to read from / write to a topic storing windowed table changelogs directly.
+        In addition, in <code>StreamsConfig</code> we have also added <code>default.windowed.key.serde.inner</code> and <code>default.windowed.value.serde.inner</code>
+        to let users specify inner serdes if the default serde classes are windowed serdes.
+        For more details, see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-265%3A+Make+Windowed+Serde+to+public+APIs">KIP-265</a>.
+    </p>
+    <p>
+        We have deprecated constructors of <code>KafkaStreams</code> that take a <code>StreamsConfig</code> as parameter.
+        Please use the other corresponding constructors that accept <code>java.util.Properties</code> instead.
+        For more details, see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-245%3A+Use+Properties+instead+of+StreamsConfig+in+KafkaStreams+constructor">KIP-245</a>.
+    </p>
+    <p>
+        Kafka 2.0.0 allows to manipulate timestamps of output records using the Processor API (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-251%3A+Allow+timestamp+manipulation+in+Processor+API">KIP-251</a>).
+        To enable this new feature, <code>ProcessorContext#forward(...)</code> was modified.
+        The two existing overloads <code>#forward(Object key, Object value, String childName)</code> and <code>#forward(Object key, Object value, int childIndex)</code> were deprecated and a new overload <code>#forward(Object key, Object value, To to)</code> was added.
+        The new class <code>To</code> allows you to send records to all or specific downstream processors by name and to set the timestamp for the output record.
+        Forwarding based on child index is not supported in the new API any longer.
+    </p>
+    <p>
+        <a href="https://cwiki.apache.org/confluence/x/DVyHB">KIP-284</a> changed the retention time for repartition topics by setting its default value to <code>Long.MAX_VALUE</code>.
+        Instead of relying on data retention Kafka Streams uses the new purge data API to delete consumed data from those topics and to keep used storage small now.
+    </p>
+    <p>
+        We have modified the <code>ProcessorStateManger#register(...)</code> signature and removed the deprecated <code>loggingEnabled</code> boolean parameter as it is specified in the <code>StoreBuilder</code>.
+        Users who used this function to register their state stores into the processor topology need to simply update their code and remove this parameter from the caller.
+    </p>
+    <p>
+        Kafka Streams DSL for Scala is a new Kafka Streams client library available for developers authoring Kafka Streams applications in Scala.  It wraps core Kafka Streams DSL types to make it easier to call when
+        interoperating with Scala code.  For example, it includes higher order functions as parameters for transformations avoiding the need anonymous classes in Java 7 or experimental SAM type conversions in Scala 2.11, automatic conversion between Java and Scala collection types, a way
+        to implicitly provide SerDes to reduce boilerplate from your application and make it more typesafe, and more!  For more information see the
+        <a href="/{{version}}/documentation/streams/developer-guide/dsl-api.html#scala-dsl">Kafka Streams DSL for Scala documentation</a> and
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-270+-+A+Scala+Wrapper+Library+for+Kafka+Streams">KIP-270</a>.
+    </p>
+    <p>
+        We have removed these deprecated APIs:
+    </p>
+    <ul>
+        <li><code>KafkaStreams#toString</code> no longer returns the topology and runtime metadata; to get topology metadata users can call <code>Topology#describe()</code> and to get thread runtime metadata users can call <code>KafkaStreams#localThreadsMetadata</code> (they are deprecated since 1.0.0).
+            For detailed guidance on how to update your code please read <a href="#streams_api_changes_100">here</a></li>
+        <li><code>TopologyBuilder</code> and <code>KStreamBuilder</code> are removed and replaced by <code>Topology</code> and <code>StreamsBuidler</code> respectively (they are deprecated since 1.0.0).
+            For detailed guidance on how to update your code please read <a href="#streams_api_changes_100">here</a></li>
+        <li><code>StateStoreSupplier</code> are removed and replaced with <code>StoreBuilder</code> (they are deprecated since 1.0.0);
+            and the corresponding <code>Stores#create</code> and <code>KStream, KTable, KGroupedStream</code> overloaded functions that use it have also been removed.
+            For detailed guidance on how to update your code please read <a href="#streams_api_changes_100">here</a></li>
+        <li><code>KStream, KTable, KGroupedStream</code> overloaded functions that requires serde and other specifications explicitly are removed and replaced with simpler overloaded functions that use <code>Consumed, Produced, Serialized, Materialized, Joined</code> (they are deprecated since 1.0.0).
+            For detailed guidance on how to update your code please read <a href="#streams_api_changes_100">here</a></li>
+        <li><code>Processor#punctuate</code>, <code>ValueTransformer#punctuate</code>, <code>ValueTransformer#punctuate</code> and <code>RecordContext#schedule(long)</code> are removed and replaced by <code>RecordContext#schedule(long, PunctuationType, Punctuator)</code> (they are deprecated in 1.0.0). </li>
+        <li>The second <code>boolean</code> typed parameter "loggingEnabled" in <code>ProcessorContext#register</code> has been removed; users can now use <code>StoreBuilder#withLoggingEnabled, withLoggingDisabled</code> to specify the behavior when they create the state store. </li>
+        <li><code>KTable#writeAs, print, foreach, to, through</code> are removed, users can call <code>KTable#tostream()#writeAs</code> instead for the same purpose (they are deprecated since 0.11.0.0).
+            For detailed list of removed APIs please read <a href="#streams_api_changes_0110">here</a></li>
+        <li><code>StreamsConfig#KEY_SERDE_CLASS_CONFIG, VALUE_SERDE_CLASS_CONFIG, TIMESTAMP_EXTRACTOR_CLASS_CONFIG</code> are removed and replaced with <code>StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG, DEFAULT_VALUE_SERDE_CLASS_CONFIG, DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG</code> respectively (they are deprecated since 0.11.0.0). </li>
+        <li><code>StreamsConfig#ZOOKEEPER_CONNECT_CONFIG</code> are removed as we do not need ZooKeeper dependency in Streams any more (it is deprecated since 0.10.2.0). </li>
+    </ul>
+
+    <h3><a id="streams_api_changes_110" href="#streams_api_changes_110">Streams API changes in 1.1.0</a></h3>
+    <p>
+        We have added support for methods in <code>ReadOnlyWindowStore</code> which allows for querying <code>WindowStore</code>s without the necessity of providing keys.
+        For users who have customized window store implementations on the above interface, they'd need to update their code to implement the newly added method as well.
+        For more details, see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-205%3A+Add+all%28%29+and+range%28%29+API+to+ReadOnlyWindowStore">KIP-205</a>.
+    </p>
+
+    <p>
+	    There is a new artifact <code>kafka-streams-test-utils</code> providing a <code>TopologyTestDriver</code>, <code>ConsumerRecordFactory</code>, and <code>OutputVerifier</code> class.
+	    You can include the new artifact as a regular dependency to your unit tests and use the test driver to test your business logic of your Kafka Streams application.
+	    For more details, see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-247%3A+Add+public+test+utils+for+Kafka+Streams">KIP-247</a>.
+    </p>
+
+    <p>
+        The introduction of <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-220%3A+Add+AdminClient+into+Kafka+Streams%27+ClientSupplier">KIP-220</a>
+        enables you to provide configuration parameters for the embedded admin client created by Kafka Streams, similar to the embedded producer and consumer clients.
+        You can provide the configs via <code>StreamsConfig</code> by adding the configs with the prefix <code>admin.</code> as defined by <code>StreamsConfig#adminClientPrefix(String)</code>
+        to distinguish them from configurations of other clients that share the same config names.
+    </p>
+
+    <p>
+	New method in <code>GlobalKTable</code>
+    </p>
+    <ul>
+	<li> A method has been provided such that it will return the store name associated with the <code>GlobalKTable</code> or <code>null</code> if the store name is non-queryable. </li>
+    </ul>
+
+    <p>
+        New methods in <code>KafkaStreams</code>:
+    </p>
+    <ul>
+        <li> added overload for the constructor that allows overriding the <code>Time</code> object used for tracking system wall-clock time; this is useful for unit testing your application code. </li>
+    </ul>
+
+    <p> New methods in <code>KafkaClientSupplier</code>: </p>
+    <ul>
+        <li> added <code>getAdminClient(config)</code> that allows to override an <code>AdminClient</code> used for administrative requests such as internal topic creations, etc. </li>
+    </ul>
+
+    <p>New error handling for exceptions during production:</p>
+    <ul>
+        <li>added interface <code>ProductionExceptionHandler</code> that allows implementors to decide whether or not Streams should <code>FAIL</code> or <code>CONTINUE</code> when certain exception occur while trying to produce.</li>
+        <li>provided an implementation, <code>DefaultProductionExceptionHandler</code> that always fails, preserving the existing behavior by default.</li>
+        <li>changing which implementation is used can be done by settings <code>default.production.exception.handler</code> to the fully qualified name of a class implementing this interface.</li>
+    </ul>
+
+    <p> Changes in <code>StreamsResetter</code>: </p>
+    <ul>
+        <li> added options to specify input topics offsets to reset according to <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-171+-+Extend+Consumer+Group+Reset+Offset+for+Stream+Application">KIP-171</a></li>
+    </ul>
 
     <h3><a id="streams_api_changes_100" href="#streams_api_changes_100">Streams API changes in 1.0.0</a></h3>
 
@@ -98,8 +277,8 @@
         New methods in <code>KafkaStreams</code>:
     </p>
     <ul>
-        <li>retrieve the current runtime information about the local threads via <code>#localThreadsMetadata()</code> </li>
-        <li>observe the restoration of all state stores via <code>#setGlobalStateRestoreListener()</code>, in which users can provide their customized implementation of the <code>org.apache.kafka.streams.processor.StateRestoreListener</code> interface</li>
+        <li>retrieve the current runtime information about the local threads via <code>localThreadsMetadata()</code> </li>
+        <li>observe the restoration of all state stores via <code>setGlobalStateRestoreListener()</code>, in which users can provide their customized implementation of the <code>org.apache.kafka.streams.processor.StateRestoreListener</code> interface</li>
     </ul>
 
     <p>
@@ -108,7 +287,7 @@
     <ul>
         <li>
             <code>toString()</code>, <code>toString(final String indent)</code> were previously used to return static and runtime information.
-            They have been deprecated in favor of using the new classes/methods <code>#localThreadsMetadata()</code> / <code>ThreadMetadata</code> (returning runtime information) and
+            They have been deprecated in favor of using the new classes/methods <code>localThreadsMetadata()</code> / <code>ThreadMetadata</code> (returning runtime information) and
             <code>TopologyDescription</code> / <code>Topology#describe()</code> (returning static information).
         </li>
         <li>
@@ -186,22 +365,22 @@
         <li> configuration parameter <code>key.serde</code> was deprecated and replaced by <code>default.key.serde</code> </li>
         <li> configuration parameter <code>value.serde</code> was deprecated and replaced by <code>default.value.serde</code> </li>
         <li> configuration parameter <code>timestamp.extractor</code> was deprecated and replaced by <code>default.timestamp.extractor</code> </li>
-        <li> method <code>#keySerde()</code> was deprecated and replaced by <code>#defaultKeySerde()</code> </li>
-        <li> method <code>#valueSerde()</code> was deprecated and replaced by <code>#defaultValueSerde()</code> </li>
-        <li> new method <code>#defaultTimestampExtractor()</code> was added </li>
+        <li> method <code>keySerde()</code> was deprecated and replaced by <code>defaultKeySerde()</code> </li>
+        <li> method <code>valueSerde()</code> was deprecated and replaced by <code>defaultValueSerde()</code> </li>
+        <li> new method <code>defaultTimestampExtractor()</code> was added </li>
     </ul>
 
     <p> New methods in <code>TopologyBuilder</code>: </p>
     <ul>
-        <li> added overloads for <code>#addSource()</code> that allow to define a <code>TimestampExtractor</code> per source node </li>
-        <li> added overloads for <code>#addGlobalStore()</code> that allow to define a <code>TimestampExtractor</code> per source node associated with the global store </li>
+        <li> added overloads for <code>addSource()</code> that allow to define a <code>TimestampExtractor</code> per source node </li>
+        <li> added overloads for <code>addGlobalStore()</code> that allow to define a <code>TimestampExtractor</code> per source node associated with the global store </li>
     </ul>
 
     <p> New methods in <code>KStreamBuilder</code>: </p>
     <ul>
-        <li> added overloads for <code>#stream()</code> that allow to define a <code>TimestampExtractor</code> per input stream </li>
-        <li> added overloads for <code>#table()</code> that allow to define a <code>TimestampExtractor</code> per input table </li>
-        <li> added overloads for <code>#globalKTable()</code> that allow to define a <code>TimestampExtractor</code> per global table </li>
+        <li> added overloads for <code>stream()</code> that allow to define a <code>TimestampExtractor</code> per input stream </li>
+        <li> added overloads for <code>table()</code> that allow to define a <code>TimestampExtractor</code> per input table </li>
+        <li> added overloads for <code>globalKTable()</code> that allow to define a <code>TimestampExtractor</code> per global table </li>
     </ul>
 
     <p> Deprecated methods in <code>KTable</code>: </p>
@@ -234,7 +413,7 @@
         If exactly-once processing is enabled via the <code>processing.guarantees</code> parameter, internally Streams switches from a producer per thread to a producer per task runtime model.
         In order to distinguish the different producers, the producer's <code>client.id</code> additionally encodes the task-ID for this case.
         Because the producer's <code>client.id</code> is used to report JMX metrics, it might be required to update tools that receive those metrics.
-    
+
     </p>
 
     <p> Producer's <code>client.id</code> naming schema: </p>
@@ -259,11 +438,11 @@
         New methods in <code>KafkaStreams</code>:
     </p>
     <ul>
-        <li> set a listener to react on application state change via <code>#setStateListener(StateListener listener)</code> </li>
-        <li> retrieve the current application state via <code>#state()</code> </li>
-        <li> retrieve the global metrics registry via <code>#metrics()</code> </li>
-        <li> apply a timeout when closing an application via <code>#close(long timeout, TimeUnit timeUnit)</code> </li>
-        <li> specify a custom indent when retrieving Kafka Streams information via <code>#toString(String indent)</code> </li>
+        <li> set a listener to react on application state change via <code>setStateListener(StateListener listener)</code> </li>
+        <li> retrieve the current application state via <code>state()</code> </li>
+        <li> retrieve the global metrics registry via <code>metrics()</code> </li>
+        <li> apply a timeout when closing an application via <code>close(long timeout, TimeUnit timeUnit)</code> </li>
+        <li> specify a custom indent when retrieving Kafka Streams information via <code>toString(String indent)</code> </li>
     </ul>
 
     <p>
@@ -277,27 +456,27 @@
 
     <p> Changes in <code>StreamsMetrics</code> interface: </p>
     <ul>
-        <li> removed methods: <code>#addLatencySensor()</code> </li>
-        <li> added methods: <code>#addLatencyAndThroughputSensor()</code>, <code>#addThroughputSensor()</code>, <code>#recordThroughput()</code>,
-            <code>#addSensor()</code>, <code>#removeSensor()</code> </li>
+        <li> removed methods: <code>addLatencySensor()</code> </li>
+        <li> added methods: <code>addLatencyAndThroughputSensor()</code>, <code>addThroughputSensor()</code>, <code>recordThroughput()</code>,
+            <code>addSensor()</code>, <code>removeSensor()</code> </li>
     </ul>
 
     <p> New methods in <code>TopologyBuilder</code>: </p>
     <ul>
-        <li> added overloads for <code>#addSource()</code> that allow to define a <code>auto.offset.reset</code> policy per source node </li>
-        <li> added methods <code>#addGlobalStore()</code> to add global <code>StateStore</code>s </li>
+        <li> added overloads for <code>addSource()</code> that allow to define a <code>auto.offset.reset</code> policy per source node </li>
+        <li> added methods <code>addGlobalStore()</code> to add global <code>StateStore</code>s </li>
     </ul>
 
     <p> New methods in <code>KStreamBuilder</code>: </p>
     <ul>
-        <li> added overloads for <code>#stream()</code> and <code>#table()</code> that allow to define a <code>auto.offset.reset</code> policy per input stream/table </li>
-        <li> added method <code>#globalKTable()</code> to create a <code>GlobalKTable</code> </li>
+        <li> added overloads for <code>stream()</code> and <code>table()</code> that allow to define a <code>auto.offset.reset</code> policy per input stream/table </li>
+        <li> added method <code>globalKTable()</code> to create a <code>GlobalKTable</code> </li>
     </ul>
 
     <p> New joins for <code>KStream</code>: </p>
     <ul>
-        <li> added overloads for <code>#join()</code> to join with <code>KTable</code> </li>
-        <li> added overloads for <code>#join()</code> and <code>leftJoin()</code> to join with <code>GlobalKTable</code> </li>
+        <li> added overloads for <code>join()</code> to join with <code>KTable</code> </li>
+        <li> added overloads for <code>join()</code> and <code>leftJoin()</code> to join with <code>GlobalKTable</code> </li>
         <li> note, join semantics in 0.10.2 were improved and thus you might see different result compared to 0.10.0.x and 0.10.1.x
             (cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/Kafka+Streams+Join+Semantics">Kafka Streams Join Semantics</a> in the Apache Kafka wiki)
     </ul>
@@ -310,13 +489,13 @@
     <p> New window type <em>Session Windows</em>: </p>
     <ul>
         <li> added class <code>SessionWindows</code> to specify session windows </li>
-        <li> added overloads for <code>KGroupedStream</code> methods <code>#count()</code>, <code>#reduce()</code>, and <code>#aggregate()</code>
+        <li> added overloads for <code>KGroupedStream</code> methods <code>count()</code>, <code>reduce()</code>, and <code>aggregate()</code>
             to allow session window aggregations </li>
     </ul>
 
     <p> Changes to <code>TimestampExtractor</code>: </p>
     <ul>
-        <li> method <code>#extract()</code> has a second parameter now </li>
+        <li> method <code>extract()</code> has a second parameter now </li>
         <li> new default timestamp extractor class <code>FailOnInvalidTimestamp</code>
             (it gives the same behavior as old (and removed) default extractor <code>ConsumerRecordTimestampExtractor</code>) </li>
         <li> new alternative timestamp extractor classes <code>LogAndSkipOnInvalidTimestamp</code> and <code>UsePreviousTimeOnInvalidTimestamps</code> </li>
@@ -360,7 +539,7 @@
     </ul>
 
     <div class="pagination">
-        <a href="/{{version}}/documentation/streams/architecture" class="pagination__btn pagination__btn__prev">Previous</a>
+        <a href="/{{version}}/documentation/streams/developer-guide/app-reset-tool" class="pagination__btn pagination__btn__prev">Previous</a>
         <a href="#" class="pagination__btn pagination__btn__next pagination__btn--disabled">Next</a>
     </div>
 </script>
@@ -373,7 +552,7 @@
         <!--#include virtual="../../includes/_docs_banner.htm" -->
         <ul class="breadcrumbs">
             <li><a href="/documentation">Documentation</a></li>
-            <li><a href="/documentation/streams">Kafka Streams API</a></li>
+            <li><a href="/documentation/streams">Kafka Streams</a></li>
         </ul>
         <div class="p-content"></div>
     </div>

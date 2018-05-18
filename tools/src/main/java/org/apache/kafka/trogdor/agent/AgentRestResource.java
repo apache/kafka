@@ -16,21 +16,36 @@
  */
 package org.apache.kafka.trogdor.agent;
 
-import org.apache.kafka.trogdor.rest.AgentFaultsResponse;
 import org.apache.kafka.trogdor.rest.AgentStatusResponse;
-import org.apache.kafka.trogdor.rest.CreateAgentFaultRequest;
+import org.apache.kafka.trogdor.rest.CreateWorkerRequest;
+import org.apache.kafka.trogdor.rest.DestroyWorkerRequest;
 import org.apache.kafka.trogdor.rest.Empty;
+import org.apache.kafka.trogdor.rest.StopWorkerRequest;
 
 import javax.servlet.ServletContext;
 import javax.ws.rs.Consumes;
+import javax.ws.rs.DELETE;
+import javax.ws.rs.DefaultValue;
 import javax.ws.rs.GET;
+import javax.ws.rs.POST;
 import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
+import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
 import java.util.concurrent.atomic.AtomicReference;
 
-
+/**
+ * The REST resource for the Agent. This describes the RPCs which the agent can accept.
+ *
+ * RPCs should be idempotent.  This is important because if the server's response is
+ * lost, the client will simply retransmit the same request. The server's response must
+ * be the same the second time around.
+ *
+ * We return the empty JSON object {} rather than void for RPCs that have no results.
+ * This ensures that if we want to add more return results later, we can do so in a
+ * compatible way.
+ */
 @Path("/agent")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
@@ -47,19 +62,27 @@ public class AgentRestResource {
     @GET
     @Path("/status")
     public AgentStatusResponse getStatus() throws Throwable {
-        return new AgentStatusResponse(agent().startTimeMs());
+        return agent().status();
     }
 
-    @GET
-    @Path("/faults")
-    public AgentFaultsResponse getAgentFaults() throws Throwable {
-        return agent().faults();
+    @POST
+    @Path("/worker/create")
+    public Empty createWorker(CreateWorkerRequest req) throws Throwable {
+        agent().createWorker(req);
+        return Empty.INSTANCE;
     }
 
     @PUT
-    @Path("/fault")
-    public Empty putAgentFault(CreateAgentFaultRequest request) throws Throwable {
-        agent().createFault(request);
+    @Path("/worker/stop")
+    public Empty stopWorker(StopWorkerRequest req) throws Throwable {
+        agent().stopWorker(req);
+        return Empty.INSTANCE;
+    }
+
+    @DELETE
+    @Path("/worker")
+    public Empty destroyWorker(@DefaultValue("0") @QueryParam("workerId") long workerId) throws Throwable {
+        agent().destroyWorker(new DestroyWorkerRequest(workerId));
         return Empty.INSTANCE;
     }
 

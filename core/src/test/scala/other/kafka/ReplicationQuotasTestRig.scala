@@ -22,13 +22,11 @@ import javax.imageio.ImageIO
 
 import kafka.admin.ReassignPartitionsCommand
 import kafka.admin.ReassignPartitionsCommand.Throttle
-import kafka.common.TopicAndPartition
 import org.apache.kafka.common.TopicPartition
 import kafka.server.{KafkaConfig, KafkaServer, QuotaType}
 import kafka.utils.TestUtils._
-import kafka.utils.ZkUtils._
 import kafka.utils.{Exit, Logging, TestUtils, ZkUtils}
-import kafka.zk.ZooKeeperTestHarness
+import kafka.zk.{ReassignPartitionsZNode, ZooKeeperTestHarness}
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.jfree.chart.plot.PlotOrientation
 import org.jfree.chart.{ChartFactory, ChartFrame, JFreeChart}
@@ -125,7 +123,7 @@ object ReplicationQuotasTestRig {
       val replicas = (0 to config.partitions).map(partition => partition -> Seq(nextReplicaRoundRobin())).toMap
 
       startBrokers(brokers)
-      createTopic(zkUtils, topicName, replicas, servers)
+      createTopic(zkClient, topicName, replicas, servers)
 
       println("Writing Data")
       val producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers), retries = 5, acks = 0)
@@ -136,10 +134,10 @@ object ReplicationQuotasTestRig {
       }
 
       println("Starting Reassignment")
-      val newAssignment = ReassignPartitionsCommand.generateAssignment(zkUtils, brokers, json(topicName), true)._1
+      val newAssignment = ReassignPartitionsCommand.generateAssignment(zkClient, brokers, json(topicName), true)._1
 
       val start = System.currentTimeMillis()
-      ReassignPartitionsCommand.executeAssignment(zkUtils, None, ZkUtils.formatAsReassignmentJson(newAssignment), Throttle(config.throttle))
+      ReassignPartitionsCommand.executeAssignment(zkClient, None, ZkUtils.getReassignmentJson(newAssignment), Throttle(config.throttle))
 
       //Await completion
       waitForReassignmentToComplete()
@@ -167,8 +165,8 @@ object ReplicationQuotasTestRig {
     }
   }
 
-    def logOutput(config: ExperimentDef, replicas: Map[Int, Seq[Int]], newAssignment: Map[TopicAndPartition, Seq[Int]]): Unit = {
-      val actual = zkUtils.getPartitionAssignmentForTopics(Seq(topicName))(topicName)
+    def logOutput(config: ExperimentDef, replicas: Map[Int, Seq[Int]], newAssignment: Map[TopicPartition, Seq[Int]]): Unit = {
+      val actual = zkClient.getPartitionAssignmentForTopics(Set(topicName))(topicName)
 
       //Long stats
       println("The replicas are " + replicas.toSeq.sortBy(_._1).map("\n" + _))
@@ -189,8 +187,8 @@ object ReplicationQuotasTestRig {
     def waitForReassignmentToComplete() {
       waitUntilTrue(() => {
         printRateMetrics()
-        !zkUtils.pathExists(ReassignPartitionsPath)
-      }, s"Znode ${ZkUtils.ReassignPartitionsPath} wasn't deleted", 60 * 60 * 1000, pause = 1000L)
+        !zkClient.reassignPartitionsInProgress()
+      }, s"Znode ${ReassignPartitionsZNode.path} wasn't deleted", 60 * 60 * 1000, pause = 1000L)
     }
 
     def renderChart(data: mutable.Map[Int, Array[Double]], name: String, journal: Journal, displayChartsOnScreen: Boolean): Unit = {

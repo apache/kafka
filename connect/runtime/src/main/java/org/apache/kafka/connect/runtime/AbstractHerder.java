@@ -79,6 +79,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
     private final String workerId;
     protected final Worker worker;
+    private final String kafkaClusterId;
     protected final StatusBackingStore statusBackingStore;
     protected final ConfigBackingStore configBackingStore;
 
@@ -86,12 +87,19 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
     public AbstractHerder(Worker worker,
                           String workerId,
+                          String kafkaClusterId,
                           StatusBackingStore statusBackingStore,
                           ConfigBackingStore configBackingStore) {
         this.worker = worker;
         this.workerId = workerId;
+        this.kafkaClusterId = kafkaClusterId;
         this.statusBackingStore = statusBackingStore;
         this.configBackingStore = configBackingStore;
+    }
+
+    @Override
+    public String kafkaClusterId() {
+        return kafkaClusterId;
     }
 
     protected abstract int generation();
@@ -241,25 +249,25 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         if (connType == null)
             throw new BadRequestException("Connector config " + connectorProps + " contains no connector type");
 
-        List<ConfigValue> configValues = new ArrayList<>();
-        Map<String, ConfigKey> configKeys = new LinkedHashMap<>();
-        Set<String> allGroups = new LinkedHashSet<>();
-
         Connector connector = getConnector(connType);
         ClassLoader savedLoader = plugins().compareAndSwapLoaders(connector);
         try {
-            ConfigDef baseConfigDef = (connector instanceof SourceConnector)
-                    ? SourceConnectorConfig.configDef()
-                    : SinkConnectorConfig.configDef();
+            ConfigDef baseConfigDef;
+            if (connector instanceof SourceConnector) {
+                baseConfigDef = SourceConnectorConfig.configDef();
+            } else {
+                baseConfigDef = SinkConnectorConfig.configDef();
+                SinkConnectorConfig.validate(connectorProps);
+            }
             ConfigDef enrichedConfigDef = ConnectorConfig.enrich(plugins(), baseConfigDef, connectorProps, false);
             Map<String, ConfigValue> validatedConnectorConfig = validateBasicConnectorConfig(
                     connector,
                     enrichedConfigDef,
                     connectorProps
             );
-            configValues.addAll(validatedConnectorConfig.values());
-            configKeys.putAll(enrichedConfigDef.configKeys());
-            allGroups.addAll(enrichedConfigDef.groups());
+            List<ConfigValue> configValues = new ArrayList<>(validatedConnectorConfig.values());
+            Map<String, ConfigKey> configKeys = new LinkedHashMap<>(enrichedConfigDef.configKeys());
+            Set<String> allGroups = new LinkedHashSet<>(enrichedConfigDef.groups());
 
             // do custom connector-specific validation
             Config config = connector.validate(connectorProps);

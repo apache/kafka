@@ -106,7 +106,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     static final int CRC_LENGTH = 4;
     static final int ATTRIBUTES_OFFSET = CRC_OFFSET + CRC_LENGTH;
     static final int ATTRIBUTE_LENGTH = 2;
-    static final int LAST_OFFSET_DELTA_OFFSET = ATTRIBUTES_OFFSET + ATTRIBUTE_LENGTH;
+    public static final int LAST_OFFSET_DELTA_OFFSET = ATTRIBUTES_OFFSET + ATTRIBUTE_LENGTH;
     static final int LAST_OFFSET_DELTA_LENGTH = 4;
     static final int FIRST_TIMESTAMP_OFFSET = LAST_OFFSET_DELTA_OFFSET + LAST_OFFSET_DELTA_LENGTH;
     static final int FIRST_TIMESTAMP_LENGTH = 8;
@@ -118,7 +118,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     static final int PRODUCER_EPOCH_LENGTH = 2;
     static final int BASE_SEQUENCE_OFFSET = PRODUCER_EPOCH_OFFSET + PRODUCER_EPOCH_LENGTH;
     static final int BASE_SEQUENCE_LENGTH = 4;
-    static final int RECORDS_COUNT_OFFSET = BASE_SEQUENCE_OFFSET + BASE_SEQUENCE_LENGTH;
+    public static final int RECORDS_COUNT_OFFSET = BASE_SEQUENCE_OFFSET + BASE_SEQUENCE_LENGTH;
     static final int RECORDS_COUNT_LENGTH = 4;
     static final int RECORDS_OFFSET = RECORDS_COUNT_OFFSET + RECORDS_COUNT_LENGTH;
     public static final int RECORD_BATCH_OVERHEAD = RECORDS_OFFSET;

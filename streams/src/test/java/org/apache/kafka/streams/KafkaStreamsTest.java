@@ -16,9 +16,10 @@
  */
 package org.apache.kafka.streams;
 
-import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.common.Metric;
-import org.apache.kafka.common.MetricName;
+import org.apache.kafka.clients.producer.MockProducer;
+import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serdes;
@@ -26,12 +27,14 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.ThreadMetadata;
 import org.apache.kafka.streams.processor.internals.GlobalStreamThread;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.test.IntegrationTest;
+import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockMetricsReporter;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.TestCondition;
@@ -39,12 +42,15 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.ClassRule;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
 import java.io.File;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -115,12 +121,37 @@ public class KafkaStreamsTest {
     }
 
     @Test
+    public void shouldCleanupResourcesOnCloseWithoutPreviousStart() throws Exception {
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.globalTable("anyTopic");
+        List<Node> nodes = Arrays.asList(new Node(0, "localhost", 8121));
+        Cluster cluster = new Cluster("mockClusterId", nodes,
+            Collections.<PartitionInfo>emptySet(), Collections.<String>emptySet(),
+            Collections.<String>emptySet(), nodes.get(0));
+        MockClientSupplier clientSupplier = new MockClientSupplier();
+        clientSupplier.setClusterForAdminClient(cluster);
+        final KafkaStreams streams = new KafkaStreams(builder.build(), props, clientSupplier);
+        streams.close();
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return streams.state() == KafkaStreams.State.NOT_RUNNING;
+            }
+        }, 10 * 1000, "Streams never stopped.");
+
+        // Ensure that any created clients are closed
+        assertTrue(clientSupplier.consumer.closed());
+        assertTrue(clientSupplier.restoreConsumer.closed());
+        for (MockProducer p : clientSupplier.producers) {
+            assertTrue(p.closed());
+        }
+    }
+
+    @Test
     public void testStateThreadClose() throws Exception {
-        final int numThreads = 2;
         final StreamsBuilder builder = new StreamsBuilder();
         // make sure we have the global state thread running too
         builder.globalTable("anyTopic");
-        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, numThreads);
         final KafkaStreams streams = new KafkaStreams(builder.build(), props);
 
 
@@ -129,7 +160,7 @@ public class KafkaStreamsTest {
         threadsField.setAccessible(true);
         final StreamThread[] threads = (StreamThread[]) threadsField.get(streams);
 
-        assertEquals(numThreads, threads.length);
+        assertEquals(NUM_THREADS, threads.length);
         assertEquals(streams.state(), KafkaStreams.State.CREATED);
 
         streams.start();
@@ -140,7 +171,7 @@ public class KafkaStreamsTest {
             }
         }, 10 * 1000, "Streams never started.");
 
-        for (int i = 0; i < numThreads; i++) {
+        for (int i = 0; i < NUM_THREADS; i++) {
             final StreamThread tmpThread = threads[i];
             tmpThread.shutdown();
             TestUtils.waitForCondition(new TestCondition() {
@@ -173,11 +204,9 @@ public class KafkaStreamsTest {
 
     @Test
     public void testStateGlobalThreadClose() throws Exception {
-        final int numThreads = 2;
         final StreamsBuilder builder = new StreamsBuilder();
         // make sure we have the global state thread running too
         builder.globalTable("anyTopic");
-        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, numThreads);
         final KafkaStreams streams = new KafkaStreams(builder.build(), props);
 
 
@@ -203,7 +232,43 @@ public class KafkaStreamsTest {
 
         streams.close();
         assertEquals(streams.state(), KafkaStreams.State.NOT_RUNNING);
+    }
 
+    @Ignore // this test cannot pass as long as GST blocks KS.start()
+    @Test
+    public void testGlobalThreadCloseWithoutConnectingToBroker() {
+        final Properties props = new Properties();
+        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
+        props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:1");
+        props.setProperty(StreamsConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
+        props.setProperty(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
+        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, NUM_THREADS);
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        // make sure we have the global state thread running too
+        builder.globalTable("anyTopic");
+        final KafkaStreams streams = new KafkaStreams(builder.build(), props);
+        streams.start();
+        streams.close();
+        // There's nothing to assert... We're testing that this operation actually completes.
+    }
+
+    @Test
+    public void testLocalThreadCloseWithoutConnectingToBroker() {
+        final Properties props = new Properties();
+        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
+        props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:1");
+        props.setProperty(StreamsConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
+        props.setProperty(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
+        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, NUM_THREADS);
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        // make sure we have the global state thread running too
+        builder.table("anyTopic");
+        final KafkaStreams streams = new KafkaStreams(builder.build(), props);
+        streams.start();
+        streams.close();
+        // There's nothing to assert... We're testing that this operation actually completes.
     }
 
 
@@ -299,18 +364,7 @@ public class KafkaStreamsTest {
     }
 
     @Test
-    public void testNumberDefaultMetrics() {
-        final KafkaStreams streams = createKafkaStreams();
-        final Map<MetricName, ? extends Metric> metrics = streams.metrics();
-        // all 22 default StreamThread metrics + 1 metric that keeps track of number of metrics
-        assertEquals(23, metrics.size());
-    }
-
-    @Test
     public void testIllegalMetricsConfig() {
-        final Properties props = new Properties();
-        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
-        props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         props.setProperty(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, "illegalConfig");
         final StreamsBuilder builder = new StreamsBuilder();
 
@@ -322,9 +376,6 @@ public class KafkaStreamsTest {
 
     @Test
     public void testLegalMetricsConfig() {
-        final Properties props = new Properties();
-        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
-        props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         props.setProperty(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, Sensor.RecordingLevel.INFO.toString());
         final StreamsBuilder builder1 = new StreamsBuilder();
         final KafkaStreams streams1 = new KafkaStreams(builder1.build(), props);
@@ -364,11 +415,6 @@ public class KafkaStreamsTest {
     public void shouldReturnFalseOnCloseWhenThreadsHaventTerminated() throws Exception {
         final AtomicBoolean keepRunning = new AtomicBoolean(true);
         try {
-            final Properties props = new Properties();
-            props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
-            props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-            props.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-
             final StreamsBuilder builder = new StreamsBuilder();
             final CountDownLatch latch = new CountDownLatch(1);
             final String topic = "input";
@@ -409,40 +455,21 @@ public class KafkaStreamsTest {
 
     @Test
     public void shouldReturnThreadMetadata() {
-        final Properties props = new Properties();
-        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
-        props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        props.setProperty(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, Sensor.RecordingLevel.INFO.toString());
-        props.setProperty(StreamsConfig.NUM_STREAM_THREADS_CONFIG, "2");
-        final KafkaStreams streams = new KafkaStreams(builder.build(), props);
         streams.start();
         Set<ThreadMetadata> threadMetadata = streams.localThreadsMetadata();
         assertNotNull(threadMetadata);
         assertEquals(2, threadMetadata.size());
         for (ThreadMetadata metadata : threadMetadata) {
-            assertTrue(Utils.mkList("RUNNING", "CREATED").contains(metadata.threadState()));
+            assertTrue("#threadState() was: " + metadata.threadState() + "; expected either RUNNING, PARTITIONS_REVOKED, PARTITIONS_ASSIGNED, or CREATED",
+                Utils.mkList("RUNNING", "PARTITIONS_REVOKED", "PARTITIONS_ASSIGNED", "CREATED").contains(metadata.threadState()));
             assertEquals(0, metadata.standbyTasks().size());
             assertEquals(0, metadata.activeTasks().size());
         }
         streams.close();
     }
 
-
-    private KafkaStreams createKafkaStreams() {
-        final Properties props = new Properties();
-        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
-        props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-
-        final StreamsBuilder builder = new StreamsBuilder();
-        return new KafkaStreams(builder.build(), props);
-    }
-
     @Test
     public void testCleanup() {
-        final Properties props = new Properties();
-        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "testLocalCleanup");
-        props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-
         final StreamsBuilder builder = new StreamsBuilder();
         final KafkaStreams streams = new KafkaStreams(builder.build(), props);
 
@@ -454,10 +481,6 @@ public class KafkaStreamsTest {
 
     @Test
     public void testCannotCleanupWhileRunning() throws InterruptedException {
-        final Properties props = new Properties();
-        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "testCannotCleanupWhileRunning");
-        props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-
         final StreamsBuilder builder = new StreamsBuilder();
         final KafkaStreams streams = new KafkaStreams(builder.build(), props);
 
@@ -479,27 +502,8 @@ public class KafkaStreamsTest {
     }
 
     @Test
-    public void testToString() {
-        streams.start();
-        final String streamString = streams.toString();
-        streams.close();
-        final String appId = streamString.split("\\n")[1].split(":")[1].trim();
-        Assert.assertNotEquals("streamString should not be empty", "", streamString);
-        Assert.assertNotNull("streamString should not be null", streamString);
-        Assert.assertNotEquals("streamString contains non-empty appId", "", appId);
-        Assert.assertNotNull("streamString contains non-null appId", appId);
-    }
-
-    @Test
     public void shouldCleanupOldStateDirs() throws InterruptedException {
-        final Properties props = new Properties();
-        final String appId = "cleanupOldStateDirs";
-        final String stateDir = TestUtils.tempDirectory().getPath();
-        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, appId);
-        props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         props.setProperty(StreamsConfig.STATE_CLEANUP_DELAY_MS_CONFIG, "1");
-        props.setProperty(StreamsConfig.STATE_DIR_CONFIG, stateDir);
-
 
         final String topic = "topic";
         CLUSTER.createTopic(topic);
@@ -518,7 +522,7 @@ public class KafkaStreamsTest {
                 }
             }
         });
-        final String appDir = stateDir + File.separator + appId;
+        final String appDir = props.getProperty(StreamsConfig.STATE_DIR_CONFIG) + File.separator + props.getProperty(StreamsConfig.APPLICATION_ID_CONFIG);
         final File oldTaskDir = new File(appDir, "10_1");
         assertTrue(oldTaskDir.mkdirs());
         try {

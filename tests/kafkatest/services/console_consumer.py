@@ -120,7 +120,7 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
             print_timestamp             if True, print each message's timestamp as well
             isolation_level             How to handle transactional messages.
         """
-        JmxMixin.__init__(self, num_nodes, jmx_object_names, jmx_attributes or [],
+        JmxMixin.__init__(self, num_nodes=num_nodes, jmx_object_names=jmx_object_names, jmx_attributes=(jmx_attributes or []),
                           root=ConsoleConsumer.PERSISTENT_ROOT)
         BackgroundThreadService.__init__(self, context, num_nodes)
         self.kafka = kafka
@@ -313,9 +313,11 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
     def _init_jmx_attributes(self):
         # Must hold lock
         if self.new_consumer:
-            if not self.jmx_object_names:
-                self.jmx_object_names = []
-                self.jmx_object_names += ["kafka.consumer:type=consumer-coordinator-metrics,client-id=%s" % self.client_id]
-                self.jmx_attributes += ["assigned-partitions"]
+            # We use a flag to track whether we're using this automatically generated ID because the service could be
+            # restarted multiple times and the client ID may be changed.
+            if getattr(self, '_automatic_metrics', False) or not self.jmx_object_names:
+                self._automatic_metrics = True
+                self.jmx_object_names = ["kafka.consumer:type=consumer-coordinator-metrics,client-id=%s" % self.client_id]
+                self.jmx_attributes = ["assigned-partitions"]
                 self.assigned_partitions_jmx_attr = "kafka.consumer:type=consumer-coordinator-metrics,client-id=%s:assigned-partitions" % self.client_id
 

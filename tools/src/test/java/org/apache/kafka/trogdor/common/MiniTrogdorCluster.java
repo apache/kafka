@@ -17,7 +17,7 @@
 
 package org.apache.kafka.trogdor.common;
 
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Scheduler;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.trogdor.agent.Agent;
 import org.apache.kafka.trogdor.agent.AgentClient;
@@ -38,6 +38,11 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.concurrent.Callable;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * MiniTrogdorCluster sets up a local cluster of Trogdor Agents and Coordinators.
@@ -53,7 +58,7 @@ public class MiniTrogdorCluster implements AutoCloseable {
 
         private String coordinatorName = null;
 
-        private Time time = Time.SYSTEM;
+        private Scheduler scheduler = Scheduler.SYSTEM;
 
         private BasicPlatform.CommandRunner commandRunner =
                 new BasicPlatform.ShellCommandRunner();
@@ -81,8 +86,8 @@ public class MiniTrogdorCluster implements AutoCloseable {
         /**
          * Set the timekeeper used by this MiniTrogdorCluster.
          */
-        public Builder time(Time time) {
-            this.time = time;
+        public Builder scheduler(Scheduler scheduler) {
+            this.scheduler = scheduler;
             return this;
         }
 
@@ -126,7 +131,7 @@ public class MiniTrogdorCluster implements AutoCloseable {
         /**
          * Create the MiniTrogdorCluster.
          */
-        public MiniTrogdorCluster build() {
+        public MiniTrogdorCluster build() throws Exception {
             log.info("Creating MiniTrogdorCluster with agents: {} and coordinator: {}",
                 Utils.join(agentNames, ", "), coordinatorName);
             TreeMap<String, NodeData> nodes = new TreeMap<>();
@@ -147,10 +152,14 @@ public class MiniTrogdorCluster implements AutoCloseable {
             for (Map.Entry<String, NodeData> entry : nodes.entrySet()) {
                 NodeData node = entry.getValue();
                 HashMap<String, String> config = new HashMap<>();
-                config.put(Platform.Config.TROGDOR_AGENT_PORT,
-                    Integer.toString(node.agentPort));
-                config.put(Platform.Config.TROGDOR_COORDINATOR_PORT,
-                    Integer.toString(node.coordinatorPort));
+                if (node.agentPort != 0) {
+                    config.put(Platform.Config.TROGDOR_AGENT_PORT,
+                        Integer.toString(node.agentPort));
+                }
+                if (node.coordinatorPort != 0) {
+                    config.put(Platform.Config.TROGDOR_COORDINATOR_PORT,
+                        Integer.toString(node.coordinatorPort));
+                }
                 node.node = new BasicNode(entry.getKey(), node.hostname, config,
                     Collections.<String>emptySet());
             }
@@ -158,20 +167,41 @@ public class MiniTrogdorCluster implements AutoCloseable {
             for (Map.Entry<String, NodeData> entry : nodes.entrySet()) {
                 topologyNodes.put(entry.getKey(), entry.getValue().node);
             }
-            BasicTopology topology = new BasicTopology(topologyNodes);
-            for (Map.Entry<String, NodeData> entry : nodes.entrySet()) {
-                String nodeName = entry.getKey();
-                NodeData node = entry.getValue();
-                node.platform = new BasicPlatform(nodeName, topology, commandRunner);
-                if (node.agentRestResource != null) {
-                    node.agent = new Agent(node.platform, time, node.agentRestServer,
-                        node.agentRestResource);
-                }
-                if (node.coordinatorRestResource != null) {
-                    node.coordinator = new Coordinator(node.platform, time,
-                        node.coordinatorRestServer, node.coordinatorRestResource);
-                }
+            final BasicTopology topology = new BasicTopology(topologyNodes);
+            ScheduledExecutorService executor = Executors.newScheduledThreadPool(1,
+                ThreadUtils.createThreadFactory("MiniTrogdorClusterStartupThread%d", false));
+            final AtomicReference<Exception> failure = new AtomicReference<Exception>(null);
+            for (final Map.Entry<String, NodeData> entry : nodes.entrySet()) {
+                executor.submit(new Callable<Void>() {
+                    @Override
+                    public Void call() throws Exception {
+                        String nodeName = entry.getKey();
+                        try {
+                            NodeData node = entry.getValue();
+                            node.platform = new BasicPlatform(nodeName, topology, scheduler, commandRunner);
+                            if (node.agentRestResource != null) {
+                                node.agent = new Agent(node.platform, scheduler, node.agentRestServer,
+                                    node.agentRestResource);
+                            }
+                            if (node.coordinatorRestResource != null) {
+                                node.coordinator = new Coordinator(node.platform, scheduler,
+                                    node.coordinatorRestServer, node.coordinatorRestResource, 0);
+                            }
+                        } catch (Exception e) {
+                            log.error("Unable to initialize {}", nodeName, e);
+                            failure.compareAndSet(null, e);
+                        }
+                        return null;
+                    }
+                });
             }
+            executor.shutdown();
+            executor.awaitTermination(1, TimeUnit.DAYS);
+            Exception failureException = failure.get();
+            if (failureException != null) {
+                throw failureException;
+            }
+
             TreeMap<String, Agent> agents = new TreeMap<>();
             Coordinator coordinator = null;
             for (Map.Entry<String, NodeData> entry : nodes.entrySet()) {
@@ -209,7 +239,10 @@ public class MiniTrogdorCluster implements AutoCloseable {
         if (coordinator == null) {
             throw new RuntimeException("No coordinator configured.");
         }
-        return new CoordinatorClient("localhost", coordinator.port());
+        return new CoordinatorClient.Builder().
+            maxTries(10).
+            target("localhost", coordinator.port()).
+            build();
     }
 
     public AgentClient agentClient(String nodeName) {
@@ -217,16 +250,20 @@ public class MiniTrogdorCluster implements AutoCloseable {
         if (agent == null) {
             throw new RuntimeException("No agent configured on node " + nodeName);
         }
-        return new AgentClient("localhost", agent.port());
+        return new AgentClient.Builder().
+            maxTries(10).
+            target("localhost", agent.port()).
+            build();
     }
 
     @Override
     public void close() throws Exception {
+        log.info("Closing MiniTrogdorCluster.");
+        if (coordinator != null) {
+            coordinator.beginShutdown(false);
+        }
         for (Agent agent : agents.values()) {
             agent.beginShutdown();
-        }
-        if (coordinator != null) {
-            coordinator.beginShutdown();
         }
         for (Agent agent : agents.values()) {
             agent.waitForShutdown();

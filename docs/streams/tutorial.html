@@ -17,8 +17,20 @@
 <script><!--#include virtual="../js/templateData.js" --></script>
 
 <script id="content-template" type="text/x-handlebars-template">
-    <h1>Tutorial: Write a Streams Application</h1>
-
+    <h1>Tutorial: Write a Kafka Streams Application</h1>
+    <div class="sub-nav-sticky">
+        <div class="sticky-top">
+            <div style="height:35px">
+                <a href="/{{version}}/documentation/streams/">Introduction</a>
+                <a href="/{{version}}/documentation/streams/quickstart">Run Demo App</a>
+                <a class="active-menu-item" href="/{{version}}/documentation/streams/tutorial">Tutorial: Write App</a>
+                <a href="/{{version}}/documentation/streams/core-concepts">Concepts</a>
+                <a href="/{{version}}/documentation/streams/architecture">Architecture</a>
+                <a href="/{{version}}/documentation/streams/developer-guide/">Developer Guide</a>
+                <a href="/{{version}}/documentation/streams/upgrade-guide">Upgrade</a>
+            </div>
+        </div>
+    </div>
     <p>
         In this guide we will start from scratch on setting up your own project to write a stream processing application using Kafka Streams.
         It is highly recommended to read the <a href="/{{version}}/documentation/streams/quickstart">quickstart</a> first on how to run a Streams application written in Kafka Streams if you have not done so.
@@ -504,7 +516,7 @@
     </p>
 
     <pre class="brush: java;">
-        counts.toStream().to("streams-wordcount-output", Produced.with(Serdes.String(), Serdes.Long());
+        counts.toStream().to("streams-wordcount-output", Produced.with(Serdes.String(), Serdes.Long()));
     </pre>
 
     <p>
@@ -520,7 +532,7 @@
               .groupBy((key, value) -> value)
               .count(Materialized.&lt;String, Long, KeyValueStore&lt;Bytes, byte[]&gt;&gt;as("counts-store"))
               .toStream()
-              .to("streams-wordcount-output", Produced.with(Serdes.String(), Serdes.Long());
+              .to("streams-wordcount-output", Produced.with(Serdes.String(), Serdes.Long()));
     </pre>
 
     <p>
@@ -607,7 +619,7 @@
 
     <div class="pagination">
         <a href="/{{version}}/documentation/streams/quickstart" class="pagination__btn pagination__btn__prev">Previous</a>
-        <a href="/{{version}}/documentation/streams/developer-guide" class="pagination__btn pagination__btn__next">Next</a>
+        <a href="/{{version}}/documentation/streams/core-concepts" class="pagination__btn pagination__btn__next">Next</a>
     </div>
 </script>
 
@@ -621,7 +633,7 @@
         <!--#include virtual="../../includes/_docs_banner.htm" -->
         <ul class="breadcrumbs">
             <li><a href="/documentation">Documentation</a></li>
-            <li><a href="/documentation/streams">Streams</a></li>
+            <li><a href="/documentation/streams">Kafka Streams</a></li>
         </ul>
         <div class="p-content"></div>
     </div>
@@ -631,6 +643,21 @@
 $(function() {
   // Show selected style on nav item
   $('.b-nav__streams').addClass('selected');
+
+     //sticky secondary nav
+          var $navbar = $(".sub-nav-sticky"),
+               y_pos = $navbar.offset().top,
+               height = $navbar.height();
+       
+           $(window).scroll(function() {
+               var scrollTop = $(window).scrollTop();
+           
+               if (scrollTop > y_pos - height) {
+                   $navbar.addClass("navbar-fixed")
+               } else if (scrollTop <= y_pos) {
+                   $navbar.removeClass("navbar-fixed")
+               }
+           });
 
   // Display docs subnav items
   $('.b-nav__docs').parent().toggleClass('nav__item__with__subs--expanded');

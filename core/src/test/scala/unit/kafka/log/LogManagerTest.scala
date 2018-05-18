@@ -142,7 +142,7 @@ class LogManagerTest {
     for (_ <- 0 until numMessages) {
       val set = TestUtils.singletonRecords("test".getBytes())
       val info = log.appendAsLeader(set, leaderEpoch = 0)
-      offset = info.firstOffset
+      offset = info.firstOffset.get
     }
 
     log.onHighWatermarkIncremented(log.logEndOffset)
@@ -211,7 +211,7 @@ class LogManagerTest {
       log.appendAsLeader(set, leaderEpoch = 0)
     }
     time.sleep(logManager.InitialTaskDelayMs)
-    assertTrue("Time based flush should have been triggered triggered", lastFlush != log.lastFlushTime)
+    assertTrue("Time based flush should have been triggered", lastFlush != log.lastFlushTime)
   }
 
   /**
@@ -308,18 +308,18 @@ class LogManagerTest {
     val log = logManager.getOrCreateLog(new TopicPartition(name, 0), logConfig)
     val activeSegment = log.activeSegment
     val logName = activeSegment.log.file.getName
-    val indexName = activeSegment.index.file.getName
+    val indexName = activeSegment.offsetIndex.file.getName
     val timeIndexName = activeSegment.timeIndex.file.getName
     val txnIndexName = activeSegment.txnIndex.file.getName
     val indexFilesOnDiskBeforeDelete = activeSegment.log.file.getParentFile.listFiles.filter(_.getName.endsWith("index"))
 
     val removedLog = logManager.asyncDelete(new TopicPartition(name, 0))
     val removedSegment = removedLog.activeSegment
-    val indexFilesAfterDelete = Seq(removedSegment.index.file, removedSegment.timeIndex.file,
+    val indexFilesAfterDelete = Seq(removedSegment.offsetIndex.file, removedSegment.timeIndex.file,
       removedSegment.txnIndex.file)
 
     assertEquals(new File(removedLog.dir, logName), removedSegment.log.file)
-    assertEquals(new File(removedLog.dir, indexName), removedSegment.index.file)
+    assertEquals(new File(removedLog.dir, indexName), removedSegment.offsetIndex.file)
     assertEquals(new File(removedLog.dir, timeIndexName), removedSegment.timeIndex.file)
     assertEquals(new File(removedLog.dir, txnIndexName), removedSegment.txnIndex.file)
 
@@ -332,5 +332,10 @@ class LogManagerTest {
       assertNotEquals("File reference was not updated in index", fileBeforeDelete.getAbsolutePath,
         fileInIndex.get.getAbsolutePath)
     }
+
+    time.sleep(logManager.InitialTaskDelayMs)
+    assertTrue("Logs deleted too early", logManager.hasLogsToBeDeleted)
+    time.sleep(logManager.currentDefaultConfig.fileDeleteDelayMs - logManager.InitialTaskDelayMs)
+    assertFalse("Logs not deleted", logManager.hasLogsToBeDeleted)
   }
 }

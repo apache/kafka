@@ -91,6 +91,14 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
     }
 
     @Test(expected = ConfigException.class)
+    public void emptyConnectorName() {
+        Map<String, String> props = new HashMap<>();
+        props.put("name", "");
+        props.put("connector.class", TestConnector.class.getName());
+        new ConnectorConfig(MOCK_PLUGINS, props);
+    }
+
+    @Test(expected = ConfigException.class)
     public void wrongTransformationType() {
         Map<String, String> props = new HashMap<>();
         props.put("name", "test");
@@ -168,5 +176,5 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         assertEquals(42, ((SimpleTransformation) transformations.get(0)).magicNumber);
         assertEquals(84, ((SimpleTransformation) transformations.get(1)).magicNumber);
     }
-    
+
 }

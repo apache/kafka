@@ -65,7 +65,26 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
                                    keySchema.hasNextCondition(keyFrom, keyTo, from, to),
                                    binaryFrom, binaryTo);
     }
-
+    
+    @Override
+    public KeyValueIterator<Bytes, byte[]> all() {
+        
+        final List<Segment> searchSpace = segments.allSegments();
+        
+        return new SegmentIterator(searchSpace.iterator(),
+                                   keySchema.hasNextCondition(null, null, 0, Long.MAX_VALUE),
+                                   null, null);
+    }
+    
+    @Override
+    public KeyValueIterator<Bytes, byte[]> fetchAll(final long timeFrom, final long timeTo) {
+        final List<Segment> searchSpace = segments.segments(timeFrom, timeTo);
+        
+        return new SegmentIterator(searchSpace.iterator(),
+                                   keySchema.hasNextCondition(null, null, timeFrom, timeTo),
+                                   null, null);
+    }
+    
     @Override
     public void remove(final Bytes key) {
         final Segment segment = segments.getSegmentForTimestamp(keySchema.segmentTimestamp(key));
@@ -107,7 +126,7 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
         segments.openExisting(context);
 
         // register and possibly restore the state from the logs
-        context.register(root, false, new StateRestoreCallback() {
+        context.register(root, new StateRestoreCallback() {
             @Override
             public void restore(byte[] key, byte[] value) {
                 put(Bytes.wrap(key), value);

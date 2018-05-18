@@ -19,15 +19,19 @@ package org.apache.kafka.trogdor.fault;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import org.apache.kafka.trogdor.common.JsonUtil;
+import org.apache.kafka.trogdor.task.TaskController;
+import org.apache.kafka.trogdor.task.TaskSpec;
+import org.apache.kafka.trogdor.task.TaskWorker;
 
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
-import java.util.Objects;
+import java.util.Set;
 
 /**
  * The specification for a fault that creates a network partition.
  */
-public class NetworkPartitionFaultSpec extends AbstractFaultSpec {
+public class NetworkPartitionFaultSpec extends TaskSpec {
     private final List<List<String>> partitions;
 
     @JsonCreator
@@ -35,7 +39,7 @@ public class NetworkPartitionFaultSpec extends AbstractFaultSpec {
                          @JsonProperty("durationMs") long durationMs,
                          @JsonProperty("partitions") List<List<String>> partitions) {
         super(startMs, durationMs);
-        this.partitions = partitions;
+        this.partitions = partitions == null ? new ArrayList<List<String>>() : partitions;
     }
 
     @JsonProperty
@@ -44,22 +48,28 @@ public class NetworkPartitionFaultSpec extends AbstractFaultSpec {
     }
 
     @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        NetworkPartitionFaultSpec that = (NetworkPartitionFaultSpec) o;
-        return Objects.equals(startMs(), that.startMs()) &&
-            Objects.equals(durationMs(), that.durationMs()) &&
-            Objects.equals(partitions, that.partitions);
+    public TaskController newController(String id) {
+        return new NetworkPartitionFaultController(partitionSets());
     }
 
     @Override
-    public int hashCode() {
-        return Objects.hash(startMs(), durationMs(), partitions);
+    public TaskWorker newTaskWorker(String id) {
+        return new NetworkPartitionFaultWorker(id, partitionSets());
     }
 
-    @Override
-    public String toString() {
-        return JsonUtil.toJsonString(this);
+    private List<Set<String>> partitionSets() {
+        List<Set<String>> partitionSets = new ArrayList<>();
+        HashSet<String> prevNodes = new HashSet<>();
+        for (List<String> partition : this.partitions()) {
+            for (String nodeName : partition) {
+                if (prevNodes.contains(nodeName)) {
+                    throw new RuntimeException("Node " + nodeName +
+                        " appears in more than one partition.");
+                }
+                prevNodes.add(nodeName);
+                partitionSets.add(new HashSet<>(partition));
+            }
+        }
+        return partitionSets;
     }
 }

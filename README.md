@@ -4,7 +4,7 @@ See our [web site](http://kafka.apache.org) for details on the project.
 
 You need to have [Gradle](http://www.gradle.org/installation) and [Java](http://www.oracle.com/technetwork/java/javase/downloads/index.html) installed.
 
-Kafka requires Gradle 2.0 or higher.
+Kafka requires Gradle 3.0 or higher.
 
 Java 7 should be used for building in order to support both Java 7 and Java 8 at runtime.
 
@@ -77,9 +77,9 @@ The release file can be found inside `./core/build/distributions/`.
     ./gradlew clean
 
 ### Running a task on a particular version of Scala (either 2.11.x or 2.12.x) ###
-*Note that if building the jars with a version other than 2.11.11, you need to set the `SCALA_VERSION` variable or change it in `bin/kafka-run-class.sh` to run the quick start.*
+*Note that if building the jars with a version other than 2.11.12, you need to set the `SCALA_VERSION` variable or change it in `bin/kafka-run-class.sh` to run the quick start.*
 
-You can pass either the major version (eg 2.11) or the full version (eg 2.11.11):
+You can pass either the major version (eg 2.11) or the full version (eg 2.11.12):
 
     ./gradlew -PscalaVersion=2.11 jar
     ./gradlew -PscalaVersion=2.11 test

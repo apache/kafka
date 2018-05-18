@@ -16,10 +16,13 @@
  */
 package org.apache.kafka.clients;
 
+import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.utils.Time;
@@ -70,6 +73,7 @@ public class MockClient implements KafkaClient {
 
     }
 
+    private int correlation;
     private final Time time;
     private final Metadata metadata;
     private Set<String> unavailableTopics;
@@ -77,6 +81,8 @@ public class MockClient implements KafkaClient {
     private Node node = null;
     private final Set<String> ready = new HashSet<>();
     private final Map<Node, Long> blackedOut = new HashMap<>();
+    private final Map<Node, Long> pendingAuthenticationErrors = new HashMap<>();
+    private final Map<Node, AuthenticationException> authenticationErrors = new HashMap<>();
     // Use concurrent queue for requests so that requests may be queried from a different thread
     private final Queue<ClientRequest> requests = new ConcurrentLinkedDeque<>();
     // Use concurrent queue for responses so that responses may be updated during poll() from a different thread.
@@ -84,7 +90,8 @@ public class MockClient implements KafkaClient {
     private final Queue<FutureResponse> futureResponses = new ArrayDeque<>();
     private final Queue<MetadataUpdate> metadataUpdates = new ArrayDeque<>();
     private volatile NodeApiVersions nodeApiVersions = NodeApiVersions.create();
-
+    private volatile int numBlockingWakeups = 0;
+    private final AtomicInteger totalRequestCount = new AtomicInteger(0);
     public MockClient(Time time) {
         this(time, null);
     }
@@ -104,17 +111,32 @@ public class MockClient implements KafkaClient {
     public boolean ready(Node node, long now) {
         if (isBlackedOut(node))
             return false;
+        authenticationErrors.remove(node);
         ready.add(node.idString());
         return true;
     }
 
     @Override
     public long connectionDelay(Node node, long now) {
+        Long blackoutExpiration = blackedOut.get(node);
+        if (blackoutExpiration != null)
+            return Math.max(0, blackoutExpiration - now);
         return 0;
     }
 
     public void blackout(Node node, long duration) {
         blackedOut.put(node, time.milliseconds() + duration);
+    }
+
+    public void authenticationFailed(Node node, long duration) {
+        pendingAuthenticationErrors.remove(node);
+        authenticationErrors.put(node, (AuthenticationException) Errors.SASL_AUTHENTICATION_FAILED.exception());
+        disconnect(node.idString());
+        blackout(node, duration);
+    }
+
+    public void createPendingAuthenticationError(Node node, long blackoutMs) {
+        pendingAuthenticationErrors.put(node, blackoutMs);
     }
 
     private boolean isBlackedOut(Node node) {
@@ -137,7 +159,7 @@ public class MockClient implements KafkaClient {
 
     @Override
     public AuthenticationException authenticationException(Node node) {
-        return null;
+        return authenticationErrors.get(node);
     }
 
     @Override
@@ -158,6 +180,26 @@ public class MockClient implements KafkaClient {
 
     @Override
     public void send(ClientRequest request, long now) {
+        // Check if the request is directed to a node with a pending authentication error.
+        for (Iterator<Map.Entry<Node, Long>> authErrorIter =
+             pendingAuthenticationErrors.entrySet().iterator(); authErrorIter.hasNext(); ) {
+            Map.Entry<Node, Long> entry = authErrorIter.next();
+            Node node = entry.getKey();
+            long blackoutMs = entry.getValue();
+            if (node.idString().equals(request.destination())) {
+                authErrorIter.remove();
+                // Set up a disconnected ClientResponse and create an authentication error
+                // for the affected node.
+                authenticationFailed(node, blackoutMs);
+                AbstractRequest.Builder<?> builder = request.requestBuilder();
+                short version = nodeApiVersions.latestUsableVersion(request.apiKey(), builder.oldestAllowedVersion(),
+                    builder.latestAllowedVersion());
+                ClientResponse resp = new ClientResponse(request.makeHeader(version), request.callback(), request.destination(),
+                    request.createdTimeMs(), time.milliseconds(), true, null, null);
+                responses.add(resp);
+                return;
+            }
+        }
         Iterator<FutureResponse> iterator = futureResponses.iterator();
         while (iterator.hasNext()) {
             FutureResponse futureResp = iterator.next();
@@ -187,8 +229,40 @@ public class MockClient implements KafkaClient {
         this.requests.add(request);
     }
 
+    /**
+     * Simulate a blocking poll in order to test wakeup behavior.
+     *
+     * @param numBlockingWakeups The number of polls which will block until woken up
+     */
+    public synchronized void enableBlockingUntilWakeup(int numBlockingWakeups) {
+        this.numBlockingWakeups = numBlockingWakeups;
+    }
+
+    @Override
+    public synchronized void wakeup() {
+        if (numBlockingWakeups > 0) {
+            numBlockingWakeups--;
+            notify();
+        }
+    }
+
+    private synchronized void maybeAwaitWakeup() {
+        try {
+            int remainingBlockingWakeups = numBlockingWakeups;
+            if (remainingBlockingWakeups <= 0)
+                return;
+
+            while (numBlockingWakeups == remainingBlockingWakeups)
+                wait();
+        } catch (InterruptedException e) {
+            throw new InterruptException(e);
+        }
+    }
+
     @Override
     public List<ClientResponse> poll(long timeoutMs, long now) {
+        maybeAwaitWakeup();
+
         List<ClientResponse> copy = new ArrayList<>(this.responses);
 
         if (metadata != null && metadata.updateRequested()) {
@@ -198,6 +272,12 @@ public class MockClient implements KafkaClient {
             if (metadataUpdate == null)
                 metadata.update(metadata.fetch(), this.unavailableTopics, time.milliseconds());
             else {
+                if (metadataUpdate.expectMatchRefreshTopics
+                    && !metadata.topics().equals(metadataUpdate.cluster.topics())) {
+                    throw new IllegalStateException("The metadata topics does not match expectation. "
+                                                        + "Expected topics: " + metadataUpdate.cluster.topics()
+                                                        + ", asked topics: " + metadata.topics());
+                }
                 this.unavailableTopics = metadataUpdate.unavailableTopics;
                 metadata.update(metadataUpdate.cluster, metadataUpdate.unavailableTopics, time.milliseconds());
             }
@@ -341,10 +421,22 @@ public class MockClient implements KafkaClient {
         responses.clear();
         futureResponses.clear();
         metadataUpdates.clear();
+        authenticationErrors.clear();
+        totalRequestCount.set(0);
+    }
+
+    public boolean hasPendingMetadataUpdates() {
+        return !metadataUpdates.isEmpty();
     }
 
     public void prepareMetadataUpdate(Cluster cluster, Set<String> unavailableTopics) {
-        metadataUpdates.add(new MetadataUpdate(cluster, unavailableTopics));
+        metadataUpdates.add(new MetadataUpdate(cluster, unavailableTopics, false));
+    }
+
+    public void prepareMetadataUpdate(Cluster cluster,
+                                      Set<String> unavailableTopics,
+                                      boolean expectMatchMetadataTopics) {
+        metadataUpdates.add(new MetadataUpdate(cluster, unavailableTopics, expectMatchMetadataTopics));
     }
 
     public void setNode(Node node) {
@@ -363,6 +455,10 @@ public class MockClient implements KafkaClient {
     @Override
     public boolean hasInFlightRequests() {
         return !requests.isEmpty();
+    }
+
+    public boolean hasPendingResponses() {
+        return !responses.isEmpty();
     }
 
     @Override
@@ -394,12 +490,9 @@ public class MockClient implements KafkaClient {
     @Override
     public ClientRequest newClientRequest(String nodeId, AbstractRequest.Builder<?> requestBuilder, long createdTimeMs,
                                           boolean expectResponse, RequestCompletionHandler callback) {
-        return new ClientRequest(nodeId, requestBuilder, 0, "mockClientId", createdTimeMs,
+        totalRequestCount.incrementAndGet();
+        return new ClientRequest(nodeId, requestBuilder, correlation++, "mockClientId", createdTimeMs,
                 expectResponse, callback);
-    }
-
-    @Override
-    public void wakeup() {
     }
 
     @Override
@@ -433,9 +526,16 @@ public class MockClient implements KafkaClient {
     private static class MetadataUpdate {
         final Cluster cluster;
         final Set<String> unavailableTopics;
-        MetadataUpdate(Cluster cluster, Set<String> unavailableTopics) {
+        final boolean expectMatchRefreshTopics;
+        MetadataUpdate(Cluster cluster, Set<String> unavailableTopics, boolean expectMatchRefreshTopics) {
             this.cluster = cluster;
             this.unavailableTopics = unavailableTopics;
+            this.expectMatchRefreshTopics = expectMatchRefreshTopics;
         }
+    }
+
+    // visible for testing
+    public int totalRequestCount() {
+        return totalRequestCount.get();
     }
 }

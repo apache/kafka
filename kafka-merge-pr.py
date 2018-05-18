@@ -48,8 +48,8 @@ CAPITALIZED_PROJECT_NAME = "kafka".upper()
 REPO_HOME = os.environ.get("%s_HOME" % CAPITALIZED_PROJECT_NAME, os.getcwd())
 # Remote name which points to the GitHub site
 PR_REMOTE_NAME = os.environ.get("PR_REMOTE_NAME", "apache-github")
-# Remote name which points to Apache git
-PUSH_REMOTE_NAME = os.environ.get("PUSH_REMOTE_NAME", "apache")
+# Remote name where we want to push the changes to (GitHub by default, but Apache Git would work if GitHub is down)
+PUSH_REMOTE_NAME = os.environ.get("PUSH_REMOTE_NAME", "apache-github")
 # ASF JIRA username
 JIRA_USERNAME = os.environ.get("JIRA_USERNAME", "")
 # ASF JIRA password
@@ -70,7 +70,7 @@ TEMP_BRANCH_PREFIX = "PR_TOOL"
 
 DEV_BRANCH_NAME = "trunk"
 
-DEFAULT_FIX_VERSION = os.environ.get("DEFAULT_FIX_VERSION", "1.1.0")
+DEFAULT_FIX_VERSION = os.environ.get("DEFAULT_FIX_VERSION", "2.0.0")
 
 def get_json(url):
     try:
@@ -157,16 +157,22 @@ def merge_pr(pr_num, target_ref, title, body, pr_repo_desc):
     merge_message_flags = []
 
     merge_message_flags += ["-m", title]
+    
     if body is not None:
-        # We remove @ symbols from the body to avoid triggering e-mails
-        # to people every time someone creates a public fork of the project.
-        merge_message_flags += ["-m", body.replace("@", "")]
+        # Remove "Committer Checklist" section
+        checklist_index = body.find("### Committer Checklist")
+        if checklist_index != -1:
+            body = body[:checklist_index].rstrip()
+        # Remove @ symbols from the body to avoid triggering e-mails to people every time someone creates a
+        # public fork of the project.
+        body = body.replace("@", "")
+        merge_message_flags += ["-m", body]
 
     authors = "\n".join(["Author: %s" % a for a in distinct_authors])
 
     merge_message_flags += ["-m", authors]
 
-    if (reviewers != ""):
+    if reviewers != "":
         merge_message_flags += ["-m", "Reviewers: %s" % reviewers]
 
     if had_conflicts:

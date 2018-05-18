@@ -21,7 +21,6 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
-import org.apache.kafka.streams.kstream.internals.SessionKeySerde;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
@@ -64,8 +63,8 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
 
     public void init(final ProcessorContext context, final StateStore root) {
         topic = ProcessorStateManager.storeChangelogTopic(context.applicationId(), root.name());
-        bytesStore.init(context, root);
         initInternal((InternalProcessorContext) context);
+        bytesStore.init(context, root);
     }
 
     @SuppressWarnings("unchecked")
@@ -141,7 +140,7 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
     @Override
     public void put(final Windowed<Bytes> key, byte[] value) {
         validateStoreOpen();
-        final Bytes binaryKey = SessionKeySerde.bytesToBinary(key);
+        final Bytes binaryKey = Bytes.wrap(SessionKeySchema.toBinary(key));
         final LRUCacheEntry entry = new LRUCacheEntry(value, true, context.offset(),
                                                       key.window().end(), context.partition(), context.topic());
         cache.put(cacheName, cacheFunction.cacheKey(binaryKey), entry);
@@ -160,14 +159,12 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
         return findSessions(from, to, 0, Long.MAX_VALUE);
     }
 
-
-
     private void putAndMaybeForward(final ThreadCache.DirtyEntry entry, final InternalProcessorContext context) {
         final Bytes binaryKey = cacheFunction.key(entry.key());
         final RecordContext current = context.recordContext();
         context.setRecordContext(entry.recordContext());
         try {
-            final Windowed<K> key = SessionKeySerde.from(binaryKey.get(), serdes.keyDeserializer(), topic);
+            final Windowed<K> key = SessionKeySchema.from(binaryKey.get(), serdes.keyDeserializer(), topic);
             final Bytes rawKey = Bytes.wrap(serdes.rawKey(key.key()));
             if (flushListener != null) {
                 final AGG newValue = serdes.valueFrom(entry.newValue());
@@ -183,8 +180,7 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
     }
 
     private AGG fetchPrevious(final Bytes rawKey, final Window window) {
-        try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = bytesStore
-                .findSessions(rawKey, window.start(), window.end())) {
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = bytesStore.findSessions(rawKey, window.start(), window.end())) {
             if (!iterator.hasNext()) {
                 return null;
             }

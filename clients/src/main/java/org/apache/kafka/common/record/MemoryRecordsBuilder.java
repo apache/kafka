@@ -23,6 +23,7 @@ import org.apache.kafka.common.utils.ByteBufferOutputStream;
 
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.ByteBuffer;
 
 import static org.apache.kafka.common.utils.Utils.wrapNullable;
@@ -38,11 +39,15 @@ import static org.apache.kafka.common.utils.Utils.wrapNullable;
  */
 public class MemoryRecordsBuilder {
     private static final float COMPRESSION_RATE_ESTIMATION_FACTOR = 1.05f;
+    private static final DataOutputStream CLOSED_STREAM = new DataOutputStream(new OutputStream() {
+        @Override
+        public void write(int b) throws IOException {
+            throw new IllegalStateException("MemoryRecordsBuilder is closed for record appends");
+        }
+    });
 
     private final TimestampType timestampType;
     private final CompressionType compressionType;
-    // Used to append records, may compress data on the fly
-    private final DataOutputStream appendStream;
     // Used to hold a reference to the underlying ByteBuffer so that we can write the record batch header and access
     // the written bytes. ByteBufferOutputStream allocates a new ByteBuffer if the existing one is not large enough,
     // so it's not safe to hold a direct reference to the underlying ByteBuffer.
@@ -60,7 +65,8 @@ public class MemoryRecordsBuilder {
     // from previous batches before appending any records.
     private float estimatedCompressionRatio = 1.0F;
 
-    private boolean appendStreamIsClosed = false;
+    // Used to append records, may compress data on the fly
+    private DataOutputStream appendStream;
     private boolean isTransactional;
     private long producerId;
     private short producerEpoch;
@@ -265,12 +271,13 @@ public class MemoryRecordsBuilder {
      * possible to update the RecordBatch header.
      */
     public void closeForRecordAppends() {
-        if (!appendStreamIsClosed) {
+        if (appendStream != CLOSED_STREAM) {
             try {
                 appendStream.close();
-                appendStreamIsClosed = true;
             } catch (IOException e) {
                 throw new KafkaException(e);
+            } finally {
+                appendStream = CLOSED_STREAM;
             }
         }
     }
@@ -384,7 +391,7 @@ public class MemoryRecordsBuilder {
     }
 
     /**
-     * Append a record and return its checksum for message format v0 and v1, or null for for v2 and above.
+     * Append a record and return its checksum for message format v0 and v1, or null for v2 and above.
      */
     private Long appendWithOffset(long offset, boolean isControlRecord, long timestamp, ByteBuffer key,
                                   ByteBuffer value, Header[] headers) {
@@ -663,7 +670,7 @@ public class MemoryRecordsBuilder {
     }
 
     private void ensureOpenForRecordAppend() {
-        if (appendStreamIsClosed)
+        if (appendStream == CLOSED_STREAM)
             throw new IllegalStateException("Tried to append a record, but MemoryRecordsBuilder is closed for record appends");
     }
 
@@ -738,7 +745,7 @@ public class MemoryRecordsBuilder {
     public boolean isFull() {
         // note that the write limit is respected only after the first record is added which ensures we can always
         // create non-empty batches (this is used to disable batching when the producer's batch size is set to 0).
-        return appendStreamIsClosed || (this.numRecords > 0 && this.writeLimit <= estimatedBytesWritten());
+        return appendStream == CLOSED_STREAM || (this.numRecords > 0 && this.writeLimit <= estimatedBytesWritten());
     }
 
     /**

@@ -1,4 +1,4 @@
-/*
+/**
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -86,7 +86,15 @@ object ControllerState {
     def value = 11
   }
 
+  case object ControllerShutdown extends ControllerState {
+    def value = 12
+  }
+
+  case object UncleanLeaderElectionEnable extends ControllerState {
+    def value = 13
+  }
+
   val values: Seq[ControllerState] = Seq(Idle, ControllerChange, BrokerChange, TopicChange, TopicDeletion,
     PartitionReassignment, AutoLeaderBalance, ManualLeaderBalance, ControlledShutdown, IsrChange, LeaderAndIsrResponseReceived,
-    LogDirChange)
+    LogDirChange, ControllerShutdown, UncleanLeaderElectionEnable)
 }

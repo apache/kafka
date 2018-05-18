@@ -37,6 +37,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
+import static org.apache.kafka.common.config.ConfigDef.NonEmptyStringWithoutControlChars.nonEmptyStringWithoutControlChars;
 
 /**
  * <p>
@@ -72,6 +73,13 @@ public class ConnectorConfig extends AbstractConfig {
     public static final String VALUE_CONVERTER_CLASS_DOC = WorkerConfig.VALUE_CONVERTER_CLASS_DOC;
     public static final String VALUE_CONVERTER_CLASS_DISPLAY = "Value converter class";
 
+    public static final String HEADER_CONVERTER_CLASS_CONFIG = WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG;
+    public static final String HEADER_CONVERTER_CLASS_DOC = WorkerConfig.HEADER_CONVERTER_CLASS_DOC;
+    public static final String HEADER_CONVERTER_CLASS_DISPLAY = "Header converter class";
+    // The Connector config should not have a default for the header converter, since the absence of a config property means that
+    // the worker config settings should be used. Thus, we set the default to null here.
+    public static final String HEADER_CONVERTER_CLASS_DEFAULT = null;
+
     public static final String TASKS_MAX_CONFIG = "tasks.max";
     private static final String TASKS_MAX_DOC = "Maximum number of tasks to use for this connector.";
     public static final int TASKS_MAX_DEFAULT = 1;
@@ -89,28 +97,30 @@ public class ConnectorConfig extends AbstractConfig {
             super(configDef, props);
         }
 
+        @Override
         public Object get(String key) {
             return super.get(key);
         }
     }
 
     public static ConfigDef configDef() {
+        int orderInGroup = 0;
         return new ConfigDef()
-                .define(NAME_CONFIG, Type.STRING, Importance.HIGH, NAME_DOC, COMMON_GROUP, 1, Width.MEDIUM, NAME_DISPLAY)
-                .define(CONNECTOR_CLASS_CONFIG, Type.STRING, Importance.HIGH, CONNECTOR_CLASS_DOC, COMMON_GROUP, 2, Width.LONG, CONNECTOR_CLASS_DISPLAY)
-                .define(TASKS_MAX_CONFIG, Type.INT, TASKS_MAX_DEFAULT, atLeast(TASKS_MIN_CONFIG), Importance.HIGH, TASKS_MAX_DOC, COMMON_GROUP, 3, Width.SHORT, TASK_MAX_DISPLAY)
-                .define(KEY_CONVERTER_CLASS_CONFIG, Type.CLASS, null, Importance.LOW, KEY_CONVERTER_CLASS_DOC, COMMON_GROUP, 4, Width.SHORT, KEY_CONVERTER_CLASS_DISPLAY)
-                .define(VALUE_CONVERTER_CLASS_CONFIG, Type.CLASS, null, Importance.LOW, VALUE_CONVERTER_CLASS_DOC, COMMON_GROUP, 5, Width.SHORT, VALUE_CONVERTER_CLASS_DISPLAY)
-                .define(TRANSFORMS_CONFIG, Type.LIST, null, new ConfigDef.Validator() {
+                .define(NAME_CONFIG, Type.STRING, ConfigDef.NO_DEFAULT_VALUE, nonEmptyStringWithoutControlChars(), Importance.HIGH, NAME_DOC, COMMON_GROUP, ++orderInGroup, Width.MEDIUM, NAME_DISPLAY)
+                .define(CONNECTOR_CLASS_CONFIG, Type.STRING, Importance.HIGH, CONNECTOR_CLASS_DOC, COMMON_GROUP, ++orderInGroup, Width.LONG, CONNECTOR_CLASS_DISPLAY)
+                .define(TASKS_MAX_CONFIG, Type.INT, TASKS_MAX_DEFAULT, atLeast(TASKS_MIN_CONFIG), Importance.HIGH, TASKS_MAX_DOC, COMMON_GROUP, ++orderInGroup, Width.SHORT, TASK_MAX_DISPLAY)
+                .define(KEY_CONVERTER_CLASS_CONFIG, Type.CLASS, null, Importance.LOW, KEY_CONVERTER_CLASS_DOC, COMMON_GROUP, ++orderInGroup, Width.SHORT, KEY_CONVERTER_CLASS_DISPLAY)
+                .define(VALUE_CONVERTER_CLASS_CONFIG, Type.CLASS, null, Importance.LOW, VALUE_CONVERTER_CLASS_DOC, COMMON_GROUP, ++orderInGroup, Width.SHORT, VALUE_CONVERTER_CLASS_DISPLAY)
+                .define(HEADER_CONVERTER_CLASS_CONFIG, Type.CLASS, HEADER_CONVERTER_CLASS_DEFAULT, Importance.LOW, HEADER_CONVERTER_CLASS_DOC, COMMON_GROUP, ++orderInGroup, Width.SHORT, HEADER_CONVERTER_CLASS_DISPLAY)
+                .define(TRANSFORMS_CONFIG, Type.LIST, Collections.emptyList(), ConfigDef.CompositeValidator.of(new ConfigDef.NonNullValidator(), new ConfigDef.Validator() {
                     @Override
                     public void ensureValid(String name, Object value) {
-                        if (value == null) return;
                         final List<String> transformAliases = (List<String>) value;
                         if (transformAliases.size() > new HashSet<>(transformAliases).size()) {
                             throw new ConfigException(name, value, "Duplicate alias provided.");
                         }
                     }
-                }, Importance.LOW, TRANSFORMS_DOC, TRANSFORMS_GROUP, 6, Width.LONG, TRANSFORMS_DISPLAY);
+                }), Importance.LOW, TRANSFORMS_DOC, TRANSFORMS_GROUP, ++orderInGroup, Width.LONG, TRANSFORMS_DISPLAY);
     }
 
     public ConnectorConfig(Plugins plugins) {
@@ -139,9 +149,6 @@ public class ConnectorConfig extends AbstractConfig {
      */
     public <R extends ConnectRecord<R>> List<Transformation<R>> transformations() {
         final List<String> transformAliases = getList(TRANSFORMS_CONFIG);
-        if (transformAliases == null || transformAliases.isEmpty()) {
-            return Collections.emptyList();
-        }
 
         final List<Transformation<R>> transformations = new ArrayList<>(transformAliases.size());
         for (String alias : transformAliases) {

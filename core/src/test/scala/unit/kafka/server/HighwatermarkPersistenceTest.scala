@@ -25,7 +25,8 @@ import org.easymock.EasyMock
 import org.junit._
 import org.junit.Assert._
 import kafka.cluster.Replica
-import kafka.utils.{KafkaScheduler, MockTime, TestUtils, ZkUtils}
+import kafka.utils.{KafkaScheduler, MockTime, TestUtils}
+import kafka.zk.KafkaZkClient
 import java.util.concurrent.atomic.AtomicBoolean
 
 import org.apache.kafka.common.TopicPartition
@@ -34,7 +35,7 @@ class HighwatermarkPersistenceTest {
 
   val configs = TestUtils.createBrokerConfigs(2, TestUtils.MockZkConnect).map(KafkaConfig.fromProps)
   val topic = "foo"
-  val zkUtils = EasyMock.createMock(classOf[ZkUtils])
+  val zkClient = EasyMock.createMock(classOf[KafkaZkClient])
   val logManagers = configs map { config =>
     TestUtils.createLogManager(
       logDirs = config.logDirs.map(new File(_)),
@@ -54,7 +55,7 @@ class HighwatermarkPersistenceTest {
   @Test
   def testHighWatermarkPersistenceSinglePartition() {
     // mock zkclient
-    EasyMock.replay(zkUtils)
+    EasyMock.replay(zkClient)
 
     // create kafka scheduler
     val scheduler = new KafkaScheduler(2)
@@ -62,8 +63,8 @@ class HighwatermarkPersistenceTest {
     val metrics = new Metrics
     val time = new MockTime
     // create replica manager
-    val replicaManager = new ReplicaManager(configs.head, metrics, time, zkUtils, scheduler,
-      logManagers.head, new AtomicBoolean(false), QuotaFactory.instantiate(configs.head, metrics, time),
+    val replicaManager = new ReplicaManager(configs.head, metrics, time, zkClient, scheduler,
+      logManagers.head, new AtomicBoolean(false), QuotaFactory.instantiate(configs.head, metrics, time, ""),
       new BrokerTopicStats, new MetadataCache(configs.head.brokerId), logDirFailureChannels.head)
     replicaManager.startup()
     try {
@@ -86,7 +87,7 @@ class HighwatermarkPersistenceTest {
       replicaManager.checkpointHighWatermarks()
       fooPartition0Hw = hwmFor(replicaManager, topic, 0)
       assertEquals(leaderReplicaPartition0.highWatermark.messageOffset, fooPartition0Hw)
-      EasyMock.verify(zkUtils)
+      EasyMock.verify(zkClient)
     } finally {
       // shutdown the replica manager upon test completion
       replicaManager.shutdown(false)
@@ -100,15 +101,15 @@ class HighwatermarkPersistenceTest {
     val topic1 = "foo1"
     val topic2 = "foo2"
     // mock zkclient
-    EasyMock.replay(zkUtils)
+    EasyMock.replay(zkClient)
     // create kafka scheduler
     val scheduler = new KafkaScheduler(2)
     scheduler.startup
     val metrics = new Metrics
     val time = new MockTime
     // create replica manager
-    val replicaManager = new ReplicaManager(configs.head, metrics, time, zkUtils,
-      scheduler, logManagers.head, new AtomicBoolean(false), QuotaFactory.instantiate(configs.head, metrics, time),
+    val replicaManager = new ReplicaManager(configs.head, metrics, time, zkClient,
+      scheduler, logManagers.head, new AtomicBoolean(false), QuotaFactory.instantiate(configs.head, metrics, time, ""),
       new BrokerTopicStats, new MetadataCache(configs.head.brokerId), logDirFailureChannels.head)
     replicaManager.startup()
     try {
@@ -155,7 +156,7 @@ class HighwatermarkPersistenceTest {
       // verify checkpointed hw for topic 1
       topic1Partition0Hw = hwmFor(replicaManager, topic1, 0)
       assertEquals(10L, topic1Partition0Hw)
-      EasyMock.verify(zkUtils)
+      EasyMock.verify(zkClient)
     } finally {
       // shutdown the replica manager upon test completion
       replicaManager.shutdown(false)

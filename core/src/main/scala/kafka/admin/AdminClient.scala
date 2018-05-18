@@ -34,7 +34,8 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.requests.ApiVersionsResponse.ApiVersion
 import org.apache.kafka.common.requests.DescribeGroupsResponse.GroupMetadata
 import org.apache.kafka.common.requests.OffsetFetchResponse
-import org.apache.kafka.common.utils.{LogContext, KafkaThread, Time, Utils}
+import org.apache.kafka.common.utils.LogContext
+import org.apache.kafka.common.utils.{KafkaThread, Time, Utils}
 import org.apache.kafka.common.{Cluster, Node, TopicPartition}
 
 import scala.collection.JavaConverters._
@@ -167,7 +168,7 @@ class AdminClient(val time: Time,
   }
 
   def listAllGroups(): Map[Node, List[GroupOverview]] = {
-    findAllBrokers.map { broker =>
+    findAllBrokers().map { broker =>
       broker -> {
         try {
           listGroups(broker)
@@ -182,16 +183,22 @@ class AdminClient(val time: Time,
 
   def listAllConsumerGroups(): Map[Node, List[GroupOverview]] = {
     listAllGroups().mapValues { groups =>
-      groups.filter(_.protocolType == ConsumerProtocol.PROTOCOL_TYPE)
+      groups.filter(isConsumerGroup)
     }
   }
 
   def listAllGroupsFlattened(): List[GroupOverview] = {
-    listAllGroups.values.flatten.toList
+    listAllGroups().values.flatten.toList
   }
 
   def listAllConsumerGroupsFlattened(): List[GroupOverview] = {
-    listAllGroupsFlattened.filter(_.protocolType == ConsumerProtocol.PROTOCOL_TYPE)
+    listAllGroupsFlattened().filter(isConsumerGroup)
+  }
+
+  private def isConsumerGroup(group: GroupOverview): Boolean = {
+    // Consumer groups which are using group management use the "consumer" protocol type.
+    // Consumer groups which are only using offset storage will have an empty protocol type.
+    group.protocolType.isEmpty || group.protocolType == ConsumerProtocol.PROTOCOL_TYPE
   }
 
   def listGroupOffsets(groupId: String): Map[TopicPartition, Long] = {
@@ -200,12 +207,12 @@ class AdminClient(val time: Time,
     val response = responseBody.asInstanceOf[OffsetFetchResponse]
     if (response.hasError)
       throw response.error.exception
-    response.maybeThrowFirstPartitionError
+    response.maybeThrowFirstPartitionError()
     response.responseData.asScala.map { case (tp, partitionData) => (tp, partitionData.offset) }.toMap
   }
 
   def listAllBrokerVersionInfo(): Map[Node, Try[NodeApiVersions]] =
-    findAllBrokers.map { broker =>
+    findAllBrokers().map { broker =>
       broker -> Try[NodeApiVersions](new NodeApiVersions(getApiVersions(broker).asJava))
     }.toMap
 
@@ -333,6 +340,50 @@ class AdminClient(val time: Time,
     ConsumerGroupSummary(metadata.state, metadata.protocol, Some(consumers), coordinator)
   }
 
+  def deleteConsumerGroups(groups: List[String]): Map[String, Errors] = {
+
+    def coordinatorLookup(group: String): Either[Node, Errors] = {
+      try {
+        Left(findCoordinator(group))
+      } catch {
+        case e: Throwable =>
+          if (e.isInstanceOf[TimeoutException])
+            Right(Errors.COORDINATOR_NOT_AVAILABLE)
+          else
+            Right(Errors.forException(e))
+      }
+    }
+
+    var errors: Map[String, Errors] = Map()
+    var groupsPerCoordinator: Map[Node, List[String]] = Map()
+
+    groups.foreach { group =>
+      coordinatorLookup(group) match {
+        case Right(error) =>
+          errors += group -> error
+        case Left(coordinator) =>
+          groupsPerCoordinator.get(coordinator) match {
+            case Some(gList) =>
+              val gListNew = group :: gList
+              groupsPerCoordinator += coordinator -> gListNew
+            case None =>
+              groupsPerCoordinator += coordinator -> List(group)
+          }
+      }
+    }
+
+    groupsPerCoordinator.foreach { case (coordinator, groups) =>
+      val responseBody = send(coordinator, ApiKeys.DELETE_GROUPS, new DeleteGroupsRequest.Builder(groups.toSet.asJava))
+      val response = responseBody.asInstanceOf[DeleteGroupsResponse]
+      groups.foreach {
+        case group if response.hasError(group) => errors += group -> response.errors.get(group)
+        case group => errors += group -> Errors.NONE
+      }
+    }
+
+    errors
+  }
+
   def close() {
     running = false
     try {
@@ -448,18 +499,20 @@ object AdminClient {
     val bootstrapCluster = Cluster.bootstrap(brokerAddresses)
     metadata.update(bootstrapCluster, Collections.emptySet(), 0)
 
+    val clientId = "admin-" + AdminClientIdSequence.getAndIncrement()
+
     val selector = new Selector(
       DefaultConnectionMaxIdleMs,
       metrics,
       time,
       "admin",
       channelBuilder,
-      new LogContext())
+      new LogContext(String.format("[Producer clientId=%s] ", clientId)))
 
     val networkClient = new NetworkClient(
       selector,
       metadata,
-      "admin-" + AdminClientIdSequence.getAndIncrement(),
+      clientId,
       DefaultMaxInFlightRequestsPerConnection,
       DefaultReconnectBackoffMs,
       DefaultReconnectBackoffMax,
@@ -469,15 +522,16 @@ object AdminClient {
       time,
       true,
       new ApiVersions,
-      new LogContext())
+      new LogContext(String.format("[NetworkClient clientId=%s] ", clientId)))
 
     val highLevelClient = new ConsumerNetworkClient(
-      new LogContext(),
+      new LogContext(String.format("[ConsumerNetworkClient clientId=%s] ", clientId)),
       networkClient,
       metadata,
       time,
       retryBackoffMs,
-      requestTimeoutMs.toLong)
+      requestTimeoutMs.toLong,
+      Integer.MAX_VALUE)
 
     new AdminClient(
       time,

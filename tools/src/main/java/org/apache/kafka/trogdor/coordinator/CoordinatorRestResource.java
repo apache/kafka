@@ -16,21 +16,41 @@
  */
 package org.apache.kafka.trogdor.coordinator;
 
-import org.apache.kafka.trogdor.rest.CoordinatorFaultsResponse;
+import org.apache.kafka.trogdor.rest.CoordinatorShutdownRequest;
 import org.apache.kafka.trogdor.rest.CoordinatorStatusResponse;
-import org.apache.kafka.trogdor.rest.CreateCoordinatorFaultRequest;
+import org.apache.kafka.trogdor.rest.CreateTaskRequest;
+import org.apache.kafka.trogdor.rest.DestroyTaskRequest;
 import org.apache.kafka.trogdor.rest.Empty;
+import org.apache.kafka.trogdor.rest.StopTaskRequest;
+import org.apache.kafka.trogdor.rest.TasksRequest;
+import org.apache.kafka.trogdor.rest.TasksResponse;
 
 import javax.servlet.ServletContext;
 import javax.ws.rs.Consumes;
+import javax.ws.rs.DELETE;
+import javax.ws.rs.DefaultValue;
 import javax.ws.rs.GET;
+import javax.ws.rs.POST;
 import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
+import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
-
+/**
+ * The REST resource for the Coordinator. This describes the RPCs which the coordinator
+ * can accept.
+ *
+ * RPCs should be idempotent.  This is important because if the server's response is
+ * lost, the client will simply retransmit the same request. The server's response must
+ * be the same the second time around.
+ *
+ * We return the empty JSON object {} rather than void for RPCs that have no results.
+ * This ensures that if we want to add more return results later, we can do so in a
+ * compatible way.
+ */
 @Path("/coordinator")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
@@ -46,27 +66,45 @@ public class CoordinatorRestResource {
 
     @GET
     @Path("/status")
-    public CoordinatorStatusResponse getStatus() throws Throwable {
-        return new CoordinatorStatusResponse(coordinator().startTimeMs());
+    public CoordinatorStatusResponse status() throws Throwable {
+        return coordinator().status();
     }
 
-    @GET
-    @Path("/faults")
-    public CoordinatorFaultsResponse getCoordinatorFaults() throws Throwable {
-        return coordinator().getFaults();
-    }
-
-    @PUT
-    @Path("/fault")
-    public Empty putCoordinatorFault(CreateCoordinatorFaultRequest request) throws Throwable {
-        coordinator().createFault(request);
+    @POST
+    @Path("/task/create")
+    public Empty createTask(CreateTaskRequest request) throws Throwable {
+        coordinator().createTask(request);
         return Empty.INSTANCE;
     }
 
     @PUT
+    @Path("/task/stop")
+    public Empty stopTask(StopTaskRequest request) throws Throwable {
+        coordinator().stopTask(request);
+        return Empty.INSTANCE;
+    }
+
+    @DELETE
+    @Path("/tasks")
+    public Empty destroyTask(@DefaultValue("") @QueryParam("taskId") String taskId) throws Throwable {
+        coordinator().destroyTask(new DestroyTaskRequest(taskId));
+        return Empty.INSTANCE;
+    }
+
+    @GET
+    @Path("/tasks")
+    public TasksResponse tasks(@QueryParam("taskId") List<String> taskId,
+            @DefaultValue("0") @QueryParam("firstStartMs") int firstStartMs,
+            @DefaultValue("0") @QueryParam("lastStartMs") int lastStartMs,
+            @DefaultValue("0") @QueryParam("firstEndMs") int firstEndMs,
+            @DefaultValue("0") @QueryParam("lastEndMs") int lastEndMs) throws Throwable {
+        return coordinator().tasks(new TasksRequest(taskId, firstStartMs, lastStartMs, firstEndMs, lastEndMs));
+    }
+
+    @PUT
     @Path("/shutdown")
-    public Empty shutdown() throws Throwable {
-        coordinator().beginShutdown();
+    public Empty beginShutdown(CoordinatorShutdownRequest request) throws Throwable {
+        coordinator().beginShutdown(request.stopAgents());
         return Empty.INSTANCE;
     }
 

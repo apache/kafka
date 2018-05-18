@@ -27,10 +27,12 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.test.TestUtils;
 
 import java.io.File;
@@ -44,6 +46,8 @@ import java.util.Properties;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+
+import static org.apache.kafka.streams.processor.internals.ConsumerUtils.poll;
 
 public class SmokeTestDriver extends SmokeTestUtil {
 
@@ -93,10 +97,16 @@ public class SmokeTestDriver extends SmokeTestUtil {
             }
         };
 
-        SmokeTestClient streams1 = new SmokeTestClient(createDir(stateDir, "1"), kafka);
-        SmokeTestClient streams2 = new SmokeTestClient(createDir(stateDir, "2"), kafka);
-        SmokeTestClient streams3 = new SmokeTestClient(createDir(stateDir, "3"), kafka);
-        SmokeTestClient streams4 = new SmokeTestClient(createDir(stateDir, "4"), kafka);
+        final Properties props = new Properties();
+        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
+        props.put(StreamsConfig.STATE_DIR_CONFIG, createDir(stateDir, "1").getAbsolutePath());
+        SmokeTestClient streams1 = new SmokeTestClient(props);
+        props.put(StreamsConfig.STATE_DIR_CONFIG, createDir(stateDir, "2").getAbsolutePath());
+        SmokeTestClient streams2 = new SmokeTestClient(props);
+        props.put(StreamsConfig.STATE_DIR_CONFIG, createDir(stateDir, "3").getAbsolutePath());
+        SmokeTestClient streams3 = new SmokeTestClient(props);
+        props.put(StreamsConfig.STATE_DIR_CONFIG, createDir(stateDir, "4").getAbsolutePath());
+        SmokeTestClient streams4 = new SmokeTestClient(props);
 
         System.out.println("starting the driver");
         driver.start();
@@ -129,65 +139,110 @@ public class SmokeTestDriver extends SmokeTestUtil {
         System.out.println("shutdown");
     }
 
-    public static Map<String, Set<Integer>> generate(String kafka, final int numKeys, final int maxRecordsPerKey) {
+    public static Map<String, Set<Integer>> generate(final String kafka,
+                                                     final int numKeys,
+                                                     final int maxRecordsPerKey) {
+        return generate(kafka, numKeys, maxRecordsPerKey, true);
+    }
+
+    public static Map<String, Set<Integer>> generate(final String kafka,
+                                                     final int numKeys,
+                                                     final int maxRecordsPerKey,
+                                                     final boolean autoTerminate) {
         final Properties producerProps = new Properties();
         producerProps.put(ProducerConfig.CLIENT_ID_CONFIG, "SmokeTest");
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
-        // the next 4 config values make sure that all records are produced with no loss and
-        // no duplicates
+        // the next 2 config values make sure that all records are produced with no loss and no duplicates
         producerProps.put(ProducerConfig.RETRIES_CONFIG, Integer.MAX_VALUE);
         producerProps.put(ProducerConfig.ACKS_CONFIG, "all");
+        producerProps.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, 80000);
 
-        KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps);
+        final KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps);
 
         int numRecordsProduced = 0;
 
-        Map<String, Set<Integer>> allData = new HashMap<>();
-        ValueList[] data = new ValueList[numKeys];
+        final Map<String, Set<Integer>> allData = new HashMap<>();
+        final ValueList[] data = new ValueList[numKeys];
         for (int i = 0; i < numKeys; i++) {
             data[i] = new ValueList(i, i + maxRecordsPerKey - 1);
             allData.put(data[i].key, new HashSet<Integer>());
         }
-        Random rand = new Random();
+        final Random rand = new Random();
 
-        int remaining = data.length;
+        int remaining = 1; // dummy value must be positive if <autoTerminate> is false
+        if (autoTerminate) {
+            remaining = data.length;
+        }
+
+        List<ProducerRecord<byte[], byte[]>> needRetry = new ArrayList<>();
 
         while (remaining > 0) {
-            int index = rand.nextInt(remaining);
-            String key = data[index].key;
+            final int index = autoTerminate ? rand.nextInt(remaining) : rand.nextInt(numKeys);
+            final String key = data[index].key;
             int value = data[index].next();
 
-            if (value < 0) {
+            if (autoTerminate && value < 0) {
                 remaining--;
                 data[index] = data[remaining];
             } else {
 
-                ProducerRecord<byte[], byte[]> record =
-                        new ProducerRecord<>("data", stringSerde.serializer().serialize("", key), intSerde.serializer().serialize("", value));
+                final ProducerRecord<byte[], byte[]> record =
+                    new ProducerRecord<>("data", stringSerde.serializer().serialize("", key), intSerde.serializer().serialize("", value));
 
-                producer.send(record, new Callback() {
-                    @Override
-                    public void onCompletion(final RecordMetadata metadata, final Exception exception) {
-                        if (exception != null) {
-                            exception.printStackTrace();
-                            Exit.exit(1);
-                        }
-                    }
-                });
-
+                producer.send(record, new TestCallback(record, needRetry));
 
                 numRecordsProduced++;
                 allData.get(key).add(value);
-                if (numRecordsProduced % 100 == 0)
+                if (numRecordsProduced % 100 == 0) {
                     System.out.println(numRecordsProduced + " records produced");
+                }
                 Utils.sleep(2);
-
             }
         }
+        producer.flush();
+
+        int remainingRetries = 5;
+        while (!needRetry.isEmpty()) {
+            final List<ProducerRecord<byte[], byte[]>> needRetry2 = new ArrayList<>();
+            for (final ProducerRecord<byte[], byte[]> record : needRetry) {
+                producer.send(record, new TestCallback(record, needRetry2));
+            }
+            producer.flush();
+            needRetry = needRetry2;
+
+            if (--remainingRetries == 0 && !needRetry.isEmpty()) {
+                System.err.println("Failed to produce all records after multiple retries");
+                Exit.exit(1);
+            }
+        }
+
         producer.close();
         return Collections.unmodifiableMap(allData);
+    }
+
+    private static class TestCallback implements Callback {
+        private final ProducerRecord<byte[], byte[]> originalRecord;
+        private final List<ProducerRecord<byte[], byte[]>> needRetry;
+
+        TestCallback(final ProducerRecord<byte[], byte[]> originalRecord,
+                     final List<ProducerRecord<byte[], byte[]>> needRetry) {
+            this.originalRecord = originalRecord;
+            this.needRetry = needRetry;
+        }
+
+        @Override
+        public void onCompletion(final RecordMetadata metadata, final Exception exception) {
+            if (exception != null) {
+                if (exception instanceof TimeoutException) {
+                    needRetry.add(originalRecord);
+                } else {
+                    exception.printStackTrace();
+                    Exit.exit(1);
+                }
+            }
+        }
     }
 
     private static void shuffle(int[] data, int windowSize) {
@@ -236,7 +291,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
         int retry = 0;
         final long start = System.currentTimeMillis();
         while (System.currentTimeMillis() - start < TimeUnit.MINUTES.toMillis(6)) {
-            ConsumerRecords<byte[], byte[]> records = consumer.poll(500);
+            ConsumerRecords<byte[], byte[]> records = poll(consumer, 500);
             if (records.isEmpty() && recordsProcessed >= recordsGenerated) {
                 if (verifyMin(min, allData, false)
                     && verifyMax(max, allData, false)

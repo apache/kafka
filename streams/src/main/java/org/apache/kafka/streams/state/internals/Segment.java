@@ -16,18 +16,17 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.processor.ProcessorContext;
 
 import java.io.IOException;
+import java.util.Objects;
 
-// Use the Bytes wrapper for underlying rocksDB keys since they are used for hashing data structures
-class Segment extends RocksDBStore<Bytes, byte[]> {
+class Segment extends RocksDBStore implements Comparable<Segment> {
     public final long id;
 
     Segment(String segmentName, String windowName, long id) {
-        super(segmentName, windowName, WindowStoreUtils.INNER_KEY_SERDE, WindowStoreUtils.INNER_VALUE_SERDE);
+        super(segmentName, windowName);
         this.id = id;
     }
 
@@ -36,14 +35,31 @@ class Segment extends RocksDBStore<Bytes, byte[]> {
     }
 
     @Override
+    public int compareTo(Segment segment) {
+        return Long.compare(id, segment.id);
+    }
+
+    @Override
     public void openDB(final ProcessorContext context) {
         super.openDB(context);
-
         // skip the registering step
     }
 
     @Override
     public String toString() {
         return "Segment(id=" + id + ", name=" + name() + ")";
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj == null || getClass() != obj.getClass()) return false;
+
+        Segment segment = (Segment) obj;
+        return Long.compare(id, segment.id) == 0;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id);
     }
 }

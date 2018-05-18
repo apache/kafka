@@ -28,7 +28,8 @@ public final class KafkaMetric implements Metric {
     private final MetricValueProvider<?> metricValueProvider;
     private MetricConfig config;
 
-    KafkaMetric(Object lock, MetricName metricName, MetricValueProvider<?> valueProvider,
+    // public for testing
+    public KafkaMetric(Object lock, MetricName metricName, MetricValueProvider<?> valueProvider,
             MetricConfig config, Time time) {
         this.metricName = metricName;
         this.lock = lock;
@@ -54,9 +55,7 @@ public final class KafkaMetric implements Metric {
     @Override
     @Deprecated
     public double value() {
-        synchronized (this.lock) {
-            return measurableValue(time.milliseconds());
-        }
+        return measurableValue(time.milliseconds());
     }
 
     @Override
@@ -80,10 +79,12 @@ public final class KafkaMetric implements Metric {
     }
 
     double measurableValue(long timeMs) {
-        if (this.metricValueProvider instanceof Measurable)
-            return ((Measurable) metricValueProvider).measure(config, timeMs);
-        else
-            return 0;
+        synchronized (this.lock) {
+            if (this.metricValueProvider instanceof Measurable)
+                return ((Measurable) metricValueProvider).measure(config, timeMs);
+            else
+                return 0;
+        }
     }
 
     public void config(MetricConfig config) {

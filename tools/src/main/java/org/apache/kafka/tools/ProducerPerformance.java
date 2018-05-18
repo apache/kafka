@@ -289,7 +289,7 @@ public class ProducerPerformance {
                .metavar("TRANSACTION-DURATION")
                .dest("transactionDurationMs")
                .setDefault(0L)
-               .help("The max age of each transaction. The commitTransaction will be called after this this time has elapsed. Transactions are only enabled if this value is positive.");
+               .help("The max age of each transaction. The commitTransaction will be called after this time has elapsed. Transactions are only enabled if this value is positive.");
 
 
         return parser;
@@ -315,7 +315,6 @@ public class ProducerPerformance {
         public Stats(long numRecords, int reportingInterval) {
             this.start = System.currentTimeMillis();
             this.windowStart = System.currentTimeMillis();
-            this.index = 0;
             this.iteration = 0;
             this.sampling = (int) (numRecords / Math.min(numRecords, 500000));
             this.latencies = new int[(int) (numRecords / this.sampling) + 1];

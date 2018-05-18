@@ -17,6 +17,7 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention;
 import org.apache.kafka.common.utils.Utils;
@@ -37,6 +38,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 @RunWith(value = Parameterized.class)
 public class MemoryRecordsTest {
@@ -607,6 +609,36 @@ public class MemoryRecordsTest {
     }
 
     @Test
+    public void testToString() {
+        long timestamp = 1000000;
+        MemoryRecords memoryRecords = MemoryRecords.withRecords(magic, compression,
+                new SimpleRecord(timestamp, "key1".getBytes(), "value1".getBytes()),
+                new SimpleRecord(timestamp + 1, "key2".getBytes(), "value2".getBytes()));
+        switch (magic) {
+            case RecordBatch.MAGIC_VALUE_V0:
+                assertEquals("[(record=LegacyRecordBatch(offset=0, Record(magic=0, attributes=0, compression=NONE, " +
+                                "crc=1978725405, key=4 bytes, value=6 bytes))), (record=LegacyRecordBatch(offset=1, Record(magic=0, " +
+                                "attributes=0, compression=NONE, crc=1964753830, key=4 bytes, value=6 bytes)))]",
+                        memoryRecords.toString());
+                break;
+            case RecordBatch.MAGIC_VALUE_V1:
+                assertEquals("[(record=LegacyRecordBatch(offset=0, Record(magic=1, attributes=0, compression=NONE, " +
+                        "crc=97210616, CreateTime=1000000, key=4 bytes, value=6 bytes))), (record=LegacyRecordBatch(offset=1, " +
+                        "Record(magic=1, attributes=0, compression=NONE, crc=3535988507, CreateTime=1000001, key=4 bytes, " +
+                        "value=6 bytes)))]",
+                        memoryRecords.toString());
+                break;
+            case RecordBatch.MAGIC_VALUE_V2:
+                assertEquals("[(record=DefaultRecord(offset=0, timestamp=1000000, key=4 bytes, value=6 bytes)), " +
+                                "(record=DefaultRecord(offset=1, timestamp=1000001, key=4 bytes, value=6 bytes))]",
+                        memoryRecords.toString());
+                break;
+            default:
+                fail("Unexpected magic " + magic);
+        }
+    }
+
+    @Test
     public void testFilterTo() {
         ByteBuffer buffer = ByteBuffer.allocate(2048);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 0L);
@@ -760,6 +792,47 @@ public class MemoryRecordsTest {
                 assertEquals(TimestampType.LOG_APPEND_TIME, batch.timestampType());
                 assertEquals(logAppendTime, batch.maxTimestamp());
             }
+        }
+    }
+
+    @Test
+    public void testNextBatchSize() {
+        ByteBuffer buffer = ByteBuffer.allocate(2048);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression,
+                TimestampType.LOG_APPEND_TIME, 0L, logAppendTime, pid, epoch, firstSequence);
+        builder.append(10L, null, "abc".getBytes());
+        builder.close();
+
+        buffer.flip();
+        int size = buffer.remaining();
+        MemoryRecords records = MemoryRecords.readableRecords(buffer);
+        assertEquals(size, records.firstBatchSize().intValue());
+        assertEquals(0, buffer.position());
+
+        buffer.limit(1); // size not in buffer
+        assertEquals(null, records.firstBatchSize());
+        buffer.limit(Records.LOG_OVERHEAD); // magic not in buffer
+        assertEquals(null, records.firstBatchSize());
+        buffer.limit(Records.HEADER_SIZE_UP_TO_MAGIC); // payload not in buffer
+        assertEquals(size, records.firstBatchSize().intValue());
+
+        buffer.limit(size);
+        byte magic = buffer.get(Records.MAGIC_OFFSET);
+        buffer.put(Records.MAGIC_OFFSET, (byte) 10);
+        try {
+            records.firstBatchSize();
+            fail("Did not fail with corrupt magic");
+        } catch (CorruptRecordException e) {
+            // Expected exception
+        }
+        buffer.put(Records.MAGIC_OFFSET, magic);
+
+        buffer.put(Records.SIZE_OFFSET + 3, (byte) 0);
+        try {
+            records.firstBatchSize();
+            fail("Did not fail with corrupt size");
+        } catch (CorruptRecordException e) {
+            // Expected exception
         }
     }
 

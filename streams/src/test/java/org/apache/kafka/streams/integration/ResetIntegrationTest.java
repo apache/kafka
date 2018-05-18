@@ -19,13 +19,16 @@ package org.apache.kafka.streams.integration;
 import kafka.server.KafkaConfig$;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.test.IntegrationTest;
-import org.junit.AfterClass;
+
+import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
+import java.util.Map;
 import java.util.Properties;
+
 
 /**
  * Tests local state store and global application cleanup.
@@ -35,27 +38,38 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
 
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER;
+
+    private static final String TEST_ID = "reset-integration-test";
+
     static {
-        final Properties props = new Properties();
+        final Properties brokerProps = new Properties();
         // we double the value passed to `time.sleep` in each iteration in one of the map functions, so we disable
         // expiration of connections by the brokers to avoid errors when `AdminClient` sends requests after potentially
         // very long sleep times
-        props.put(KafkaConfig$.MODULE$.ConnectionsMaxIdleMsProp(), -1L);
-        // we align time to seconds to get clean window boundaries and thus ensure the same result for each run
-        // otherwise, input records could fall into different windows for different runs depending on the initial mock time
-        final long alignedTime = (System.currentTimeMillis() / 1000) * 1000;
-        CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS, props, alignedTime);
-        cluster = CLUSTER;
+        brokerProps.put(KafkaConfig$.MODULE$.ConnectionsMaxIdleMsProp(), -1L);
+        CLUSTER = new EmbeddedKafkaCluster(1, brokerProps);
     }
 
-    @AfterClass
-    public static void globalCleanup() {
-        afterClassGlobalCleanup();
+    @Override
+    Map<String, Object> getClientSslConfig() {
+        return null;
     }
 
     @Before
     public void before() throws Exception {
-        beforePrepareTest();
+        testId = TEST_ID;
+        cluster = CLUSTER;
+        prepareTest();
+    }
+
+    @After
+    public void after() throws Exception {
+        cleanupTest();
+    }
+
+    @Test
+    public void testReprocessingFromScratchAfterResetWithoutIntermediateUserTopic() throws Exception {
+        super.testReprocessingFromScratchAfterResetWithoutIntermediateUserTopic();
     }
 
     @Test
@@ -64,7 +78,32 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
     }
 
     @Test
-    public void testReprocessingFromScratchAfterResetWithoutIntermediateUserTopic() throws Exception {
-        super.testReprocessingFromScratchAfterResetWithoutIntermediateUserTopic();
+    public void testReprocessingFromFileAfterResetWithoutIntermediateUserTopic() throws Exception {
+        super.testReprocessingFromFileAfterResetWithoutIntermediateUserTopic();
+    }
+
+    @Test
+    public void testReprocessingFromDateTimeAfterResetWithoutIntermediateUserTopic() throws Exception {
+        super.testReprocessingFromDateTimeAfterResetWithoutIntermediateUserTopic();
+    }
+
+    @Test
+    public void testReprocessingByDurationAfterResetWithoutIntermediateUserTopic() throws Exception {
+        super.testReprocessingByDurationAfterResetWithoutIntermediateUserTopic();
+    }
+
+    @Test
+    public void shouldNotAllowToResetWhileStreamsRunning() throws Exception {
+        super.shouldNotAllowToResetWhileStreamsIsRunning();
+    }
+
+    @Test
+    public void shouldNotAllowToResetWhenInputTopicAbsent() throws Exception {
+        super.shouldNotAllowToResetWhenInputTopicAbsent();
+    }
+
+    @Test
+    public void shouldNotAllowToResetWhenIntermediateTopicAbsent() throws Exception {
+        super.shouldNotAllowToResetWhenIntermediateTopicAbsent();
     }
 }

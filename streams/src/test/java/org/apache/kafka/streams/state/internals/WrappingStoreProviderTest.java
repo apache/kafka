@@ -17,11 +17,13 @@
 package org.apache.kafka.streams.state.internals;
 
 
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.state.NoOpWindowStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
+import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.StateStoreProviderStub;
 import org.junit.Before;
 import org.junit.Test;
@@ -42,9 +44,15 @@ public class WrappingStoreProviderTest {
         final StateStoreProviderStub stubProviderTwo = new StateStoreProviderStub(false);
 
 
-        stubProviderOne.addStore("kv", StateStoreTestUtils.newKeyValueStore("kv", "app-id", String.class, String.class));
+        stubProviderOne.addStore("kv", Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore("kv"),
+                Serdes.serdeFrom(String.class),
+                Serdes.serdeFrom(String.class))
+                .build());
         stubProviderOne.addStore("window", new NoOpWindowStore());
-        stubProviderTwo.addStore("kv", StateStoreTestUtils.newKeyValueStore("kv", "app-id", String.class, String.class));
+        stubProviderTwo.addStore("kv", Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore("kv"),
+                Serdes.serdeFrom(String.class),
+                Serdes.serdeFrom(String.class))
+                .build());
         stubProviderTwo.addStore("window", new NoOpWindowStore());
 
         wrappingStoreProvider = new WrappingStoreProvider(

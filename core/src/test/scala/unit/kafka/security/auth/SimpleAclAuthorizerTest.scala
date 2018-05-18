@@ -237,12 +237,12 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
     //test remove all acls for resource
     simpleAclAuthorizer.removeAcls(resource)
     TestUtils.waitAndVerifyAcls(Set.empty[Acl], simpleAclAuthorizer, resource)
-    assertTrue(!zkUtils.pathExists(simpleAclAuthorizer.toResourcePath(resource)))
+    assertTrue(!zkClient.resourceExists(resource))
 
-    //test removing last acl also deletes zookeeper path
+    //test removing last acl also deletes ZooKeeper path
     acls = changeAclAndVerify(Set.empty[Acl], Set(acl1), Set.empty[Acl])
     changeAclAndVerify(acls, Set.empty[Acl], acls)
-    assertTrue(!zkUtils.pathExists(simpleAclAuthorizer.toResourcePath(resource)))
+    assertTrue(!zkClient.resourceExists(resource))
   }
 
   @Test
@@ -258,7 +258,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
     val acls1 = Set[Acl](acl2)
     simpleAclAuthorizer.addAcls(acls1, resource1)
 
-    zkUtils.deletePathRecursive(SimpleAclAuthorizer.AclChangedZkPath)
+    zkClient.deleteAclChangeNotifications
     val authorizer = new SimpleAclAuthorizer
     try {
       authorizer.configure(config.originals)
@@ -405,7 +405,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
   def testHighConcurrencyDeletionOfResourceAcls() {
     val acl = new Acl(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username), Allow, WildCardHost, All)
 
-    // Alternate authorizer to keep adding and removing zookeeper path
+    // Alternate authorizer to keep adding and removing ZooKeeper path
     val concurrentFuctions = (0 to 50).map { _ =>
       () => {
         simpleAclAuthorizer.addAcls(Set(acl), resource)

@@ -17,9 +17,11 @@
 package org.apache.kafka.common.config;
 
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
+import org.apache.kafka.common.utils.Utils;
 
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.TrustManagerFactory;
+import java.util.Set;
 
 public class SslConfigs {
     /*
@@ -135,4 +137,13 @@ public class SslConfigs {
                 .define(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, ConfigDef.Type.STRING, null, ConfigDef.Importance.LOW, SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_DOC)
                 .define(SslConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG, ConfigDef.Type.STRING, null, ConfigDef.Importance.LOW, SslConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_DOC);
     }
+
+    public static final Set<String> RECONFIGURABLE_CONFIGS = Utils.mkSet(
+            SslConfigs.SSL_KEYSTORE_TYPE_CONFIG,
+            SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG,
+            SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG,
+            SslConfigs.SSL_KEY_PASSWORD_CONFIG,
+            SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG,
+            SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG,
+            SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG);
 }

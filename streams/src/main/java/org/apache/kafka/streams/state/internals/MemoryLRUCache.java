@@ -37,12 +37,9 @@ import java.util.Objects;
  *  * Note that the use of array-typed keys is discouraged because they result in incorrect ordering behavior.
  * If you intend to work on byte arrays as key, for example, you may want to wrap them with the {@code Bytes} class,
  * i.e. use {@code RocksDBStore<Bytes, ...>} rather than {@code RocksDBStore<byte[], ...>}.
-
  *
  * @param <K> The key type
  * @param <V> The value type
- *
- * @see org.apache.kafka.streams.state.Stores#create(String)
  */
 public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
 
@@ -61,9 +58,12 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
                                             // in the future we should augment the StateRestoreCallback with onComplete etc to better resolve this.
     private volatile boolean open = true;
 
-    EldestEntryRemovalListener<K, V> listener;
+    private EldestEntryRemovalListener<K, V> listener;
 
-    MemoryLRUCache(String name, final int maxCacheSize, Serde<K> keySerde, Serde<V> valueSerde) {
+    MemoryLRUCache(final String name,
+                   final int maxCacheSize,
+                   final Serde<K> keySerde,
+                   final Serde<V> valueSerde) {
         this.name = name;
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
@@ -87,7 +87,7 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
         return new InMemoryKeyValueLoggedStore<>(this, keySerde, valueSerde);
     }
 
-    MemoryLRUCache<K, V> whenEldestRemoved(EldestEntryRemovalListener<K, V> listener) {
+    MemoryLRUCache<K, V> whenEldestRemoved(final EldestEntryRemovalListener<K, V> listener) {
         this.listener = listener;
 
         return this;
@@ -108,13 +108,13 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
             valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
 
         // register the store
-        context.register(root, false, new StateRestoreCallback() {
+        context.register(root, new StateRestoreCallback() {
             @Override
             public void restore(byte[] key, byte[] value) {
                 restoring = true;
                 // check value for null, to avoid  deserialization error.
                 if (value == null) {
-                    put(serdes.keyFrom(key), null);
+                    delete(serdes.keyFrom(key));
                 } else {
                     put(serdes.keyFrom(key), serdes.valueFrom(value));
                 }
@@ -134,19 +134,24 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
-    public synchronized V get(K key) {
+    public synchronized V get(final K key) {
         Objects.requireNonNull(key);
+
         return this.map.get(key);
     }
 
     @Override
-    public synchronized void put(K key, V value) {
+    public synchronized void put(final K key, final V value) {
         Objects.requireNonNull(key);
-        this.map.put(key, value);
+        if (value == null) {
+            this.map.remove(key);
+        } else {
+            this.map.put(key, value);
+        }
     }
 
     @Override
-    public synchronized V putIfAbsent(K key, V value) {
+    public synchronized V putIfAbsent(final K key, final V value) {
         Objects.requireNonNull(key);
         V originalValue = get(key);
         if (originalValue == null) {
@@ -156,23 +161,22 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
-    public void putAll(List<KeyValue<K, V>> entries) {
+    public void putAll(final List<KeyValue<K, V>> entries) {
         for (KeyValue<K, V> entry : entries)
             put(entry.key, entry.value);
     }
 
     @Override
-    public synchronized V delete(K key) {
+    public synchronized V delete(final K key) {
         Objects.requireNonNull(key);
-        V value = this.map.remove(key);
-        return value;
+        return this.map.remove(key);
     }
 
     /**
      * @throws UnsupportedOperationException
      */
     @Override
-    public KeyValueIterator<K, V> range(K from, K to) {
+    public KeyValueIterator<K, V> range(final K from, final K to) {
         throw new UnsupportedOperationException("MemoryLRUCache does not support range() function.");
     }
 

@@ -16,6 +16,10 @@
 
 set -ex
 
+# The version of Kibosh to use for testing.
+# If you update this, also update tests/docker/Dockerfile
+export KIBOSH_VERSION=d85ac3ec44be0700efe605c16289fd901cfdaa13
+
 if [ -z `which javac` ]; then
     apt-get -y update
     apt-get install -y software-properties-common python-software-properties
@@ -23,13 +27,13 @@ if [ -z `which javac` ]; then
     apt-get -y update
 
     # Try to share cache. See Vagrantfile for details
-    mkdir -p /var/cache/oracle-jdk7-installer
-    if [ -e "/tmp/oracle-jdk7-installer-cache/" ]; then
-        find /tmp/oracle-jdk7-installer-cache/ -not -empty -exec cp '{}' /var/cache/oracle-jdk7-installer/ \;
+    mkdir -p /var/cache/oracle-jdk8-installer
+    if [ -e "/tmp/oracle-jdk8-installer-cache/" ]; then
+        find /tmp/oracle-jdk8-installer-cache/ -not -empty -exec cp '{}' /var/cache/oracle-jdk8-installer/ \;
     fi
-    if [ ! -e "/var/cache/oracle-jdk7-installer/jdk-7u80-linux-x64.tar.gz" ]; then
-        # Grab a copy of the JDK since it has moved and original downloader won't work
-        curl -s -L "https://s3-us-west-2.amazonaws.com/kafka-packages/jdk-7u80-linux-x64.tar.gz" -o /var/cache/oracle-jdk7-installer/jdk-7u80-linux-x64.tar.gz
+    if [ ! -e "/var/cache/oracle-jdk8-installer/jdk-8u171-linux-x64.tar.gz" ]; then
+      # Grab a copy of the JDK since it has moved and original downloader won't work
+      curl -s -L "https://s3-us-west-2.amazonaws.com/kafka-packages/jdk-8u171-linux-x64.tar.gz" -o /var/cache/oracle-jdk8-installer/jdk-8u171-linux-x64.tar.gz
     fi
 
     /bin/echo debconf shared/accepted-oracle-license-v1-1 select true | /usr/bin/debconf-set-selections
@@ -38,15 +42,15 @@ if [ -z `which javac` ]; then
     # as one line per dot in the build logs.
     # To avoid this noise we redirect all output to a file that we only show if apt-get fails.
     echo "Installing JDK..."
-    if ! apt-get -y install oracle-java7-installer oracle-java7-set-default >/tmp/jdk_install.log 2>&1 ; then
+    if ! apt-get -y install oracle-java8-installer oracle-java8-set-default >/tmp/jdk_install.log 2>&1 ; then
         cat /tmp/jdk_install.log
         echo "ERROR: JDK install failed"
         exit 1
     fi
     echo "JDK installed: $(javac -version 2>&1)"
 
-    if [ -e "/tmp/oracle-jdk7-installer-cache/" ]; then
-        cp -R /var/cache/oracle-jdk7-installer/* /tmp/oracle-jdk7-installer-cache
+    if [ -e "/tmp/oracle-jdk8-installer-cache/" ]; then
+        cp -R /var/cache/oracle-jdk8-installer/* /tmp/oracle-jdk8-installer-cache
     fi
 fi
 
@@ -82,8 +86,23 @@ get_kafka() {
     fi
 }
 
-# Test multiple Scala versions
-get_kafka 0.8.2.2 2.10
+# Install Kibosh
+apt-get update -y && apt-get install -y git cmake pkg-config libfuse-dev
+pushd /opt
+git clone -q  https://github.com/confluentinc/kibosh.git
+pushd "/opt/kibosh"
+git reset --hard $KIBOSH_VERSION
+mkdir "/opt/kibosh/build"
+pushd "/opt/kibosh/build"
+../configure && make -j 2
+popd
+popd
+popd
+
+# Test multiple Kafka versions
+# we want to use the latest Scala version per Kafka version
+# however, we cannot pull in Scala 2.12 builds atm, because Scala 2.12 requires Java 8, but we use Java 7 to run the system tests
+get_kafka 0.8.2.2 2.11
 chmod a+rw /opt/kafka-0.8.2.2
 get_kafka 0.9.0.1 2.11
 chmod a+rw /opt/kafka-0.9.0.1
@@ -93,8 +112,12 @@ get_kafka 0.10.1.1 2.11
 chmod a+rw /opt/kafka-0.10.1.1
 get_kafka 0.10.2.1 2.11
 chmod a+rw /opt/kafka-0.10.2.1
-get_kafka 0.11.0.0 2.11
-chmod a+rw /opt/kafka-0.11.0.0
+get_kafka 0.11.0.2 2.11
+chmod a+rw /opt/kafka-0.11.0.2
+get_kafka 1.0.1 2.11
+chmod a+rw /opt/kafka-1.0.1
+get_kafka 1.1.0 2.11
+chmod a+rw /opt/kafka-1.1.0
 
 
 # For EC2 nodes, we want to use /mnt, which should have the local disk. On local

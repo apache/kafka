@@ -19,7 +19,7 @@ package kafka.server
 
 import java.util.concurrent._
 import java.util.concurrent.atomic._
-import java.util.concurrent.locks.{ReentrantLock, ReentrantReadWriteLock}
+import java.util.concurrent.locks.{Lock, ReentrantLock, ReentrantReadWriteLock}
 
 import com.yammer.metrics.core.Gauge
 import kafka.metrics.KafkaMetricsGroup
@@ -43,11 +43,13 @@ import scala.collection.mutable.ListBuffer
  *
  * A subclass of DelayedOperation needs to provide an implementation of both onComplete() and tryComplete().
  */
-abstract class DelayedOperation(override val delayMs: Long) extends TimerTask with Logging {
+abstract class DelayedOperation(override val delayMs: Long,
+    lockOpt: Option[Lock] = None) extends TimerTask with Logging {
 
   private val completed = new AtomicBoolean(false)
+  private val tryCompletePending = new AtomicBoolean(false)
   // Visible for testing
-  private[server] val lock: ReentrantLock = new ReentrantLock
+  private[server] val lock: Lock = lockOpt.getOrElse(new ReentrantLock)
 
   /*
    * Force completing the delayed operation, if not already completed.
@@ -100,16 +102,38 @@ abstract class DelayedOperation(override val delayMs: Long) extends TimerTask wi
   /**
    * Thread-safe variant of tryComplete() that attempts completion only if the lock can be acquired
    * without blocking.
+   *
+   * If threadA acquires the lock and performs the check for completion before completion criteria is met
+   * and threadB satisfies the completion criteria, but fails to acquire the lock because threadA has not
+   * yet released the lock, we need to ensure that completion is attempted again without blocking threadA
+   * or threadB. `tryCompletePending` is set by threadB when it fails to acquire the lock and at least one
+   * of threadA or threadB will attempt completion of the operation if this flag is set. This ensures that
+   * every invocation of `maybeTryComplete` is followed by at least one invocation of `tryComplete` until
+   * the operation is actually completed.
    */
   private[server] def maybeTryComplete(): Boolean = {
-    if (lock.tryLock()) {
-      try {
-        tryComplete()
-      } finally {
-        lock.unlock()
+    var retry = false
+    var done = false
+    do {
+      if (lock.tryLock()) {
+        try {
+          tryCompletePending.set(false)
+          done = tryComplete()
+        } finally {
+          lock.unlock()
+        }
+        // While we were holding the lock, another thread may have invoked `maybeTryComplete` and set
+        // `tryCompletePending`. In this case we should retry.
+        retry = tryCompletePending.get()
+      } else {
+        // Another thread is holding the lock. If `tryCompletePending` is already set and this thread failed to
+        // acquire the lock, then the thread that is holding the lock is guaranteed to see the flag and retry.
+        // Otherwise, we should set the flag and retry on this thread since the thread holding the lock may have
+        // released the lock and returned by the time the flag is set.
+        retry = !tryCompletePending.getAndSet(true)
       }
-    } else
-      false
+    } while (!isCompleted && retry)
+    done
   }
 
   /*

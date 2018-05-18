@@ -24,6 +24,7 @@ import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.AbstractProcessorContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 
@@ -36,7 +37,7 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
     public Map forwardedValues = new HashMap();
 
     public NoOpProcessorContext() {
-        super(new TaskId(1, 1), "appId", streamsConfig(), new MockStreamsMetrics(new Metrics()), null, null);
+        super(new TaskId(1, 1), streamsConfig(), new MockStreamsMetrics(new Metrics()), null, null);
     }
 
     static StreamsConfig streamsConfig() {
@@ -56,11 +57,12 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
     }
 
     @Override
-    public void schedule(final long interval) {
+    public <K, V> void forward(final K key, final V value) {
+        forwardedValues.put(key, value);
     }
 
     @Override
-    public <K, V> void forward(final K key, final V value) {
+    public <K, V> void forward(final K key, final V value, final To to) {
         forwardedValues.put(key, value);
     }
 
@@ -85,7 +87,6 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
 
     @Override
     public void register(final StateStore store,
-                         final boolean deprecatedAndIgnoredLoggingEnabled,
                          final StateRestoreCallback stateRestoreCallback) {
         // no-op
     }

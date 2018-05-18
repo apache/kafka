@@ -39,10 +39,18 @@ class GroupedStreamAggregateBuilder<K, V> {
             return 0L;
         }
     };
+
     final Aggregator<K, V, Long> countAggregator = new Aggregator<K, V, Long>() {
         @Override
         public Long apply(K aggKey, V value, Long aggregate) {
             return aggregate + 1;
+        }
+    };
+
+    final Initializer<V> reduceInitializer = new Initializer<V>() {
+        @Override
+        public V apply() {
+            return null;
         }
     };
 
@@ -86,6 +94,6 @@ class GroupedStreamAggregateBuilder<K, V> {
         if (!repartitionRequired) {
             return this.name;
         }
-        return KStreamImpl.createReparitionedSource(builder, keySerde, valueSerde, queryableStoreName, name);
+        return KStreamImpl.createRepartitionedSource(builder, keySerde, valueSerde, queryableStoreName, name);
     }
 }

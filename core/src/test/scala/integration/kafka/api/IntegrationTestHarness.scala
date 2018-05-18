@@ -26,7 +26,7 @@ import java.util.Properties
 import org.apache.kafka.clients.producer.KafkaProducer
 import kafka.server.KafkaConfig
 import kafka.integration.KafkaServerTestHarness
-import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.network.{ListenerName, Mode}
 import org.junit.{After, Before}
 
 import scala.collection.mutable.Buffer
@@ -69,8 +69,8 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
 
   @Before
   override def setUp() {
-    val producerSecurityProps = TestUtils.producerSecurityConfigs(securityProtocol, trustStoreFile, clientSaslProperties)
-    val consumerSecurityProps = TestUtils.consumerSecurityConfigs(securityProtocol, trustStoreFile, clientSaslProperties)
+    val producerSecurityProps = clientSecurityProps("producer")
+    val consumerSecurityProps = clientSecurityProps("consumer")
     super.setUp()
     producerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArraySerializer])
     producerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArraySerializer])
@@ -84,7 +84,12 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
       consumers += createNewConsumer
     }
 
-    TestUtils.createOffsetsTopic(zkUtils, servers)
+    TestUtils.createOffsetsTopic(zkClient, servers)
+  }
+
+  def clientSecurityProps(certAlias: String): Properties = {
+    TestUtils.securityConfigs(Mode.CLIENT, securityProtocol, trustStoreFile, certAlias, TestUtils.SslCertificateCn,
+      clientSaslProperties)
   }
 
   def createNewProducer: KafkaProducer[Array[Byte], Array[Byte]] = {

@@ -23,7 +23,6 @@ import scala.collection.JavaConverters._
 import java.util.concurrent.atomic.AtomicLong
 import java.nio.channels.ClosedByInterruptException
 
-import org.apache.log4j.Logger
 import org.apache.kafka.clients.consumer.{ConsumerRebalanceListener, KafkaConsumer}
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.common.utils.Utils
@@ -38,13 +37,14 @@ import kafka.consumer.ConsumerTimeoutException
 import java.text.SimpleDateFormat
 import java.util.concurrent.atomic.AtomicBoolean
 
+import com.typesafe.scalalogging.LazyLogging
+
 import scala.collection.mutable
 
 /**
  * Performance test for the full zookeeper consumer
  */
-object ConsumerPerformance {
-  private val logger = Logger.getLogger(getClass())
+object ConsumerPerformance extends LazyLogging {
 
   def main(args: Array[String]): Unit = {
 
@@ -157,8 +157,6 @@ object ConsumerPerformance {
       def onPartitionsRevoked(partitions: util.Collection[TopicPartition]) {
         joinStart = System.currentTimeMillis
       }})
-    consumer.poll(0)
-    consumer.seekToBeginning(Collections.emptyList())
 
     // Now start the benchmark
     val startMs = System.currentTimeMillis
@@ -320,8 +318,8 @@ object ConsumerPerformance {
       CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServersOpt)
 
       if (options.has(newConsumerOpt)) {
-        Console.err.println("The --new-consumer option is deprecated and will be removed in a future major release." +
-          "The new consumer is used by default if the --bootstrap-server option is provided.")
+        Console.err.println("The --new-consumer option is deprecated and will be removed in a future major release. " +
+          "The new consumer is used by default if the --broker-list option is provided.")
       }
 
       import org.apache.kafka.clients.consumer.ConsumerConfig

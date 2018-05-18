@@ -16,30 +16,24 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyDescription;
-import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.StateStoreSupplier;
-import org.apache.kafka.streams.processor.internals.StreamPartitionAssignor.SubscriptionUpdates;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.streams.state.internals.RocksDBWindowStoreSupplier;
 import org.apache.kafka.test.MockProcessorSupplier;
-import org.apache.kafka.test.MockStateStoreSupplier;
+import org.apache.kafka.test.MockStoreBuilder;
 import org.apache.kafka.test.MockTimestampExtractor;
-import org.apache.kafka.test.ProcessorTopologyTestDriver;
 import org.junit.Test;
 
 import java.lang.reflect.Field;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -47,13 +41,13 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.Set;
 import java.util.regex.Pattern;
 
 import static org.apache.kafka.common.utils.Utils.mkList;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThat;
@@ -62,8 +56,9 @@ import static org.junit.Assert.fail;
 
 public class InternalTopologyBuilderTest {
 
-    private final InternalTopologyBuilder builder = new InternalTopologyBuilder();
     private final Serde<String> stringSerde = Serdes.String();
+    private final InternalTopologyBuilder builder = new InternalTopologyBuilder();
+    private final StoreBuilder storeBuilder = new MockStoreBuilder("store", false);
 
     @Test
     public void shouldAddSourceWithOffsetReset() {
@@ -265,14 +260,14 @@ public class InternalTopologyBuilderTest {
 
     @Test(expected = TopologyException.class)
     public void testAddStateStoreWithNonExistingProcessor() {
-        builder.addStateStore(new MockStateStoreSupplier("store", false), "no-such-processsor");
+        builder.addStateStore(storeBuilder, "no-such-processsor");
     }
 
     @Test
     public void testAddStateStoreWithSource() {
         builder.addSource(null, "source-1", null, null, null, "topic-1");
         try {
-            builder.addStateStore(new MockStateStoreSupplier("store", false), "source-1");
+            builder.addStateStore(storeBuilder, "source-1");
             fail("Should throw TopologyException with store cannot be added to source");
         } catch (final TopologyException expected) { /* ok */ }
     }
@@ -281,36 +276,34 @@ public class InternalTopologyBuilderTest {
     public void testAddStateStoreWithSink() {
         builder.addSink("sink-1", "topic-1", null, null, null);
         try {
-            builder.addStateStore(new MockStateStoreSupplier("store", false), "sink-1");
+            builder.addStateStore(storeBuilder, "sink-1");
             fail("Should throw TopologyException with store cannot be added to sink");
         } catch (final TopologyException expected) { /* ok */ }
     }
 
     @Test
     public void testAddStateStoreWithDuplicates() {
-        builder.addStateStore(new MockStateStoreSupplier("store", false));
+        builder.addStateStore(storeBuilder);
         try {
-            builder.addStateStore(new MockStateStoreSupplier("store", false));
+            builder.addStateStore(storeBuilder);
             fail("Should throw TopologyException with store name conflict");
         } catch (final TopologyException expected) { /* ok */ }
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void testAddStateStore() {
-        final StateStoreSupplier supplier = new MockStateStoreSupplier("store-1", false);
-        builder.addStateStore(supplier);
+        builder.addStateStore(storeBuilder);
         builder.setApplicationId("X");
         builder.addSource(null, "source-1", null, null, null, "topic-1");
         builder.addProcessor("processor-1", new MockProcessorSupplier(), "source-1");
 
         assertEquals(0, builder.build(null).stateStores().size());
 
-        builder.connectProcessorAndStateStores("processor-1", "store-1");
+        builder.connectProcessorAndStateStores("processor-1", storeBuilder.name());
 
         final List<StateStore> suppliers = builder.build(null).stateStores();
         assertEquals(1, suppliers.size());
-        assertEquals(supplier.name(), suppliers.get(0).name());
+        assertEquals(storeBuilder.name(), suppliers.get(0).name());
     }
 
     @Test
@@ -345,7 +338,6 @@ public class InternalTopologyBuilderTest {
         assertEquals(mkSet(mkSet("topic-1", "X-topic-1x", "topic-2")), new HashSet<>(copartitionGroups));
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void testTopicGroupsByStateStore() {
         builder.setApplicationId("X");
@@ -357,15 +349,14 @@ public class InternalTopologyBuilderTest {
 
         builder.addProcessor("processor-1", new MockProcessorSupplier(), "source-1");
         builder.addProcessor("processor-2", new MockProcessorSupplier(), "source-2");
-        builder.addStateStore(new MockStateStoreSupplier("store-1", false), "processor-1", "processor-2");
+        builder.addStateStore(new MockStoreBuilder("store-1", false), "processor-1", "processor-2");
 
         builder.addProcessor("processor-3", new MockProcessorSupplier(), "source-3");
         builder.addProcessor("processor-4", new MockProcessorSupplier(), "source-4");
-        builder.addStateStore(new MockStateStoreSupplier("store-2", false), "processor-3", "processor-4");
+        builder.addStateStore(new MockStoreBuilder("store-2", false), "processor-3", "processor-4");
 
         builder.addProcessor("processor-5", new MockProcessorSupplier(), "source-5");
-        final StateStoreSupplier supplier = new MockStateStoreSupplier("store-3", false);
-        builder.addStateStore(supplier);
+        builder.addStateStore(new MockStoreBuilder("store-3", false));
         builder.connectProcessorAndStateStores("processor-5", "store-3");
 
         final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
@@ -377,29 +368,15 @@ public class InternalTopologyBuilderTest {
         expectedTopicGroups.put(0, new InternalTopologyBuilder.TopicsInfo(
             Collections.<String>emptySet(), mkSet("topic-1", "topic-1x", "topic-2"),
             Collections.<String, InternalTopicConfig>emptyMap(),
-            Collections.singletonMap(
-                store1,
-                new InternalTopicConfig(
-                    store1,
-                    Collections.singleton(InternalTopicConfig.CleanupPolicy.compact),
-                    Collections.<String, String>emptyMap()))));
+            Collections.singletonMap(store1, (InternalTopicConfig) new UnwindowedChangelogTopicConfig(store1, Collections.<String, String>emptyMap()))));
         expectedTopicGroups.put(1, new InternalTopologyBuilder.TopicsInfo(
             Collections.<String>emptySet(), mkSet("topic-3", "topic-4"),
             Collections.<String, InternalTopicConfig>emptyMap(),
-            Collections.singletonMap(
-                store2,
-                new InternalTopicConfig(
-                    store2,
-                    Collections.singleton(InternalTopicConfig.CleanupPolicy.compact),
-                    Collections.<String, String>emptyMap()))));
+            Collections.singletonMap(store2, (InternalTopicConfig) new UnwindowedChangelogTopicConfig(store2, Collections.<String, String>emptyMap()))));
         expectedTopicGroups.put(2, new InternalTopologyBuilder.TopicsInfo(
             Collections.<String>emptySet(), mkSet("topic-5"),
             Collections.<String, InternalTopicConfig>emptyMap(),
-            Collections.singletonMap(store3,
-                new InternalTopicConfig(
-                    store3,
-                    Collections.singleton(InternalTopicConfig.CleanupPolicy.compact),
-                    Collections.<String, String>emptyMap()))));
+            Collections.singletonMap(store3, (InternalTopicConfig) new UnwindowedChangelogTopicConfig(store3, Collections.<String, String>emptyMap()))));
 
         assertEquals(3, topicGroups.size());
         assertEquals(expectedTopicGroups, topicGroups);
@@ -428,17 +405,17 @@ public class InternalTopologyBuilderTest {
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullNameWhenAddingSink() throws Exception {
+    public void shouldNotAllowNullNameWhenAddingSink() {
         builder.addSink(null, "topic", null, null, null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullTopicWhenAddingSink() throws Exception {
+    public void shouldNotAllowNullTopicWhenAddingSink() {
         builder.addSink("name", null, null, null, null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullNameWhenAddingProcessor() throws Exception {
+    public void shouldNotAllowNullNameWhenAddingProcessor() {
         builder.addProcessor(null, new ProcessorSupplier() {
             @Override
             public Processor get() {
@@ -448,34 +425,38 @@ public class InternalTopologyBuilderTest {
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullProcessorSupplier() throws Exception {
+    public void shouldNotAllowNullProcessorSupplier() {
         builder.addProcessor("name", null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullNameWhenAddingSource() throws Exception {
+    public void shouldNotAllowNullNameWhenAddingSource() {
         builder.addSource(null, null, null, null, null, Pattern.compile(".*"));
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullProcessorNameWhenConnectingProcessorAndStateStores() throws Exception {
+    public void shouldNotAllowNullProcessorNameWhenConnectingProcessorAndStateStores() {
         builder.connectProcessorAndStateStores(null, "store");
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAddNullInternalTopic() throws Exception {
+    public void shouldNotAllowNullStateStoreNameWhenConnectingProcessorAndStateStores() {
+        builder.connectProcessorAndStateStores("processor", new String[]{null});
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAddNullInternalTopic() {
         builder.addInternalTopic(null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotSetApplicationIdToNull() throws Exception {
+    public void shouldNotSetApplicationIdToNull() {
         builder.setApplicationId(null);
     }
 
-    @SuppressWarnings("deprecation")
     @Test(expected = NullPointerException.class)
-    public void shouldNotAddNullStateStoreSupplier() throws Exception {
-        builder.addStateStore((StateStoreSupplier) null);
+    public void shouldNotAddNullStateStoreSupplier() {
+        builder.addStateStore((StoreBuilder) null);
     }
 
     private Set<String> nodeNames(final Collection<ProcessorNode> nodes) {
@@ -487,141 +468,83 @@ public class InternalTopologyBuilderTest {
     }
 
     @Test
-    public void shouldAssociateStateStoreNameWhenStateStoreSupplierIsInternal() throws Exception {
+    public void shouldAssociateStateStoreNameWhenStateStoreSupplierIsInternal() {
         builder.addSource(null, "source", null, null, null, "topic");
         builder.addProcessor("processor", new MockProcessorSupplier(), "source");
-        builder.addStateStore(new MockStateStoreSupplier("store", false), "processor");
+        builder.addStateStore(storeBuilder, "processor");
         final Map<String, List<String>> stateStoreNameToSourceTopic = builder.stateStoreNameToSourceTopics();
         assertEquals(1, stateStoreNameToSourceTopic.size());
         assertEquals(Collections.singletonList("topic"), stateStoreNameToSourceTopic.get("store"));
     }
 
     @Test
-    public void shouldAssociateStateStoreNameWhenStateStoreSupplierIsExternal() throws Exception {
+    public void shouldAssociateStateStoreNameWhenStateStoreSupplierIsExternal() {
         builder.addSource(null, "source", null, null, null, "topic");
         builder.addProcessor("processor", new MockProcessorSupplier(), "source");
-        builder.addStateStore(new MockStateStoreSupplier("store", false), "processor");
+        builder.addStateStore(storeBuilder, "processor");
         final Map<String, List<String>> stateStoreNameToSourceTopic = builder.stateStoreNameToSourceTopics();
         assertEquals(1, stateStoreNameToSourceTopic.size());
         assertEquals(Collections.singletonList("topic"), stateStoreNameToSourceTopic.get("store"));
     }
 
     @Test
-    public void shouldCorrectlyMapStateStoreToInternalTopics() throws Exception {
+    public void shouldCorrectlyMapStateStoreToInternalTopics() {
         builder.setApplicationId("appId");
         builder.addInternalTopic("internal-topic");
         builder.addSource(null, "source", null, null, null, "internal-topic");
         builder.addProcessor("processor", new MockProcessorSupplier(), "source");
-        builder.addStateStore(new MockStateStoreSupplier("store", false), "processor");
+        builder.addStateStore(storeBuilder, "processor");
         final Map<String, List<String>> stateStoreNameToSourceTopic = builder.stateStoreNameToSourceTopics();
         assertEquals(1, stateStoreNameToSourceTopic.size());
         assertEquals(Collections.singletonList("appId-internal-topic"), stateStoreNameToSourceTopic.get("store"));
     }
 
-    @SuppressWarnings("unchecked")
     @Test
-    public void shouldAddInternalTopicConfigWithCompactAndDeleteSetForWindowStores() throws Exception {
+    public void shouldAddInternalTopicConfigForWindowStores() {
         builder.setApplicationId("appId");
         builder.addSource(null, "source", null, null, null, "topic");
         builder.addProcessor("processor", new MockProcessorSupplier(), "source");
-        builder.addStateStore(new RocksDBWindowStoreSupplier("store", 30000, 3, false, null, null, 10000, true, Collections.<String, String>emptyMap(), false), "processor");
+        builder.addStateStore(Stores.windowStoreBuilder(Stores.persistentWindowStore("store", 30000, 3, 10000, false), Serdes.String(), Serdes.String()), "processor");
         final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
         final InternalTopologyBuilder.TopicsInfo topicsInfo = topicGroups.values().iterator().next();
         final InternalTopicConfig topicConfig = topicsInfo.stateChangelogTopics.get("appId-store-changelog");
-        final Properties properties = topicConfig.toProperties(0);
-        final List<String> policies = Arrays.asList(properties.getProperty(InternalTopicManager.CLEANUP_POLICY_PROP).split(","));
-        assertEquals("appId-store-changelog", topicConfig.name());
-        assertTrue(policies.contains("compact"));
-        assertTrue(policies.contains("delete"));
-        assertEquals(2, policies.size());
-        assertEquals("30000", properties.getProperty(InternalTopicManager.RETENTION_MS));
+        final Map<String, String> properties = topicConfig.getProperties(Collections.<String, String>emptyMap(), 10000);
         assertEquals(2, properties.size());
+        assertEquals(TopicConfig.CLEANUP_POLICY_COMPACT + "," + TopicConfig.CLEANUP_POLICY_DELETE, properties.get(TopicConfig.CLEANUP_POLICY_CONFIG));
+        assertEquals("40000", properties.get(TopicConfig.RETENTION_MS_CONFIG));
+        assertEquals("appId-store-changelog", topicConfig.name());
+        assertTrue(topicConfig instanceof WindowedChangelogTopicConfig);
     }
 
-    @SuppressWarnings("unchecked")
     @Test
-    public void shouldAddInternalTopicConfigWithCompactForNonWindowStores() throws Exception {
+    public void shouldAddInternalTopicConfigForNonWindowStores() {
         builder.setApplicationId("appId");
         builder.addSource(null, "source", null, null, null, "topic");
         builder.addProcessor("processor", new MockProcessorSupplier(), "source");
-        builder.addStateStore(new MockStateStoreSupplier("name", true), "processor");
+        builder.addStateStore(storeBuilder, "processor");
         final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
         final InternalTopologyBuilder.TopicsInfo topicsInfo = topicGroups.values().iterator().next();
-        final InternalTopicConfig topicConfig = topicsInfo.stateChangelogTopics.get("appId-name-changelog");
-        final Properties properties = topicConfig.toProperties(0);
-        assertEquals("appId-name-changelog", topicConfig.name());
-        assertEquals("compact", properties.getProperty(InternalTopicManager.CLEANUP_POLICY_PROP));
+        final InternalTopicConfig topicConfig = topicsInfo.stateChangelogTopics.get("appId-store-changelog");
+        final Map<String, String> properties = topicConfig.getProperties(Collections.<String, String>emptyMap(), 10000);
         assertEquals(1, properties.size());
+        assertEquals(TopicConfig.CLEANUP_POLICY_COMPACT, properties.get(TopicConfig.CLEANUP_POLICY_CONFIG));
+        assertEquals("appId-store-changelog", topicConfig.name());
+        assertTrue(topicConfig instanceof UnwindowedChangelogTopicConfig);
     }
 
-    @SuppressWarnings("unchecked")
     @Test
-    public void shouldAddInternalTopicConfigWithCleanupPolicyDeleteForInternalTopics() throws Exception {
+    public void shouldAddInternalTopicConfigForRepartitionTopics() {
         builder.setApplicationId("appId");
         builder.addInternalTopic("foo");
         builder.addSource(null, "source", null, null, null, "foo");
         final InternalTopologyBuilder.TopicsInfo topicsInfo = builder.topicGroups().values().iterator().next();
         final InternalTopicConfig topicConfig = topicsInfo.repartitionSourceTopics.get("appId-foo");
-        final Properties properties = topicConfig.toProperties(0);
+        final Map<String, String> properties = topicConfig.getProperties(Collections.<String, String>emptyMap(), 10000);
+        assertEquals(5, properties.size());
+        assertEquals(String.valueOf(Long.MAX_VALUE), properties.get(TopicConfig.RETENTION_MS_CONFIG));
+        assertEquals(TopicConfig.CLEANUP_POLICY_DELETE, properties.get(TopicConfig.CLEANUP_POLICY_CONFIG));
         assertEquals("appId-foo", topicConfig.name());
-        assertEquals("delete", properties.getProperty(InternalTopicManager.CLEANUP_POLICY_PROP));
-        assertEquals(1, properties.size());
-    }
-
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldThrowOnUnassignedStateStoreAccess() {
-        final String sourceNodeName = "source";
-        final String goodNodeName = "goodGuy";
-        final String badNodeName = "badGuy";
-
-        final Properties config = new Properties();
-        config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "host:1");
-        config.put(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
-        final StreamsConfig streamsConfig = new StreamsConfig(config);
-
-        builder.addSource(null, sourceNodeName, null, null, null, "topic");
-        builder.addProcessor(goodNodeName, new LocalMockProcessorSupplier(), sourceNodeName);
-        builder.addStateStore(
-            Stores.create(LocalMockProcessorSupplier.STORE_NAME).withStringKeys().withStringValues().inMemory().build(),
-            goodNodeName);
-        builder.addProcessor(badNodeName, new LocalMockProcessorSupplier(), sourceNodeName);
-
-        try {
-            new ProcessorTopologyTestDriver(streamsConfig, builder);
-            fail("Should have throw StreamsException");
-        } catch (final StreamsException expected) {
-            final Throwable cause = expected.getCause();
-            if (cause == null
-                || !(cause instanceof TopologyBuilderException)
-                || !cause.getMessage().equals("Invalid topology building: Processor " + badNodeName + " has no access to StateStore " + LocalMockProcessorSupplier.STORE_NAME)) {
-                throw new RuntimeException("Did expect different exception. Did catch:", expected);
-            }
-        }
-    }
-
-    private static class LocalMockProcessorSupplier implements ProcessorSupplier {
-        final static String STORE_NAME = "store";
-
-        @Override
-        public Processor get() {
-            return new Processor() {
-                @Override
-                public void init(final ProcessorContext context) {
-                    context.getStateStore(STORE_NAME);
-                }
-
-                @Override
-                public void process(final Object key, final Object value) { }
-
-                @Override
-                public void punctuate(final long timestamp) { }
-
-                @Override
-                public void close() {
-                }
-            };
-        }
+        assertTrue(topicConfig instanceof RepartitionTopicConfig);
     }
 
     @SuppressWarnings("unchecked")
@@ -631,7 +554,7 @@ public class InternalTopologyBuilderTest {
         builder.addSource(null, "source-2", null, null, null, Pattern.compile("topic-[A-C]"));
         builder.addSource(null, "source-3", null, null, null, Pattern.compile("topic-\\d"));
 
-        final SubscriptionUpdates subscriptionUpdates = new SubscriptionUpdates();
+        final InternalTopologyBuilder.SubscriptionUpdates subscriptionUpdates = new InternalTopologyBuilder.SubscriptionUpdates();
         final Field updatedTopicsField  = subscriptionUpdates.getClass().getDeclaredField("updatedTopicSubscriptions");
         updatedTopicsField.setAccessible(true);
 
@@ -652,17 +575,15 @@ public class InternalTopologyBuilderTest {
 
     }
 
-    @SuppressWarnings("unchecked")
     @Test
-    public void shouldAddTimestampExtractorPerSource() throws Exception {
+    public void shouldAddTimestampExtractorPerSource() {
         builder.addSource(null, "source", new MockTimestampExtractor(), null, null, "topic");
         final ProcessorTopology processorTopology = builder.build(null);
         assertThat(processorTopology.source("topic").getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
     }
 
-    @SuppressWarnings("unchecked")
     @Test
-    public void shouldAddTimestampExtractorWithPatternPerSource() throws Exception {
+    public void shouldAddTimestampExtractorWithPatternPerSource() {
         final Pattern pattern = Pattern.compile("t.*");
         builder.addSource(null, "source", new MockTimestampExtractor(), null, null, pattern);
         final ProcessorTopology processorTopology = builder.build(null);
@@ -670,7 +591,7 @@ public class InternalTopologyBuilderTest {
     }
 
     @Test
-    public void shouldSortProcessorNodesCorrectly() throws Exception {
+    public void shouldSortProcessorNodesCorrectly() {
         builder.addSource(null, "source1", null, null, null, "topic1");
         builder.addSource(null, "source2", null, null, null, "topic2");
         builder.addProcessor("processor1", new MockProcessorSupplier(), "source1");
@@ -713,13 +634,14 @@ public class InternalTopologyBuilderTest {
         assertEquals(1, node.size);
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void shouldConnectRegexMatchedTopicsToStateStore() throws Exception {
         builder.addSource(null, "ingest", null, null, null, Pattern.compile("topic-\\d+"));
         builder.addProcessor("my-processor", new MockProcessorSupplier(), "ingest");
-        builder.addStateStore(new MockStateStoreSupplier("testStateStore", false), "my-processor");
+        builder.addStateStore(storeBuilder, "my-processor");
 
-        final SubscriptionUpdates subscriptionUpdates = new SubscriptionUpdates();
+        final InternalTopologyBuilder.SubscriptionUpdates subscriptionUpdates = new InternalTopologyBuilder.SubscriptionUpdates();
         final Field updatedTopicsField  = subscriptionUpdates.getClass().getDeclaredField("updatedTopicSubscriptions");
         updatedTopicsField.setAccessible(true);
 
@@ -733,7 +655,7 @@ public class InternalTopologyBuilderTest {
         builder.setApplicationId("test-app");
 
         final Map<String, List<String>> stateStoreAndTopics = builder.stateStoreNameToSourceTopics();
-        final List<String> topics = stateStoreAndTopics.get("testStateStore");
+        final List<String> topics = stateStoreAndTopics.get(storeBuilder.name());
 
         assertTrue("Expected to contain two topics", topics.size() == 2);
 
@@ -742,11 +664,12 @@ public class InternalTopologyBuilderTest {
         assertFalse(topics.contains("topic-A"));
     }
 
+    @SuppressWarnings("unchecked")
     @Test(expected = TopologyException.class)
     public void shouldNotAllowToAddGlobalStoreWithSourceNameEqualsProcessorName() {
         final String sameNameForSourceAndProcessor = "sameName";
         builder.addGlobalStore(
-            new MockStateStoreSupplier("anyName", false, false),
+            (StoreBuilder<KeyValueStore>) storeBuilder,
             sameNameForSourceAndProcessor,
             null,
             null,

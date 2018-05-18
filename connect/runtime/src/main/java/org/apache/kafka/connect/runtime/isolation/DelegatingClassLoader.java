@@ -18,8 +18,12 @@ package org.apache.kafka.connect.runtime.isolation;
 
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.storage.Converter;
+import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.transforms.Transformation;
+import org.reflections.Configuration;
 import org.reflections.Reflections;
+import org.reflections.ReflectionsException;
+import org.reflections.scanners.SubTypesScanner;
 import org.reflections.util.ClasspathHelper;
 import org.reflections.util.ConfigurationBuilder;
 import org.slf4j.Logger;
@@ -52,11 +56,13 @@ import java.util.TreeSet;
 
 public class DelegatingClassLoader extends URLClassLoader {
     private static final Logger log = LoggerFactory.getLogger(DelegatingClassLoader.class);
+    private static final String CLASSPATH_NAME = "classpath";
 
     private final Map<String, SortedMap<PluginDesc<?>, ClassLoader>> pluginLoaders;
     private final Map<String, String> aliases;
     private final SortedSet<PluginDesc<Connector>> connectors;
     private final SortedSet<PluginDesc<Converter>> converters;
+    private final SortedSet<PluginDesc<HeaderConverter>> headerConverters;
     private final SortedSet<PluginDesc<Transformation>> transformations;
     private final List<String> pluginPaths;
     private final Map<Path, PluginClassLoader> activePaths;
@@ -69,6 +75,7 @@ public class DelegatingClassLoader extends URLClassLoader {
         this.activePaths = new HashMap<>();
         this.connectors = new TreeSet<>();
         this.converters = new TreeSet<>();
+        this.headerConverters = new TreeSet<>();
         this.transformations = new TreeSet<>();
     }
 
@@ -82,6 +89,10 @@ public class DelegatingClassLoader extends URLClassLoader {
 
     public Set<PluginDesc<Converter>> converters() {
         return converters;
+    }
+
+    public Set<PluginDesc<HeaderConverter>> headerConverters() {
+        return headerConverters;
     }
 
     public Set<PluginDesc<Transformation>> transformations() {
@@ -139,10 +150,23 @@ public class DelegatingClassLoader extends URLClassLoader {
     }
 
     protected void initLoaders() {
-        String path = null;
+        for (String configPath : pluginPaths) {
+            initPluginLoader(configPath);
+        }
+        // Finally add parent/system loader.
+        initPluginLoader(CLASSPATH_NAME);
+        addAllAliases();
+    }
+
+    private void initPluginLoader(String path) {
         try {
-            for (String configPath : pluginPaths) {
-                path = configPath;
+            if (CLASSPATH_NAME.equals(path)) {
+                scanUrlsAndAddPlugins(
+                        getParent(),
+                        ClasspathHelper.forJavaClassPath().toArray(new URL[0]),
+                        null
+                );
+            } else {
                 Path pluginPath = Paths.get(path).toAbsolutePath();
                 // Update for exception handling
                 path = pluginPath.toString();
@@ -156,14 +180,6 @@ public class DelegatingClassLoader extends URLClassLoader {
                     registerPlugin(pluginPath);
                 }
             }
-
-            path = "classpath";
-            // Finally add parent/system loader.
-            scanUrlsAndAddPlugins(
-                    getParent(),
-                    ClasspathHelper.forJavaClassPath().toArray(new URL[0]),
-                    null
-            );
         } catch (InvalidPathException | MalformedURLException e) {
             log.error("Invalid path in plugin path: {}. Ignoring.", path, e);
         } catch (IOException e) {
@@ -171,7 +187,6 @@ public class DelegatingClassLoader extends URLClassLoader {
         } catch (InstantiationException | IllegalAccessException e) {
             log.error("Could not instantiate plugins in: {}. Ignoring: {}", path, e);
         }
-        addAllAliases();
     }
 
     private void registerPlugin(Path pluginLocation)
@@ -209,6 +224,8 @@ public class DelegatingClassLoader extends URLClassLoader {
             connectors.addAll(plugins.connectors());
             addPlugins(plugins.converters(), loader);
             converters.addAll(plugins.converters());
+            addPlugins(plugins.headerConverters(), loader);
+            headerConverters.addAll(plugins.headerConverters());
             addPlugins(plugins.transformations(), loader);
             transformations.addAll(plugins.transformations());
         }
@@ -221,6 +238,7 @@ public class DelegatingClassLoader extends URLClassLoader {
         // implementing the java.sql.Driver interface.
         AccessController.doPrivileged(
                 new PrivilegedAction<Void>() {
+                    @Override
                     public Void run() {
                         ServiceLoader<Driver> loadedDrivers = ServiceLoader.load(
                                 Driver.class,
@@ -255,11 +273,14 @@ public class DelegatingClassLoader extends URLClassLoader {
         ConfigurationBuilder builder = new ConfigurationBuilder();
         builder.setClassLoaders(new ClassLoader[]{loader});
         builder.addUrls(urls);
-        Reflections reflections = new Reflections(builder);
+        builder.setScanners(new SubTypesScanner());
+        builder.useParallelExecutor();
+        Reflections reflections = new InternalReflections(builder);
 
         return new PluginScanResult(
                 getPluginDesc(reflections, Connector.class, loader),
                 getPluginDesc(reflections, Converter.class, loader),
+                getPluginDesc(reflections, HeaderConverter.class, loader),
                 getPluginDesc(reflections, Transformation.class, loader)
         );
     }
@@ -314,6 +335,7 @@ public class DelegatingClassLoader extends URLClassLoader {
     private void addAllAliases() {
         addAliases(connectors);
         addAliases(converters);
+        addAliases(headerConverters);
         addAliases(transformations);
     }
 
@@ -333,6 +355,27 @@ public class DelegatingClassLoader extends URLClassLoader {
                             pruned,
                             plugin.className()
                     );
+                }
+            }
+        }
+    }
+
+    private static class InternalReflections extends Reflections {
+
+        public InternalReflections(Configuration configuration) {
+            super(configuration);
+        }
+
+        // When Reflections is used for parallel scans, it has a bug where it propagates ReflectionsException
+        // as RuntimeException.  Override the scan behavior to emulate the singled-threaded logic.
+        @Override
+        protected void scan(URL url) {
+            try {
+                super.scan(url);
+            } catch (ReflectionsException e) {
+                Logger log = Reflections.log;
+                if (log != null && log.isWarnEnabled()) {
+                    log.warn("could not create Vfs.Dir from url. ignoring the exception and continuing", e);
                 }
             }
         }

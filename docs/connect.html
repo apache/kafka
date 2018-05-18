@@ -56,7 +56,7 @@
         <li><code>offset.storage.file.filename</code> - File to store offset data in</li>
     </ul>
 
-    <p>The parameters that are configured here are intended for producers and consumers used by Kafka Connect to access the configuration, offset and status topics. For configuration of Kafka source and Kafka sink tasks, the same parameters can be used but need to be prefixed with <code>consumer.</code> and <code>producer.</code> respectively. The only parameter that is inherited from the worker configuration is <code>bootstrap.servers</code>, which in most cases will be sufficient, since the same cluster is often used for all purposes. A notable exeption is a secured cluster, which requires extra parameters to allow connections. These parameters will need to be set up to three times in the worker configuration, once for management access, once for Kafka sinks and once for Kafka sources.</p>
+    <p>The parameters that are configured here are intended for producers and consumers used by Kafka Connect to access the configuration, offset and status topics. For configuration of Kafka source and Kafka sink tasks, the same parameters can be used but need to be prefixed with <code>consumer.</code> and <code>producer.</code> respectively. The only parameter that is inherited from the worker configuration is <code>bootstrap.servers</code>, which in most cases will be sufficient, since the same cluster is often used for all purposes. A notable exception is a secured cluster, which requires extra parameters to allow connections. These parameters will need to be set up to three times in the worker configuration, once for management access, once for Kafka sinks and once for Kafka sources.</p>
 
     <p>The remaining parameters are connector configuration files. You may include as many as you want, but all will execute within the same process (on different threads).</p>
 
@@ -95,9 +95,10 @@
 
     <p>The <code>connector.class</code> config supports several formats: the full name or alias of the class for this connector. If the connector is org.apache.kafka.connect.file.FileStreamSinkConnector, you can either specify this full name or use FileStreamSink or FileStreamSinkConnector to make the configuration a bit shorter.</p>
 
-    <p>Sink connectors also have one additional option to control their input:</p>
+    <p>Sink connectors also have a few additional options to control their input. Each sink connector must set one of the following:</p>
     <ul>
-        <li><code>topics</code> - A list of topics to use as input for this connector</li>
+        <li><code>topics</code> - A comma-separated list of topics to use as input for this connector</li>
+        <li><code>topics.regex</code> - A Java regular expression of topics to use as input for this connector</li>
     </ul>
 
     <p>For any other options, you should consult the documentation for the connector.</p>
@@ -186,7 +187,43 @@
 
     <h4><a id="connect_rest" href="#connect_rest">REST API</a></h4>
 
-    <p>Since Kafka Connect is intended to be run as a service, it also provides a REST API for managing connectors. By default, this service runs on port 8083. The following are the currently supported endpoints:</p>
+    <p>Since Kafka Connect is intended to be run as a service, it also provides a REST API for managing connectors. The REST API server can be configured using the <code>listeners</code> configuration option.
+        This field should contain a list of listeners in the following format: <code>protocol://host:port,protocol2://host2:port2</code>. Currently supported protocols are <code>http</code> and <code>https</code>.
+        For example:</p>
+
+    <pre class="brush: text;">
+        listeners=http://localhost:8080,https://localhost:8443
+    </pre>
+
+    <p>By default, if no <code>listeners</code> are specified, the REST server runs on port 8083 using the HTTP protocol. When using HTTPS, the configuration has to include the SSL configuration.
+    By default, it will use the <code>ssl.*</code> settings. In case it is needed to use different configuration for the REST API than for connecting to Kafka brokers, the fields can be prefixed with <code>listeners.https</code>.
+        When using the prefix, only the prefixed options will be used and the <code>ssl.*</code> options without the prefix will be ignored. Following fields can be used to configure HTTPS for the REST API:</p>
+
+    <ul>
+        <li><code>ssl.keystore.location</code></li>
+        <li><code>ssl.keystore.password</code></li>
+        <li><code>ssl.keystore.type</code></li>
+        <li><code>ssl.key.password</code></li>
+        <li><code>ssl.truststore.location</code></li>
+        <li><code>ssl.truststore.password</code></li>
+        <li><code>ssl.truststore.type</code></li>
+        <li><code>ssl.enabled.protocols</code></li>
+        <li><code>ssl.provider</code></li>
+        <li><code>ssl.protocol</code></li>
+        <li><code>ssl.cipher.suites</code></li>
+        <li><code>ssl.keymanager.algorithm</code></li>
+        <li><code>ssl.secure.random.implementation</code></li>
+        <li><code>ssl.trustmanager.algorithm</code></li>
+        <li><code>ssl.endpoint.identification.algorithm</code></li>
+        <li><code>ssl.client.auth</code></li>
+    </ul>
+
+    <p>The REST API is used not only by users to monitor / manage Kafka Connect. It is also used for the Kafka Connect cross-cluster communication. Requests received on the follower nodes REST API will be forwarded to the leader node REST API.
+    In case the URI under which is given host reachable is different from the URI which it listens on, the configuration options <code>rest.advertised.host.name</code>, <code>rest.advertised.port</code> and <code>rest.advertised.listener</code>
+    can be used to change the URI which will be used by the follower nodes to connect with the leader. When using both HTTP and HTTPS listeners, the <code>rest.advertised.listener</code> option can be also used to define which listener
+        will be used for the cross-cluster communication. When using HTTPS for communication between nodes, the same <code>ssl.*</code> or <code>listeners.https</code> options will be used to configure the HTTPS client.</p>
+
+    <p>The following are the currently supported REST API endpoints:</p>
 
     <ul>
         <li><code>GET /connectors</code> - return a list of active connectors</li>
@@ -329,7 +366,7 @@
         }
     </pre>
 
-    <p>These are slightly simplified versions, but show that that these methods should be relatively simple and the only work they should perform is allocating or freeing resources. There are two points to note about this implementation. First, the <code>start()</code> method does not yet handle resuming from a previous offset, which will be addressed in a later section. Second, the <code>stop()</code> method is synchronized. This will be necessary because <code>SourceTasks</code> are given a dedicated thread which they can block indefinitely, so they need to be stopped with a call from a different thread in the Worker.</p>
+    <p>These are slightly simplified versions, but show that these methods should be relatively simple and the only work they should perform is allocating or freeing resources. There are two points to note about this implementation. First, the <code>start()</code> method does not yet handle resuming from a previous offset, which will be addressed in a later section. Second, the <code>stop()</code> method is synchronized. This will be necessary because <code>SourceTasks</code> are given a dedicated thread which they can block indefinitely, so they need to be stopped with a call from a different thread in the Worker.</p>
 
     <p>Next, we implement the main functionality of the task, the <code>poll()</code> method which gets events from the input system and returns a <code>List&lt;SourceRecord&gt;</code>:</p>
 
@@ -357,7 +394,7 @@
     }
     </pre>
 
-    <p>Again, we've omitted some details, but we can see the important steps: the <code>poll()</code> method is going to be called repeatedly, and for each call it will loop trying to read records from the file. For each line it reads, it also tracks the file offset. It uses this information to create an output <code>SourceRecord</code> with four pieces of information: the source partition (there is only one, the single file being read), source offset (byte offset in the file), output topic name, and output value (the line, and we include a schema indicating this value will always be a string). Other variants of the <code>SourceRecord</code> constructor can also include a specific output partition and a key.</p>
+    <p>Again, we've omitted some details, but we can see the important steps: the <code>poll()</code> method is going to be called repeatedly, and for each call it will loop trying to read records from the file. For each line it reads, it also tracks the file offset. It uses this information to create an output <code>SourceRecord</code> with four pieces of information: the source partition (there is only one, the single file being read), source offset (byte offset in the file), output topic name, and output value (the line, and we include a schema indicating this value will always be a string). Other variants of the <code>SourceRecord</code> constructor can also include a specific output partition, a key, and headers.</p>
 
     <p>Note that this implementation uses the normal Java <code>InputStream</code> interface and may sleep if data is not available. This is acceptable because Kafka Connect provides each task with a dedicated thread. While task implementations have to conform to the basic <code>poll()</code> interface, they have a lot of flexibility in how they are implemented. In this case, an NIO-based implementation would be more efficient, but this simple approach works, is quick to implement, and is compatible with older versions of Java.</p>
 
@@ -377,7 +414,7 @@
         }
     </pre>
 
-    <p>The <code>SinkTask</code> documentation contains full details, but this interface is nearly as simple as the <code>SourceTask</code>. The <code>put()</code> method should contain most of the implementation, accepting sets of <code>SinkRecords</code>, performing any required translation, and storing them in the destination system. This method does not need to ensure the data has been fully written to the destination system before returning. In fact, in many cases internal buffering will be useful so an entire batch of records can be sent at once, reducing the overhead of inserting events into the downstream data store. The <code>SinkRecords</code> contain essentially the same information as <code>SourceRecords</code>: Kafka topic, partition, offset and the event key and value.</p>
+    <p>The <code>SinkTask</code> documentation contains full details, but this interface is nearly as simple as the <code>SourceTask</code>. The <code>put()</code> method should contain most of the implementation, accepting sets of <code>SinkRecords</code>, performing any required translation, and storing them in the destination system. This method does not need to ensure the data has been fully written to the destination system before returning. In fact, in many cases internal buffering will be useful so an entire batch of records can be sent at once, reducing the overhead of inserting events into the downstream data store. The <code>SinkRecords</code> contain essentially the same information as <code>SourceRecords</code>: Kafka topic, partition, offset, the event key and value, and optional headers.</p>
 
     <p>The <code>flush()</code> method is used during the offset commit process, which allows tasks to recover from failures and resume from a safe point such that no events will be missed. The method should push any outstanding data to the destination system and then block until the write has been acknowledged. The <code>offsets</code> parameter can often be ignored, but is useful in some cases where implementations want to store offset information in the destination store to provide exactly-once
     delivery. For example, an HDFS connector could do this and use atomic move operations to make sure the <code>flush()</code> operation atomically commits the data and offsets to a final location in HDFS.</p>

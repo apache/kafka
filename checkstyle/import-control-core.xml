@@ -60,6 +60,9 @@
     <allow pkg="kafka.consumer" />
     <allow pkg="joptsimple" />
     <allow pkg="org.apache.kafka.clients.consumer" />
+    <allow class="javax.xml.datatype.Duration" />
+    <allow class="javax.xml.datatype.DatatypeFactory" />
+    <allow class="javax.xml.datatype.DatatypeConfigurationException" />
   </subpackage>
 
   <subpackage name="coordinator">

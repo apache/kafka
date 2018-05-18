@@ -50,6 +50,7 @@
     <disallow pkg="org.apache.kafka.clients" />
     <allow pkg="org.apache.kafka.common" exact-match="true" />
     <allow pkg="org.apache.kafka.common.annotation" />
+    <allow pkg="org.apache.kafka.common.config" exact-match="true" />
     <allow pkg="org.apache.kafka.common.internals" exact-match="true" />
     <allow pkg="org.apache.kafka.test" />
 
@@ -163,6 +164,8 @@
 
     <subpackage name="admin">
       <allow pkg="org.apache.kafka.clients.admin" />
+      <allow pkg="org.apache.kafka.clients.consumer.internals" />
+      <allow pkg="org.apache.kafka.clients.consumer" />
     </subpackage>
   </subpackage>
 
@@ -187,6 +190,10 @@
     <allow pkg="javax.servlet" />
     <allow pkg="javax.ws.rs" />
     <allow pkg="net.sourceforge.argparse4j" />
+    <allow pkg="org.apache.kafka.clients.admin" />
+    <allow pkg="org.apache.kafka.clients.consumer" exact-match="true"/>
+    <allow pkg="org.apache.kafka.clients.producer" exact-match="true"/>
+    <allow pkg="org.apache.kafka.common" />
     <allow pkg="org.apache.kafka.test"/>
     <allow pkg="org.apache.kafka.trogdor" />
     <allow pkg="org.apache.log4j" />
@@ -219,14 +226,18 @@
       <allow pkg="kafka.tools" />
       <allow pkg="kafka.utils" />
       <allow pkg="kafka.zk" />
+      <allow pkg="kafka.zookeeper" />
       <allow pkg="kafka.log" />
       <allow pkg="scala" />
       <allow pkg="scala.collection" />
-      <allow pkg="org.I0Itec.zkclient" />
     </subpackage>
 
     <subpackage name="test">
       <allow pkg="kafka.admin" />
+    </subpackage>
+
+    <subpackage name="tools">
+      <allow pkg="kafka.tools" />
     </subpackage>
 
     <subpackage name="state">
@@ -238,6 +249,10 @@
         <allow pkg="org.I0Itec.zkclient" />
         <allow pkg="com.fasterxml.jackson" />
         <allow pkg="org.apache.zookeeper" />
+        <allow pkg="org.apache.zookeeper" />
+        <subpackage name="testutil">
+          <allow pkg="org.apache.log4j" />
+        </subpackage>
       </subpackage>
     </subpackage>
   </subpackage>
@@ -269,6 +284,7 @@
     <allow pkg="org.apache.kafka.common" />
     <allow pkg="org.apache.kafka.connect.data" />
     <allow pkg="org.apache.kafka.connect.errors" />
+    <allow pkg="org.apache.kafka.connect.header" />
     <allow pkg="org.apache.kafka.clients" />
     <allow pkg="org.apache.kafka.test"/>
 

@@ -28,7 +28,7 @@ import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.Consumed;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -57,7 +57,6 @@ import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
-import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -106,12 +105,11 @@ public class RestoreIntegrationTest {
     }
 
     @After
-    public void shutdown() throws IOException {
+    public void shutdown() {
         if (kafkaStreams != null) {
             kafkaStreams.close(30, TimeUnit.SECONDS);
         }
     }
-
 
     @Test
     public void shouldRestoreState() throws ExecutionException, InterruptedException {
@@ -273,11 +271,6 @@ public class RestoreIntegrationTest {
                 store.put(key, value);
                 processorLatch.countDown();
             }
-        }
-
-        @Override
-        public void punctuate(final long timestamp) {
-
         }
 
         @Override

@@ -369,7 +369,7 @@ public class NetworkClient implements KafkaClient {
         if (!isInternalRequest) {
             // If this request came from outside the NetworkClient, validate
             // that we can send data.  If the request is internal, we trust
-            // that that internal code has done this validation.  Validation
+            // that internal code has done this validation.  Validation
             // will be slightly different for some internal requests (for
             // example, ApiVersionsRequests can be sent prior to being in
             // READY state.)
@@ -603,11 +603,13 @@ public class NetworkClient implements KafkaClient {
         nodesNeedingApiVersionsFetch.remove(nodeId);
         switch (disconnectState.state()) {
             case AUTHENTICATION_FAILED:
-                connectionStates.authenticationFailed(nodeId, now, disconnectState.exception());
-                log.error("Connection to node {} failed authentication due to: {}", nodeId, disconnectState.exception().getMessage());
+                AuthenticationException exception = disconnectState.exception();
+                connectionStates.authenticationFailed(nodeId, now, exception);
+                metadataUpdater.handleAuthenticationFailure(exception);
+                log.error("Connection to node {} failed authentication due to: {}", nodeId, exception.getMessage());
                 break;
             case AUTHENTICATE:
-                // This warning applies to older brokers which dont provide feedback on authentication failures
+                // This warning applies to older brokers which don't provide feedback on authentication failures
                 log.warn("Connection to node {} terminated during authentication. This may indicate " +
                         "that authentication failed due to invalid credentials.", nodeId);
                 break;
@@ -618,16 +620,13 @@ public class NetworkClient implements KafkaClient {
                 break; // Disconnections in other states are logged at debug level in Selector
         }
         for (InFlightRequest request : this.inFlightRequests.clearAll(nodeId)) {
-            log.trace("Cancelled request {} with correlation id {} due to node {} being disconnected", request.request,
-                    request.header.correlationId(), nodeId);
-            if (request.isInternalRequest && request.header.apiKey() == ApiKeys.METADATA)
-                metadataUpdater.handleDisconnection(request.destination);
-            else
+            log.trace("Cancelled request {} {} with correlation id {} due to node {} being disconnected",
+                    request.header.apiKey(), request.request, request.header.correlationId(), nodeId);
+            if (!request.isInternalRequest)
                 responses.add(request.disconnected(now));
+            else if (request.header.apiKey() == ApiKeys.METADATA)
+                metadataUpdater.handleDisconnection(request.destination);
         }
-        AuthenticationException authenticationException = connectionStates.authenticationException(nodeId);
-        if (authenticationException != null)
-            metadataUpdater.handleAuthenticationFailure(authenticationException);
     }
 
     /**
@@ -833,6 +832,7 @@ public class NetworkClient implements KafkaClient {
             long waitForMetadataFetch = this.metadataFetchInProgress ? requestTimeoutMs : 0;
 
             long metadataTimeout = Math.max(timeToNextMetadataUpdate, waitForMetadataFetch);
+
             if (metadataTimeout > 0) {
                 return metadataTimeout;
             }

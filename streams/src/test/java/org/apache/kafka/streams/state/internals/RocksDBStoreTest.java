@@ -17,7 +17,12 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
@@ -26,7 +31,7 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
-import org.apache.kafka.test.MockProcessorContext;
+import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.NoOpRecordCollector;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -54,15 +59,17 @@ import static org.junit.Assert.fail;
 public class RocksDBStoreTest {
     private final File tempDir = TestUtils.tempDirectory();
 
-    private RocksDBStore<String, String> subject;
-    private MockProcessorContext context;
+    private Serializer<String> stringSerializer = new StringSerializer();
+    private Deserializer<String> stringDeserializer = new StringDeserializer();
+    private RocksDBStore rocksDBStore;
+    private InternalMockProcessorContext context;
     private File dir;
 
     @Before
     public void setUp() {
-        subject = new RocksDBStore<>("test", Serdes.String(), Serdes.String());
+        rocksDBStore = new RocksDBStore("test");
         dir = TestUtils.tempDirectory();
-        context = new MockProcessorContext(dir,
+        context = new InternalMockProcessorContext(dir,
             Serdes.String(),
             Serdes.String(),
             new NoOpRecordCollector(),
@@ -71,17 +78,18 @@ public class RocksDBStoreTest {
 
     @After
     public void tearDown() {
-        subject.close();
+        rocksDBStore.close();
     }
 
     @Test
     public void shouldNotThrowExceptionOnRestoreWhenThereIsPreExistingRocksDbFiles() throws Exception {
-        subject.init(context, subject);
+        rocksDBStore.init(context, rocksDBStore);
 
         final String message = "how can a 4 ounce bird carry a 2lb coconut";
         int intKey = 1;
         for (int i = 0; i < 2000000; i++) {
-            subject.put("theKeyIs" + intKey++, message);
+            rocksDBStore.put(new Bytes(stringSerializer.serialize(null, "theKeyIs" + intKey++)),
+                             stringSerializer.serialize(null, message));
         }
 
         final List<KeyValue<byte[], byte[]>> restoreBytes = new ArrayList<>();
@@ -92,7 +100,11 @@ public class RocksDBStoreTest {
 
         context.restore("test", restoreBytes);
 
-        assertThat(subject.get("restoredKey"), equalTo("restoredValue"));
+        assertThat(
+            stringDeserializer.deserialize(
+                null,
+                rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "restoredKey")))),
+            equalTo("restoredValue"));
     }
 
     @Test
@@ -102,7 +114,7 @@ public class RocksDBStoreTest {
         configs.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "test-server:9092");
         configs.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, MockRocksDbConfigSetter.class);
         MockRocksDbConfigSetter.called = false;
-        subject.openDB(new MockProcessorContext(tempDir, new StreamsConfig(configs)));
+        rocksDBStore.openDB(new InternalMockProcessorContext(tempDir, new StreamsConfig(configs)));
 
         assertTrue(MockRocksDbConfigSetter.called);
     }
@@ -110,88 +122,131 @@ public class RocksDBStoreTest {
     @Test(expected = ProcessorStateException.class)
     public void shouldThrowProcessorStateExceptionOnOpeningReadOnlyDir() throws IOException {
         final File tmpDir = TestUtils.tempDirectory();
-        MockProcessorContext tmpContext = new MockProcessorContext(tmpDir,
+        InternalMockProcessorContext tmpContext = new InternalMockProcessorContext(tmpDir,
             Serdes.String(),
             Serdes.Long(),
             new NoOpRecordCollector(),
             new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())));
         tmpDir.setReadOnly();
 
-        subject.openDB(tmpContext);
+        rocksDBStore.openDB(tmpContext);
     }
 
     @Test
     public void shouldPutAll() {
-        List<KeyValue<String, String>> entries = new ArrayList<>();
-        entries.add(new KeyValue<>("1", "a"));
-        entries.add(new KeyValue<>("2", "b"));
-        entries.add(new KeyValue<>("3", "c"));
+        List<KeyValue<Bytes, byte[]>> entries = new ArrayList<>();
+        entries.add(new KeyValue<>(
+            new Bytes(stringSerializer.serialize(null, "1")),
+            stringSerializer.serialize(null, "a")));
+        entries.add(new KeyValue<>(
+            new Bytes(stringSerializer.serialize(null, "2")),
+            stringSerializer.serialize(null, "b")));
+        entries.add(new KeyValue<>(
+            new Bytes(stringSerializer.serialize(null, "3")),
+            stringSerializer.serialize(null, "c")));
 
-        subject.init(context, subject);
-        subject.putAll(entries);
-        subject.flush();
+        rocksDBStore.init(context, rocksDBStore);
+        rocksDBStore.putAll(entries);
+        rocksDBStore.flush();
 
-        assertEquals(subject.get("1"), "a");
-        assertEquals(subject.get("2"), "b");
-        assertEquals(subject.get("3"), "c");
+        assertEquals(
+            stringDeserializer.deserialize(
+                null,
+                rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "1")))),
+            "a");
+        assertEquals(
+            stringDeserializer.deserialize(
+                null,
+                rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "2")))),
+            "b");
+        assertEquals(
+            stringDeserializer.deserialize(
+                null,
+                rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "3")))),
+            "c");
     }
 
     @Test
     public void shouldTogglePrepareForBulkloadSetting() {
-        subject.init(context, subject);
+        rocksDBStore.init(context, rocksDBStore);
         RocksDBStore.RocksDBBatchingRestoreCallback restoreListener =
-            (RocksDBStore.RocksDBBatchingRestoreCallback) subject.batchingStateRestoreCallback;
+            (RocksDBStore.RocksDBBatchingRestoreCallback) rocksDBStore.batchingStateRestoreCallback;
 
         restoreListener.onRestoreStart(null, null, 0, 0);
-        assertTrue("Should have set bulk loading to true", subject.isPrepareForBulkload());
+        assertTrue("Should have set bulk loading to true", rocksDBStore.isPrepareForBulkload());
 
         restoreListener.onRestoreEnd(null, null, 0);
-        assertFalse("Should have set bulk loading to false", subject.isPrepareForBulkload());
+        assertFalse("Should have set bulk loading to false", rocksDBStore.isPrepareForBulkload());
     }
 
     @Test
     public void shouldTogglePrepareForBulkloadSettingWhenPrexistingSstFiles() throws Exception {
         final List<KeyValue<byte[], byte[]>> entries = getKeyValueEntries();
 
-        subject.init(context, subject);
-        context.restore(subject.name(), entries);
+        rocksDBStore.init(context, rocksDBStore);
+        context.restore(rocksDBStore.name(), entries);
 
         RocksDBStore.RocksDBBatchingRestoreCallback restoreListener =
-            (RocksDBStore.RocksDBBatchingRestoreCallback) subject.batchingStateRestoreCallback;
+            (RocksDBStore.RocksDBBatchingRestoreCallback) rocksDBStore.batchingStateRestoreCallback;
 
         restoreListener.onRestoreStart(null, null, 0, 0);
-        assertTrue("Should have not set bulk loading to true", subject.isPrepareForBulkload());
+        assertTrue("Should have not set bulk loading to true", rocksDBStore.isPrepareForBulkload());
 
         restoreListener.onRestoreEnd(null, null, 0);
-        assertFalse("Should have set bulk loading to false", subject.isPrepareForBulkload());
+        assertFalse("Should have set bulk loading to false", rocksDBStore.isPrepareForBulkload());
     }
 
     @Test
     public void shouldRestoreAll() throws Exception {
         final List<KeyValue<byte[], byte[]>> entries = getKeyValueEntries();
 
-        subject.init(context, subject);
-        context.restore(subject.name(), entries);
+        rocksDBStore.init(context, rocksDBStore);
+        context.restore(rocksDBStore.name(), entries);
 
-        assertEquals(subject.get("1"), "a");
-        assertEquals(subject.get("2"), "b");
-        assertEquals(subject.get("3"), "c");
+        assertEquals(
+            stringDeserializer.deserialize(
+                null,
+                rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "1")))),
+            "a");
+        assertEquals(
+            stringDeserializer.deserialize(
+                null,
+                rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "2")))),
+            "b");
+        assertEquals(
+            stringDeserializer.deserialize(
+                null,
+                rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "3")))),
+            "c");
     }
 
+    @Test
+    public void shouldPutOnlyIfAbsentValue() throws Exception {
+        rocksDBStore.init(context, rocksDBStore);
+        final Bytes keyBytes = new Bytes(stringSerializer.serialize(null, "one"));
+        final byte[] valueBytes = stringSerializer.serialize(null, "A");
+        final byte[] valueBytesUpdate = stringSerializer.serialize(null, "B");
+
+        rocksDBStore.putIfAbsent(keyBytes, valueBytes);
+        rocksDBStore.putIfAbsent(keyBytes, valueBytesUpdate);
+
+        final String retrievedValue = stringDeserializer.deserialize(null, rocksDBStore.get(keyBytes));
+        assertEquals(retrievedValue, "A");
+    }
 
     @Test
     public void shouldHandleDeletesOnRestoreAll() throws Exception {
         final List<KeyValue<byte[], byte[]>> entries = getKeyValueEntries();
         entries.add(new KeyValue<>("1".getBytes("UTF-8"), (byte[]) null));
 
-        subject.init(context, subject);
-        context.restore(subject.name(), entries);
+        rocksDBStore.init(context, rocksDBStore);
+        context.restore(rocksDBStore.name(), entries);
 
-        final KeyValueIterator<String, String> iterator = subject.all();
+        final KeyValueIterator<Bytes, byte[]> iterator = rocksDBStore.all();
         final Set<String> keys = new HashSet<>();
 
         while (iterator.hasNext()) {
-            keys.add(iterator.next().key);
+            keys.add(stringDeserializer.deserialize(null, iterator.next().key.get()));
         }
 
         assertThat(keys, equalTo(Utils.mkSet("2", "3")));
@@ -208,34 +263,58 @@ public class RocksDBStoreTest {
         // this will restore key "1" as WriteBatch applies updates in order
         entries.add(new KeyValue<>("1".getBytes("UTF-8"), "restored".getBytes("UTF-8")));
 
-        subject.init(context, subject);
-        context.restore(subject.name(), entries);
+        rocksDBStore.init(context, rocksDBStore);
+        context.restore(rocksDBStore.name(), entries);
 
-        final KeyValueIterator<String, String> iterator = subject.all();
+        final KeyValueIterator<Bytes, byte[]> iterator = rocksDBStore.all();
         final Set<String> keys = new HashSet<>();
 
         while (iterator.hasNext()) {
-            keys.add(iterator.next().key);
+            keys.add(stringDeserializer.deserialize(null, iterator.next().key.get()));
         }
 
         assertThat(keys, equalTo(Utils.mkSet("1", "2", "3")));
 
-        assertEquals(subject.get("1"), "restored");
-        assertEquals(subject.get("2"), "b");
-        assertEquals(subject.get("3"), "c");
+        assertEquals(
+            stringDeserializer.deserialize(
+                null,
+                rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "1")))),
+            "restored");
+        assertEquals(
+            stringDeserializer.deserialize(
+                null,
+                rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "2")))),
+            "b");
+        assertEquals(
+            stringDeserializer.deserialize(
+                null,
+                rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "3")))),
+            "c");
     }
 
     @Test
     public void shouldRestoreThenDeleteOnRestoreAll() throws Exception {
         final List<KeyValue<byte[], byte[]>> entries = getKeyValueEntries();
 
-        subject.init(context, subject);
+        rocksDBStore.init(context, rocksDBStore);
 
-        context.restore(subject.name(), entries);
+        context.restore(rocksDBStore.name(), entries);
 
-        assertEquals(subject.get("1"), "a");
-        assertEquals(subject.get("2"), "b");
-        assertEquals(subject.get("3"), "c");
+        assertEquals(
+            stringDeserializer.deserialize(
+                null,
+                rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "1")))),
+            "a");
+        assertEquals(
+            stringDeserializer.deserialize(
+                null,
+                rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "2")))),
+            "b");
+        assertEquals(
+            stringDeserializer.deserialize(
+                null,
+                rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "3")))),
+            "c");
 
         entries.clear();
 
@@ -243,13 +322,13 @@ public class RocksDBStoreTest {
         entries.add(new KeyValue<>("3".getBytes("UTF-8"), "c".getBytes("UTF-8")));
         entries.add(new KeyValue<>("1".getBytes("UTF-8"), (byte[]) null));
 
-        context.restore(subject.name(), entries);
+        context.restore(rocksDBStore.name(), entries);
 
-        final KeyValueIterator<String, String> iterator = subject.all();
+        final KeyValueIterator<Bytes, byte[]> iterator = rocksDBStore.all();
         final Set<String> keys = new HashSet<>();
 
         while (iterator.hasNext()) {
-            keys.add(iterator.next().key);
+            keys.add(stringDeserializer.deserialize(null, iterator.next().key.get()));
         }
 
         assertThat(keys, equalTo(Utils.mkSet("2", "3")));
@@ -259,55 +338,57 @@ public class RocksDBStoreTest {
 
     @Test
     public void shouldThrowNullPointerExceptionOnNullPut() {
-        subject.init(context, subject);
+        rocksDBStore.init(context, rocksDBStore);
         try {
-            subject.put(null, "someVal");
+            rocksDBStore.put(null, stringSerializer.serialize(null, "someVal"));
             fail("Should have thrown NullPointerException on null put()");
         } catch (NullPointerException e) { }
     }
 
     @Test
     public void shouldThrowNullPointerExceptionOnNullPutAll() {
-        subject.init(context, subject);
+        rocksDBStore.init(context, rocksDBStore);
         try {
-            subject.put(null, "someVal");
+            rocksDBStore.put(null, stringSerializer.serialize(null, "someVal"));
             fail("Should have thrown NullPointerException on null put()");
         } catch (NullPointerException e) { }
     }
 
     @Test
     public void shouldThrowNullPointerExceptionOnNullGet() {
-        subject.init(context, subject);
+        rocksDBStore.init(context, rocksDBStore);
         try {
-            subject.get(null);
+            rocksDBStore.get(null);
             fail("Should have thrown NullPointerException on null get()");
         } catch (NullPointerException e) { }
     }
 
     @Test
     public void shouldThrowNullPointerExceptionOnDelete() {
-        subject.init(context, subject);
+        rocksDBStore.init(context, rocksDBStore);
         try {
-            subject.delete(null);
+            rocksDBStore.delete(null);
             fail("Should have thrown NullPointerException on deleting null key");
         } catch (NullPointerException e) { }
     }
 
     @Test
     public void shouldThrowNullPointerExceptionOnRange() {
-        subject.init(context, subject);
+        rocksDBStore.init(context, rocksDBStore);
         try {
-            subject.range(null, "2");
+            rocksDBStore.range(null, new Bytes(stringSerializer.serialize(null, "2")));
             fail("Should have thrown NullPointerException on deleting null key");
         } catch (NullPointerException e) { }
     }
 
     @Test(expected = ProcessorStateException.class)
     public void shouldThrowProcessorStateExceptionOnPutDeletedDir() throws IOException {
-        subject.init(context, subject);
+        rocksDBStore.init(context, rocksDBStore);
         Utils.delete(dir);
-        subject.put("anyKey", "anyValue");
-        subject.flush();
+        rocksDBStore.put(
+            new Bytes(stringSerializer.serialize(null, "anyKey")),
+            stringSerializer.serialize(null, "anyValue"));
+        rocksDBStore.flush();
     }
 
     public static class MockRocksDbConfigSetter implements RocksDBConfigSetter {

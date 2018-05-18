@@ -17,17 +17,19 @@
 
 package org.apache.kafka.clients.admin;
 
-import java.util.Set;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.KafkaClient;
-import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResult;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResults;
 import org.apache.kafka.clients.admin.DescribeReplicaLogDirsResult.ReplicaLogDirInfo;
+import org.apache.kafka.clients.admin.internals.AdminMetadataManager;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
+import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
@@ -42,15 +44,17 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.AuthenticationException;
-import org.apache.kafka.common.errors.BrokerNotAvailableException;
 import org.apache.kafka.common.errors.DisconnectException;
+import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.InvalidTopicException;
+import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
+import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -65,38 +69,62 @@ import org.apache.kafka.common.requests.AlterConfigsRequest;
 import org.apache.kafka.common.requests.AlterConfigsResponse;
 import org.apache.kafka.common.requests.AlterReplicaLogDirsRequest;
 import org.apache.kafka.common.requests.AlterReplicaLogDirsResponse;
-import org.apache.kafka.common.requests.CreatePartitionsRequest;
-import org.apache.kafka.common.requests.CreatePartitionsResponse;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.CreateAclsRequest;
 import org.apache.kafka.common.requests.CreateAclsRequest.AclCreation;
 import org.apache.kafka.common.requests.CreateAclsResponse;
 import org.apache.kafka.common.requests.CreateAclsResponse.AclCreationResponse;
+import org.apache.kafka.common.requests.CreateDelegationTokenRequest;
+import org.apache.kafka.common.requests.CreateDelegationTokenResponse;
+import org.apache.kafka.common.requests.CreatePartitionsRequest;
+import org.apache.kafka.common.requests.CreatePartitionsResponse;
 import org.apache.kafka.common.requests.CreateTopicsRequest;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
 import org.apache.kafka.common.requests.DeleteAclsRequest;
 import org.apache.kafka.common.requests.DeleteAclsResponse;
 import org.apache.kafka.common.requests.DeleteAclsResponse.AclDeletionResult;
 import org.apache.kafka.common.requests.DeleteAclsResponse.AclFilterResponse;
+import org.apache.kafka.common.requests.DeleteGroupsRequest;
+import org.apache.kafka.common.requests.DeleteGroupsResponse;
+import org.apache.kafka.common.requests.DeleteRecordsRequest;
+import org.apache.kafka.common.requests.DeleteRecordsResponse;
 import org.apache.kafka.common.requests.DeleteTopicsRequest;
 import org.apache.kafka.common.requests.DeleteTopicsResponse;
 import org.apache.kafka.common.requests.DescribeAclsRequest;
 import org.apache.kafka.common.requests.DescribeAclsResponse;
 import org.apache.kafka.common.requests.DescribeConfigsRequest;
 import org.apache.kafka.common.requests.DescribeConfigsResponse;
+import org.apache.kafka.common.requests.DescribeDelegationTokenRequest;
+import org.apache.kafka.common.requests.DescribeDelegationTokenResponse;
 import org.apache.kafka.common.requests.DescribeLogDirsRequest;
 import org.apache.kafka.common.requests.DescribeLogDirsResponse;
+import org.apache.kafka.common.requests.ExpireDelegationTokenRequest;
+import org.apache.kafka.common.requests.ExpireDelegationTokenResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.requests.RenewDelegationTokenRequest;
+import org.apache.kafka.common.requests.RenewDelegationTokenResponse;
+import org.apache.kafka.common.requests.DescribeGroupsRequest;
+import org.apache.kafka.common.requests.DescribeGroupsResponse;
+import org.apache.kafka.common.requests.FindCoordinatorRequest;
+import org.apache.kafka.common.requests.FindCoordinatorResponse;
+import org.apache.kafka.common.requests.ListGroupsRequest;
+import org.apache.kafka.common.requests.ListGroupsResponse;
+import org.apache.kafka.common.requests.OffsetFetchRequest;
+import org.apache.kafka.common.requests.OffsetFetchResponse;
 import org.apache.kafka.common.requests.Resource;
 import org.apache.kafka.common.requests.ResourceType;
+import org.apache.kafka.common.security.token.delegation.DelegationToken;
+import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
 import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -108,6 +136,7 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -156,9 +185,9 @@ public class KafkaAdminClient extends AdminClient {
     private final Time time;
 
     /**
-     * The cluster metadata used by the KafkaClient.
+     * The cluster metadata manager used by the KafkaClient.
      */
-    private final Metadata metadata;
+    private final AdminMetadataManager metadataManager;
 
     /**
      * The metrics for this KafkaAdminClient.
@@ -297,8 +326,9 @@ public class KafkaAdminClient extends AdminClient {
         try {
             // Since we only request node information, it's safe to pass true for allowAutoTopicCreation (and it
             // simplifies communication with older brokers)
-            Metadata metadata = new Metadata(config.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),
-                    config.getLong(AdminClientConfig.METADATA_MAX_AGE_CONFIG), true);
+            AdminMetadataManager metadataManager = new AdminMetadataManager(logContext, time,
+                config.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),
+                config.getLong(AdminClientConfig.METADATA_MAX_AGE_CONFIG));
             List<MetricsReporter> reporters = config.getConfiguredInstances(AdminClientConfig.METRIC_REPORTER_CLASSES_CONFIG,
                 MetricsReporter.class);
             Map<String, String> metricTags = Collections.singletonMap("client-id", clientId);
@@ -314,7 +344,7 @@ public class KafkaAdminClient extends AdminClient {
                     metrics, time, metricGrpPrefix, channelBuilder, logContext);
             networkClient = new NetworkClient(
                 selector,
-                metadata,
+                metadataManager.updater(),
                 clientId,
                 1,
                 config.getLong(AdminClientConfig.RECONNECT_BACKOFF_MS_CONFIG),
@@ -326,7 +356,7 @@ public class KafkaAdminClient extends AdminClient {
                 true,
                 apiVersions,
                 logContext);
-            return new KafkaAdminClient(config, clientId, time, metadata, metrics, networkClient,
+            return new KafkaAdminClient(config, clientId, time, metadataManager, metrics, networkClient,
                 timeoutProcessorFactory, logContext);
         } catch (Throwable exc) {
             closeQuietly(metrics, "Metrics");
@@ -337,35 +367,39 @@ public class KafkaAdminClient extends AdminClient {
         }
     }
 
-    static KafkaAdminClient createInternal(AdminClientConfig config, KafkaClient client, Metadata metadata, Time time) {
+    static KafkaAdminClient createInternal(AdminClientConfig config, KafkaClient client, Time time) {
         Metrics metrics = null;
         String clientId = generateClientId(config);
 
         try {
             metrics = new Metrics(new MetricConfig(), new LinkedList<MetricsReporter>(), time);
-            return new KafkaAdminClient(config, clientId, time, metadata, metrics, client, null,
-                    createLogContext(clientId));
+            LogContext logContext = createLogContext(clientId);
+            AdminMetadataManager metadataManager = new AdminMetadataManager(logContext, time,
+                config.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),
+                config.getLong(AdminClientConfig.METADATA_MAX_AGE_CONFIG));
+            return new KafkaAdminClient(config, clientId, time, metadataManager, metrics,
+                client, null, logContext);
         } catch (Throwable exc) {
             closeQuietly(metrics, "Metrics");
             throw new KafkaException("Failed create new KafkaAdminClient", exc);
         }
     }
 
-    private static LogContext createLogContext(String clientId) {
+    static LogContext createLogContext(String clientId) {
         return new LogContext("[AdminClient clientId=" + clientId + "] ");
     }
 
-    private KafkaAdminClient(AdminClientConfig config, String clientId, Time time, Metadata metadata,
-                     Metrics metrics, KafkaClient client, TimeoutProcessorFactory timeoutProcessorFactory,
-                     LogContext logContext) {
+    private KafkaAdminClient(AdminClientConfig config, String clientId, Time time,
+                AdminMetadataManager metadataManager, Metrics metrics, KafkaClient client,
+                TimeoutProcessorFactory timeoutProcessorFactory, LogContext logContext) {
         this.defaultTimeoutMs = config.getInt(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG);
         this.clientId = clientId;
         this.log = logContext.logger(KafkaAdminClient.class);
         this.time = time;
-        this.metadata = metadata;
+        this.metadataManager = metadataManager;
         List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(
             config.getList(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG));
-        this.metadata.update(Cluster.bootstrap(addresses), Collections.<String>emptySet(), time.milliseconds());
+        metadataManager.update(Cluster.bootstrap(addresses), time.milliseconds(), null);
         this.metrics = metrics;
         this.client = client;
         this.runnable = new AdminClientRunnable();
@@ -432,6 +466,13 @@ public class KafkaAdminClient extends AdminClient {
         Node provide();
     }
 
+    private class MetadataUpdateNodeIdProvider implements NodeProvider {
+        @Override
+        public Node provide() {
+            return client.leastLoadedNode(time.milliseconds());
+        }
+    }
+
     private class ConstantNodeIdProvider implements NodeProvider {
         private final int nodeId;
 
@@ -441,7 +482,16 @@ public class KafkaAdminClient extends AdminClient {
 
         @Override
         public Node provide() {
-            return metadata.fetch().nodeById(nodeId);
+            if (metadataManager.isReady() &&
+                    (metadataManager.nodeById(nodeId) != null)) {
+                return metadataManager.nodeById(nodeId);
+            }
+            // If we can't find the node with the given constant ID, we schedule a
+            // metadata update and hope it appears.  This behavior is useful for avoiding
+            // flaky behavior in tests when the cluster is starting up and not all nodes
+            // have appeared.
+            metadataManager.requestUpdate();
+            return null;
         }
     }
 
@@ -451,7 +501,12 @@ public class KafkaAdminClient extends AdminClient {
     private class ControllerNodeProvider implements NodeProvider {
         @Override
         public Node provide() {
-            return metadata.fetch().controller();
+            if (metadataManager.isReady() &&
+                    (metadataManager.controller() != null)) {
+                return metadataManager.controller();
+            }
+            metadataManager.requestUpdate();
+            return null;
         }
     }
 
@@ -461,21 +516,38 @@ public class KafkaAdminClient extends AdminClient {
     private class LeastLoadedNodeProvider implements NodeProvider {
         @Override
         public Node provide() {
-            return client.leastLoadedNode(time.milliseconds());
+            if (metadataManager.isReady()) {
+                // This may return null if all nodes are busy.
+                // In that case, we will postpone node assignment.
+                return client.leastLoadedNode(time.milliseconds());
+            }
+            metadataManager.requestUpdate();
+            return null;
         }
     }
 
     abstract class Call {
+        private final boolean internal;
         private final String callName;
         private final long deadlineMs;
         private final NodeProvider nodeProvider;
         private int tries = 0;
         private boolean aborted = false;
+        private Node curNode = null;
 
-        Call(String callName, long deadlineMs, NodeProvider nodeProvider) {
+        Call(boolean internal, String callName, long deadlineMs, NodeProvider nodeProvider) {
+            this.internal = internal;
             this.callName = callName;
             this.deadlineMs = deadlineMs;
             this.nodeProvider = nodeProvider;
+        }
+
+        Call(String callName, long deadlineMs, NodeProvider nodeProvider) {
+            this(false, callName, deadlineMs, nodeProvider);
+        }
+
+        protected Node curNode() {
+            return curNode;
         }
 
         /**
@@ -585,6 +657,10 @@ public class KafkaAdminClient extends AdminClient {
         public String toString() {
             return "Call(callName=" + callName + ", deadlineMs=" + deadlineMs + ")";
         }
+
+        public boolean isInternal() {
+            return internal;
+        }
     }
 
     static class TimeoutProcessorFactory {
@@ -662,58 +738,52 @@ public class KafkaAdminClient extends AdminClient {
 
     private final class AdminClientRunnable implements Runnable {
         /**
+         * Calls which have not yet been assigned to a node.
+         * Only accessed from this thread.
+         */
+        private final ArrayList<Call> pendingCalls = new ArrayList<>();
+
+        /**
+         * Maps nodes to calls that we want to send.
+         * Only accessed from this thread.
+         */
+        private final Map<Node, List<Call>> callsToSend = new HashMap<>();
+
+        /**
+         * Maps node ID strings to calls that have been sent.
+         * Only accessed from this thread.
+         */
+        private final Map<String, List<Call>> callsInFlight = new HashMap<>();
+
+        /**
+         * Maps correlation IDs to calls that have been sent.
+         * Only accessed from this thread.
+         */
+        private final Map<Integer, Call> correlationIdToCalls = new HashMap<>();
+
+        /**
          * Pending calls. Protected by the object monitor.
          * This will be null only if the thread has shut down.
          */
         private List<Call> newCalls = new LinkedList<>();
 
         /**
-         * Check if the AdminClient metadata is ready.
-         * We need to know who the controller is, and have a non-empty view of the cluster.
-         *
-         * @param prevMetadataVersion       The previous metadata version which wasn't usable.
-         * @return                          null if the metadata is usable; the current metadata
-         *                                  version otherwise
-         */
-        private Integer checkMetadataReady(Integer prevMetadataVersion) {
-            if (prevMetadataVersion != null) {
-                if (prevMetadataVersion == metadata.version())
-                    return prevMetadataVersion;
-            }
-            Cluster cluster = metadata.fetch();
-            if (cluster.nodes().isEmpty()) {
-                log.trace("Metadata is not ready yet. No cluster nodes found.");
-                return metadata.requestUpdate();
-            }
-            if (cluster.controller() == null) {
-                log.trace("Metadata is not ready yet. No controller found.");
-                return metadata.requestUpdate();
-            }
-            if (prevMetadataVersion != null) {
-                log.trace("Metadata is now ready.");
-            }
-            return null;
-        }
-
-        /**
-         * Time out the elements in the newCalls list which are expired.
+         * Time out the elements in the pendingCalls list which are expired.
          *
          * @param processor     The timeout processor.
          */
-        private synchronized void timeoutNewCalls(TimeoutProcessor processor) {
-            int numTimedOut = processor.handleTimeouts(newCalls,
-                    "Timed out waiting for a node assignment.");
+        private void timeoutPendingCalls(TimeoutProcessor processor) {
+            int numTimedOut = processor.handleTimeouts(pendingCalls, "Timed out waiting for a node assignment.");
             if (numTimedOut > 0)
-                log.debug("Timed out {} new calls.", numTimedOut);
+                log.debug("Timed out {} pending calls.", numTimedOut);
         }
 
         /**
          * Time out calls which have been assigned to nodes.
          *
          * @param processor     The timeout processor.
-         * @param callsToSend   A map of nodes to the calls they need to handle.
          */
-        private void timeoutCallsToSend(TimeoutProcessor processor, Map<Node, List<Call>> callsToSend) {
+        private int timeoutCallsToSend(TimeoutProcessor processor) {
             int numTimedOut = 0;
             for (List<Call> callList : callsToSend.values()) {
                 numTimedOut += processor.handleTimeouts(callList,
@@ -721,62 +791,58 @@ public class KafkaAdminClient extends AdminClient {
             }
             if (numTimedOut > 0)
                 log.debug("Timed out {} call(s) with assigned nodes.", numTimedOut);
+            return numTimedOut;
         }
 
         /**
-         * Choose nodes for the calls in the callsToSend list.
+         * Drain all the calls from newCalls into pendingCalls.
          *
          * This function holds the lock for the minimum amount of time, to avoid blocking
          * users of AdminClient who will also take the lock to add new calls.
-         *
-         * @param now           The current time in milliseconds.
-         * @param callsToSend   A map of nodes to the calls they need to handle.
-         *
          */
-        private void chooseNodesForNewCalls(long now, Map<Node, List<Call>> callsToSend) {
-            List<Call> newCallsToAdd = null;
-            synchronized (this) {
-                if (newCalls.isEmpty()) {
-                    return;
-                }
-                newCallsToAdd = newCalls;
-                newCalls = new LinkedList<>();
-            }
-            for (Call call : newCallsToAdd) {
-                chooseNodeForNewCall(now, callsToSend, call);
+        private synchronized void drainNewCalls() {
+            if (!newCalls.isEmpty()) {
+                pendingCalls.addAll(newCalls);
+                newCalls.clear();
             }
         }
 
         /**
-         * Choose a node for a new call.
+         * Choose nodes for the calls in the pendingCalls list.
          *
          * @param now           The current time in milliseconds.
-         * @param callsToSend   A map of nodes to the calls they need to handle.
-         * @param call          The call.
+         * @param pendingIter   An iterator yielding pending calls.
          */
-        private void chooseNodeForNewCall(long now, Map<Node, List<Call>> callsToSend, Call call) {
-            Node node = call.nodeProvider.provide();
-            if (node == null) {
-                call.fail(now, new BrokerNotAvailableException(
-                    String.format("Error choosing node for %s: no node found.", call.callName)));
-                return;
+        private void chooseNodesForPendingCalls(long now, Iterator<Call> pendingIter) {
+            while (pendingIter.hasNext()) {
+                Call call = pendingIter.next();
+                Node node = null;
+                try {
+                    node = call.nodeProvider.provide();
+                } catch (Throwable t) {
+                    // Handle authentication errors while choosing nodes.
+                    log.debug("Unable to choose node for {}", call, t);
+                    pendingIter.remove();
+                    call.fail(now, t);
+                }
+                if (node != null) {
+                    log.trace("Assigned {} to node {}", call, node);
+                    pendingIter.remove();
+                    call.curNode = node;
+                    getOrCreateListValue(callsToSend, node).add(call);
+                } else {
+                    log.trace("Unable to assign {} to a node.", call);
+                }
             }
-            log.trace("Assigned {} to {}", call, node);
-            getOrCreateListValue(callsToSend, node).add(call);
         }
 
         /**
          * Send the calls which are ready.
          *
          * @param now                   The current time in milliseconds.
-         * @param callsToSend           The calls to send, by node.
-         * @param correlationIdToCalls  A map of correlation IDs to calls.
-         * @param callsInFlight         A map of nodes to the calls they have in flight.
-         *
          * @return                      The minimum timeout we need for poll().
          */
-        private long sendEligibleCalls(long now, Map<Node, List<Call>> callsToSend,
-                         Map<Integer, Call> correlationIdToCalls, Map<String, List<Call>> callsInFlight) {
+        private long sendEligibleCalls(long now) {
             long pollTimeout = Long.MAX_VALUE;
             for (Iterator<Map.Entry<Node, List<Call>>> iter = callsToSend.entrySet().iterator();
                      iter.hasNext(); ) {
@@ -820,9 +886,8 @@ public class KafkaAdminClient extends AdminClient {
          * to time them out is to close the entire connection.
          *
          * @param processor         The timeout processor.
-         * @param callsInFlight     A map of nodes to the calls they have in flight.
          */
-        private void timeoutCallsInFlight(TimeoutProcessor processor, Map<String, List<Call>> callsInFlight) {
+        private void timeoutCallsInFlight(TimeoutProcessor processor) {
             int numTimedOut = 0;
             for (Map.Entry<String, List<Call>> entry : callsInFlight.entrySet()) {
                 List<Call> contexts = entry.getValue();
@@ -851,50 +916,16 @@ public class KafkaAdminClient extends AdminClient {
         }
 
         /**
-         * If an authentication exception is encountered with connection to any broker,
-         * fail all pending requests.
-         */
-        private void handleAuthenticationException(long now, Map<Node, List<Call>> callsToSend) {
-            AuthenticationException authenticationException = metadata.getAndClearAuthenticationException();
-            if (authenticationException == null) {
-                for (Node node : callsToSend.keySet()) {
-                    authenticationException = client.authenticationException(node);
-                    if (authenticationException != null)
-                        break;
-                }
-            }
-            if (authenticationException != null) {
-                synchronized (this) {
-                    failCalls(now, newCalls, authenticationException);
-                }
-                for (List<Call> calls : callsToSend.values()) {
-                    failCalls(now, calls, authenticationException);
-                }
-                callsToSend.clear();
-            }
-        }
-
-        private void failCalls(long now, List<Call> calls, AuthenticationException authenticationException) {
-            for (Call call : calls) {
-                call.fail(now, authenticationException);
-            }
-            calls.clear();
-        }
-
-        /**
          * Handle responses from the server.
          *
          * @param now                   The current time in milliseconds.
          * @param responses             The latest responses from KafkaClient.
-         * @param correlationIdToCall   A map of correlation IDs to calls.
-         * @param callsInFlight         A map of nodes to the calls they have in flight.
-        **/
-        private void handleResponses(long now, List<ClientResponse> responses, Map<String, List<Call>> callsInFlight,
-                Map<Integer, Call> correlationIdToCall) {
+         **/
+        private void handleResponses(long now, List<ClientResponse> responses) {
             for (ClientResponse response : responses) {
                 int correlationId = response.requestHeader().correlationId();
 
-                Call call = correlationIdToCall.get(correlationId);
+                Call call = correlationIdToCalls.get(correlationId);
                 if (call == null) {
                     // If the server returns information about a correlation ID we didn't use yet,
                     // an internal server error has occurred. Close the connection and log an error message.
@@ -906,7 +937,7 @@ public class KafkaAdminClient extends AdminClient {
                 }
 
                 // Stop tracking this call.
-                correlationIdToCall.remove(correlationId);
+                correlationIdToCalls.remove(correlationId);
                 List<Call> calls = callsInFlight.get(response.destination());
                 if ((calls == null) || (!calls.remove(call))) {
                     log.error("Internal server error on {}: ignoring call {} in correlationIdToCall " +
@@ -919,9 +950,14 @@ public class KafkaAdminClient extends AdminClient {
                 if (response.versionMismatch() != null) {
                     call.fail(now, response.versionMismatch());
                 } else if (response.wasDisconnected()) {
-                    call.fail(now, new DisconnectException(String.format(
-                        "Cancelled %s request with correlation id %s due to node %s being disconnected",
-                        call.callName, correlationId, response.destination())));
+                    AuthenticationException authException = client.authenticationException(call.curNode());
+                    if (authException != null) {
+                        call.fail(now, authException);
+                    } else {
+                        call.fail(now, new DisconnectException(String.format(
+                            "Cancelled %s request with correlation id %s due to node %s being disconnected",
+                            call.callName, correlationId, response.destination())));
+                    }
                 } else {
                     try {
                         call.handleResponse(response.responseBody());
@@ -937,13 +973,36 @@ public class KafkaAdminClient extends AdminClient {
             }
         }
 
-        private synchronized boolean threadShouldExit(long now, long curHardShutdownTimeMs,
-                Map<Node, List<Call>> callsToSend, Map<Integer, Call> correlationIdToCalls) {
-            if (newCalls.isEmpty() && callsToSend.isEmpty() && correlationIdToCalls.isEmpty()) {
+        private boolean hasActiveExternalCalls(Collection<Call> calls) {
+            for (Call call : calls) {
+                if (!call.isInternal()) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /**
+         * Return true if there are currently active external calls.
+         */
+        private boolean hasActiveExternalCalls() {
+            if (hasActiveExternalCalls(pendingCalls)) {
+                return true;
+            }
+            for (List<Call> callList : callsToSend.values()) {
+                if (hasActiveExternalCalls(callList)) {
+                    return true;
+                }
+            }
+            return hasActiveExternalCalls(correlationIdToCalls.values());
+        }
+
+        private boolean threadShouldExit(long now, long curHardShutdownTimeMs) {
+            if (!hasActiveExternalCalls()) {
                 log.trace("All work has been completed, and the I/O thread is now exiting.");
                 return true;
             }
-            if (now > curHardShutdownTimeMs) {
+            if (now >= curHardShutdownTimeMs) {
                 log.info("Forcing a hard I/O thread shutdown. Requests in progress will be aborted.");
                 return true;
             }
@@ -953,52 +1012,42 @@ public class KafkaAdminClient extends AdminClient {
 
         @Override
         public void run() {
-            /**
-             * Maps nodes to calls that we want to send.
-             */
-            Map<Node, List<Call>> callsToSend = new HashMap<>();
-
-            /**
-             * Maps node ID strings to calls that have been sent.
-             */
-            Map<String, List<Call>> callsInFlight = new HashMap<>();
-
-            /**
-             * Maps correlation IDs to calls that have been sent.
-             */
-            Map<Integer, Call> correlationIdToCalls = new HashMap<>();
-
-            /**
-             * The previous metadata version which wasn't usable, or null if there is none.
-             */
-            Integer prevMetadataVersion = null;
-
             long now = time.milliseconds();
             log.trace("Thread starting");
             while (true) {
+                // Copy newCalls into pendingCalls.
+                drainNewCalls();
+
                 // Check if the AdminClient thread should shut down.
                 long curHardShutdownTimeMs = hardShutdownTimeMs.get();
-                if ((curHardShutdownTimeMs != INVALID_SHUTDOWN_TIME) &&
-                        threadShouldExit(now, curHardShutdownTimeMs, callsToSend, correlationIdToCalls))
+                if ((curHardShutdownTimeMs != INVALID_SHUTDOWN_TIME) && threadShouldExit(now, curHardShutdownTimeMs))
                     break;
 
                 // Handle timeouts.
                 TimeoutProcessor timeoutProcessor = timeoutProcessorFactory.create(now);
-                timeoutNewCalls(timeoutProcessor);
-                timeoutCallsToSend(timeoutProcessor, callsToSend);
-                timeoutCallsInFlight(timeoutProcessor, callsInFlight);
+                timeoutPendingCalls(timeoutProcessor);
+                timeoutCallsToSend(timeoutProcessor);
+                timeoutCallsInFlight(timeoutProcessor);
 
                 long pollTimeout = Math.min(1200000, timeoutProcessor.nextTimeoutMs());
                 if (curHardShutdownTimeMs != INVALID_SHUTDOWN_TIME) {
                     pollTimeout = Math.min(pollTimeout, curHardShutdownTimeMs - now);
                 }
 
-                // Handle new calls and metadata update requests.
-                prevMetadataVersion = checkMetadataReady(prevMetadataVersion);
-                if (prevMetadataVersion == null) {
-                    chooseNodesForNewCalls(now, callsToSend);
-                    pollTimeout = Math.min(pollTimeout,
-                        sendEligibleCalls(now, callsToSend, correlationIdToCalls, callsInFlight));
+                // Choose nodes for our pending calls.
+                chooseNodesForPendingCalls(now, pendingCalls.iterator());
+                long metadataFetchDelayMs = metadataManager.metadataFetchDelayMs(now);
+                if (metadataFetchDelayMs == 0) {
+                    metadataManager.transitionToUpdatePending(now);
+                    Call metadataCall = makeMetadataCall(now);
+                    // Create a new metadata fetch call and add it to the end of pendingCalls.
+                    // Assign a node for just the new call (we handled the other pending nodes above).
+                    pendingCalls.add(metadataCall);
+                    chooseNodesForPendingCalls(now, pendingCalls.listIterator(pendingCalls.size() - 1));
+                }
+                pollTimeout = Math.min(pollTimeout, sendEligibleCalls(now));
+                if (metadataFetchDelayMs > 0) {
+                    pollTimeout = Math.min(pollTimeout, metadataFetchDelayMs);
                 }
 
                 // Wait for network responses.
@@ -1008,20 +1057,20 @@ public class KafkaAdminClient extends AdminClient {
 
                 // Update the current time and handle the latest responses.
                 now = time.milliseconds();
-                handleAuthenticationException(now, callsToSend);
-                handleResponses(now, responses, callsInFlight, correlationIdToCalls);
+                handleResponses(now, responses);
             }
             int numTimedOut = 0;
             TimeoutProcessor timeoutProcessor = new TimeoutProcessor(Long.MAX_VALUE);
             synchronized (this) {
-                numTimedOut += timeoutProcessor.handleTimeouts(newCalls,
-                        "The AdminClient thread has exited.");
+                numTimedOut += timeoutProcessor.handleTimeouts(newCalls, "The AdminClient thread has exited.");
                 newCalls = null;
             }
+            numTimedOut += timeoutProcessor.handleTimeouts(pendingCalls, "The AdminClient thread has exited.");
+            numTimedOut += timeoutCallsToSend(timeoutProcessor);
             numTimedOut += timeoutProcessor.handleTimeouts(correlationIdToCalls.values(),
                     "The AdminClient thread has exited.");
             if (numTimedOut > 0) {
-                log.debug("Timed out {} remaining operations.", numTimedOut);
+                log.debug("Timed out {} remaining operation(s).", numTimedOut);
             }
             closeQuietly(client, "KafkaClient");
             closeQuietly(metrics, "Metrics");
@@ -1073,6 +1122,53 @@ public class KafkaAdminClient extends AdminClient {
                 enqueue(call, now);
             }
         }
+
+        /**
+         * Create a new metadata call.
+         */
+        private Call makeMetadataCall(long now) {
+            return new Call(true, "fetchMetadata", calcDeadlineMs(now, defaultTimeoutMs),
+                    new MetadataUpdateNodeIdProvider()) {
+                @Override
+                public AbstractRequest.Builder createRequest(int timeoutMs) {
+                    // Since this only requests node information, it's safe to pass true
+                    // for allowAutoTopicCreation (and it simplifies communication with
+                    // older brokers)
+                    return new MetadataRequest.Builder(Collections.<String>emptyList(), true);
+                }
+
+                @Override
+                public void handleResponse(AbstractResponse abstractResponse) {
+                    MetadataResponse response = (MetadataResponse) abstractResponse;
+                    metadataManager.update(response.cluster(), time.milliseconds(), null);
+                }
+
+                @Override
+                public void handleFailure(Throwable e) {
+                    if (e instanceof AuthenticationException) {
+                        log.info("Unable to fetch cluster metadata from node {} because of " +
+                            "authentication error", curNode(), e);
+                        metadataManager.update(Cluster.empty(), time.milliseconds(), (AuthenticationException) e);
+                    } else {
+                        log.info("Unable to fetch cluster metadata from node {}",
+                            curNode(), e);
+                    }
+                }
+            };
+        }
+    }
+
+    /**
+     * Returns true if a topic name cannot be represented in an RPC.  This function does NOT check
+     * whether the name is too long, contains invalid characters, etc.  It is better to enforce
+     * those policies on the server, so that they can be changed in the future if needed.
+     */
+    private static boolean topicNameIsUnrepresentable(String topicName) {
+        return topicName == null || topicName.isEmpty();
+    }
+
+    private static boolean groupIdIsUnrepresentable(String groupId) {
+        return groupId == null;
     }
 
     @Override
@@ -1081,13 +1177,18 @@ public class KafkaAdminClient extends AdminClient {
         final Map<String, KafkaFutureImpl<Void>> topicFutures = new HashMap<>(newTopics.size());
         final Map<String, CreateTopicsRequest.TopicDetails> topicsMap = new HashMap<>(newTopics.size());
         for (NewTopic newTopic : newTopics) {
-            if (topicFutures.get(newTopic.name()) == null) {
+            if (topicNameIsUnrepresentable(newTopic.name())) {
+                KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+                future.completeExceptionally(new InvalidTopicException("The given topic name '" +
+                    newTopic.name() + "' cannot be represented in a request."));
+                topicFutures.put(newTopic.name(), future);
+            } else if (!topicFutures.containsKey(newTopic.name())) {
                 topicFutures.put(newTopic.name(), new KafkaFutureImpl<Void>());
                 topicsMap.put(newTopic.name(), newTopic.convertToTopicDetails());
             }
         }
         final long now = time.milliseconds();
-        runnable.call(new Call("createTopics", calcDeadlineMs(now, options.timeoutMs()),
+        Call call = new Call("createTopics", calcDeadlineMs(now, options.timeoutMs()),
             new ControllerNodeProvider()) {
 
             @Override
@@ -1098,6 +1199,14 @@ public class KafkaAdminClient extends AdminClient {
             @Override
             public void handleResponse(AbstractResponse abstractResponse) {
                 CreateTopicsResponse response = (CreateTopicsResponse) abstractResponse;
+                // Check for controller change
+                for (ApiError error : response.errors().values()) {
+                    if (error.error() == Errors.NOT_CONTROLLER) {
+                        metadataManager.clearController();
+                        metadataManager.requestUpdate();
+                        throw error.exception();
+                    }
+                }
                 // Handle server responses for particular topics.
                 for (Map.Entry<String, ApiError> entry : response.errors().entrySet()) {
                     KafkaFutureImpl<Void> future = topicFutures.get(entry.getKey());
@@ -1126,31 +1235,49 @@ public class KafkaAdminClient extends AdminClient {
             void handleFailure(Throwable throwable) {
                 completeAllExceptionally(topicFutures.values(), throwable);
             }
-        }, now);
+        };
+        if (!topicsMap.isEmpty()) {
+            runnable.call(call, now);
+        }
         return new CreateTopicsResult(new HashMap<String, KafkaFuture<Void>>(topicFutures));
     }
 
     @Override
-    public DeleteTopicsResult deleteTopics(final Collection<String> topicNames,
+    public DeleteTopicsResult deleteTopics(Collection<String> topicNames,
                                            DeleteTopicsOptions options) {
         final Map<String, KafkaFutureImpl<Void>> topicFutures = new HashMap<>(topicNames.size());
+        final List<String> validTopicNames = new ArrayList<>(topicNames.size());
         for (String topicName : topicNames) {
-            if (topicFutures.get(topicName) == null) {
+            if (topicNameIsUnrepresentable(topicName)) {
+                KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+                future.completeExceptionally(new InvalidTopicException("The given topic name '" +
+                    topicName + "' cannot be represented in a request."));
+                topicFutures.put(topicName, future);
+            } else if (!topicFutures.containsKey(topicName)) {
                 topicFutures.put(topicName, new KafkaFutureImpl<Void>());
+                validTopicNames.add(topicName);
             }
         }
         final long now = time.milliseconds();
-        runnable.call(new Call("deleteTopics", calcDeadlineMs(now, options.timeoutMs()),
+        Call call = new Call("deleteTopics", calcDeadlineMs(now, options.timeoutMs()),
             new ControllerNodeProvider()) {
 
             @Override
             AbstractRequest.Builder createRequest(int timeoutMs) {
-                return new DeleteTopicsRequest.Builder(new HashSet<>(topicNames), timeoutMs);
+                return new DeleteTopicsRequest.Builder(new HashSet<>(validTopicNames), timeoutMs);
             }
 
             @Override
             void handleResponse(AbstractResponse abstractResponse) {
                 DeleteTopicsResponse response = (DeleteTopicsResponse) abstractResponse;
+                // Check for controller change
+                for (Errors error : response.errors().values()) {
+                    if (error == Errors.NOT_CONTROLLER) {
+                        metadataManager.clearController();
+                        metadataManager.requestUpdate();
+                        throw error.exception();
+                    }
+                }
                 // Handle server responses for particular topics.
                 for (Map.Entry<String, Errors> entry : response.errors().entrySet()) {
                     KafkaFutureImpl<Void> future = topicFutures.get(entry.getKey());
@@ -1179,7 +1306,10 @@ public class KafkaAdminClient extends AdminClient {
             void handleFailure(Throwable throwable) {
                 completeAllExceptionally(topicFutures.values(), throwable);
             }
-        }, now);
+        };
+        if (!validTopicNames.isEmpty()) {
+            runnable.call(call, now);
+        }
         return new DeleteTopicsResult(new HashMap<String, KafkaFuture<Void>>(topicFutures));
     }
 
@@ -1221,13 +1351,18 @@ public class KafkaAdminClient extends AdminClient {
         final Map<String, KafkaFutureImpl<TopicDescription>> topicFutures = new HashMap<>(topicNames.size());
         final ArrayList<String> topicNamesList = new ArrayList<>();
         for (String topicName : topicNames) {
-            if (!topicFutures.containsKey(topicName)) {
+            if (topicNameIsUnrepresentable(topicName)) {
+                KafkaFutureImpl<TopicDescription> future = new KafkaFutureImpl<TopicDescription>();
+                future.completeExceptionally(new InvalidTopicException("The given topic name '" +
+                    topicName + "' cannot be represented in a request."));
+                topicFutures.put(topicName, future);
+            } else if (!topicFutures.containsKey(topicName)) {
                 topicFutures.put(topicName, new KafkaFutureImpl<TopicDescription>());
                 topicNamesList.add(topicName);
             }
         }
         final long now = time.milliseconds();
-        runnable.call(new Call("describeTopics", calcDeadlineMs(now, options.timeoutMs()),
+        Call call = new Call("describeTopics", calcDeadlineMs(now, options.timeoutMs()),
             new ControllerNodeProvider()) {
 
             private boolean supportsDisablingTopicCreation = true;
@@ -1244,15 +1379,16 @@ public class KafkaAdminClient extends AdminClient {
             void handleResponse(AbstractResponse abstractResponse) {
                 MetadataResponse response = (MetadataResponse) abstractResponse;
                 // Handle server responses for particular topics.
+                Cluster cluster = response.cluster();
+                Map<String, Errors> errors = response.errors();
                 for (Map.Entry<String, KafkaFutureImpl<TopicDescription>> entry : topicFutures.entrySet()) {
                     String topicName = entry.getKey();
                     KafkaFutureImpl<TopicDescription> future = entry.getValue();
-                    Errors topicError = response.errors().get(topicName);
+                    Errors topicError = errors.get(topicName);
                     if (topicError != null) {
                         future.completeExceptionally(topicError.exception());
                         continue;
                     }
-                    Cluster cluster = response.cluster();
                     if (!cluster.topics().contains(topicName)) {
                         future.completeExceptionally(new InvalidTopicException("Topic " + topicName + " not found."));
                         continue;
@@ -1296,7 +1432,10 @@ public class KafkaAdminClient extends AdminClient {
             void handleFailure(Throwable throwable) {
                 completeAllExceptionally(topicFutures.values(), throwable);
             }
-        }, now);
+        };
+        if (!topicNamesList.isEmpty()) {
+            runnable.call(call, now);
+        }
         return new DescribeTopicsResult(new HashMap<String, KafkaFuture<TopicDescription>>(topicFutures));
     }
 
@@ -1492,7 +1631,7 @@ public class KafkaAdminClient extends AdminClient {
         final Collection<Resource> unifiedRequestResources = new ArrayList<>(configResources.size());
 
         for (ConfigResource resource : configResources) {
-            if (resource.type() == ConfigResource.Type.BROKER) {
+            if (resource.type() == ConfigResource.Type.BROKER && !resource.isDefault()) {
                 brokerFutures.put(resource, new KafkaFutureImpl<Config>());
                 brokerResources.add(configResourceToResource(resource));
             } else {
@@ -1508,7 +1647,8 @@ public class KafkaAdminClient extends AdminClient {
 
                 @Override
                 AbstractRequest.Builder createRequest(int timeoutMs) {
-                    return new DescribeConfigsRequest.Builder(unifiedRequestResources);
+                    return new DescribeConfigsRequest.Builder(unifiedRequestResources)
+                            .includeSynonyms(options.includeSynonyms());
                 }
 
                 @Override
@@ -1529,8 +1669,10 @@ public class KafkaAdminClient extends AdminClient {
                         }
                         List<ConfigEntry> configEntries = new ArrayList<>();
                         for (DescribeConfigsResponse.ConfigEntry configEntry : config.entries()) {
-                            configEntries.add(new ConfigEntry(configEntry.name(), configEntry.value(),
-                                configEntry.isDefault(), configEntry.isSensitive(), configEntry.isReadOnly()));
+                            configEntries.add(new ConfigEntry(configEntry.name(),
+                                    configEntry.value(), configSource(configEntry.source()),
+                                    configEntry.isSensitive(), configEntry.isReadOnly(),
+                                    configSynonyms(configEntry)));
                         }
                         future.complete(new Config(configEntries));
                     }
@@ -1552,7 +1694,8 @@ public class KafkaAdminClient extends AdminClient {
 
                 @Override
                 AbstractRequest.Builder createRequest(int timeoutMs) {
-                    return new DescribeConfigsRequest.Builder(Collections.singleton(resource));
+                    return new DescribeConfigsRequest.Builder(Collections.singleton(resource))
+                            .includeSynonyms(options.includeSynonyms());
                 }
 
                 @Override
@@ -1571,7 +1714,8 @@ public class KafkaAdminClient extends AdminClient {
                         List<ConfigEntry> configEntries = new ArrayList<>();
                         for (DescribeConfigsResponse.ConfigEntry configEntry : config.entries()) {
                             configEntries.add(new ConfigEntry(configEntry.name(), configEntry.value(),
-                                configEntry.isDefault(), configEntry.isSensitive(), configEntry.isReadOnly()));
+                                configSource(configEntry.source()), configEntry.isSensitive(), configEntry.isReadOnly(),
+                                configSynonyms(configEntry)));
                         }
                         brokerFuture.complete(new Config(configEntries));
                     }
@@ -1604,24 +1748,74 @@ public class KafkaAdminClient extends AdminClient {
         return new Resource(resourceType, configResource.name());
     }
 
+    private List<ConfigEntry.ConfigSynonym> configSynonyms(DescribeConfigsResponse.ConfigEntry configEntry) {
+        List<ConfigEntry.ConfigSynonym> synonyms = new ArrayList<>(configEntry.synonyms().size());
+        for (DescribeConfigsResponse.ConfigSynonym synonym : configEntry.synonyms()) {
+            synonyms.add(new ConfigEntry.ConfigSynonym(synonym.name(), synonym.value(), configSource(synonym.source())));
+        }
+        return synonyms;
+    }
+
+    private ConfigEntry.ConfigSource configSource(DescribeConfigsResponse.ConfigSource source) {
+        ConfigEntry.ConfigSource configSource;
+        switch (source) {
+            case TOPIC_CONFIG:
+                configSource = ConfigEntry.ConfigSource.DYNAMIC_TOPIC_CONFIG;
+                break;
+            case DYNAMIC_BROKER_CONFIG:
+                configSource = ConfigEntry.ConfigSource.DYNAMIC_BROKER_CONFIG;
+                break;
+            case DYNAMIC_DEFAULT_BROKER_CONFIG:
+                configSource = ConfigEntry.ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG;
+                break;
+            case STATIC_BROKER_CONFIG:
+                configSource = ConfigEntry.ConfigSource.STATIC_BROKER_CONFIG;
+                break;
+            case DEFAULT_CONFIG:
+                configSource = ConfigEntry.ConfigSource.DEFAULT_CONFIG;
+                break;
+            default:
+                throw new IllegalArgumentException("Unexpected config source " + source);
+        }
+        return configSource;
+    }
+
     @Override
     public AlterConfigsResult alterConfigs(Map<ConfigResource, Config> configs, final AlterConfigsOptions options) {
-        final Map<ConfigResource, KafkaFutureImpl<Void>> futures = new HashMap<>(configs.size());
-        for (ConfigResource configResource : configs.keySet()) {
-            futures.put(configResource, new KafkaFutureImpl<Void>());
+        final Map<ConfigResource, KafkaFutureImpl<Void>> allFutures = new HashMap<>();
+        // We must make a separate AlterConfigs request for every BROKER resource we want to alter
+        // and send the request to that specific broker. Other resources are grouped together into
+        // a single request that may be sent to any broker.
+        final Collection<ConfigResource> unifiedRequestResources = new ArrayList<>();
+
+        for (ConfigResource resource : configs.keySet()) {
+            if (resource.type() == ConfigResource.Type.BROKER && !resource.isDefault()) {
+                NodeProvider nodeProvider = new ConstantNodeIdProvider(Integer.parseInt(resource.name()));
+                allFutures.putAll(alterConfigs(configs, options, Collections.singleton(resource), nodeProvider));
+            } else
+                unifiedRequestResources.add(resource);
         }
-        final Map<Resource, AlterConfigsRequest.Config> requestMap = new HashMap<>(configs.size());
-        for (Map.Entry<ConfigResource, Config> entry : configs.entrySet()) {
+        if (!unifiedRequestResources.isEmpty())
+          allFutures.putAll(alterConfigs(configs, options, unifiedRequestResources, new LeastLoadedNodeProvider()));
+        return new AlterConfigsResult(new HashMap<ConfigResource, KafkaFuture<Void>>(allFutures));
+    }
+
+    private Map<ConfigResource, KafkaFutureImpl<Void>> alterConfigs(Map<ConfigResource, Config> configs,
+                                                                    final AlterConfigsOptions options,
+                                                                    Collection<ConfigResource> resources,
+                                                                    NodeProvider nodeProvider) {
+        final Map<ConfigResource, KafkaFutureImpl<Void>> futures = new HashMap<>();
+        final Map<Resource, AlterConfigsRequest.Config> requestMap = new HashMap<>(resources.size());
+        for (ConfigResource resource : resources) {
             List<AlterConfigsRequest.ConfigEntry> configEntries = new ArrayList<>();
-            for (ConfigEntry configEntry: entry.getValue().entries())
+            for (ConfigEntry configEntry: configs.get(resource).entries())
                 configEntries.add(new AlterConfigsRequest.ConfigEntry(configEntry.name(), configEntry.value()));
-            ConfigResource resource = entry.getKey();
             requestMap.put(configResourceToResource(resource), new AlterConfigsRequest.Config(configEntries));
+            futures.put(resource, new KafkaFutureImpl<Void>());
         }
 
         final long now = time.milliseconds();
-        runnable.call(new Call("alterConfigs", calcDeadlineMs(now, options.timeoutMs()),
-                new LeastLoadedNodeProvider()) {
+        runnable.call(new Call("alterConfigs", calcDeadlineMs(now, options.timeoutMs()), nodeProvider) {
 
             @Override
             public AbstractRequest.Builder createRequest(int timeoutMs) {
@@ -1647,7 +1841,7 @@ public class KafkaAdminClient extends AdminClient {
                 completeAllExceptionally(futures.values(), throwable);
             }
         }, now);
-        return new AlterConfigsResult(new HashMap<ConfigResource, KafkaFuture<Void>>(futures));
+        return futures;
     }
 
     @Override
@@ -1833,6 +2027,7 @@ public class KafkaAdminClient extends AdminClient {
         return new DescribeReplicaLogDirsResult(new HashMap<TopicPartitionReplica, KafkaFuture<ReplicaLogDirInfo>>(futures));
     }
 
+    @Override
     public CreatePartitionsResult createPartitions(Map<String, NewPartitions> newPartitions,
                                                    final CreatePartitionsOptions options) {
         final Map<String, KafkaFutureImpl<Void>> futures = new HashMap<>(newPartitions.size());
@@ -1853,6 +2048,14 @@ public class KafkaAdminClient extends AdminClient {
             @Override
             public void handleResponse(AbstractResponse abstractResponse) {
                 CreatePartitionsResponse response = (CreatePartitionsResponse) abstractResponse;
+                // Check for controller change
+                for (ApiError error : response.errors().values()) {
+                    if (error.error() == Errors.NOT_CONTROLLER) {
+                        metadataManager.clearController();
+                        metadataManager.requestUpdate();
+                        throw error.exception();
+                    }
+                }
                 for (Map.Entry<String, ApiError> result : response.errors().entrySet()) {
                     KafkaFutureImpl<Void> future = futures.get(result.getKey());
                     if (result.getValue().isSuccess()) {
@@ -1871,4 +2074,629 @@ public class KafkaAdminClient extends AdminClient {
         return new CreatePartitionsResult(new HashMap<String, KafkaFuture<Void>>(futures));
     }
 
+    @Override
+    public DeleteRecordsResult deleteRecords(final Map<TopicPartition, RecordsToDelete> recordsToDelete,
+                                             final DeleteRecordsOptions options) {
+
+        // requests need to be sent to partitions leader nodes so ...
+        // ... from the provided map it's needed to create more maps grouping topic/partition per leader
+
+        final Map<TopicPartition, KafkaFutureImpl<DeletedRecords>> futures = new HashMap<>(recordsToDelete.size());
+        for (TopicPartition topicPartition: recordsToDelete.keySet()) {
+            futures.put(topicPartition, new KafkaFutureImpl<DeletedRecords>());
+        }
+
+        // preparing topics list for asking metadata about them
+        final Set<String> topics = new HashSet<>();
+        for (TopicPartition topicPartition: recordsToDelete.keySet()) {
+            topics.add(topicPartition.topic());
+        }
+
+        final long nowMetadata = time.milliseconds();
+        final long deadline = calcDeadlineMs(nowMetadata, options.timeoutMs());
+        // asking for topics metadata for getting partitions leaders
+        runnable.call(new Call("topicsMetadata", deadline,
+                new LeastLoadedNodeProvider()) {
+
+            @Override
+            AbstractRequest.Builder createRequest(int timeoutMs) {
+                return new MetadataRequest.Builder(new ArrayList<>(topics), false);
+            }
+
+            @Override
+            void handleResponse(AbstractResponse abstractResponse) {
+                MetadataResponse response = (MetadataResponse) abstractResponse;
+
+                Map<String, Errors> errors = response.errors();
+                Cluster cluster = response.cluster();
+
+                // completing futures for topics with errors
+                for (Map.Entry<String, Errors> topicError: errors.entrySet()) {
+
+                    for (Map.Entry<TopicPartition, KafkaFutureImpl<DeletedRecords>> future: futures.entrySet()) {
+                        if (future.getKey().topic().equals(topicError.getKey())) {
+                            future.getValue().completeExceptionally(topicError.getValue().exception());
+                        }
+                    }
+                }
+
+                // grouping topic partitions per leader
+                Map<Node, Map<TopicPartition, Long>> leaders = new HashMap<>();
+                for (Map.Entry<TopicPartition, RecordsToDelete> entry: recordsToDelete.entrySet()) {
+
+                    // avoiding to send deletion request for topics with errors
+                    if (!errors.containsKey(entry.getKey().topic())) {
+
+                        Node node = cluster.leaderFor(entry.getKey());
+                        if (node != null) {
+                            if (!leaders.containsKey(node))
+                                leaders.put(node, new HashMap<TopicPartition, Long>());
+                            leaders.get(node).put(entry.getKey(), entry.getValue().beforeOffset());
+                        } else {
+                            KafkaFutureImpl<DeletedRecords> future = futures.get(entry.getKey());
+                            future.completeExceptionally(Errors.LEADER_NOT_AVAILABLE.exception());
+                        }
+                    }
+                }
+
+                for (final Map.Entry<Node, Map<TopicPartition, Long>> entry: leaders.entrySet()) {
+
+                    final long nowDelete = time.milliseconds();
+
+                    final int brokerId = entry.getKey().id();
+
+                    runnable.call(new Call("deleteRecords", deadline,
+                            new ConstantNodeIdProvider(brokerId)) {
+
+                        @Override
+                        AbstractRequest.Builder createRequest(int timeoutMs) {
+                            return new DeleteRecordsRequest.Builder(timeoutMs, entry.getValue());
+                        }
+
+                        @Override
+                        void handleResponse(AbstractResponse abstractResponse) {
+                            DeleteRecordsResponse response = (DeleteRecordsResponse) abstractResponse;
+                            for (Map.Entry<TopicPartition, DeleteRecordsResponse.PartitionResponse> result: response.responses().entrySet()) {
+
+                                KafkaFutureImpl<DeletedRecords> future = futures.get(result.getKey());
+                                if (result.getValue().error == Errors.NONE) {
+                                    future.complete(new DeletedRecords(result.getValue().lowWatermark));
+                                } else {
+                                    future.completeExceptionally(result.getValue().error.exception());
+                                }
+                            }
+                        }
+
+                        @Override
+                        void handleFailure(Throwable throwable) {
+                            completeAllExceptionally(futures.values(), throwable);
+                        }
+                    }, nowDelete);
+                }
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                completeAllExceptionally(futures.values(), throwable);
+            }
+        }, nowMetadata);
+
+        return new DeleteRecordsResult(new HashMap<TopicPartition, KafkaFuture<DeletedRecords>>(futures));
+    }
+
+    @Override
+    public CreateDelegationTokenResult createDelegationToken(final CreateDelegationTokenOptions options) {
+        final KafkaFutureImpl<DelegationToken> delegationTokenFuture = new KafkaFutureImpl<>();
+        final long now = time.milliseconds();
+        runnable.call(new Call("createDelegationToken", calcDeadlineMs(now, options.timeoutMs()),
+            new LeastLoadedNodeProvider()) {
+
+            @Override
+            AbstractRequest.Builder createRequest(int timeoutMs) {
+                return new CreateDelegationTokenRequest.Builder(options.renewers(), options.maxlifeTimeMs());
+            }
+
+            @Override
+            void handleResponse(AbstractResponse abstractResponse) {
+                CreateDelegationTokenResponse response = (CreateDelegationTokenResponse) abstractResponse;
+                if (response.hasError()) {
+                    delegationTokenFuture.completeExceptionally(response.error().exception());
+                } else {
+                    TokenInformation tokenInfo =  new TokenInformation(response.tokenId(), response.owner(),
+                        options.renewers(), response.issueTimestamp(), response.maxTimestamp(), response.expiryTimestamp());
+                    DelegationToken token = new DelegationToken(tokenInfo, response.hmacBytes());
+                    delegationTokenFuture.complete(token);
+                }
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                delegationTokenFuture.completeExceptionally(throwable);
+            }
+        }, now);
+
+        return new CreateDelegationTokenResult(delegationTokenFuture);
+    }
+
+    @Override
+    public RenewDelegationTokenResult renewDelegationToken(final byte[] hmac, final RenewDelegationTokenOptions options) {
+        final KafkaFutureImpl<Long>  expiryTimeFuture = new KafkaFutureImpl<>();
+        final long now = time.milliseconds();
+        runnable.call(new Call("renewDelegationToken", calcDeadlineMs(now, options.timeoutMs()),
+            new LeastLoadedNodeProvider()) {
+
+            @Override
+            AbstractRequest.Builder createRequest(int timeoutMs) {
+                return new RenewDelegationTokenRequest.Builder(hmac, options.renewTimePeriodMs());
+            }
+
+            @Override
+            void handleResponse(AbstractResponse abstractResponse) {
+                RenewDelegationTokenResponse response = (RenewDelegationTokenResponse) abstractResponse;
+                if (response.hasError()) {
+                    expiryTimeFuture.completeExceptionally(response.error().exception());
+                } else {
+                    expiryTimeFuture.complete(response.expiryTimestamp());
+                }
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                expiryTimeFuture.completeExceptionally(throwable);
+            }
+        }, now);
+
+        return new RenewDelegationTokenResult(expiryTimeFuture);
+    }
+
+    @Override
+    public ExpireDelegationTokenResult expireDelegationToken(final byte[] hmac, final ExpireDelegationTokenOptions options) {
+        final KafkaFutureImpl<Long>  expiryTimeFuture = new KafkaFutureImpl<>();
+        final long now = time.milliseconds();
+        runnable.call(new Call("expireDelegationToken", calcDeadlineMs(now, options.timeoutMs()),
+            new LeastLoadedNodeProvider()) {
+
+            @Override
+            AbstractRequest.Builder createRequest(int timeoutMs) {
+                return new ExpireDelegationTokenRequest.Builder(hmac, options.expiryTimePeriodMs());
+            }
+
+            @Override
+            void handleResponse(AbstractResponse abstractResponse) {
+                ExpireDelegationTokenResponse response = (ExpireDelegationTokenResponse) abstractResponse;
+                if (response.hasError()) {
+                    expiryTimeFuture.completeExceptionally(response.error().exception());
+                } else {
+                    expiryTimeFuture.complete(response.expiryTimestamp());
+                }
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                expiryTimeFuture.completeExceptionally(throwable);
+            }
+        }, now);
+
+        return new ExpireDelegationTokenResult(expiryTimeFuture);
+    }
+
+    @Override
+    public DescribeDelegationTokenResult describeDelegationToken(final DescribeDelegationTokenOptions options) {
+        final KafkaFutureImpl<List<DelegationToken>>  tokensFuture = new KafkaFutureImpl<>();
+        final long now = time.milliseconds();
+        runnable.call(new Call("describeDelegationToken", calcDeadlineMs(now, options.timeoutMs()),
+            new LeastLoadedNodeProvider()) {
+
+            @Override
+            AbstractRequest.Builder createRequest(int timeoutMs) {
+                return new DescribeDelegationTokenRequest.Builder(options.owners());
+            }
+
+            @Override
+            void handleResponse(AbstractResponse abstractResponse) {
+                DescribeDelegationTokenResponse response = (DescribeDelegationTokenResponse) abstractResponse;
+                if (response.hasError()) {
+                    tokensFuture.completeExceptionally(response.error().exception());
+                } else {
+                    tokensFuture.complete(response.tokens());
+                }
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                tokensFuture.completeExceptionally(throwable);
+            }
+        }, now);
+
+        return new DescribeDelegationTokenResult(tokensFuture);
+    }
+
+    @Override
+    public DescribeConsumerGroupsResult describeConsumerGroups(final Collection<String> groupIds,
+                                                               final DescribeConsumerGroupsOptions options) {
+
+        final Map<String, KafkaFutureImpl<ConsumerGroupDescription>> futures = new HashMap<>(groupIds.size());
+        for (String groupId: groupIds) {
+            if (groupIdIsUnrepresentable(groupId)) {
+                KafkaFutureImpl<ConsumerGroupDescription> future = new KafkaFutureImpl<>();
+                future.completeExceptionally(new InvalidGroupIdException("The given group id '" +
+                        groupId + "' cannot be represented in a request."));
+                futures.put(groupId, future);
+            } else if (!futures.containsKey(groupId)) {
+                futures.put(groupId, new KafkaFutureImpl<ConsumerGroupDescription>());
+            }
+        }
+
+        // TODO: KAFKA-6788, we should consider grouping the request per coordinator and send one request with a list of
+        // all consumer groups this coordinator host
+        for (final Map.Entry<String, KafkaFutureImpl<ConsumerGroupDescription>> entry : futures.entrySet()) {
+            // skip sending request for those futures that already failed.
+            if (entry.getValue().isCompletedExceptionally())
+                continue;
+
+            final String groupId = entry.getKey();
+
+            final long startFindCoordinatorMs = time.milliseconds();
+            final long deadline = calcDeadlineMs(startFindCoordinatorMs, options.timeoutMs());
+
+            runnable.call(new Call("findCoordinator", deadline, new LeastLoadedNodeProvider()) {
+                @Override
+                AbstractRequest.Builder createRequest(int timeoutMs) {
+                    return new FindCoordinatorRequest.Builder(FindCoordinatorRequest.CoordinatorType.GROUP, groupId);
+                }
+
+                @Override
+                void handleResponse(AbstractResponse abstractResponse) {
+                    final FindCoordinatorResponse response = (FindCoordinatorResponse) abstractResponse;
+
+                    final long nowDescribeConsumerGroups = time.milliseconds();
+
+                    final int nodeId = response.node().id();
+
+                    runnable.call(new Call("describeConsumerGroups", deadline, new ConstantNodeIdProvider(nodeId)) {
+
+                        @Override
+                        AbstractRequest.Builder createRequest(int timeoutMs) {
+                            return new DescribeGroupsRequest.Builder(Collections.singletonList(groupId));
+                        }
+
+                        @Override
+                        void handleResponse(AbstractResponse abstractResponse) {
+                            final DescribeGroupsResponse response = (DescribeGroupsResponse) abstractResponse;
+
+                            KafkaFutureImpl<ConsumerGroupDescription> future = futures.get(groupId);
+                            final DescribeGroupsResponse.GroupMetadata groupMetadata = response.groups().get(groupId);
+
+                            final Errors groupError = groupMetadata.error();
+                            if (groupError != Errors.NONE) {
+                                // TODO: KAFKA-6789, we can retry based on the error code
+                                future.completeExceptionally(groupError.exception());
+                            } else {
+                                final String protocolType = groupMetadata.protocolType();
+                                if (protocolType.equals(ConsumerProtocol.PROTOCOL_TYPE) || protocolType.isEmpty()) {
+                                    final List<DescribeGroupsResponse.GroupMember> members = groupMetadata.members();
+                                    final List<MemberDescription> consumers = new ArrayList<>(members.size());
+
+                                    for (DescribeGroupsResponse.GroupMember groupMember : members) {
+                                        final PartitionAssignor.Assignment assignment =
+                                                ConsumerProtocol.deserializeAssignment(
+                                                        ByteBuffer.wrap(Utils.readBytes(groupMember.memberAssignment())));
+
+                                        final MemberDescription memberDescription =
+                                                new MemberDescription(
+                                                        groupMember.memberId(),
+                                                        groupMember.clientId(),
+                                                        groupMember.clientHost(),
+                                                        new MemberAssignment(assignment.partitions()));
+                                        consumers.add(memberDescription);
+                                    }
+                                    final String protocol = groupMetadata.protocol();
+                                    final ConsumerGroupDescription consumerGroupDescription =
+                                            new ConsumerGroupDescription(groupId, protocolType.isEmpty(), consumers, protocol);
+                                    future.complete(consumerGroupDescription);
+                                }
+                            }
+                        }
+
+                        @Override
+                        void handleFailure(Throwable throwable) {
+                            KafkaFutureImpl<ConsumerGroupDescription> future = futures.get(groupId);
+                            future.completeExceptionally(throwable);
+                        }
+                    }, nowDescribeConsumerGroups);
+                }
+
+                @Override
+                void handleFailure(Throwable throwable) {
+                    KafkaFutureImpl<ConsumerGroupDescription> future = futures.get(groupId);
+                    future.completeExceptionally(throwable);
+                }
+            }, startFindCoordinatorMs);
+        }
+
+        return new DescribeConsumerGroupsResult(new HashMap<String, KafkaFuture<ConsumerGroupDescription>>(futures));
+    }
+
+    private final static class ListConsumerGroupsResults {
+        private final List<Throwable> errors;
+        private final HashMap<String, ConsumerGroupListing> listings;
+        private final HashSet<Node> remaining;
+        private final KafkaFutureImpl<Collection<Object>> future;
+
+        ListConsumerGroupsResults(Collection<Throwable> errors, Collection<Node> leaders,
+                                  KafkaFutureImpl<Collection<Object>> future) {
+            this.errors = new ArrayList<>(errors);
+            this.listings = new HashMap<>();
+            this.remaining = new HashSet<>(leaders);
+            this.future = future;
+            tryComplete();
+        }
+
+        synchronized void addError(Throwable throwable, Node node) {
+            ApiError error = ApiError.fromThrowable(throwable);
+            if (error.message() == null || error.message().isEmpty()) {
+                errors.add(error.error().exception(
+                    "Error listing groups on " + node));
+            } else {
+                errors.add(error.error().exception(
+                    "Error listing groups on " + node + ": " + error.message()));
+            }
+        }
+
+        synchronized void addListing(ConsumerGroupListing listing) {
+            listings.put(listing.groupId(), listing);
+        }
+
+        synchronized void tryComplete(Node leader) {
+            remaining.remove(leader);
+            tryComplete();
+        }
+
+        private synchronized void tryComplete() {
+            if (remaining.isEmpty()) {
+                ArrayList<Object> results = new ArrayList<Object>(listings.values());
+                results.addAll(errors);
+                future.complete(results);
+            }
+        }
+    };
+
+    @Override
+    public ListConsumerGroupsResult listConsumerGroups(ListConsumerGroupsOptions options) {
+        final KafkaFutureImpl<Collection<Object>> all = new KafkaFutureImpl<>();
+        final long nowMetadata = time.milliseconds();
+        final long deadline = calcDeadlineMs(nowMetadata, options.timeoutMs());
+        runnable.call(new Call("findGroupsMetadata", deadline, new LeastLoadedNodeProvider()) {
+            @Override
+            AbstractRequest.Builder createRequest(int timeoutMs) {
+                return new MetadataRequest.Builder(Collections.singletonList(Topic.GROUP_METADATA_TOPIC_NAME), true);
+            }
+
+            @Override
+            void handleResponse(AbstractResponse abstractResponse) {
+                MetadataResponse metadataResponse = (MetadataResponse) abstractResponse;
+                final List<Throwable> metadataExceptions = new ArrayList<>();
+                final HashSet<Node> leaders = new HashSet<>();
+                for (final MetadataResponse.TopicMetadata metadata : metadataResponse.topicMetadata()) {
+                    if (metadata.error() != Errors.NONE) {
+                        metadataExceptions.add(metadata.error().exception("Unable to locate " +
+                            Topic.GROUP_METADATA_TOPIC_NAME));
+                    } else if (!metadata.topic().equals(Topic.GROUP_METADATA_TOPIC_NAME)) {
+                        metadataExceptions.add(new UnknownServerException("Server returned unrequested " +
+                            "information about unexpected topic " + metadata.topic()));
+                    } else {
+                        for (final MetadataResponse.PartitionMetadata partitionMetadata : metadata.partitionMetadata()) {
+                            final Node leader = partitionMetadata.leader();
+                            if (partitionMetadata.error() != Errors.NONE) {
+                                // TODO: KAFKA-6789, retry based on the error code
+                                metadataExceptions.add(partitionMetadata.error().exception("Unable to find " +
+                                    "leader for partition " + partitionMetadata.partition() + " of " +
+                                    Topic.GROUP_METADATA_TOPIC_NAME));
+                            } else if (leader == null || leader.equals(Node.noNode())) {
+                                metadataExceptions.add(new LeaderNotAvailableException("Unable to find leader " +
+                                    "for partition " + partitionMetadata.partition() + " of " +
+                                    Topic.GROUP_METADATA_TOPIC_NAME));
+                            } else {
+                                leaders.add(leader);
+                            }
+                        }
+                    }
+                }
+                final ListConsumerGroupsResults results =
+                    new ListConsumerGroupsResults(metadataExceptions, leaders, all);
+                for (final Node node : leaders) {
+                    final long nowList = time.milliseconds();
+                    runnable.call(new Call("listConsumerGroups", deadline, new ConstantNodeIdProvider(node.id())) {
+                        @Override
+                        AbstractRequest.Builder createRequest(int timeoutMs) {
+                            return new ListGroupsRequest.Builder();
+                        }
+
+                        @Override
+                        void handleResponse(AbstractResponse abstractResponse) {
+                            final ListGroupsResponse response = (ListGroupsResponse) abstractResponse;
+                            synchronized (results) {
+                                if (response.error() != Errors.NONE) {
+                                    results.addError(response.error().exception(), node);
+                                } else {
+                                    for (ListGroupsResponse.Group group : response.groups()) {
+                                        if (group.protocolType().equals(ConsumerProtocol.PROTOCOL_TYPE) ||
+                                            group.protocolType().isEmpty()) {
+                                            final String groupId = group.groupId();
+                                            final String protocolType = group.protocolType();
+                                            final ConsumerGroupListing groupListing = new ConsumerGroupListing(groupId, protocolType.isEmpty());
+                                            results.addListing(groupListing);
+                                        }
+                                    }
+                                }
+                                results.tryComplete(node);
+                            }
+                        }
+
+                        @Override
+                        void handleFailure(Throwable throwable) {
+                            synchronized (results) {
+                                results.addError(throwable, node);
+                                results.tryComplete(node);
+                            }
+                        }
+                    }, nowList);
+                }
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                all.complete(Collections.<Object>singletonList(throwable));
+            }
+        }, nowMetadata);
+
+        return new ListConsumerGroupsResult(all);
+    }
+
+    @Override
+    public ListConsumerGroupOffsetsResult listConsumerGroupOffsets(final String groupId, final ListConsumerGroupOffsetsOptions options) {
+        final KafkaFutureImpl<Map<TopicPartition, OffsetAndMetadata>> groupOffsetListingFuture = new KafkaFutureImpl<>();
+
+        final long startFindCoordinatorMs = time.milliseconds();
+        final long deadline = calcDeadlineMs(startFindCoordinatorMs, options.timeoutMs());
+
+        runnable.call(new Call("findCoordinator", deadline, new LeastLoadedNodeProvider()) {
+            @Override
+            AbstractRequest.Builder createRequest(int timeoutMs) {
+                return new FindCoordinatorRequest.Builder(FindCoordinatorRequest.CoordinatorType.GROUP, groupId);
+            }
+
+            @Override
+            void handleResponse(AbstractResponse abstractResponse) {
+                final FindCoordinatorResponse response = (FindCoordinatorResponse) abstractResponse;
+
+                final long nowListConsumerGroupOffsets = time.milliseconds();
+
+                final int nodeId = response.node().id();
+
+                runnable.call(new Call("listConsumerGroupOffsets", deadline, new ConstantNodeIdProvider(nodeId)) {
+                    @Override
+                    AbstractRequest.Builder createRequest(int timeoutMs) {
+                        return new OffsetFetchRequest.Builder(groupId, options.topicPartitions());
+                    }
+
+                    @Override
+                    void handleResponse(AbstractResponse abstractResponse) {
+                        final OffsetFetchResponse response = (OffsetFetchResponse) abstractResponse;
+                        final Map<TopicPartition, OffsetAndMetadata> groupOffsetsListing = new HashMap<>();
+
+                        if (response.hasError()) {
+                            groupOffsetListingFuture.completeExceptionally(response.error().exception());
+                        } else {
+                            for (Map.Entry<TopicPartition, OffsetFetchResponse.PartitionData> entry :
+                                    response.responseData().entrySet()) {
+                                final TopicPartition topicPartition = entry.getKey();
+                                final Errors error = entry.getValue().error;
+
+                                if (error == Errors.NONE) {
+                                    final Long offset = entry.getValue().offset;
+                                    final String metadata = entry.getValue().metadata;
+                                    groupOffsetsListing.put(topicPartition, new OffsetAndMetadata(offset, metadata));
+                                } else {
+                                    log.warn("Skipping return offset for {} due to error {}.", topicPartition, error);
+                                }
+                            }
+                            groupOffsetListingFuture.complete(groupOffsetsListing);
+                        }
+                    }
+
+                    @Override
+                    void handleFailure(Throwable throwable) {
+                        groupOffsetListingFuture.completeExceptionally(throwable);
+                    }
+                }, nowListConsumerGroupOffsets);
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                groupOffsetListingFuture.completeExceptionally(throwable);
+            }
+        }, startFindCoordinatorMs);
+
+        return new ListConsumerGroupOffsetsResult(groupOffsetListingFuture);
+    }
+
+    @Override
+    public DeleteConsumerGroupsResult deleteConsumerGroups(Collection<String> groupIds, DeleteConsumerGroupsOptions options) {
+
+        final Map<String, KafkaFutureImpl<Void>> futures = new HashMap<>(groupIds.size());
+        for (String groupId: groupIds) {
+            if (groupIdIsUnrepresentable(groupId)) {
+                KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+                future.completeExceptionally(new ApiException("The given group id '" +
+                        groupId + "' cannot be represented in a request."));
+                futures.put(groupId, future);
+            } else if (!futures.containsKey(groupId)) {
+                futures.put(groupId, new KafkaFutureImpl<Void>());
+            }
+        }
+
+        // TODO: KAFKA-6788, we should consider grouping the request per coordinator and send one request with a list of
+        // all consumer groups this coordinator host
+        for (final String groupId : groupIds) {
+            // skip sending request for those futures that already failed.
+            if (futures.get(groupId).isCompletedExceptionally())
+                continue;
+
+            final long startFindCoordinatorMs = time.milliseconds();
+            final long deadline = calcDeadlineMs(startFindCoordinatorMs, options.timeoutMs());
+
+            runnable.call(new Call("findCoordinator", deadline, new LeastLoadedNodeProvider()) {
+                @Override
+                AbstractRequest.Builder createRequest(int timeoutMs) {
+                    return new FindCoordinatorRequest.Builder(FindCoordinatorRequest.CoordinatorType.GROUP, groupId);
+                }
+
+                @Override
+                void handleResponse(AbstractResponse abstractResponse) {
+                    final FindCoordinatorResponse response = (FindCoordinatorResponse) abstractResponse;
+
+                    final long nowDeleteConsumerGroups = time.milliseconds();
+
+                    final int nodeId = response.node().id();
+
+                    runnable.call(new Call("deleteConsumerGroups", deadline, new ConstantNodeIdProvider(nodeId)) {
+
+                        @Override
+                        AbstractRequest.Builder createRequest(int timeoutMs) {
+                            return new DeleteGroupsRequest.Builder(Collections.singleton(groupId));
+                        }
+
+                        @Override
+                        void handleResponse(AbstractResponse abstractResponse) {
+                            final DeleteGroupsResponse response = (DeleteGroupsResponse) abstractResponse;
+
+                            KafkaFutureImpl<Void> future = futures.get(groupId);
+                            final Errors groupError = response.get(groupId);
+
+                            if (groupError != Errors.NONE) {
+                                future.completeExceptionally(groupError.exception());
+                            } else {
+                                future.complete(null);
+                            }
+                        }
+
+                        @Override
+                        void handleFailure(Throwable throwable) {
+                            KafkaFutureImpl<Void> future = futures.get(groupId);
+                            future.completeExceptionally(throwable);
+                        }
+                    }, nowDeleteConsumerGroups);
+                }
+
+                @Override
+                void handleFailure(Throwable throwable) {
+                    KafkaFutureImpl<Void> future = futures.get(groupId);
+                    future.completeExceptionally(throwable);
+                }
+            }, startFindCoordinatorMs);
+        }
+
+        return new DeleteConsumerGroupsResult(new HashMap<String, KafkaFuture<Void>>(futures));
+    }
 }

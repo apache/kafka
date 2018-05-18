@@ -17,8 +17,10 @@
 
 package kafka.server
 
-import kafka.utils.{TestUtils, ZkUtils}
+import kafka.common.KafkaException
+import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
+import org.apache.zookeeper.KeeperException.NodeExistsException
 import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.{After, Test}
@@ -43,7 +45,7 @@ class ServerStartupTest extends ZooKeeperTestHarness {
     props.put("zookeeper.connect", zooKeeperConnect + zookeeperChroot)
     server = TestUtils.createServer(KafkaConfig.fromProps(props))
 
-    val pathExists = zkUtils.pathExists(zookeeperChroot)
+    val pathExists = zkClient.pathExists(zookeeperChroot)
     assertTrue(pathExists)
   }
 
@@ -62,7 +64,7 @@ class ServerStartupTest extends ZooKeeperTestHarness {
       TestUtils.createServer(KafkaConfig.fromProps(props2))
       fail("Starting a broker with the same port should fail")
     } catch {
-      case _: RuntimeException => // expected
+      case _: KafkaException => // expected
     }
   }
 
@@ -74,19 +76,19 @@ class ServerStartupTest extends ZooKeeperTestHarness {
     val brokerId = 0
     val props1 = TestUtils.createBrokerConfig(brokerId, zkConnect)
     server = TestUtils.createServer(KafkaConfig.fromProps(props1))
-    val brokerRegistration = zkUtils.readData(ZkUtils.BrokerIdsPath + "/" + brokerId)._1
+    val brokerRegistration = zkClient.getBroker(brokerId).getOrElse(fail("broker doesn't exists"))
 
     val props2 = TestUtils.createBrokerConfig(brokerId, zkConnect)
     try {
       TestUtils.createServer(KafkaConfig.fromProps(props2))
       fail("Registering a broker with a conflicting id should fail")
     } catch {
-      case _: RuntimeException =>
+      case _: NodeExistsException =>
       // this is expected
     }
 
     // broker registration shouldn't change
-    assertEquals(brokerRegistration, zkUtils.readData(ZkUtils.BrokerIdsPath + "/" + brokerId)._1)
+    assertEquals(brokerRegistration, zkClient.getBroker(brokerId).getOrElse(fail("broker doesn't exists")))
   }
 
   @Test
@@ -107,7 +109,7 @@ class ServerStartupTest extends ZooKeeperTestHarness {
 
     class BrokerStateInterceptor() extends BrokerState {
       override def newState(newState: BrokerStates): Unit = {
-        val brokers = zkUtils.getAllBrokersInCluster()
+        val brokers = zkClient.getAllBrokersInCluster
         assertEquals(1, brokers.size)
         assertEquals(brokerId, brokers.head.id)
       }

@@ -413,8 +413,7 @@ ducker_test() {
         fi
     done
     must_pushd "${kafka_dir}"
-    ls ./core/build/distributions/kafka_*.tgz &> /dev/null
-    [[ $? -eq 0 ]] || die "Failed to find core/build/distributions/kafka_*.tgz.  Did you run ./gradlew releaseTarGz?"
+    (test -f ./gradlew || gradle) && ./gradlew systemTestLibs
     must_popd
     cmd="cd /opt/kafka-dev && ducktape --cluster-file /opt/kafka-dev/tests/docker/build/cluster.json $args"
     echo "docker exec -it ducker01 bash -c \"${cmd}\""

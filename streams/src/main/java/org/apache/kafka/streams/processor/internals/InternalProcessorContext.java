@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 /**
@@ -25,6 +26,9 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
  * {@link ThreadCache}
  */
 public interface InternalProcessorContext extends ProcessorContext {
+
+    @Override
+    StreamsMetricsImpl metrics();
 
     /**
      * Returns the current {@link RecordContext}
@@ -50,7 +54,12 @@ public interface InternalProcessorContext extends ProcessorContext {
     ThreadCache getCache();
 
     /**
-     * Mark this contex as being initialized
+     * Mark this context as being initialized
      */
     void initialized();
+
+    /**
+     * Mark this context as being uninitialized
+     */
+    void uninitialize();
 }

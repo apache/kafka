@@ -17,19 +17,10 @@
 
 package kafka.utils
 
-
-import org.apache.log4j.{Logger, Level, LogManager}
 import java.util
 import java.util.Locale
 
-
-object Log4jController {
-
-  private val controller = new Log4jController
-
-  CoreUtils.registerMBean(controller, "kafka:type=kafka.Log4jController")
-
-}
+import org.apache.log4j.{Level, LogManager, Logger}
 
 
 /**

@@ -15,254 +15,359 @@
  * limitations under the License.
  */
 
+/*
+ * So, when a task comes in, it happens via createTask (the RPC backend).
+ * This starts a CreateTask on the main state change thread, and waits for it.
+ * That task checks the main task hash map, and returns back the existing task spec
+ * if there is something there.  If there is nothing there, it creates
+ * something new, and returns null.
+ * It also schedules a RunTask some time in the future on the main state change thread.
+ * We save the future from this in case we need to cancel it later, in a StopTask.
+ * If we can't create the TaskController for the task, we transition to DONE with an
+ * appropriate error message.
+ *
+ * RunTask actually starts the task which was created earlier.  This could
+ * happen an arbitrary amount of time after task creation (it is based on the
+ * task spec).  RunTask must operate only on PENDING tasks... if the task has been
+ * stopped, then we have nothing to do here.
+ * RunTask asks the TaskController for a list of all the names of nodes
+ * affected by this task.
+ * If this list contains nodes we don't know about, or zero nodes, we
+ * transition directly to DONE state with an appropriate error set.
+ * RunTask schedules CreateWorker Callables on all the affected worker nodes.
+ * These callables run in the context of the relevant NodeManager.
+ *
+ * CreateWorker calls the RPC of the same name for the agent.
+ * There is some complexity here due to retries.
+ */
+
 package org.apache.kafka.trogdor.coordinator;
 
-import org.apache.kafka.common.utils.KafkaThread;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.trogdor.agent.AgentClient;
 import org.apache.kafka.trogdor.common.Node;
-import org.apache.kafka.trogdor.common.Platform;
-import org.apache.kafka.trogdor.fault.DoneState;
-import org.apache.kafka.trogdor.fault.Fault;
-import org.apache.kafka.trogdor.fault.SendingState;
+import org.apache.kafka.trogdor.common.ThreadUtils;
 import org.apache.kafka.trogdor.rest.AgentStatusResponse;
-import org.apache.kafka.trogdor.rest.CreateAgentFaultRequest;
+import org.apache.kafka.trogdor.rest.CreateWorkerRequest;
+import org.apache.kafka.trogdor.rest.StopWorkerRequest;
+import org.apache.kafka.trogdor.rest.WorkerReceiving;
+import org.apache.kafka.trogdor.rest.WorkerRunning;
+import org.apache.kafka.trogdor.rest.WorkerStarting;
+import org.apache.kafka.trogdor.rest.WorkerState;
+import org.apache.kafka.trogdor.task.TaskSpec;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.net.ConnectException;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.Callable;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 
-class NodeManager {
+/**
+ * The NodeManager handles communicating with a specific agent node.
+ * Each NodeManager has its own ExecutorService which runs in a dedicated thread.
+ */
+public final class NodeManager {
     private static final Logger log = LoggerFactory.getLogger(NodeManager.class);
 
     /**
-     * The Time object used to fetch the current time.
+     * The normal amount of seconds between heartbeats sent to the agent.
      */
-    private final Time time;
+    private static final long HEARTBEAT_DELAY_MS = 1000L;
+
+    class ManagedWorker {
+        private final long workerId;
+        private final String taskId;
+        private final TaskSpec spec;
+        private boolean shouldRun;
+        private WorkerState state;
+
+        ManagedWorker(long workerId, String taskId, TaskSpec spec,
+                      boolean shouldRun, WorkerState state) {
+            this.workerId = workerId;
+            this.taskId = taskId;
+            this.spec = spec;
+            this.shouldRun = shouldRun;
+            this.state = state;
+        }
+
+        void tryCreate() {
+            try {
+                client.createWorker(new CreateWorkerRequest(workerId, taskId, spec));
+            } catch (Throwable e) {
+                log.error("{}: error creating worker {}.", node.name(), this, e);
+            }
+        }
+
+        void tryStop() {
+            try {
+                client.stopWorker(new StopWorkerRequest(workerId));
+            } catch (Throwable e) {
+                log.error("{}: error stopping worker {}.", node.name(), this, e);
+            }
+        }
+
+        @Override
+        public String toString() {
+            return String.format("%s_%d", taskId, workerId);
+        }
+    }
 
     /**
-     * The node which is being managed.
+     * The node which we are managing.
      */
     private final Node node;
 
     /**
-     * The client for the node being managed.
+     * The task manager.
+     */
+    private final TaskManager taskManager;
+
+    /**
+     * A client for the Node's Agent.
      */
     private final AgentClient client;
 
     /**
-     * The maximum amount of time to go without contacting the node.
+     * Maps task IDs to worker structures.
      */
-    private final long heartbeatMs;
+    private final Map<Long, ManagedWorker> workers;
 
     /**
-     * True if the NodeManager is shutting down.  Protected by the queueLock.
+     * An executor service which manages the thread dedicated to this node.
      */
-    private boolean shutdown = false;
+    private final ScheduledExecutorService executor;
 
     /**
-     * The Node Manager runnable.
+     * The heartbeat runnable.
      */
-    private final NodeManagerRunnable runnable;
+    private final NodeHeartbeat heartbeat;
 
     /**
-     * The Node Manager thread.
+     * A future which can be used to cancel the periodic hearbeat task.
      */
-    private final KafkaThread thread;
+    private ScheduledFuture<?> heartbeatFuture;
 
-    /**
-     * The lock protecting the NodeManager fields.
-     */
-    private final Lock lock = new ReentrantLock();
-
-    /**
-     * The condition variable used to wake the thread when it is waiting for a
-     * queue or shutdown change.
-     */
-    private final Condition cond = lock.newCondition();
-
-    /**
-     * A queue of faults which should be sent to this node.  Protected by the lock.
-     */
-    private final List<Fault> faultQueue = new ArrayList<>();
-
-    /**
-     * The last time we successfully contacted the node.  Protected by the lock.
-     */
-    private long lastContactMs = 0;
-
-    /**
-     * The current status of this node.
-     */
-    public static class NodeStatus {
-        private final String nodeName;
-        private final long lastContactMs;
-
-        NodeStatus(String nodeName, long lastContactMs) {
-            this.nodeName = nodeName;
-            this.lastContactMs = lastContactMs;
-        }
-
-        public String nodeName() {
-            return nodeName;
-        }
-
-        public long lastContactMs() {
-            return lastContactMs;
-        }
+    NodeManager(Node node, TaskManager taskManager) {
+        this.node = node;
+        this.taskManager = taskManager;
+        this.client = new AgentClient.Builder().
+            maxTries(1).
+            target(node.hostname(), Node.Util.getTrogdorAgentPort(node)).
+            build();
+        this.workers = new HashMap<>();
+        this.executor = Executors.newSingleThreadScheduledExecutor(
+            ThreadUtils.createThreadFactory("NodeManager(" + node.name() + ")",
+                false));
+        this.heartbeat = new NodeHeartbeat();
+        rescheduleNextHeartbeat(HEARTBEAT_DELAY_MS);
     }
 
-    class NodeManagerRunnable implements Runnable {
+    /**
+     * Reschedule the heartbeat runnable.
+     *
+     * @param initialDelayMs        The initial delay to use.
+     */
+    void rescheduleNextHeartbeat(long initialDelayMs) {
+        if (this.heartbeatFuture != null) {
+            this.heartbeatFuture.cancel(false);
+        }
+        this.heartbeatFuture = this.executor.scheduleAtFixedRate(heartbeat,
+            initialDelayMs, HEARTBEAT_DELAY_MS, TimeUnit.MILLISECONDS);
+    }
+
+    /**
+     * The heartbeat runnable.
+     */
+    class NodeHeartbeat implements Runnable {
         @Override
         public void run() {
+            rescheduleNextHeartbeat(HEARTBEAT_DELAY_MS);
             try {
-                Fault fault = null;
-                long lastCommAttemptMs = 0;
-                while (true) {
-                    long now = time.milliseconds();
-                    if (fault != null) {
-                        lastCommAttemptMs = now;
-                        if (sendFault(now, fault)) {
-                            fault = null;
+                AgentStatusResponse agentStatus = null;
+                try {
+                    agentStatus = client.status();
+                } catch (ConnectException e) {
+                    log.error("{}: failed to get agent status: ConnectException {}", node.name(), e.getMessage());
+                    return;
+                } catch (Exception e) {
+                    log.error("{}: failed to get agent status", node.name(), e);
+                    // TODO: eventually think about putting tasks into a bad state as a result of
+                    // agents going down?
+                    return;
+                }
+                if (log.isTraceEnabled()) {
+                    log.trace("{}: got heartbeat status {}", node.name(), agentStatus);
+                }
+                // Identify workers which we think should be running, but which do not appear
+                // in the agent's response.  We need to send startWorker requests for these.
+                for (Map.Entry<Long, ManagedWorker> entry : workers.entrySet()) {
+                    Long workerId = entry.getKey();
+                    if (!agentStatus.workers().containsKey(workerId)) {
+                        ManagedWorker worker = entry.getValue();
+                        if (worker.shouldRun) {
+                            worker.tryCreate();
                         }
                     }
-                    long nextCommAttemptMs = lastCommAttemptMs + heartbeatMs;
-                    if (now < nextCommAttemptMs) {
-                        lastCommAttemptMs = now;
-                        sendHeartbeat(now);
-                    }
-                    long waitMs = Math.max(0L, nextCommAttemptMs - now);
-                    lock.lock();
-                    try {
-                        if (shutdown) {
-                            return;
-                        }
-                        try {
-                            cond.await(waitMs, TimeUnit.MILLISECONDS);
-                        } catch (InterruptedException e) {
-                            log.info("{}: NodeManagerRunnable got InterruptedException", node.name());
-                            Thread.currentThread().interrupt();
-                        }
-                        if (fault == null) {
-                            if (!faultQueue.isEmpty()) {
-                                fault = faultQueue.remove(0);
+                }
+                for (Map.Entry<Long, WorkerState> entry : agentStatus.workers().entrySet()) {
+                    long workerId = entry.getKey();
+                    WorkerState state = entry.getValue();
+                    ManagedWorker worker = workers.get(workerId);
+                    if (worker == null) {
+                        // Identify tasks which are running, but which we don't know about.
+                        // Add these to the NodeManager as tasks that should not be running.
+                        log.warn("{}: scheduling unknown worker with ID {} for stopping.", node.name(), workerId);
+                        workers.put(workerId, new ManagedWorker(workerId, state.taskId(),
+                            state.spec(), false, state));
+                    } else {
+                        // Handle workers which need to be stopped.
+                        if (state instanceof WorkerStarting || state instanceof WorkerRunning) {
+                            if (!worker.shouldRun) {
+                                worker.tryStop();
                             }
                         }
-                    } finally {
-                        lock.unlock();
+                        // Notify the TaskManager if the worker state has changed.
+                        if (worker.state.equals(state)) {
+                            log.debug("{}: worker state is still {}", node.name(), worker.state);
+                        } else {
+                            log.info("{}: worker state changed from {} to {}", node.name(), worker.state, state);
+                            worker.state = state;
+                            taskManager.updateWorkerState(node.name(), worker.workerId, state);
+                        }
                     }
                 }
             } catch (Throwable e) {
-                log.warn("{}: exiting NodeManagerRunnable with exception", node.name(), e);
-            } finally {
+                log.error("{}: Unhandled exception in NodeHeartbeatRunnable", node.name(), e);
             }
         }
     }
 
-    NodeManager(Time time, Node node) {
-        this.time = time;
-        this.node = node;
-        this.client = new AgentClient(node.hostname(), Node.Util.getTrogdorAgentPort(node));
-        this.heartbeatMs = Node.Util.getIntConfig(node,
-                Platform.Config.TROGDOR_COORDINATOR_HEARTBEAT_MS,
-                Platform.Config.TROGDOR_COORDINATOR_HEARTBEAT_MS_DEFAULT);
-        this.runnable = new NodeManagerRunnable();
-        this.thread = new KafkaThread("NodeManagerThread(" + node.name() + ")", runnable, false);
-        this.thread.start();
+    /**
+     * Create a new worker.
+     *
+     * @param workerId              The new worker id.
+     * @param taskId                The new task id.
+     * @param spec                  The task specification to use with the new worker.
+     */
+    public void createWorker(long workerId, String taskId, TaskSpec spec) {
+        executor.submit(new CreateWorker(workerId, taskId, spec));
     }
 
-    private boolean sendFault(long now, Fault fault) {
-        try {
-            client.putFault(new CreateAgentFaultRequest(fault.id(), fault.spec()));
-        } catch (Exception e) {
-            log.warn("{}: error sending fault to {}.", node.name(), client.target(), e);
-            return false;
-        }
-        lock.lock();
-        try {
-            lastContactMs = now;
-        } finally {
-            lock.unlock();
-        }
-        SendingState state = (SendingState) fault.state();
-        if (state.completeSend(node.name())) {
-            fault.setState(new DoneState(now, ""));
-        }
-        return true;
-    }
+    /**
+     * Starts a worker.
+     */
+    class CreateWorker implements Callable<Void> {
+        private final long workerId;
+        private final String taskId;
+        private final TaskSpec spec;
 
-    private void sendHeartbeat(long now) {
-        AgentStatusResponse status = null;
-        try {
-            status = client.getStatus();
-        } catch (Exception e) {
-            log.warn("{}: error sending heartbeat to {}.", node.name(), client.target(), e);
-            return;
+        CreateWorker(long workerId, String taskId, TaskSpec spec) {
+            this.workerId = workerId;
+            this.taskId = taskId;
+            this.spec = spec;
         }
-        lock.lock();
-        try {
-            lastContactMs = now;
-        } finally {
-            lock.unlock();
-        }
-        log.debug("{}: got heartbeat status {}.", node.name(), status);
-    }
 
-    public void beginShutdown() {
-        lock.lock();
-        try {
-            if (shutdown)
-                return;
-            log.trace("{}: beginning shutdown.", node.name());
-            shutdown = true;
-            cond.signalAll();
-        } finally {
-            lock.unlock();
-        }
-    }
-
-    public void waitForShutdown() {
-        log.trace("waiting for NodeManager({}) shutdown.", node.name());
-        try {
-            thread.join();
-        } catch (InterruptedException e) {
-            log.error("{}: Interrupted while waiting for thread shutdown", node.name(), e);
-            Thread.currentThread().interrupt();
+        @Override
+        public Void call() throws Exception {
+            ManagedWorker worker = workers.get(workerId);
+            if (worker != null) {
+                log.error("{}: there is already a worker {} with ID {}.",
+                    node.name(), worker, workerId);
+                return null;
+            }
+            worker = new ManagedWorker(workerId, taskId, spec, true, new WorkerReceiving(taskId, spec));
+            log.info("{}: scheduling worker {} to start.", node.name(), worker);
+            workers.put(workerId, worker);
+            rescheduleNextHeartbeat(0);
+            return null;
         }
     }
 
     /**
-     * Get the current status of this node.
+     * Stop a worker.
      *
-     * @return                  The node status.
+     * @param workerId              The id of the worker to stop.
      */
-    public NodeStatus status() {
-        lock.lock();
-        try {
-            return new NodeStatus(node.name(), lastContactMs);
-        } finally {
-            lock.unlock();
+    public void stopWorker(long workerId) {
+        executor.submit(new StopWorker(workerId));
+    }
+
+    /**
+     * Stops a worker.
+     */
+    class StopWorker implements Callable<Void> {
+        private final long workerId;
+
+        StopWorker(long workerId) {
+            this.workerId = workerId;
+        }
+
+        @Override
+        public Void call() throws Exception {
+            ManagedWorker worker = workers.get(workerId);
+            if (worker == null) {
+                log.error("{}: unable to locate worker to stop with ID {}.", node.name(), workerId);
+                return null;
+            }
+            if (!worker.shouldRun) {
+                log.error("{}: Worker {} is already scheduled to stop.",
+                    node.name(), worker);
+                return null;
+            }
+            log.info("{}: scheduling worker {} to stop.", node.name(), worker);
+            worker.shouldRun = false;
+            rescheduleNextHeartbeat(0);
+            return null;
         }
     }
 
     /**
-     * Enqueue a new fault.
+     * Destroy a worker.
      *
-     * @param fault             The fault to enqueue.
+     * @param workerId              The id of the worker to destroy.
      */
-    public void enqueueFault(Fault fault) {
-        lock.lock();
-        try {
-            log.trace("{}: added {} to fault queue.", node.name(), fault);
-            faultQueue.add(fault);
-            cond.signalAll();
-        } finally {
-            lock.unlock();
+    public void destroyWorker(long workerId) {
+        executor.submit(new DestroyWorker(workerId));
+    }
+
+    /**
+     * Destroys a worker.
+     */
+    class DestroyWorker implements Callable<Void> {
+        private final long workerId;
+
+        DestroyWorker(long workerId) {
+            this.workerId = workerId;
         }
+
+        @Override
+        public Void call() throws Exception {
+            ManagedWorker worker = workers.remove(workerId);
+            if (worker == null) {
+                log.error("{}: unable to locate worker to destroy with ID {}.", node.name(), workerId);
+                return null;
+            }
+            rescheduleNextHeartbeat(0);
+            return null;
+        }
+    }
+
+    public void beginShutdown(boolean stopNode) {
+        executor.shutdownNow();
+        if (stopNode) {
+            try {
+                client.invokeShutdown();
+            } catch (Exception e) {
+                log.error("{}: Failed to send shutdown request", node.name(), e);
+            }
+        }
+    }
+
+    public void waitForShutdown() throws InterruptedException {
+        executor.awaitTermination(1, TimeUnit.DAYS);
     }
 };

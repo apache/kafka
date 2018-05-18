@@ -22,6 +22,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.record.RecordBatch;
@@ -32,12 +33,14 @@ import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
+import org.apache.kafka.connect.runtime.WorkerSinkTask.SinkTaskMetricsGroup;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.storage.Converter;
+import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.util.ConnectorTaskId;
-import org.apache.kafka.connect.util.MockTime;
+import org.apache.kafka.common.utils.MockTime;
 import org.easymock.Capture;
 import org.easymock.CaptureType;
 import org.easymock.EasyMock;
@@ -67,12 +70,14 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.regex.Pattern;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singleton;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -106,6 +111,7 @@ public class WorkerSinkTaskTest {
     private static final TaskConfig TASK_CONFIG = new TaskConfig(TASK_PROPS);
 
     private ConnectorTaskId taskId = new ConnectorTaskId("job", 0);
+    private ConnectorTaskId taskId1 = new ConnectorTaskId("job", 1);
     private TargetState initialState = TargetState.STARTED;
     private MockTime time;
     private WorkerSinkTask workerTask;
@@ -121,12 +127,15 @@ public class WorkerSinkTaskTest {
     @Mock
     private Converter valueConverter;
     @Mock
+    private HeaderConverter headerConverter;
+    @Mock
     private TransformationChain<SinkRecord> transformationChain;
     @Mock
     private TaskStatus.Listener statusListener;
     @Mock
     private KafkaConsumer<byte[], byte[]> consumer;
     private Capture<ConsumerRebalanceListener> rebalanceListener = EasyMock.newCapture();
+    private Capture<Pattern> topicsRegex = EasyMock.newCapture();
 
     private long recordsReturnedTp1;
     private long recordsReturnedTp3;
@@ -152,7 +161,7 @@ public class WorkerSinkTaskTest {
     private void createTask(TargetState initialState) {
         workerTask = PowerMock.createPartialMock(
                 WorkerSinkTask.class, new String[]{"createConsumer"},
-                taskId, sinkTask, statusListener, initialState, workerConfig, metrics, keyConverter, valueConverter, transformationChain, pluginLoader, time);
+                taskId, sinkTask, statusListener, initialState, workerConfig, metrics, keyConverter, valueConverter, headerConverter, transformationChain, pluginLoader, time);
     }
 
     @After
@@ -1141,6 +1150,102 @@ public class WorkerSinkTaskTest {
         assertEquals(timestampType, record.timestampType());
 
         PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testTopicsRegex() throws Exception {
+        Map<String, String> props = new HashMap<>(TASK_PROPS);
+        props.remove("topics");
+        props.put("topics.regex", "te.*");
+        TaskConfig taskConfig = new TaskConfig(props);
+
+        createTask(TargetState.PAUSED);
+
+        PowerMock.expectPrivate(workerTask, "createConsumer").andReturn(consumer);
+        consumer.subscribe(EasyMock.capture(topicsRegex), EasyMock.capture(rebalanceListener));
+        PowerMock.expectLastCall();
+
+        sinkTask.initialize(EasyMock.capture(sinkTaskContext));
+        PowerMock.expectLastCall();
+        sinkTask.start(props);
+        PowerMock.expectLastCall();
+
+        expectPollInitialAssignment();
+
+        Set<TopicPartition> partitions = new HashSet<>(asList(TOPIC_PARTITION, TOPIC_PARTITION2));
+        EasyMock.expect(consumer.assignment()).andReturn(partitions);
+        consumer.pause(partitions);
+        PowerMock.expectLastCall();
+
+        PowerMock.replayAll();
+
+        workerTask.initialize(taskConfig);
+        workerTask.initializeAndStart();
+        workerTask.iteration();
+        time.sleep(10000L);
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testMetricsGroup() {
+        SinkTaskMetricsGroup group = new SinkTaskMetricsGroup(taskId, metrics);
+        SinkTaskMetricsGroup group1 = new SinkTaskMetricsGroup(taskId1, metrics);
+        for (int i = 0; i != 10; ++i) {
+            group.recordRead(1);
+            group.recordSend(2);
+            group.recordPut(3);
+            group.recordPartitionCount(4);
+            group.recordOffsetSequenceNumber(5);
+        }
+        Map<TopicPartition, OffsetAndMetadata> committedOffsets = new HashMap<>();
+        committedOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET + 1));
+        group.recordCommittedOffsets(committedOffsets);
+        Map<TopicPartition, OffsetAndMetadata> consumedOffsets = new HashMap<>();
+        consumedOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET + 10));
+        group.recordConsumedOffsets(consumedOffsets);
+
+        for (int i = 0; i != 20; ++i) {
+            group1.recordRead(1);
+            group1.recordSend(2);
+            group1.recordPut(30);
+            group1.recordPartitionCount(40);
+            group1.recordOffsetSequenceNumber(50);
+        }
+        committedOffsets = new HashMap<>();
+        committedOffsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET + 2));
+        committedOffsets.put(TOPIC_PARTITION3, new OffsetAndMetadata(FIRST_OFFSET + 3));
+        group1.recordCommittedOffsets(committedOffsets);
+        consumedOffsets = new HashMap<>();
+        consumedOffsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET + 20));
+        consumedOffsets.put(TOPIC_PARTITION3, new OffsetAndMetadata(FIRST_OFFSET + 30));
+        group1.recordConsumedOffsets(consumedOffsets);
+
+        assertEquals(0.333, metrics.currentMetricValueAsDouble(group.metricGroup(), "sink-record-read-rate"), 0.001d);
+        assertEquals(0.667, metrics.currentMetricValueAsDouble(group.metricGroup(), "sink-record-send-rate"), 0.001d);
+        assertEquals(9, metrics.currentMetricValueAsDouble(group.metricGroup(), "sink-record-active-count"), 0.001d);
+        assertEquals(4, metrics.currentMetricValueAsDouble(group.metricGroup(), "partition-count"), 0.001d);
+        assertEquals(5, metrics.currentMetricValueAsDouble(group.metricGroup(), "offset-commit-seq-no"), 0.001d);
+        assertEquals(3, metrics.currentMetricValueAsDouble(group.metricGroup(), "put-batch-max-time-ms"), 0.001d);
+
+        // Close the group
+        group.close();
+
+        for (MetricName metricName : group.metricGroup().metrics().metrics().keySet()) {
+            // Metrics for this group should no longer exist
+            assertFalse(group.metricGroup().groupId().includes(metricName));
+        }
+        // Sensors for this group should no longer exist
+        assertNull(group.metricGroup().metrics().getSensor("source-record-poll"));
+        assertNull(group.metricGroup().metrics().getSensor("source-record-write"));
+        assertNull(group.metricGroup().metrics().getSensor("poll-batch-time"));
+
+        assertEquals(0.667, metrics.currentMetricValueAsDouble(group1.metricGroup(), "sink-record-read-rate"), 0.001d);
+        assertEquals(1.333, metrics.currentMetricValueAsDouble(group1.metricGroup(), "sink-record-send-rate"), 0.001d);
+        assertEquals(45, metrics.currentMetricValueAsDouble(group1.metricGroup(), "sink-record-active-count"), 0.001d);
+        assertEquals(40, metrics.currentMetricValueAsDouble(group1.metricGroup(), "partition-count"), 0.001d);
+        assertEquals(50, metrics.currentMetricValueAsDouble(group1.metricGroup(), "offset-commit-seq-no"), 0.001d);
+        assertEquals(30, metrics.currentMetricValueAsDouble(group1.metricGroup(), "put-batch-max-time-ms"), 0.001d);
     }
 
     private void expectInitializeTask() throws Exception {

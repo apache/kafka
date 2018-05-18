@@ -21,6 +21,10 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.KeyValueStore;
 
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
+
 class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, V, V> {
 
     private final KTableImpl<K, ?, V> parent1;
@@ -28,9 +32,9 @@ class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, V, V> {
     private final String queryableName;
     private boolean sendOldValues = false;
 
-    public KTableKTableJoinMerger(final KTableImpl<K, ?, V> parent1,
-                                  final KTableImpl<K, ?, V> parent2,
-                                  final String queryableName) {
+    KTableKTableJoinMerger(final KTableImpl<K, ?, V> parent1,
+                           final KTableImpl<K, ?, V> parent2,
+                           final String queryableName) {
         this.parent1 = parent1;
         this.parent2 = parent2;
         this.queryableName = queryableName;
@@ -38,12 +42,33 @@ class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, V, V> {
 
     @Override
     public Processor<K, Change<V>> get() {
-        return new KTableKTableJoinMergeProcessor<>();
+        return new KTableKTableJoinMergeProcessor();
     }
 
     @Override
     public KTableValueGetterSupplier<K, V> view() {
-        return parent1.valueGetterSupplier();
+        // if the result KTable is materialized, use the materialized store to return getter value;
+        // otherwise rely on the parent getter and apply join on-the-fly
+        if (queryableName != null) {
+            return new KTableMaterializedValueGetterSupplier<>(queryableName);
+        } else {
+            return new KTableValueGetterSupplier<K, V>() {
+
+                public KTableValueGetter<K, V> get() {
+                    return parent1.valueGetterSupplier().get();
+                }
+
+                @Override
+                public String[] storeNames() {
+                    final String[] storeNames1 = parent1.valueGetterSupplier().storeNames();
+                    final String[] storeNames2 = parent2.valueGetterSupplier().storeNames();
+                    final Set<String> stores = new HashSet<>(storeNames1.length + storeNames2.length);
+                    Collections.addAll(stores, storeNames1);
+                    Collections.addAll(stores, storeNames2);
+                    return stores.toArray(new String[stores.size()]);
+                }
+            };
+        }
     }
 
     @Override
@@ -53,14 +78,13 @@ class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, V, V> {
         sendOldValues = true;
     }
 
-    private class KTableKTableJoinMergeProcessor<K, V>
-        extends AbstractProcessor<K, Change<V>> {
+    private class KTableKTableJoinMergeProcessor extends AbstractProcessor<K, Change<V>> {
         private KeyValueStore<K, V> store;
         private TupleForwarder<K, V> tupleForwarder;
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(ProcessorContext context) {
+        public void init(final ProcessorContext context) {
             super.init(context);
             if (queryableName != null) {
                 store = (KeyValueStore<K, V>) context.getStateStore(queryableName);
@@ -72,7 +96,6 @@ class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, V, V> {
 
         @Override
         public void process(K key, Change<V> value) {
-
             if (queryableName != null) {
                 store.put(key, value.newValue);
                 tupleForwarder.maybeForward(key, value.newValue, value.oldValue);
@@ -81,5 +104,4 @@ class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, V, V> {
             }
         }
     }
-
 }

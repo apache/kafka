@@ -129,7 +129,7 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
               txnMarkerChannelManager.removeMarkersForTxnId(transactionalId)
               abortSending = true
             } else {
-              txnMetadata synchronized {
+              txnMetadata.inLock {
                 for ((topicPartition, error) <- errors.asScala) {
                   error match {
                     case Errors.NONE =>

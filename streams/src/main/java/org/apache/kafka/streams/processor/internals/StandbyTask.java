@@ -22,6 +22,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -40,7 +41,6 @@ public class StandbyTask extends AbstractTask {
      * Create {@link StandbyTask} with its assigned partitions
      *
      * @param id             the ID of this task
-     * @param applicationId  the ID of the stream processing application
      * @param partitions     the collection of assigned {@link TopicPartition}
      * @param topology       the instance of {@link ProcessorTopology}
      * @param consumer       the instance of {@link Consumer}
@@ -49,27 +49,32 @@ public class StandbyTask extends AbstractTask {
      * @param stateDirectory the {@link StateDirectory} created by the thread
      */
     StandbyTask(final TaskId id,
-                final String applicationId,
                 final Collection<TopicPartition> partitions,
                 final ProcessorTopology topology,
                 final Consumer<byte[], byte[]> consumer,
                 final ChangelogReader changelogReader,
                 final StreamsConfig config,
-                final StreamsMetrics metrics,
+                final StreamsMetricsImpl metrics,
                 final StateDirectory stateDirectory) {
-        super(id, applicationId, partitions, topology, consumer, changelogReader, true, stateDirectory, config);
+        super(id, partitions, topology, consumer, changelogReader, true, stateDirectory, config);
 
         // initialize the topology with its own context
-        processorContext = new StandbyContextImpl(id, applicationId, config, stateMgr, metrics);
+        processorContext = new StandbyContextImpl(id, config, stateMgr, metrics);
     }
 
     @Override
-    public boolean initialize() {
-        initializeStateStores();
+    public boolean initializeStateStores() {
+        log.trace("Initializing state stores");
+        registerStateStores();
         checkpointedOffsets = Collections.unmodifiableMap(stateMgr.checkpointed());
         processorContext.initialized();
         taskInitialized = true;
         return true;
+    }
+
+    @Override
+    public void initializeTopology() {
+        //no-op
     }
 
     /**
@@ -133,11 +138,15 @@ public class StandbyTask extends AbstractTask {
         log.debug("Closing");
         boolean committedSuccessfully = false;
         try {
-            commit();
-            committedSuccessfully = true;
+            if (clean) {
+                commit();
+                committedSuccessfully = true;
+            }
         } finally {
             closeStateManager(committedSuccessfully);
         }
+
+        taskClosed = true;
     }
 
     @Override
@@ -145,11 +154,6 @@ public class StandbyTask extends AbstractTask {
                                final boolean isZombie,
                                final RuntimeException e) {
         close(clean, isZombie);
-    }
-
-    @Override
-    public boolean commitNeeded() {
-        return false;
     }
 
     /**
@@ -163,28 +167,8 @@ public class StandbyTask extends AbstractTask {
         return stateMgr.updateStandbyStates(partition, records);
     }
 
-    @Override
-    public int addRecords(final TopicPartition partition, final Iterable<ConsumerRecord<byte[], byte[]>> records) {
-        throw new UnsupportedOperationException("add records not supported by StandbyTasks");
-    }
-
-    public Map<TopicPartition, Long> checkpointedOffsets() {
+    Map<TopicPartition, Long> checkpointedOffsets() {
         return checkpointedOffsets;
-    }
-
-    @Override
-    public boolean maybePunctuateStreamTime() {
-        throw new UnsupportedOperationException("maybePunctuateStreamTime not supported by StandbyTask");
-    }
-
-    @Override
-    public boolean maybePunctuateSystemTime() {
-        throw new UnsupportedOperationException("maybePunctuateSystemTime not supported by StandbyTask");
-    }
-
-    @Override
-    public boolean process() {
-        throw new UnsupportedOperationException("process not supported by StandbyTasks");
     }
 
 }

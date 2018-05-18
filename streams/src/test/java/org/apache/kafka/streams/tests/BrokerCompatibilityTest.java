@@ -24,43 +24,56 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.requests.IsolationLevel;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.test.TestUtils;
+import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.kstream.Serialized;
+import org.apache.kafka.streams.kstream.ValueMapper;
 
-import java.io.File;
+import java.io.IOException;
 import java.util.Collections;
 import java.util.Locale;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
+
+import static org.apache.kafka.streams.processor.internals.ConsumerUtils.poll;
 
 public class BrokerCompatibilityTest {
 
     private static final String SOURCE_TOPIC = "brokerCompatibilitySourceTopic";
     private static final String SINK_TOPIC = "brokerCompatibilitySinkTopic";
 
-    public static void main(final String[] args) {
+    public static void main(final String[] args) throws IOException {
+        if (args.length < 2) {
+            System.err.println("BrokerCompatibilityTest are expecting two parameters: propFile, eosEnabled; but only see " + args.length + " parameter");
+            System.exit(1);
+        }
+
         System.out.println("StreamsTest instance started");
 
-        final String kafka = args.length > 0 ? args[0] : "localhost:9092";
-        final String stateDirStr = args.length > 1 ? args[1] : TestUtils.tempDirectory().getAbsolutePath();
-        final boolean eosEnabled = args.length > 2 ? Boolean.parseBoolean(args[2]) : false;
+        final String propFileName = args[0];
+        final boolean eosEnabled = Boolean.parseBoolean(args[1]);
 
-        final File stateDir = new File(stateDirStr);
-        stateDir.mkdir();
+        final Properties streamsProperties = Utils.loadProps(propFileName);
+        final String kafka = streamsProperties.getProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG);
 
-        final Properties streamsProperties = new Properties();
-        streamsProperties.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
+        if (kafka == null) {
+            System.err.println("No bootstrap kafka servers specified in " + StreamsConfig.BOOTSTRAP_SERVERS_CONFIG);
+            System.exit(1);
+        }
+
         streamsProperties.put(StreamsConfig.APPLICATION_ID_CONFIG, "kafka-streams-system-test-broker-compatibility");
-        streamsProperties.put(StreamsConfig.STATE_DIR_CONFIG, stateDir.toString());
         streamsProperties.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsProperties.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsProperties.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsProperties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
+        streamsProperties.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         if (eosEnabled) {
             streamsProperties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
         }
@@ -68,17 +81,36 @@ public class BrokerCompatibilityTest {
         streamsProperties.put(StreamsConfig.consumerPrefix(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG), timeout);
         streamsProperties.put(StreamsConfig.consumerPrefix(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG), timeout);
         streamsProperties.put(StreamsConfig.REQUEST_TIMEOUT_MS_CONFIG, timeout + 1);
+        //TODO remove this config or set to smaller value when KIP-91 is merged
+        streamsProperties.put(StreamsConfig.producerPrefix(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG), 60000);
+        Serde<String> stringSerde = Serdes.String();
 
 
         final StreamsBuilder builder = new StreamsBuilder();
-        builder.stream(SOURCE_TOPIC).to(SINK_TOPIC);
+        builder.<String, String>stream(SOURCE_TOPIC).groupByKey(Serialized.with(stringSerde, stringSerde))
+            .count()
+            .toStream()
+            .mapValues(new ValueMapper<Long, String>() {
+                @Override
+                public String apply(Long value) {
+                    return value.toString();
+                }
+            })
+            .to(SINK_TOPIC);
 
         final KafkaStreams streams = new KafkaStreams(builder.build(), streamsProperties);
         streams.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
             @Override
             public void uncaughtException(final Thread t, final Throwable e) {
-                System.out.println("FATAL: An unexpected exception is encountered on thread " + t + ": " + e);
-
+                Throwable cause = e;
+                if (cause instanceof StreamsException) {
+                    while (cause.getCause() != null) {
+                        cause = cause.getCause();
+                    }
+                }
+                System.err.println("FATAL: An unexpected exception " + cause);
+                e.printStackTrace(System.err);
+                System.err.flush();
                 streams.close(30, TimeUnit.SECONDS);
             }
         });
@@ -92,17 +124,20 @@ public class BrokerCompatibilityTest {
         producerProperties.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         producerProperties.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
 
-        final KafkaProducer<String, String> producer = new KafkaProducer<>(producerProperties);
-        producer.send(new ProducerRecord<>(SOURCE_TOPIC, "key", "value"));
+        try {
+            try (final KafkaProducer<String, String> producer = new KafkaProducer<>(producerProperties);) {
+                producer.send(new ProducerRecord<>(SOURCE_TOPIC, "key", "value"));
 
-
-        System.out.println("wait for result");
-        loopUntilRecordReceived(kafka, eosEnabled);
-
-
-        System.out.println("close Kafka Streams");
-        producer.close();
-        streams.close();
+                System.out.println("wait for result");
+                loopUntilRecordReceived(kafka, eosEnabled);
+                System.out.println("close Kafka Streams");
+                streams.close();
+            }
+        } catch (final RuntimeException e) {
+            System.err.println("Non-Streams exception occurred: ");
+            e.printStackTrace(System.err);
+            System.err.flush();
+        }
     }
 
     private static void loopUntilRecordReceived(final String kafka, final boolean eosEnabled) {
@@ -116,15 +151,15 @@ public class BrokerCompatibilityTest {
             consumerProperties.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT));
         }
 
-        final KafkaConsumer<String, String> consumer = new KafkaConsumer<>(consumerProperties);
-        consumer.subscribe(Collections.singletonList(SINK_TOPIC));
+        try (final KafkaConsumer<String, String> consumer = new KafkaConsumer<>(consumerProperties)) {
+            consumer.subscribe(Collections.singletonList(SINK_TOPIC));
 
-        while (true) {
-            final ConsumerRecords<String, String> records = consumer.poll(100);
-            for (final ConsumerRecord<String, String> record : records) {
-                if (record.key().equals("key") && record.value().equals("value")) {
-                    consumer.close();
-                    return;
+            while (true) {
+                final ConsumerRecords<String, String> records = poll(consumer, 100);
+                for (final ConsumerRecord<String, String> record : records) {
+                    if (record.key().equals("key") && record.value().equals("1")) {
+                        return;
+                    }
                 }
             }
         }

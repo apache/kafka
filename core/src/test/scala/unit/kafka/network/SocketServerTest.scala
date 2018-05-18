@@ -20,8 +20,8 @@ package kafka.network
 import java.io._
 import java.net._
 import java.nio.ByteBuffer
-import java.nio.channels.SocketChannel
 import java.util.{HashMap, Random}
+import java.nio.channels.SocketChannel
 import javax.net.ssl._
 
 import com.yammer.metrics.core.{Gauge, Meter}
@@ -38,7 +38,9 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.{AbstractRequest, ProduceRequest, RequestHeader}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
+import org.apache.kafka.common.security.scram.internal.ScramMechanism
 import org.apache.kafka.common.utils.{LogContext, MockTime, Time}
+import org.apache.log4j.Level
 import org.junit.Assert._
 import org.junit._
 import org.scalatest.junit.JUnitSuite
@@ -60,7 +62,7 @@ class SocketServerTest extends JUnitSuite {
   props.put("connections.max.idle.ms", "60000")
   val config = KafkaConfig.fromProps(props)
   val metrics = new Metrics
-  val credentialProvider = new CredentialProvider(config.saslEnabledMechanisms)
+  val credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, null)
   val localAddress = InetAddress.getLoopbackAddress
 
   // Clean-up any metrics left around by previous tests
@@ -70,6 +72,24 @@ class SocketServerTest extends JUnitSuite {
   val server = new SocketServer(config, metrics, Time.SYSTEM, credentialProvider)
   server.startup()
   val sockets = new ArrayBuffer[Socket]
+
+  private val kafkaLogger = org.apache.log4j.LogManager.getLogger("kafka")
+  private var logLevelToRestore: Level = _
+
+  @Before
+  def setUp(): Unit = {
+    // Run the tests with TRACE logging to exercise request logging path
+    logLevelToRestore = kafkaLogger.getLevel
+    kafkaLogger.setLevel(Level.TRACE)
+  }
+
+  @After
+  def tearDown() {
+    shutdownServerAndMetrics(server)
+    sockets.foreach(_.close())
+    sockets.clear()
+    kafkaLogger.setLevel(logLevelToRestore)
+  }
 
   def sendRequest(socket: Socket, request: Array[Byte], id: Option[Short] = None, flush: Boolean = true) {
     val outgoing = new DataOutputStream(socket.getOutputStream)
@@ -111,11 +131,11 @@ class SocketServerTest extends JUnitSuite {
     byteBuffer.rewind()
 
     val send = new NetworkSend(request.context.connectionId, byteBuffer)
-    channel.sendResponse(new RequestChannel.Response(request, Some(send), SendAction, None))
+    channel.sendResponse(new RequestChannel.Response(request, Some(send), SendAction, Some(request.header.toString)))
   }
 
-  def connect(s: SocketServer = server, protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT) = {
-    val socket = new Socket("localhost", s.boundPort(ListenerName.forSecurityProtocol(protocol)))
+  def connect(s: SocketServer = server, protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT, localAddr: InetAddress = null) = {
+    val socket = new Socket("localhost", s.boundPort(ListenerName.forSecurityProtocol(protocol)), localAddr, 0)
     sockets += socket
     socket
   }
@@ -129,28 +149,19 @@ class SocketServerTest extends JUnitSuite {
   }
 
   def sendAndReceiveRequest(socket: Socket, server: SocketServer): RequestChannel.Request = {
-    sendRequest(socket, producerRequestBytes)
+    sendRequest(socket, producerRequestBytes())
     receiveRequest(server.requestChannel)
   }
 
   def shutdownServerAndMetrics(server: SocketServer): Unit = {
     server.shutdown()
     server.metrics.close()
-    server.requestChannel.metrics.close()
   }
 
-  @After
-  def tearDown() {
-    shutdownServerAndMetrics(server)
-    sockets.foreach(_.close())
-    sockets.clear()
-  }
-
-  private def producerRequestBytes: Array[Byte] = {
+  private def producerRequestBytes(ack: Short = 0): Array[Byte] = {
     val correlationId = -1
     val clientId = ""
     val ackTimeoutMs = 10000
-    val ack = 0: Short
 
     val emptyRequest = ProduceRequest.Builder.forCurrentMagic(ack, ackTimeoutMs,
       new HashMap[TopicPartition, MemoryRecords]()).build()
@@ -166,7 +177,7 @@ class SocketServerTest extends JUnitSuite {
   @Test
   def simpleRequest() {
     val plainSocket = connect(protocol = SecurityProtocol.PLAINTEXT)
-    val serializedBytes = producerRequestBytes
+    val serializedBytes = producerRequestBytes()
 
     // Test PLAINTEXT socket
     sendRequest(plainSocket, serializedBytes)
@@ -195,7 +206,7 @@ class SocketServerTest extends JUnitSuite {
   @Test
   def testGracefulClose() {
     val plainSocket = connect(protocol = SecurityProtocol.PLAINTEXT)
-    val serializedBytes = producerRequestBytes
+    val serializedBytes = producerRequestBytes()
 
     for (_ <- 0 until 10)
       sendRequest(plainSocket, serializedBytes)
@@ -208,9 +219,23 @@ class SocketServerTest extends JUnitSuite {
   }
 
   @Test
+  def testNoOpAction(): Unit = {
+    val plainSocket = connect(protocol = SecurityProtocol.PLAINTEXT)
+    val serializedBytes = producerRequestBytes()
+
+    for (_ <- 0 until 3)
+      sendRequest(plainSocket, serializedBytes)
+    for (_ <- 0 until 3) {
+      val request = receiveRequest(server.requestChannel)
+      assertNotNull("receiveRequest timed out", request)
+      server.requestChannel.sendResponse(new RequestChannel.Response(request, None, RequestChannel.NoOpAction, None))
+    }
+  }
+
+  @Test
   def testConnectionId() {
     val sockets = (1 to 5).map(_ => connect(protocol = SecurityProtocol.PLAINTEXT))
-    val serializedBytes = producerRequestBytes
+    val serializedBytes = producerRequestBytes()
 
     val requests = sockets.map{socket =>
       sendRequest(socket, serializedBytes)
@@ -239,7 +264,7 @@ class SocketServerTest extends JUnitSuite {
 
     try {
       overrideServer.startup()
-      val serializedBytes = producerRequestBytes
+      val serializedBytes = producerRequestBytes()
 
       // Connection with no staged receives
       val socket1 = connect(overrideServer, protocol = SecurityProtocol.PLAINTEXT)
@@ -322,13 +347,13 @@ class SocketServerTest extends JUnitSuite {
 
       // Send requests to `channel1` until a receive is staged and advance time beyond idle time so that `channel1` is
       // closed with staged receives and is in Selector.closingChannels
-      val serializedBytes = producerRequestBytes
+      val serializedBytes = producerRequestBytes()
       val request = sendRequestsUntilStagedReceive(overrideServer, socket1, serializedBytes)
       time.sleep(idleTimeMs + 1)
       TestUtils.waitUntilTrue(() => openChannel.isEmpty, "Idle channel not closed")
       TestUtils.waitUntilTrue(() => openOrClosingChannel.isDefined, "Channel removed without processing staged receives")
 
-      // Create new connection with same id when when `channel1` is in Selector.closingChannels
+      // Create new connection with same id when `channel1` is in Selector.closingChannels
       // Check that new connection is closed and openOrClosingChannel still contains `channel1`
       connectAndWaitForConnectionRegister()
       TestUtils.waitUntilTrue(() => connectionCount == 1, "Failed to close channel")
@@ -381,7 +406,7 @@ class SocketServerTest extends JUnitSuite {
     // the following sleep is necessary to reliably detect the connection close when we send data below
     Thread.sleep(200L)
     // make sure the sockets are open
-    server.acceptors.values.foreach(acceptor => assertFalse(acceptor.serverChannel.socket.isClosed))
+    server.acceptors.asScala.values.foreach(acceptor => assertFalse(acceptor.serverChannel.socket.isClosed))
     // then shutdown the server
     shutdownServerAndMetrics(server)
 
@@ -412,10 +437,47 @@ class SocketServerTest extends JUnitSuite {
     TestUtils.waitUntilTrue(() => server.connectionCount(address) < conns.length,
       "Failed to decrement connection count after close")
     val conn2 = connect()
-    val serializedBytes = producerRequestBytes
+    val serializedBytes = producerRequestBytes()
     sendRequest(conn2, serializedBytes)
     val request = server.requestChannel.receiveRequest(2000)
     assertNotNull(request)
+  }
+
+  @Test
+  def testZeroMaxConnectionsPerIp() {
+    val newProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
+    newProps.setProperty(KafkaConfig.MaxConnectionsPerIpProp, "0")
+    newProps.setProperty(KafkaConfig.MaxConnectionsPerIpOverridesProp, "%s:%s".format("127.0.0.1", "5"))
+    val server = new SocketServer(KafkaConfig.fromProps(newProps), new Metrics(), Time.SYSTEM, credentialProvider)
+    try {
+      server.startup()
+      // make the maximum allowable number of connections
+      val conns = (0 until 5).map(_ => connect(server))
+      // now try one more (should fail)
+      val conn = connect(server)
+      conn.setSoTimeout(3000)
+      assertEquals(-1, conn.getInputStream.read())
+      conn.close()
+
+      // it should succeed after closing one connection
+      val address = conns.head.getInetAddress
+      conns.head.close()
+      TestUtils.waitUntilTrue(() => server.connectionCount(address) < conns.length,
+        "Failed to decrement connection count after close")
+      val conn2 = connect(server)
+      val serializedBytes = producerRequestBytes()
+      sendRequest(conn2, serializedBytes)
+      val request = server.requestChannel.receiveRequest(2000)
+      assertNotNull(request)
+
+      // now try to connect from the external facing interface, which should fail
+      val conn3 = connect(s = server, localAddr = InetAddress.getLocalHost)
+      conn3.setSoTimeout(3000)
+      assertEquals(-1, conn3.getInputStream.read())
+      conn3.close()
+    } finally {
+      shutdownServerAndMetrics(server)
+    }
   }
 
   @Test
@@ -431,7 +493,7 @@ class SocketServerTest extends JUnitSuite {
       val conns = (0 until overrideNum).map(_ => connect(overrideServer))
 
       // it should succeed
-      val serializedBytes = producerRequestBytes
+      val serializedBytes = producerRequestBytes()
       sendRequest(conns.last, serializedBytes)
       val request = overrideServer.requestChannel.receiveRequest(2000)
       assertNotNull(request)
@@ -514,7 +576,7 @@ class SocketServerTest extends JUnitSuite {
     try {
       overrideServer.startup()
       conn = connect(overrideServer)
-      val serializedBytes = producerRequestBytes
+      val serializedBytes = producerRequestBytes()
       sendRequest(conn, serializedBytes)
 
       val channel = overrideServer.requestChannel
@@ -539,6 +601,54 @@ class SocketServerTest extends JUnitSuite {
     }
   }
 
+  @Test
+  def testClientDisconnectionWithStagedReceivesFullyProcessed() {
+    val serverMetrics = new Metrics
+    @volatile var selector: TestableSelector = null
+    val overrideConnectionId = "127.0.0.1:1-127.0.0.1:2-0"
+    val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics, Time.SYSTEM, credentialProvider) {
+      override def newProcessor(id: Int, connectionQuotas: ConnectionQuotas, listenerName: ListenerName,
+                                protocol: SecurityProtocol, memoryPool: MemoryPool): Processor = {
+        new Processor(id, time, config.socketRequestMaxBytes, requestChannel, connectionQuotas,
+          config.connectionsMaxIdleMs, listenerName, protocol, config, metrics, credentialProvider, memoryPool, new LogContext()) {
+          override protected[network] def connectionId(socket: Socket): String = overrideConnectionId
+          override protected[network] def createSelector(channelBuilder: ChannelBuilder): Selector = {
+           val testableSelector = new TestableSelector(config, channelBuilder, time, metrics)
+           selector = testableSelector
+           testableSelector
+        }
+        }
+      }
+    }
+
+    def openChannel: Option[KafkaChannel] = overrideServer.processor(0).channel(overrideConnectionId)
+    def openOrClosingChannel: Option[KafkaChannel] = overrideServer.processor(0).openOrClosingChannel(overrideConnectionId)
+
+    try {
+      overrideServer.startup()
+      val socket = connect(overrideServer)
+
+      TestUtils.waitUntilTrue(() => openChannel.nonEmpty, "Channel not found")
+
+      // Setup channel to client with staged receives so when client disconnects
+      // it will be stored in Selector.closingChannels
+      val serializedBytes = producerRequestBytes(1)
+      val request = sendRequestsUntilStagedReceive(overrideServer, socket, serializedBytes)
+
+      // Set SoLinger to 0 to force a hard disconnect via TCP RST
+      socket.setSoLinger(true, 0)
+      socket.close()
+
+      // Complete request with socket exception so that the channel is removed from Selector.closingChannels
+      processRequest(overrideServer.requestChannel, request)
+      TestUtils.waitUntilTrue(() => openOrClosingChannel.isEmpty, "Channel not closed after failed send")
+      assertTrue("Unexpected completed send", selector.completedSends.isEmpty)
+    } finally {
+      overrideServer.shutdown()
+      serverMetrics.close()
+    }
+  }
+
   /*
    * Test that we update request metrics if the channel has been removed from the selector when the broker calls
    * `selector.send` (selector closes old connections, for example).
@@ -553,7 +663,7 @@ class SocketServerTest extends JUnitSuite {
     try {
       overrideServer.startup()
       conn = connect(overrideServer)
-      val serializedBytes = producerRequestBytes
+      val serializedBytes = producerRequestBytes()
       sendRequest(conn, serializedBytes)
       val channel = overrideServer.requestChannel
       val request = receiveRequest(channel)
@@ -576,12 +686,16 @@ class SocketServerTest extends JUnitSuite {
   }
 
   @Test
-  def testRequestMetricsAfterShutdown(): Unit = {
-    server.shutdown()
-
-    server.requestChannel.metrics(ApiKeys.PRODUCE.name).requestRate.mark()
+  def testRequestMetricsAfterStop(): Unit = {
+    server.stopProcessingRequests()
+    val version = ApiKeys.PRODUCE.latestVersion
+    val version2 = (version - 1).toShort
+    for (_ <- 0 to 1) server.requestChannel.metrics(ApiKeys.PRODUCE.name).requestRate(version).mark()
+    server.requestChannel.metrics(ApiKeys.PRODUCE.name).requestRate(version2).mark()
+    assertEquals(2, server.requestChannel.metrics(ApiKeys.PRODUCE.name).requestRate(version).count())
     server.requestChannel.updateErrorMetrics(ApiKeys.PRODUCE, Map(Errors.NONE -> 1))
-    val nonZeroMeters = Map("kafka.network:type=RequestMetrics,name=RequestsPerSec,request=Produce" -> 1,
+    val nonZeroMeters = Map(s"kafka.network:type=RequestMetrics,name=RequestsPerSec,request=Produce,version=$version" -> 2,
+        s"kafka.network:type=RequestMetrics,name=RequestsPerSec,request=Produce,version=$version2" -> 1,
         "kafka.network:type=RequestMetrics,name=ErrorsPerSec,request=Produce,error=NONE" -> 1)
 
     def requestMetricMeters = YammerMetrics
@@ -591,7 +705,7 @@ class SocketServerTest extends JUnitSuite {
       .collect { case (k, metric: Meter) => (k.toString, metric.count) }
 
     assertEquals(nonZeroMeters, requestMetricMeters.filter { case (_, value) => value != 0 })
-    server.requestChannel.metrics.close()
+    server.shutdown()
     assertEquals(Map.empty, requestMetricMeters)
   }
 
@@ -672,7 +786,7 @@ class SocketServerTest extends JUnitSuite {
       testableSelector.updateMinWakeup(2)
 
       val sockets = (1 to 2).map(_ => connect(testableServer))
-      sockets.foreach(sendRequest(_, producerRequestBytes))
+      sockets.foreach(sendRequest(_, producerRequestBytes()))
 
       testableServer.testableSelector.addFailure(SelectorOperation.Send)
       sockets.foreach(_ => processRequest(testableServer.requestChannel))
@@ -695,7 +809,7 @@ class SocketServerTest extends JUnitSuite {
       testableSelector.updateMinWakeup(2)
 
       val sockets = (1 to 2).map(_ => connect(testableServer))
-      sockets.foreach(sendRequest(_, producerRequestBytes))
+      sockets.foreach(sendRequest(_, producerRequestBytes()))
       val requestChannel = testableServer.requestChannel
 
       val requests = sockets.map(_ => receiveRequest(requestChannel))
@@ -723,7 +837,7 @@ class SocketServerTest extends JUnitSuite {
       testableSelector.updateMinWakeup(2)
 
       val sockets = (1 to 2).map(_ => connect(testableServer))
-      val serializedBytes = producerRequestBytes
+      val serializedBytes = producerRequestBytes()
       val request = sendRequestsUntilStagedReceive(testableServer, sockets(0), serializedBytes)
       sendRequest(sockets(1), serializedBytes)
 
@@ -757,7 +871,7 @@ class SocketServerTest extends JUnitSuite {
 
       testableSelector.cachedCompletedReceives.minPerPoll = 2
       testableSelector.addFailure(SelectorOperation.Mute)
-      sockets.foreach(sendRequest(_, producerRequestBytes))
+      sockets.foreach(sendRequest(_, producerRequestBytes()))
       val requests = sockets.map(_ => receiveRequest(requestChannel))
       testableSelector.waitForOperations(SelectorOperation.Mute, 2)
       testableServer.waitForChannelClose(testableSelector.allFailedChannels.head, locallyClosed = true)
@@ -881,7 +995,7 @@ class SocketServerTest extends JUnitSuite {
 
     // Check new channel behaves as expected
     val (socket, connectionId) = connectAndProcessRequest(testableServer)
-    assertArrayEquals(producerRequestBytes, receiveResponse(socket))
+    assertArrayEquals(producerRequestBytes(), receiveResponse(socket))
     assertNotNull("Channel should not have been closed", selector.channel(connectionId))
     assertNull("Channel should not be closing", selector.closingChannel(connectionId))
     socket.close()

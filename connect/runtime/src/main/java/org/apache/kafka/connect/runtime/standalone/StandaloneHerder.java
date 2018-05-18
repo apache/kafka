@@ -52,26 +52,29 @@ public class StandaloneHerder extends AbstractHerder {
 
     private ClusterConfigState configState;
 
-    public StandaloneHerder(Worker worker) {
-        this(worker, worker.workerId(), new MemoryStatusBackingStore(), new MemoryConfigBackingStore());
+    public StandaloneHerder(Worker worker, String kafkaClusterId) {
+        this(worker, worker.workerId(), kafkaClusterId, new MemoryStatusBackingStore(), new MemoryConfigBackingStore());
     }
 
     // visible for testing
     StandaloneHerder(Worker worker,
                      String workerId,
+                     String kafkaClusterId,
                      StatusBackingStore statusBackingStore,
                      MemoryConfigBackingStore configBackingStore) {
-        super(worker, workerId, statusBackingStore, configBackingStore);
+        super(worker, workerId, kafkaClusterId, statusBackingStore, configBackingStore);
         this.configState = ClusterConfigState.EMPTY;
         configBackingStore.setUpdateListener(new ConfigUpdateListener());
     }
 
+    @Override
     public synchronized void start() {
         log.info("Herder starting");
         startServices();
         log.info("Herder started");
     }
 
+    @Override
     public synchronized void stop() {
         log.info("Herder stopping");
 
@@ -255,19 +258,11 @@ public class StandaloneHerder extends AbstractHerder {
     private List<Map<String, String>> recomputeTaskConfigs(String connName) {
         Map<String, String> config = configState.connectorConfig(connName);
 
-        ConnectorConfig connConfig;
-        if (worker.isSinkConnector(connName)) {
-            connConfig = new SinkConnectorConfig(plugins(), config);
-            return worker.connectorTaskConfigs(connName,
-                                               connConfig.getInt(ConnectorConfig.TASKS_MAX_CONFIG),
-                                               connConfig.getList(SinkConnectorConfig.TOPICS_CONFIG));
-        } else {
-            connConfig = new SourceConnectorConfig(plugins(), config);
-            return worker.connectorTaskConfigs(connName,
-                                               connConfig.getInt(ConnectorConfig.TASKS_MAX_CONFIG),
-                                               null);
-        }
+        ConnectorConfig connConfig = worker.isSinkConnector(connName) ?
+            new SinkConnectorConfig(plugins(), config) :
+            new SourceConnectorConfig(plugins(), config);
 
+        return worker.connectorTaskConfigs(connName, connConfig);
     }
 
     private void createConnectorTasks(String connName, TargetState initialState) {

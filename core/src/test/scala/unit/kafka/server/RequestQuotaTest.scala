@@ -14,16 +14,15 @@
 
 package kafka.server
 
-import java.net.Socket
 import java.nio.ByteBuffer
 import java.util.{Collections, LinkedHashMap, Properties}
 import java.util.concurrent.{Executors, Future, TimeUnit}
 
-import kafka.admin.AdminUtils
 import kafka.log.LogConfig
 import kafka.network.RequestChannel.Session
 import kafka.security.auth._
 import kafka.utils.TestUtils
+
 import org.apache.kafka.clients.admin.NewPartitions
 import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
 import org.apache.kafka.common.resource.{ResourceFilter, Resource => AdminResource, ResourceType => AdminResourceType}
@@ -37,6 +36,7 @@ import org.apache.kafka.common.requests.CreateAclsRequest.AclCreation
 import org.apache.kafka.common.requests.{Resource => RResource, ResourceType => RResourceType, _}
 import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, KafkaPrincipalBuilder, SecurityProtocol}
 import org.apache.kafka.common.utils.Sanitizer
+import org.apache.kafka.common.utils.SecurityUtils
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
@@ -75,15 +75,15 @@ class RequestQuotaTest extends BaseRequestTest {
     RequestQuotaTest.principal = KafkaPrincipal.ANONYMOUS
     super.setUp()
 
-    TestUtils.createTopic(zkUtils, topic, numPartitions, 1, servers)
+    createTopic(topic, numPartitions, 1)
     leaderNode = servers.head
 
     // Change default client-id request quota to a small value and a single unthrottledClient with a large quota
     val quotaProps = new Properties()
     quotaProps.put(DynamicConfig.Client.RequestPercentageOverrideProp, "0.01")
-    AdminUtils.changeClientIdConfig(zkUtils, "<default>", quotaProps)
+    adminZkClient.changeClientIdConfig("<default>", quotaProps)
     quotaProps.put(DynamicConfig.Client.RequestPercentageOverrideProp, "2000")
-    AdminUtils.changeClientIdConfig(zkUtils, Sanitizer.sanitize(unthrottledClientId), quotaProps)
+    adminZkClient.changeClientIdConfig(Sanitizer.sanitize(unthrottledClientId), quotaProps)
 
     TestUtils.retry(10000) {
       val quotaManager = servers.head.apis.quotas.request
@@ -132,13 +132,16 @@ class RequestQuotaTest extends BaseRequestTest {
     waitAndCheckResults()
   }
 
+  def session(user: String): Session = Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, user), null)
+
   private def throttleTimeMetricValue(clientId: String): Double = {
     val metricName = leaderNode.metrics.metricName("throttle-time",
                                   QuotaType.Request.toString,
                                   "",
                                   "user", "",
                                   "client-id", clientId)
-    val sensor = leaderNode.quotaManagers.request.getOrCreateQuotaSensors("ANONYMOUS", clientId).throttleTimeSensor
+    val sensor = leaderNode.quotaManagers.request.getOrCreateQuotaSensors(session("ANONYMOUS"),
+      clientId).throttleTimeSensor
     metricValue(leaderNode.metrics.metrics.get(metricName), sensor)
   }
 
@@ -148,7 +151,8 @@ class RequestQuotaTest extends BaseRequestTest {
                                   "",
                                   "user", "",
                                   "client-id", clientId)
-    val sensor = leaderNode.quotaManagers.request.getOrCreateQuotaSensors("ANONYMOUS", clientId).quotaSensor
+    val sensor = leaderNode.quotaManagers.request.getOrCreateQuotaSensors(session("ANONYMOUS"),
+      clientId).quotaSensor
     metricValue(leaderNode.metrics.metrics.get(metricName), sensor)
   }
 
@@ -254,7 +258,7 @@ class RequestQuotaTest extends BaseRequestTest {
           new InitProducerIdRequest.Builder("abc")
 
         case ApiKeys.OFFSET_FOR_LEADER_EPOCH =>
-          new OffsetsForLeaderEpochRequest.Builder().add(tp, 0)
+          new OffsetsForLeaderEpochRequest.Builder(ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion()).add(tp, 0)
 
         case ApiKeys.ADD_PARTITIONS_TO_TXN =>
           new AddPartitionsToTxnRequest.Builder("test-transactional-id", 1, 0, List(tp).asJava)
@@ -306,18 +310,24 @@ class RequestQuotaTest extends BaseRequestTest {
             Collections.singletonMap("topic-2", NewPartitions.increaseTo(1)), 0, false
           )
 
+        case ApiKeys.CREATE_DELEGATION_TOKEN =>
+          new CreateDelegationTokenRequest.Builder(Collections.singletonList(SecurityUtils.parseKafkaPrincipal("User:test")), 1000)
+
+        case ApiKeys.EXPIRE_DELEGATION_TOKEN =>
+          new ExpireDelegationTokenRequest.Builder("".getBytes, 1000)
+
+        case ApiKeys.DESCRIBE_DELEGATION_TOKEN =>
+          new DescribeDelegationTokenRequest.Builder(Collections.singletonList(SecurityUtils.parseKafkaPrincipal("User:test")))
+
+        case ApiKeys.RENEW_DELEGATION_TOKEN =>
+          new RenewDelegationTokenRequest.Builder("".getBytes, 1000)
+
+        case ApiKeys.DELETE_GROUPS =>
+          new DeleteGroupsRequest.Builder(Collections.singleton("test-group"))
+
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)
     }
-  }
-
-  private def requestResponse(socket: Socket, clientId: String, correlationId: Int, requestBuilder: AbstractRequest.Builder[_ <: AbstractRequest]): Struct = {
-    val apiKey = requestBuilder.apiKey
-    val request = requestBuilder.build()
-    val header = new RequestHeader(apiKey, request.version, clientId, correlationId)
-    val response = requestAndReceive(socket, request.serialize(header).array)
-    val responseBuffer = skipResponseHeader(response)
-    apiKey.parseResponse(request.version, responseBuffer)
   }
 
   case class Client(clientId: String, apiKey: ApiKeys) {
@@ -400,6 +410,11 @@ class RequestQuotaTest extends BaseRequestTest {
       case ApiKeys.ALTER_REPLICA_LOG_DIRS => new AlterReplicaLogDirsResponse(response).throttleTimeMs
       case ApiKeys.DESCRIBE_LOG_DIRS => new DescribeLogDirsResponse(response).throttleTimeMs
       case ApiKeys.CREATE_PARTITIONS => new CreatePartitionsResponse(response).throttleTimeMs
+      case ApiKeys.CREATE_DELEGATION_TOKEN => new CreateDelegationTokenResponse(response).throttleTimeMs
+      case ApiKeys.DESCRIBE_DELEGATION_TOKEN=> new DescribeDelegationTokenResponse(response).throttleTimeMs
+      case ApiKeys.EXPIRE_DELEGATION_TOKEN => new ExpireDelegationTokenResponse(response).throttleTimeMs
+      case ApiKeys.RENEW_DELEGATION_TOKEN => new RenewDelegationTokenResponse(response).throttleTimeMs
+      case ApiKeys.DELETE_GROUPS => new DeleteGroupsResponse(response).throttleTimeMs
       case requestId => throw new IllegalArgumentException(s"No throttle time for $requestId")
     }
   }

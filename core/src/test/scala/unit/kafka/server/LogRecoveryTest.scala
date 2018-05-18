@@ -85,7 +85,7 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
     servers = List(server1, server2)
 
     // create topic with 1 partition, 2 replicas, one on each broker
-    createTopic(zkUtils, topic, partitionReplicaAssignment = Map(0 -> Seq(0,1)), servers = servers)
+    createTopic(zkClient, topic, partitionReplicaAssignment = Map(0 -> Seq(0,1)), servers = servers)
 
     // create the producer
     updateProducer()
@@ -117,7 +117,7 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
 
   @Test
   def testHWCheckpointWithFailuresSingleLogSegment(): Unit = {
-    var leader = waitUntilLeaderIsElectedOrChanged(zkUtils, topic, partitionId)
+    var leader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId)
 
     assertEquals(0L, hwFile1.read.getOrElse(topicPartition, 0L))
 
@@ -130,7 +130,7 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
     assertEquals(hw, hwFile1.read.getOrElse(topicPartition, 0L))
 
     // check if leader moves to the other server
-    leader = waitUntilLeaderIsElectedOrChanged(zkUtils, topic, partitionId, oldLeaderOpt = Some(leader))
+    leader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, oldLeaderOpt = Some(leader))
     assertEquals("Leader must move to broker 1", 1, leader)
 
     // bring the preferred replica back
@@ -138,8 +138,8 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
     // Update producer with new server settings
     updateProducer()
 
-    leader = waitUntilLeaderIsElectedOrChanged(zkUtils, topic, partitionId)
-    assertTrue("Leader must remain on broker 1, in case of zookeeper session expiration it can move to broker 0",
+    leader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId)
+    assertTrue("Leader must remain on broker 1, in case of ZooKeeper session expiration it can move to broker 0",
       leader == 0 || leader == 1)
 
     assertEquals(hw, hwFile1.read.getOrElse(topicPartition, 0L))
@@ -149,8 +149,8 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
 
     server2.startup()
     updateProducer()
-    leader = waitUntilLeaderIsElectedOrChanged(zkUtils, topic, partitionId, oldLeaderOpt = Some(leader))
-    assertTrue("Leader must remain on broker 0, in case of zookeeper session expiration it can move to broker 1",
+    leader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, oldLeaderOpt = Some(leader))
+    assertTrue("Leader must remain on broker 0, in case of ZooKeeper session expiration it can move to broker 1",
       leader == 0 || leader == 1)
 
     sendMessages(1)
@@ -184,7 +184,7 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
 
   @Test
   def testHWCheckpointWithFailuresMultipleLogSegments(): Unit = {
-    var leader = waitUntilLeaderIsElectedOrChanged(zkUtils, topic, partitionId)
+    var leader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId)
 
     sendMessages(2)
     var hw = 2L
@@ -202,7 +202,7 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
     server2.startup()
     updateProducer()
     // check if leader moves to the other server
-    leader = waitUntilLeaderIsElectedOrChanged(zkUtils, topic, partitionId, oldLeaderOpt = Some(leader))
+    leader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, oldLeaderOpt = Some(leader))
     assertEquals("Leader must move to broker 1", 1, leader)
 
     assertEquals(hw, hwFile1.read.getOrElse(topicPartition, 0L))

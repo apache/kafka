@@ -146,6 +146,16 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
                 return new SaslAuthenticateResponse(struct);
             case CREATE_PARTITIONS:
                 return new CreatePartitionsResponse(struct);
+            case CREATE_DELEGATION_TOKEN:
+                return new CreateDelegationTokenResponse(struct);
+            case RENEW_DELEGATION_TOKEN:
+                return new RenewDelegationTokenResponse(struct);
+            case EXPIRE_DELEGATION_TOKEN:
+                return new ExpireDelegationTokenResponse(struct);
+            case DESCRIBE_DELEGATION_TOKEN:
+                return new DescribeDelegationTokenResponse(struct);
+            case DELETE_GROUPS:
+                return new DeleteGroupsResponse(struct);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseResponse`, the " +
                         "code should be updated to do so.", apiKey));
