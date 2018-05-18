@@ -36,7 +36,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-
 public class ProcessorStateManager extends AbstractStateManager {
     private static final String STATE_CHANGELOG_TOPIC_SUFFIX = "-changelog";
 
@@ -49,6 +48,7 @@ public class ProcessorStateManager extends AbstractStateManager {
     private final Map<TopicPartition, Long> restoredOffsets;
     private final Map<String, StateRestoreCallback> restoreCallbacks; // used for standby tasks, keyed by state topic name
     private final Map<String, String> storeToChangelogTopic;
+    private final Map<String, String> stateStoreToChangelogTopicOnlyForRestoring;
     private final List<TopicPartition> changelogPartitions = new ArrayList<>();
 
     // TODO: this map does not work with customized grouper where multiple partitions
@@ -66,7 +66,8 @@ public class ProcessorStateManager extends AbstractStateManager {
                                  final Map<String, String> storeToChangelogTopic,
                                  final ChangelogReader changelogReader,
                                  final boolean eosEnabled,
-                                 final LogContext logContext) throws IOException {
+                                 final LogContext logContext,
+                                 final Map<String, String> stateStoreToChangelogTopicOnlyForRestoring) throws IOException {
         super(stateDirectory.directoryForTask(taskId));
 
         this.log = logContext.logger(ProcessorStateManager.class);
@@ -83,6 +84,7 @@ public class ProcessorStateManager extends AbstractStateManager {
         this.isStandby = isStandby;
         restoreCallbacks = isStandby ? new HashMap<String, StateRestoreCallback>() : null;
         this.storeToChangelogTopic = storeToChangelogTopic;
+        this.stateStoreToChangelogTopicOnlyForRestoring = stateStoreToChangelogTopicOnlyForRestoring;
 
         // load the checkpoint information
         checkpointableOffsets.putAll(checkpoint.read());
@@ -121,7 +123,7 @@ public class ProcessorStateManager extends AbstractStateManager {
         }
 
         // check that the underlying change log topic exist or not
-        final String topic = storeToChangelogTopic.get(storeName);
+        final String topic = storeToChangelogTopic.get(storeName) == null ? stateStoreToChangelogTopicOnlyForRestoring.get(storeName) : storeToChangelogTopic.get(storeName);
         if (topic == null) {
             stores.put(storeName, store);
             return;
