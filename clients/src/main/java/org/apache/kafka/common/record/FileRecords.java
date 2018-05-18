@@ -132,9 +132,9 @@ public class FileRecords extends AbstractRecords implements Closeable {
      */
     public FileRecords read(int position, int size) throws IOException {
         if (position < 0)
-            throw new IllegalArgumentException("Invalid position: " + position);
+            throw new IllegalArgumentException("Invalid position: " + position + " in read from " + file);
         if (size < 0)
-            throw new IllegalArgumentException("Invalid size: " + size);
+            throw new IllegalArgumentException("Invalid size: " + size + " in read from " + file);
 
         int end = this.start + position + size;
         // handle integer overflow or if end is beyond the end of the file
@@ -228,7 +228,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
     public int truncateTo(int targetSize) throws IOException {
         int originalSize = sizeInBytes();
         if (targetSize > originalSize || targetSize < 0)
-            throw new KafkaException("Attempt to truncate log segment to " + targetSize + " bytes failed, " +
+            throw new KafkaException("Attempt to truncate log segment " + file + " to " + targetSize + " bytes failed, " +
                     " size of this log segment is " + originalSize + " bytes.");
         if (targetSize < (int) channel.size()) {
             channel.truncate(targetSize);
@@ -347,6 +347,14 @@ public class FileRecords extends AbstractRecords implements Closeable {
         return batches;
     }
 
+    @Override
+    public String toString() {
+        return "FileRecords(file= " + file +
+                ", start=" + start +
+                ", end=" + end +
+                ")";
+    }
+
     private Iterable<FileChannelRecordBatch> batchesFrom(final int start) {
         return new Iterable<FileChannelRecordBatch>() {
             @Override
@@ -362,7 +370,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
             end = this.end;
         else
             end = this.sizeInBytes();
-        FileLogInputStream inputStream = new FileLogInputStream(channel, start, end);
+        FileLogInputStream inputStream = new FileLogInputStream(this, start, end);
         return new RecordBatchIterator<>(inputStream);
     }
 

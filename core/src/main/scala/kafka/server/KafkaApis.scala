@@ -231,6 +231,13 @@ class KafkaApis(val requestChannel: RequestChannel,
           adminManager.tryCompleteDelayedTopicOperations(topic)
         }
       }
+      quotas.clientQuotaCallback.foreach { callback =>
+        if (callback.updateClusterMetadata(metadataCache.getClusterMetadata(clusterId, request.context.listenerName))) {
+          quotas.fetch.updateQuotaMetricConfigs()
+          quotas.produce.updateQuotaMetricConfigs()
+          quotas.request.updateQuotaMetricConfigs()
+        }
+      }
       sendResponseExemptThrottle(request, new UpdateMetadataResponse(Errors.NONE))
     } else {
       sendResponseMaybeThrottle(request, _ => new UpdateMetadataResponse(Errors.CLUSTER_AUTHORIZATION_FAILED))
@@ -280,7 +287,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       for ((topicPartition, partitionData) <- offsetCommitRequest.offsetData.asScala) {
         if (!authorize(request.session, Read, new Resource(Topic, topicPartition.topic)))
           unauthorizedTopicErrors += (topicPartition -> Errors.TOPIC_AUTHORIZATION_FAILED)
-        else if (!metadataCache.contains(topicPartition.topic))
+        else if (!metadataCache.contains(topicPartition))
           nonExistingTopicErrors += (topicPartition -> Errors.UNKNOWN_TOPIC_OR_PARTITION)
         else
           authorizedTopicRequestInfoBldr += (topicPartition -> partitionData)
@@ -394,7 +401,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     for ((topicPartition, memoryRecords) <- produceRequest.partitionRecordsOrFail.asScala) {
       if (!authorize(request.session, Write, new Resource(Topic, topicPartition.topic)))
         unauthorizedTopicResponses += topicPartition -> new PartitionResponse(Errors.TOPIC_AUTHORIZATION_FAILED)
-      else if (!metadataCache.contains(topicPartition.topic))
+      else if (!metadataCache.contains(topicPartition))
         nonExistingTopicResponses += topicPartition -> new PartitionResponse(Errors.UNKNOWN_TOPIC_OR_PARTITION)
       else
         authorizedRequestInfo += (topicPartition -> memoryRecords)
@@ -445,7 +452,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       request.apiRemoteCompleteTimeNanos = time.nanoseconds
 
       quotas.produce.maybeRecordAndThrottle(
-        request.session.sanitizedUser,
+        request.session,
         request.header.clientId,
         numBytesAppended,
         produceResponseCallback)
@@ -495,13 +502,13 @@ class KafkaApis(val requestChannel: RequestChannel,
     if (fetchRequest.isFromFollower()) {
       // The follower must have ClusterAction on ClusterResource in order to fetch partition data.
       if (authorize(request.session, ClusterAction, Resource.ClusterResource)) {
-        fetchContext.foreachPartition((part, data) => {
-          if (!metadataCache.contains(part.topic)) {
-            erroneous += part -> new FetchResponse.PartitionData(Errors.UNKNOWN_TOPIC_OR_PARTITION,
+        fetchContext.foreachPartition((topicPartition, data) => {
+          if (!metadataCache.contains(topicPartition)) {
+            erroneous += topicPartition -> new FetchResponse.PartitionData(Errors.UNKNOWN_TOPIC_OR_PARTITION,
               FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LAST_STABLE_OFFSET,
               FetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY)
           } else {
-            interesting += (part -> data)
+            interesting += (topicPartition -> data)
           }
         })
       } else {
@@ -513,17 +520,17 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     } else {
       // Regular Kafka consumers need READ permission on each partition they are fetching.
-      fetchContext.foreachPartition((part, data) => {
-        if (!authorize(request.session, Read, new Resource(Topic, part.topic)))
-          erroneous += part -> new FetchResponse.PartitionData(Errors.TOPIC_AUTHORIZATION_FAILED,
+      fetchContext.foreachPartition((topicPartition, data) => {
+        if (!authorize(request.session, Read, new Resource(Topic, topicPartition.topic)))
+          erroneous += topicPartition -> new FetchResponse.PartitionData(Errors.TOPIC_AUTHORIZATION_FAILED,
             FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LAST_STABLE_OFFSET,
             FetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY)
-        else if (!metadataCache.contains(part.topic))
-          erroneous += part -> new FetchResponse.PartitionData(Errors.UNKNOWN_TOPIC_OR_PARTITION,
+        else if (!metadataCache.contains(topicPartition))
+          erroneous += topicPartition -> new FetchResponse.PartitionData(Errors.UNKNOWN_TOPIC_OR_PARTITION,
             FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LAST_STABLE_OFFSET,
             FetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY)
         else
-          interesting += (part -> data)
+          interesting += (topicPartition -> data)
       })
     }
 
@@ -610,7 +617,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         // This may be slightly different from the actual response size. But since down conversions
         // result in data being loaded into memory, it is better to do this after throttling to avoid OOM.
         val responseStruct = unconvertedFetchResponse.toStruct(versionId)
-        quotas.fetch.maybeRecordAndThrottle(request.session.sanitizedUser, clientId, responseStruct.sizeOf,
+        quotas.fetch.maybeRecordAndThrottle(request.session, clientId, responseStruct.sizeOf,
           fetchResponseCallback)
       }
     }
@@ -1055,7 +1062,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             // version 0 reads offsets from ZK
             val authorizedPartitionData = authorizedPartitions.map { topicPartition =>
               try {
-                if (!metadataCache.contains(topicPartition.topic))
+                if (!metadataCache.contains(topicPartition))
                   (topicPartition, OffsetFetchResponse.UNKNOWN_PARTITION)
                 else {
                   val payloadOpt = zkClient.getConsumerOffset(offsetFetchRequest.groupId, topicPartition)
@@ -1348,7 +1355,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         apiVersionRequest.getErrorResponse(requestThrottleMs, Errors.UNSUPPORTED_VERSION.exception)
       else
         ApiVersionsResponse.apiVersionsResponse(requestThrottleMs,
-          config.interBrokerProtocolVersion.messageFormatVersion.value)
+          config.interBrokerProtocolVersion.recordVersion.value)
     }
     sendResponseMaybeThrottle(request, createResponseCallback)
   }
@@ -1501,7 +1508,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       if (!authorize(request.session, Delete, new Resource(Topic, topicPartition.topic)))
         unauthorizedTopicResponses += topicPartition -> new DeleteRecordsResponse.PartitionResponse(
           DeleteRecordsResponse.INVALID_LOW_WATERMARK, Errors.TOPIC_AUTHORIZATION_FAILED)
-      else if (!metadataCache.contains(topicPartition.topic))
+      else if (!metadataCache.contains(topicPartition))
         nonExistingTopicResponses += topicPartition -> new DeleteRecordsResponse.PartitionResponse(
           DeleteRecordsResponse.INVALID_LOW_WATERMARK, Errors.UNKNOWN_TOPIC_OR_PARTITION)
       else
@@ -1713,7 +1720,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         if (org.apache.kafka.common.internals.Topic.isInternal(topicPartition.topic) ||
             !authorize(request.session, Write, new Resource(Topic, topicPartition.topic)))
           unauthorizedTopicErrors += topicPartition -> Errors.TOPIC_AUTHORIZATION_FAILED
-        else if (!metadataCache.contains(topicPartition.topic))
+        else if (!metadataCache.contains(topicPartition))
           nonExistingTopicErrors += topicPartition -> Errors.UNKNOWN_TOPIC_OR_PARTITION
         else
           authorizedPartitions.add(topicPartition)
@@ -1799,7 +1806,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       for ((topicPartition, commitedOffset) <- txnOffsetCommitRequest.offsets.asScala) {
         if (!authorize(request.session, Read, new Resource(Topic, topicPartition.topic)))
           unauthorizedTopicErrors += topicPartition -> Errors.TOPIC_AUTHORIZATION_FAILED
-        else if (!metadataCache.contains(topicPartition.topic))
+        else if (!metadataCache.contains(topicPartition))
           nonExistingTopicErrors += topicPartition -> Errors.UNKNOWN_TOPIC_OR_PARTITION
         else
           authorizedTopicCommittedOffsets += (topicPartition -> commitedOffset)

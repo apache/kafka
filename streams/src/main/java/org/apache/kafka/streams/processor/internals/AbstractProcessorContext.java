@@ -18,15 +18,14 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.io.File;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -37,7 +36,7 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     private final TaskId taskId;
     private final String applicationId;
     private final StreamsConfig config;
-    private final StreamsMetrics metrics;
+    private final StreamsMetricsImpl metrics;
     private final Serde keySerde;
     private final ThreadCache cache;
     private final Serde valueSerde;
@@ -48,7 +47,7 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
 
     public AbstractProcessorContext(final TaskId taskId,
                                     final StreamsConfig config,
-                                    final StreamsMetrics metrics,
+                                    final StreamsMetricsImpl metrics,
                                     final StateManager stateManager,
                                     final ThreadCache cache) {
         this.taskId = taskId;
@@ -87,13 +86,12 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     }
 
     @Override
-    public StreamsMetrics metrics() {
+    public StreamsMetricsImpl metrics() {
         return metrics;
     }
 
     @Override
     public void register(final StateStore store,
-                         final boolean deprecatedAndIgnoredLoggingEnabled,
                          final StateRestoreCallback stateRestoreCallback) {
         if (initialized) {
             throw new IllegalStateException("Can only create state stores during initialization.");
@@ -162,20 +160,6 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
         combined.putAll(config.originals());
         combined.putAll(config.values());
         return combined;
-    }
-
-    @SuppressWarnings("unchecked")
-    @Override
-    public <K, V> void forward(final K key, final V value) {
-        final ProcessorNode previousNode = currentNode();
-        try {
-            for (final ProcessorNode child : (List<ProcessorNode>) currentNode().children()) {
-                setCurrentNode(child);
-                child.process(key, value);
-            }
-        } finally {
-            setCurrentNode(previousNode);
-        }
     }
 
     @Override

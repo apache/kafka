@@ -75,23 +75,25 @@ object DynamicBrokerConfig {
 
   private[server] val DynamicSecurityConfigs = SslConfigs.RECONFIGURABLE_CONFIGS.asScala
 
-  val AllDynamicConfigs = mutable.Set[String]()
-  AllDynamicConfigs ++= DynamicSecurityConfigs
-  AllDynamicConfigs ++= LogCleaner.ReconfigurableConfigs
-  AllDynamicConfigs ++= DynamicLogConfig.ReconfigurableConfigs
-  AllDynamicConfigs ++= DynamicThreadPool.ReconfigurableConfigs
-  AllDynamicConfigs ++= Set(KafkaConfig.MetricReporterClassesProp)
-  AllDynamicConfigs ++= DynamicListenerConfig.ReconfigurableConfigs
+  val AllDynamicConfigs = DynamicSecurityConfigs ++
+    LogCleaner.ReconfigurableConfigs ++
+    DynamicLogConfig.ReconfigurableConfigs ++
+    DynamicThreadPool.ReconfigurableConfigs ++
+    Set(KafkaConfig.MetricReporterClassesProp) ++
+    DynamicListenerConfig.ReconfigurableConfigs
 
   private val PerBrokerConfigs = DynamicSecurityConfigs  ++
     DynamicListenerConfig.ReconfigurableConfigs
+  private val ListenerMechanismConfigs = Set(KafkaConfig.SaslJaasConfigProp)
 
   val ListenerConfigRegex = """listener\.name\.[^.]*\.(.*)""".r
 
-  private[server] val DynamicPasswordConfigs = {
+  private val DynamicPasswordConfigs = {
     val passwordConfigs = KafkaConfig.configKeys.filter(_._2.`type` == ConfigDef.Type.PASSWORD).keySet
     AllDynamicConfigs.intersect(passwordConfigs)
   }
+
+  def isPasswordConfig(name: String): Boolean = DynamicBrokerConfig.DynamicPasswordConfigs.exists(name.endsWith)
 
   def brokerConfigSynonyms(name: String, matchListenerOverride: Boolean): List[String] = {
     name match {
@@ -103,7 +105,12 @@ object DynamicBrokerConfig {
         List(KafkaConfig.LogFlushIntervalMsProp, KafkaConfig.LogFlushSchedulerIntervalMsProp)
       case KafkaConfig.LogRetentionTimeMillisProp | KafkaConfig.LogRetentionTimeMinutesProp | KafkaConfig.LogRetentionTimeHoursProp =>
         List(KafkaConfig.LogRetentionTimeMillisProp, KafkaConfig.LogRetentionTimeMinutesProp, KafkaConfig.LogRetentionTimeHoursProp)
-      case ListenerConfigRegex(baseName) if matchListenerOverride => List(name, baseName)
+      case ListenerConfigRegex(baseName) if matchListenerOverride =>
+        // `ListenerMechanismConfigs` are specified as listenerPrefix.mechanism.<configName>
+        // and other listener configs are specified as listenerPrefix.<configName>
+        // Add <configName> as a synonym in both cases.
+        val mechanismConfig = ListenerMechanismConfigs.find(baseName.endsWith)
+        List(name, mechanismConfig.getOrElse(baseName))
       case _ => List(name)
     }
   }
@@ -137,6 +144,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   private val dynamicConfigPasswordEncoder = maybeCreatePasswordEncoder(kafkaConfig.passwordEncoderSecret)
 
   private[server] def initialize(zkClient: KafkaZkClient): Unit = {
+    currentConfig = new KafkaConfig(kafkaConfig.props, false, None)
     val adminZkClient = new AdminZkClient(zkClient)
     updateDefaultConfig(adminZkClient.fetchEntityConfig(ConfigType.Broker, ConfigEntityName.Default))
     val props = adminZkClient.fetchEntityConfig(ConfigType.Broker, kafkaConfig.brokerId.toString)
@@ -148,23 +156,29 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     addBrokerReconfigurable(new DynamicThreadPool(kafkaServer))
     if (kafkaServer.logManager.cleaner != null)
       addBrokerReconfigurable(kafkaServer.logManager.cleaner)
-    addReconfigurable(new DynamicLogConfig(kafkaServer.logManager))
+    addReconfigurable(new DynamicLogConfig(kafkaServer.logManager, kafkaServer))
     addReconfigurable(new DynamicMetricsReporters(kafkaConfig.brokerId, kafkaServer))
+    addReconfigurable(new DynamicClientQuotaCallback(kafkaConfig.brokerId, kafkaServer))
     addBrokerReconfigurable(new DynamicListenerConfig(kafkaServer))
   }
 
   def addReconfigurable(reconfigurable: Reconfigurable): Unit = CoreUtils.inWriteLock(lock) {
-    require(reconfigurable.reconfigurableConfigs.asScala.forall(AllDynamicConfigs.contains))
+    verifyReconfigurableConfigs(reconfigurable.reconfigurableConfigs.asScala)
     reconfigurables += reconfigurable
   }
 
   def addBrokerReconfigurable(reconfigurable: BrokerReconfigurable): Unit = CoreUtils.inWriteLock(lock) {
-    require(reconfigurable.reconfigurableConfigs.forall(AllDynamicConfigs.contains))
+    verifyReconfigurableConfigs(reconfigurable.reconfigurableConfigs)
     brokerReconfigurables += reconfigurable
   }
 
   def removeReconfigurable(reconfigurable: Reconfigurable): Unit = CoreUtils.inWriteLock(lock) {
     reconfigurables -= reconfigurable
+  }
+
+  private def verifyReconfigurableConfigs(configNames: Set[String]): Unit = CoreUtils.inWriteLock(lock) {
+    val nonDynamic = configNames.filter(DynamicConfig.Broker.nonDynamicProps.contains)
+    require(nonDynamic.isEmpty, s"Reconfigurable contains non-dynamic configs $nonDynamic")
   }
 
   // Visibility for testing
@@ -219,15 +233,14 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   private[server] def toPersistentProps(configProps: Properties, perBrokerConfig: Boolean): Properties = {
     val props = configProps.clone().asInstanceOf[Properties]
 
-    def encodePassword(configName: String): Unit = {
-      val value = props.getProperty(configName)
+    def encodePassword(configName: String, value: String): Unit = {
       if (value != null) {
         if (!perBrokerConfig)
           throw new ConfigException("Password config can be defined only at broker level")
         props.setProperty(configName, passwordEncoder.encode(new Password(value)))
       }
     }
-    DynamicPasswordConfigs.foreach(encodePassword)
+    configProps.asScala.filterKeys(isPasswordConfig).foreach { case (name, value) => encodePassword(name, value) }
     props
   }
 
@@ -249,8 +262,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     if (!perBrokerConfig)
       removeInvalidProps(perBrokerConfigs(props), "Per-broker configs defined at default cluster level will be ignored")
 
-    def decodePassword(configName: String): Unit = {
-      val value = props.getProperty(configName)
+    def decodePassword(configName: String, value: String): Unit = {
       if (value != null) {
         try {
           props.setProperty(configName, passwordEncoder.decode(value).value)
@@ -262,7 +274,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
       }
     }
 
-    DynamicPasswordConfigs.foreach(decodePassword)
+    props.asScala.filterKeys(isPasswordConfig).foreach { case (name, value) => decodePassword(name, value) }
     props
   }
 
@@ -272,10 +284,9 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   // have been removed during broker restart.
   private def maybeReEncodePasswords(persistentProps: Properties, adminZkClient: AdminZkClient): Properties = {
     val props = persistentProps.clone().asInstanceOf[Properties]
-    if (!props.asScala.keySet.exists(DynamicPasswordConfigs.contains)) {
+    if (props.asScala.keySet.exists(isPasswordConfig)) {
       maybeCreatePasswordEncoder(kafkaConfig.passwordEncoderOldSecret).foreach { passwordDecoder =>
-        DynamicPasswordConfigs.foreach { configName =>
-          val value = props.getProperty(configName)
+        persistentProps.asScala.filterKeys(isPasswordConfig).foreach { case (configName, value) =>
           if (value != null) {
             val decoded = try {
               Some(passwordDecoder.decode(value).value)
@@ -490,7 +501,7 @@ object DynamicLogConfig {
   val ReconfigurableConfigs = LogConfig.TopicConfigSynonyms.values.toSet -- ExcludedConfigs
   val KafkaConfigToLogConfigName = LogConfig.TopicConfigSynonyms.map { case (k, v) => (v, k) }
 }
-class DynamicLogConfig(logManager: LogManager) extends Reconfigurable with Logging {
+class DynamicLogConfig(logManager: LogManager, server: KafkaServer) extends Reconfigurable with Logging {
 
   override def configure(configs: util.Map[String, _]): Unit = {}
 
@@ -506,6 +517,7 @@ class DynamicLogConfig(logManager: LogManager) extends Reconfigurable with Loggi
 
   override def reconfigure(configs: util.Map[String, _]): Unit = {
     val currentLogConfig = logManager.currentDefaultConfig
+    val origUncleanLeaderElectionEnable = logManager.currentDefaultConfig.uncleanLeaderElectionEnable
     val newBrokerDefaults = new util.HashMap[String, Object](currentLogConfig.originals)
     configs.asScala.filterKeys(DynamicLogConfig.ReconfigurableConfigs.contains).foreach { case (k, v) =>
       if (v != null) {
@@ -524,6 +536,9 @@ class DynamicLogConfig(logManager: LogManager) extends Reconfigurable with Loggi
 
       val logConfig = LogConfig(props.asJava)
       log.updateConfig(newBrokerDefaults.asScala.keySet, logConfig)
+    }
+    if (logManager.currentDefaultConfig.uncleanLeaderElectionEnable && !origUncleanLeaderElectionEnable) {
+      server.kafkaController.enableDefaultUncleanLeaderElection()
     }
   }
 }
@@ -699,6 +714,37 @@ object DynamicListenerConfig {
   )
 }
 
+class DynamicClientQuotaCallback(brokerId: Int, server: KafkaServer) extends Reconfigurable {
+
+  override def configure(configs: util.Map[String, _]): Unit = {}
+
+  override def reconfigurableConfigs(): util.Set[String] = {
+    val configs = new util.HashSet[String]()
+    server.quotaManagers.clientQuotaCallback.foreach {
+      case callback: Reconfigurable => configs.addAll(callback.reconfigurableConfigs)
+      case _ =>
+    }
+    configs
+  }
+
+  override def validateReconfiguration(configs: util.Map[String, _]): Unit = {
+    server.quotaManagers.clientQuotaCallback.foreach {
+      case callback: Reconfigurable => callback.validateReconfiguration(configs)
+      case _ =>
+    }
+  }
+
+  override def reconfigure(configs: util.Map[String, _]): Unit = {
+    val config = server.config
+    server.quotaManagers.clientQuotaCallback.foreach {
+      case callback: Reconfigurable =>
+        config.dynamicConfig.maybeReconfigure(callback, config.dynamicConfig.currentKafkaConfig, configs)
+        true
+      case _ => false
+    }
+  }
+}
+
 class DynamicListenerConfig(server: KafkaServer) extends BrokerReconfigurable with Logging {
 
   override def reconfigurableConfigs: Set[String] = {
@@ -719,8 +765,8 @@ class DynamicListenerConfig(server: KafkaServer) extends BrokerReconfigurable wi
     val oldListeners = listenersToMap(oldConfig.listeners)
     if (!newAdvertisedListeners.keySet.subsetOf(newListeners.keySet))
       throw new ConfigException(s"Advertised listeners '$newAdvertisedListeners' must be a subset of listeners '$newListeners'")
-    if (newListeners.keySet != newConfig.listenerSecurityProtocolMap.keySet)
-      throw new ConfigException(s"Listeners '$newListeners' and listener map '${newConfig.listenerSecurityProtocolMap}' don't match")
+    if (!newListeners.keySet.subsetOf(newConfig.listenerSecurityProtocolMap.keySet))
+      throw new ConfigException(s"Listeners '$newListeners' must be subset of listener map '${newConfig.listenerSecurityProtocolMap}'")
     newListeners.keySet.intersect(oldListeners.keySet).foreach { listenerName =>
       val prefix = listenerName.configPrefix
       val newListenerProps = immutableListenerConfigs(newConfig, prefix)

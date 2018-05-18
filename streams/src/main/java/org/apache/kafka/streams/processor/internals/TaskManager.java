@@ -106,9 +106,9 @@ class TaskManager {
         active.closeNonAssignedSuspendedTasks(assignedActiveTasks);
         addStreamTasks(assignment);
         addStandbyTasks();
-        final Set<TopicPartition> partitions = active.uninitializedPartitions();
-        log.trace("Pausing partitions: {}", partitions);
-        consumer.pause(partitions);
+        // Pause all the partitions until the underlying state store is ready for all the active tasks.
+        log.trace("Pausing partitions: {}", assignment);
+        consumer.pause(assignment);
     }
 
     private void addStreamTasks(final Collection<TopicPartition> assignment) {
@@ -312,18 +312,17 @@ class TaskManager {
      * @throws TaskMigratedException if the task producer got fenced or consumer discovered changelog offset changes (EOS only)
      */
     boolean updateNewAndRestoringTasks() {
-        final Set<TopicPartition> resumed = active.initializeNewTasks();
+        active.initializeNewTasks();
         standby.initializeNewTasks();
 
         final Collection<TopicPartition> restored = changelogReader.restore(active);
 
-        resumed.addAll(active.updateRestored(restored));
+        active.updateRestored(restored);
 
-        if (!resumed.isEmpty()) {
-            log.trace("Resuming partitions {}", resumed);
-            consumer.resume(resumed);
-        }
         if (active.allTasksRunning()) {
+            Set<TopicPartition> assignment = consumer.assignment();
+            log.trace("Resuming partitions {}", assignment);
+            consumer.resume(assignment);
             assignStandbyPartitions();
             return true;
         }
@@ -446,8 +445,22 @@ class TaskManager {
         }
     }
 
+    /**
+     * Produces a string representation containing useful information about the TaskManager.
+     * This is useful in debugging scenarios.
+     *
+     * @return A string representation of the TaskManager instance.
+     */
+    @Override
+    public String toString() {
+        return toString("");
+    }
+
     public String toString(final String indent) {
         final StringBuilder builder = new StringBuilder();
+        builder.append("TaskManager\n");
+        builder.append(indent).append("\tMetadataState:\n");
+        builder.append(streamsMetadataState.toString(indent + "\t\t"));
         builder.append(indent).append("\tActive tasks:\n");
         builder.append(active.toString(indent + "\t\t"));
         builder.append(indent).append("\tStandby tasks:\n");

@@ -19,14 +19,18 @@ package org.apache.kafka.streams.processor.internals;
 public class RecordContextStub implements RecordContext {
 
     private final long offset;
-    private final long timestamp;
+    private long timestamp;
     private final int partition;
     private final String topic;
 
     public RecordContextStub() {
         this(-1, -1, -1, "");
     }
-    public RecordContextStub(final long offset, final long timestamp, final int partition, final String topic) {
+
+    public RecordContextStub(final long offset,
+                             final long timestamp,
+                             final int partition,
+                             final String topic) {
         this.offset = offset;
         this.timestamp = timestamp;
         this.partition = partition;
@@ -41,6 +45,11 @@ public class RecordContextStub implements RecordContext {
     @Override
     public long timestamp() {
         return timestamp;
+    }
+
+    @Override
+    public void setTimestamp(final long timestamp) {
+        this.timestamp = timestamp;
     }
 
     @Override

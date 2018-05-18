@@ -19,6 +19,8 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
+import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -28,15 +30,16 @@ import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.To;
 
 import java.io.File;
 import java.util.Map;
 
 public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V> {
 
-    private final InternalValueTransformerWithKeySupplier<K, V, R> valueTransformerSupplier;
+    private final ValueTransformerWithKeySupplier<K, V, R> valueTransformerSupplier;
 
-    public KStreamTransformValues(final InternalValueTransformerWithKeySupplier<K, V, R> valueTransformerSupplier) {
+    KStreamTransformValues(final ValueTransformerWithKeySupplier<K, V, R> valueTransformerSupplier) {
         this.valueTransformerSupplier = valueTransformerSupplier;
     }
 
@@ -47,10 +50,10 @@ public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V> 
 
     public static class KStreamTransformValuesProcessor<K, V, R> implements Processor<K, V> {
 
-        private final InternalValueTransformerWithKey<K, V, R> valueTransformer;
+        private final ValueTransformerWithKey<K, V, R> valueTransformer;
         private ProcessorContext context;
 
-        public KStreamTransformValuesProcessor(final InternalValueTransformerWithKey<K, V, R> valueTransformer) {
+        KStreamTransformValuesProcessor(final ValueTransformerWithKey<K, V, R> valueTransformer) {
             this.valueTransformer = valueTransformer;
         }
 
@@ -90,9 +93,8 @@ public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V> 
 
                     @Override
                     public void register(final StateStore store,
-                                         final boolean deprecatedAndIgnoredLoggingEnabled,
                                          final StateRestoreCallback stateRestoreCallback) {
-                        context.register(store, deprecatedAndIgnoredLoggingEnabled, stateRestoreCallback);
+                        context.register(store, stateRestoreCallback);
                     }
 
                     @Override
@@ -105,22 +107,23 @@ public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V> 
                         return context.schedule(interval, type, callback);
                     }
 
-                    @SuppressWarnings("deprecation")
-                    @Override
-                    public void schedule(final long interval) {
-                        context.schedule(interval);
-                    }
-
                     @Override
                     public <K, V> void forward(final K key, final V value) {
                         throw new StreamsException("ProcessorContext#forward() must not be called within TransformValues.");
                     }
 
                     @Override
+                    public <K, V> void forward(final K key, final V value, final To to) {
+                        throw new StreamsException("ProcessorContext#forward() must not be called within TransformValues.");
+                    }
+
+                    @SuppressWarnings("deprecation")
+                    @Override
                     public <K, V> void forward(final K key, final V value, final int childIndex) {
                         throw new StreamsException("ProcessorContext#forward() must not be called within TransformValues.");
                     }
 
+                    @SuppressWarnings("deprecation")
                     @Override
                     public <K, V> void forward(final K key, final V value, final String childName) {
                         throw new StreamsException("ProcessorContext#forward() must not be called within TransformValues.");
@@ -167,14 +170,6 @@ public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V> 
         @Override
         public void process(K key, V value) {
             context.forward(key, valueTransformer.transform(key, value));
-        }
-
-        @SuppressWarnings("deprecation")
-        @Override
-        public void punctuate(long timestamp) {
-            if (valueTransformer.punctuate(timestamp) != null) {
-                throw new StreamsException("ValueTransformer#punctuate must return null.");
-            }
         }
 
         @Override

@@ -487,7 +487,8 @@ public class Metrics implements Closeable {
 
     /**
      * Add a metric to monitor an object that implements MetricValueProvider. This metric won't be associated with any
-     * sensor. This is a way to expose existing values as metrics.
+     * sensor. This is a way to expose existing values as metrics. User is expected to add any additional
+     * synchronization to update and access metric values, if required.
      *
      * @param metricName The name of the metric
      * @param metricValueProvider The metric value provider associated with this metric
@@ -503,7 +504,8 @@ public class Metrics implements Closeable {
 
     /**
      * Add a metric to monitor an object that implements MetricValueProvider. This metric won't be associated with any
-     * sensor. This is a way to expose existing values as metrics.
+     * sensor. This is a way to expose existing values as metrics. User is expected to add any additional
+     * synchronization to update and access metric values, if required.
      *
      * @param metricName The name of the metric
      * @param metricValueProvider The metric value provider associated with this metric
@@ -522,8 +524,14 @@ public class Metrics implements Closeable {
     public synchronized KafkaMetric removeMetric(MetricName metricName) {
         KafkaMetric metric = this.metrics.remove(metricName);
         if (metric != null) {
-            for (MetricsReporter reporter : reporters)
-                reporter.metricRemoval(metric);
+            for (MetricsReporter reporter : reporters) {
+                try {
+                    reporter.metricRemoval(metric);
+                } catch (Exception e) {
+                    log.error("Error when removing metric from " + reporter.getClass().getName(), e);
+                }
+            }
+            log.trace("Removed metric named {}", metricName);
         }
         return metric;
     }
@@ -550,8 +558,14 @@ public class Metrics implements Closeable {
         if (this.metrics.containsKey(metricName))
             throw new IllegalArgumentException("A metric named '" + metricName + "' already exists, can't register another one.");
         this.metrics.put(metricName, metric);
-        for (MetricsReporter reporter : reporters)
-            reporter.metricChange(metric);
+        for (MetricsReporter reporter : reporters) {
+            try {
+                reporter.metricChange(metric);
+            } catch (Exception e) {
+                log.error("Error when registering metric on " + reporter.getClass().getName(), e);
+            }
+        }
+        log.trace("Registered metric named {}", metricName);
     }
 
     /**
@@ -632,8 +646,13 @@ public class Metrics implements Closeable {
             }
         }
 
-        for (MetricsReporter reporter : this.reporters)
-            reporter.close();
+        for (MetricsReporter reporter : reporters) {
+            try {
+                reporter.close();
+            } catch (Exception e) {
+                log.error("Error when closing " + reporter.getClass().getName(), e);
+            }
+        }
     }
 
 }

@@ -73,27 +73,12 @@ abstract class AssignedTasks<T extends Task> {
         created.put(task.id(), task);
     }
 
-    Set<TopicPartition> uninitializedPartitions() {
-        if (created.isEmpty()) {
-            return Collections.emptySet();
-        }
-        final Set<TopicPartition> partitions = new HashSet<>();
-        for (final Map.Entry<TaskId, T> entry : created.entrySet()) {
-            if (entry.getValue().hasStateStores()) {
-                partitions.addAll(entry.getValue().partitions());
-            }
-        }
-        return partitions;
-    }
-
     /**
-     * @return partitions that are ready to be resumed
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException if the store's change log does not contain the partition
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
-    Set<TopicPartition> initializeNewTasks() {
-        final Set<TopicPartition> readyPartitions = new HashSet<>();
+    void initializeNewTasks() {
         if (!created.isEmpty()) {
             log.debug("Initializing {}s {}", taskTypeName, created.keySet());
         }
@@ -104,29 +89,27 @@ abstract class AssignedTasks<T extends Task> {
                     log.debug("Transitioning {} {} to restoring", taskTypeName, entry.getKey());
                     addToRestoring(entry.getValue());
                 } else {
-                    transitionToRunning(entry.getValue(), readyPartitions);
+                    transitionToRunning(entry.getValue());
                 }
                 it.remove();
             } catch (final LockException e) {
                 // made this trace as it will spam the logs in the poll loop.
-                log.trace("Could not create {} {} due to {}; will retry", taskTypeName, entry.getKey(), e.getMessage());
+                log.trace("Could not create {} {} due to {}; will retry", taskTypeName, entry.getKey(), e.toString());
             }
         }
-        return readyPartitions;
     }
 
-    Set<TopicPartition> updateRestored(final Collection<TopicPartition> restored) {
+    void updateRestored(final Collection<TopicPartition> restored) {
         if (restored.isEmpty()) {
-            return Collections.emptySet();
+            return;
         }
         log.trace("{} changelog partitions that have completed restoring so far: {}", taskTypeName, restored);
-        final Set<TopicPartition> resume = new HashSet<>();
         restoredPartitions.addAll(restored);
         for (final Iterator<Map.Entry<TaskId, T>> it = restoring.entrySet().iterator(); it.hasNext(); ) {
             final Map.Entry<TaskId, T> entry = it.next();
             final T task = entry.getValue();
             if (restoredPartitions.containsAll(task.changelogPartitions())) {
-                transitionToRunning(task, resume);
+                transitionToRunning(task);
                 it.remove();
                 log.trace("{} {} completed restoration as all its changelog partitions {} have been applied to restore state",
                         taskTypeName,
@@ -146,7 +129,6 @@ abstract class AssignedTasks<T extends Task> {
         if (allTasksRunning()) {
             restoredPartitions.clear();
         }
-        return resume;
     }
 
     boolean allTasksRunning() {
@@ -222,7 +204,7 @@ abstract class AssignedTasks<T extends Task> {
         try {
             task.close(false, true);
         } catch (final RuntimeException e) {
-            log.warn("Failed to close zombie {} {} due to {}; ignore and proceed.", taskTypeName, task.id(), e.getMessage());
+            log.warn("Failed to close zombie {} {} due to {}; ignore and proceed.", taskTypeName, task.id(), e.toString());
             return e;
         }
         return null;
@@ -243,7 +225,7 @@ abstract class AssignedTasks<T extends Task> {
                 suspended.remove(taskId);
                 task.resume();
                 try {
-                    transitionToRunning(task, new HashSet<TopicPartition>());
+                    transitionToRunning(task);
                 } catch (final TaskMigratedException e) {
                     // we need to catch migration exception internally since this function
                     // is triggered in the rebalance callback
@@ -278,15 +260,12 @@ abstract class AssignedTasks<T extends Task> {
     /**
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
-    private void transitionToRunning(final T task, final Set<TopicPartition> readyPartitions) {
+    private void transitionToRunning(final T task) {
         log.debug("transitioning {} {} to running", taskTypeName, task.id());
         running.put(task.id(), task);
         task.initializeTopology();
         for (TopicPartition topicPartition : task.partitions()) {
             runningByPartition.put(topicPartition, task);
-            if (task.hasStateStores()) {
-                readyPartitions.add(topicPartition);
-            }
         }
         for (TopicPartition topicPartition : task.changelogPartitions()) {
             runningByPartition.put(topicPartition, task);
@@ -303,6 +282,11 @@ abstract class AssignedTasks<T extends Task> {
 
     Map<TaskId, T> runningTaskMap() {
         return Collections.unmodifiableMap(running);
+    }
+
+    @Override
+    public String toString() {
+        return toString("");
     }
 
     public String toString(final String indent) {

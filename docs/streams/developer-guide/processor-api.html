@@ -41,13 +41,16 @@
             <p class="topic-title first"><b>Table of Contents</b></p>
             <ul class="simple">
                 <li><a class="reference internal" href="#overview" id="id1">Overview</a></li>
-                <li><a class="reference internal" href="#defining-a-stream-processor" id="id2">Defining a Stream Processor</a></li>
-                <li><a class="reference internal" href="#state-stores" id="id3">State Stores</a><ul>
-                    <li><a class="reference internal" href="#defining-and-creating-a-state-store" id="id4">Defining and creating a State Store</a></li>
-                    <li><a class="reference internal" href="#fault-tolerant-state-stores" id="id5">Fault-tolerant State Stores</a></li>
-                    <li><a class="reference internal" href="#enable-or-disable-fault-tolerance-of-state-stores-store-changelogs" id="id6">Enable or Disable Fault Tolerance of State Stores (Store Changelogs)</a></li>
-                    <li><a class="reference internal" href="#implementing-custom-state-stores" id="id7">Implementing Custom State Stores</a></li>
-                </ul>
+                <li><a class="reference internal" href="#defining-a-stream-processor" id="id2">Defining a Stream
+                    Processor</a></li>
+                <li><a class="reference internal" href="#unit-testing-processors" id="id9">Unit Testing Processors</a></li>
+                <li><a class="reference internal" href="#state-stores" id="id3">State Stores</a>
+                    <ul>
+                        <li><a class="reference internal" href="#defining-and-creating-a-state-store" id="id4">Defining and creating a State Store</a></li>
+                        <li><a class="reference internal" href="#fault-tolerant-state-stores" id="id5">Fault-tolerant State Stores</a></li>
+                        <li><a class="reference internal" href="#enable-or-disable-fault-tolerance-of-state-stores-store-changelogs" id="id6">Enable or Disable Fault Tolerance of State Stores (Store Changelogs)</a></li>
+                        <li><a class="reference internal" href="#implementing-custom-state-stores" id="id7">Implementing Custom State Stores</a></li>
+                    </ul>
                 </li>
                 <li><a class="reference internal" href="#connecting-processors-and-state-stores" id="id8">Connecting Processors and State Stores</a></li>
             </ul>
@@ -76,7 +79,15 @@
                 instance, which provides access to the metadata of the currently processed record, including its source Kafka topic and partition,
                 its corresponding message offset, and further such information. You can also use this context instance to schedule a punctuation
                 function (via <code class="docutils literal"><span class="pre">ProcessorContext#schedule()</span></code>), to forward a new record as a key-value pair to the downstream processors (via <code class="docutils literal"><span class="pre">ProcessorContext#forward()</span></code>),
-                and to commit the current processing progress (via <code class="docutils literal"><span class="pre">ProcessorContext#commit()</span></code>).</p>
+              and to commit the current processing progress (via <code class="docutils literal"><span class="pre">ProcessorContext#commit()</span></code>).
+              Any resources you set up in <code class="docutils literal"><span class="pre">init()</span></code> can be cleaned up in the
+              <code class="docutils literal"><span class="pre">close()</span></code> method. Note that Kafka Streams may re-use a single
+              <code class="docutils literal"><span class="pre">Processor</span></code> object by calling
+              <code class="docutils literal"><span class="pre">init()</span></code> on it again after <code class="docutils literal"><span class="pre">close()</span></code>.</p>
+            <p>When records are forwarded via downstream processors they also get a timestamp assigned. There are two different default behaviors:
+	       (1) If <code class="docutils literal"><span class="pre">#forward()</span></code> is called within <code class="docutils literal"><span class="pre">#process()</span></code> the output record inherits the input record timestamp.
+	       (2) If <code class="docutils literal"><span class="pre">#forward()</span></code> is called within <code class="docutils literal"><span class="pre">punctuate()</span></code></p> the output record inherits the current punctuation timestamp (either current 'stream time' or system wall-clock time).
+	       Note, that <code class="docutils literal"><span class="pre">#forward()</span></code> also allows to change the default behavior by passing a custom timestamp for the output record.</p>
             <p>Specifically, <code class="docutils literal"><span class="pre">ProcessorContext#schedule()</span></code> accepts a user <code class="docutils literal"><span class="pre">Punctuator</span></code> callback interface, which triggers its <code class="docutils literal"><span class="pre">punctuate()</span></code>
                 API method periodically based on the <code class="docutils literal"><span class="pre">PunctuationType</span></code>. The <code class="docutils literal"><span class="pre">PunctuationType</span></code> determines what notion of time is used
                 for the punctuation scheduling: either <a class="reference internal" href="../concepts.html#streams-concepts-time"><span class="std std-ref">stream-time</span></a> or wall-clock-time (by default, stream-time
@@ -94,11 +105,12 @@
                 callbacks with different <code class="docutils literal"><span class="pre">PunctuationType</span></code> types within the same processor by calling <code class="docutils literal"><span class="pre">ProcessorContext#schedule()</span></code> multiple
                 times inside <code class="docutils literal"><span class="pre">init()</span></code> method.</p>
             <div class="admonition attention">
-                <p class="first admonition-title">Attention</p>
+                <p class="first admonition-title"><b>Attention</b></p>
                 <p class="last">Stream-time is only advanced if all input partitions over all input topics have new data (with newer timestamps) available.
                     If at least one partition does not have any new data available, stream-time will not be advanced and thus <code class="docutils literal"><span class="pre">punctuate()</span></code> will not be triggered if <code class="docutils literal"><span class="pre">PunctuationType.STREAM_TIME</span></code> was specified.
                     This behavior is independent of the configured timestamp extractor, i.e., using <code class="docutils literal"><span class="pre">WallclockTimestampExtractor</span></code> does not enable wall-clock triggering of <code class="docutils literal"><span class="pre">punctuate()</span></code>.</p>
             </div>
+            <p><b>Example</b></p>
             <p>The following example <code class="docutils literal"><span class="pre">Processor</span></code> defines a simple word-count algorithm and the following actions are performed:</p>
             <ul class="simple">
                 <li>In the <code class="docutils literal"><span class="pre">init()</span></code> method, schedule the punctuation every 1000 time units (the time unit is normally milliseconds, which in this example would translate to punctuation every 1 second) and retrieve the local state store by its name &#8220;Counts&#8221;.</li>
@@ -154,6 +166,16 @@
                     leverage <a class="reference internal" href="#streams-developer-guide-state-store"><span class="std std-ref">state stores</span></a> to maintain processing states to, for example, remember recently
                     arrived records for stateful processing needs like aggregations and joins. For more information, see the <a class="reference internal" href="#streams-developer-guide-state-store"><span class="std std-ref">state stores</span></a> documentation.</p>
             </div>
+        </div>
+        <div class="section" id="unit-testing-processors">
+            <h2>
+                <a class="toc-backref" href="#id9">Unit Testing Processors</a>
+                <a class="headerlink" href="#unit-testing-processors" title="Permalink to this headline"></a>
+            </h2>
+            <p>
+                Kafka Streams comes with a <code>test-utils</code> module to help you write unit tests for your
+                processors <a href="testing.html#unit-testing-processors">here</a>.
+            </p>
         </div>
         <div class="section" id="state-stores">
             <span id="streams-developer-guide-state-store"></span><h2><a class="toc-backref" href="#id3">State Stores</a><a class="headerlink" href="#state-stores" title="Permalink to this headline"></a></h2>

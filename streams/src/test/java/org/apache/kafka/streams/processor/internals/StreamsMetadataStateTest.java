@@ -24,9 +24,9 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.Consumed;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.StreamsBuilderTest;
+import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Predicate;
@@ -71,19 +71,19 @@ public class StreamsMetadataStateTest {
     private StreamPartitioner<String, Object> partitioner;
 
     @Before
-    public void before() throws Exception {
+    public void before() {
         builder = new StreamsBuilder();
         final KStream<Object, Object> one = builder.stream("topic-one");
-        one.groupByKey().count("table-one");
+        one.groupByKey().count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>as("table-one"));
 
         final KStream<Object, Object> two = builder.stream("topic-two");
-        two.groupByKey().count("table-two");
+        two.groupByKey().count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>as("table-two"));
 
         builder.stream("topic-three")
                 .groupByKey()
-                .count("table-three");
+                .count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>as("table-three"));
 
-        one.merge(two).groupByKey().count("merged-table");
+        one.merge(two).groupByKey().count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>as("merged-table"));
 
         builder.stream("topic-four").mapValues(new ValueMapper<Object, Object>() {
             @Override
@@ -96,7 +96,7 @@ public class StreamsMetadataStateTest {
                             Consumed.with(null, null),
                             Materialized.<Object, Object, KeyValueStore<Bytes, byte[]>>as(globalTable));
 
-        StreamsBuilderTest.internalTopologyBuilder(builder).setApplicationId("appId");
+        TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("appId");
 
         topic1P0 = new TopicPartition("topic-one", 0);
         topic1P1 = new TopicPartition("topic-one", 1);
@@ -122,7 +122,7 @@ public class StreamsMetadataStateTest {
                 new PartitionInfo("topic-four", 0, null, null, null));
 
         cluster = new Cluster(null, Collections.<Node>emptyList(), partitionInfos, Collections.<String>emptySet(), Collections.<String>emptySet());
-        discovery = new StreamsMetadataState(StreamsBuilderTest.internalTopologyBuilder(builder), hostOne);
+        discovery = new StreamsMetadataState(TopologyWrapper.getInternalTopologyBuilder(builder.build()), hostOne);
         discovery.onChange(hostToPartitions, cluster);
         partitioner = new StreamPartitioner<String, Object>() {
             @Override
@@ -134,7 +134,7 @@ public class StreamsMetadataStateTest {
 
     @Test
     public void shouldNotThrowNPEWhenOnChangeNotCalled() {
-        new StreamsMetadataState(StreamsBuilderTest.internalTopologyBuilder(builder), hostOne).getAllMetadataForStore("store");
+        new StreamsMetadataState(TopologyWrapper.getInternalTopologyBuilder(builder.build()), hostOne).getAllMetadataForStore("store");
     }
 
     @Test
@@ -301,7 +301,7 @@ public class StreamsMetadataStateTest {
 
     @Test
     public void shouldGetAnyHostForGlobalStoreByKeyIfMyHostUnknown() {
-        final StreamsMetadataState streamsMetadataState = new StreamsMetadataState(StreamsBuilderTest.internalTopologyBuilder(builder), StreamsMetadataState.UNKNOWN_HOST);
+        final StreamsMetadataState streamsMetadataState = new StreamsMetadataState(TopologyWrapper.getInternalTopologyBuilder(builder.build()), StreamsMetadataState.UNKNOWN_HOST);
         streamsMetadataState.onChange(hostToPartitions, cluster);
         assertNotNull(streamsMetadataState.getMetadataWithKey(globalTable, "key", Serdes.String().serializer()));
     }
@@ -314,7 +314,7 @@ public class StreamsMetadataStateTest {
 
     @Test
     public void shouldGetAnyHostForGlobalStoreByKeyAndPartitionerIfMyHostUnknown() {
-        final StreamsMetadataState streamsMetadataState = new StreamsMetadataState(StreamsBuilderTest.internalTopologyBuilder(builder), StreamsMetadataState.UNKNOWN_HOST);
+        final StreamsMetadataState streamsMetadataState = new StreamsMetadataState(TopologyWrapper.getInternalTopologyBuilder(builder.build()), StreamsMetadataState.UNKNOWN_HOST);
         streamsMetadataState.onChange(hostToPartitions, cluster);
         assertNotNull(streamsMetadataState.getMetadataWithKey(globalTable, "key", partitioner));
     }

@@ -261,7 +261,8 @@ class Partition(val topic: String,
       (assignedReplicas.map(_.brokerId) -- newAssignedReplicas).foreach(removeReplica)
       inSyncReplicas = newInSyncReplicas
 
-      info(s"$topicPartition starts at Leader Epoch ${partitionStateInfo.basePartitionState.leaderEpoch} from offset ${getReplica().get.logEndOffset.messageOffset}. Previous Leader Epoch was: $leaderEpoch")
+      info(s"$topicPartition starts at Leader Epoch ${partitionStateInfo.basePartitionState.leaderEpoch} from " +
+        s"offset ${getReplica().get.logEndOffset.messageOffset}. Previous Leader Epoch was: $leaderEpoch")
 
       //We cache the leader epoch here, persisting it only if it's local (hence having a log dir)
       leaderEpoch = partitionStateInfo.basePartitionState.leaderEpoch
@@ -404,22 +405,16 @@ class Partition(val topic: String,
         // keep the current immutable replica list reference
         val curInSyncReplicas = inSyncReplicas
 
-        def numAcks = curInSyncReplicas.count { r =>
-          if (!r.isLocal)
-            if (r.logEndOffset.messageOffset >= requiredOffset) {
-              trace(s"Replica ${r.brokerId} received offset $requiredOffset")
-              true
-            }
-            else
-              false
-          else
-            true /* also count the local (leader) replica */
+        if (isTraceEnabled) {
+          def logEndOffsetString(r: Replica) = s"broker ${r.brokerId}: ${r.logEndOffset.messageOffset}"
+          val (ackedReplicas, awaitingReplicas) = curInSyncReplicas.partition { replica =>
+            replica.logEndOffset.messageOffset >= requiredOffset
+          }
+          trace(s"Progress awaiting ISR acks for offset $requiredOffset: acked: ${ackedReplicas.map(logEndOffsetString)}, " +
+            s"awaiting ${awaitingReplicas.map(logEndOffsetString)}")
         }
 
-        trace(s"$numAcks acks satisfied with acks = -1")
-
         val minIsr = leaderReplica.log.get.config.minInSyncReplicas
-
         if (leaderReplica.highWatermark.messageOffset >= requiredOffset) {
           /*
            * The topic may be configured not to accept messages if there are not enough replicas in ISR
@@ -468,9 +463,10 @@ class Partition(val topic: String,
       leaderReplica.highWatermark = newHighWatermark
       debug(s"High watermark updated to $newHighWatermark")
       true
-    } else  {
-      debug(s"Skipping update high watermark since new hw $newHighWatermark is not larger than old hw $oldHighWatermark." +
-        s"All LEOs are ${allLogEndOffsets.mkString(",")}")
+    } else {
+      def logEndOffsetString(r: Replica) = s"replica ${r.brokerId}: ${r.logEndOffset}"
+      debug(s"Skipping update high watermark since new hw $newHighWatermark is not larger than old hw $oldHighWatermark. " +
+        s"All current LEOs are ${assignedReplicas.map(logEndOffsetString)}")
       false
     }
   }
@@ -482,7 +478,7 @@ class Partition(val topic: String,
    */
   def lowWatermarkIfLeader: Long = {
     if (!isLeaderReplicaLocal)
-      throw new NotLeaderForPartitionException("Leader not local for partition %s on broker %d".format(topicPartition, localBrokerId))
+      throw new NotLeaderForPartitionException(s"Leader not local for partition $topicPartition on broker $localBrokerId")
     val logStartOffsets = allReplicas.collect {
       case replica if replicaManager.metadataCache.isBrokerAlive(replica.brokerId) || replica.brokerId == Request.FutureLocalReplicaId => replica.logStartOffset
     }
@@ -651,15 +647,20 @@ class Partition(val topic: String,
 
   /**
     * @param leaderEpoch Requested leader epoch
-    * @return The last offset of messages published under this leader epoch.
+    * @return The requested leader epoch and the end offset of this leader epoch, or if the requested
+    *         leader epoch is unknown, the leader epoch less than the requested leader epoch and the end offset
+    *         of this leader epoch. The end offset of a leader epoch is defined as the start
+    *         offset of the first leader epoch larger than the leader epoch, or else the log end
+    *         offset if the leader epoch is the latest leader epoch.
     */
   def lastOffsetForLeaderEpoch(leaderEpoch: Int): EpochEndOffset = {
     inReadLock(leaderIsrUpdateLock) {
       leaderReplicaIfLocal match {
         case Some(leaderReplica) =>
-          new EpochEndOffset(NONE, leaderReplica.epochs.get.endOffsetFor(leaderEpoch))
+          val (epoch, offset) = leaderReplica.epochs.get.endOffsetFor(leaderEpoch)
+          new EpochEndOffset(NONE, epoch, offset)
         case None =>
-          new EpochEndOffset(NOT_LEADER_FOR_PARTITION, UNDEFINED_EPOCH_OFFSET)
+          new EpochEndOffset(NOT_LEADER_FOR_PARTITION, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
       }
     }
   }

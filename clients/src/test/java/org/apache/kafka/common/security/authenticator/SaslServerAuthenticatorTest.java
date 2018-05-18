@@ -22,13 +22,12 @@ import org.apache.kafka.common.network.InvalidReceiveException;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.plain.PlainLoginModule;
-import org.apache.kafka.common.security.scram.ScramMechanism;
-import org.apache.kafka.common.security.token.delegation.DelegationTokenCache;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
 import org.easymock.IAnswer;
@@ -41,7 +40,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.apache.kafka.common.security.scram.ScramMechanism.SCRAM_SHA_256;
+import static org.apache.kafka.common.security.scram.internal.ScramMechanism.SCRAM_SHA_256;
 import static org.junit.Assert.fail;
 
 public class SaslServerAuthenticatorTest {
@@ -112,8 +111,10 @@ public class SaslServerAuthenticatorTest {
         Map<String, JaasContext> jaasContexts = Collections.singletonMap(mechanism,
                 new JaasContext("jaasContext", JaasContext.Type.SERVER, jaasConfig, null));
         Map<String, Subject> subjects = Collections.singletonMap(mechanism, new Subject());
-        return new SaslServerAuthenticator(configs, "node", jaasContexts, subjects, null, new CredentialCache(),
-                new ListenerName("ssl"), SecurityProtocol.SASL_SSL, transportLayer, new DelegationTokenCache(ScramMechanism.mechanismNames()));
+        Map<String, AuthenticateCallbackHandler> callbackHandlers = Collections.<String, AuthenticateCallbackHandler>singletonMap(
+                mechanism, new SaslServerCallbackHandler());
+        return new SaslServerAuthenticator(configs, callbackHandlers, "node", subjects, null,
+                new ListenerName("ssl"), SecurityProtocol.SASL_SSL, transportLayer);
     }
 
 }

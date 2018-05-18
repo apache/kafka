@@ -53,8 +53,7 @@ import java.util.Set;
 
 public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V> {
 
-    // TODO: change to package-private after removing KStreamBuilder
-    public static final String SOURCE_NAME = "KSTREAM-SOURCE-";
+    static final String SOURCE_NAME = "KSTREAM-SOURCE-";
 
     static final String SINK_NAME = "KSTREAM-SINK-";
 
@@ -104,8 +103,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     private static final String FOREACH_NAME = "KSTREAM-FOREACH-";
 
-    private final KeyValueMapper<K, V, String> defaultKeyValueMapper;
-
     private final boolean repartitionRequired;
 
     public KStreamImpl(final InternalStreamsBuilder builder,
@@ -114,12 +111,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                        final boolean repartitionRequired) {
         super(builder, name, sourceNodes);
         this.repartitionRequired = repartitionRequired;
-        this.defaultKeyValueMapper = new KeyValueMapper<K, V, String>() {
-            @Override
-            public String apply(K key, V value) {
-                return String.format("%s, %s", key, value);
-            }
-        };
     }
 
     @Override
@@ -191,137 +182,12 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         return new KStreamImpl<>(builder, name, sourceNodes, this.repartitionRequired);
     }
 
-    @SuppressWarnings("deprecation")
-    @Override
-    public void print() {
-        print(defaultKeyValueMapper, null, null, this.name);
-    }
-
-    @SuppressWarnings("deprecation")
-    @Override
-    public void print(final String label) {
-        print(defaultKeyValueMapper, null, null, label);
-    }
-
-    @SuppressWarnings("deprecation")
-    @Override
-    public void print(final Serde<K> keySerde,
-                      final Serde<V> valSerde) {
-        print(defaultKeyValueMapper, keySerde, valSerde, this.name);
-    }
-
-    @SuppressWarnings("deprecation")
-    @Override
-    public void print(final Serde<K> keySerde,
-                      final Serde<V> valSerde,
-                      final String label) {
-        print(defaultKeyValueMapper, keySerde, valSerde, label);
-    }
-
-    @SuppressWarnings("deprecation")
-    @Override
-    public void print(final KeyValueMapper<? super K, ? super V, String> mapper) {
-        print(mapper, null, null, this.name);
-    }
-
-    @SuppressWarnings("deprecation")
-    @Override
-    public void print(final KeyValueMapper<? super K, ? super V, String> mapper,
-                      final String label) {
-        print(mapper, null, null, label);
-    }
-
-    @SuppressWarnings("deprecation")
-    @Override
-    public void print(final KeyValueMapper<? super K, ? super V, String> mapper,
-                      final Serde<K> keySerde,
-                      final Serde<V> valSerde) {
-        print(mapper, keySerde, valSerde, this.name);
-    }
-
-    @SuppressWarnings("deprecation")
-    @Override
-    public void print(final KeyValueMapper<? super K, ? super V, String> mapper,
-                      final Serde<K> keySerde,
-                      final Serde<V> valSerde,
-                      final String label) {
-        Objects.requireNonNull(mapper, "mapper can't be null");
-        Objects.requireNonNull(label, "label can't be null");
-        print(Printed.<K, V>toSysOut().withLabel(label).withKeyValueMapper(mapper));
-    }
-
     @Override
     public void print(final Printed<K, V> printed) {
         Objects.requireNonNull(printed, "printed can't be null");
         final PrintedInternal<K, V> printedInternal = new PrintedInternal<>(printed);
         final String name = builder.newProcessorName(PRINTING_NAME);
         builder.internalTopologyBuilder.addProcessor(name, printedInternal.build(this.name), this.name);
-    }
-
-    @SuppressWarnings("deprecation")
-    @Override
-    public void writeAsText(final String filePath) {
-        writeAsText(filePath, this.name, null, null, defaultKeyValueMapper);
-    }
-
-    @SuppressWarnings("deprecation")
-    @Override
-    public void writeAsText(final String filePath,
-                            final String label) {
-        writeAsText(filePath, label, null, null, defaultKeyValueMapper);
-    }
-
-    @SuppressWarnings("deprecation")
-    @Override
-    public void writeAsText(final String filePath,
-                            final Serde<K> keySerde,
-                            final Serde<V> valSerde) {
-        writeAsText(filePath, this.name, keySerde, valSerde, defaultKeyValueMapper);
-    }
-
-    @SuppressWarnings("deprecation")
-    @Override
-    public void writeAsText(final String filePath,
-                            final String label,
-                            final Serde<K> keySerde,
-                            final Serde<V> valSerde) {
-        writeAsText(filePath, label, keySerde, valSerde, defaultKeyValueMapper);
-    }
-
-    @SuppressWarnings("deprecation")
-    @Override
-    public void writeAsText(final String filePath,
-                            final KeyValueMapper<? super K, ? super V, String> mapper) {
-        writeAsText(filePath, this.name, null, null, mapper);
-    }
-
-    @SuppressWarnings("deprecation")
-    @Override
-    public void writeAsText(final String filePath,
-                            final String label,
-                            final KeyValueMapper<? super K, ? super V, String> mapper) {
-        writeAsText(filePath, label, null, null, mapper);
-    }
-
-    @SuppressWarnings("deprecation")
-    @Override
-    public void writeAsText(final String filePath,
-                            final Serde<K> keySerde,
-                            final Serde<V> valSerde,
-                            final KeyValueMapper<? super K, ? super V, String> mapper) {
-        writeAsText(filePath, this.name, keySerde, valSerde, mapper);
-    }
-
-    @SuppressWarnings("deprecation")
-    @Override
-    public void writeAsText(final String filePath,
-                            final String label,
-                            final Serde<K> keySerde,
-                            final Serde<V> valSerde, KeyValueMapper<? super K, ? super V, String> mapper) {
-        Objects.requireNonNull(filePath, "filePath can't be null");
-        Objects.requireNonNull(label, "label can't be null");
-        Objects.requireNonNull(mapper, "mapper can't be null");
-        print(Printed.<K, V>toFile(filePath).withKeyValueMapper(mapper).withLabel(label));
     }
 
     @Override
@@ -358,17 +224,20 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         for (final Predicate<? super K, ? super V> predicate : predicates) {
             Objects.requireNonNull(predicate, "predicates can't have null values");
         }
+
         String branchName = builder.newProcessorName(BRANCH_NAME);
 
-        builder.internalTopologyBuilder.addProcessor(branchName, new KStreamBranch(predicates.clone()), this.name);
+        String[] childNames = new String[predicates.length];
+        for (int i = 0; i < predicates.length; i++) {
+            childNames[i] = builder.newProcessorName(BRANCHCHILD_NAME);
+        }
+
+        builder.internalTopologyBuilder.addProcessor(branchName, new KStreamBranch(predicates.clone(), childNames), this.name);
 
         KStream<K, V>[] branchChildren = (KStream<K, V>[]) Array.newInstance(KStream.class, predicates.length);
         for (int i = 0; i < predicates.length; i++) {
-            String childName = builder.newProcessorName(BRANCHCHILD_NAME);
-
-            builder.internalTopologyBuilder.addProcessor(childName, new KStreamPassThrough<K, V>(), branchName);
-
-            branchChildren[i] = new KStreamImpl<>(builder, childName, sourceNodes, this.repartitionRequired);
+            builder.internalTopologyBuilder.addProcessor(childNames[i], new KStreamPassThrough<K, V>(), branchName);
+            branchChildren[i] = new KStreamImpl<>(builder, childNames[i], sourceNodes, this.repartitionRequired);
         }
 
         return branchChildren;
@@ -394,14 +263,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         builder.internalTopologyBuilder.addProcessor(name, new KStreamPassThrough<>(), parentNames);
 
         return new KStreamImpl<>(builder, name, allSourceNodes, requireRepartitioning);
-    }
-
-    @SuppressWarnings("deprecation")
-    @Override
-    public KStream<K, V> through(final Serde<K> keySerde,
-                                 final Serde<V> valSerde,
-                                 final StreamPartitioner<? super K, ? super V> partitioner, String topic) {
-        return through(topic, Produced.with(keySerde, valSerde, partitioner));
     }
 
     @Override
@@ -433,54 +294,14 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         return new KStreamImpl<>(builder, name, sourceNodes, repartitionRequired);
     }
 
-    @SuppressWarnings("deprecation")
-    @Override
-    public KStream<K, V> through(final Serde<K> keySerde,
-                                 final Serde<V> valSerde,
-                                 final String topic) {
-        return through(topic, Produced.with(keySerde, valSerde));
-    }
-
-    @SuppressWarnings("deprecation")
-    @Override
-    public KStream<K, V> through(final StreamPartitioner<? super K, ? super V> partitioner,
-                                 final String topic) {
-        return through(topic, Produced.streamPartitioner(partitioner));
-    }
-
     @Override
     public KStream<K, V> through(final String topic) {
-        return through(null, null, null, topic);
+        return through(topic, Produced.<K, V>with(null, null, null));
     }
 
     @Override
     public void to(final String topic) {
         to(topic, Produced.<K, V>with(null, null, null));
-    }
-
-    @SuppressWarnings("deprecation")
-    @Override
-    public void to(final StreamPartitioner<? super K, ? super V> partitioner,
-                   final String topic) {
-        to(topic, Produced.streamPartitioner(partitioner));
-    }
-
-    @SuppressWarnings("deprecation")
-    @Override
-    public void to(final Serde<K> keySerde,
-                   final Serde<V> valSerde,
-                   final String topic) {
-        to(topic, Produced.with(keySerde, valSerde));
-    }
-
-    @SuppressWarnings({"unchecked", "deprecation"})
-    @Override
-    public void to(final Serde<K> keySerde,
-                   final Serde<V> valSerde,
-                   final StreamPartitioner<? super K, ? super V> partitioner,
-                   final String topic) {
-        Objects.requireNonNull(topic, "topic can't be null");
-        to(topic, Produced.with(keySerde, valSerde, partitioner));
     }
 
     @SuppressWarnings("unchecked")
@@ -499,7 +320,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         final Serializer<V> valSerializer = produced.valueSerde() == null ? null : produced.valueSerde().serializer();
         final StreamPartitioner<? super K, ? super V> partitioner = produced.streamPartitioner();
 
-        if (partitioner == null && keySerializer != null && keySerializer instanceof WindowedSerializer) {
+        if (partitioner == null && keySerializer instanceof WindowedSerializer) {
             final StreamPartitioner<K, V> windowedPartitioner = (StreamPartitioner<K, V>) new WindowedStreamPartitioner<Object, V>(topic, (WindowedSerializer) keySerializer);
             builder.internalTopologyBuilder.addSink(name, topic, keySerializer, valSerializer, windowedPartitioner, this.name);
         } else {
@@ -526,7 +347,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                                final String... stateStoreNames) {
         Objects.requireNonNull(valueTransformerSupplier, "valueTransformSupplier can't be null");
 
-        return transformValues(toInternalValueTransformerSupplier(valueTransformerSupplier), stateStoreNames);
+        return doTransformValues(toValueTransformerWithKeySupplier(valueTransformerSupplier), stateStoreNames);
     }
 
     @Override
@@ -534,13 +355,13 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                                final String... stateStoreNames) {
         Objects.requireNonNull(valueTransformerSupplier, "valueTransformSupplier can't be null");
 
-        return transformValues(toInternalValueTransformerSupplier(valueTransformerSupplier), stateStoreNames);
+        return doTransformValues(valueTransformerSupplier, stateStoreNames);
     }
 
-    private <VR> KStream<K, VR> transformValues(final InternalValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> internalValueTransformerWithKeySupplier,
-                                                final String... stateStoreNames) {
+    private <VR> KStream<K, VR> doTransformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> valueTransformerWithKeySupplier,
+                                                  final String... stateStoreNames) {
         final String name = builder.newProcessorName(TRANSFORMVALUES_NAME);
-        builder.internalTopologyBuilder.addProcessor(name, new KStreamTransformValues<>(internalValueTransformerWithKeySupplier), this.name);
+        builder.internalTopologyBuilder.addProcessor(name, new KStreamTransformValues<>(valueTransformerWithKeySupplier), this.name);
         if (stateStoreNames != null && stateStoreNames.length > 0) {
             builder.internalTopologyBuilder.connectProcessorAndStateStores(name, stateStoreNames);
         }
@@ -559,18 +380,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         }
     }
 
-    @SuppressWarnings("deprecation")
-    @Override
-    public <V1, R> KStream<K, R> join(final KStream<K, V1> other,
-                                      final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
-                                      final JoinWindows windows,
-                                      final Serde<K> keySerde,
-                                      final Serde<V> thisValueSerde,
-                                      final Serde<V1> otherValueSerde) {
-        return doJoin(other, joiner, windows, Joined.with(keySerde, thisValueSerde, otherValueSerde),
-            new KStreamImplJoin(false, false));
-    }
-
     @Override
     public <V1, R> KStream<K, R> join(final KStream<K, V1> other,
                                       final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
@@ -585,17 +394,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                         final Joined<K, V, VO> joined) {
         return doJoin(otherStream, joiner, windows, joined,
                              new KStreamImplJoin(false, false));
-    }
-
-    @SuppressWarnings("deprecation")
-    @Override
-    public <V1, R> KStream<K, R> outerJoin(final KStream<K, V1> other,
-                                           final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
-                                           final JoinWindows windows,
-                                           final Serde<K> keySerde,
-                                           final Serde<V> thisValueSerde,
-                                           final Serde<V1> otherValueSerde) {
-        return outerJoin(other, joiner, windows, Joined.with(keySerde, thisValueSerde, otherValueSerde));
     }
 
     @Override
@@ -689,21 +487,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         return sourceName;
     }
 
-    @SuppressWarnings("deprecation")
-    @Override
-    public <V1, R> KStream<K, R> leftJoin(final KStream<K, V1> other,
-                                          final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
-                                          final JoinWindows windows,
-                                          final Serde<K> keySerde,
-                                          final Serde<V> thisValSerde,
-                                          final Serde<V1> otherValueSerde) {
-        return doJoin(other,
-            joiner,
-            windows,
-            Joined.with(keySerde, thisValSerde, otherValueSerde),
-            new KStreamImplJoin(true, false));
-    }
-
     @Override
     public <V1, R> KStream<K, R> leftJoin(final KStream<K, V1> other,
                                           final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
@@ -743,15 +526,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         } else {
             return doStreamTableJoin(other, joiner, false);
         }
-    }
-
-    @SuppressWarnings("deprecation")
-    @Override
-    public <V1, R> KStream<K, R> join(final KTable<K, V1> other,
-                                      final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
-                                      final Serde<K> keySerde,
-                                      final Serde<V> valueSerde) {
-        return join(other, joiner, Joined.<K, V, V1>with(keySerde, valueSerde, null));
     }
 
     @Override
@@ -819,15 +593,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         }
     }
 
-    @SuppressWarnings("deprecation")
-    @Override
-    public <V1, R> KStream<K, R> leftJoin(final KTable<K, V1> other,
-                                          final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
-                                          final Serde<K> keySerde,
-                                          final Serde<V> valueSerde) {
-        return leftJoin(other, joiner, Joined.<K, V, V1>with(keySerde, valueSerde, null));
-    }
-
     @Override
     public <K1> KGroupedStream<K1, V> groupBy(final KeyValueMapper<? super K, ? super V, K1> selector) {
         return groupBy(selector, Serialized.<K1, V>with(null, null));
@@ -848,15 +613,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                         true);
     }
 
-    @SuppressWarnings("deprecation")
-    @Override
-    public <K1> KGroupedStream<K1, V> groupBy(final KeyValueMapper<? super K, ? super V, K1> selector,
-                                              final Serde<K1> keySerde,
-                                              final Serde<V> valSerde) {
-        Objects.requireNonNull(selector, "selector can't be null");
-        return groupBy(selector, Serialized.with(keySerde, valSerde));
-    }
-
     @Override
     public KGroupedStream<K, V> groupByKey() {
         return groupByKey(Serialized.<K, V>with(null, null));
@@ -872,13 +628,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                         serializedInternal.valueSerde(),
                                         this.repartitionRequired);
 
-    }
-
-    @SuppressWarnings("deprecation")
-    @Override
-    public KGroupedStream<K, V> groupByKey(final Serde<K> keySerde,
-                                           final Serde<V> valSerde) {
-        return groupByKey(Serialized.with(keySerde, valSerde));
     }
 
     private static <K, V> StoreBuilder<WindowStore<K, V>> createWindowedStateStore(final JoinWindows windows,

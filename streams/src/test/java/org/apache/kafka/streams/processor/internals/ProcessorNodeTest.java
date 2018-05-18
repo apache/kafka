@@ -24,26 +24,27 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.StateSerdes;
-import org.apache.kafka.test.MockProcessorContext;
+import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
 
 import java.util.Collections;
-import java.util.Map;
 import java.util.LinkedHashMap;
+import java.util.Map;
 
 import static org.junit.Assert.assertNotNull;
 
 public class ProcessorNodeTest {
 
     @SuppressWarnings("unchecked")
-    @Test (expected = StreamsException.class)
+    @Test(expected = StreamsException.class)
     public void shouldThrowStreamsExceptionIfExceptionCaughtDuringInit() {
         final ProcessorNode node = new ProcessorNode("name", new ExceptionalProcessor(), Collections.emptySet());
         node.init(null);
     }
 
     @SuppressWarnings("unchecked")
-    @Test (expected = StreamsException.class)
+    @Test(expected = StreamsException.class)
     public void shouldThrowStreamsExceptionIfExceptionCaughtDuringClose() {
         final ProcessorNode node = new ProcessorNode("name", new ExceptionalProcessor(), Collections.emptySet());
         node.close();
@@ -61,17 +62,12 @@ public class ProcessorNodeTest {
         }
 
         @Override
-        public void punctuate(final long timestamp) {
-            throw new RuntimeException();
-        }
-
-        @Override
         public void close() {
             throw new RuntimeException();
         }
     }
 
-    private static class NoOpProcessor implements Processor {
+    private static class NoOpProcessor implements Processor<Object, Object> {
         @Override
         public void init(final ProcessorContext context) {
 
@@ -83,26 +79,9 @@ public class ProcessorNodeTest {
         }
 
         @Override
-        public void punctuate(final long timestamp) {
-
-        }
-
-        @Override
         public void close() {
 
         }
-    }
-
-    private void testSpecificMetrics(final Metrics metrics, final String groupName,
-                                     final String opName,
-                                     final Map<String, String> metricTags) {
-        assertNotNull(metrics.metrics().get(metrics.metricName(opName + "-latency-avg", groupName,
-                "The average latency of " + opName + " operation.", metricTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName(opName + "-latency-max", groupName,
-                "The max latency of " + opName + " operation.", metricTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName(opName + "-rate", groupName,
-                "The average number of occurrence of " + opName + " operation per second.", metricTags)));
-
     }
 
     @Test
@@ -110,39 +89,55 @@ public class ProcessorNodeTest {
         final StateSerdes anyStateSerde = StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class);
 
         final Metrics metrics = new Metrics();
-        final MockProcessorContext context = new MockProcessorContext(anyStateSerde,  new RecordCollectorImpl(null, null, new LogContext("processnode-test "), new DefaultProductionExceptionHandler()), metrics);
-        final ProcessorNode node = new ProcessorNode("name", new NoOpProcessor(), Collections.emptySet());
+        final InternalMockProcessorContext context = new InternalMockProcessorContext(
+            anyStateSerde,
+            new RecordCollectorImpl(
+                null,
+                null,
+                new LogContext("processnode-test "),
+                new DefaultProductionExceptionHandler(),
+                metrics.sensor("skipped-records")
+            ),
+            metrics
+        );
+        final ProcessorNode<Object, Object> node = new ProcessorNode<>("name", new NoOpProcessor(), Collections.<String>emptySet());
         node.init(context);
 
-        String[] latencyOperations = {"process", "punctuate", "create", "destroy"};
-        String throughputOperation =  "forward";
-        String groupName = "stream-processor-node-metrics";
+        final String[] latencyOperations = {"process", "punctuate", "create", "destroy"};
+        final String throughputOperation = "forward";
+        final String groupName = "stream-processor-node-metrics";
         final Map<String, String> metricTags = new LinkedHashMap<>();
         metricTags.put("processor-node-id", node.name());
         metricTags.put("task-id", context.taskId().toString());
+        metricTags.put("client-id", "mock");
 
 
-        for (String operation : latencyOperations) {
-            assertNotNull(metrics.getSensor(operation));
+        for (final String operation : latencyOperations) {
+            assertNotNull(metrics.getSensor("name-mock.0_0." + operation));
         }
-        assertNotNull(metrics.getSensor(throughputOperation));
+        assertNotNull(metrics.getSensor("name-mock.0_0." + throughputOperation));
 
-        for (String opName : latencyOperations) {
-            testSpecificMetrics(metrics, groupName, opName, metricTags);
+        for (final String opName : latencyOperations) {
+            StreamsTestUtils.getMetricByNameFilterByTags(metrics.metrics(), "mock.0_0." + opName + "-latency-avg", groupName, metricTags);
+            StreamsTestUtils.getMetricByNameFilterByTags(metrics.metrics(), "mock.0_0." + opName + "-latency-max", groupName, metricTags);
+            StreamsTestUtils.getMetricByNameFilterByTags(metrics.metrics(), "mock.0_0." + opName + "-rate", groupName, metricTags);
+            StreamsTestUtils.getMetricByNameFilterByTags(metrics.metrics(), "mock.0_0." + opName + "-total", groupName, metricTags);
         }
-        assertNotNull(metrics.metrics().get(metrics.metricName(throughputOperation + "-rate", groupName,
-                "The average number of occurrence of " + throughputOperation + " operation per second.", metricTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName("mock.0_0." + throughputOperation + "-rate", groupName,
+            "The average number of occurrence of " + "mock.0_0." + throughputOperation + " operation per second.", metricTags)));
 
         // test "all"
         metricTags.put("processor-node-id", "all");
-        for (String opName : latencyOperations) {
-            testSpecificMetrics(metrics, groupName, opName, metricTags);
+        for (final String opName : latencyOperations) {
+            StreamsTestUtils.getMetricByNameFilterByTags(metrics.metrics(), "mock.0_0." + opName + "-latency-avg", groupName, metricTags);
+            StreamsTestUtils.getMetricByNameFilterByTags(metrics.metrics(), "mock.0_0." + opName + "-latency-max", groupName, metricTags);
+            StreamsTestUtils.getMetricByNameFilterByTags(metrics.metrics(), "mock.0_0." + opName + "-rate", groupName, metricTags);
+            StreamsTestUtils.getMetricByNameFilterByTags(metrics.metrics(), "mock.0_0." + opName + "-total", groupName, metricTags);
         }
-        assertNotNull(metrics.metrics().get(metrics.metricName(throughputOperation + "-rate", groupName,
-                "The average number of occurrence of " + throughputOperation + " operation per second.", metricTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName("mock.0_0." + throughputOperation + "-rate", groupName,
+            "The average number of occurrence of " + "mock.0_0." + throughputOperation + " operation per second.", metricTags)));
 
 
-        context.close();
     }
 
 }

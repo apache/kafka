@@ -20,8 +20,6 @@ package org.apache.kafka.trogdor.task;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.trogdor.common.Platform;
 
-import java.util.concurrent.atomic.AtomicReference;
-
 /**
  * The agent-side interface for implementing tasks.
  */
@@ -42,7 +40,7 @@ public interface TaskWorker {
      *
      *
      * @param platform          The platform to use.
-     * @param status            The current status string.  The TaskWorker can update
+     * @param status            The current status.  The TaskWorker can update
      *                          this at any time to provide an updated status.
      * @param haltFuture        A future which the worker should complete if it halts.
      *                          If it is completed with an empty string, that means the task
@@ -53,7 +51,7 @@ public interface TaskWorker {
      *
      * @throws Exception        If the TaskWorker failed to start.  stop() will not be invoked.
      */
-    void start(Platform platform, AtomicReference<String> status, KafkaFutureImpl<String> haltFuture)
+    void start(Platform platform, WorkerStatusTracker status, KafkaFutureImpl<String> haltFuture)
         throws Exception;
 
     /**

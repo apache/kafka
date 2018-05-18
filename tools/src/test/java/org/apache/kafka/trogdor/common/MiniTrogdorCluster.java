@@ -152,10 +152,14 @@ public class MiniTrogdorCluster implements AutoCloseable {
             for (Map.Entry<String, NodeData> entry : nodes.entrySet()) {
                 NodeData node = entry.getValue();
                 HashMap<String, String> config = new HashMap<>();
-                config.put(Platform.Config.TROGDOR_AGENT_PORT,
-                    Integer.toString(node.agentPort));
-                config.put(Platform.Config.TROGDOR_COORDINATOR_PORT,
-                    Integer.toString(node.coordinatorPort));
+                if (node.agentPort != 0) {
+                    config.put(Platform.Config.TROGDOR_AGENT_PORT,
+                        Integer.toString(node.agentPort));
+                }
+                if (node.coordinatorPort != 0) {
+                    config.put(Platform.Config.TROGDOR_COORDINATOR_PORT,
+                        Integer.toString(node.coordinatorPort));
+                }
                 node.node = new BasicNode(entry.getKey(), node.hostname, config,
                     Collections.<String>emptySet());
             }
@@ -181,7 +185,7 @@ public class MiniTrogdorCluster implements AutoCloseable {
                             }
                             if (node.coordinatorRestResource != null) {
                                 node.coordinator = new Coordinator(node.platform, scheduler,
-                                    node.coordinatorRestServer, node.coordinatorRestResource);
+                                    node.coordinatorRestServer, node.coordinatorRestResource, 0);
                             }
                         } catch (Exception e) {
                             log.error("Unable to initialize {}", nodeName, e);

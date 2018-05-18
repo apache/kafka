@@ -148,10 +148,11 @@
   <li>Kafka <code>ApiVersionsRequest</code> may be sent by the client to obtain the version ranges of requests supported by the broker. This is optional.</li>
   <li>Kafka <code>SaslHandshakeRequest</code> containing the SASL mechanism for authentication is sent by the client. If the requested mechanism is not enabled
     in the server, the server responds with the list of supported mechanisms and closes the client connection. If the mechanism is enabled
-    in the server, the server sends a successful response and continues with SASL authentication.
-  <li>The actual SASL authentication is now performed. A series of SASL client and server tokens corresponding to the mechanism are sent as opaque
-    packets. These packets contain a 32-bit size followed by the token as defined by the protocol for the SASL mechanism.
-  <li>If authentication succeeds, subsequent packets are handled as Kafka API requests. Otherwise, the client connection is closed.
+    in the server, the server sends a successful response and continues with SASL authentication.</li>
+  <li>The actual SASL authentication is now performed. If <code>SaslHandshakeRequest</code> version is v0, a series of SASL client and server tokens corresponding to the mechanism are sent
+     as opaque packets without wrapping the messages with Kafka protocol headers. If <code>SaslHandshakeRequest</code> version is v1, the <code>SaslAuthenticate</code>
+     request/response are used, where the actual SASL tokens are wrapped in the Kafka protocol. The error code in the final message from the broker will indicate if authentication succeeded or failed.</li>
+  <li>If authentication succeeds, subsequent packets are handled as Kafka API requests. Otherwise, the client connection is closed.</li>
 </ol>
 <p>For interoperability with 0.9.0.x clients, the first packet received by the server is handled as a SASL/GSSAPI client token if it is not a valid
 Kafka request. SASL/GSSAPI authentication is performed starting with this packet, skipping the first two steps above.</p>
@@ -162,18 +163,7 @@ Kafka request. SASL/GSSAPI authentication is performed starting with this packet
 <h5><a id="protocol_types" href="#protocol_types">Protocol Primitive Types</a></h5>
 
 <p>The protocol is built out of the following primitive types.</p>
-
-<p><b>Fixed Width Primitives</b><p>
-
-<p>int8, int16, int32, int64 - Signed integers with the given precision (in bits) stored in big endian order.</p>
-
-<p><b>Variable Length Primitives</b><p>
-
-<p>bytes, string - These types consist of a signed integer giving a length N followed by N bytes of content. A length of -1 indicates null. string uses an int16 for its size, and bytes uses an int32.</p>
-
-<p><b>Arrays</b><p>
-
-<p>This is a notation for handling repeated structures. These will always be encoded as an int32 size containing the length N followed by N repetitions of the structure which can itself be made up of other primitive types. In the BNF grammars below we will show an array of a structure foo as [foo].</p>
+<!--#include virtual="generated/protocol_types.html" -->
 
 <h5><a id="protocol_grammar" href="#protocol_grammar">Notes on reading the request format grammars</a></h5>
 

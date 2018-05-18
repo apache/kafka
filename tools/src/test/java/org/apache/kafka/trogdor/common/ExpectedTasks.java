@@ -25,12 +25,14 @@ import org.apache.kafka.trogdor.agent.AgentClient;
 import org.apache.kafka.trogdor.coordinator.CoordinatorClient;
 import org.apache.kafka.trogdor.rest.AgentStatusResponse;
 import org.apache.kafka.trogdor.rest.TaskState;
+import org.apache.kafka.trogdor.rest.TasksRequest;
 import org.apache.kafka.trogdor.rest.TasksResponse;
 import org.apache.kafka.trogdor.rest.WorkerState;
 import org.apache.kafka.trogdor.task.TaskSpec;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.TreeMap;
 
@@ -144,7 +146,7 @@ public class ExpectedTasks {
             public boolean conditionMet() {
                 TasksResponse tasks = null;
                 try {
-                    tasks = client.tasks();
+                    tasks = client.tasks(new TasksRequest(null, 0, 0, 0, 0));
                 } catch (Exception e) {
                     log.info("Unable to get coordinator tasks", e);
                     throw new RuntimeException(e);
@@ -183,10 +185,14 @@ public class ExpectedTasks {
                     throw new RuntimeException(e);
                 }
                 StringBuilder errors = new StringBuilder();
+                HashMap<String, WorkerState> taskIdToWorkerState = new HashMap<>();
+                for (WorkerState state : status.workers().values()) {
+                    taskIdToWorkerState.put(state.taskId(), state);
+                }
                 for (Map.Entry<String, ExpectedTask> entry : expected.entrySet()) {
                     String id = entry.getKey();
                     ExpectedTask worker = entry.getValue();
-                    String differences = worker.compare(status.workers().get(id));
+                    String differences = worker.compare(taskIdToWorkerState.get(id));
                     if (differences != null) {
                         errors.append(differences);
                     }

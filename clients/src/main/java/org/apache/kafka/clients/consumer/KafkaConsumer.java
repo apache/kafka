@@ -1646,16 +1646,14 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Get the last offset for the given partitions.  The last offset of a partition is the offset of the upcoming
-     * message, i.e. the offset of the last available message + 1.  If messages have never been written
-     * to the the partition, the offset returned will be 0.
+     * Get the end offsets for the given partitions. In the default {@code read_uncommitted} isolation level, the end
+     * offset is the high watermark (that is, the offset of the last successfully replicated message plus one). For
+     * {@code read_committed} consumers, the end offset is the last stable offset (LSO), which is the minimum of
+     * the high watermark and the smallest offset of any open transaction. Finally, if the partition has never been
+     * written to, the end offset is 0.
      *
      * <p>
      * This method does not change the current consumer position of the partitions.
-     * <p>
-     * When {@code isolation.level=read_committed} the last offset will be the Last Stable Offset (LSO).
-     * This is the offset of the first message with an open transaction. The LSO moves forward as transactions
-     * are completed.
      *
      * @see #seekToEnd(Collection)
      *

@@ -22,7 +22,7 @@ import java.util.Collections
 import kafka.utils.MockTime
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.FetchMetadata.{FINAL_EPOCH, INITIAL_EPOCH, INVALID_SESSION_ID}
+import org.apache.kafka.common.requests.FetchMetadata.{FINAL_EPOCH, INVALID_SESSION_ID}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, FetchMetadata => JFetchMetadata}
 import org.junit.{Rule, Test}
 import org.junit.Assert._
@@ -201,7 +201,7 @@ class FetchSessionTest {
       context6.updateAndGenerateResponseData(respData2).error())
 
     // Close the incremental fetch session.
-    var prevSessionId = resp5.sessionId()
+    val prevSessionId = resp5.sessionId
     var nextSessionId = prevSessionId
     do {
       val reqData7 = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]

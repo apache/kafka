@@ -179,6 +179,8 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
     private TaskManager taskManager;
     private PartitionGrouper partitionGrouper;
 
+    private int userMetadataVersion = SubscriptionInfo.LATEST_SUPPORTED_VERSION;
+
     private InternalTopicManager internalTopicManager;
     private CopartitionedTopicsValidator copartitionedTopicsValidator;
 
@@ -196,6 +198,26 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         logPrefix = String.format("stream-thread [%s] ", streamsConfig.getString(CommonClientConfigs.CLIENT_ID_CONFIG));
         final LogContext logContext = new LogContext(logPrefix);
         log = logContext.logger(getClass());
+
+        final String upgradeFrom = streamsConfig.getString(StreamsConfig.UPGRADE_FROM_CONFIG);
+        if (upgradeFrom != null) {
+            switch (upgradeFrom) {
+                case StreamsConfig.UPGRADE_FROM_0100:
+                    log.info("Downgrading metadata version from {} to 1 for upgrade from 0.10.0.x.", SubscriptionInfo.LATEST_SUPPORTED_VERSION);
+                    userMetadataVersion = 1;
+                    break;
+                case StreamsConfig.UPGRADE_FROM_0101:
+                case StreamsConfig.UPGRADE_FROM_0102:
+                case StreamsConfig.UPGRADE_FROM_0110:
+                case StreamsConfig.UPGRADE_FROM_10:
+                case StreamsConfig.UPGRADE_FROM_11:
+                    log.info("Downgrading metadata version from {} to 2 for upgrade from " + upgradeFrom + ".x.", SubscriptionInfo.LATEST_SUPPORTED_VERSION);
+                    userMetadataVersion = 2;
+                    break;
+                default:
+                    throw new IllegalArgumentException("Unknown configuration value for parameter 'upgrade.from': " + upgradeFrom);
+            }
+        }
 
         final Object o = configs.get(StreamsConfig.InternalConfig.TASK_MANAGER_FOR_PARTITION_ASSIGNOR);
         if (o == null) {
@@ -255,6 +277,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         final Set<TaskId> standbyTasks = taskManager.cachedTasksIds();
         standbyTasks.removeAll(previousActiveTasks);
         final SubscriptionInfo data = new SubscriptionInfo(
+            userMetadataVersion,
             taskManager.processId(),
             previousActiveTasks,
             standbyTasks,
@@ -447,7 +470,11 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                 for (final PartitionInfo partitionInfo : partitionInfoList) {
                     final TopicPartition partition = new TopicPartition(partitionInfo.topic(), partitionInfo.partition());
                     if (!allAssignedPartitions.contains(partition)) {
-                        log.warn("Partition {} is not assigned to any tasks: {}", partition, partitionsForTask);
+                        log.warn("Partition {} is not assigned to any tasks: {}"
+                                 + " Possible causes of a partition not getting assigned"
+                                 + " is that another topic defined in the topology has not been"
+                                 + " created when starting your streams application,"
+                                 + " resulting in no tasks created for this topology at all.", partition, partitionsForTask);
                     }
                 }
             } else {
@@ -503,7 +530,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
 
         // construct the global partition assignment per host map
         final Map<HostInfo, Set<TopicPartition>> partitionsByHostState = new HashMap<>();
-        if (minUserMetadataVersion == 2) {
+        if (minUserMetadataVersion == 2 || minUserMetadataVersion == 3) {
             for (final Map.Entry<UUID, ClientMetadata> entry : clientsMetadata.entrySet()) {
                 final HostInfo hostInfo = entry.getValue().hostInfo;
 
@@ -622,6 +649,10 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                 processVersionTwoAssignment(info, partitions, activeTasks, topicToPartitionInfo);
                 partitionsByHost = info.partitionsByHost();
                 break;
+            case 3:
+                processVersionThreeAssignment(info, partitions, activeTasks, topicToPartitionInfo);
+                partitionsByHost = info.partitionsByHost();
+                break;
             default:
                 throw new IllegalStateException("Unknown metadata version: " + usedVersion
                     + "; latest supported version: " + AssignmentInfo.LATEST_SUPPORTED_VERSION);
@@ -675,6 +706,13 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         }
     }
 
+    private void processVersionThreeAssignment(final AssignmentInfo info,
+                                               final List<TopicPartition> partitions,
+                                               final Map<TaskId, Set<TopicPartition>> activeTasks,
+                                               final Map<TopicPartition, PartitionInfo> topicToPartitionInfo) {
+        processVersionTwoAssignment(info, partitions, activeTasks, topicToPartitionInfo);
+    }
+
     /**
      * Internal helper function that creates a Kafka topic
      *
@@ -717,38 +755,6 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         }
     }
 
-    /**
-     * Used to capture subscribed topic via Patterns discovered during the
-     * partition assignment process.
-     *
-     * // TODO: this is a duplicate of the InternalTopologyBuilder#SubscriptionUpdates
-     *          and is maintained only for compatibility of the deprecated TopologyBuilder API
-     */
-    public static class SubscriptionUpdates {
-
-        private final Set<String> updatedTopicSubscriptions = new HashSet<>();
-
-        public void updateTopics(final Collection<String> topicNames) {
-            updatedTopicSubscriptions.clear();
-            updatedTopicSubscriptions.addAll(topicNames);
-        }
-
-        public Collection<String> getUpdates() {
-            return Collections.unmodifiableSet(updatedTopicSubscriptions);
-        }
-
-        public boolean hasUpdates() {
-            return !updatedTopicSubscriptions.isEmpty();
-        }
-
-        @Override
-        public String toString() {
-            return "SubscriptionUpdates{" +
-                    "updatedTopicSubscriptions=" + updatedTopicSubscriptions +
-                    '}';
-        }
-    }
-
     static class CopartitionedTopicsValidator {
         private final String logPrefix;
 
@@ -756,7 +762,6 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
             this.logPrefix = logPrefix;
         }
 
-        @SuppressWarnings("deprecation")
         void validate(final Set<String> copartitionGroup,
                       final Map<String, InternalTopicMetadata> allRepartitionTopicsNumPartitions,
                       final Cluster metadata) {
@@ -767,7 +772,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                     final Integer partitions = metadata.partitionCountForTopic(topic);
 
                     if (partitions == null) {
-                        throw new org.apache.kafka.streams.errors.TopologyBuilderException(String.format("%sTopic not found: %s", logPrefix, topic));
+                        throw new org.apache.kafka.streams.errors.TopologyException(String.format("%sTopic not found: %s", logPrefix, topic));
                     }
 
                     if (numPartitions == UNKNOWN) {
@@ -775,7 +780,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                     } else if (numPartitions != partitions) {
                         final String[] topics = copartitionGroup.toArray(new String[copartitionGroup.size()]);
                         Arrays.sort(topics);
-                        throw new org.apache.kafka.streams.errors.TopologyBuilderException(String.format("%sTopics not co-partitioned: [%s]", logPrefix, Utils.join(Arrays.asList(topics), ",")));
+                        throw new org.apache.kafka.streams.errors.TopologyException(String.format("%sTopics not co-partitioned: [%s]", logPrefix, Utils.join(Arrays.asList(topics), ",")));
                     }
                 } else if (allRepartitionTopicsNumPartitions.get(topic).numPartitions == NOT_AVAILABLE) {
                     numPartitions = NOT_AVAILABLE;
@@ -809,4 +814,5 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
     void setInternalTopicManager(final InternalTopicManager internalTopicManager) {
         this.internalTopicManager = internalTopicManager;
     }
+
 }

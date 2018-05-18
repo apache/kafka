@@ -34,7 +34,6 @@ from kafkatest.version import DEV_BRANCH
 
 Port = collections.namedtuple('Port', ['name', 'number', 'open'])
 
-
 class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     PERSISTENT_ROOT = "/mnt/kafka"
     STDOUT_STDERR_CAPTURE = os.path.join(PERSISTENT_ROOT, "server-start-stdout-stderr.log")
@@ -72,14 +71,14 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     def __init__(self, context, num_nodes, zk, security_protocol=SecurityConfig.PLAINTEXT, interbroker_security_protocol=SecurityConfig.PLAINTEXT,
                  client_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI, interbroker_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI,
                  authorizer_class_name=None, topics=None, version=DEV_BRANCH, jmx_object_names=None,
-                 jmx_attributes=None, zk_connect_timeout=5000, zk_session_timeout=6000, server_prop_overides=[], zk_chroot=None):
+                 jmx_attributes=None, zk_connect_timeout=5000, zk_session_timeout=6000, server_prop_overides=None, zk_chroot=None):
         """
         :type context
         :type zk: ZookeeperService
         :type topics: dict
         """
         Service.__init__(self, context, num_nodes)
-        JmxMixin.__init__(self, num_nodes, jmx_object_names, jmx_attributes or [],
+        JmxMixin.__init__(self, num_nodes=num_nodes, jmx_object_names=jmx_object_names, jmx_attributes=(jmx_attributes or []),
                           root=KafkaService.PERSISTENT_ROOT)
 
         self.zk = zk
@@ -92,7 +91,10 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.minikdc = None
         self.authorizer_class_name = authorizer_class_name
         self.zk_set_acl = False
-        self.server_prop_overides = server_prop_overides
+        if server_prop_overides is None:
+            self.server_prop_overides = []
+        else:
+            self.server_prop_overides = server_prop_overides
         self.log_level = "DEBUG"
         self.zk_chroot = zk_chroot
 
@@ -163,6 +165,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.open_port(self.interbroker_security_protocol)
 
         self.start_minikdc(add_principals)
+        self._ensure_zk_chroot()
+
         Service.start(self)
 
         self.logger.info("Waiting for brokers to register at ZK")
@@ -182,6 +186,16 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
                 topic_cfg["topic"] = topic
                 self.create_topic(topic_cfg)
+
+    def _ensure_zk_chroot(self):
+        self.logger.info("Ensuring zk_chroot %s exists", self.zk_chroot)
+        if self.zk_chroot:
+            if not self.zk_chroot.startswith('/'):
+                raise Exception("Zookeeper chroot must start with '/' but found " + self.zk_chroot)
+
+            parts = self.zk_chroot.split('/')[1:]
+            for i in range(len(parts)):
+                self.zk.create('/' + '/'.join(parts[:i+1]))
 
     def set_protocol_and_port(self, node):
         listeners = []
@@ -310,6 +324,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                 'partitions': topic_cfg.get('partitions', 1),
                 'replication-factor': topic_cfg.get('replication-factor', 1)
             }
+
+        if topic_cfg.get('if-not-exists', False):
+            cmd += ' --if-not-exists'
 
         if "configs" in topic_cfg.keys() and topic_cfg["configs"] is not None:
             for config_name, config_value in topic_cfg["configs"].items():
