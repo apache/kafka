@@ -96,13 +96,14 @@ class GroupMetadataManager(brokerId: Int,
     }
   )
 
-  def enableMetadataExpiration() {
+  def startup(enableMetadataExpiration: Boolean) {
     scheduler.startup()
-
-    scheduler.schedule(name = "delete-expired-group-metadata",
-      fun = cleanupGroupMetadata,
-      period = config.offsetsRetentionCheckIntervalMs,
-      unit = TimeUnit.MILLISECONDS)
+    if (enableMetadataExpiration) {
+      scheduler.schedule(name = "delete-expired-group-metadata",
+        fun = cleanupGroupMetadata,
+        period = config.offsetsRetentionCheckIntervalMs,
+        unit = TimeUnit.MILLISECONDS)
+    }
   }
 
   def currentGroups: Iterable[GroupMetadata] = groupMetadataCache.values
@@ -743,7 +744,20 @@ class GroupMetadataManager(brokerId: Int,
     info(s"Removed $offsetsRemoved expired offsets in ${time.milliseconds() - startMs} milliseconds.")
   }
 
-  def handleTxnCompletion(producerId: Long, completedPartitions: Set[Int], isCommit: Boolean) {
+  /**
+   * Complete pending transactional offset commits of the groups of `producerId` from the provided
+   * `completedPartitions`. This method is invoked when a commit or abort marker is fully written
+   * to the log. It may be invoked when a group lock is held by the caller, for instance when delayed
+   * operations are completed while appending offsets for a group. Since we need to acquire one or
+   * more group metadata locks to handle transaction completion, this operation is scheduled on
+   * the scheduler thread to avoid deadlocks.
+   */
+  def scheduleHandleTxnCompletion(producerId: Long, completedPartitions: Set[Int], isCommit: Boolean): Unit = {
+    scheduler.schedule(s"handleTxnCompletion-$producerId", () =>
+      handleTxnCompletion(producerId, completedPartitions, isCommit))
+  }
+
+  private[group] def handleTxnCompletion(producerId: Long, completedPartitions: Set[Int], isCommit: Boolean): Unit = {
     val pendingGroups = groupsBelongingToPartitions(producerId, completedPartitions)
     pendingGroups.foreach { case (groupId) =>
       getGroup(groupId) match {
@@ -752,7 +766,7 @@ class GroupMetadataManager(brokerId: Int,
             group.completePendingTxnOffsetCommit(producerId, isCommit)
             removeProducerGroup(producerId, groupId)
           }
-       }
+        }
         case _ =>
           info(s"Group $groupId has moved away from $brokerId after transaction marker was written but before the " +
             s"cache was updated. The cache on the new group owner will be updated instead.")
