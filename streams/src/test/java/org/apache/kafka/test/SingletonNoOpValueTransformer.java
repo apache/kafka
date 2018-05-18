@@ -20,26 +20,27 @@ import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.ProcessorContext;
 
-public class NoOpInternalValueTransformer<K, V> implements ValueTransformerWithKeySupplier<K, V, V> {
+public class SingletonNoOpValueTransformer<K, V> implements ValueTransformerWithKeySupplier<K, V, V> {
     public ProcessorContext context;
+    private final ValueTransformerWithKey<K, V, V> transformer = new ValueTransformerWithKey<K, V, V>() {
+
+        @Override
+        public void init(final ProcessorContext context) {
+            SingletonNoOpValueTransformer.this.context = context;
+        }
+
+        @Override
+        public V transform(final K readOnlyKey, final V value) {
+            return value;
+        }
+
+        @Override
+        public void close() {
+        }
+    };
 
     @Override
     public ValueTransformerWithKey<K, V, V> get() {
-        return new ValueTransformerWithKey<K, V, V>() {
-
-            @Override
-            public void init(ProcessorContext context) {
-                NoOpInternalValueTransformer.this.context = context;
-            }
-
-            @Override
-            public V transform(K readOnlyKey, V value) {
-                return value;
-            }
-
-            @Override
-            public void close() {
-            }
-        };
+        return transformer;
     }
 }

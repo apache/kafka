@@ -31,7 +31,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.ForwardingDisabledProcessorContext;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockProcessorSupplier;
-import org.apache.kafka.test.NoOpInternalValueTransformer;
+import org.apache.kafka.test.SingletonNoOpValueTransformer;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.easymock.EasyMockRunner;
 import org.easymock.Mock;
@@ -144,7 +144,7 @@ public class KStreamTransformValuesTest {
 
     @Test
     public void shouldInitializeTransformerWithForwardDisabledProcessorContext() {
-        final NoOpInternalValueTransformer<String, String> transformer = new NoOpInternalValueTransformer<>();
+        final SingletonNoOpValueTransformer<String, String> transformer = new SingletonNoOpValueTransformer<>();
         final KStreamTransformValues<String, String, String> transformValues = new KStreamTransformValues<>(transformer);
         final Processor<String, String> processor = transformValues.get();
 

@@ -40,7 +40,7 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockReducer;
-import org.apache.kafka.test.NoOpInternalValueTransformer;
+import org.apache.kafka.test.SingletonNoOpValueTransformer;
 import org.apache.kafka.test.TestUtils;
 import org.easymock.EasyMockRunner;
 import org.easymock.Mock;
@@ -138,7 +138,7 @@ public class KTableTransformValuesTest {
 
     @Test
     public void shouldInitializeTransformerWithForwardDisabledProcessorContext() {
-        final NoOpInternalValueTransformer<String, String> transformer = new NoOpInternalValueTransformer<>();
+        final SingletonNoOpValueTransformer<String, String> transformer = new SingletonNoOpValueTransformer<>();
         final KTableTransformValues<String, String, String> transformValues = new KTableTransformValues<>(parent, transformer, null);
         final Processor<String, Change<String>> processor = transformValues.get();
 
@@ -188,7 +188,7 @@ public class KTableTransformValuesTest {
         expectLastCall();
         replay(parent);
 
-        new KTableTransformValues<>(parent, new NoOpInternalValueTransformer<>(), QUERYABLE_NAME).enableSendingOldValues();
+        new KTableTransformValues<>(parent, new SingletonNoOpValueTransformer<>(), QUERYABLE_NAME).enableSendingOldValues();
 
         verify(parent);
     }
