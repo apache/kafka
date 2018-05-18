@@ -136,7 +136,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.TreeSet;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -2385,11 +2384,11 @@ public class KafkaAdminClient extends AdminClient {
                                     final List<MemberDescription> memberDescriptions = new ArrayList<>(members.size());
 
                                     for (DescribeGroupsResponse.GroupMember groupMember : members) {
-                                        Set<TopicPartition> partitions = Collections.<TopicPartition>emptySet();
+                                        Set<TopicPartition> partitions = Collections.emptySet();
                                         if (groupMember.memberAssignment().remaining() > 0) {
                                             final PartitionAssignor.Assignment assignment = ConsumerProtocol.
                                                 deserializeAssignment(groupMember.memberAssignment().duplicate());
-                                            partitions = new TreeSet<>(assignment.partitions());
+                                            partitions = new HashSet<>(assignment.partitions());
                                         }
                                         final MemberDescription memberDescription =
                                             new MemberDescription(groupMember.memberId(),

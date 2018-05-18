@@ -20,8 +20,8 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Utils;
 
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Set;
-import java.util.TreeSet;
 
 /**
  * A description of the assignments of a specific group member.
@@ -36,7 +36,7 @@ public class MemberAssignment {
      */
     MemberAssignment(Set<TopicPartition> topicPartitions) {
         this.topicPartitions = topicPartitions == null ? Collections.<TopicPartition>emptySet() :
-            Collections.unmodifiableSet(new TreeSet<TopicPartition>(topicPartitions));
+            Collections.unmodifiableSet(new HashSet<>(topicPartitions));
     }
 
     @Override

@@ -37,8 +37,11 @@ public class ConsumerGroupDescription {
     private final ConsumerGroupState state;
     private final Node coordinator;
 
-    ConsumerGroupDescription(String groupId, boolean isSimpleConsumerGroup,
-            Collection<MemberDescription> members, String partitionAssignor, ConsumerGroupState state,
+    ConsumerGroupDescription(String groupId,
+            boolean isSimpleConsumerGroup,
+            Collection<MemberDescription> members,
+            String partitionAssignor,
+            ConsumerGroupState state,
             Node coordinator) {
         this.groupId = groupId == null ? "" : groupId;
         this.isSimpleConsumerGroup = isSimpleConsumerGroup;
