@@ -857,6 +857,14 @@ public class KafkaAdminClientTest {
                         new DescribeGroupsResponse.GroupMember("0", "clientId0", "clientHost", null, memberAssignment),
                         new DescribeGroupsResponse.GroupMember("1", "clientId1", "clientHost", null, memberAssignment))));
 
+
+            env.kafkaClient().prepareResponse(
+                new ListGroupsResponse(
+                    Errors.NONE,
+                    Arrays.asList(
+                        new ListGroupsResponse.Group("group-0", ConsumerProtocol.PROTOCOL_TYPE)
+                    )));
+
             env.kafkaClient().prepareResponse(new DescribeGroupsResponse(groupMetadataMap));
 
             final DescribeConsumerGroupsResult result = env.adminClient().describeConsumerGroups(Collections.singletonList("group-0"));
@@ -929,6 +937,15 @@ public class KafkaAdminClientTest {
             env.kafkaClient().setNode(env.cluster().controller());
 
             env.kafkaClient().prepareResponse(new FindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            env.kafkaClient().prepareResponse(
+                new ListGroupsResponse(
+                    Errors.NONE,
+                    Arrays.asList(
+                        new ListGroupsResponse.Group("group-1", ConsumerProtocol.PROTOCOL_TYPE),
+                        new ListGroupsResponse.Group("group-connect-1", "connector")
+                    )));
+
 
             final Map<String, Errors> response = new HashMap<>();
             response.put("group-0", Errors.NONE);
