@@ -17,14 +17,10 @@
 package org.apache.kafka.streams.processor.internals;
 
 
-import org.apache.kafka.common.Metric;
-import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.junit.Test;
-
-import java.util.HashMap;
-import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 
@@ -32,82 +28,75 @@ public class StreamsMetricsImplTest {
 
     @Test(expected = NullPointerException.class)
     public void testNullMetrics() {
-        String groupName = "doesNotMatter";
-        Map<String, String> tags = new HashMap<>();
-        StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(null, groupName, tags);
+        new StreamsMetricsImpl(null, "");
     }
 
     @Test(expected = NullPointerException.class)
     public void testRemoveNullSensor() {
-        String groupName = "doesNotMatter";
-        Map<String, String> tags = new HashMap<>();
-        StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), groupName, tags);
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), "");
         streamsMetrics.removeSensor(null);
     }
 
     @Test
     public void testRemoveSensor() {
-        String groupName = "doesNotMatter";
-        String sensorName = "sensor1";
-        String scope = "scope";
-        String entity = "entity";
-        String operation = "put";
-        Map<String, String> tags = new HashMap<>();
-        StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), groupName, tags);
+        final String sensorName = "sensor1";
+        final String taskName = "task";
+        final String scope = "scope";
+        final String entity = "entity";
+        final String operation = "put";
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), "");
 
-        Sensor sensor1 = streamsMetrics.addSensor(sensorName, Sensor.RecordingLevel.DEBUG);
+        final Sensor sensor1 = streamsMetrics.addSensor(sensorName, Sensor.RecordingLevel.DEBUG);
         streamsMetrics.removeSensor(sensor1);
 
-        Sensor sensor1a = streamsMetrics.addSensor(sensorName, Sensor.RecordingLevel.DEBUG, sensor1);
+        final Sensor sensor1a = streamsMetrics.addSensor(sensorName, Sensor.RecordingLevel.DEBUG, sensor1);
         streamsMetrics.removeSensor(sensor1a);
 
-        Sensor sensor2 = streamsMetrics.addLatencyAndThroughputSensor(scope, entity, operation, Sensor.RecordingLevel.DEBUG);
+        final Sensor sensor2 = streamsMetrics.addLatencyAndThroughputSensor(taskName, scope, entity, operation, Sensor.RecordingLevel.DEBUG);
         streamsMetrics.removeSensor(sensor2);
 
-        Sensor sensor3 = streamsMetrics.addThroughputSensor(scope, entity, operation, Sensor.RecordingLevel.DEBUG);
+        final Sensor sensor3 = streamsMetrics.addThroughputSensor(taskName, scope, entity, operation, Sensor.RecordingLevel.DEBUG);
         streamsMetrics.removeSensor(sensor3);
     }
 
     @Test
     public void testLatencyMetrics() {
-        String groupName = "doesNotMatter";
-        String scope = "scope";
-        String entity = "entity";
-        String operation = "put";
-        Map<String, String> tags = new HashMap<>();
-        StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), groupName, tags);
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), "");
+        final int defaultMetrics = streamsMetrics.metrics().size();
 
-        Sensor sensor1 = streamsMetrics.addLatencyAndThroughputSensor(scope, entity, operation, Sensor.RecordingLevel.DEBUG);
+        final String taskName = "task";
+        final String scope = "scope";
+        final String entity = "entity";
+        final String operation = "put";
 
-        Map<MetricName, ? extends Metric> metrics = streamsMetrics.metrics();
+        final Sensor sensor1 = streamsMetrics.addLatencyAndThroughputSensor(taskName, scope, entity, operation, Sensor.RecordingLevel.DEBUG);
+
         // 2 meters and 4 non-meter metrics plus a common metric that keeps track of total registered metrics in Metrics() constructor
-        int meterMetricsCount = 2; // Each Meter is a combination of a Rate and a Total
-        int otherMetricsCount = 4;
-        assertEquals(meterMetricsCount * 2 + otherMetricsCount + 1, metrics.size());
+        final int meterMetricsCount = 2; // Each Meter is a combination of a Rate and a Total
+        final int otherMetricsCount = 4;
+        assertEquals(defaultMetrics + meterMetricsCount * 2 + otherMetricsCount, streamsMetrics.metrics().size());
 
         streamsMetrics.removeSensor(sensor1);
-        metrics = streamsMetrics.metrics();
-        assertEquals(metrics.size(), 1);
+        assertEquals(defaultMetrics, streamsMetrics.metrics().size());
     }
 
     @Test
     public void testThroughputMetrics() {
-        String groupName = "doesNotMatter";
-        String scope = "scope";
-        String entity = "entity";
-        String operation = "put";
-        Map<String, String> tags = new HashMap<>();
-        StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), groupName, tags);
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), "");
+        final int defaultMetrics = streamsMetrics.metrics().size();
 
-        Sensor sensor1 = streamsMetrics.addThroughputSensor(scope, entity, operation, Sensor.RecordingLevel.DEBUG);
+        final String taskName = "task";
+        final String scope = "scope";
+        final String entity = "entity";
+        final String operation = "put";
 
-        Map<MetricName, ? extends Metric> metrics = streamsMetrics.metrics();
-        int meterMetricsCount = 2; // Each Meter is a combination of a Rate and a Total
+        final Sensor sensor1 = streamsMetrics.addThroughputSensor(taskName,  scope, entity, operation, Sensor.RecordingLevel.DEBUG);
+
+        final int meterMetricsCount = 2; // Each Meter is a combination of a Rate and a Total
         // 2 meter metrics plus a common metric that keeps track of total registered metrics in Metrics() constructor
-        assertEquals(meterMetricsCount * 2 + 1, metrics.size());
+        assertEquals(defaultMetrics + meterMetricsCount * 2, streamsMetrics.metrics().size());
 
         streamsMetrics.removeSensor(sensor1);
-        metrics = streamsMetrics.metrics();
-        assertEquals(metrics.size(), 1);
+        assertEquals(defaultMetrics, streamsMetrics.metrics().size());
     }
 }

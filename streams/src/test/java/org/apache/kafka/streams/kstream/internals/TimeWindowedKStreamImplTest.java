@@ -19,7 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.Consumed;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.ForeachAction;
@@ -105,8 +105,9 @@ public class TimeWindowedKStreamImplTest {
     public void shouldAggregateWindowed() {
         final Map<Windowed<String>, String> results = new HashMap<>();
         windowedStream.aggregate(MockInitializer.STRING_INIT,
-                                 MockAggregator.TOSTRING_ADDER
-        )
+                MockAggregator.TOSTRING_ADDER,
+                Materialized.<String, String, WindowStore<Bytes, byte[]>>with(Serdes.String(), Serdes.String()
+        ))
                 .toStream()
                 .foreach(new ForeachAction<Windowed<String>, String>() {
                     @Override

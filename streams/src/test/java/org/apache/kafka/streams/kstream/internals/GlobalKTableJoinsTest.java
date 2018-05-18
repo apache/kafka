@@ -17,22 +17,23 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.streams.Consumed;
+import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
-import org.apache.kafka.test.KStreamTestDriver;
+import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockValueJoiner;
-import org.apache.kafka.test.TestUtils;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
 
-import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Properties;
 
 import static org.junit.Assert.assertEquals;
 
@@ -43,17 +44,14 @@ public class GlobalKTableJoinsTest {
     private final Map<String, String> results = new HashMap<>();
     private final String streamTopic = "stream";
     private final String globalTopic = "global";
-    private File stateDir;
     private GlobalKTable<String, String> global;
     private KStream<String, String> stream;
     private KeyValueMapper<String, String, String> keyValueMapper;
     private ForeachAction<String, String> action;
-    @Rule
-    public final KStreamTestDriver driver = new KStreamTestDriver();
+
 
     @Before
     public void setUp() {
-        stateDir = TestUtils.tempDirectory();
         final Consumed<String, String> consumed = Consumed.with(Serdes.String(), Serdes.String());
         global = builder.globalTable(globalTopic, consumed);
         stream = builder.stream(streamTopic, consumed);
@@ -73,41 +71,45 @@ public class GlobalKTableJoinsTest {
 
     @Test
     public void shouldLeftJoinWithStream() {
-        stream.leftJoin(global, keyValueMapper, MockValueJoiner.TOSTRING_JOINER)
-                .foreach(action);
+        stream
+            .leftJoin(global, keyValueMapper, MockValueJoiner.TOSTRING_JOINER)
+            .foreach(action);
 
         final Map<String, String> expected = new HashMap<>();
         expected.put("1", "a+A");
         expected.put("2", "b+B");
         expected.put("3", "c+null");
 
-        verifyJoin(expected, streamTopic);
+        verifyJoin(expected);
 
     }
 
     @Test
     public void shouldInnerJoinWithStream() {
-        stream.join(global, keyValueMapper,  MockValueJoiner.TOSTRING_JOINER)
-                .foreach(action);
+        stream
+            .join(global, keyValueMapper, MockValueJoiner.TOSTRING_JOINER)
+            .foreach(action);
 
         final Map<String, String> expected = new HashMap<>();
         expected.put("1", "a+A");
         expected.put("2", "b+B");
 
-        verifyJoin(expected, streamTopic);
+        verifyJoin(expected);
     }
 
-    private void verifyJoin(final Map<String, String> expected, final String joinInput) {
-        driver.setUp(builder, stateDir);
-        driver.setTime(0L);
-        // write some data to the global table
-        driver.process(globalTopic, "a", "A");
-        driver.process(globalTopic, "b", "B");
-        //write some data to the stream
-        driver.process(joinInput, "1", "a");
-        driver.process(joinInput, "2", "b");
-        driver.process(joinInput, "3", "c");
-        driver.flushState();
+    private void verifyJoin(final Map<String, String> expected) {
+        final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
+        final Properties props = StreamsTestUtils.topologyTestConfig(Serdes.String(), Serdes.String());
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            // write some data to the global table
+            driver.pipeInput(recordFactory.create(globalTopic, "a", "A"));
+            driver.pipeInput(recordFactory.create(globalTopic, "b", "B"));
+            //write some data to the stream
+            driver.pipeInput(recordFactory.create(streamTopic, "1", "a"));
+            driver.pipeInput(recordFactory.create(streamTopic, "2", "b"));
+            driver.pipeInput(recordFactory.create(streamTopic, "3", "c"));
+        }
 
         assertEquals(expected, results);
     }

@@ -23,7 +23,6 @@ import kafka.utils.TestUtils._
 import kafka.api.FetchRequestBuilder
 import kafka.message.ByteBufferMessageSet
 import java.io.File
-import java.net.UnknownHostException
 
 import kafka.log.LogManager
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
@@ -131,7 +130,7 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
     val newProps = TestUtils.createBrokerConfig(0, zkConnect)
     newProps.setProperty("zookeeper.connect", "some.invalid.hostname.foo.bar.local:65535")
     val newConfig = KafkaConfig.fromProps(newProps)
-    verifyCleanShutdownAfterFailedStartup[UnknownHostException](newConfig)
+    verifyCleanShutdownAfterFailedStartup[IllegalArgumentException](newConfig)
   }
 
   @Test

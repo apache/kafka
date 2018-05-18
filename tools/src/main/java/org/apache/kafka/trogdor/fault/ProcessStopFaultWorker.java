@@ -17,16 +17,17 @@
 
 package org.apache.kafka.trogdor.fault;
 
+import com.fasterxml.jackson.databind.node.TextNode;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.trogdor.common.Platform;
 import org.apache.kafka.trogdor.task.TaskWorker;
+import org.apache.kafka.trogdor.task.WorkerStatusTracker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicReference;
 
 public class ProcessStopFaultWorker implements TaskWorker {
     private static final Logger log = LoggerFactory.getLogger(ProcessStopFaultWorker.class);
@@ -35,22 +36,29 @@ public class ProcessStopFaultWorker implements TaskWorker {
 
     private final String javaProcessName;
 
+    private WorkerStatusTracker status;
+
     public ProcessStopFaultWorker(String id, String javaProcessName) {
         this.id = id;
         this.javaProcessName = javaProcessName;
     }
 
     @Override
-    public void start(Platform platform, AtomicReference<String> status,
+    public void start(Platform platform, WorkerStatusTracker status,
                       KafkaFutureImpl<String> errorFuture) throws Exception {
+        this.status = status;
         log.info("Activating ProcessStopFault {}.", id);
+        this.status.update(new TextNode("stopping " + javaProcessName));
         sendSignals(platform, "SIGSTOP");
+        this.status.update(new TextNode("stopped " + javaProcessName));
     }
 
     @Override
     public void stop(Platform platform) throws Exception {
         log.info("Deactivating ProcessStopFault {}.", id);
+        this.status.update(new TextNode("resuming " + javaProcessName));
         sendSignals(platform, "SIGCONT");
+        this.status.update(new TextNode("resumed " + javaProcessName));
     }
 
     private void sendSignals(Platform platform, String signalName) throws Exception {

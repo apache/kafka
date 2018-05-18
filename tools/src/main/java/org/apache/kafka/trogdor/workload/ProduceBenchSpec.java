@@ -26,7 +26,6 @@ import org.apache.kafka.trogdor.task.TaskWorker;
 
 import java.util.Collections;
 import java.util.Map;
-import java.util.TreeMap;
 import java.util.Set;
 
 /**
@@ -40,8 +39,10 @@ public class ProduceBenchSpec extends TaskSpec {
     private final PayloadGenerator keyGenerator;
     private final PayloadGenerator valueGenerator;
     private final Map<String, String> producerConf;
-    private final int totalTopics;
-    private final int activeTopics;
+    private final Map<String, String> adminClientConf;
+    private final Map<String, String> commonClientConf;
+    private final TopicsSpec activeTopics;
+    private final TopicsSpec inactiveTopics;
 
     @JsonCreator
     public ProduceBenchSpec(@JsonProperty("startMs") long startMs,
@@ -53,8 +54,10 @@ public class ProduceBenchSpec extends TaskSpec {
                          @JsonProperty("keyGenerator") PayloadGenerator keyGenerator,
                          @JsonProperty("valueGenerator") PayloadGenerator valueGenerator,
                          @JsonProperty("producerConf") Map<String, String> producerConf,
-                         @JsonProperty("totalTopics") int totalTopics,
-                         @JsonProperty("activeTopics") int activeTopics) {
+                         @JsonProperty("commonClientConf") Map<String, String> commonClientConf,
+                         @JsonProperty("adminClientConf") Map<String, String> adminClientConf,
+                         @JsonProperty("activeTopics") TopicsSpec activeTopics,
+                         @JsonProperty("inactiveTopics") TopicsSpec inactiveTopics) {
         super(startMs, durationMs);
         this.producerNode = (producerNode == null) ? "" : producerNode;
         this.bootstrapServers = (bootstrapServers == null) ? "" : bootstrapServers;
@@ -64,9 +67,13 @@ public class ProduceBenchSpec extends TaskSpec {
             new SequentialPayloadGenerator(4, 0) : keyGenerator;
         this.valueGenerator = valueGenerator == null ?
             new ConstantPayloadGenerator(512, new byte[0]) : valueGenerator;
-        this.producerConf = (producerConf == null) ? new TreeMap<String, String>() : producerConf;
-        this.totalTopics = totalTopics;
-        this.activeTopics = activeTopics;
+        this.producerConf = configOrEmptyMap(producerConf);
+        this.commonClientConf = configOrEmptyMap(commonClientConf);
+        this.adminClientConf = configOrEmptyMap(adminClientConf);
+        this.activeTopics = (activeTopics == null) ?
+            TopicsSpec.EMPTY : activeTopics.immutableCopy();
+        this.inactiveTopics = (inactiveTopics == null) ?
+            TopicsSpec.EMPTY : inactiveTopics.immutableCopy();
     }
 
     @JsonProperty
@@ -105,13 +112,23 @@ public class ProduceBenchSpec extends TaskSpec {
     }
 
     @JsonProperty
-    public int totalTopics() {
-        return totalTopics;
+    public Map<String, String> commonClientConf() {
+        return commonClientConf;
     }
 
     @JsonProperty
-    public int activeTopics() {
+    public Map<String, String> adminClientConf() {
+        return adminClientConf;
+    }
+
+    @JsonProperty
+    public TopicsSpec activeTopics() {
         return activeTopics;
+    }
+
+    @JsonProperty
+    public TopicsSpec inactiveTopics() {
+        return inactiveTopics;
     }
 
     @Override

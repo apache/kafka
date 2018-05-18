@@ -16,30 +16,20 @@
  */
 package org.apache.kafka.test;
 
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.PunctuationType;
-import org.apache.kafka.streams.processor.Punctuator;
 
 import java.util.ArrayList;
+import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 
 public class MockProcessorSupplier<K, V> implements ProcessorSupplier<K, V> {
 
-    public final ArrayList<String> processed = new ArrayList<>();
-    public final ArrayList<K> processedKeys = new ArrayList<>();
-    public final ArrayList<V> processedValues = new ArrayList<>();
-
-    public final ArrayList<Long> punctuatedStreamTime = new ArrayList<>();
-    public final ArrayList<Long> punctuatedSystemTime = new ArrayList<>();
-
     private final long scheduleInterval;
     private final PunctuationType punctuationType;
-    public Cancellable scheduleCancellable;
+    private final List<MockProcessor<K, V>> processors = new ArrayList<>();
 
     public MockProcessorSupplier() {
         this(-1L);
@@ -56,71 +46,20 @@ public class MockProcessorSupplier<K, V> implements ProcessorSupplier<K, V> {
 
     @Override
     public Processor<K, V> get() {
-        return new MockProcessor(punctuationType);
+        final MockProcessor<K, V> processor = new MockProcessor<>(punctuationType, scheduleInterval);
+        processors.add(processor);
+        return processor;
     }
 
-    public class MockProcessor extends AbstractProcessor<K, V> {
-
-        PunctuationType punctuationType;
-
-        public MockProcessor(PunctuationType punctuationType) {
-            this.punctuationType = punctuationType;
-        }
-
-        @Override
-        public void init(ProcessorContext context) {
-            super.init(context);
-            if (scheduleInterval > 0L) {
-                scheduleCancellable = context.schedule(scheduleInterval, punctuationType, new Punctuator() {
-                    @Override
-                    public void punctuate(long timestamp) {
-                        if (punctuationType == PunctuationType.STREAM_TIME) {
-                            assertEquals(timestamp, context().timestamp());
-                        }
-                        assertEquals(-1, context().partition());
-                        assertEquals(-1L, context().offset());
-
-                        (punctuationType == PunctuationType.STREAM_TIME ? punctuatedStreamTime : punctuatedSystemTime)
-                           .add(timestamp);
-                    }
-                });
-            }
-        }
-
-        @Override
-        public void process(K key, V value) {
-            processedKeys.add(key);
-            processedValues.add(value);
-            processed.add((key == null ? "null" : key) + ":" +
-                    (value == null ? "null" : value));
-
-        }
+    // get the captured processor assuming that only one processor gets returned from this supplier
+    public MockProcessor<K, V> theCapturedProcessor() {
+        return capturedProcessors(1).get(0);
     }
 
-    public void checkAndClearProcessResult(String... expected) {
-        assertEquals("the number of outputs:" + processed, expected.length, processed.size());
-        for (int i = 0; i < expected.length; i++) {
-            assertEquals("output[" + i + "]:", expected[i], processed.get(i));
-        }
+    // get the captured processors with the expected number
+    public List<MockProcessor<K, V>> capturedProcessors(final int expectedNumberOfProcessors) {
+        assertEquals(expectedNumberOfProcessors, processors.size());
 
-        processed.clear();
+        return processors;
     }
-
-    public void checkEmptyAndClearProcessResult() {
-
-        assertEquals("the number of outputs:", 0, processed.size());
-        processed.clear();
-    }
-
-    public void checkAndClearPunctuateResult(PunctuationType type, long... expected) {
-        ArrayList<Long> punctuated = type == PunctuationType.STREAM_TIME ? punctuatedStreamTime : punctuatedSystemTime;
-        assertEquals("the number of outputs:", expected.length, punctuated.size());
-
-        for (int i = 0; i < expected.length; i++) {
-            assertEquals("output[" + i + "]:", expected[i], (long) punctuated.get(i));
-        }
-
-        processed.clear();
-    }
-
 }

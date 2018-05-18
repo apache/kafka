@@ -79,12 +79,14 @@ class LogManager(logDirs: Seq[File],
   private val logsToBeDeleted = new LinkedBlockingQueue[(Log, Long)]()
 
   private val _liveLogDirs: ConcurrentLinkedQueue[File] = createAndValidateLogDirs(logDirs, initialOfflineDirs)
-  @volatile var currentDefaultConfig = initialDefaultConfig
+  @volatile private var _currentDefaultConfig = initialDefaultConfig
   @volatile private var numRecoveryThreadsPerDataDir = recoveryThreadsPerDataDir
 
   def reconfigureDefaultLogConfig(logConfig: LogConfig): Unit = {
-    this.currentDefaultConfig = logConfig
+    this._currentDefaultConfig = logConfig
   }
+
+  def currentDefaultConfig: LogConfig = _currentDefaultConfig
 
   def liveLogDirs: Seq[File] = {
     if (_liveLogDirs.size == logDirs.size)
@@ -244,6 +246,9 @@ class LogManager(logDirs: Seq[File],
   private def addLogToBeDeleted(log: Log): Unit = {
     this.logsToBeDeleted.add((log, time.milliseconds()))
   }
+
+  // Only for testing
+  private[log] def hasLogsToBeDeleted: Boolean = !logsToBeDeleted.isEmpty
 
   private def loadLog(logDir: File, recoveryPoints: Map[TopicPartition, Long], logStartOffsets: Map[TopicPartition, Long]): Unit = {
     debug("Loading log '" + logDir.getName + "'")
@@ -704,17 +709,27 @@ class LogManager(logDirs: Seq[File],
   }
 
   /**
-   *  Delete logs marked for deletion.
+   *  Delete logs marked for deletion. Delete all logs for which `currentDefaultConfig.fileDeleteDelayMs`
+   *  has elapsed after the delete was scheduled. Logs for which this interval has not yet elapsed will be
+   *  considered for deletion in the next iteration of `deleteLogs`. The next iteration will be executed
+   *  after the remaining time for the first log that is not deleted. If there are no more `logsToBeDeleted`,
+   *  `deleteLogs` will be executed after `currentDefaultConfig.fileDeleteDelayMs`.
    */
   private def deleteLogs(): Unit = {
+    var nextDelayMs = 0L
     try {
-      while (!logsToBeDeleted.isEmpty) {
-        val (removedLog, scheduleTimeMs) = logsToBeDeleted.take()
+      def nextDeleteDelayMs: Long = {
+        if (!logsToBeDeleted.isEmpty) {
+          val (_, scheduleTimeMs) = logsToBeDeleted.peek()
+          scheduleTimeMs + currentDefaultConfig.fileDeleteDelayMs - time.milliseconds()
+        } else
+          currentDefaultConfig.fileDeleteDelayMs
+      }
+
+      while ({nextDelayMs = nextDeleteDelayMs; nextDelayMs <= 0}) {
+        val (removedLog, _) = logsToBeDeleted.take()
         if (removedLog != null) {
           try {
-            val waitingTimeMs = scheduleTimeMs + currentDefaultConfig.fileDeleteDelayMs - time.milliseconds()
-            if (waitingTimeMs > 0)
-              Thread.sleep(waitingTimeMs)
             removedLog.delete()
             info(s"Deleted log for partition ${removedLog.topicPartition} in ${removedLog.dir.getAbsolutePath}.")
           } catch {
@@ -730,7 +745,7 @@ class LogManager(logDirs: Seq[File],
       try {
         scheduler.schedule("kafka-delete-logs",
           deleteLogs _,
-          delay = currentDefaultConfig.fileDeleteDelayMs,
+          delay = nextDelayMs,
           unit = TimeUnit.MILLISECONDS)
       } catch {
         case e: Throwable =>

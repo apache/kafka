@@ -41,9 +41,11 @@ import Implicits._
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.zk.{AdminZkClient, BrokerIdsZNode, BrokerInfo, KafkaZkClient}
 import org.apache.kafka.clients.CommonClientConfigs
+import org.apache.kafka.clients.admin.{AdminClient, AlterConfigsResult, Config, ConfigEntry}
 import org.apache.kafka.clients.consumer.{ConsumerRecord, KafkaConsumer, OffsetAndMetadata, RangeAssignor}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.header.Header
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.{ListenerName, Mode}
@@ -555,7 +557,7 @@ object TestUtils extends Logging {
                         bufferSize: Long = 1024L * 1024L,
                         retries: Int = 0,
                         lingerMs: Long = 0,
-                        requestTimeoutMs: Long = 10 * 1024L,
+                        requestTimeoutMs: Long = 30 * 1000L,
                         securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT,
                         trustStoreFile: Option[File] = None,
                         saslProperties: Option[Properties] = None,
@@ -1086,20 +1088,22 @@ object TestUtils extends Logging {
     val producer = createNewProducer(
       TestUtils.getBrokerListStrFromServers(servers),
       retries = 5,
-      requestTimeoutMs = 2000,
       acks = acks
     )
+    val values = try {
+      val curValues = (0 until numMessages).map(x => valueBytes match {
+        case -1 => s"test-$x".getBytes
+        case _ => new Array[Byte](valueBytes)
+      })
 
-    val values = (0 until numMessages).map(x => valueBytes match {
-      case -1 => s"test-$x".getBytes
-      case _ => new Array[Byte](valueBytes)
-    })
-
-    val futures = values.map { value =>
-      producer.send(new ProducerRecord(topic, value))
+      val futures = curValues.map { value =>
+        producer.send(new ProducerRecord(topic, value))
+      }
+      futures.foreach(_.get)
+      curValues 
+    } finally {
+      producer.close()
     }
-    futures.foreach(_.get)
-    producer.close()
 
     debug(s"Sent ${values.size} messages for topic [$topic]")
 
@@ -1109,8 +1113,7 @@ object TestUtils extends Logging {
   def produceMessage(servers: Seq[KafkaServer], topic: String, message: String) {
     val producer = createNewProducer(
       TestUtils.getBrokerListStrFromServers(servers),
-      retries = 5,
-      requestTimeoutMs = 2000
+      retries = 5
     )
     producer.send(new ProducerRecord(topic, topic.getBytes, message.getBytes)).get
     producer.close()
@@ -1489,6 +1492,21 @@ object TestUtils extends Logging {
       else
         consumer.seekToBeginning(Collections.singletonList(topicPartition))
     }
+  }
+
+  def alterConfigs(servers: Seq[KafkaServer], adminClient: AdminClient, props: Properties,
+                   perBrokerConfig: Boolean): AlterConfigsResult = {
+    val configEntries = props.asScala.map { case (k, v) => new ConfigEntry(k, v) }.toList.asJava
+    val newConfig = new Config(configEntries)
+    val configs = if (perBrokerConfig) {
+      servers.map { server =>
+        val resource = new ConfigResource(ConfigResource.Type.BROKER, server.config.brokerId.toString)
+        (resource, newConfig)
+      }.toMap.asJava
+    } else {
+      Map(new ConfigResource(ConfigResource.Type.BROKER, "") -> newConfig).asJava
+    }
+    adminClient.alterConfigs(configs)
   }
 
   /**

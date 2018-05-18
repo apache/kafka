@@ -23,12 +23,15 @@ import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.streams.state.WindowStoreIterator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 
 public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggProcessorSupplier<K, Windowed<K>, V, V> {
+    private static final Logger LOG = LoggerFactory.getLogger(KStreamWindowReduce.class);
 
     private final String storeName;
     private final Windows<W> windows;
@@ -58,11 +61,13 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
 
         private WindowStore<K, V> windowStore;
         private TupleForwarder<Windowed<K>, V> tupleForwarder;
+        private StreamsMetricsImpl metrics;
 
         @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
             super.init(context);
+            metrics = (StreamsMetricsImpl) context.metrics();
             windowStore = (WindowStore<K, V>) context.getStateStore(storeName);
             tupleForwarder = new TupleForwarder<>(windowStore, context, new ForwardingCacheFlushListener<Windowed<K>, V>(context, sendOldValues), sendOldValues);
         }
@@ -71,8 +76,14 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
         public void process(final K key, final V value) {
             // if the key is null, we do not need proceed aggregating
             // the record with the table
-            if (key == null)
+            if (key == null) {
+                LOG.warn(
+                    "Skipping record due to null key. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
+                    value, context().topic(), context().partition(), context().offset()
+                );
+                metrics.skippedRecordsSensor().record();
                 return;
+            }
 
             // first get the matching windows
             final long timestamp = context().timestamp();
@@ -82,7 +93,7 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
             for (final Map.Entry<Long, W> entry : matchedWindows.entrySet()) {
                 final V oldAgg = windowStore.fetch(key, entry.getKey());
 
-                V newAgg;
+                final V newAgg;
                 if (oldAgg == null) {
                     newAgg = value;
                 } else {
@@ -125,13 +136,10 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
         @SuppressWarnings("unchecked")
         @Override
         public V get(final Windowed<K> windowedKey) {
-            K key = windowedKey.key();
-            W window = (W) windowedKey.window();
+            final K key = windowedKey.key();
+            final W window = (W) windowedKey.window();
 
-            // this iterator should only contain one element
-            try (WindowStoreIterator<V> iter = windowStore.fetch(key, window.start(), window.start())) {
-                return iter.hasNext() ? iter.next().value : null;
-            }
+            return windowStore.fetch(key, window.start());
         }
     }
 }

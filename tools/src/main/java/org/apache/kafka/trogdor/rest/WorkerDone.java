@@ -19,6 +19,8 @@ package org.apache.kafka.trogdor.rest;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.NullNode;
 import org.apache.kafka.trogdor.task.TaskSpec;
 
 /**
@@ -39,7 +41,7 @@ public class WorkerDone extends WorkerState {
      * The task status.  The format will depend on the type of task that is
      * being run.
      */
-    private final String status;
+    private final JsonNode status;
 
     /**
      * Empty if the task completed without error; the error message otherwise.
@@ -47,15 +49,16 @@ public class WorkerDone extends WorkerState {
     private final String error;
 
     @JsonCreator
-    public WorkerDone(@JsonProperty("spec") TaskSpec spec,
+    public WorkerDone(@JsonProperty("taskId") String taskId,
+            @JsonProperty("spec") TaskSpec spec,
             @JsonProperty("startedMs") long startedMs,
             @JsonProperty("doneMs") long doneMs,
-            @JsonProperty("status") String status,
+            @JsonProperty("status") JsonNode status,
             @JsonProperty("error") String error) {
-        super(spec);
+        super(taskId, spec);
         this.startedMs = startedMs;
         this.doneMs = doneMs;
-        this.status = status == null ? "" : status;
+        this.status = status == null ? NullNode.instance : status;
         this.error = error == null ? "" : error;
     }
 
@@ -72,7 +75,7 @@ public class WorkerDone extends WorkerState {
 
     @JsonProperty
     @Override
-    public String status() {
+    public JsonNode status() {
         return status;
     }
 

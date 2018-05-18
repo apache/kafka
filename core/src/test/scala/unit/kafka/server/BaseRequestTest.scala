@@ -155,6 +155,18 @@ abstract class BaseRequestTest extends KafkaServerTestHarness {
   }
 
   /**
+   * Sends a request built by the builder, waits for the response and parses it 
+   */
+  def requestResponse(socket: Socket, clientId: String, correlationId: Int, requestBuilder: AbstractRequest.Builder[_ <: AbstractRequest]): Struct = {
+    val apiKey = requestBuilder.apiKey
+    val request = requestBuilder.build()
+    val header = new RequestHeader(apiKey, request.version, clientId, correlationId)
+    val response = requestAndReceive(socket, request.serialize(header).array)
+    val responseBuffer = skipResponseHeader(response)
+    apiKey.parseResponse(request.version, responseBuffer)
+  }
+  
+  /**
     * Serializes and sends the requestStruct to the given api.
     * A ByteBuffer containing the response (without the response header) is returned.
     */

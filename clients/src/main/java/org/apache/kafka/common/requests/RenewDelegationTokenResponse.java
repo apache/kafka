@@ -93,4 +93,8 @@ public class RenewDelegationTokenResponse extends AbstractResponse {
     public long expiryTimestamp() {
         return expiryTimestamp;
     }
+
+    public boolean hasError() {
+        return this.error != Errors.NONE;
+    }
 }

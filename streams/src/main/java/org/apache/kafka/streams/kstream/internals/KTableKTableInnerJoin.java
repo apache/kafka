@@ -21,8 +21,12 @@ import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 class KTableKTableInnerJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R, V1, V2> {
+    private static final Logger LOG = LoggerFactory.getLogger(KTableKTableInnerJoin.class);
 
     private final KeyValueMapper<K, V1, K> keyValueMapper = new KeyValueMapper<K, V1, K>() {
         @Override
@@ -31,7 +35,9 @@ class KTableKTableInnerJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R,
         }
     };
 
-    KTableKTableInnerJoin(KTableImpl<K, ?, V1> table1, KTableImpl<K, ?, V2> table2, ValueJoiner<? super V1, ? super V2, ? extends R> joiner) {
+    KTableKTableInnerJoin(final KTableImpl<K, ?, V1> table1,
+                          final KTableImpl<K, ?, V2> table2,
+                          final ValueJoiner<? super V1, ? super V2, ? extends R> joiner) {
         super(table1, table2, joiner);
     }
 
@@ -47,7 +53,8 @@ class KTableKTableInnerJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R,
 
     private class KTableKTableInnerJoinValueGetterSupplier extends KTableKTableAbstractJoinValueGetterSupplier<K, R, V1, V2> {
 
-        KTableKTableInnerJoinValueGetterSupplier(KTableValueGetterSupplier<K, V1> valueGetterSupplier1, KTableValueGetterSupplier<K, V2> valueGetterSupplier2) {
+        KTableKTableInnerJoinValueGetterSupplier(final KTableValueGetterSupplier<K, V1> valueGetterSupplier1,
+                                                 final KTableValueGetterSupplier<K, V2> valueGetterSupplier2) {
             super(valueGetterSupplier1, valueGetterSupplier2);
         }
 
@@ -59,14 +66,16 @@ class KTableKTableInnerJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R,
     private class KTableKTableJoinProcessor extends AbstractProcessor<K, Change<V1>> {
 
         private final KTableValueGetter<K, V2> valueGetter;
+        private StreamsMetricsImpl metrics;
 
-        KTableKTableJoinProcessor(KTableValueGetter<K, V2> valueGetter) {
+        KTableKTableJoinProcessor(final KTableValueGetter<K, V2> valueGetter) {
             this.valueGetter = valueGetter;
         }
 
         @Override
-        public void init(ProcessorContext context) {
+        public void init(final ProcessorContext context) {
             super.init(context);
+            metrics = (StreamsMetricsImpl) context.metrics();
             valueGetter.init(context);
         }
 
@@ -74,6 +83,11 @@ class KTableKTableInnerJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R,
         public void process(final K key, final Change<V1> change) {
             // we do join iff keys are equal, thus, if key is null we cannot join and just ignore the record
             if (key == null) {
+                LOG.warn(
+                    "Skipping record due to null key. change=[{}] topic=[{}] partition=[{}] offset=[{}]",
+                    change, context().topic(), context().partition(), context().offset()
+                );
+                metrics.skippedRecordsSensor().record();
                 return;
             }
 
@@ -119,7 +133,7 @@ class KTableKTableInnerJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R,
             final V1 value1 = valueGetter1.get(key);
 
             if (value1 != null) {
-                V2 value2 = valueGetter2.get(keyValueMapper.apply(key, value1));
+                final V2 value2 = valueGetter2.get(keyValueMapper.apply(key, value1));
 
                 if (value2 != null) {
                     return joiner.apply(value1, value2);

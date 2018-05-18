@@ -18,15 +18,22 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.streams.Consumed;
+import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.StreamsBuilderTest;
+import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.streams.processor.MockProcessorContext;
+import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.KStreamTestDriver;
+import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockReducer;
 import org.apache.kafka.test.MockValueJoiner;
@@ -36,7 +43,6 @@ import org.junit.Rule;
 import org.junit.Test;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
@@ -44,6 +50,9 @@ import java.util.Locale;
 import java.util.Random;
 import java.util.Set;
 
+import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
+import static org.hamcrest.CoreMatchers.hasItem;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -53,8 +62,6 @@ public class KTableKTableLeftJoinTest {
 
     final private String topic1 = "topic1";
     final private String topic2 = "topic2";
-    final private String storeName1 = "store-name-1";
-    final private String storeName2 = "store-name-2";
 
     final private Serde<Integer> intSerde = Serdes.Integer();
     final private Serde<String> stringSerde = Serdes.String();
@@ -64,7 +71,7 @@ public class KTableKTableLeftJoinTest {
     private final Consumed<Integer, String> consumed = Consumed.with(intSerde, stringSerde);
 
     @Before
-    public void setUp() throws IOException {
+    public void setUp() {
         stateDir = TestUtils.tempDirectory("kafka-test");
     }
 
@@ -74,24 +81,25 @@ public class KTableKTableLeftJoinTest {
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
-        KTable<Integer, String> table1 = builder.table(topic1, consumed);
-        KTable<Integer, String> table2 = builder.table(topic2, consumed);
-        KTable<Integer, String> joined = table1.leftJoin(table2, MockValueJoiner.TOSTRING_JOINER);
-        MockProcessorSupplier<Integer, String> processor;
-        processor = new MockProcessorSupplier<>();
-        joined.toStream().process(processor);
+        final KTable<Integer, String> table1 = builder.table(topic1, consumed);
+        final KTable<Integer, String> table2 = builder.table(topic2, consumed);
+        final KTable<Integer, String> joined = table1.leftJoin(table2, MockValueJoiner.TOSTRING_JOINER);
+        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
+        joined.toStream().process(supplier);
 
-        Collection<Set<String>> copartitionGroups = StreamsBuilderTest.getCopartitionedGroups(builder);
+        final Collection<Set<String>> copartitionGroups = TopologyWrapper.getInternalTopologyBuilder(builder.build()).copartitionGroups();
 
         assertEquals(1, copartitionGroups.size());
         assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
 
-        KTableValueGetterSupplier<Integer, String> getterSupplier = ((KTableImpl<Integer, String, String>) joined).valueGetterSupplier();
+        final KTableValueGetterSupplier<Integer, String> getterSupplier = ((KTableImpl<Integer, String, String>) joined).valueGetterSupplier();
 
         driver.setUp(builder, stateDir);
         driver.setTime(0L);
 
-        KTableValueGetter<Integer, String> getter = getterSupplier.get();
+        final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
+
+        final KTableValueGetter<Integer, String> getter = getterSupplier.get();
         getter.init(driver.context());
 
         // push two items to the primary stream. the other table is empty
@@ -119,7 +127,7 @@ public class KTableKTableLeftJoinTest {
 
         // push all four items to the primary stream. this should produce four items.
 
-        for (int expectedKey : expectedKeys) {
+        for (final int expectedKey : expectedKeys) {
             driver.process(topic1, expectedKey, "X" + expectedKey);
         }
         driver.flushState();
@@ -127,7 +135,7 @@ public class KTableKTableLeftJoinTest {
         checkJoinedValues(getter, kv(0, "X0+Y0"), kv(1, "X1+Y1"), kv(2, "X2+null"), kv(3, "X3+null"));
 
         // push all items to the other stream. this should produce four items.
-        for (int expectedKey : expectedKeys) {
+        for (final int expectedKey : expectedKeys) {
             driver.process(topic2, expectedKey, "YY" + expectedKey);
         }
         driver.flushState();
@@ -136,7 +144,7 @@ public class KTableKTableLeftJoinTest {
 
         // push all four items to the primary stream. this should produce four items.
 
-        for (int expectedKey : expectedKeys) {
+        for (final int expectedKey : expectedKeys) {
             driver.process(topic1, expectedKey, "X" + expectedKey);
         }
         driver.flushState();
@@ -154,7 +162,7 @@ public class KTableKTableLeftJoinTest {
 
         // push all four items to the primary stream. this should produce four items.
 
-        for (int expectedKey : expectedKeys) {
+        for (final int expectedKey : expectedKeys) {
             driver.process(topic1, expectedKey, "XX" + expectedKey);
         }
         driver.flushState();
@@ -171,17 +179,19 @@ public class KTableKTableLeftJoinTest {
         final KTable<Integer, String> table1;
         final KTable<Integer, String> table2;
         final KTable<Integer, String> joined;
-        final MockProcessorSupplier<Integer, String> proc;
+        final MockProcessorSupplier<Integer, String> supplier;
 
         table1 = builder.table(topic1, consumed);
         table2 = builder.table(topic2, consumed);
         joined = table1.leftJoin(table2, MockValueJoiner.TOSTRING_JOINER);
 
-        proc = new MockProcessorSupplier<>();
-        builder.build().addProcessor("proc", proc, ((KTableImpl<?, ?, ?>) joined).name);
+        supplier = new MockProcessorSupplier<>();
+        builder.build().addProcessor("proc", supplier, ((KTableImpl<?, ?, ?>) joined).name);
 
         driver.setUp(builder, stateDir);
         driver.setTime(0L);
+
+        final MockProcessor<Integer, String> proc = supplier.theCapturedProcessor();
 
         assertTrue(((KTableImpl<?, ?, ?>) table1).sendingOldValueEnabled());
         assertFalse(((KTableImpl<?, ?, ?>) table2).sendingOldValueEnabled());
@@ -205,14 +215,14 @@ public class KTableKTableLeftJoinTest {
 
         // push all four items to the primary stream. this should produce four items.
 
-        for (int expectedKey : expectedKeys) {
+        for (final int expectedKey : expectedKeys) {
             driver.process(topic1, expectedKey, "X" + expectedKey);
         }
         driver.flushState();
         proc.checkAndClearProcessResult("0:(X0+Y0<-null)", "1:(X1+Y1<-null)", "2:(X2+null<-null)", "3:(X3+null<-null)");
 
         // push all items to the other stream. this should produce four items.
-        for (int expectedKey : expectedKeys) {
+        for (final int expectedKey : expectedKeys) {
             driver.process(topic2, expectedKey, "YY" + expectedKey);
         }
         driver.flushState();
@@ -220,7 +230,7 @@ public class KTableKTableLeftJoinTest {
 
         // push all four items to the primary stream. this should produce four items.
 
-        for (int expectedKey : expectedKeys) {
+        for (final int expectedKey : expectedKeys) {
             driver.process(topic1, expectedKey, "X" + expectedKey);
         }
         driver.flushState();
@@ -236,7 +246,7 @@ public class KTableKTableLeftJoinTest {
 
         // push all four items to the primary stream. this should produce four items.
 
-        for (int expectedKey : expectedKeys) {
+        for (final int expectedKey : expectedKeys) {
             driver.process(topic1, expectedKey, "XX" + expectedKey);
         }
         driver.flushState();
@@ -249,10 +259,10 @@ public class KTableKTableLeftJoinTest {
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
-        KTable<Integer, String> table1;
-        KTable<Integer, String> table2;
-        KTable<Integer, String> joined;
-        MockProcessorSupplier<Integer, String> proc;
+        final KTable<Integer, String> table1;
+        final KTable<Integer, String> table2;
+        final KTable<Integer, String> joined;
+        final MockProcessorSupplier<Integer, String> supplier;
 
         table1 = builder.table(topic1, consumed);
         table2 = builder.table(topic2, consumed);
@@ -260,11 +270,13 @@ public class KTableKTableLeftJoinTest {
 
         ((KTableImpl<?, ?, ?>) joined).enableSendingOldValues();
 
-        proc = new MockProcessorSupplier<>();
-        builder.build().addProcessor("proc", proc, ((KTableImpl<?, ?, ?>) joined).name);
+        supplier = new MockProcessorSupplier<>();
+        builder.build().addProcessor("proc", supplier, ((KTableImpl<?, ?, ?>) joined).name);
 
         driver.setUp(builder, stateDir);
         driver.setTime(0L);
+
+        final MockProcessor<Integer, String> proc = supplier.theCapturedProcessor();
 
         assertTrue(((KTableImpl<?, ?, ?>) table1).sendingOldValueEnabled());
         assertTrue(((KTableImpl<?, ?, ?>) table2).sendingOldValueEnabled());
@@ -288,14 +300,14 @@ public class KTableKTableLeftJoinTest {
 
         // push all four items to the primary stream. this should produce four items.
 
-        for (int expectedKey : expectedKeys) {
+        for (final int expectedKey : expectedKeys) {
             driver.process(topic1, expectedKey, "X" + expectedKey);
         }
         driver.flushState();
         proc.checkAndClearProcessResult("0:(X0+Y0<-X0+Y0)", "1:(X1+Y1<-X1+Y1)", "2:(X2+null<-null)", "3:(X3+null<-null)");
 
         // push all items to the other stream. this should produce four items.
-        for (int expectedKey : expectedKeys) {
+        for (final int expectedKey : expectedKeys) {
             driver.process(topic2, expectedKey, "YY" + expectedKey);
         }
         driver.flushState();
@@ -303,7 +315,7 @@ public class KTableKTableLeftJoinTest {
 
         // push all four items to the primary stream. this should produce four items.
 
-        for (int expectedKey : expectedKeys) {
+        for (final int expectedKey : expectedKeys) {
             driver.process(topic1, expectedKey, "X" + expectedKey);
         }
         driver.flushState();
@@ -319,7 +331,7 @@ public class KTableKTableLeftJoinTest {
 
         // push all four items to the primary stream. this should produce four items.
 
-        for (int expectedKey : expectedKeys) {
+        for (final int expectedKey : expectedKeys) {
             driver.process(topic1, expectedKey, "XX" + expectedKey);
         }
         driver.flushState();
@@ -344,13 +356,18 @@ public class KTableKTableLeftJoinTest {
 
         final StreamsBuilder builder = new StreamsBuilder();
         final Consumed<Long, String> consumed = Consumed.with(Serdes.Long(), Serdes.String());
-        final KTable<Long, String> aggTable = builder.table(agg, consumed)
-                .groupBy(new KeyValueMapper<Long, String, KeyValue<Long, String>>() {
+        final KTable<Long, String> aggTable = builder
+            .table(agg, consumed)
+            .groupBy(
+                new KeyValueMapper<Long, String, KeyValue<Long, String>>() {
                     @Override
                     public KeyValue<Long, String> apply(final Long key, final String value) {
                         return new KeyValue<>(key, value);
                     }
-                }, Serialized.with(Serdes.Long(), Serdes.String())).reduce(MockReducer.STRING_ADDER, MockReducer.STRING_ADDER, "agg-store");
+                },
+                Serialized.with(Serdes.Long(), Serdes.String())
+            )
+            .reduce(MockReducer.STRING_ADDER, MockReducer.STRING_ADDER, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("agg-store"));
 
         final KTable<Long, String> one = builder.table(tableOne, consumed);
         final KTable<Long, String> two = builder.table(tableTwo, consumed);
@@ -369,23 +386,26 @@ public class KTableKTableLeftJoinTest {
 
         final KTable<Long, String> eight = six.leftJoin(seven, MockValueJoiner.TOSTRING_JOINER);
 
-        aggTable.leftJoin(one, MockValueJoiner.TOSTRING_JOINER)
-                .leftJoin(two, MockValueJoiner.TOSTRING_JOINER)
-                .leftJoin(three, MockValueJoiner.TOSTRING_JOINER)
-                .leftJoin(four, MockValueJoiner.TOSTRING_JOINER)
-                .leftJoin(five, MockValueJoiner.TOSTRING_JOINER)
-                .leftJoin(eight, MockValueJoiner.TOSTRING_JOINER)
-                .mapValues(mapper);
+        aggTable
+            .leftJoin(one, MockValueJoiner.TOSTRING_JOINER)
+            .leftJoin(two, MockValueJoiner.TOSTRING_JOINER)
+            .leftJoin(three, MockValueJoiner.TOSTRING_JOINER)
+            .leftJoin(four, MockValueJoiner.TOSTRING_JOINER)
+            .leftJoin(five, MockValueJoiner.TOSTRING_JOINER)
+            .leftJoin(eight, MockValueJoiner.TOSTRING_JOINER)
+            .mapValues(mapper);
 
         driver.setUp(builder, stateDir, 250);
 
-        final String[] values = {"a", "AA", "BBB", "CCCC", "DD", "EEEEEEEE", "F", "GGGGGGGGGGGGGGG", "HHH", "IIIIIIIIII",
-                                 "J", "KK", "LLLL", "MMMMMMMMMMMMMMMMMMMMMM", "NNNNN", "O", "P", "QQQQQ", "R", "SSSS",
-                                 "T", "UU", "VVVVVVVVVVVVVVVVVVV"};
+        final String[] values = {
+            "a", "AA", "BBB", "CCCC", "DD", "EEEEEEEE", "F", "GGGGGGGGGGGGGGG", "HHH", "IIIIIIIIII",
+            "J", "KK", "LLLL", "MMMMMMMMMMMMMMMMMMMMMM", "NNNNN", "O", "P", "QQQQQ", "R", "SSSS",
+            "T", "UU", "VVVVVVVVVVVVVVVVVVV"
+        };
 
         final Random random = new Random();
         for (int i = 0; i < 1000; i++) {
-            for (String input : inputs) {
+            for (final String input : inputs) {
                 final Long key = (long) random.nextInt(1000);
                 final String value = values[random.nextInt(values.length)];
                 driver.process(input, key, value);
@@ -393,13 +413,35 @@ public class KTableKTableLeftJoinTest {
         }
     }
 
-    private KeyValue<Integer, String> kv(Integer key, String value) {
+    @Test
+    public void shouldLogAndMeterSkippedRecordsDueToNullLeftKey() {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final Processor<String, Change<String>> join = new KTableKTableLeftJoin<>(
+            (KTableImpl<String, String, String>) builder.table("left", Consumed.with(stringSerde, stringSerde)),
+            (KTableImpl<String, String, String>) builder.table("right", Consumed.with(stringSerde, stringSerde)),
+            null
+        ).get();
+
+        final MockProcessorContext context = new MockProcessorContext();
+        context.setRecordMetadata("left", -1, -2, -3);
+        join.init(context);
+        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
+        join.process(null, new Change<>("new", "old"));
+        LogCaptureAppender.unregister(appender);
+
+        assertEquals(1.0, getMetricByName(context.metrics().metrics(), "skipped-records-total", "stream-metrics").metricValue());
+        assertThat(appender.getMessages(), hasItem("Skipping record due to null key. change=[(new<-old)] topic=[left] partition=[-1] offset=[-2]"));
+    }
+
+    private KeyValue<Integer, String> kv(final Integer key, final String value) {
         return new KeyValue<>(key, value);
     }
 
-    private void checkJoinedValues(KTableValueGetter<Integer, String> getter, KeyValue<Integer, String>... expected) {
-        for (KeyValue<Integer, String> kv : expected) {
-            String value = getter.get(kv.key);
+    @SafeVarargs
+    private final void checkJoinedValues(final KTableValueGetter<Integer, String> getter, final KeyValue<Integer, String>... expected) {
+        for (final KeyValue<Integer, String> kv : expected) {
+            final String value = getter.get(kv.key);
             if (kv.value == null) {
                 assertNull(value);
             } else {

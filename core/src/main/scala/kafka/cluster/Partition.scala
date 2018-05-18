@@ -261,7 +261,8 @@ class Partition(val topic: String,
       (assignedReplicas.map(_.brokerId) -- newAssignedReplicas).foreach(removeReplica)
       inSyncReplicas = newInSyncReplicas
 
-      info(s"$topicPartition starts at Leader Epoch ${partitionStateInfo.basePartitionState.leaderEpoch} from offset ${getReplica().get.logEndOffset.messageOffset}. Previous Leader Epoch was: $leaderEpoch")
+      info(s"$topicPartition starts at Leader Epoch ${partitionStateInfo.basePartitionState.leaderEpoch} from " +
+        s"offset ${getReplica().get.logEndOffset.messageOffset}. Previous Leader Epoch was: $leaderEpoch")
 
       //We cache the leader epoch here, persisting it only if it's local (hence having a log dir)
       leaderEpoch = partitionStateInfo.basePartitionState.leaderEpoch
@@ -646,15 +647,20 @@ class Partition(val topic: String,
 
   /**
     * @param leaderEpoch Requested leader epoch
-    * @return The last offset of messages published under this leader epoch.
+    * @return The requested leader epoch and the end offset of this leader epoch, or if the requested
+    *         leader epoch is unknown, the leader epoch less than the requested leader epoch and the end offset
+    *         of this leader epoch. The end offset of a leader epoch is defined as the start
+    *         offset of the first leader epoch larger than the leader epoch, or else the log end
+    *         offset if the leader epoch is the latest leader epoch.
     */
   def lastOffsetForLeaderEpoch(leaderEpoch: Int): EpochEndOffset = {
     inReadLock(leaderIsrUpdateLock) {
       leaderReplicaIfLocal match {
         case Some(leaderReplica) =>
-          new EpochEndOffset(NONE, leaderReplica.epochs.get.endOffsetFor(leaderEpoch))
+          val (epoch, offset) = leaderReplica.epochs.get.endOffsetFor(leaderEpoch)
+          new EpochEndOffset(NONE, epoch, offset)
         case None =>
-          new EpochEndOffset(NOT_LEADER_FOR_PARTITION, UNDEFINED_EPOCH_OFFSET)
+          new EpochEndOffset(NOT_LEADER_FOR_PARTITION, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
       }
     }
   }

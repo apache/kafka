@@ -76,7 +76,9 @@ public class ConnectorConfig extends AbstractConfig {
     public static final String HEADER_CONVERTER_CLASS_CONFIG = WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG;
     public static final String HEADER_CONVERTER_CLASS_DOC = WorkerConfig.HEADER_CONVERTER_CLASS_DOC;
     public static final String HEADER_CONVERTER_CLASS_DISPLAY = "Header converter class";
-    public static final String HEADER_CONVERTER_CLASS_DEFAULT = WorkerConfig.HEADER_CONVERTER_CLASS_DEFAULT;
+    // The Connector config should not have a default for the header converter, since the absence of a config property means that
+    // the worker config settings should be used. Thus, we set the default to null here.
+    public static final String HEADER_CONVERTER_CLASS_DEFAULT = null;
 
     public static final String TASKS_MAX_CONFIG = "tasks.max";
     private static final String TASKS_MAX_DOC = "Maximum number of tasks to use for this connector.";
@@ -95,6 +97,7 @@ public class ConnectorConfig extends AbstractConfig {
             super(configDef, props);
         }
 
+        @Override
         public Object get(String key) {
             return super.get(key);
         }

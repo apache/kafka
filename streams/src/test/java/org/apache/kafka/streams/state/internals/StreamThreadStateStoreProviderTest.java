@@ -20,13 +20,14 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
@@ -61,7 +62,6 @@ import static org.junit.Assert.assertEquals;
 public class StreamThreadStateStoreProviderTest {
 
     private StreamTask taskOne;
-    private StreamTask taskTwo;
     private StreamThreadStateStoreProvider provider;
     private StateDirectory stateDirectory;
     private File stateDir;
@@ -69,21 +69,13 @@ public class StreamThreadStateStoreProviderTest {
     private StreamThread threadMock;
     private Map<TaskId, StreamTask> tasks;
 
-    @SuppressWarnings("deprecation")
     @Before
-    public void before() throws IOException {
-        final TopologyBuilder builder = new TopologyBuilder();
-        builder.addSource("the-source", topicName);
-        builder.addProcessor("the-processor", new MockProcessorSupplier(), "the-source");
-        builder.addStateStore(Stores.create("kv-store")
-                                  .withStringKeys()
-                                  .withStringValues().inMemory().build(), "the-processor");
-
-        builder.addStateStore(Stores.create("window-store")
-                                  .withStringKeys()
-                                  .withStringValues()
-                                  .persistent()
-                                  .windowed(10, 10, 2, false).build(), "the-processor");
+    public void before() {
+        final TopologyWrapper topology = new TopologyWrapper();
+        topology.addSource("the-source", topicName);
+        topology.addProcessor("the-processor", new MockProcessorSupplier(), "the-source");
+        topology.addStateStore(Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore("kv-store"), Serdes.String(), Serdes.String()), "the-processor");
+        topology.addStateStore(Stores.windowStoreBuilder(Stores.persistentWindowStore("window-store", 10, 2, 2, false), Serdes.String(), Serdes.String()), "the-processor");
 
         final Properties properties = new Properties();
         final String applicationId = "applicationId";
@@ -97,20 +89,19 @@ public class StreamThreadStateStoreProviderTest {
         configureRestoreConsumer(clientSupplier, "applicationId-kv-store-changelog");
         configureRestoreConsumer(clientSupplier, "applicationId-window-store-changelog");
 
-        builder.setApplicationId(applicationId);
-        final ProcessorTopology topology = builder.build(null);
+        topology.setApplicationId(applicationId);
+        final ProcessorTopology processorTopology = topology.getInternalBuilder().build();
+
         tasks = new HashMap<>();
         stateDirectory = new StateDirectory(streamsConfig, new MockTime());
-        taskOne = createStreamsTask(applicationId, streamsConfig, clientSupplier, topology,
-                                    new TaskId(0, 0));
+
+        taskOne = createStreamsTask(streamsConfig, clientSupplier, processorTopology, new TaskId(0, 0));
         taskOne.initializeStateStores();
-        tasks.put(new TaskId(0, 0),
-                  taskOne);
-        taskTwo = createStreamsTask(applicationId, streamsConfig, clientSupplier, topology,
-                                    new TaskId(0, 1));
+        tasks.put(new TaskId(0, 0), taskOne);
+
+        final StreamTask taskTwo = createStreamsTask(streamsConfig, clientSupplier, processorTopology, new TaskId(0, 1));
         taskTwo.initializeStateStores();
-        tasks.put(new TaskId(0, 1),
-                  taskTwo);
+        tasks.put(new TaskId(0, 1), taskTwo);
 
         threadMock = EasyMock.createNiceMock(StreamThread.class);
         provider = new StreamThreadStateStoreProvider(threadMock);
@@ -121,7 +112,7 @@ public class StreamThreadStateStoreProviderTest {
     public void cleanUp() throws IOException {
         Utils.delete(stateDir);
     }
-    
+
     @Test
     public void shouldFindKeyValueStores() {
         mockThread(true);
@@ -164,8 +155,10 @@ public class StreamThreadStateStoreProviderTest {
     @Test
     public void shouldReturnEmptyListIfStoreExistsButIsNotOfTypeValueStore() {
         mockThread(true);
-        assertEquals(Collections.emptyList(), provider.stores("window-store",
-                                                              QueryableStoreTypes.keyValueStore()));
+        assertEquals(
+            Collections.emptyList(),
+            provider.stores("window-store", QueryableStoreTypes.keyValueStore())
+        );
     }
 
     @Test(expected = InvalidStateStoreException.class)
@@ -174,11 +167,11 @@ public class StreamThreadStateStoreProviderTest {
         provider.stores("kv-store", QueryableStoreTypes.keyValueStore());
     }
 
-    private StreamTask createStreamsTask(final String applicationId,
-                                         final StreamsConfig streamsConfig,
+    private StreamTask createStreamsTask(final StreamsConfig streamsConfig,
                                          final MockClientSupplier clientSupplier,
                                          final ProcessorTopology topology,
                                          final TaskId taskId) {
+        final Metrics metrics = new Metrics();
         return new StreamTask(
             taskId,
             Collections.singletonList(new TopicPartition(topicName, taskId.partition)),
@@ -186,12 +179,12 @@ public class StreamThreadStateStoreProviderTest {
             clientSupplier.consumer,
             new StoreChangelogReader(clientSupplier.restoreConsumer, new MockStateRestoreListener(), new LogContext("test-stream-task ")),
             streamsConfig,
-            new MockStreamsMetrics(new Metrics()),
+            new MockStreamsMetrics(metrics),
             stateDirectory,
             null,
             new MockTime(),
-            clientSupplier.getProducer(new HashMap<String, Object>())) {
-
+            clientSupplier.getProducer(new HashMap<String, Object>())
+        ) {
             @Override
             protected void updateOffsetLimits() {}
         };
@@ -205,28 +198,21 @@ public class StreamThreadStateStoreProviderTest {
 
     private void configureRestoreConsumer(final MockClientSupplier clientSupplier,
                                           final String topic) {
-        clientSupplier.restoreConsumer
-            .updatePartitions(topic,
-                              Arrays.asList(
-                                  new PartitionInfo(topic, 0, null,
-                                                    null, null),
-                                  new PartitionInfo(topic, 1, null,
-                                                    null, null)));
+        final List<PartitionInfo> partitions = Arrays.asList(
+            new PartitionInfo(topic, 0, null, null, null),
+            new PartitionInfo(topic, 1, null, null, null)
+        );
+        clientSupplier.restoreConsumer.updatePartitions(topic, partitions);
         final TopicPartition tp1 = new TopicPartition(topic, 0);
         final TopicPartition tp2 = new TopicPartition(topic, 1);
 
-        clientSupplier.restoreConsumer
-            .assign(Arrays.asList(
-                tp1,
-                tp2));
+        clientSupplier.restoreConsumer.assign(Arrays.asList(tp1, tp2));
 
         final Map<TopicPartition, Long> offsets = new HashMap<>();
         offsets.put(tp1, 0L);
         offsets.put(tp2, 0L);
 
-        clientSupplier.restoreConsumer
-            .updateBeginningOffsets(offsets);
-        clientSupplier.restoreConsumer
-            .updateEndOffsets(offsets);
+        clientSupplier.restoreConsumer.updateBeginningOffsets(offsets);
+        clientSupplier.restoreConsumer.updateEndOffsets(offsets);
     }
 }

@@ -20,16 +20,20 @@ import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, K, V, V> {
+    private static final Logger LOG = LoggerFactory.getLogger(KStreamReduce.class);
 
     private final String storeName;
     private final Reducer<V> reducer;
 
     private boolean sendOldValues = false;
 
-    public KStreamReduce(String storeName, Reducer<V> reducer) {
+    KStreamReduce(final String storeName, final Reducer<V> reducer) {
         this.storeName = storeName;
         this.reducer = reducer;
     }
@@ -48,11 +52,13 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, K, V,
 
         private KeyValueStore<K, V> store;
         private TupleForwarder<K, V> tupleForwarder;
+        private StreamsMetricsImpl metrics;
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(ProcessorContext context) {
+        public void init(final ProcessorContext context) {
             super.init(context);
+            metrics = (StreamsMetricsImpl) context.metrics();
 
             store = (KeyValueStore<K, V>) context.getStateStore(storeName);
             tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context, sendOldValues), sendOldValues);
@@ -60,13 +66,18 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, K, V,
 
 
         @Override
-        public void process(K key, V value) {
+        public void process(final K key, final V value) {
             // If the key or value is null we don't need to proceed
             if (key == null || value == null) {
+                LOG.warn(
+                    "Skipping record due to null key or value. key=[{}] value=[{}] topic=[{}] partition=[{}] offset=[{}]",
+                    key, value, context().topic(), context().partition(), context().offset()
+                );
+                metrics.skippedRecordsSensor().record();
                 return;
             }
 
-            V oldAgg = store.get(key);
+            final V oldAgg = store.get(key);
             V newAgg = oldAgg;
 
             // try to add the new value
@@ -75,7 +86,7 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, K, V,
             } else {
                 newAgg = reducer.apply(newAgg, value);
             }
-            
+
             // update the store with the new value
             store.put(key, newAgg);
             tupleForwarder.maybeForward(key, newAgg, oldAgg);
@@ -104,12 +115,12 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, K, V,
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(ProcessorContext context) {
+        public void init(final ProcessorContext context) {
             store = (KeyValueStore<K, V>) context.getStateStore(storeName);
         }
 
         @Override
-        public V get(K key) {
+        public V get(final K key) {
             return store.get(key);
         }
     }

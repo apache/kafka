@@ -83,6 +83,7 @@ public abstract class SourceTask implements Task {
      * could set a flag that will force {@link #poll()} to exit immediately and invoke
      * {@link java.nio.channels.Selector#wakeup() wakeup()} to interrupt any ongoing requests.
      */
+    @Override
     public abstract void stop();
 
     /**

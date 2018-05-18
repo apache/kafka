@@ -94,7 +94,7 @@ abstract class AssignedTasks<T extends Task> {
                 it.remove();
             } catch (final LockException e) {
                 // made this trace as it will spam the logs in the poll loop.
-                log.trace("Could not create {} {} due to {}; will retry", taskTypeName, entry.getKey(), e.getMessage());
+                log.trace("Could not create {} {} due to {}; will retry", taskTypeName, entry.getKey(), e.toString());
             }
         }
     }
@@ -204,7 +204,7 @@ abstract class AssignedTasks<T extends Task> {
         try {
             task.close(false, true);
         } catch (final RuntimeException e) {
-            log.warn("Failed to close zombie {} {} due to {}; ignore and proceed.", taskTypeName, task.id(), e.getMessage());
+            log.warn("Failed to close zombie {} {} due to {}; ignore and proceed.", taskTypeName, task.id(), e.toString());
             return e;
         }
         return null;
@@ -282,6 +282,11 @@ abstract class AssignedTasks<T extends Task> {
 
     Map<TaskId, T> runningTaskMap() {
         return Collections.unmodifiableMap(running);
+    }
+
+    @Override
+    public String toString() {
+        return toString("");
     }
 
     public String toString(final String indent) {
