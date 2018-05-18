@@ -40,8 +40,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static org.apache.kafka.streams.processor.internals.ConsumerUtils.poll;
-
 public class StoreChangelogReader implements ChangelogReader {
 
     private final Logger log;
@@ -83,7 +81,7 @@ public class StoreChangelogReader implements ChangelogReader {
 
         final Set<TopicPartition> restoringPartitions = new HashSet<>(needsRestoring.keySet());
         try {
-            final ConsumerRecords<byte[], byte[]> allRecords = poll(restoreConsumer, 10);
+            final ConsumerRecords<byte[], byte[]> allRecords = restoreConsumer.poll(10);
             for (final TopicPartition partition : restoringPartitions) {
                 restorePartition(allRecords, partition, active.restoringTaskFor(partition));
             }

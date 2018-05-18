@@ -27,7 +27,7 @@ import org.apache.kafka.streams.kstream.{KStream => KStreamJ,
   KGroupedTable => KGroupedTableJ, _}
 
 import org.apache.kafka.streams.scala.kstream._
-import org.apache.kafka.streams.{KeyValue, Consumed}
+import org.apache.kafka.streams.KeyValue
 import org.apache.kafka.common.serialization.Serde
 
 import scala.language.implicitConversions

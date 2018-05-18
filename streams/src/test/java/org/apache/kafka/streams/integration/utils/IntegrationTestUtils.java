@@ -51,8 +51,6 @@ import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
-import static org.apache.kafka.streams.processor.internals.ConsumerUtils.poll;
-
 /**
  * Utility functions to make integration testing more convenient.
  */
@@ -390,7 +388,7 @@ public class IntegrationTestUtils {
         while (totalPollTimeMs < waitTime &&
             continueConsuming(consumedValues.size(), maxMessages)) {
             totalPollTimeMs += pollIntervalMs;
-            final ConsumerRecords<K, V> records = poll(consumer, pollIntervalMs);
+            final ConsumerRecords<K, V> records = consumer.poll(pollIntervalMs);
 
             for (final ConsumerRecord<K, V> record : records) {
                 consumedValues.add(new KeyValue<>(record.key(), record.value()));

@@ -109,6 +109,11 @@ class KTableKTableInnerJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R,
 
             context().forward(key, new Change<>(newValue, oldValue));
         }
+
+        @Override
+        public void close() {
+            valueGetter.close();
+        }
     }
 
     private class KTableKTableInnerJoinValueGetter implements KTableValueGetter<K, R> {
@@ -143,6 +148,12 @@ class KTableKTableInnerJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R,
             } else {
                 return null;
             }
+        }
+
+        @Override
+        public void close() {
+            valueGetter1.close();
+            valueGetter2.close();
         }
     }
 }
