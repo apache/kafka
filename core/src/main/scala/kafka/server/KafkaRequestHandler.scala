@@ -157,6 +157,7 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
   val failedProduceRequestRate = newMeter(BrokerTopicStats.FailedProduceRequestsPerSec, "requests", TimeUnit.SECONDS, tags)
   val failedFetchRequestRate = newMeter(BrokerTopicStats.FailedFetchRequestsPerSec, "requests", TimeUnit.SECONDS, tags)
   val totalProduceRequestRate = newMeter(BrokerTopicStats.TotalProduceRequestsPerSec, "requests", TimeUnit.SECONDS, tags)
+  val consumerFetchRequestRate = newMeter(BrokerTopicStats.ConsumerFetchRequestsPerSec, "requests", TimeUnit.SECONDS, tags)
   val totalFetchRequestRate = newMeter(BrokerTopicStats.TotalFetchRequestsPerSec, "requests", TimeUnit.SECONDS, tags)
   val fetchMessageConversionsRate = newMeter(BrokerTopicStats.FetchMessageConversionsPerSec, "requests", TimeUnit.SECONDS, tags)
   val produceMessageConversionsRate = newMeter(BrokerTopicStats.ProduceMessageConversionsPerSec, "requests", TimeUnit.SECONDS, tags)
@@ -173,6 +174,7 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
     removeMetric(BrokerTopicStats.FailedProduceRequestsPerSec, tags)
     removeMetric(BrokerTopicStats.FailedFetchRequestsPerSec, tags)
     removeMetric(BrokerTopicStats.TotalProduceRequestsPerSec, tags)
+    removeMetric(BrokerTopicStats.ConsumerFetchRequestsPerSec, tags)
     removeMetric(BrokerTopicStats.TotalFetchRequestsPerSec, tags)
     removeMetric(BrokerTopicStats.FetchMessageConversionsPerSec, tags)
     removeMetric(BrokerTopicStats.ProduceMessageConversionsPerSec, tags)
@@ -189,6 +191,7 @@ object BrokerTopicStats {
   val FailedProduceRequestsPerSec = "FailedProduceRequestsPerSec"
   val FailedFetchRequestsPerSec = "FailedFetchRequestsPerSec"
   val TotalProduceRequestsPerSec = "TotalProduceRequestsPerSec"
+  val ConsumerFetchRequestsPerSec = "ConsumerFetchRequestsPerSec"
   val TotalFetchRequestsPerSec = "TotalFetchRequestsPerSec"
   val FetchMessageConversionsPerSec = "FetchMessageConversionsPerSec"
   val ProduceMessageConversionsPerSec = "ProduceMessageConversionsPerSec"

@@ -872,8 +872,13 @@ class ReplicaManager(val config: KafkaConfig,
       val partitionFetchSize = fetchInfo.maxBytes
       val followerLogStartOffset = fetchInfo.logStartOffset
 
-      brokerTopicStats.topicStats(tp.topic).totalFetchRequestRate.mark()
+      val topicStats = brokerTopicStats.topicStats(tp.topic)
+      topicStats.totalFetchRequestRate.mark()
       brokerTopicStats.allTopicsStats.totalFetchRequestRate.mark()
+      if (-1 == replicaId) {
+        topicStats.consumerFetchRequestRate.mark()
+        brokerTopicStats.allTopicsStats.consumerFetchRequestRate.mark()
+      }
 
       try {
         trace(s"Fetching log segment for partition $tp, offset $offset, partition fetch size $partitionFetchSize, " +
