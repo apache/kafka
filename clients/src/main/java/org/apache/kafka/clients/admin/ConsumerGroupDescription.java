@@ -37,50 +37,7 @@ public class ConsumerGroupDescription {
     private final ConsumerGroupState state;
     private final Node coordinator;
 
-    public static class Builder {
-        private final String groupId;
-        private boolean isSimpleConsumerGroup = true;
-        private Collection<MemberDescription> members = null;
-        private String partitionAssignor = "";
-        private ConsumerGroupState state = ConsumerGroupState.UNKNOWN;
-        private Node coordinator = null;
-
-        public Builder(String groupId) {
-            this.groupId = groupId;
-        }
-
-        public Builder isSimpleConsumerGroup(boolean isSimpleConsumerGroup) {
-            this.isSimpleConsumerGroup = isSimpleConsumerGroup;
-            return this;
-        }
-
-        public Builder members(Collection<MemberDescription> members) {
-            this.members = members;
-            return this;
-        }
-
-        public Builder partitionAssignor(String partitionAssignor) {
-            this.partitionAssignor = partitionAssignor;
-            return this;
-        }
-
-        public Builder state(ConsumerGroupState state) {
-            this.state = state;
-            return this;
-        }
-
-        public Builder coordinator(Node coordinator) {
-            this.coordinator = coordinator;
-            return this;
-        }
-
-        public ConsumerGroupDescription build() {
-            return new ConsumerGroupDescription(groupId, isSimpleConsumerGroup,
-                members, partitionAssignor, state, coordinator);
-        }
-    }
-
-    private ConsumerGroupDescription(String groupId, boolean isSimpleConsumerGroup,
+    ConsumerGroupDescription(String groupId, boolean isSimpleConsumerGroup,
             Collection<MemberDescription> members, String partitionAssignor, ConsumerGroupState state,
             Node coordinator) {
         this.groupId = groupId == null ? "" : groupId;

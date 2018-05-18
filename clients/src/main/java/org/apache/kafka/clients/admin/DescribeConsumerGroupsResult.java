@@ -56,7 +56,7 @@ public class DescribeConsumerGroupsResult {
                 @Override
                 public Map<String, ConsumerGroupDescription> apply(Void v) {
                     try {
-                        Map<String, ConsumerGroupDescription> descriptions = new HashMap<>();
+                        Map<String, ConsumerGroupDescription> descriptions = new HashMap<>(futures.size());
                         for (Map.Entry<String, KafkaFuture<ConsumerGroupDescription>> entry : futures.entrySet()) {
                             descriptions.put(entry.getKey(), entry.getValue().get());
                         }

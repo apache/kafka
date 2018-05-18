@@ -31,42 +31,12 @@ public class MemberDescription {
     private final String host;
     private final MemberAssignment assignment;
 
-    public static class Builder {
-        private final String memberId;
-        private String clientId;
-        private String host;
-        private MemberAssignment assignment;
-
-        public Builder(String memberId) {
-            this.memberId = memberId;
-        }
-
-        public Builder clientId(String clientId) {
-            this.clientId = clientId;
-            return this;
-        }
-
-        public Builder host(String host) {
-            this.host = host;
-            return this;
-        }
-
-        public Builder assignment(MemberAssignment assignment) {
-            this.assignment = assignment;
-            return this;
-        }
-
-        public MemberDescription build() {
-            return new MemberDescription(memberId, clientId, host, assignment);
-        }
-    }
-
-    private MemberDescription(String memberId, String clientId, String host, MemberAssignment assignment) {
+    MemberDescription(String memberId, String clientId, String host, MemberAssignment assignment) {
         this.memberId = memberId == null ? "" : memberId;
         this.clientId = clientId == null ? "" : clientId;
         this.host = host == null ? "" : host;
         this.assignment = assignment == null ?
-            new MemberAssignment(Collections.<TopicPartition>emptyList()) : assignment;
+            new MemberAssignment(Collections.<TopicPartition>emptySet()) : assignment;
     }
 
     @Override
