@@ -62,9 +62,9 @@ import static org.easymock.EasyMock.verify;
 import static org.hamcrest.CoreMatchers.hasItems;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.isA;
-import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.fail;
 
 @RunWith(EasyMockRunner.class)
 public class KTableTransformValuesTest {
@@ -76,7 +76,7 @@ public class KTableTransformValuesTest {
     private static final Consumed<String, String> CONSUMED = Consumed.with(Serdes.String(), Serdes.String());
 
     private final ConsumerRecordFactory<String, String> recordFactory
-            = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
+        = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
 
     private TopologyTestDriver driver;
     private MockProcessorSupplier<String, String> capture;
@@ -100,8 +100,8 @@ public class KTableTransformValuesTest {
     public void cleanup() {
         if (driver != null) {
             driver.close();
+            driver = null;
         }
-        driver = null;
     }
 
     @Before
@@ -110,14 +110,30 @@ public class KTableTransformValuesTest {
         builder = new StreamsBuilder();
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowOnGetIfSupplierReturnsNull() {
-        new KTableTransformValues<>(parent, new NullSupplier(), QUERYABLE_NAME).get();
+        final KTableTransformValues<String, String, String> transformer =
+            new KTableTransformValues<>(parent, new NullSupplier(), QUERYABLE_NAME);
+
+        try {
+            transformer.get();
+            fail("NPE expected");
+        } catch (final NullPointerException expected) {
+            // expected
+        }
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowOnViewGetIfSupplierReturnsNull() {
-        new KTableTransformValues<>(parent, new NullSupplier(), null).view().get();
+        final KTableValueGetterSupplier<String, String> view =
+            new KTableTransformValues<>(parent, new NullSupplier(), null).view();
+
+        try {
+            view.get();
+            fail("NPE expected");
+        } catch (final NullPointerException expected) {
+            // expected
+        }
     }
 
     @Test
@@ -134,7 +150,7 @@ public class KTableTransformValuesTest {
     @Test
     public void shouldNotSendOldValuesByDefault() {
         final KTableTransformValues<String, String, String> transformValues =
-                new KTableTransformValues<>(parent, new ExclamationValueTransformerSupplier(), null);
+            new KTableTransformValues<>(parent, new ExclamationValueTransformerSupplier(), null);
 
         final Processor<String, Change<String>> processor = transformValues.get();
         processor.init(context);
@@ -151,7 +167,7 @@ public class KTableTransformValuesTest {
     @Test
     public void shouldSendOldValuesIfConfigured() {
         final KTableTransformValues<String, String, String> transformValues =
-                new KTableTransformValues<>(parent, new ExclamationValueTransformerSupplier(), null);
+            new KTableTransformValues<>(parent, new ExclamationValueTransformerSupplier(), null);
 
         transformValues.enableSendingOldValues();
         final Processor<String, Change<String>> processor = transformValues.get();
@@ -181,7 +197,7 @@ public class KTableTransformValuesTest {
     @Test
     public void shouldTransformOnGetIfNotMaterialized() {
         final KTableTransformValues<String, String, String> transformValues =
-                new KTableTransformValues<>(parent, new ExclamationValueTransformerSupplier(), null);
+            new KTableTransformValues<>(parent, new ExclamationValueTransformerSupplier(), null);
 
         expect(parent.valueGetterSupplier()).andReturn(parentGetterSupplier);
         expect(parentGetterSupplier.get()).andReturn(parentGetter);
@@ -199,7 +215,7 @@ public class KTableTransformValuesTest {
     @Test
     public void shouldGetFromStateStoreIfMaterialized() {
         final KTableTransformValues<String, String, String> transformValues =
-                new KTableTransformValues<>(parent, new ExclamationValueTransformerSupplier(), QUERYABLE_NAME);
+            new KTableTransformValues<>(parent, new ExclamationValueTransformerSupplier(), QUERYABLE_NAME);
 
         expect(context.getStateStore(QUERYABLE_NAME)).andReturn(stateStore);
         expect(stateStore.get("Key")).andReturn("something");
@@ -216,7 +232,7 @@ public class KTableTransformValuesTest {
     @Test
     public void shouldGetStoreNamesFromParentIfNotMaterialized() {
         final KTableTransformValues<String, String, String> transformValues =
-                new KTableTransformValues<>(parent, new ExclamationValueTransformerSupplier(), null);
+            new KTableTransformValues<>(parent, new ExclamationValueTransformerSupplier(), null);
 
         expect(parent.valueGetterSupplier()).andReturn(parentGetterSupplier);
         expect(parentGetterSupplier.storeNames()).andReturn(new String[]{"store1", "store2"});
@@ -230,7 +246,7 @@ public class KTableTransformValuesTest {
     @Test
     public void shouldGetQueryableStoreNameIfMaterialized() {
         final KTableTransformValues<String, String, String> transformValues =
-                new KTableTransformValues<>(parent, new ExclamationValueTransformerSupplier(), QUERYABLE_NAME);
+            new KTableTransformValues<>(parent, new ExclamationValueTransformerSupplier(), QUERYABLE_NAME);
 
         final String[] storeNames = transformValues.view().storeNames();
 
@@ -240,7 +256,7 @@ public class KTableTransformValuesTest {
     @Test
     public void shouldCloseTransformerOnProcessorClose() {
         final KTableTransformValues<String, String, String> transformValues =
-                new KTableTransformValues<>(parent, mockSupplier, null);
+            new KTableTransformValues<>(parent, mockSupplier, null);
 
         expect(mockSupplier.get()).andReturn(transformer);
         transformer.close();
@@ -256,11 +272,11 @@ public class KTableTransformValuesTest {
     @Test
     public void shouldCloseTransformerOnGetterClose() {
         final KTableTransformValues<String, String, String> transformValues =
-                new KTableTransformValues<>(parent, mockSupplier, null);
+            new KTableTransformValues<>(parent, mockSupplier, null);
 
         expect(mockSupplier.get()).andReturn(transformer);
-        expect(parent.valueGetterSupplier()).andReturn(parentGetterSupplier);
         expect(parentGetterSupplier.get()).andReturn(parentGetter);
+        expect(parent.valueGetterSupplier()).andReturn(parentGetterSupplier);
 
         transformer.close();
         expectLastCall();
@@ -276,10 +292,10 @@ public class KTableTransformValuesTest {
     @Test
     public void shouldCloseParentGetterClose() {
         final KTableTransformValues<String, String, String> transformValues =
-                new KTableTransformValues<>(parent, mockSupplier, null);
+            new KTableTransformValues<>(parent, mockSupplier, null);
 
-        expect(mockSupplier.get()).andReturn(transformer);
         expect(parent.valueGetterSupplier()).andReturn(parentGetterSupplier);
+        expect(mockSupplier.get()).andReturn(transformer);
         expect(parentGetterSupplier.get()).andReturn(parentGetter);
 
         parentGetter.close();
@@ -295,14 +311,15 @@ public class KTableTransformValuesTest {
 
     @Test
     public void shouldTransformValuesWithKey() {
-        builder.addStateStore(storeBuilder(STORE_NAME))
-                .addStateStore(storeBuilder(OTHER_STORE_NAME))
-                .table(INPUT_TOPIC, CONSUMED)
-                .transformValues(
-                        new ExclamationValueTransformerSupplier(STORE_NAME, OTHER_STORE_NAME),
-                        STORE_NAME, OTHER_STORE_NAME)
-                .toStream()
-                .process(capture);
+        builder
+            .addStateStore(storeBuilder(STORE_NAME))
+            .addStateStore(storeBuilder(OTHER_STORE_NAME))
+            .table(INPUT_TOPIC, CONSUMED)
+            .transformValues(
+                new ExclamationValueTransformerSupplier(STORE_NAME, OTHER_STORE_NAME),
+                STORE_NAME, OTHER_STORE_NAME)
+            .toStream()
+            .process(capture);
 
         driver = new TopologyTestDriver(builder.build(), props());
 
@@ -310,21 +327,23 @@ public class KTableTransformValuesTest {
         driver.pipeInput(recordFactory.create(INPUT_TOPIC, "B", "b", 0L));
         driver.pipeInput(recordFactory.create(INPUT_TOPIC, "D", null, 0L));
 
-        assertThat(output(), hasItems("A:A->a!", "B:B->b!", "D:null"));
+        assertThat(output(), hasItems("A:A->a!", "B:B->b!", "D:D->null!"));
+        assertThat("Store should not be materialized", driver.getKeyValueStore(QUERYABLE_NAME), is(nullValue()));
     }
 
     @Test
     public void shouldTransformValuesWithKeyAndMaterialize() {
-        builder.addStateStore(storeBuilder(STORE_NAME))
-                .table(INPUT_TOPIC, CONSUMED)
-                .transformValues(
-                        new ExclamationValueTransformerSupplier(STORE_NAME, QUERYABLE_NAME),
-                        Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as(QUERYABLE_NAME)
-                                .withKeySerde(Serdes.String())
-                                .withValueSerde(Serdes.String()),
-                        STORE_NAME)
-                .toStream()
-                .process(capture);
+        builder
+            .addStateStore(storeBuilder(STORE_NAME))
+            .table(INPUT_TOPIC, CONSUMED)
+            .transformValues(
+                new ExclamationValueTransformerSupplier(STORE_NAME, QUERYABLE_NAME),
+                Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as(QUERYABLE_NAME)
+                    .withKeySerde(Serdes.String())
+                    .withValueSerde(Serdes.String()),
+                STORE_NAME)
+            .toStream()
+            .process(capture);
 
         driver = new TopologyTestDriver(builder.build(), props());
 
@@ -332,35 +351,34 @@ public class KTableTransformValuesTest {
         driver.pipeInput(recordFactory.create(INPUT_TOPIC, "B", "b", 0L));
         driver.pipeInput(recordFactory.create(INPUT_TOPIC, "C", null, 0L));
 
-        assertThat(output(), hasItems("A:A->a!", "B:B->b!", "C:null"));
+        assertThat(output(), hasItems("A:A->a!", "B:B->b!", "C:C->null!"));
 
         final KeyValueStore<String, String> keyValueStore = driver.getKeyValueStore(QUERYABLE_NAME);
         assertThat(keyValueStore.get("A"), is("A->a!"));
         assertThat(keyValueStore.get("B"), is("B->b!"));
-        assertThat(keyValueStore.get("C"), is(nullValue()));
+        assertThat(keyValueStore.get("C"), is("C->null!"));
     }
 
     @Test
     public void shouldCalculateCorrectOldValuesIfMaterializedEvenIfStateful() {
-
-        builder.addStateStore(storeBuilder(STORE_NAME))
-                .table(INPUT_TOPIC, CONSUMED)
-                .transformValues(
-                        new StatefulTransformerSupplier(),
-                        Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as(QUERYABLE_NAME)
-                                .withKeySerde(Serdes.String())
-                                .withValueSerde(Serdes.Integer()))
-                .groupBy(toForceSendingOfOldValues(), Serialized.with(Serdes.String(), Serdes.Integer()))
-                .reduce(MockReducer.INTEGER_ADDER, MockReducer.INTEGER_SUBTRACTOR)
-                .mapValues(mapBackToStrings())
-                .toStream()
-                .process(capture);
+        builder
+            .table(INPUT_TOPIC, CONSUMED)
+            .transformValues(
+                new StatefulTransformerSupplier(),
+                Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as(QUERYABLE_NAME)
+                    .withKeySerde(Serdes.String())
+                    .withValueSerde(Serdes.Integer()))
+            .groupBy(toForceSendingOfOldValues(), Serialized.with(Serdes.String(), Serdes.Integer()))
+            .reduce(MockReducer.INTEGER_ADDER, MockReducer.INTEGER_SUBTRACTOR)
+            .mapValues(mapBackToStrings())
+            .toStream()
+            .process(capture);
 
         driver = new TopologyTestDriver(builder.build(), props());
 
-        driver.pipeInput(recordFactory.create(INPUT_TOPIC, "A", "a", 0L));
-        driver.pipeInput(recordFactory.create(INPUT_TOPIC, "A", "aa", 0L));
-        driver.pipeInput(recordFactory.create(INPUT_TOPIC, "A", "aaa", 0L));
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC, "A", "ignore", 0L));
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC, "A", "ignored", 0L));
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC, "A", "ignored", 0L));
 
         assertThat(output(), hasItems("A:1", "A:0", "A:2", "A:0", "A:3"));
 
@@ -370,15 +388,14 @@ public class KTableTransformValuesTest {
 
     @Test
     public void shouldCalculateCorrectOldValuesIfNotStatefulEvenIfNotMaterialized() {
-
-        builder.addStateStore(storeBuilder(STORE_NAME))
-                .table(INPUT_TOPIC, CONSUMED)
-                .transformValues(new StatelessTransformerSupplier())
-                .groupBy(toForceSendingOfOldValues(), Serialized.with(Serdes.String(), Serdes.Integer()))
-                .reduce(MockReducer.INTEGER_ADDER, MockReducer.INTEGER_SUBTRACTOR)
-                .mapValues(mapBackToStrings())
-                .toStream()
-                .process(capture);
+        builder
+            .table(INPUT_TOPIC, CONSUMED)
+            .transformValues(new StatelessTransformerSupplier())
+            .groupBy(toForceSendingOfOldValues(), Serialized.with(Serdes.String(), Serdes.Integer()))
+            .reduce(MockReducer.INTEGER_ADDER, MockReducer.INTEGER_SUBTRACTOR)
+            .mapValues(mapBackToStrings())
+            .toStream()
+            .process(capture);
 
         driver = new TopologyTestDriver(builder.build(), props());
 
@@ -387,27 +404,6 @@ public class KTableTransformValuesTest {
         driver.pipeInput(recordFactory.create(INPUT_TOPIC, "A", "aaa", 0L));
 
         assertThat(output(), hasItems("A:1", "A:0", "A:2", "A:0", "A:3"));
-    }
-
-    @Test
-    public void willUnfortunatelyCalculateIncorrectOldValuesIfStatefulAndNotMaterialized() {
-        builder.addStateStore(storeBuilder(STORE_NAME))
-                .table(INPUT_TOPIC, CONSUMED)
-                .transformValues(new StatefulTransformerSupplier())
-                .groupBy(toForceSendingOfOldValues(), Serialized.with(Serdes.String(), Serdes.Integer()))
-                .reduce(MockReducer.INTEGER_ADDER, MockReducer.INTEGER_SUBTRACTOR)
-                .mapValues(mapBackToStrings())
-                .toStream()
-                .process(capture);
-
-        driver = new TopologyTestDriver(builder.build(), props());
-
-        driver.pipeInput(recordFactory.create(INPUT_TOPIC, "A", "a", 0L));
-        driver.pipeInput(recordFactory.create(INPUT_TOPIC, "A", "aa", 0L));
-        driver.pipeInput(recordFactory.create(INPUT_TOPIC, "A", "aaa", 0L));
-
-        assertThat(output(), not(hasItems("A:1", "A:0", "A:2", "A:0", "A:3")));
-        // Output more likely to be "A:1", "A:-2", "A:0", "A:-5", "A:-1"
     }
 
     private ArrayList<String> output() {
@@ -450,7 +446,7 @@ public class KTableTransformValuesTest {
                                                   final List<String> expectedStoredNames) {
         final List<String> missing = new ArrayList<>();
 
-        for (String storedName : expectedStoredNames) {
+        for (final String storedName : expectedStoredNames) {
             if (context.getStateStore(storedName) == null) {
                 missing.add(storedName);
             }
@@ -514,11 +510,11 @@ public class KTableTransformValuesTest {
         private int counter;
 
         @Override
-        public void init(ProcessorContext context) {
+        public void init(final ProcessorContext context) {
         }
 
         @Override
-        public Integer transform(String readOnlyKey, String value) {
+        public Integer transform(final String readOnlyKey, final String value) {
             return ++counter;
         }
 
@@ -535,15 +531,13 @@ public class KTableTransformValuesTest {
     }
 
     private static class StatelessTransformer implements ValueTransformerWithKey<String, String, Integer> {
-        private int counter;
-
         @Override
-        public void init(ProcessorContext context) {
+        public void init(final ProcessorContext context) {
         }
 
         @Override
-        public Integer transform(String readOnlyKey, String value) {
-            return value.length();
+        public Integer transform(final String readOnlyKey, final String value) {
+            return value == null ? null : value.length();
         }
 
         @Override

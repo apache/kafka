@@ -49,7 +49,7 @@ class KTableTransformValues<K, V, V1> implements KTableProcessorSupplier<K, V, V
     @Override
     public KTableValueGetterSupplier<K, V1> view() {
         if (queryableName != null) {
-            return getMaterializedValueGetterSupplier();
+            return new KTableMaterializedValueGetterSupplier<>(queryableName);
         }
 
         return new KTableValueGetterSupplier<K, V1>() {
@@ -57,8 +57,8 @@ class KTableTransformValues<K, V, V1> implements KTableProcessorSupplier<K, V, V
 
             public KTableValueGetter<K, V1> get() {
                 return new KTableTransformValuesGetter(
-                        parentValueGetterSupplier.get(),
-                        transformerSupplier.get());
+                    parentValueGetterSupplier.get(),
+                    transformerSupplier.get());
             }
 
             @Override
@@ -72,20 +72,6 @@ class KTableTransformValues<K, V, V1> implements KTableProcessorSupplier<K, V, V
     public void enableSendingOldValues() {
         parent.enableSendingOldValues();
         sendOldValues = true;
-    }
-
-    private KTableValueGetterSupplier<K, V1> getMaterializedValueGetterSupplier() {
-        return new KTableMaterializedValueGetterSupplier<>(queryableName);
-    }
-
-    private static <K, V, V1> V1 computeValue(final K key,
-                                              final V value,
-                                              final ValueTransformerWithKey<? super K, ? super V, ? extends V1> valueTransformer) {
-        if (value == null) {
-            return null;
-        }
-
-        return valueTransformer.transform(key, value);
     }
 
     private class KTableTransformValuesProcessor extends AbstractProcessor<K, Change<V>> {
@@ -113,10 +99,10 @@ class KTableTransformValues<K, V, V1> implements KTableProcessorSupplier<K, V, V
 
         @Override
         public void process(final K key, final Change<V> change) {
-            final V1 newValue = computeValue(key, change.newValue, valueTransformer);
+            final V1 newValue = valueTransformer.transform(key, change.newValue);
 
             if (queryableName == null) {
-                final V1 oldValue = sendOldValues ? computeValue(key, change.oldValue, valueTransformer) : null;
+                final V1 oldValue = sendOldValues ? valueTransformer.transform(key, change.oldValue) : null;
                 context().forward(key, new Change<>(newValue, oldValue));
             } else {
                 final V1 oldValue = sendOldValues ? store.get(key) : null;
@@ -151,7 +137,7 @@ class KTableTransformValues<K, V, V1> implements KTableProcessorSupplier<K, V, V
 
         @Override
         public V1 get(final K key) {
-            return computeValue(key, parentGetter.get(key), valueTransformer);
+            return valueTransformer.transform(key, parentGetter.get(key));
         }
 
         @Override

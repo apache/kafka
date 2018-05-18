@@ -234,7 +234,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                                               final String... stateStoreNames) {
         Objects.requireNonNull(materialized, "materialized can't be null");
         return doTransformValues(transformerSupplier,
-                new MaterializedInternal<>(materialized, builder, TRANSFORMVALUES_NAME), stateStoreNames);
+            new MaterializedInternal<>(materialized, builder, TRANSFORMVALUES_NAME), stateStoreNames);
     }
 
     private <VR> KTable<K, VR> doTransformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> transformerSupplier,
@@ -247,9 +247,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         final boolean shouldMaterialize = materialized != null && materialized.isQueryable();
 
         final KTableProcessorSupplier<K, V, VR> processorSupplier = new KTableTransformValues<>(
-                this,
-                transformerSupplier,
-                shouldMaterialize ? materialized.storeName() : null);
+            this,
+            transformerSupplier,
+            shouldMaterialize ? materialized.storeName() : null);
 
         builder.internalTopologyBuilder.addProcessor(name, processorSupplier, this.name);
 
@@ -259,16 +259,17 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
         if (shouldMaterialize) {
             builder.internalTopologyBuilder.addStateStore(
-                    new KeyValueStoreMaterializer<>(materialized).materialize(),
-                    name);
+                new KeyValueStoreMaterializer<>(materialized).materialize(),
+                name);
         }
 
-        return new KTableImpl<>(builder,
-                name,
-                processorSupplier,
-                sourceNodes,
-                shouldMaterialize ? materialized.storeName() : this.queryableStoreName,
-                shouldMaterialize);
+        return new KTableImpl<>(
+            builder,
+            name,
+            processorSupplier,
+            sourceNodes,
+            shouldMaterialize ? materialized.storeName() : this.queryableStoreName,
+            shouldMaterialize);
     }
 
     @Override

@@ -386,13 +386,13 @@ public interface KTable<K, V> {
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value,
      * (with possibly new type).
-     * A {@link ValueTransformerWithKey} (provided by the given {@link ValueTransformerWithKeySupplier}) is applies to each input
+     * A {@link ValueTransformerWithKey} (provided by the given {@link ValueTransformerWithKeySupplier}) is applied to each input
      * record value and computes a new value for it.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
      * This is similar to {@link #mapValues(ValueMapperWithKey)}, but more flexible, allowing access to additional state-stores,
      * and access to the {@link ProcessorContext}.
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress can be observed and additional
-     * periodic actions get be performed.
+     * periodic actions can be performed.
      * <p>
      * If the downstream topology uses aggregation functions, (e.g. {@link KGroupedTable#reduce}, {@link KGroupedTable#aggregate}, etc),
      * care must be taken when dealing with state, (either held in state-stores or transformer instances), to ensure correct aggregate results.
@@ -420,10 +420,10 @@ public interface KTable<K, V> {
      * new ValueTransformerWithKeySupplier() {
      *     ValueTransformerWithKey get() {
      *         return new ValueTransformerWithKey() {
-     *             private StateStore state;
+     *             private KeyValueStore<String, String> state;
      *
      *             void init(ProcessorContext context) {
-     *                 this.state = context.getStateStore("myValueTransformState");
+     *                 this.state = (KeyValueStore<String, String>)context.getStateStore("myValueTransformState");
      *                 context.schedule(1000, PunctuationType.WALL_CLOCK_TIME, new Punctuator(..)); // punctuate each 1000ms, can access this.state
      *             }
      *
@@ -459,7 +459,7 @@ public interface KTable<K, V> {
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value,
      * (with possibly new type).
-     * A {@link ValueTransformerWithKey} (provided by the given {@link ValueTransformerWithKeySupplier}) is applies to each input
+     * A {@link ValueTransformerWithKey} (provided by the given {@link ValueTransformerWithKeySupplier}) is applied to each input
      * record value and computes a new value for it.
      * This is similar to {@link #mapValues(ValueMapperWithKey)}, but more flexible, allowing stateful, rather than stateless,
      * record-by-record operation, access to additional state-stores, and access to the {@link ProcessorContext}.
@@ -494,10 +494,10 @@ public interface KTable<K, V> {
      * new ValueTransformerWithKeySupplier() {
      *     ValueTransformerWithKey get() {
      *         return new ValueTransformerWithKey() {
-     *             private StateStore state;
+     *             private KeyValueStore<String, String> state;
      *
      *             void init(ProcessorContext context) {
-     *                 this.state = context.getStateStore("myValueTransformState");
+     *                 this.state = (KeyValueStore<String, String>)context.getStateStore("myValueTransformState");
      *                 context.schedule(1000, PunctuationType.WALL_CLOCK_TIME, new Punctuator(..)); // punctuate each 1000ms, can access this.state
      *             }
      *

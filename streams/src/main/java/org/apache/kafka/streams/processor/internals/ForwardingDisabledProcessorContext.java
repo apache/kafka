@@ -36,9 +36,6 @@ import java.util.Objects;
  * {@code ProcessorContext} implementation that will throw on any forward call.
  */
 public final class ForwardingDisabledProcessorContext implements ProcessorContext {
-    private static final String ERROR_MSG = "ProcessorContext#forward() is not allowed, " +
-            "please specify the output record in transformValues() return value";
-
     private final ProcessorContext delegate;
 
     public ForwardingDisabledProcessorContext(final ProcessorContext delegate) {
