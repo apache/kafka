@@ -222,9 +222,10 @@ public class StreamsBuilder {
         Objects.requireNonNull(topic, "topic can't be null");
         Objects.requireNonNull(consumed, "consumed can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
-        materialized.withKeySerde(consumed.keySerde).withValueSerde(consumed.valueSerde);
+        final ConsumedInternal<K, V> consumedInternal = new ConsumedInternal<>(consumed);
+        materialized.withKeySerde(consumedInternal.keySerde()).withValueSerde(consumedInternal.valueSerde());
         return internalStreamsBuilder.table(topic,
-                                            new ConsumedInternal<>(consumed),
+                                            consumedInternal,
                                             new MaterializedInternal<>(materialized, internalStreamsBuilder, topic + "-"));
     }
 
@@ -271,10 +272,11 @@ public class StreamsBuilder {
                                                   final Consumed<K, V> consumed) {
         Objects.requireNonNull(topic, "topic can't be null");
         Objects.requireNonNull(consumed, "consumed can't be null");
+        final ConsumedInternal<K, V> consumedInternal = new ConsumedInternal<>(consumed);
         return internalStreamsBuilder.table(topic,
-                                            new ConsumedInternal<>(consumed),
+                                            consumedInternal,
                                             new MaterializedInternal<>(
-                                                    Materialized.<K, V, KeyValueStore<Bytes, byte[]>>with(consumed.keySerde, consumed.valueSerde),
+                                                    Materialized.<K, V, KeyValueStore<Bytes, byte[]>>with(consumedInternal.keySerde(), consumedInternal.valueSerde()),
                                                     internalStreamsBuilder,
                                                     topic + "-"));
     }
@@ -328,14 +330,15 @@ public class StreamsBuilder {
                                                               final Consumed<K, V> consumed) {
         Objects.requireNonNull(topic, "topic can't be null");
         Objects.requireNonNull(consumed, "consumed can't be null");
+        final ConsumedInternal<K, V> consumedInternal = new ConsumedInternal<>(consumed);
         final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized =
                 new MaterializedInternal<>(
-                        Materialized.<K, V, KeyValueStore<Bytes, byte[]>>with(consumed.keySerde, consumed.valueSerde),
+                        Materialized.<K, V, KeyValueStore<Bytes, byte[]>>with(consumedInternal.keySerde(), consumedInternal.valueSerde()),
                         internalStreamsBuilder,
                         topic + "-");
 
 
-        return internalStreamsBuilder.globalTable(topic, new ConsumedInternal<>(consumed), materialized);
+        return internalStreamsBuilder.globalTable(topic, consumedInternal, materialized);
     }
 
     /**
@@ -396,10 +399,11 @@ public class StreamsBuilder {
         Objects.requireNonNull(topic, "topic can't be null");
         Objects.requireNonNull(consumed, "consumed can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
+        final ConsumedInternal<K, V> consumedInternal = new ConsumedInternal<>(consumed);
         // always use the serdes from consumed
-        materialized.withKeySerde(consumed.keySerde).withValueSerde(consumed.valueSerde);
+        materialized.withKeySerde(consumedInternal.keySerde()).withValueSerde(consumedInternal.valueSerde());
         return internalStreamsBuilder.globalTable(topic,
-                                                  new ConsumedInternal<>(consumed),
+                                                  consumedInternal,
                                                   new MaterializedInternal<>(materialized, internalStreamsBuilder, topic + "-"));
     }
 
