@@ -23,10 +23,10 @@ import kafka.utils.MockTime
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.FetchMetadata.{FINAL_EPOCH, INVALID_SESSION_ID}
-import org.apache.kafka.common.requests.{AbstractFetchResponse, FetchRequest, FetchResponse, FetchMetadata => JFetchMetadata}
-import org.junit.{Rule, Test}
+import org.apache.kafka.common.requests.{DefaultFetchResponse, FetchRequest, FetchResponse, FetchMetadata => JFetchMetadata}
 import org.junit.Assert._
 import org.junit.rules.Timeout
+import org.junit.{Rule, Test}
 
 class FetchSessionTest {
   @Rule
@@ -152,10 +152,10 @@ class FetchSessionTest {
     })
     assertEquals(0, context2.getFetchOffset(new TopicPartition("foo", 0)).get)
     assertEquals(10, context2.getFetchOffset(new TopicPartition("foo", 1)).get)
-    val respData2 = new util.LinkedHashMap[TopicPartition, AbstractFetchResponse.PartitionData]
-    respData2.put(new TopicPartition("foo", 0), new AbstractFetchResponse.PartitionData(
+    val respData2 = new util.LinkedHashMap[TopicPartition, DefaultFetchResponse.PartitionData]
+    respData2.put(new TopicPartition("foo", 0), new DefaultFetchResponse.PartitionData(
       Errors.NONE, 100, 100, 100, null, null))
-    respData2.put(new TopicPartition("foo", 1), new AbstractFetchResponse.PartitionData(
+    respData2.put(new TopicPartition("foo", 1), new DefaultFetchResponse.PartitionData(
       Errors.NONE, 10, 10, 10, null, null))
     val resp2 = context2.updateAndGenerateResponseData(respData2)
     assertEquals(Errors.NONE, resp2.error())
@@ -211,11 +211,11 @@ class FetchSessionTest {
         new JFetchMetadata(prevSessionId, FINAL_EPOCH), reqData7, EMPTY_PART_LIST, false)
       assertEquals(classOf[SessionlessFetchContext], context7.getClass)
       assertEquals(0, cache.size())
-      val respData7 = new util.LinkedHashMap[TopicPartition, AbstractFetchResponse.PartitionData]
+      val respData7 = new util.LinkedHashMap[TopicPartition, DefaultFetchResponse.PartitionData]
       respData7.put(new TopicPartition("bar", 0),
-        new AbstractFetchResponse.PartitionData(Errors.NONE, 100, 100, 100, null, null))
+        new DefaultFetchResponse.PartitionData(Errors.NONE, 100, 100, 100, null, null))
       respData7.put(new TopicPartition("bar", 1),
-        new AbstractFetchResponse.PartitionData(Errors.NONE, 100, 100, 100, null, null))
+        new DefaultFetchResponse.PartitionData(Errors.NONE, 100, 100, 100, null, null))
       val resp7 = context7.updateAndGenerateResponseData(respData7)
       assertEquals(Errors.NONE, resp7.error())
       nextSessionId = resp7.sessionId()
@@ -234,10 +234,10 @@ class FetchSessionTest {
     reqData1.put(new TopicPartition("foo", 1), new FetchRequest.PartitionData(10, 0, 100))
     val context1 = fetchManager.newContext(JFetchMetadata.INITIAL, reqData1, EMPTY_PART_LIST, false)
     assertEquals(classOf[FullFetchContext], context1.getClass)
-    val respData1 = new util.LinkedHashMap[TopicPartition, AbstractFetchResponse.PartitionData]
-    respData1.put(new TopicPartition("foo", 0), new AbstractFetchResponse.PartitionData(
+    val respData1 = new util.LinkedHashMap[TopicPartition, DefaultFetchResponse.PartitionData]
+    respData1.put(new TopicPartition("foo", 0), new DefaultFetchResponse.PartitionData(
       Errors.NONE, 100, 100, 100, null, null))
-    respData1.put(new TopicPartition("foo", 1), new AbstractFetchResponse.PartitionData(
+    respData1.put(new TopicPartition("foo", 1), new DefaultFetchResponse.PartitionData(
       Errors.NONE, 10, 10, 10, null, null))
     val resp1 = context1.updateAndGenerateResponseData(respData1)
     assertEquals(Errors.NONE, resp1.error())
@@ -261,10 +261,10 @@ class FetchSessionTest {
     assertEquals(10, context2.getFetchOffset(new TopicPartition("foo", 1)).get)
     assertEquals(15, context2.getFetchOffset(new TopicPartition("bar", 0)).get)
     assertEquals(None, context2.getFetchOffset(new TopicPartition("bar", 2)))
-    val respData2 = new util.LinkedHashMap[TopicPartition, AbstractFetchResponse.PartitionData]
-    respData2.put(new TopicPartition("foo", 1), new AbstractFetchResponse.PartitionData(
+    val respData2 = new util.LinkedHashMap[TopicPartition, DefaultFetchResponse.PartitionData]
+    respData2.put(new TopicPartition("foo", 1), new DefaultFetchResponse.PartitionData(
       Errors.NONE, 10, 10, 10, null, null))
-    respData2.put(new TopicPartition("bar", 0), new AbstractFetchResponse.PartitionData(
+    respData2.put(new TopicPartition("bar", 0), new DefaultFetchResponse.PartitionData(
       Errors.NONE, 10, 10, 10, null, null))
     val resp2 = context2.updateAndGenerateResponseData(respData2)
     assertEquals(Errors.NONE, resp2.error())
@@ -284,10 +284,10 @@ class FetchSessionTest {
     reqData1.put(new TopicPartition("foo", 1), new FetchRequest.PartitionData(10, 0, 100))
     val context1 = fetchManager.newContext(JFetchMetadata.INITIAL, reqData1, EMPTY_PART_LIST, false)
     assertEquals(classOf[FullFetchContext], context1.getClass)
-    val respData1 = new util.LinkedHashMap[TopicPartition, AbstractFetchResponse.PartitionData]
-    respData1.put(new TopicPartition("foo", 0), new AbstractFetchResponse.PartitionData(
+    val respData1 = new util.LinkedHashMap[TopicPartition, DefaultFetchResponse.PartitionData]
+    respData1.put(new TopicPartition("foo", 0), new DefaultFetchResponse.PartitionData(
       Errors.NONE, 100, 100, 100, null, null))
-    respData1.put(new TopicPartition("foo", 1), new AbstractFetchResponse.PartitionData(
+    respData1.put(new TopicPartition("foo", 1), new DefaultFetchResponse.PartitionData(
       Errors.NONE, 10, 10, 10, null, null))
     val resp1 = context1.updateAndGenerateResponseData(respData1)
     assertEquals(Errors.NONE, resp1.error())
@@ -303,7 +303,7 @@ class FetchSessionTest {
     val context2 = fetchManager.newContext(
       new JFetchMetadata(resp1.sessionId(), 1), reqData2, removed2, false)
     assertEquals(classOf[SessionlessFetchContext], context2.getClass)
-    val respData2 = new util.LinkedHashMap[TopicPartition, AbstractFetchResponse.PartitionData]
+    val respData2 = new util.LinkedHashMap[TopicPartition, DefaultFetchResponse.PartitionData]
     val resp2 = context2.updateAndGenerateResponseData(respData2)
     assertEquals(INVALID_SESSION_ID, resp2.sessionId())
     assertTrue(resp2.responseData().isEmpty)

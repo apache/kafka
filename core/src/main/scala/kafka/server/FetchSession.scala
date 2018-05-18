@@ -26,7 +26,7 @@ import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.FetchMetadata.{FINAL_EPOCH, INITIAL_EPOCH, INVALID_SESSION_ID}
-import org.apache.kafka.common.requests.{AbstractFetchResponse, FetchRequest, FetchResponse, FetchMetadata => JFetchMetadata}
+import org.apache.kafka.common.requests.{DefaultFetchResponse, FetchRequest, FetchResponse, FetchMetadata => JFetchMetadata}
 import org.apache.kafka.common.utils.{ImplicitLinkedHashSet, Time, Utils}
 
 import scala.math.Ordered.orderingToOrdered
@@ -35,7 +35,7 @@ import scala.collection.JavaConverters._
 
 object FetchSession {
   type REQ_MAP = util.Map[TopicPartition, FetchRequest.PartitionData]
-  type RESP_MAP = util.LinkedHashMap[TopicPartition, AbstractFetchResponse.PartitionData]
+  type RESP_MAP = util.LinkedHashMap[TopicPartition, DefaultFetchResponse.PartitionData]
   type CACHE_MAP = ImplicitLinkedHashSet[CachedPartition]
 
   val NUM_INCREMENTAL_FETCH_SESSISONS = "NumIncrementalFetchSessions"
@@ -98,7 +98,7 @@ class CachedPartition(val topic: String,
       reqData.logStartOffset, -1)
 
   def this(part: TopicPartition, reqData: FetchRequest.PartitionData,
-           respData: AbstractFetchResponse.PartitionData) =
+           respData: FetchResponse.PartitionData) =
     this(part.topic(), part.partition(),
       reqData.maxBytes, reqData.fetchOffset, respData.highWatermark,
       reqData.logStartOffset, respData.logStartOffset)
@@ -123,7 +123,7 @@ class CachedPartition(val topic: String,
     * @return True if this partition should be included in the FetchResponse
     *         we send back to the fetcher; false if it can be omitted.
     */
-  def updateResponseData(respData: AbstractFetchResponse.PartitionData): Boolean = {
+  def updateResponseData(respData: FetchResponse.PartitionData): Boolean = {
     // Check the response data.
     var mustRespond = false
     if ((respData.records != null) && (respData.records.sizeInBytes() > 0)) {
@@ -274,7 +274,7 @@ trait FetchContext extends Logging {
     * Updates the fetch context with new partition information.  Generates response data.
     * The response data may require subsequent down-conversion.
     */
-  def updateAndGenerateResponseData(updates: FetchSession.RESP_MAP): FetchResponse
+  def updateAndGenerateResponseData(updates: FetchSession.RESP_MAP): DefaultFetchResponse
 
   def partitionsToLogString(partitions: util.Collection[TopicPartition]): String =
     FetchSession.partitionsToLogString(partitions, isTraceEnabled)
@@ -290,9 +290,9 @@ class SessionErrorContext(val error: Errors,
   override def foreachPartition(fun: (TopicPartition, FetchRequest.PartitionData) => Unit): Unit = {}
 
   // Because of the fetch session error, we don't know what partitions were supposed to be in this request.
-  override def updateAndGenerateResponseData(updates: FetchSession.RESP_MAP): FetchResponse = {
+  override def updateAndGenerateResponseData(updates: FetchSession.RESP_MAP): DefaultFetchResponse = {
     debug(s"Session error fetch context returning $error")
-    new FetchResponse(error, new FetchSession.RESP_MAP, 0, INVALID_SESSION_ID)
+    new DefaultFetchResponse(error, new FetchSession.RESP_MAP, 0, INVALID_SESSION_ID)
   }
 }
 
@@ -309,9 +309,9 @@ class SessionlessFetchContext(val fetchData: util.Map[TopicPartition, FetchReque
     fetchData.entrySet().asScala.foreach(entry => fun(entry.getKey, entry.getValue))
   }
 
-  override def updateAndGenerateResponseData(updates: FetchSession.RESP_MAP): FetchResponse = {
+  override def updateAndGenerateResponseData(updates: FetchSession.RESP_MAP): DefaultFetchResponse = {
     debug(s"Sessionless fetch context returning ${partitionsToLogString(updates.keySet())}")
-    new FetchResponse(Errors.NONE, updates, 0, INVALID_SESSION_ID)
+    new DefaultFetchResponse(Errors.NONE, updates, 0, INVALID_SESSION_ID)
   }
 }
 
@@ -336,7 +336,7 @@ class FullFetchContext(private val time: Time,
     fetchData.entrySet().asScala.foreach(entry => fun(entry.getKey, entry.getValue))
   }
 
-  override def updateAndGenerateResponseData(updates: FetchSession.RESP_MAP): FetchResponse = {
+  override def updateAndGenerateResponseData(updates: FetchSession.RESP_MAP): DefaultFetchResponse = {
     def createNewSession(): FetchSession.CACHE_MAP = {
       val cachedPartitions = new FetchSession.CACHE_MAP(updates.size())
       updates.entrySet().asScala.foreach(entry => {
@@ -351,7 +351,7 @@ class FullFetchContext(private val time: Time,
         updates.size(), createNewSession)
     debug(s"Full fetch context with session id $responseSessionId returning " +
       s"${partitionsToLogString(updates.keySet())}")
-    new FetchResponse(Errors.NONE, updates, 0, responseSessionId)
+    new DefaultFetchResponse(Errors.NONE, updates, 0, responseSessionId)
   }
 }
 
@@ -377,7 +377,7 @@ class IncrementalFetchContext(private val time: Time,
     }
   }
 
-  override def updateAndGenerateResponseData(updates: FetchSession.RESP_MAP): FetchResponse = {
+  override def updateAndGenerateResponseData(updates: FetchSession.RESP_MAP): DefaultFetchResponse = {
     session.synchronized {
       // Check to make sure that the session epoch didn't change in between
       // creating this fetch context and generating this response.
@@ -385,7 +385,7 @@ class IncrementalFetchContext(private val time: Time,
       if (session.epoch != expectedEpoch) {
         info(s"Incremental fetch session ${session.id} expected epoch $expectedEpoch, but " +
           s"got ${session.epoch}.  Possible duplicate request.")
-        new FetchResponse(Errors.INVALID_FETCH_SESSION_EPOCH, new FetchSession.RESP_MAP, 0, session.id)
+        new DefaultFetchResponse(Errors.INVALID_FETCH_SESSION_EPOCH, new FetchSession.RESP_MAP, 0, session.id)
       } else {
         // Iterate over the update list.  Prune updates which don't need to be sent.
         val iter = updates.entrySet().iterator()
@@ -408,7 +408,7 @@ class IncrementalFetchContext(private val time: Time,
         }
         debug(s"Incremental fetch context with session id ${session.id} returning " +
           s"${partitionsToLogString(updates.keySet())}")
-        new FetchResponse(Errors.NONE, updates, 0, session.id)
+        new DefaultFetchResponse(Errors.NONE, updates, 0, session.id)
       }
     }
   }

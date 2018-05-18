@@ -20,19 +20,18 @@ package kafka.server
 import java.nio.ByteBuffer
 import java.util
 
-import AbstractFetcherThread.ResultWithPartitions
-import kafka.cluster.BrokerEndPoint
-import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.requests.EpochEndOffset._
-import org.apache.kafka.common.requests.{AbstractFetchResponse, EpochEndOffset, FetchResponse, FetchRequest => JFetchRequest}
-import ReplicaAlterLogDirsThread.FetchRequest
-import ReplicaAlterLogDirsThread.PartitionData
 import kafka.api.Request
+import kafka.cluster.BrokerEndPoint
+import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import kafka.server.QuotaFactory.UnboundedQuota
+import kafka.server.ReplicaAlterLogDirsThread.{FetchRequest, PartitionData}
 import kafka.server.epoch.LeaderEpochCache
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{FileRecords, MemoryRecords}
+import org.apache.kafka.common.requests.EpochEndOffset._
+import org.apache.kafka.common.requests.{DefaultFetchResponse, EpochEndOffset, FetchResponse, FetchRequest => JFetchRequest}
 
 import scala.collection.JavaConverters._
 import scala.collection.{Map, Seq, Set, mutable}
@@ -58,14 +57,14 @@ class ReplicaAlterLogDirsThread(name: String,
   private val fetchSize = brokerConfig.replicaFetchMaxBytes
 
   def fetch(fetchRequest: FetchRequest): Seq[(TopicPartition, PartitionData)] = {
-    var partitionData: Seq[(TopicPartition, AbstractFetchResponse.PartitionData)] = null
+    var partitionData: Seq[(TopicPartition, FetchResponse.PartitionData)] = null
     val request = fetchRequest.underlying.build()
 
     def processResponseCallback(responsePartitionData: Seq[(TopicPartition, FetchPartitionData)]) {
       partitionData = responsePartitionData.map { case (tp, data) =>
         val abortedTransactions = data.abortedTransactions.map(_.asJava).orNull
-        val lastStableOffset = data.lastStableOffset.getOrElse(AbstractFetchResponse.INVALID_LAST_STABLE_OFFSET)
-        tp -> new AbstractFetchResponse.PartitionData(data.error, data.highWatermark, lastStableOffset,
+        val lastStableOffset = data.lastStableOffset.getOrElse(FetchResponse.INVALID_LAST_STABLE_OFFSET)
+        tp -> new DefaultFetchResponse.PartitionData(data.error, data.highWatermark, lastStableOffset,
           data.logStartOffset, abortedTransactions, data.records)
       }
     }
@@ -256,7 +255,7 @@ object ReplicaAlterLogDirsThread {
     override def toString = underlying.toString
   }
 
-  private[server] class PartitionData(val underlying: AbstractFetchResponse.PartitionData) extends AbstractFetcherThread.PartitionData {
+  private[server] class PartitionData(val underlying: FetchResponse.PartitionData) extends AbstractFetcherThread.PartitionData {
 
     def error = underlying.error
 

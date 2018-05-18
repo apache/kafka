@@ -73,7 +73,7 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
             case PRODUCE:
                 return new ProduceResponse(struct);
             case FETCH:
-                return FetchResponse.constructFetchResponse(struct);
+                return DefaultFetchResponse.constructFetchResponse(struct);
             case LIST_OFFSETS:
                 return new ListOffsetResponse(struct);
             case METADATA:

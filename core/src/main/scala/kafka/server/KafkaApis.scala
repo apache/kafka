@@ -496,45 +496,45 @@ class KafkaApis(val requestChannel: RequestChannel,
           fetchRequest.toForget(),
           fetchRequest.isFromFollower())
 
-    val erroneous = mutable.ArrayBuffer[(TopicPartition, AbstractFetchResponse.PartitionData)]()
+    val erroneous = mutable.ArrayBuffer[(TopicPartition, DefaultFetchResponse.PartitionData)]()
     val interesting = mutable.ArrayBuffer[(TopicPartition, FetchRequest.PartitionData)]()
     if (fetchRequest.isFromFollower()) {
       // The follower must have ClusterAction on ClusterResource in order to fetch partition data.
       if (authorize(request.session, ClusterAction, Resource.ClusterResource)) {
         fetchContext.foreachPartition((topicPartition, data) => {
           if (!metadataCache.contains(topicPartition)) {
-            erroneous += topicPartition -> new AbstractFetchResponse.PartitionData(Errors.UNKNOWN_TOPIC_OR_PARTITION,
-              AbstractFetchResponse.INVALID_HIGHWATERMARK, AbstractFetchResponse.INVALID_LAST_STABLE_OFFSET,
-              AbstractFetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY)
+            erroneous += topicPartition -> new DefaultFetchResponse.PartitionData(Errors.UNKNOWN_TOPIC_OR_PARTITION,
+              FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LAST_STABLE_OFFSET,
+              FetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY)
           } else {
             interesting += (topicPartition -> data)
           }
         })
       } else {
         fetchContext.foreachPartition((part, data) => {
-          erroneous += part -> new AbstractFetchResponse.PartitionData(Errors.TOPIC_AUTHORIZATION_FAILED,
-            AbstractFetchResponse.INVALID_HIGHWATERMARK, AbstractFetchResponse.INVALID_LAST_STABLE_OFFSET,
-            AbstractFetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY)
+          erroneous += part -> new DefaultFetchResponse.PartitionData(Errors.TOPIC_AUTHORIZATION_FAILED,
+            FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LAST_STABLE_OFFSET,
+            FetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY)
         })
       }
     } else {
       // Regular Kafka consumers need READ permission on each partition they are fetching.
       fetchContext.foreachPartition((topicPartition, data) => {
         if (!authorize(request.session, Read, new Resource(Topic, topicPartition.topic)))
-          erroneous += topicPartition -> new AbstractFetchResponse.PartitionData(Errors.TOPIC_AUTHORIZATION_FAILED,
-            AbstractFetchResponse.INVALID_HIGHWATERMARK, AbstractFetchResponse.INVALID_LAST_STABLE_OFFSET,
-            AbstractFetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY)
+          erroneous += topicPartition -> new DefaultFetchResponse.PartitionData(Errors.TOPIC_AUTHORIZATION_FAILED,
+            FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LAST_STABLE_OFFSET,
+            FetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY)
         else if (!metadataCache.contains(topicPartition))
-          erroneous += topicPartition -> new AbstractFetchResponse.PartitionData(Errors.UNKNOWN_TOPIC_OR_PARTITION,
-            AbstractFetchResponse.INVALID_HIGHWATERMARK, AbstractFetchResponse.INVALID_LAST_STABLE_OFFSET,
-            AbstractFetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY)
+          erroneous += topicPartition -> new DefaultFetchResponse.PartitionData(Errors.UNKNOWN_TOPIC_OR_PARTITION,
+            FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LAST_STABLE_OFFSET,
+            FetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY)
        else
           interesting += (topicPartition -> data)
       })
     }
 
     def convertedPartitionData(tp: TopicPartition,
-                               data: AbstractFetchResponse.PartitionData): AbstractFetchResponse.SerializablePartitionData = {
+                               data: DefaultFetchResponse.PartitionData): WriteableFetchResponse.PartitionData = {
       // Down-conversion of the fetched records is needed when the stored magic version is
       // greater than that supported by the client (as indicated by the fetch request version). If the
       // configured magic version for the topic is less than or equal to that supported by the version of the
@@ -560,7 +560,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           // down-conversion always guarantees that at least one batch of messages is down-converted and sent out to the
           // client.
           val converted = new LazyDownConversionRecords(tp, data.records, magic, fetchContext.getFetchOffset(tp).get)
-          new AbstractFetchResponse.SerializablePartitionData(data.error, data.highWatermark, AbstractFetchResponse.INVALID_LAST_STABLE_OFFSET,
+          new WriteableFetchResponse.PartitionData(data.error, data.highWatermark, FetchResponse.INVALID_LAST_STABLE_OFFSET,
             data.logStartOffset, data.abortedTransactions, converted)
         }
 
@@ -569,11 +569,11 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     // the callback for process a fetch response, invoked before throttling
     def processResponseCallback(responsePartitionData: Seq[(TopicPartition, FetchPartitionData)]): Unit = {
-      val partitions = new util.LinkedHashMap[TopicPartition, AbstractFetchResponse.PartitionData]
+      val partitions = new util.LinkedHashMap[TopicPartition, DefaultFetchResponse.PartitionData]
       responsePartitionData.foreach{ case (tp, data) =>
         val abortedTransactions = data.abortedTransactions.map(_.asJava).orNull
-        val lastStableOffset = data.lastStableOffset.getOrElse(AbstractFetchResponse.INVALID_LAST_STABLE_OFFSET)
-        partitions.put(tp, new AbstractFetchResponse.PartitionData(data.error, data.highWatermark, lastStableOffset,
+        val lastStableOffset = data.lastStableOffset.getOrElse(FetchResponse.INVALID_LAST_STABLE_OFFSET)
+        partitions.put(tp, new DefaultFetchResponse.PartitionData(data.error, data.highWatermark, lastStableOffset,
           data.logStartOffset, abortedTransactions, data.records))
       }
       erroneous.foreach{case (tp, data) => partitions.put(tp, data)}
@@ -581,15 +581,15 @@ class KafkaApis(val requestChannel: RequestChannel,
 
       // fetch response callback invoked after any throttling
       def fetchResponseCallback(bandwidthThrottleTimeMs: Int) {
-        def createResponse(requestThrottleTimeMs: Int): SerializableFetchResponse = {
-          val convertedData = new util.LinkedHashMap[TopicPartition, AbstractFetchResponse.SerializablePartitionData]
+        def createResponse(requestThrottleTimeMs: Int): WriteableFetchResponse[WriteableFetchResponse.PartitionData] = {
+          val convertedData = new util.LinkedHashMap[TopicPartition, WriteableFetchResponse.PartitionData]
           unconvertedFetchResponse.responseData().asScala.foreach { case (tp, partitionData) =>
             if (partitionData.error != Errors.NONE)
               debug(s"Fetch request with correlation id ${request.header.correlationId} from client $clientId " +
                 s"on partition $tp failed due to ${partitionData.error.exceptionName}")
             convertedData.put(tp, convertedPartitionData(tp, partitionData))
           }
-          val response = new SerializableFetchResponse(unconvertedFetchResponse.error(), convertedData,
+          val response = new WriteableFetchResponse[WriteableFetchResponse.PartitionData](unconvertedFetchResponse.error(), convertedData,
             bandwidthThrottleTimeMs + requestThrottleTimeMs, unconvertedFetchResponse.sessionId())
           response.responseData.asScala.foreach { case (topicPartition, data) =>
             // record the bytes out metrics only when the response is being sent
@@ -649,12 +649,12 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
-  class SelectingIterator(val partitions: util.LinkedHashMap[TopicPartition, AbstractFetchResponse.PartitionData],
+  class SelectingIterator(val partitions: util.LinkedHashMap[TopicPartition, DefaultFetchResponse.PartitionData],
                           val quota: ReplicationQuotaManager)
-                          extends util.Iterator[util.Map.Entry[TopicPartition, AbstractFetchResponse.PartitionData]] {
+                          extends util.Iterator[util.Map.Entry[TopicPartition, DefaultFetchResponse.PartitionData]] {
     val iter = partitions.entrySet().iterator()
 
-    var nextElement: util.Map.Entry[TopicPartition, AbstractFetchResponse.PartitionData] = null
+    var nextElement: util.Map.Entry[TopicPartition, DefaultFetchResponse.PartitionData] = null
 
     override def hasNext: Boolean = {
       while ((nextElement == null) && iter.hasNext()) {
@@ -666,7 +666,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       nextElement != null
     }
 
-    override def next(): util.Map.Entry[TopicPartition, AbstractFetchResponse.PartitionData] = {
+    override def next(): util.Map.Entry[TopicPartition, DefaultFetchResponse.PartitionData] = {
       if (!hasNext()) throw new NoSuchElementException()
       val element = nextElement
       nextElement = null
@@ -677,10 +677,10 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def sizeOfThrottledPartitions(versionId: Short,
-                                        unconvertedResponse: FetchResponse,
+                                        unconvertedResponse: DefaultFetchResponse,
                                         quota: ReplicationQuotaManager): Int = {
     val iter = new SelectingIterator(unconvertedResponse.responseData(), quota)
-    AbstractFetchResponse.sizeOf(versionId, iter)
+    FetchResponse.sizeOf(versionId, iter)
   }
 
   def replicationQuota(fetchRequest: FetchRequest): ReplicaQuota =

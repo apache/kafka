@@ -18,19 +18,38 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.BaseRecords;
+import org.apache.kafka.common.record.WriteableRecords;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 
 /**
  * Describes a Fetch Response to be sent over the wire. This implementation exposes serialization-only primitives for the
  * partition data and underlying records. See {@link FetchResponse} for a more generic implementation that exposes
  * record reading and processing methods for the underlying partition data, in addition to serialization primitives.
  */
-public class SerializableFetchResponse extends AbstractFetchResponse<AbstractFetchResponse.SerializablePartitionData> {
-    public SerializableFetchResponse(Errors error,
-                                     LinkedHashMap<TopicPartition, SerializablePartitionData> responseData,
-                                     int throttleTimeMs,
-                                     int sessionId) {
+public class WriteableFetchResponse<T extends WriteableFetchResponse.PartitionData> extends FetchResponse<T> {
+    public WriteableFetchResponse(Errors error,
+                                  LinkedHashMap<TopicPartition, T> responseData,
+                                  int throttleTimeMs,
+                                  int sessionId) {
         super(error, responseData, throttleTimeMs, sessionId);
+    }
+
+    public static class PartitionData extends FetchResponse.PartitionData {
+        public PartitionData(Errors error,
+                             long highWatermark,
+                             long lastStableOffset,
+                             long logStartOffset,
+                             List<AbortedTransaction> abortedTransactions,
+                             WriteableRecords records) {
+            super(error, highWatermark, lastStableOffset, logStartOffset, abortedTransactions, records);
+        }
+
+        @Override
+        public WriteableRecords records() {
+            return (WriteableRecords) super.records();
+        }
     }
 }

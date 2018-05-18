@@ -16,11 +16,6 @@
  */
 package org.apache.kafka.common.record;
 
-import org.apache.kafka.common.utils.AbstractIterator;
-import org.apache.kafka.common.utils.Time;
-
-import java.util.Iterator;
-
 /**
  * Interface for accessing the records contained in a log. The log itself is represented as a sequence of record
  * batches (see {@link RecordBatch}).
@@ -40,55 +35,5 @@ import java.util.Iterator;
  *
  * See {@link MemoryRecords} for the in-memory representation and {@link FileRecords} for the on-disk representation.
  */
-public interface Records extends SerializableRecords {
-   /**
-     * Get the record batches. Note that the signature allows subclasses
-     * to return a more specific batch type. This enables optimizations such as in-place offset
-     * assignment (see for example {@link DefaultRecordBatch}), and partial reading of
-     * record data (see {@link FileLogInputStream.FileChannelRecordBatch#magic()}.
-     * @return An iterator over the record batches of the log
-     */
-    Iterable<? extends RecordBatch> batches();
-
-    /**
-     * Get an iterator over the record batches. This is similar to {@link #batches()} but returns an {@link AbstractIterator}
-     * instead of {@link Iterator}, so that clients can use methods like {@link AbstractIterator#peek() peek}.
-     * @return An iterator over the record batches of the log
-     */
-    AbstractIterator<? extends RecordBatch> batchIterator();
-
-    /**
-     * Check whether all batches in this buffer have a certain magic value.
-     * @param magic The magic value to check
-     * @return true if all record batches have a matching magic value, false otherwise
-     */
-    boolean hasMatchingMagic(byte magic);
-
-    /**
-     * Check whether this log buffer has a magic value compatible with a particular value
-     * (i.e. whether all message sets contained in the buffer have a matching or lower magic).
-     * @param magic The magic version to ensure compatibility with
-     * @return true if all batches have compatible magic, false otherwise
-     */
-    boolean hasCompatibleMagic(byte magic);
-
-    /**
-     * Convert all batches in this buffer to the format passed as a parameter. Note that this requires
-     * deep iteration since all of the deep records must also be converted to the desired format.
-     * @param toMagic The magic value to convert to
-     * @param firstOffset The starting offset for returned records. This only impacts some cases. See
-     *                    {@link RecordsUtil#downConvert(Iterable, byte, long, Time)} for an explanation.
-     * @param time instance used for reporting stats
-     * @return A ConvertedRecords instance which may or may not contain the same instance in its records field.
-     */
-    ConvertedRecords<? extends Records> downConvert(byte toMagic, long firstOffset, Time time);
-
-    /**
-     * Get an iterator over the records in this log. Note that this generally requires decompression,
-     * and should therefore be used with care.
-     * @return The record iterator
-     */
-    Iterable<Record> records();
-
-
+public interface Records extends ReadableRecords, WriteableRecords {
 }

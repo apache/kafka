@@ -21,30 +21,7 @@ import org.apache.kafka.common.TopicPartitionRecordsStats;
 import java.io.IOException;
 import java.nio.channels.GatheringByteChannel;
 
-/**
- * Interface defining serialization primitives for records. This low-level abstraction is exposed for cases when we
- * want to write out records over the network. For all other use cases, see the more generic {@link Records}
- * implementation.
- */
-public interface SerializableRecords {
-    int OFFSET_OFFSET = 0;
-    int OFFSET_LENGTH = 8;
-    int SIZE_OFFSET = OFFSET_OFFSET + OFFSET_LENGTH;
-    int SIZE_LENGTH = 4;
-    int LOG_OVERHEAD = SIZE_OFFSET + SIZE_LENGTH;
-
-    // the magic offset is at the same offset for all current message formats, but the 4 bytes
-    // between the size and the magic is dependent on the version.
-    int MAGIC_OFFSET = 16;
-    int MAGIC_LENGTH = 1;
-    int HEADER_SIZE_UP_TO_MAGIC = MAGIC_OFFSET + MAGIC_LENGTH;
-
-    /**
-     * The size of these records in bytes.
-     * @return The size in bytes of the records
-     */
-    int sizeInBytes();
-
+public interface WriteableRecords extends BaseRecords {
     /**
      * Attempts to write the contents of this buffer to a channel.
      * @param channel The channel to write to

@@ -18,7 +18,8 @@ package org.apache.kafka.clients;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.requests.AbstractFetchResponse;
+import org.apache.kafka.common.requests.DefaultFetchResponse;
+import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.utils.LogContext;
@@ -154,11 +155,11 @@ public class FetchSessionHandlerTest {
 
     private static final class RespEntry {
         final TopicPartition part;
-        final AbstractFetchResponse.PartitionData data;
+        final DefaultFetchResponse.PartitionData data;
 
         RespEntry(String topic, int partition, long highWatermark, long lastStableOffset) {
             this.part = new TopicPartition(topic, partition);
-            this.data = new AbstractFetchResponse.PartitionData(
+            this.data = new DefaultFetchResponse.PartitionData(
                 Errors.NONE,
                 highWatermark,
                 lastStableOffset,
@@ -168,8 +169,8 @@ public class FetchSessionHandlerTest {
         }
     }
 
-    private static LinkedHashMap<TopicPartition, AbstractFetchResponse.PartitionData> respMap(RespEntry... entries) {
-        LinkedHashMap<TopicPartition, AbstractFetchResponse.PartitionData> map = new LinkedHashMap<>();
+    private static LinkedHashMap<TopicPartition, DefaultFetchResponse.PartitionData> respMap(RespEntry... entries) {
+        LinkedHashMap<TopicPartition, DefaultFetchResponse.PartitionData> map = new LinkedHashMap<>();
         for (RespEntry entry : entries) {
             map.put(entry.part, entry.data);
         }
@@ -195,7 +196,7 @@ public class FetchSessionHandlerTest {
         assertEquals(INVALID_SESSION_ID, data.metadata().sessionId());
         assertEquals(INITIAL_EPOCH, data.metadata().epoch());
 
-        FetchResponse resp = new FetchResponse(Errors.NONE,
+        FetchResponse resp = new DefaultFetchResponse(Errors.NONE,
             respMap(new RespEntry("foo", 0, 0, 0),
                     new RespEntry("foo", 1, 0, 0)),
             0, INVALID_SESSION_ID);
@@ -229,7 +230,7 @@ public class FetchSessionHandlerTest {
         assertEquals(INVALID_SESSION_ID, data.metadata().sessionId());
         assertEquals(INITIAL_EPOCH, data.metadata().epoch());
 
-        FetchResponse resp = new FetchResponse(Errors.NONE,
+        FetchResponse resp = new DefaultFetchResponse(Errors.NONE,
             respMap(new RespEntry("foo", 0, 10, 20),
                     new RespEntry("foo", 1, 10, 20)),
             0, 123);
@@ -253,14 +254,14 @@ public class FetchSessionHandlerTest {
                 new ReqEntry("foo", 1, 10, 120, 210)),
             data2.toSend());
 
-        FetchResponse resp2 = new FetchResponse(Errors.NONE,
+        FetchResponse resp2 = new DefaultFetchResponse(Errors.NONE,
             respMap(new RespEntry("foo", 1, 20, 20)),
             0, 123);
         handler.handleResponse(resp2);
 
         // Skip building a new request.  Test that handling an invalid fetch session epoch response results
         // in a request which closes the session.
-        FetchResponse resp3 = new FetchResponse(Errors.INVALID_FETCH_SESSION_EPOCH, respMap(),
+        FetchResponse resp3 = new DefaultFetchResponse(Errors.INVALID_FETCH_SESSION_EPOCH, respMap(),
             0, INVALID_SESSION_ID);
         handler.handleResponse(resp3);
 
@@ -316,7 +317,7 @@ public class FetchSessionHandlerTest {
             data.toSend(), data.sessionPartitions());
         assertTrue(data.metadata().isFull());
 
-        FetchResponse resp = new FetchResponse(Errors.NONE,
+        FetchResponse resp = new DefaultFetchResponse(Errors.NONE,
             respMap(new RespEntry("foo", 0, 10, 20),
                     new RespEntry("foo", 1, 10, 20),
                     new RespEntry("bar", 0, 10, 20)),
@@ -341,7 +342,7 @@ public class FetchSessionHandlerTest {
 
         // A FETCH_SESSION_ID_NOT_FOUND response triggers us to close the session.
         // The next request is a session establishing FULL request.
-        FetchResponse resp2 = new FetchResponse(Errors.FETCH_SESSION_ID_NOT_FOUND,
+        FetchResponse resp2 = new DefaultFetchResponse(Errors.FETCH_SESSION_ID_NOT_FOUND,
             respMap(), 0, INVALID_SESSION_ID);
         handler.handleResponse(resp2);
         FetchSessionHandler.Builder builder3 = handler.newBuilder();

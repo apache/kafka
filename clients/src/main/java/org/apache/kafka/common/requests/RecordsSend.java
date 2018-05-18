@@ -19,7 +19,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.TopicPartitionRecordsStats;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.network.TransportLayers;
-import org.apache.kafka.common.record.SerializableRecords;
+import org.apache.kafka.common.record.WriteableRecords;
 
 import java.io.EOFException;
 import java.io.IOException;
@@ -30,11 +30,11 @@ public class RecordsSend implements Send {
     private static final ByteBuffer EMPTY_BYTE_BUFFER = ByteBuffer.allocate(0);
 
     private final String destination;
-    private final SerializableRecords records;
+    private final WriteableRecords records;
     private int remaining;
     private boolean pending = false;
 
-    public RecordsSend(String destination, SerializableRecords records) {
+    public RecordsSend(String destination, WriteableRecords records) {
         this.destination = destination;
         this.records = records;
         this.remaining = records.sizeInBytes();

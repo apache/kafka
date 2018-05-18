@@ -42,7 +42,7 @@ import java.util.List;
  * with {@link Records} are unsupported and not implemented. Specifically, this class provides implementations for
  * {@link #sizeInBytes() sizeInBytes} and {@link #writeTo(GatheringByteChannel, long, int) writeTo} methods only. </p>
  */
-public class LazyDownConversionRecords implements SerializableRecords {
+public class LazyDownConversionRecords implements WriteableRecords {
     private static final Logger log = LoggerFactory.getLogger(LazyDownConversionRecords.class);
     private final TopicPartition topicPartition;
     private final Records records;
@@ -52,7 +52,7 @@ public class LazyDownConversionRecords implements SerializableRecords {
     private RecordsWriter convertedRecordsWriter = null;
     private LazyDownConversionRecordsIterator convertedRecordsIterator = null;
     private RecordsProcessingStats processingStats = null;
-    private static final long MAX_READ_SIZE = 16L * 1024L;
+    private static final long MAX_READ_SIZE = 128L * 1024L;
 
     /**
      * @param records Records to lazily down-convert
@@ -152,6 +152,17 @@ public class LazyDownConversionRecords implements SerializableRecords {
     @Override
     public TopicPartitionRecordsStats recordsProcessingStats() {
         return new TopicPartitionRecordsStats(topicPartition, processingStats);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        LazyDownConversionRecords that = (LazyDownConversionRecords) o;
+        return (toMagic == that.toMagic) && records.equals(that.records);
+    }
+
+    @Override
+    public int hashCode() {
+        return records.hashCode();
     }
 
     // Protected for unit tests
