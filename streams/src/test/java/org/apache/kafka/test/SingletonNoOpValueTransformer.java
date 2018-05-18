@@ -14,45 +14,33 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.test;
 
-package org.apache.kafka.streams.kstream.internals;
-
+import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
+import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.state.KeyValueStore;
 
-public class KTableMaterializedValueGetterSupplier<K, V> implements KTableValueGetterSupplier<K, V> {
+public class SingletonNoOpValueTransformer<K, V> implements ValueTransformerWithKeySupplier<K, V, V> {
+    public ProcessorContext context;
+    private final ValueTransformerWithKey<K, V, V> transformer = new ValueTransformerWithKey<K, V, V>() {
 
-    private final String storeName;
-
-    KTableMaterializedValueGetterSupplier(final String storeName) {
-        this.storeName = storeName;
-    }
-
-    public KTableValueGetter<K, V> get() {
-        return new KTableMaterializedValueGetter();
-    }
-
-    @Override
-    public String[] storeNames() {
-        return new String[]{storeName};
-    }
-
-    private class KTableMaterializedValueGetter implements KTableValueGetter<K, V> {
-        private KeyValueStore<K, V> store;
-
-        @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
-            store = (KeyValueStore<K, V>) context.getStateStore(storeName);
+            SingletonNoOpValueTransformer.this.context = context;
         }
 
         @Override
-        public V get(final K key) {
-            return store.get(key);
+        public V transform(final K readOnlyKey, final V value) {
+            return value;
         }
 
         @Override
         public void close() {
         }
+    };
+
+    @Override
+    public ValueTransformerWithKey<K, V, V> get() {
+        return transformer;
     }
 }

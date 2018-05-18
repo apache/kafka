@@ -24,4 +24,5 @@ public interface KTableValueGetter<K, V> {
 
     V get(K key);
 
+    void close();
 }
