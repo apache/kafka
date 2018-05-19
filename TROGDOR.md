@@ -44,7 +44,7 @@ Now, we can submit a test job to Trogdor.  Here's an example of a short bash scr
 
 To get the test results, we run --show-tasks:
 
-    ./tests/bin/trogdor.sh client --show-tasks localhost:8889
+    ./bin/trogdor.sh client --show-tasks localhost:8889
     Got coordinator tasks: {
       "tasks" : {
         "produce_bench_20462" : {
