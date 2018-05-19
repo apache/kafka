@@ -30,6 +30,7 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.requests.UpdateMetadataRequest;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -91,6 +92,12 @@ public class IntegrationTestUtils {
         IntegrationTestUtils.produceKeyValuesSynchronously(topic, records, producerConfig, time, false);
     }
 
+    public static <K, V> void produceKeyValuesSynchronously(
+        final String topic, final Collection<KeyValue<K, V>> records, final Properties producerConfig, final Headers headers, final Time time)
+        throws ExecutionException, InterruptedException {
+        IntegrationTestUtils.produceKeyValuesSynchronously(topic, records, producerConfig, headers, time, false);
+    }
+
     /**
      * @param topic               Kafka topic to write the data records to
      * @param records             Data records to write to Kafka
@@ -102,10 +109,21 @@ public class IntegrationTestUtils {
     public static <K, V> void produceKeyValuesSynchronously(
         final String topic, final Collection<KeyValue<K, V>> records, final Properties producerConfig, final Time time, final boolean enableTransactions)
         throws ExecutionException, InterruptedException {
+        IntegrationTestUtils.produceKeyValuesSynchronously(topic, records, producerConfig, null, time, enableTransactions);
+    }
+
+    public static <K, V> void produceKeyValuesSynchronously(final String topic,
+                                                            final Collection<KeyValue<K, V>> records,
+                                                            final Properties producerConfig,
+                                                            final Headers headers,
+                                                            final Time time,
+                                                            final boolean enableTransactions)
+        throws ExecutionException, InterruptedException {
         for (final KeyValue<K, V> record : records) {
             produceKeyValuesSynchronouslyWithTimestamp(topic,
                 Collections.singleton(record),
                 producerConfig,
+                headers,
                 time.milliseconds(),
                 enableTransactions);
             time.sleep(1L);
@@ -123,20 +141,39 @@ public class IntegrationTestUtils {
     public static <K, V> void produceKeyValuesSynchronouslyWithTimestamp(final String topic,
                                                                          final Collection<KeyValue<K, V>> records,
                                                                          final Properties producerConfig,
+                                                                         final Headers headers,
+                                                                         final Long timestamp)
+        throws ExecutionException, InterruptedException {
+        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(topic, records, producerConfig, headers, timestamp, false);
+    }
+
+    public static <K, V> void produceKeyValuesSynchronouslyWithTimestamp(final String topic,
+                                                                         final Collection<KeyValue<K, V>> records,
+                                                                         final Properties producerConfig,
                                                                          final Long timestamp,
                                                                          final boolean enableTransactions)
         throws ExecutionException, InterruptedException {
+        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(topic, records, producerConfig, null, timestamp, enableTransactions);
+    }
+
+    public static <K, V> void produceKeyValuesSynchronouslyWithTimestamp(final String topic,
+                                                                         final Collection<KeyValue<K, V>> records,
+                                                                         final Properties producerConfig,
+                                                                         final Headers headers,
+                                                                         final Long timestamp,
+                                                                         final boolean enabledTransactions)
+        throws ExecutionException, InterruptedException {
         try (Producer<K, V> producer = new KafkaProducer<>(producerConfig)) {
-            if (enableTransactions) {
+            if (enabledTransactions) {
                 producer.initTransactions();
                 producer.beginTransaction();
             }
             for (final KeyValue<K, V> record : records) {
                 final Future<RecordMetadata> f = producer.send(
-                    new ProducerRecord<>(topic, null, timestamp, record.key, record.value));
+                    new ProducerRecord<>(topic, null, timestamp, record.key, record.value, headers));
                 f.get();
             }
-            if (enableTransactions) {
+            if (enabledTransactions) {
                 producer.commitTransaction();
             }
             producer.flush();
