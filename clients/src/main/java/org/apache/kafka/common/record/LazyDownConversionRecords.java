@@ -49,7 +49,6 @@ public class LazyDownConversionRecords implements WriteableRecords {
     private final byte toMagic;
     private final long firstOffset;
     private final int minimumSize;
-    private final MemoryRecords firstConvertedBatch;
     private RecordsWriter convertedRecordsWriter = null;
     private LazyDownConversionRecordsIterator convertedRecordsIterator = null;
     private RecordsProcessingStats processingStats = null;
@@ -68,14 +67,11 @@ public class LazyDownConversionRecords implements WriteableRecords {
         this.firstOffset = firstOffset;
 
         AbstractIterator<? extends RecordBatch> it = records.batchIterator();
-        if (it.hasNext()) {
-            firstConvertedBatch = RecordsUtil.downConvert(
-                    Arrays.asList(it.peek()), toMagic, firstOffset, new SystemTime()).records();
-            minimumSize = firstConvertedBatch.sizeInBytes();
-        } else {
-            firstConvertedBatch = null;
+        if (it.hasNext())
+            minimumSize = RecordsUtil.downConvert(
+                    Arrays.asList(it.peek()), toMagic, firstOffset, new SystemTime()).records().sizeInBytes();
+        else
             minimumSize = 0;
-        }
     }
 
     /**
@@ -109,11 +105,10 @@ public class LazyDownConversionRecords implements WriteableRecords {
         if (position == 0) {
             log.info("Initializing lazy down-conversion for {" + topicPartition + "} with length=" + length);
             convertedRecordsIterator = lazyDownConversionRecordsIterator(MAX_READ_SIZE);
-            convertedRecordsWriter = new RecordsWriter(firstConvertedBatch);
             processingStats = new RecordsProcessingStats(0, 0, 0);
         }
 
-        if (convertedRecordsWriter.remaining() == 0) {
+        if (convertedRecordsWriter == null || convertedRecordsWriter.remaining() == 0) {
             AbstractRecords convertedRecords;
 
             // Check if we have more chunks left to down-convert
