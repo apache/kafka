@@ -1639,8 +1639,9 @@ public class KafkaConsumerTest {
                 records = builder.build();
             }
             tpResponses.put(partition,
-                    new FetchResponse.PartitionData(Errors.NONE, 0, FetchResponse.INVALID_LAST_STABLE_OFFSET, 0L,
-                            null, records));
+                            new FetchResponse.PartitionData(
+                                    Errors.NONE, 0, FetchResponse.INVALID_LAST_STABLE_OFFSET,
+                                    0L, null, records));
         }
         return new FetchResponse(Errors.NONE, tpResponses, 0, INVALID_SESSION_ID);
     }

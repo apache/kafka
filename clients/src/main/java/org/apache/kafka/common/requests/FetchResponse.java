@@ -457,8 +457,8 @@ public class FetchResponse<T extends Records> extends AbstractResponse {
     }
 
     private static <T extends Records> Struct toStruct(short version, int throttleTimeMs, Errors error,
-                                                           Iterator<Map.Entry<TopicPartition, PartitionData<T>>> partIterator,
-                                                           int sessionId) {
+                                                       Iterator<Map.Entry<TopicPartition, PartitionData<T>>> partIterator,
+                                                       int sessionId) {
         Struct struct = new Struct(ApiKeys.FETCH.responseSchema(version));
         struct.setIfExists(THROTTLE_TIME_MS, throttleTimeMs);
         struct.setIfExists(ERROR_CODE, error.code());
@@ -523,10 +523,9 @@ public class FetchResponse<T extends Records> extends AbstractResponse {
      * @return              The response size in bytes.
      */
     public static <T extends Records> int sizeOf(short version,
-                                                     Iterator<Map.Entry<TopicPartition, PartitionData<T>>> partIterator) {
+                                                 Iterator<Map.Entry<TopicPartition, PartitionData<T>>> partIterator) {
         // Since the throttleTimeMs and metadata field sizes are constant and fixed, we can
         // use arbitrary values here without affecting the result.
         return 4 + toStruct(version, 0, Errors.NONE, partIterator, INVALID_SESSION_ID).sizeOf();
     }
-
 }

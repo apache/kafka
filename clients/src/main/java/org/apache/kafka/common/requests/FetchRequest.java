@@ -397,7 +397,7 @@ public class FetchRequest extends AbstractRequest {
     }
 
     @Override
-    public FetchResponse getErrorResponse(int throttleTimeMs, Throwable e) {
+    public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         // The error is indicated in two ways: by setting the same error code in all partitions, and by
         // setting the top-level error code.  The form where we set the same error code in all partitions
         // is needed in order to maintain backwards compatibility with older versions of the protocol
