@@ -32,8 +32,8 @@ import static org.junit.Assert.assertEquals;
 
 public class RecordDeserializerTest {
 
-  private final RecordHeaders headers = new RecordHeaders(new Header[] {new RecordHeader("key", "value".getBytes())});
-  private final ConsumerRecord<byte[], byte[]> rawRecord = new ConsumerRecord<>("topic",
+    private final RecordHeaders headers = new RecordHeaders(new Header[] {new RecordHeader("key", "value".getBytes())});
+    private final ConsumerRecord<byte[], byte[]> rawRecord = new ConsumerRecord<>("topic",
         1,
         1,
         10,
@@ -46,7 +46,7 @@ public class RecordDeserializerTest {
         headers);
 
 
-  @SuppressWarnings("deprecation")
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldReturnNewConsumerRecordWithDeserializedValueWhenNoExceptions() {
         final RecordDeserializer recordDeserializer = new RecordDeserializer(
