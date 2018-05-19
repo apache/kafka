@@ -25,8 +25,16 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Map;
 import java.util.TimeZone;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class TimestampRouter<R extends ConnectRecord<R>> implements Transformation<R> {
+
+    /** Statically compiled regex for finding topic placeholders. */
+    private static final Pattern REPLACE_TOPIC = Pattern.compile("${topic}", Pattern.LITERAL);
+
+    /** Statically compiled regex for finding timestamp placeholders. */
+    private static final Pattern REPLACE_TIMESTAMP = Pattern.compile("${timestamp}", Pattern.LITERAL);
 
     public static final String OVERVIEW_DOC =
             "Update the record's topic field as a function of the original topic value and the record timestamp."
@@ -72,7 +80,9 @@ public class TimestampRouter<R extends ConnectRecord<R>> implements Transformati
             throw new DataException("Timestamp missing on record: " + record);
         }
         final String formattedTimestamp = timestampFormat.get().format(new Date(timestamp));
-        final String updatedTopic = topicFormat.replace("${topic}", record.topic()).replace("${timestamp}", formattedTimestamp);
+        final String updatedTopic = REPLACE_TIMESTAMP.matcher(
+                REPLACE_TOPIC.matcher(topicFormat).replaceAll(Matcher.quoteReplacement(record.topic()))
+        ).replaceAll(Matcher.quoteReplacement(formattedTimestamp));
         return record.newRecord(
                 updatedTopic, record.kafkaPartition(),
                 record.keySchema(), record.key(),

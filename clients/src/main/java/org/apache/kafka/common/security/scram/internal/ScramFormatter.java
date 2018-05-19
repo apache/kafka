@@ -22,6 +22,7 @@ import java.security.InvalidKeyException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.util.regex.Pattern;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -36,6 +37,11 @@ import org.apache.kafka.common.security.scram.internal.ScramMessages.ServerFirst
  * Scram message salt and hash functions defined in <a href="https://tools.ietf.org/html/rfc5802">RFC 5802</a>.
  */
 public class ScramFormatter {
+
+    private static final Pattern REPLACE_EQUAL = Pattern.compile("=", Pattern.LITERAL);
+    private static final Pattern REPLACE_COMMA = Pattern.compile(",", Pattern.LITERAL);
+    private static final Pattern REPLACE_TWO_C = Pattern.compile("=2C", Pattern.LITERAL);
+    private static final Pattern REPLACE_THREE_D = Pattern.compile("=3D", Pattern.LITERAL);
 
     private final MessageDigest messageDigest;
     private final Mac mac;
@@ -96,14 +102,17 @@ public class ScramFormatter {
     }
 
     public String saslName(String username) {
-        return username.replace("=", "=3D").replace(",", "=2C");
+        return REPLACE_COMMA.matcher(
+                REPLACE_EQUAL.matcher(username).replaceAll("=3D")
+        ).replaceAll("=2C");
     }
 
     public String username(String saslName) {
-        String username = saslName.replace("=2C", ",");
-        if (username.replace("=3D", "").indexOf('=') >= 0)
+        String username = REPLACE_TWO_C.matcher(saslName).replaceAll(",");
+        if (REPLACE_THREE_D.matcher(username).replaceAll("").indexOf('=') >= 0) {
             throw new IllegalArgumentException("Invalid username: " + saslName);
-        return username.replace("=3D", "=");
+        }
+        return REPLACE_THREE_D.matcher(username).replaceAll("=");
     }
 
     public String authMessage(String clientFirstMessageBare, String serverFirstMessage, String clientFinalMessageWithoutProof) {

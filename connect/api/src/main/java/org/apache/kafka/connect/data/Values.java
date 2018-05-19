@@ -38,6 +38,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.TimeZone;
+import java.util.regex.Pattern;
 
 /**
  * Utility for converting from one Connect value to a different form. This is useful when the caller expects a value of a particular type
@@ -83,6 +84,12 @@ public class Values {
     private static final int ISO_8601_DATE_LENGTH = ISO_8601_DATE_FORMAT_PATTERN.length();
     private static final int ISO_8601_TIME_LENGTH = ISO_8601_TIME_FORMAT_PATTERN.length() - 2; // subtract single quotes
     private static final int ISO_8601_TIMESTAMP_LENGTH = ISO_8601_TIMESTAMP_FORMAT_PATTERN.length() - 4; // subtract single quotes
+
+    /** Statically compiled pattern for finding two consequtive backslashes */
+    private static final Pattern REPLACE_BACKSLASH_TWO = Pattern.compile("\\\\");
+
+    /** Statically compiled pattern for finding a double quote. */
+    private static final Pattern REPLACE_DOUBLEQOUTE = Pattern.compile("\"");
 
     /**
      * Convert the specified value to an {@link Type#BOOLEAN} value. The supplied schema is required if the value is a logical
@@ -704,7 +711,9 @@ public class Values {
     }
 
     protected static String escape(String value) {
-        return value.replaceAll("\\\\", "\\\\\\\\").replaceAll("\"", "\\\\\"");
+        return REPLACE_DOUBLEQOUTE.matcher(
+                REPLACE_BACKSLASH_TWO.matcher(value).replaceAll("\\\\\\\\")
+        ).replaceAll("\\\\\"");
     }
 
     protected static DateFormat dateFormatFor(java.util.Date value) {

@@ -20,6 +20,7 @@ package org.apache.kafka.common.utils;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
+import java.util.regex.Pattern;
 
 /**
  * Temporary class in order to support Java 7 and Java 9. `DatatypeConverter` is not in the base module of Java 9
@@ -222,6 +223,15 @@ public final class Base64 {
         private static final MethodHandle PRINT;
         private static final MethodHandle PARSE;
 
+        /** Statically compiled Pattern for finding the literal "+" character. */
+        private static final Pattern REPLACE_PLUS = Pattern.compile("+", Pattern.LITERAL);
+        /** Statically compiled Pattern for finding the literal "/" character. */
+        private static final Pattern REPLACE_FORWARD_SLASH = Pattern.compile("/", Pattern.LITERAL);
+        /** Statically compiled Pattern for finding the literal "-" character. */
+        private static final Pattern REPLACE_MINUS = Pattern.compile("-", Pattern.LITERAL);
+        /** Statically compiled Pattern for finding the literal "_" character. */
+        private static final Pattern REPLACE_UNDERSCORE = Pattern.compile("_", Pattern.LITERAL);
+
         static {
             try {
                 Class<?> cls = Class.forName("javax.xml.bind.DatatypeConverter");
@@ -244,7 +254,9 @@ public final class Base64 {
                     return "";
                 String base64EncodedUUID = Java7Factory.encodeToString(bytes);
                 // Convert to URL safe variant by replacing + and / with - and _ respectively.
-                String urlSafeBase64EncodedUUID = base64EncodedUUID.replace("+", "-").replace("/", "_");
+                String urlSafeBase64EncodedUUID = REPLACE_FORWARD_SLASH.matcher(
+                        REPLACE_PLUS.matcher(base64EncodedUUID).replaceAll("-")
+                ).replaceAll("_");
                 // Remove any "=" or "==" padding at the end.
                 // Note that length will be at least 4 here.
                 int index = urlSafeBase64EncodedUUID.indexOf('=', urlSafeBase64EncodedUUID.length() - 2);
@@ -278,7 +290,9 @@ public final class Base64 {
                 try {
                     // Convert from URL safe variant by replacing - and _ with + and / respectively,
                     // and append "=" or "==" padding; then decode.
-                    String unpadded = string.replace("-", "+").replace("_", "/");
+                    String unpadded = REPLACE_UNDERSCORE.matcher(
+                            REPLACE_MINUS.matcher(string).replaceAll("+")
+                    ).replaceAll("/");
                     int padLength = 4 - (unpadded.length() & 3);
                     return (byte[]) PARSE.invokeExact(padLength > 2 ? unpadded : unpadded + "==".substring(0, padLength));
                 } catch (Throwable throwable) {
