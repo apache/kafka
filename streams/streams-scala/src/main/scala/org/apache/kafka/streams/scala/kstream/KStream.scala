@@ -283,7 +283,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
     * // to the through call
     * }}}
     *
-    * @param extractor the mapper from key value to topic name
+    * @param extractor the extractor to determine the name of the Kafka topic to write to for reach record
     * @param (implicit) produced the instance of Produced that gives the serdes and `StreamPartitioner`
     * @see `org.apache.kafka.streams.kstream.KStream#to`
     */

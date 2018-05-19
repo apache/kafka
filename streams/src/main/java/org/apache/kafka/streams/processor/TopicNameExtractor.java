@@ -20,20 +20,19 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.streams.processor.internals.RecordContext;
 
 /**
- * An interface that allows to dynamically determine the topic name to send to at the sink node of the topology.
+ * An interface that allows to dynamically determine the name of the Kafka topic to send at the sink node of the topology.
  */
 @InterfaceStability.Evolving
 public interface TopicNameExtractor<K, V> {
 
     /**
      * Extracts the topic name to send to. The topic name must be pre-existed, since the Kafka Streams library will not
-     * try to automatically create the topic with the extracted name, and will fail with a timeout exception if the topic
-     * does not exist in the Kafka cluster.
+     * try to automatically create the topic with the extracted name.
      *
      * @param key           the record key
-     * @param value         the record value payload
+     * @param value         the record value
      * @param recordContext current context metadata of the record
-     * @return the topic name to send to
+     * @return              the topic name this record should be sent to
      */
     String extract(K key, V value, RecordContext recordContext);
 }

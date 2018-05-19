@@ -314,6 +314,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     @Override
     public void to(final TopicNameExtractor<K, V> topicExtractor) {
+        Objects.requireNonNull(topicExtractor, "topic extractor can't be null");
         to(topicExtractor, Produced.<K, V>with(null, null, null));
     }
 

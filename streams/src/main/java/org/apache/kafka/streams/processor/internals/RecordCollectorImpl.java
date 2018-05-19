@@ -39,6 +39,8 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.ProductionExceptionHandler;
 import org.apache.kafka.streams.errors.ProductionExceptionHandler.ProductionExceptionHandlerResponse;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.internals.WindowedStreamPartitioner;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.slf4j.Logger;
 
@@ -86,7 +88,11 @@ public class RecordCollectorImpl implements RecordCollector {
         if (partitioner != null) {
             final List<PartitionInfo> partitions = producer.partitionsFor(topic);
             if (partitions.size() > 0) {
-                partition = partitioner.partition(key, value, partitions.size());
+                if (partitioner instanceof WindowedStreamPartitioner && ((WindowedStreamPartitioner) partitioner).topic() == null) {
+                    partition = ((WindowedStreamPartitioner) partitioner).partition(topic, (Windowed) key, value, partitions.size());
+                } else {
+                    partition = partitioner.partition(key, value, partitions.size());
+                }
             } else {
                 throw new StreamsException("Could not get partition information for topic '" + topic + "'." +
                     " This can happen if the topic does not exist.");

@@ -232,11 +232,11 @@ public class KStreamImplTest {
         stream.to(new TopicNameExtractor<String, String>() {
             @Override
             public String extract(String key, String value, RecordContext recordContext) {
-                return recordContext.topic() + "-" + key + "-topic";
+                return recordContext.topic() + "-" + key + "-" + value.substring(0, 1);
             }
         }, Produced.with(Serdes.String(), Serdes.String()));
-        builder.stream(input + "-a-topic", stringConsumed).process(processorSupplier);
-        builder.stream(input + "-b-topic", stringConsumed).process(processorSupplier);
+        builder.stream(input + "-a-v", stringConsumed).process(processorSupplier);
+        builder.stream(input + "-b-v", stringConsumed).process(processorSupplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             driver.pipeInput(recordFactory.create(input, "a", "v1"));

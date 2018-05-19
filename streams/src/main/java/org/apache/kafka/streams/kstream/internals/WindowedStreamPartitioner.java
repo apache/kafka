@@ -37,6 +37,10 @@ public class WindowedStreamPartitioner<K, V> implements StreamPartitioner<Window
         this.serializer = serializer;
     }
 
+    public String topic() {
+        return this.topic;
+    }
+
     /**
      * WindowedStreamPartitioner determines the partition number for a record with the given windowed key and value
      * and the current number of partitions. The partition number id determined by the original key of the windowed key
@@ -47,7 +51,15 @@ public class WindowedStreamPartitioner<K, V> implements StreamPartitioner<Window
      * @param numPartitions the total number of partitions
      * @return an integer between 0 and {@code numPartitions-1}, or {@code null} if the default partitioning logic should be used
      */
+    @Override
     public Integer partition(final Windowed<K> windowedKey, final V value, final int numPartitions) {
+        final byte[] keyBytes = serializer.serializeBaseKey(topic, windowedKey);
+
+        // hash the keyBytes to choose a partition
+        return toPositive(Utils.murmur2(keyBytes)) % numPartitions;
+    }
+
+    public Integer partition(final String topic, final Windowed<K> windowedKey, final V value, final int numPartitions) {
         final byte[] keyBytes = serializer.serializeBaseKey(topic, windowedKey);
 
         // hash the keyBytes to choose a partition

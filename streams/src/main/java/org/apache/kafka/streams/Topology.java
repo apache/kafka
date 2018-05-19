@@ -519,30 +519,32 @@ public class Topology {
 
     /**
      * Add a new sink that forwards records from upstream parent processor and/or source nodes to Kafka topics dynamically.
+     * The topics that it may ever send to should be pre-created.
      * The sink will use the {@link StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG default key serializer} and
      * {@link StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG default value serializer} specified in the
      * {@link StreamsConfig stream configuration}.
      *
      * @param name              the unique name of the sink
-     * @param topicExtractor    the mapper to dynamically choose the name of the Kafka topic to which this sink should write per reach record
+     * @param topicExtractor    the extractor to determine the name of the Kafka topic to which this sink should write for reach record
      * @param parentNames       the name of one or more source or processor nodes whose output records this sink should consume
-     *                          and write to its topic
+     *                          and dynamically write to topics
      * @return                  itself
-     * @throws TopologyException if parent processor is not added yet, or if this processor's name is equal to the parent's name
+     * @throws TopologyException if parent processor is not added yet, or if this processor's name is not unique
      * @see #addSink(String, String, StreamPartitioner, String...)
      * @see #addSink(String, String, Serializer, Serializer, String...)
      * @see #addSink(String, String, Serializer, Serializer, StreamPartitioner, String...)
      */
     public synchronized <K, V> Topology addSink(final String name,
-                                         final TopicNameExtractor<K, V> topicExtractor,
-                                         final String... parentNames) {
+                                                final TopicNameExtractor<K, V> topicExtractor,
+                                                final String... parentNames) {
         internalTopologyBuilder.addSink(name, topicExtractor, null, null, null, parentNames);
         return this;
     }
 
     /**
-     * Add a new sink that forwards records from upstream parent processor and/or source nodes to  Kafka topics dynamically,
+     * Add a new sink that forwards records from upstream parent processor and/or source nodes to Kafka topics dynamically,
      * using the supplied partitioner.
+     * The topics that it may ever send to should be pre-created.
      * The sink will use the {@link StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG default key serializer} and
      * {@link StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG default value serializer} specified in the
      * {@link StreamsConfig stream configuration}.
@@ -555,12 +557,12 @@ public class Topology {
      * records among partitions using Kafka's default partitioning logic.
      *
      * @param name              the unique name of the sink
-     * @param topicExtractor    the mapper to dynamically choose the name of the Kafka topic to which this sink should write per reach record
+     * @param topicExtractor    the extractor to determine the name of the Kafka topic to which this sink should write for reach record
      * @param partitioner       the function that should be used to determine the partition for each record processed by the sink
      * @param parentNames       the name of one or more source or processor nodes whose output records this sink should consume
-     *                          and write to its topic
+     *                          and dynamically write to topics
      * @return                  itself
-     * @throws TopologyException if parent processor is not added yet, or if this processor's name is equal to the parent's name
+     * @throws TopologyException if parent processor is not added yet, or if this processor's name is not unique
      * @see #addSink(String, String, String...)
      * @see #addSink(String, String, Serializer, Serializer, String...)
      * @see #addSink(String, String, Serializer, Serializer, StreamPartitioner, String...)
@@ -575,10 +577,11 @@ public class Topology {
 
     /**
      * Add a new sink that forwards records from upstream parent processor and/or source nodes to Kafka topics dynamically.
+     * The topics that it may ever send to should be pre-created.
      * The sink will use the specified key and value serializers.
      *
      * @param name              the unique name of the sink
-     * @param topicExtractor    the mapper to dynamically choose the name of the Kafka topic to which this sink should write per reach record
+     * @param topicExtractor    the extractor to determine the name of the Kafka topic to which this sink should write for reach record
      * @param keySerializer     the {@link Serializer key serializer} used when consuming records; may be null if the sink
      *                          should use the {@link StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG default key serializer} specified in the
      *                          {@link StreamsConfig stream configuration}
@@ -586,9 +589,9 @@ public class Topology {
      *                          should use the {@link StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG default value serializer} specified in the
      *                          {@link StreamsConfig stream configuration}
      * @param parentNames       the name of one or more source or processor nodes whose output records this sink should consume
-     *                          and write to its topic
+     *                          and dynamically write to topics
      * @return                  itself
-     * @throws TopologyException if parent processor is not added yet, or if this processor's name is equal to the parent's name
+     * @throws TopologyException if parent processor is not added yet, or if this processor's name is not unique
      * @see #addSink(String, String, String...)
      * @see #addSink(String, String, StreamPartitioner, String...)
      * @see #addSink(String, String, Serializer, Serializer, StreamPartitioner, String...)
@@ -604,10 +607,11 @@ public class Topology {
 
     /**
      * Add a new sink that forwards records from upstream parent processor and/or source nodes to Kafka topics dynamically.
+     * The topics that it may ever send to should be pre-created.
      * The sink will use the specified key and value serializers, and the supplied partitioner.
      *
      * @param name              the unique name of the sink
-     * @param topicExtractor    the mapper to dynamically choose the name of the Kafka topic to which this sink should write per reach record
+     * @param topicExtractor    the extractor to determine the name of the Kafka topic to which this sink should write for reach record
      * @param keySerializer     the {@link Serializer key serializer} used when consuming records; may be null if the sink
      *                          should use the {@link StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG default key serializer} specified in the
      *                          {@link StreamsConfig stream configuration}
@@ -616,9 +620,9 @@ public class Topology {
      *                          {@link StreamsConfig stream configuration}
      * @param partitioner       the function that should be used to determine the partition for each record processed by the sink
      * @param parentNames       the name of one or more source or processor nodes whose output records this sink should consume
-     *                          and write to its topic
+     *                          and dynamically write to topics
      * @return                  itself
-     * @throws TopologyException if parent processor is not added yet, or if this processor's name is equal to the parent's name
+     * @throws TopologyException if parent processor is not added yet, or if this processor's name is not unique
      * @see #addSink(String, String, String...)
      * @see #addSink(String, String, StreamPartitioner, String...)
      * @see #addSink(String, String, Serializer, Serializer, String...)

@@ -471,18 +471,17 @@ public interface KStream<K, V> {
     /**
      * Dynamically materialize this stream to topics using default serializers specified in the config and producer's
      * {@link DefaultPartitioner}.
-     * The topic names for each record to send to is dynamically determined based on the {@link KeyValueMapper}.
+     * The topic names for each record to send to is dynamically determined based on the {@link TopicNameExtractor}.
      *
-     * @param topicExtractor    the dynamic topic chooser
+     * @param topicExtractor    the extractor to determine the name of the Kafka topic to write to for reach record
      */
     void to(final TopicNameExtractor<K, V> topicExtractor);
 
     /**
-     * Dynamically materialize this stream to topics using default serializers specified in the config and producer's
-     * {@link DefaultPartitioner}.
-     * The topic names for each record to send to is dynamically determined based on the {@link KeyValueMapper}.
+     * Dynamically materialize this stream to topics using default serializers specified in the config.
+     * The topic names for each record to send to is dynamically determined based on the {@link TopicNameExtractor}.
      *
-     * @param topicExtractor    the dynamic topic chooser
+     * @param topicExtractor    the extractor to determine the name of the Kafka topic to write to for reach record
      * @param produced          the options to use when producing to the topic
      */
     void to(final TopicNameExtractor<K, V> topicExtractor,
