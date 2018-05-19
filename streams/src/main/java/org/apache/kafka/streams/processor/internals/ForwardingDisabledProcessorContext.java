@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -130,6 +131,11 @@ public final class ForwardingDisabledProcessorContext implements ProcessorContex
     @Override
     public long offset() {
         return delegate.offset();
+    }
+
+    @Override
+    public Headers headers() {
+        return delegate.headers();
     }
 
     @Override

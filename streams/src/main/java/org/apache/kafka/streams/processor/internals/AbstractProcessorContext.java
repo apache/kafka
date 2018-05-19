@@ -145,6 +145,10 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
 
     @Override
     public Headers headers() {
+        if (recordContext == null) {
+            throw new IllegalStateException("This should not happen as headers() should only be called while a record is processed");
+        }
+
         return recordContext.headers();
     }
 
