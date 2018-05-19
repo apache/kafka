@@ -748,4 +748,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     RecordCollector recordCollector() {
         return recordCollector;
     }
+
+    Producer<byte[], byte[]> getProducer() {
+        return producer;
+    }
 }
