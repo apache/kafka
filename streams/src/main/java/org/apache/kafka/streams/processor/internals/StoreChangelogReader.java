@@ -51,7 +51,7 @@ public class StoreChangelogReader implements ChangelogReader {
     private final Map<TopicPartition, StateRestorer> stateRestorers = new HashMap<>();
     private final Map<TopicPartition, StateRestorer> needsRestoring = new HashMap<>();
     private final Map<TopicPartition, StateRestorer> needsInitializing = new HashMap<>();
-    private Map<TopicPartition, Long> updatedEndOffsets = null;
+    private Map<TopicPartition, Long> updatedEndOffsets = new HashMap<>();
 
     public StoreChangelogReader(final Consumer<byte[], byte[]> restoreConsumer,
                                 final StateRestoreListener userStateRestoreListener,
@@ -80,8 +80,10 @@ public class StoreChangelogReader implements ChangelogReader {
 
         final Set<TopicPartition> restoringPartitions = new HashSet<>(needsRestoring.keySet());
         try {
-            if (!needsRestoring.isEmpty() && updatedEndOffsets == null) {
-                updatedEndOffsets = restoreConsumer.endOffsets(restoringPartitions);
+            if (!needsRestoring.isEmpty()) {
+                final Set<TopicPartition> remainingPartitions = new HashSet<>(needsRestoring.keySet());
+                remainingPartitions.removeAll(updatedEndOffsets.keySet());
+                updatedEndOffsets.putAll(restoreConsumer.endOffsets(remainingPartitions));
             }
             final ConsumerRecords<byte[], byte[]> records = poll(restoreConsumer, 10);
             final Iterator<TopicPartition> iterator = restoringPartitions.iterator();
