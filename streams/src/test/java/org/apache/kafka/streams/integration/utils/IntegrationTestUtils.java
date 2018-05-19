@@ -231,6 +231,12 @@ public class IntegrationTestUtils {
         }
     }
 
+    public static <K, V> List<ConsumerRecord<K, V>> waitUntilMinRecordsReceived(final Properties consumerConfig,
+                                                                                final String topic,
+                                                                                final int expectedNumRecords) throws InterruptedException {
+        return waitUntilMinRecordsReceived(consumerConfig, topic, expectedNumRecords, DEFAULT_TIMEOUT);
+    }
+
     public static <K, V> List<KeyValue<K, V>> waitUntilMinKeyValueRecordsReceived(final Properties consumerConfig,
                                                                                   final String topic,
                                                                                   final int expectedNumRecords) throws InterruptedException {
@@ -259,6 +265,27 @@ public class IntegrationTestUtils {
                 public boolean conditionMet() {
                     final List<KeyValue<K, V>> readData =
                         readKeyValues(topic, consumer, waitTime, expectedNumRecords);
+                    accumData.addAll(readData);
+                    return accumData.size() >= expectedNumRecords;
+                }
+            };
+            final String conditionDetails = "Did not receive all " + expectedNumRecords + " records from topic " + topic;
+            TestUtils.waitForCondition(valuesRead, waitTime, conditionDetails);
+        }
+        return accumData;
+    }
+
+    public static <K, V> List<ConsumerRecord<K, V>> waitUntilMinRecordsReceived(final Properties consumerConfig,
+                                                                                final String topic,
+                                                                                final int expectedNumRecords,
+                                                                                final long waitTime) throws InterruptedException {
+        final List<ConsumerRecord<K, V>> accumData = new ArrayList<>();
+        try (final Consumer<K, V> consumer = createConsumer(consumerConfig)) {
+            final TestCondition valuesRead = new TestCondition() {
+                @Override
+                public boolean conditionMet() {
+                    final List<ConsumerRecord<K, V>> readData =
+                        readRecords(topic, consumer, waitTime, expectedNumRecords);
                     accumData.addAll(readData);
                     return accumData.size() >= expectedNumRecords;
                 }
@@ -417,21 +444,33 @@ public class IntegrationTestUtils {
                                                              final Consumer<K, V> consumer,
                                                              final long waitTime,
                                                              final int maxMessages) {
-        final List<KeyValue<K, V>> consumedValues;
+        final List<KeyValue<K, V>> consumedValues = new ArrayList<>();
+        final List<ConsumerRecord<K, V>> records = readRecords(topic, consumer, waitTime, maxMessages);
+        for (final ConsumerRecord<K, V> record : records) {
+            consumedValues.add(new KeyValue<>(record.key(), record.value()));
+        }
+        return consumedValues;
+    }
+
+    private static <K, V> List<ConsumerRecord<K, V>> readRecords(final String topic,
+                                                                 final Consumer<K, V> consumer,
+                                                                 final long waitTime,
+                                                                 final int maxMessages) {
+        final List<ConsumerRecord<K, V>> consumerRecords;
         consumer.subscribe(Collections.singletonList(topic));
         final int pollIntervalMs = 100;
-        consumedValues = new ArrayList<>();
+        consumerRecords = new ArrayList<>();
         int totalPollTimeMs = 0;
         while (totalPollTimeMs < waitTime &&
-            continueConsuming(consumedValues.size(), maxMessages)) {
+            continueConsuming(consumerRecords.size(), maxMessages)) {
             totalPollTimeMs += pollIntervalMs;
             final ConsumerRecords<K, V> records = consumer.poll(pollIntervalMs);
 
             for (final ConsumerRecord<K, V> record : records) {
-                consumedValues.add(new KeyValue<>(record.key(), record.value()));
+                consumerRecords.add(record);
             }
         }
-        return consumedValues;
+        return consumerRecords;
     }
 
     private static boolean continueConsuming(final int messagesConsumed, final int maxMessages) {

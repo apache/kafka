@@ -6,7 +6,6 @@ import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
-import org.apache.kafka.common.requests.IsolationLevel;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
@@ -26,7 +25,6 @@ import org.junit.experimental.categories.Category;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 
@@ -50,7 +48,6 @@ public class HeadersSupportIntegrationTest {
     private static final String THROUGH_TOPIC = "throughTopic";
     private static final String OUTPUT_TOPIC = "outputTopic";
 
-    private Headers headers = new RecordHeaders(new Header[]{new RecordHeader("hkey", "hvalue".getBytes())});
 
     private int testNumber = 0;
 
@@ -92,6 +89,8 @@ public class HeadersSupportIntegrationTest {
 
             final List<KeyValue<Long, Long>> inputData = prepareData(0, 10L, 0L, 1L);
 
+            final Headers headers = new RecordHeaders(new Header[]{new RecordHeader("hkey", "hvalue".getBytes())});
+
             IntegrationTestUtils.produceKeyValuesSynchronously(
                     INPUT_TOPIC,
                     inputData,
@@ -106,15 +105,11 @@ public class HeadersSupportIntegrationTest {
                                     CONSUMER_GROUP_ID,
                                     LongDeserializer.class,
                                     LongDeserializer.class,
-                                    new Properties() {
-                                        {
-                                            put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT));
-                                        }
-                                    }),
-                            OUTPUT_TOPIC,
+                                    new Properties()),
+                            THROUGH_TOPIC,
                             inputData.size());
 
-            checkResultRecordsHasHeaders(intermediateRecords);
+            checkResultRecordsHasHeaders(headers, intermediateRecords);
 
             final List<ConsumerRecord<Long, Long>> outputRecords =
                     IntegrationTestUtils.waitUntilMinRecordsReceived(
@@ -123,15 +118,11 @@ public class HeadersSupportIntegrationTest {
                                     CONSUMER_GROUP_ID,
                                     LongDeserializer.class,
                                     LongDeserializer.class,
-                                    new Properties() {
-                                        {
-                                            put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT));
-                                        }
-                                    }),
+                                    new Properties()),
                             OUTPUT_TOPIC,
                             inputData.size());
 
-            checkResultRecordsHasHeaders(outputRecords);
+            checkResultRecordsHasHeaders(headers, outputRecords);
         } finally {
             streams.close();
         }
@@ -141,6 +132,10 @@ public class HeadersSupportIntegrationTest {
     @Test
     public void shouldAddHeadersToInputRecord() throws ExecutionException, InterruptedException {
         final Topology topology = new Topology();
+
+
+        final Headers[] headers = new Headers[1];
+
         topology
                 .addSource("INPUT", INPUT_TOPIC)
                 .addProcessor("HEADER_PROCESSOR", new ProcessorSupplier() {
@@ -150,7 +145,7 @@ public class HeadersSupportIntegrationTest {
                             @Override
                             public void process(Object key, Object value) {
                                 context().headers().add("hkey", "hvalue".getBytes());
-                                headers = context().headers();
+                                headers[0] = context().headers();
                                 context().forward(key, value);
                             }
                         };
@@ -177,6 +172,7 @@ public class HeadersSupportIntegrationTest {
 
             final List<KeyValue<Long, Long>> inputData = prepareData(0, 10L, 0L, 1L);
 
+
             IntegrationTestUtils.produceKeyValuesSynchronously(
                     INPUT_TOPIC,
                     inputData,
@@ -190,22 +186,18 @@ public class HeadersSupportIntegrationTest {
                                     CONSUMER_GROUP_ID,
                                     LongDeserializer.class,
                                     LongDeserializer.class,
-                                    new Properties() {
-                                        {
-                                            put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT));
-                                        }
-                                    }),
+                                    new Properties()),
                             OUTPUT_TOPIC,
                             inputData.size());
 
-            checkResultRecordsHasHeaders(outputRecords);
+            checkResultRecordsHasHeaders(headers[0], outputRecords);
         } finally {
             streams.close();
         }
 
     }
 
-    private void checkResultRecordsHasHeaders(List<ConsumerRecord<Long, Long>> committedRecords) {
+    private void checkResultRecordsHasHeaders(Headers headers, List<ConsumerRecord<Long, Long>> committedRecords) {
         for (ConsumerRecord<Long, Long> record : committedRecords) {
             assertThat(headers, equalTo(record.headers()));
         }
