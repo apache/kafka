@@ -27,6 +27,10 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Sum;
@@ -85,14 +89,16 @@ public class RecordCollectorTest {
             new Metrics().sensor("skipped-records")
         );
 
+        final Headers headers = new RecordHeaders(new Header[]{new RecordHeader("key", "value".getBytes())});
+
         collector.send("topic1", "999", "0", null, 0, null, stringSerializer, stringSerializer);
         collector.send("topic1", "999", "0", null, 0, null, stringSerializer, stringSerializer);
         collector.send("topic1", "999", "0", null, 0, null, stringSerializer, stringSerializer);
 
-        collector.send("topic1", "999", "0", null, 1, null, stringSerializer, stringSerializer);
-        collector.send("topic1", "999", "0", null, 1, null, stringSerializer, stringSerializer);
+        collector.send("topic1", "999", "0", headers, 1, null, stringSerializer, stringSerializer);
+        collector.send("topic1", "999", "0", headers, 1, null, stringSerializer, stringSerializer);
 
-        collector.send("topic1", "999", "0", null, 2, null, stringSerializer, stringSerializer);
+        collector.send("topic1", "999", "0", headers, 2, null, stringSerializer, stringSerializer);
 
         final Map<TopicPartition, Long> offsets = collector.offsets();
 
@@ -103,7 +109,7 @@ public class RecordCollectorTest {
         // ignore StreamPartitioner
         collector.send("topic1", "999", "0", null, 0, null, stringSerializer, stringSerializer);
         collector.send("topic1", "999", "0", null, 1, null, stringSerializer, stringSerializer);
-        collector.send("topic1", "999", "0", null, 2, null, stringSerializer, stringSerializer);
+        collector.send("topic1", "999", "0", headers, 2, null, stringSerializer, stringSerializer);
 
         assertEquals((Long) 3L, offsets.get(new TopicPartition("topic1", 0)));
         assertEquals((Long) 2L, offsets.get(new TopicPartition("topic1", 1)));
@@ -121,15 +127,17 @@ public class RecordCollectorTest {
             new Metrics().sensor("skipped-records")
         );
 
+        final Headers headers = new RecordHeaders(new Header[]{new RecordHeader("key", "value".getBytes())});
+
         collector.send("topic1", "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
         collector.send("topic1", "9", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
         collector.send("topic1", "27", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
         collector.send("topic1", "81", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
         collector.send("topic1", "243", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
 
-        collector.send("topic1", "28", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
-        collector.send("topic1", "82", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
-        collector.send("topic1", "244", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
+        collector.send("topic1", "28", "0", headers, null, stringSerializer, stringSerializer, streamPartitioner);
+        collector.send("topic1", "82", "0", headers, null, stringSerializer, stringSerializer, streamPartitioner);
+        collector.send("topic1", "244", "0", headers, null, stringSerializer, stringSerializer, streamPartitioner);
 
         collector.send("topic1", "245", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
 
