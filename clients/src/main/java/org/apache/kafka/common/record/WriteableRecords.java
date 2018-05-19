@@ -21,7 +21,7 @@ import org.apache.kafka.common.TopicPartitionRecordsStats;
 import java.io.IOException;
 import java.nio.channels.GatheringByteChannel;
 
-public interface WriteableRecords extends BaseRecords {
+public interface WriteableRecords extends Records {
     /**
      * Attempts to write the contents of this buffer to a channel.
      * @param channel The channel to write to
@@ -32,7 +32,7 @@ public interface WriteableRecords extends BaseRecords {
      */
     long writeTo(GatheringByteChannel channel, long position, int length) throws IOException;
 
-    /**
+   /**
      * Get records processing statistics, if there are any. This is typically used for cases when records require
      * additional processing while serializing, for example for {@link LazyDownConversionRecords}.
      * @return Processing statistics for enclosed records

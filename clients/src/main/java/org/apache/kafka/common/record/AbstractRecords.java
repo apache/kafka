@@ -23,7 +23,7 @@ import org.apache.kafka.common.utils.Utils;
 import java.nio.ByteBuffer;
 import java.util.Iterator;
 
-public abstract class AbstractRecords implements Records {
+public abstract class AbstractRecords implements ReadableRecords, WriteableRecords {
 
     private final Iterable<Record> records = new Iterable<Record>() {
         @Override
@@ -47,8 +47,6 @@ public abstract class AbstractRecords implements Records {
                 return false;
         return true;
     }
-
-
 
     /**
      * Get an iterator over the deep records.

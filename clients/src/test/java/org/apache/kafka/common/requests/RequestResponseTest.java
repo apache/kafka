@@ -461,14 +461,14 @@ public class RequestResponseTest {
 
     @Test
     public void fetchResponseVersionTest() {
-        LinkedHashMap<TopicPartition, DefaultFetchResponse.PartitionData> responseData = new LinkedHashMap<>();
+        LinkedHashMap<TopicPartition, FetchResponse.PartitionData> responseData = new LinkedHashMap<>();
 
         MemoryRecords records = MemoryRecords.readableRecords(ByteBuffer.allocate(10));
-        responseData.put(new TopicPartition("test", 0), new DefaultFetchResponse.PartitionData(Errors.NONE, 1000000,
+        responseData.put(new TopicPartition("test", 0), new FetchResponse.PartitionData(Errors.NONE, 1000000,
                 FetchResponse.INVALID_LAST_STABLE_OFFSET, 0L, null, records));
 
-        FetchResponse v0Response = new DefaultFetchResponse(Errors.NONE, responseData, 0, INVALID_SESSION_ID);
-        FetchResponse v1Response = new DefaultFetchResponse(Errors.NONE, responseData, 10, INVALID_SESSION_ID);
+        FetchResponse v0Response = new FetchResponse(Errors.NONE, responseData, 0, INVALID_SESSION_ID);
+        FetchResponse v1Response = new FetchResponse(Errors.NONE, responseData, 10, INVALID_SESSION_ID);
         assertEquals("Throttle time must be zero", 0, v0Response.throttleTimeMs());
         assertEquals("Throttle time must be 10", 10, v1Response.throttleTimeMs());
         assertEquals("Should use schema version 0", ApiKeys.FETCH.responseSchema((short) 0),
@@ -481,7 +481,7 @@ public class RequestResponseTest {
 
     @Test
     public void testFetchResponseV4() {
-        LinkedHashMap<TopicPartition, DefaultFetchResponse.PartitionData> responseData = new LinkedHashMap<>();
+        LinkedHashMap<TopicPartition, FetchResponse.PartitionData> responseData = new LinkedHashMap<>();
 
         MemoryRecords records = MemoryRecords.readableRecords(ByteBuffer.allocate(10));
 
@@ -489,15 +489,15 @@ public class RequestResponseTest {
                 new FetchResponse.AbortedTransaction(10, 100),
                 new FetchResponse.AbortedTransaction(15, 50)
         );
-        responseData.put(new TopicPartition("bar", 0), new DefaultFetchResponse.PartitionData(Errors.NONE, 100000,
+        responseData.put(new TopicPartition("bar", 0), new FetchResponse.PartitionData(Errors.NONE, 100000,
                 FetchResponse.INVALID_LAST_STABLE_OFFSET, FetchResponse.INVALID_LOG_START_OFFSET, abortedTransactions, records));
-        responseData.put(new TopicPartition("bar", 1), new DefaultFetchResponse.PartitionData(Errors.NONE, 900000,
+        responseData.put(new TopicPartition("bar", 1), new FetchResponse.PartitionData(Errors.NONE, 900000,
                 5, FetchResponse.INVALID_LOG_START_OFFSET, null, records));
-        responseData.put(new TopicPartition("foo", 0), new DefaultFetchResponse.PartitionData(Errors.NONE, 70000,
+        responseData.put(new TopicPartition("foo", 0), new FetchResponse.PartitionData(Errors.NONE, 70000,
                 6, FetchResponse.INVALID_LOG_START_OFFSET, Collections.<FetchResponse.AbortedTransaction>emptyList(), records));
 
-        FetchResponse response = new DefaultFetchResponse(Errors.NONE, responseData, 10, INVALID_SESSION_ID);
-        FetchResponse deserialized = DefaultFetchResponse.parse(toBuffer(response.toStruct((short) 4)), (short) 4);
+        FetchResponse response = new FetchResponse(Errors.NONE, responseData, 10, INVALID_SESSION_ID);
+        FetchResponse deserialized = FetchResponse.parse(toBuffer(response.toStruct((short) 4)), (short) 4);
         assertEquals(responseData, deserialized.responseData());
     }
 
@@ -641,34 +641,34 @@ public class RequestResponseTest {
     }
 
     private FetchResponse createFetchResponse(Errors error, int sessionId) {
-        return new DefaultFetchResponse(error, new LinkedHashMap<TopicPartition, DefaultFetchResponse.PartitionData>(),
+        return new FetchResponse(error, new LinkedHashMap<TopicPartition, FetchResponse.PartitionData>(),
             25, sessionId);
     }
 
     private FetchResponse createFetchResponse(int sessionId) {
-        LinkedHashMap<TopicPartition, DefaultFetchResponse.PartitionData> responseData = new LinkedHashMap<>();
+        LinkedHashMap<TopicPartition, FetchResponse.PartitionData> responseData = new LinkedHashMap<>();
         MemoryRecords records = MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("blah".getBytes()));
-        responseData.put(new TopicPartition("test", 0), new DefaultFetchResponse.PartitionData(Errors.NONE,
+        responseData.put(new TopicPartition("test", 0), new FetchResponse.PartitionData(Errors.NONE,
             1000000, FetchResponse.INVALID_LAST_STABLE_OFFSET, 0L, null, records));
         List<FetchResponse.AbortedTransaction> abortedTransactions = Collections.singletonList(
             new FetchResponse.AbortedTransaction(234L, 999L));
-        responseData.put(new TopicPartition("test", 1), new DefaultFetchResponse.PartitionData(Errors.NONE,
+        responseData.put(new TopicPartition("test", 1), new FetchResponse.PartitionData(Errors.NONE,
             1000000, FetchResponse.INVALID_LAST_STABLE_OFFSET, 0L, abortedTransactions, MemoryRecords.EMPTY));
-        return new DefaultFetchResponse(Errors.NONE, responseData, 25, sessionId);
+        return new FetchResponse(Errors.NONE, responseData, 25, sessionId);
     }
 
     private FetchResponse createFetchResponse() {
-        LinkedHashMap<TopicPartition, DefaultFetchResponse.PartitionData> responseData = new LinkedHashMap<>();
+        LinkedHashMap<TopicPartition, FetchResponse.PartitionData> responseData = new LinkedHashMap<>();
         MemoryRecords records = MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("blah".getBytes()));
-        responseData.put(new TopicPartition("test", 0), new DefaultFetchResponse.PartitionData(Errors.NONE,
+        responseData.put(new TopicPartition("test", 0), new FetchResponse.PartitionData(Errors.NONE,
                 1000000, FetchResponse.INVALID_LAST_STABLE_OFFSET, 0L, null, records));
 
         List<FetchResponse.AbortedTransaction> abortedTransactions = Collections.singletonList(
                 new FetchResponse.AbortedTransaction(234L, 999L));
-        responseData.put(new TopicPartition("test", 1), new DefaultFetchResponse.PartitionData(Errors.NONE,
+        responseData.put(new TopicPartition("test", 1), new FetchResponse.PartitionData(Errors.NONE,
                 1000000, FetchResponse.INVALID_LAST_STABLE_OFFSET, 0L, abortedTransactions, MemoryRecords.EMPTY));
 
-        return new DefaultFetchResponse(Errors.NONE, responseData, 25, INVALID_SESSION_ID);
+        return new FetchResponse(Errors.NONE, responseData, 25, INVALID_SESSION_ID);
     }
 
     private HeartbeatRequest createHeartBeatRequest() {

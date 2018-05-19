@@ -241,7 +241,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
     }
 
     @Override
-    public ConvertedRecords<? extends Records> downConvert(byte toMagic, long firstOffset, Time time) {
+    public ConvertedRecords<? extends ReadableRecords> downConvert(byte toMagic, long firstOffset, Time time) {
         ConvertedRecords<MemoryRecords> convertedRecords = RecordsUtil.downConvert(batches, toMagic, firstOffset, time);
         if (convertedRecords.recordsProcessingStats().numRecordsConverted() == 0) {
             // This indicates that the message is too large, which means that the buffer is not large

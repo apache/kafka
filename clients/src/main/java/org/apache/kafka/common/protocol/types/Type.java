@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.protocol.types;
 
-import org.apache.kafka.common.record.BaseRecords;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Records;
@@ -567,7 +566,7 @@ public abstract class Type {
             if (o == null)
                 return 4;
 
-            BaseRecords records = (BaseRecords) o;
+            Records records = (Records) o;
             return 4 + records.sizeInBytes();
         }
 
@@ -577,12 +576,12 @@ public abstract class Type {
         }
 
         @Override
-        public BaseRecords validate(Object item) {
+        public Records validate(Object item) {
             if (item == null)
                 return null;
 
-            if (item instanceof BaseRecords)
-                return (BaseRecords) item;
+            if (item instanceof Records)
+                return (Records) item;
 
             throw new SchemaException(item + " is not an instance of " + Records.class.getName());
         }

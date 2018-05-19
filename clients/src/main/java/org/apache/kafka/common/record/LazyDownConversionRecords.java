@@ -45,10 +45,11 @@ import java.util.List;
 public class LazyDownConversionRecords implements WriteableRecords {
     private static final Logger log = LoggerFactory.getLogger(LazyDownConversionRecords.class);
     private final TopicPartition topicPartition;
-    private final Records records;
+    private final ReadableRecords records;
     private final byte toMagic;
     private final long firstOffset;
     private final int minimumSize;
+    private final MemoryRecords firstConvertedBatch;
     private RecordsWriter convertedRecordsWriter = null;
     private LazyDownConversionRecordsIterator convertedRecordsIterator = null;
     private RecordsProcessingStats processingStats = null;
@@ -60,17 +61,21 @@ public class LazyDownConversionRecords implements WriteableRecords {
      * @param firstOffset The starting offset for down-converted records. This only impacts some cases. See
      *                    {@link RecordsUtil#downConvert(Iterable, byte, long, Time)} for an explanation.
      */
-    public LazyDownConversionRecords(TopicPartition topicPartition, Records records, byte toMagic, long firstOffset) {
+    public LazyDownConversionRecords(TopicPartition topicPartition, ReadableRecords records, byte toMagic, long firstOffset) {
         this.topicPartition = topicPartition;
         this.records = records;
         this.toMagic = toMagic;
         this.firstOffset = firstOffset;
 
         AbstractIterator<? extends RecordBatch> it = records.batchIterator();
-        if (it.hasNext())
-            this.minimumSize = RecordsUtil.downConvert(Arrays.asList(it.peek()), toMagic, firstOffset, new SystemTime()).records().sizeInBytes();
-        else
-            this.minimumSize = 0;
+        if (it.hasNext()) {
+            firstConvertedBatch = RecordsUtil.downConvert(
+                    Arrays.asList(it.peek()), toMagic, firstOffset, new SystemTime()).records();
+            minimumSize = firstConvertedBatch.sizeInBytes();
+        } else {
+            firstConvertedBatch = null;
+            minimumSize = 0;
+        }
     }
 
     /**
@@ -104,15 +109,17 @@ public class LazyDownConversionRecords implements WriteableRecords {
         if (position == 0) {
             log.info("Initializing lazy down-conversion for {" + topicPartition + "} with length=" + length);
             convertedRecordsIterator = lazyDownConversionRecordsIterator(MAX_READ_SIZE);
+            convertedRecordsWriter = new RecordsWriter(firstConvertedBatch);
             processingStats = new RecordsProcessingStats(0, 0, 0);
         }
 
-        if ((convertedRecordsWriter == null) || (convertedRecordsWriter.remaining() == 0)) {
-            Records convertedRecords;
+        if (convertedRecordsWriter.remaining() == 0) {
+            AbstractRecords convertedRecords;
 
+            // Check if we have more chunks left to down-convert
             if (convertedRecordsIterator.hasNext()) {
-                // Get next set of down-converted records
-                ConvertedRecords recordsAndStats = convertedRecordsIterator.next();
+                // Get next chunk of down-converted messages
+                ConvertedRecords<AbstractRecords> recordsAndStats = convertedRecordsIterator.next();
                 convertedRecords = recordsAndStats.records();
 
                 if ((position == 0) && (convertedRecords.batchIterator().peek().sizeInBytes() > length))
@@ -143,6 +150,7 @@ public class LazyDownConversionRecords implements WriteableRecords {
                 fakeMessageBatch.putInt(length + 1);
                 convertedRecords = MemoryRecords.readableRecords(fakeMessageBatch);
             }
+
             convertedRecordsWriter = new RecordsWriter(convertedRecords);
         }
 
@@ -156,8 +164,11 @@ public class LazyDownConversionRecords implements WriteableRecords {
 
     @Override
     public boolean equals(Object o) {
-        LazyDownConversionRecords that = (LazyDownConversionRecords) o;
-        return (toMagic == that.toMagic) && records.equals(that.records);
+        if (o instanceof LazyDownConversionRecords) {
+            LazyDownConversionRecords that = (LazyDownConversionRecords) o;
+            return (toMagic == that.toMagic) && records.equals(that.records);
+        }
+        return false;
     }
 
     @Override
@@ -174,10 +185,10 @@ public class LazyDownConversionRecords implements WriteableRecords {
      * Implementation for writing {@link Records} to a particular channel. Internally tracks the progress of writes.
      */
     private static class RecordsWriter {
-        private final Records records;
+        private final WriteableRecords records;
         private int position;
 
-        RecordsWriter(Records records) {
+        RecordsWriter(WriteableRecords records) {
             if (records == null)
                 throw new IllegalArgumentException();
             this.records = records;
@@ -220,7 +231,7 @@ public class LazyDownConversionRecords implements WriteableRecords {
          */
         private final long maximumReadSize;
 
-        LazyDownConversionRecordsIterator(Records recordsToDownConvert, long maximumReadSize) {
+        LazyDownConversionRecordsIterator(ReadableRecords recordsToDownConvert, long maximumReadSize) {
             this.batchIterator = recordsToDownConvert.batchIterator();
             this.maximumReadSize = maximumReadSize;
         }

@@ -21,8 +21,8 @@ import org.apache.kafka.common.utils.Time;
 
 import java.util.Iterator;
 
-public interface ReadableRecords extends BaseRecords {
-    /**
+public interface ReadableRecords extends Records {
+   /**
      * Get the record batches. Note that the signature allows subclasses
      * to return a more specific batch type. This enables optimizations such as in-place offset
      * assignment (see for example {@link DefaultRecordBatch}), and partial reading of

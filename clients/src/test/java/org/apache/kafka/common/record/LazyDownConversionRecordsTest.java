@@ -145,7 +145,7 @@ public class LazyDownConversionRecordsTest {
 
     private void verifyDownConvertedRecords(List<SimpleRecord> initialRecords,
                                             List<Long> initialOffsets,
-                                            Records downConvertedRecords,
+                                            MemoryRecords downConvertedRecords,
                                             CompressionType compressionType,
                                             byte toMagic) {
         int i = 0;

@@ -49,12 +49,13 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.BufferSupplier;
 import org.apache.kafka.common.record.ControlRecordType;
 import org.apache.kafka.common.record.InvalidRecordException;
+import org.apache.kafka.common.record.ReadableRecords;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.TimestampType;
-import org.apache.kafka.common.requests.DefaultFetchResponse;
-import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.requests.FetchRequest;
+import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.requests.IsolationLevel;
 import org.apache.kafka.common.requests.ListOffsetRequest;
 import org.apache.kafka.common.requests.ListOffsetResponse;
@@ -204,7 +205,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                     .addListener(new RequestFutureListener<ClientResponse>() {
                         @Override
                         public void onSuccess(ClientResponse resp) {
-                            DefaultFetchResponse response = (DefaultFetchResponse) resp.responseBody();
+                            FetchResponse<Records> response = (FetchResponse<Records>) resp.responseBody();
                             FetchSessionHandler handler = sessionHandlers.get(fetchTarget.id());
                             if (handler == null) {
                                 log.error("Unable to find FetchSessionHandler for node {}. Ignoring fetch response.",
@@ -218,10 +219,10 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                             Set<TopicPartition> partitions = new HashSet<>(response.responseData().keySet());
                             FetchResponseMetricAggregator metricAggregator = new FetchResponseMetricAggregator(sensors, partitions);
 
-                            for (Map.Entry<TopicPartition, DefaultFetchResponse.PartitionData> entry : response.responseData().entrySet()) {
+                            for (Map.Entry<TopicPartition, FetchResponse.PartitionData<Records>> entry : response.responseData().entrySet()) {
                                 TopicPartition partition = entry.getKey();
                                 long fetchOffset = data.sessionPartitions().get(partition).fetchOffset;
-                                DefaultFetchResponse.PartitionData fetchData = entry.getValue();
+                                FetchResponse.PartitionData fetchData = entry.getValue();
 
                                 log.debug("Fetch {} at offset {} for partition {} returned fetch data {}",
                                         isolationLevel, fetchOffset, partition, fetchData);
@@ -494,7 +495,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                         // in cases such as the TopicAuthorizationException, and the second condition ensures that no
                         // potential data loss due to an exception in a following record.
                         FetchResponse.PartitionData partition = completedFetch.partitionData;
-                        if (fetched.isEmpty() && (partition.records() == null || partition.records().sizeInBytes() == 0)) {
+                        if (fetched.isEmpty() && (partition.records == null || partition.records.sizeInBytes() == 0)) {
                             completedFetches.poll();
                         }
                         throw e;
@@ -894,7 +895,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
      */
     private PartitionRecords parseCompletedFetch(CompletedFetch completedFetch) {
         TopicPartition tp = completedFetch.partition;
-        DefaultFetchResponse.PartitionData partition = completedFetch.partitionData;
+        FetchResponse.PartitionData<ReadableRecords> partition = completedFetch.partitionData;
         long fetchOffset = completedFetch.fetchedOffset;
         PartitionRecords partitionRecords = null;
         Errors error = partition.error;
@@ -915,11 +916,11 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 }
 
                 log.trace("Preparing to read {} bytes of data for partition {} with offset {}",
-                        partition.records().sizeInBytes(), tp, position);
-                Iterator<? extends RecordBatch> batches = partition.records().batches().iterator();
+                        partition.records.sizeInBytes(), tp, position);
+                Iterator<? extends RecordBatch> batches = partition.records.batches().iterator();
                 partitionRecords = new PartitionRecords(tp, completedFetch, batches);
 
-                if (!batches.hasNext() && partition.records().sizeInBytes() > 0) {
+                if (!batches.hasNext() && partition.records.sizeInBytes() > 0) {
                     if (completedFetch.responseVersion < 3) {
                         // Implement the pre KIP-74 behavior of throwing a RecordTooLargeException.
                         Map<TopicPartition, Long> recordTooLargePartitions = Collections.singletonMap(tp, fetchOffset);
@@ -1252,13 +1253,13 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     private static class CompletedFetch {
         private final TopicPartition partition;
         private final long fetchedOffset;
-        private final DefaultFetchResponse.PartitionData partitionData;
+        private final FetchResponse.PartitionData<ReadableRecords> partitionData;
         private final FetchResponseMetricAggregator metricAggregator;
         private final short responseVersion;
 
         private CompletedFetch(TopicPartition partition,
                                long fetchedOffset,
-                               DefaultFetchResponse.PartitionData partitionData,
+                               FetchResponse.PartitionData<ReadableRecords> partitionData,
                                FetchResponseMetricAggregator metricAggregator,
                                short responseVersion) {
             this.partition = partition;

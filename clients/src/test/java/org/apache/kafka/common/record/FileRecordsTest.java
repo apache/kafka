@@ -345,7 +345,7 @@ public class FileRecordsTest {
         int start = fileRecords.searchForOffsetWithSize(1, 0).position;
         int size = batch.sizeInBytes();
         FileRecords slice = fileRecords.read(start, size - 1);
-        Records messageV0 = slice.downConvert(RecordBatch.MAGIC_VALUE_V0, 0, time).records();
+        ReadableRecords messageV0 = slice.downConvert(RecordBatch.MAGIC_VALUE_V0, 0, time).records();
         assertTrue("No message should be there", batches(messageV0).isEmpty());
         assertEquals("There should be " + (size - 1) + " bytes", size - 1, messageV0.sizeInBytes());
 
@@ -451,7 +451,7 @@ public class FileRecordsTest {
         }
 
         // Test the normal down-conversion path
-        List<Records> convertedRecords = new ArrayList<>();
+        List<ReadableRecords> convertedRecords = new ArrayList<>();
         convertedRecords.add(fileRecords.downConvert(toMagic, firstOffset, time).records());
         verifyConvertedRecords(initialRecords, initialOffsets, convertedRecords, compressionType, toMagic);
         convertedRecords.clear();
@@ -490,12 +490,12 @@ public class FileRecordsTest {
 
     private void verifyConvertedRecords(List<SimpleRecord> initialRecords,
                                         List<Long> initialOffsets,
-                                        List<Records> convertedRecordsList,
+                                        List<ReadableRecords> convertedRecordsList,
                                         CompressionType compressionType,
                                         byte magicByte) {
         int i = 0;
 
-        for (Records convertedRecords : convertedRecordsList) {
+        for (ReadableRecords convertedRecords : convertedRecordsList) {
             for (RecordBatch batch : convertedRecords.batches()) {
                 assertTrue("Magic byte should be lower than or equal to " + magicByte, batch.magic() <= magicByte);
                 if (batch.magic() == RecordBatch.MAGIC_VALUE_V0)
@@ -530,7 +530,7 @@ public class FileRecordsTest {
         assertEquals(initialOffsets.size(), i);
     }
 
-    private static List<RecordBatch> batches(Records buffer) {
+    private static List<RecordBatch> batches(ReadableRecords buffer) {
         return TestUtils.toList(buffer.batches());
     }
 

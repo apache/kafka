@@ -536,7 +536,7 @@ class Log(@volatile var dir: File,
     }
   }
 
-  private def loadProducersFromLog(producerStateManager: ProducerStateManager, records: Records): Unit = {
+  private def loadProducersFromLog(producerStateManager: ProducerStateManager, records: ReadableRecords): Unit = {
     val loadedProducers = mutable.Map.empty[Long, ProducerAppendInfo]
     val completedTxns = ListBuffer.empty[CompletedTxn]
     records.batches.asScala.foreach { batch =>

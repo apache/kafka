@@ -108,7 +108,7 @@ case class LogReadResult(info: FetchDataInfo,
 case class FetchPartitionData(error: Errors = Errors.NONE,
                               highWatermark: Long,
                               logStartOffset: Long,
-                              records: Records,
+                              records: AbstractRecords,
                               lastStableOffset: Option[Long],
                               abortedTransactions: Option[List[AbortedTransaction]])
 

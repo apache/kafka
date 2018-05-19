@@ -26,8 +26,8 @@ import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.{Record, RecordBatch}
-import org.apache.kafka.common.requests.{DefaultFetchResponse, FetchRequest, FetchResponse, WriteableFetchResponse, FetchMetadata => JFetchMetadata}
+import org.apache.kafka.common.record.{ReadableRecords, Record, RecordBatch}
+import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, FetchMetadata => JFetchMetadata}
 import org.apache.kafka.common.serialization.{ByteArraySerializer, StringSerializer}
 import org.junit.Assert._
 import org.junit.Test
@@ -63,9 +63,9 @@ class FetchRequestTest extends BaseRequestTest {
     partitionMap
   }
 
-  private def sendFetchRequest(leaderId: Int, request: FetchRequest): DefaultFetchResponse = {
+  private def sendFetchRequest(leaderId: Int, request: FetchRequest): FetchResponse[ReadableRecords] = {
     val response = connectAndSend(request, ApiKeys.FETCH, destination = brokerSocketServer(leaderId))
-    DefaultFetchResponse.parse(response, request.version)
+    FetchResponse.parse(response, request.version)
   }
 
   private def initProducer(): Unit = {
@@ -218,7 +218,7 @@ class FetchRequestTest extends BaseRequestTest {
     // batch is not complete, but sent when the producer is closed
     futures.foreach(_.get)
 
-    def fetch(version: Short, maxPartitionBytes: Int, closeAfterPartialResponse: Boolean): Option[DefaultFetchResponse] = {
+    def fetch(version: Short, maxPartitionBytes: Int, closeAfterPartialResponse: Boolean): Option[FetchResponse[ReadableRecords]] = {
       val fetchRequest = FetchRequest.Builder.forConsumer(Int.MaxValue, 0, createPartitionMap(maxPartitionBytes,
         Seq(topicPartition))).build(version)
 
@@ -235,7 +235,7 @@ class FetchRequestTest extends BaseRequestTest {
               size > maxPartitionBytes - batchSize)
           None
         } else {
-          Some(DefaultFetchResponse.parse(receive(socket), version))
+          Some(FetchResponse.parse(receive(socket), version))
         }
       } finally {
         socket.close()
@@ -384,11 +384,11 @@ class FetchRequestTest extends BaseRequestTest {
     assertFalse(resp4.responseData().containsKey(bar0))
   }
 
-  private def records(partitionData: DefaultFetchResponse.PartitionData): Seq[Record] = {
+  private def records(partitionData: FetchResponse.PartitionData[ReadableRecords]): Seq[Record] = {
     partitionData.records.records.asScala.toIndexedSeq
   }
 
-  private def checkFetchResponse(expectedPartitions: Seq[TopicPartition], fetchResponse: DefaultFetchResponse,
+  private def checkFetchResponse(expectedPartitions: Seq[TopicPartition], fetchResponse: FetchResponse[ReadableRecords],
                                  maxPartitionBytes: Int, maxResponseBytes: Int, numMessagesPerPartition: Int): Unit = {
     assertEquals(expectedPartitions, fetchResponse.responseData.keySet.asScala.toSeq)
     var emptyResponseSeen = false
