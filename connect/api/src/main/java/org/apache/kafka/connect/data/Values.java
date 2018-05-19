@@ -708,7 +708,7 @@ public class Values {
     private static final Pattern REPLACE_BACKSLASH_TWO = Pattern.compile("\\\\");
 
     /** Statically compiled pattern for finding a double quote. */
-    private static final Pattern REPLACE_DOUBLEQOUTE = Pattern.compile("\\\\");
+    private static final Pattern REPLACE_DOUBLEQOUTE = Pattern.compile("\"");
 
     protected static String escape(String value) {
         return REPLACE_DOUBLEQOUTE.matcher(

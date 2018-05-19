@@ -324,7 +324,6 @@ public class StateDirectory {
         return stateDir.listFiles(new FileFilter() {
             @Override
             public boolean accept(final File pathname) {
-                final String name = pathname.getName();
                 return pathname.isDirectory() && MATCHER_NAME.matcher(pathname.getName()).matches();
             }
         });
