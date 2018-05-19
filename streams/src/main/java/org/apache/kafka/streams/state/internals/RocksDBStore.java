@@ -55,6 +55,7 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * A persistent key-value store based on RocksDB.
@@ -227,15 +228,17 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         }
     }
 
+    /** Statically compiled pattern for checking if the file name ends with .sst . */
+    private static final Pattern MATCHER_FILE_EXTENSION = Pattern.compile(".*\\.sst");
+
     private void toggleDbForBulkLoading(final boolean prepareForBulkload) {
 
         if (prepareForBulkload) {
-            // if the store is not empty, we need to compact to get around the num.levels check
-            // for bulk loading
+            // If the store is not empty, we need to compact to get around the num.levels check for bulk loading
             final String[] sstFileNames = dbDir.list(new FilenameFilter() {
                 @Override
                 public boolean accept(final File dir, final String name) {
-                    return name.matches(".*\\.sst");
+                    return MATCHER_FILE_EXTENSION.matcher(name).matches();
                 }
             });
 

@@ -32,6 +32,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * This class is used for specifying the set of expected configurations. For each configuration, you can specify
@@ -626,6 +627,9 @@ public class ConfigDef {
         }
     }
 
+    /** Statically compiled pattern for finding commas with potentially unlimited whitespace before and/or after the comma. */
+    private static final Pattern SPLIT_COMMA_WITH_WHITESPACE = Pattern.compile("\\s*,\\s*");
+
     /**
      * Parse a value according to its expected type.
      * @param name  The config name
@@ -705,7 +709,7 @@ public class ConfigDef {
                         if (trimmed.isEmpty())
                             return Collections.emptyList();
                         else
-                            return Arrays.asList(trimmed.split("\\s*,\\s*", -1));
+                            return Arrays.asList(SPLIT_COMMA_WITH_WHITESPACE.split(trimmed, -1));
                     else
                         throw new ConfigException(name, value, "Expected a comma separated list.");
                 case CLASS:

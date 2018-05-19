@@ -38,6 +38,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.TimeZone;
+import java.util.regex.Pattern;
 
 /**
  * Utility for converting from one Connect value to a different form. This is useful when the caller expects a value of a particular type
@@ -703,8 +704,18 @@ public class Values {
         }
     }
 
+    /** Statically compiled pattern for finding two consequtive backslashes */
+    private static final Pattern REPLACE_BACKSLASH_TWO = Pattern.compile("\\\\");
+
+    /** Statically compiled pattern for finding a double quote. */
+    private static final Pattern REPLACE_DOUBLEQOUTE = Pattern.compile("\"");
+
     protected static String escape(String value) {
-        return value.replaceAll("\\\\", "\\\\\\\\").replaceAll("\"", "\\\\\"");
+        return REPLACE_DOUBLEQOUTE.matcher(
+            REPLACE_BACKSLASH_TWO.matcher(
+                value
+            ).replaceAll("\\\\\\\\")
+        ).replaceAll("\\\\\"");
     }
 
     protected static DateFormat dateFormatFor(java.util.Date value) {
