@@ -421,7 +421,7 @@ public class ConsumerRecordFactory<K, V> {
      */
     public ConsumerRecord<byte[], byte[]> create(final V value,
                                                  final Headers headers) {
-         if (topicName == null) {
+        if (topicName == null) {
             throw new IllegalStateException("ConsumerRecordFactory was created without defaultTopicName. " +
                 "Use #create(String topicName, V value, long timestampMs) instead.");
         }
