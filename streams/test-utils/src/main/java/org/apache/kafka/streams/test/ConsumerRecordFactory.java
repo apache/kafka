@@ -18,6 +18,7 @@ package org.apache.kafka.streams.test;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.KeyValue;
@@ -153,18 +154,20 @@ public class ConsumerRecordFactory<K, V> {
     }
 
     /**
-     * Create a {@link ConsumerRecord} with the given topic name, key, value, and timestamp.
+     * Create a {@link ConsumerRecord} with the given topic name, key, value, headers, and timestamp.
      * Does not auto advance internally tracked time.
      *
      * @param topicName the topic name
      * @param key the record key
      * @param value the record value
+     * @param headers the record headers
      * @param timestampMs the record timestamp
      * @return the generated {@link ConsumerRecord}
      */
     public ConsumerRecord<byte[], byte[]> create(final String topicName,
                                                  final K key,
                                                  final V value,
+                                                 final Headers headers,
                                                  final long timestampMs) {
         Objects.requireNonNull(topicName, "topicName cannot be null.");
         final byte[] serializedKey = keySerializer.serialize(topicName, key);
@@ -175,11 +178,32 @@ public class ConsumerRecordFactory<K, V> {
             -1L,
             timestampMs,
             TimestampType.CREATE_TIME,
-            ConsumerRecord.NULL_CHECKSUM,
+            (long) ConsumerRecord.NULL_CHECKSUM,
             serializedKey == null ? 0 : serializedKey.length,
             serializedValue == null ? 0 : serializedValue.length,
             serializedKey,
-            serializedValue);
+            serializedValue,
+            headers);
+    }
+
+    /**
+     * Create a {@link ConsumerRecord} with default topic name and given topic, key, value, and timestamp.
+     * Does not auto advance internally tracked time.
+     *
+     * @param key the record key
+     * @param value the record value
+     * @param timestampMs the record timestamp
+     * @return the generated {@link ConsumerRecord}
+     */
+    public ConsumerRecord<byte[], byte[]> create(final String topicName,
+                                                 final K key,
+                                                 final V value,
+                                                 final long timestampMs) {
+        if (topicName == null) {
+            throw new IllegalStateException("ConsumerRecordFactory was created without defaultTopicName. " +
+                "Use #create(String topicName, K key, V value, long timestampMs) instead.");
+        }
+        return create(topicName, key, value, null, timestampMs);
     }
 
     /**
