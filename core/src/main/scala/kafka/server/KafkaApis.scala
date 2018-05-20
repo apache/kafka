@@ -590,26 +590,20 @@ class KafkaApis(val requestChannel: RequestChannel,
       var unconvertedFetchResponse: FetchResponse = null
 
       def createResponse(throttleTimeMs: Int): FetchResponse = {
-        // If throttling is required, return an empty response.
-        if (throttleTimeMs > 0) {
-          new FetchResponse(Errors.NONE, new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData](),
-            throttleTimeMs, INVALID_SESSION_ID)
-        } else {
-          val convertedData = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData]
-          unconvertedFetchResponse.responseData().asScala.foreach { case (tp, partitionData) =>
-            if (partitionData.error != Errors.NONE)
-              debug(s"Fetch request with correlation id ${request.header.correlationId} from client $clientId " +
-                s"on partition $tp failed due to ${partitionData.error.exceptionName}")
-            convertedData.put(tp, convertedPartitionData(tp, partitionData))
-          }
-          val response = new FetchResponse(unconvertedFetchResponse.error(), convertedData,
-            throttleTimeMs, unconvertedFetchResponse.sessionId())
-          response.responseData.asScala.foreach { case (topicPartition, data) =>
-            // record the bytes out metrics only when the response is being sent
-            brokerTopicStats.updateBytesOut(topicPartition.topic, fetchRequest.isFromFollower, data.records.sizeInBytes)
-          }
-          response
+        val convertedData = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData]
+        unconvertedFetchResponse.responseData().asScala.foreach { case (tp, partitionData) =>
+          if (partitionData.error != Errors.NONE)
+            debug(s"Fetch request with correlation id ${request.header.correlationId} from client $clientId " +
+              s"on partition $tp failed due to ${partitionData.error.exceptionName}")
+          convertedData.put(tp, convertedPartitionData(tp, partitionData))
         }
+        val response = new FetchResponse(unconvertedFetchResponse.error(), convertedData, throttleTimeMs,
+          unconvertedFetchResponse.sessionId())
+        response.responseData.asScala.foreach { case (topicPartition, data) =>
+          // record the bytes out metrics only when the response is being sent
+          brokerTopicStats.updateBytesOut(topicPartition.topic, fetchRequest.isFromFollower, data.records.sizeInBytes)
+        }
+        response
       }
 
       if (fetchRequest.isFromFollower) {
@@ -637,12 +631,15 @@ class KafkaApis(val requestChannel: RequestChannel,
         if (maxThrottleTimeMs > 0) {
           // Even if we need to throttle for request quota violation, we should "unrecord" the already recorded value
           // from the fetch quota because we are going to return an empty response.
-          quotas.fetch.maybeUnrecord(request, responseSize, timeMs)
+          quotas.fetch.unrecordQuotaSensor(request, responseSize, timeMs)
           if (bandwidthThrottleTimeMs > requestThrottleTimeMs) {
             quotas.fetch.throttle(request, bandwidthThrottleTimeMs, sendActionOnlyResponse(request))
           } else {
             quotas.request.throttle(request, requestThrottleTimeMs, sendActionOnlyResponse(request))
           }
+          // If throttling is required, return an empty response.
+          unconvertedFetchResponse = new FetchResponse(Errors.NONE, new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData](),
+            maxThrottleTimeMs, INVALID_SESSION_ID)
         } else {
           // Get the actual response. This will update the fetch context.
           unconvertedFetchResponse = fetchContext.updateAndGenerateResponseData(partitions)

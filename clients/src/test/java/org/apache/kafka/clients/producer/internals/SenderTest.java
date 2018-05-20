@@ -256,9 +256,7 @@ public class SenderTest {
         while (!client.ready(node, time.milliseconds())) {
             client.poll(1, time.milliseconds());
             // If a throttled response is received, advance the time to ensure progress.
-            if (client.throttleDelayMs(node, time.milliseconds()) > 0) {
-                time.sleep(client.throttleDelayMs(node, time.milliseconds()));
-            }
+            time.sleep(client.throttleDelayMs(node, time.milliseconds()));
         }
         selector.clear();
 
@@ -274,9 +272,7 @@ public class SenderTest {
             selector.completeReceive(new NetworkReceive(node.idString(), buffer));
             client.poll(1, time.milliseconds());
             // If a throttled response is received, advance the time to ensure progress.
-            if (client.throttleDelayMs(node, time.milliseconds()) > 0) {
-                time.sleep(client.throttleDelayMs(node, time.milliseconds()));
-            }
+            time.sleep(client.throttleDelayMs(node, time.milliseconds()));
             selector.clear();
         }
         Map<MetricName, KafkaMetric> allMetrics = metrics.metrics();

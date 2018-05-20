@@ -630,7 +630,7 @@ private[kafka] class Processor(val id: Int,
             // Try unmuting the channel. If there was no quota violation and the channel has not been throttled,
             // it will be unmuted immediately. If the channel has been throttled, it will be unmuted only if the
             // throttling delay has already passed by now.
-            handleChannelMuteEvent(channelId, ChannelMuteEvent.RESPONSE_RECEIVED)
+            handleChannelMuteEvent(channelId, ChannelMuteEvent.RESPONSE_SENT)
             tryUnmuteChannel(channelId)
           case RequestChannel.SendAction =>
             val responseSend = curr.responseSend.getOrElse(
@@ -696,7 +696,7 @@ private[kafka] class Processor(val id: Int,
               startTimeNanos = time.nanoseconds, memoryPool, receive.payload, requestChannel.metrics)
             requestChannel.sendRequest(req)
             selector.mute(connectionId)
-            handleChannelMuteEvent(connectionId, ChannelMuteEvent.REQUEST_SENT)
+            handleChannelMuteEvent(connectionId, ChannelMuteEvent.REQUEST_RECEIVED)
           case None =>
             // This should never happen since completed receives are processed immediately after `poll()`
             throw new IllegalStateException(s"Channel ${receive.source} removed from selector before processing completed receive")
@@ -721,7 +721,7 @@ private[kafka] class Processor(val id: Int,
         // Try unmuting the channel. If there was no quota violation and the channel has not been throttled,
         // it will be unmuted immediately. If the channel has been throttled, it will unmuted only if the throttling
         // delay has already passed by now.
-        handleChannelMuteEvent(send.destination, ChannelMuteEvent.RESPONSE_RECEIVED)
+        handleChannelMuteEvent(send.destination, ChannelMuteEvent.RESPONSE_SENT)
         tryUnmuteChannel(send.destination)
       } catch {
         case e: Throwable => processChannelException(send.destination,

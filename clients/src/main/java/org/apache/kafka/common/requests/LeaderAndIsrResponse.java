@@ -119,9 +119,4 @@ public class LeaderAndIsrResponse extends AbstractResponse {
 
         return struct;
     }
-
-    @Override
-    public boolean shouldClientThrottle(short version) {
-        return version >= 2;
-    }
 }
