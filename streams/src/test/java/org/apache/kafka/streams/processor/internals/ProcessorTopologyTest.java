@@ -68,6 +68,9 @@ public class ProcessorTopologyTest {
     private static final String OUTPUT_TOPIC_2 = "output-topic-2";
     private static final String THROUGH_TOPIC_1 = "through-topic-1";
 
+    private static final Header HEADER = new RecordHeader("key", "value".getBytes());
+    private static final Headers HEADERS = new RecordHeaders(new Header[]{HEADER});
+
     private final TopologyWrapper topology = new TopologyWrapper();
     private final MockProcessorSupplier mockProcessorSupplier = new MockProcessorSupplier();
     private final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(STRING_SERIALIZER, STRING_SERIALIZER, 0L);
@@ -75,8 +78,6 @@ public class ProcessorTopologyTest {
     private TopologyTestDriver driver;
     private final Properties props = new Properties();
 
-    private static final RecordHeader header = new RecordHeader("key", "value".getBytes());
-    private final Headers headers = new RecordHeaders(new Header[]{header});
 
     @Before
     public void setup() {
@@ -349,12 +350,12 @@ public class ProcessorTopologyTest {
     public void shouldConsiderHeaders() {
         final int partition = 10;
         driver = new TopologyTestDriver(createSimpleTopology(partition), props);
-        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key1", "value1", headers, 10L));
-        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key2", "value2", headers, 20L));
-        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key3", "value3", headers, 30L));
-        assertNextOutputRecord(OUTPUT_TOPIC_1, "key1", "value1", headers, partition, 10L);
-        assertNextOutputRecord(OUTPUT_TOPIC_1, "key2", "value2", headers, partition, 20L);
-        assertNextOutputRecord(OUTPUT_TOPIC_1, "key3", "value3", headers, partition, 30L);
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key1", "value1", HEADERS, 10L));
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key2", "value2", HEADERS, 20L));
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key3", "value3", HEADERS, 30L));
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key1", "value1", HEADERS, partition, 10L);
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key2", "value2", HEADERS, partition, 20L);
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key3", "value3", HEADERS, partition, 30L);
     }
 
     @Test
@@ -363,9 +364,9 @@ public class ProcessorTopologyTest {
         driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key1", "value1", 10L));
         driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key2", "value2", 20L));
         driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key3", "value3", 30L));
-        assertNextOutputRecord(OUTPUT_TOPIC_1, "key1", "value1", headers, 10L);
-        assertNextOutputRecord(OUTPUT_TOPIC_1, "key2", "value2", headers, 20L);
-        assertNextOutputRecord(OUTPUT_TOPIC_1, "key3", "value3", headers, 30L);
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key1", "value1", HEADERS, 10L);
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key2", "value2", HEADERS, 20L);
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key3", "value3", HEADERS, 30L);
     }
 
     private void assertNextOutputRecord(final String topic,
@@ -535,7 +536,7 @@ public class ProcessorTopologyTest {
     protected static class AddHeaderProcessor extends AbstractProcessor<String, String> {
         @Override
         public void process(String key, String value) {
-            context().headers().add(header);
+            context().headers().add(HEADER);
             context().forward(key, value);
         }
     }
