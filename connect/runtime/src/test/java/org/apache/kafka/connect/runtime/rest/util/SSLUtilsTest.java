@@ -90,7 +90,7 @@ public class SSLUtilsTest {
         Assert.assertEquals("JKS", ssl.getTrustStoreType());
         Assert.assertEquals("TLS", ssl.getProtocol());
         Assert.assertArrayEquals(new String[] {"TLSv1.2", "TLSv1.1", "TLSv1"}, ssl.getIncludeProtocols());
-        Assert.assertEquals("SunX509", ssl.getSslKeyManagerFactoryAlgorithm());
+        Assert.assertEquals("SunX509", ssl.getKeyManagerFactoryAlgorithm());
         Assert.assertEquals("PKIX", ssl.getTrustManagerFactoryAlgorithm());
     }
 
@@ -118,7 +118,7 @@ public class SSLUtilsTest {
         Assert.assertEquals(SslConfigs.DEFAULT_SSL_TRUSTSTORE_TYPE, ssl.getTrustStoreType());
         Assert.assertEquals(SslConfigs.DEFAULT_SSL_PROTOCOL, ssl.getProtocol());
         Assert.assertArrayEquals(Arrays.asList(SslConfigs.DEFAULT_SSL_ENABLED_PROTOCOLS.split("\\s*,\\s*")).toArray(), ssl.getIncludeProtocols());
-        Assert.assertEquals(SslConfigs.DEFAULT_SSL_KEYMANGER_ALGORITHM, ssl.getSslKeyManagerFactoryAlgorithm());
+        Assert.assertEquals(SslConfigs.DEFAULT_SSL_KEYMANGER_ALGORITHM, ssl.getKeyManagerFactoryAlgorithm());
         Assert.assertEquals(SslConfigs.DEFAULT_SSL_TRUSTMANAGER_ALGORITHM, ssl.getTrustManagerFactoryAlgorithm());
         Assert.assertFalse(ssl.getNeedClientAuth());
         Assert.assertFalse(ssl.getWantClientAuth());
