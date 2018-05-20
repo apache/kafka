@@ -850,6 +850,21 @@
         <td>0</td>
       </tr>
       <tr>
+        <td># of events in the controller event queue</td>
+        <td>kafka.controller:type=ControllerEventManager,name=EventQueueSize</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>Time the event waits in the controller event queue</td>
+        <td>kafka.controller:type=ControllerEventManager,name=EventQueueTimeMs</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>Rate and time of requests waiting in the controller request queue to the given broker</td>
+        <td>kafka.controller:type=ControllerChannelManager,name=RequestRateAndQueueTimeMs, brokerId=([0-9]+)</td>
+        <td></td>
+      </tr>
+      <tr>
         <td>Partition counts</td>
         <td>kafka.server:type=ReplicaManager,name=PartitionCount</td>
         <td>mostly even across brokers</td>
