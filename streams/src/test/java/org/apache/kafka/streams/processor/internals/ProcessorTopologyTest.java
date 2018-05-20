@@ -535,7 +535,7 @@ public class ProcessorTopologyTest {
 
     protected static class AddHeaderProcessor extends AbstractProcessor<String, String> {
         @Override
-        public void process(String key, String value) {
+        public void process(final String key, final String value) {
             context().headers().add(HEADER);
             context().forward(key, value);
         }

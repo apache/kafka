@@ -224,7 +224,7 @@ public class ConsumerRecordFactory<K, V> {
 
     /**
      * Create a {@link ConsumerRecord} with the given topic name, key, and value.
-     * The timestamp will be generated from the constructor provided and time will auto advance.
+     * The timestamp will be generated based on the constructor provided start time and time will auto advance.
      *
      * @param topicName the topic name
      * @param key the record key
@@ -240,8 +240,8 @@ public class ConsumerRecordFactory<K, V> {
     }
 
     /**
-     * Create a {@link ConsumerRecord} with the given topic name, key, headers, and value.
-     * The timestamp will be generated from the constructor provided and time will auto advance.
+     * Create a {@link ConsumerRecord} with the given topic name, key, value and headers.
+     * The timestamp will be generated based on the constructor provided start time and time will auto advance.
      *
      * @param topicName the topic name
      * @param key the record key
@@ -260,7 +260,7 @@ public class ConsumerRecordFactory<K, V> {
 
     /**
      * Create a {@link ConsumerRecord} with default topic name and given key and value.
-     * The timestamp will be generated from the constructor provided and time will auto advance.
+     * The timestamp will be generated based on the constructor provided start time and time will auto advance.
      *
      * @param key the record key
      * @param value the record value
@@ -277,6 +277,7 @@ public class ConsumerRecordFactory<K, V> {
 
     /**
      * Create a {@link ConsumerRecord} with {@code null}-key and the given topic name, value, and timestamp.
+     * Does not auto advance internally tracked time.
      *
      * @param topicName the topic name
      * @param value the record value
@@ -291,6 +292,7 @@ public class ConsumerRecordFactory<K, V> {
 
     /**
      * Create a {@link ConsumerRecord} with {@code null}-key and the given topic name, value, headers, and timestamp.
+     * Does not auto advance internally tracked time.
      *
      * @param topicName the topic name
      * @param value the record value
@@ -307,6 +309,7 @@ public class ConsumerRecordFactory<K, V> {
 
     /**
      * Create a {@link ConsumerRecord} with default topic name and {@code null}-key as well as given value and timestamp.
+     * Does not auto advance internally tracked time.
      *
      * @param value the record value
      * @param timestampMs the record timestamp
@@ -323,7 +326,7 @@ public class ConsumerRecordFactory<K, V> {
 
     /**
      * Create a {@link ConsumerRecord} with {@code null}-key and the given topic name and value.
-     * The timestamp will be generated from the constructor provided and time will auto advance.
+     * The timestamp will be generated based on the constructor provided start time and time will auto advance.
      *
      * @param topicName the topic name
      * @param value the record value
@@ -336,7 +339,7 @@ public class ConsumerRecordFactory<K, V> {
 
     /**
      * Create a {@link ConsumerRecord} with default topic name and {@code null}-key was well as given value.
-     * The timestamp will be generated from the constructor provided and time will auto advance.
+     * The timestamp will be generated based on the constructor provided start time and time will auto advance.
      *
      * @param value the record value
      * @return the generated {@link ConsumerRecord}
@@ -351,7 +354,7 @@ public class ConsumerRecordFactory<K, V> {
 
     /**
      * Creates {@link ConsumerRecord consumer records} with the given topic name, keys, and values.
-     * The timestamp will be generated from the constructor provided and time will auto advance.
+     * The timestamp will be generated based on the constructor provided start time and time will auto advance.
      *
      * @param topicName the topic name
      * @param keyValues the record keys and values
@@ -370,7 +373,7 @@ public class ConsumerRecordFactory<K, V> {
 
     /**
      * Creates {@link ConsumerRecord consumer records} with default topic name as well as given keys and values.
-     * The timestamp will be generated from the constructor provided and time will auto advance.
+     * The timestamp will be generated based on the constructor provided start time and time will auto advance.
      *
      * @param keyValues the record keys and values
      * @return the generated {@link ConsumerRecord consumer records}

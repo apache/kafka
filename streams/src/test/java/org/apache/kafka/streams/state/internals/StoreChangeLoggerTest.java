@@ -89,7 +89,7 @@ public class StoreChangeLoggerTest {
     }
 
     @Test
-    public void testHeadersAreNotSent() {
+    public void shouldNotSendRecordHeadersToChangelogTopic() {
         context.headers().add(new RecordHeader("key", "value".getBytes()));
         changeLogger.logChange(0, "zero");
 
