@@ -85,7 +85,7 @@ public class LoggingSignalHandler {
                 return null;
             }
         };
-        return Proxy.newProxyInstance(Utils.getContextOrKafkaClassLoader(), new Class[] { signalHandlerClass },
+        return Proxy.newProxyInstance(Utils.getContextOrKafkaClassLoader(), new Class[] {signalHandlerClass},
                 invocationHandler);
     }
 
