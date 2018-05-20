@@ -171,6 +171,7 @@ public class ConsumerRecordFactory<K, V> {
                                                  final Headers headers,
                                                  final long timestampMs) {
         Objects.requireNonNull(topicName, "topicName cannot be null.");
+        Objects.requireNonNull(headers, "headers cannot be null.");
         final byte[] serializedKey = keySerializer.serialize(topicName, key);
         final byte[] serializedValue = valueSerializer.serialize(topicName, value);
         return new ConsumerRecord<>(

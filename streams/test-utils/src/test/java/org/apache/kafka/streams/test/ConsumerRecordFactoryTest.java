@@ -63,6 +63,11 @@ public class ConsumerRecordFactoryTest {
     }
 
     @Test(expected = NullPointerException.class)
+    public void shouldNotAllowToCreateTopicWithNullHeaders() {
+        factory.create(topicName, rawKey, value, null, timestamp);
+    }
+
+    @Test(expected = NullPointerException.class)
     public void shouldNotAllowToCreateTopicWithNullTopicNameWithDefaultTimestamp() {
         factory.create(null, rawKey, value);
     }
