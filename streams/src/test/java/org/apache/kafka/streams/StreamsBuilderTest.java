@@ -279,7 +279,11 @@ public class StreamsBuilderTest {
 
         final InternalTopologyBuilder internalTopologyBuilder = TopologyWrapper.getInternalTopologyBuilder(builder.build());
 
-        assertThat(internalTopologyBuilder.topicGroups().get(0).stateChangelogTopics.keySet(), equalTo(Collections.singleton("topic")));
+        assertThat(internalTopologyBuilder.getStateStores().keySet(), equalTo(Collections.singleton("store")));
+
+        assertThat(internalTopologyBuilder.getStateStores().get("store").loggingEnabled(), equalTo(false));
+
+        assertThat(internalTopologyBuilder.topicGroups().get(0).stateChangelogTopics.isEmpty(), equalTo(true));
     }
     
     @Test(expected = TopologyException.class)
