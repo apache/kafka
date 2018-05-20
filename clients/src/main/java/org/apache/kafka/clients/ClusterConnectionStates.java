@@ -156,7 +156,7 @@ final class ClusterConnectionStates {
     }
 
     /**
-     * Returns the number of milliseconds to wait, based on the connection state and the throttle time, before
+     * Return the number of milliseconds to wait, based on the connection state and the throttle time, before
      * attempting to send data. If the connection has been established but being throttled, return throttle delay.
      * Otherwise, return connection delay.
      * @param id the connection to check
@@ -215,7 +215,7 @@ final class ClusterConnectionStates {
         return isReady(nodeState.get(id), now);
     }
 
-    public boolean isReady(NodeConnectionState state, long now) {
+    private boolean isReady(NodeConnectionState state, long now) {
         return state != null && state.state == ConnectionState.READY && state.throttleUntilTimeMs <= now;
     }
 
@@ -345,8 +345,7 @@ final class ClusterConnectionStates {
         }
 
         public String toString() {
-            return "NodeState(" + state + ", " + lastConnectAttemptMs + ", " + failedAttempts + ", " + throttleUntilTimeMs
-                + ")";
+            return "NodeState(" + state + ", " + lastConnectAttemptMs + ", " + failedAttempts + ", " + throttleUntilTimeMs + ")";
         }
     }
 }

@@ -48,7 +48,7 @@ public interface KafkaClient extends Closeable {
     boolean ready(Node node, long now);
 
     /**
-     * Returns the number of milliseconds to wait, based on the connection state, before attempting to send data. When
+     * Return the number of milliseconds to wait, based on the connection state, before attempting to send data. When
      * disconnected, this respects the reconnect backoff time. When connecting or connected, this handles slow/stalled
      * connections.
      *
@@ -59,7 +59,7 @@ public interface KafkaClient extends Closeable {
     long connectionDelay(Node node, long now);
 
     /**
-     * Returns the number of milliseconds to wait, based on the connection state and the throttle time, before
+     * Return the number of milliseconds to wait, based on the connection state and the throttle time, before
      * attempting to send data. If the connection has been established but being throttled, return throttle delay.
      * Otherwise, return connection delay.
      *

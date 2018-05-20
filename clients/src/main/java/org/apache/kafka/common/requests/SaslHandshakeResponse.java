@@ -96,9 +96,4 @@ public class SaslHandshakeResponse extends AbstractResponse {
     public static SaslHandshakeResponse parse(ByteBuffer buffer, short version) {
         return new SaslHandshakeResponse(ApiKeys.SASL_HANDSHAKE.parseResponse(version, buffer));
     }
-
-    @Override
-    public boolean shouldClientThrottle(short version) {
-        return version >= 2;
-    }
 }

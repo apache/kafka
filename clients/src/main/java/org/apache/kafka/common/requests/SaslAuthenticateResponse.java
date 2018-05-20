@@ -102,9 +102,4 @@ public class SaslAuthenticateResponse extends AbstractResponse {
     public static SaslAuthenticateResponse parse(ByteBuffer buffer, short version) {
         return new SaslAuthenticateResponse(ApiKeys.SASL_AUTHENTICATE.parseResponse(version, buffer));
     }
-
-    @Override
-    public boolean shouldClientThrottle(short version) {
-        return version >= 1;
-    }
 }

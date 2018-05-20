@@ -190,7 +190,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
    * @param delayQueue DelayQueue to dequeue from
    */
   class ThrottledChannelReaper(delayQueue: DelayQueue[ThrottledChannel], prefix: String) extends ShutdownableThread(
-    s"${prefix}ThrottledChannelReaper-${quotaType}", false) {
+    s"${prefix}ThrottledChannelReaper-$quotaType", false) {
 
     override def doWork(): Unit = {
       val throttledChannel: ThrottledChannel = delayQueue.poll(1, TimeUnit.SECONDS)
@@ -257,11 +257,9 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
     * in case of throttling. Rate keeps the sum of values that fall in each time window, so this should bring the
     * overall sum back to the previous value.
     */
-  def maybeUnrecord(request: RequestChannel.Request, value: Double, timeMs: Long): Unit = {
-    if (quotasEnabled) {
-      val clientSensors = getOrCreateQuotaSensors(request.session, request.header.clientId)
-      clientSensors.quotaSensor.record(value * (-1), timeMs, false)
-    }
+  def unrecordQuotaSensor(request: RequestChannel.Request, value: Double, timeMs: Long): Unit = {
+    val clientSensors = getOrCreateQuotaSensors(request.session, request.header.clientId)
+    clientSensors.quotaSensor.record(value * (-1), timeMs, false)
   }
 
   /**

@@ -33,12 +33,13 @@ public class KafkaChannel {
      * <ul>
      *   <li> NOT_MUTED: Channel is not muted. This is the default state. </li>
      *   <li> MUTED: Channel is muted. Channel must be in this state to be unmuted. </li>
-     *   <li> MUTED_AND_RESPONSE_PENDING: (SocketServer only) Channel is muted and currently waiting to receive a
-     *                                   response from the API layer. </li>
+     *   <li> MUTED_AND_RESPONSE_PENDING: (SocketServer only) Channel is muted and SocketServer has not sent a response
+     *                                    back to the client yet (acks != 0) or is currently waiting to receive a
+     *                                    response from the API layer (acks == 0). </li>
      *   <li> MUTED_AND_THROTTLED: (SocketServer only) Channel is muted and throttling is in progress due to quota
      *                             violation. </li>
      *   <li> MUTED_AND_THROTTLED_AND_RESPONSE_PENDING: (SocketServer only) Channel is muted, throttling is in progress,
-     *                                                 and waiting for a response from the API layer. </li>
+     *                                                  and a response is currently pending. </li>
      * </ul>
      */
     public enum ChannelMuteState {
@@ -49,27 +50,26 @@ public class KafkaChannel {
         MUTED_AND_THROTTLED_AND_RESPONSE_PENDING
     };
 
-    /** Socket server events that will change the mute state. Valid transitions are:
+    /** Socket server events that will change the mute state:
      * <ul>
-     *   <li> REQUEST_SENT: A request has been sent to the API layer. </li>
-     *   <li> RESPONSE_RECEIVED: A response has been received from the API layer. </li>
+     *   <li> REQUEST_RECEIVED: A request has been received from the client. </li>
+     *   <li> RESPONSE_SENT: A response has been sent out to the client (ack != 0) or SocketServer has heard back from
+     *                       the API layer (acks = 0) </li>
      *   <li> THROTTLE_STARTED: Throttling started due to quota violation. </li>
      *   <li> THROTTLE_ENDED: Throttling ended. </li>
      * </ul>
      *
      * Valid transitions on each event are:
      * <ul>
-     *   <li> REQUEST_SENT:      MUTED => MUTED_AND_RESPONSE_PENDING </li>
-     *   <li> RESPONSE_RECEIVED: MUTED_AND_RESPONSE_PENDING => MUTED, MUTED_AND_THROTTLED_AND_RESPONSE_PENDING =>
-     *                           MUTED_AND_THROTTLED </li>
-     *   <li> THROTTLE_STARTED:  MUTED_AND_RESPONSE_PENDING => MUTED_AND_THROTTLED_AND_RESPONSE_PENDING </li>
-     *   <li> THROTTLE_ENDED:    MUTED_AND_THROTTLED => MUTED, MUTED_AND_THROTTLED_AND_RESPONSE_PENDING =>
-     *                           MUTED_AND_RESPONSE_PENDING </li>
+     *   <li> REQUEST_RECEIVED: MUTED => MUTED_AND_RESPONSE_PENDING </li>
+     *   <li> RESPONSE_SENT:    MUTED_AND_RESPONSE_PENDING => MUTED, MUTED_AND_THROTTLED_AND_RESPONSE_PENDING => MUTED_AND_THROTTLED </li>
+     *   <li> THROTTLE_STARTED: MUTED_AND_RESPONSE_PENDING => MUTED_AND_THROTTLED_AND_RESPONSE_PENDING </li>
+     *   <li> THROTTLE_ENDED:   MUTED_AND_THROTTLED => MUTED, MUTED_AND_THROTTLED_AND_RESPONSE_PENDING => MUTED_AND_RESPONSE_PENDING </li>
      * </ul>
      */
     public enum ChannelMuteEvent {
-        REQUEST_SENT,
-        RESPONSE_RECEIVED,
+        REQUEST_RECEIVED,
+        RESPONSE_SENT,
         THROTTLE_STARTED,
         THROTTLE_ENDED
     };
@@ -188,13 +188,13 @@ public class KafkaChannel {
     public void handleChannelMuteEvent(ChannelMuteEvent event) {
         boolean stateChanged = false;
         switch (event) {
-            case REQUEST_SENT:
+            case REQUEST_RECEIVED:
                 if (muteState == ChannelMuteState.MUTED) {
                     muteState = ChannelMuteState.MUTED_AND_RESPONSE_PENDING;
                     stateChanged = true;
                 }
                 break;
-            case RESPONSE_RECEIVED:
+            case RESPONSE_SENT:
                 if (muteState == ChannelMuteState.MUTED_AND_RESPONSE_PENDING) {
                     muteState = ChannelMuteState.MUTED;
                     stateChanged = true;

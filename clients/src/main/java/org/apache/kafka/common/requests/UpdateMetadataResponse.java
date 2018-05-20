@@ -72,9 +72,4 @@ public class UpdateMetadataResponse extends AbstractResponse {
         struct.set(ERROR_CODE, error.code());
         return struct;
     }
-
-    @Override
-    public boolean shouldClientThrottle(short version) {
-        return version >= 5;
-    }
 }

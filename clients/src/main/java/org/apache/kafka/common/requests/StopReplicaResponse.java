@@ -115,9 +115,4 @@ public class StopReplicaResponse extends AbstractResponse {
         struct.set(ERROR_CODE, error.code());
         return struct;
     }
-
-    @Override
-    public boolean shouldClientThrottle(short version) {
-        return version >= 1;
-    }
 }
