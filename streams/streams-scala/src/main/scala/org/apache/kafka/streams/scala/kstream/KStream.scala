@@ -47,9 +47,8 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @return a [[KStream]] that contains only those records that satisfy the given predicate
    * @see `org.apache.kafka.streams.kstream.KStream#filter`
    */ 
-  def filter(predicate: (K, V) => Boolean): KStream[K, V] = {
+  def filter(predicate: (K, V) => Boolean): KStream[K, V] =
     inner.filter(predicate.asPredicate)
-  }
 
   /**
    * Create a new [[KStream]] that consists all records of this stream which do <em>not</em> satisfy the given
@@ -59,9 +58,8 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @return a [[KStream]] that contains only those records that do <em>not</em> satisfy the given predicate
    * @see `org.apache.kafka.streams.kstream.KStream#filterNot`
    */ 
-  def filterNot(predicate: (K, V) => Boolean): KStream[K, V] = {
+  def filterNot(predicate: (K, V) => Boolean): KStream[K, V] =
     inner.filterNot(predicate.asPredicate)
-  }
 
   /**
    * Set a new key (with possibly new type) for each input record.
@@ -73,9 +71,8 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @return a [[KStream]] that contains records with new key (possibly of different type) and unmodified value
    * @see `org.apache.kafka.streams.kstream.KStream#selectKey`
    */ 
-  def selectKey[KR](mapper: (K, V) => KR): KStream[KR, V] = {
+  def selectKey[KR](mapper: (K, V) => KR): KStream[KR, V] =
     inner.selectKey[KR](mapper.asKeyValueMapper)
-  }
 
   /**
    * Transform each record of the input stream into a new record in the output stream (both key and value type can be
@@ -101,9 +98,8 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @return a [[KStream]] that contains records with unmodified key and new values (possibly of different type)
    * @see `org.apache.kafka.streams.kstream.KStream#mapValues`
    */ 
-  def mapValues[VR](mapper: V => VR): KStream[K, VR] = {
+  def mapValues[VR](mapper: V => VR): KStream[K, VR] =
     inner.mapValues[VR](mapper.asValueMapper)
-  }
 
   /**
    * Transform the value of each input record into a new value (with possible new type) of the output record.
@@ -114,9 +110,8 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @return a [[KStream]] that contains records with unmodified key and new values (possibly of different type)
    * @see `org.apache.kafka.streams.kstream.KStream#mapValues`
    */ 
-  def mapValues[VR](mapper: (K, V) => VR): KStream[K, VR] = {
+  def mapValues[VR](mapper: (K, V) => VR): KStream[K, VR] =
     inner.mapValues[VR](mapper.asValueMapperWithKey)
-  }
 
   /**
    * Transform each record of the input stream into zero or more records in the output stream (both key and value type
@@ -145,9 +140,8 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @return a [[KStream]] that contains more or less records with unmodified keys and new values of different type
    * @see `org.apache.kafka.streams.kstream.KStream#flatMapValues`
    */ 
-  def flatMapValues[VR](mapper: V => Iterable[VR]): KStream[K, VR] = {
+  def flatMapValues[VR](mapper: V => Iterable[VR]): KStream[K, VR] =
     inner.flatMapValues[VR](mapper.asValueMapper)
-  }
 
   /**
    * Create a new [[KStream]] by transforming the value of each record in this stream into zero or more values
@@ -161,9 +155,8 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @return a [[KStream]] that contains more or less records with unmodified keys and new values of different type
    * @see `org.apache.kafka.streams.kstream.KStream#flatMapValues`
    */ 
-  def flatMapValues[VR](mapper: (K, V) => Iterable[VR]): KStream[K, VR] = {
+  def flatMapValues[VR](mapper: (K, V) => Iterable[VR]): KStream[K, VR] =
     inner.flatMapValues[VR](mapper.asValueMapperWithKey)
-  }
 
   /**
    * Print the records of this KStream using the options provided by `Printed`
@@ -179,9 +172,8 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @param action an action to perform on each record
    * @see `org.apache.kafka.streams.kstream.KStream#foreach`
    */
-  def foreach(action: (K, V) => Unit): Unit = {
+  def foreach(action: (K, V) => Unit): Unit =
     inner.foreach((k: K, v: V) => action(k, v))
-  }
 
   /**
    * Creates an array of {@code KStream} from this stream by branching the records in the original stream based on
@@ -191,9 +183,8 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @return multiple distinct substreams of this [[KStream]]
    * @see `org.apache.kafka.streams.kstream.KStream#branch`
    */
-  def branch(predicates: ((K, V) => Boolean)*): Array[KStream[K, V]] = {
+  def branch(predicates: (K, V) => Boolean*): Array[KStream[K, V]] =
     inner.branch(predicates.map(_.asPredicate): _*).map(kstream => wrapKStream(kstream))
-  }
 
   /**
    * Materialize this stream to a topic and creates a new [[KStream]] from the topic using the `Produced` instance for 
@@ -304,9 +295,8 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @see `org.apache.kafka.streams.kstream.KStream#transformValues`
    */ 
   def transformValues[VR](valueTransformerSupplier: ValueTransformerSupplier[V, VR],
-                          stateStoreNames: String*): KStream[K, VR] = {
+                          stateStoreNames: String*): KStream[K, VR] =
     inner.transformValues[VR](valueTransformerSupplier, stateStoreNames: _*)
-  }
 
   /**
    * Transform the value of each input record into a new value (with possible new type) of the output record.
@@ -335,9 +325,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @param stateStoreNames   the names of the state store used by the processor
    * @see `org.apache.kafka.streams.kstream.KStream#process`
    */ 
-  def process(processorSupplier: () => Processor[K, V],
-    stateStoreNames: String*): Unit = {
-
+  def process(processorSupplier: () => Processor[K, V], stateStoreNames: String*): Unit = {
     val processorSupplierJ: ProcessorSupplier[K, V] = new ProcessorSupplier[K, V] {
       override def get(): Processor[K, V] = processorSupplier()
     }
@@ -425,11 +413,12 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @return a [[KStream]] that contains join-records for each key and values computed by the given `joiner`,
    * one for each matched record-pair with the same key and within the joining window intervals
    * @see `org.apache.kafka.streams.kstream.KStream#join`
-   */ 
-  def join[VO, VR](otherStream: KStream[K, VO],
+   */
+  def join[VO, VR](otherStream: KStream[K, VO])(
     joiner: (V, VO) => VR,
-    windows: JoinWindows)(implicit joined: Joined[K, V, VO]): KStream[K, VR] =
-      inner.join[VO, VR](otherStream.inner, joiner.asValueJoiner, windows, joined)
+    windows: JoinWindows
+  )(implicit joined: Joined[K, V, VO]): KStream[K, VR] =
+    inner.join[VO, VR](otherStream.inner, joiner.asValueJoiner, windows, joined)
 
   /**
    * Join records of this stream with another [[KTable]]'s records using inner equi join with 
@@ -444,10 +433,9 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @return a [[KStream]] that contains join-records for each key and values computed by the given `joiner`,
    * one for each matched record-pair with the same key 
    * @see `org.apache.kafka.streams.kstream.KStream#join`
-   */ 
-  def join[VT, VR](table: KTable[K, VT],
-    joiner: (V, VT) => VR)(implicit joined: Joined[K, V, VT]): KStream[K, VR] =
-      inner.join[VT, VR](table.inner, joiner.asValueJoiner, joined)
+   */
+  def join[VT, VR](table: KTable[K, VT])(joiner: (V, VT) => VR)(implicit joined: Joined[K, V, VT]): KStream[K, VR] =
+    inner.join[VT, VR](table.inner, joiner.asValueJoiner, joined)
 
   /**
    * Join records of this stream with `GlobalKTable`'s records using non-windowed inner equi join.
@@ -460,14 +448,15 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    *                       one output for each input [[KStream]] record
    * @see `org.apache.kafka.streams.kstream.KStream#join`
    */ 
-  def join[GK, GV, RV](globalKTable: GlobalKTable[GK, GV],
+  def join[GK, GV, RV](globalKTable: GlobalKTable[GK, GV])(
     keyValueMapper: (K, V) => GK,
-    joiner: (V, GV) => RV): KStream[K, RV] =
-      inner.join[GK, GV, RV](
-        globalKTable,
-        ((k: K, v: V) => keyValueMapper(k, v)).asKeyValueMapper,
-        ((v: V, gv: GV) => joiner(v, gv)).asValueJoiner
-      )
+    joiner: (V, GV) => RV
+  ): KStream[K, RV] =
+    inner.join[GK, GV, RV](
+      globalKTable,
+      ((k: K, v: V) => keyValueMapper(k, v)).asKeyValueMapper,
+      ((v: V, gv: GV) => joiner(v, gv)).asValueJoiner
+    )
 
   /**
    * Join records of this stream with another [[KStream]]'s records using windowed left equi join with 
@@ -484,10 +473,11 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    *                    one for each matched record-pair with the same key and within the joining window intervals
    * @see `org.apache.kafka.streams.kstream.KStream#leftJoin`
    */ 
-  def leftJoin[VO, VR](otherStream: KStream[K, VO],
+  def leftJoin[VO, VR](otherStream: KStream[K, VO])(
     joiner: (V, VO) => VR,
-    windows: JoinWindows)(implicit joined: Joined[K, V, VO]): KStream[K, VR] =
-      inner.leftJoin[VO, VR](otherStream.inner, joiner.asValueJoiner, windows, joined)
+    windows: JoinWindows
+  )(implicit joined: Joined[K, V, VO]): KStream[K, VR] =
+    inner.leftJoin[VO, VR](otherStream.inner, joiner.asValueJoiner, windows, joined)
 
   /**
    * Join records of this stream with another [[KTable]]'s records using left equi join with 
@@ -503,9 +493,8 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    *                 one for each matched record-pair with the same key 
    * @see `org.apache.kafka.streams.kstream.KStream#leftJoin`
    */ 
-  def leftJoin[VT, VR](table: KTable[K, VT],
-    joiner: (V, VT) => VR)(implicit joined: Joined[K, V, VT]): KStream[K, VR] =
-      inner.leftJoin[VT, VR](table.inner, joiner.asValueJoiner, joined)
+  def leftJoin[VT, VR](table: KTable[K, VT])(joiner: (V, VT) => VR)(implicit joined: Joined[K, V, VT]): KStream[K, VR] =
+    inner.leftJoin[VT, VR](table.inner, joiner.asValueJoiner, joined)
 
   /**
    * Join records of this stream with `GlobalKTable`'s records using non-windowed left equi join.
@@ -518,12 +507,11 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    *                       one output for each input [[KStream]] record
    * @see `org.apache.kafka.streams.kstream.KStream#leftJoin`
    */ 
-  def leftJoin[GK, GV, RV](globalKTable: GlobalKTable[GK, GV],
+  def leftJoin[GK, GV, RV](globalKTable: GlobalKTable[GK, GV])(
     keyValueMapper: (K, V) => GK,
-    joiner: (V, GV) => RV): KStream[K, RV] = {
-
+    joiner: (V, GV) => RV
+  ): KStream[K, RV] =
     inner.leftJoin[GK, GV, RV](globalKTable, keyValueMapper.asKeyValueMapper, joiner.asValueJoiner)
-  }
 
   /**
    * Join records of this stream with another [[KStream]]'s records using windowed outer equi join with 
@@ -540,10 +528,11 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * one for each matched record-pair with the same key and within the joining window intervals
    * @see `org.apache.kafka.streams.kstream.KStream#outerJoin`
    */ 
-  def outerJoin[VO, VR](otherStream: KStream[K, VO],
+  def outerJoin[VO, VR](otherStream: KStream[K, VO])(
     joiner: (V, VO) => VR,
-    windows: JoinWindows)(implicit joined: Joined[K, V, VO]): KStream[K, VR] =
-      inner.outerJoin[VO, VR](otherStream.inner, joiner.asValueJoiner, windows, joined)
+    windows: JoinWindows
+  )(implicit joined: Joined[K, V, VO]): KStream[K, VR] =
+    inner.outerJoin[VO, VR](otherStream.inner, joiner.asValueJoiner, windows, joined)
 
   /**
    * Merge this stream and the given stream into one larger stream.
@@ -567,7 +556,6 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @param action an action to perform on each record
    * @see `org.apache.kafka.streams.kstream.KStream#peek`
    */
-  def peek(action: (K, V) => Unit): KStream[K, V] = {
+  def peek(action: (K, V) => Unit): KStream[K, V] =
     inner.peek((k: K, v: V) => action(k, v))
-  }
 }
