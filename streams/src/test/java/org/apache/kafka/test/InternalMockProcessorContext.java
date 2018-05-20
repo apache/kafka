@@ -17,6 +17,7 @@
 package org.apache.kafka.test;
 
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
@@ -283,7 +284,7 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
     @Override
     public Headers headers() {
         if (recordContext == null) {
-            return null;
+            return new RecordHeaders();
         }
         return recordContext.headers();
     }
