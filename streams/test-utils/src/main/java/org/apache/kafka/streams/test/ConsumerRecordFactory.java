@@ -199,10 +199,6 @@ public class ConsumerRecordFactory<K, V> {
                                                  final K key,
                                                  final V value,
                                                  final long timestampMs) {
-        if (topicName == null) {
-            throw new IllegalStateException("ConsumerRecordFactory was created without defaultTopicName. " +
-                "Use #create(String topicName, K key, V value, long timestampMs) instead.");
-        }
         return create(topicName, key, value, null, timestampMs);
     }
 
@@ -239,7 +235,26 @@ public class ConsumerRecordFactory<K, V> {
                                                  final V value) {
         final long timestamp = timeMs;
         timeMs += advanceMs;
-        return create(topicName, key, value, timestamp);
+        return create(topicName, key, value, null, timestamp);
+    }
+
+    /**
+     * Create a {@link ConsumerRecord} with the given topic name, key, headers, and value.
+     * The timestamp will be generated from the constructor provided and time will auto advance.
+     *
+     * @param topicName the topic name
+     * @param key the record key
+     * @param value the record value
+     * @param headers the record headers
+     * @return the generated {@link ConsumerRecord}
+     */
+    public ConsumerRecord<byte[], byte[]> create(final String topicName,
+                                                 final K key,
+                                                 final V value,
+                                                 final Headers headers) {
+        final long timestamp = timeMs;
+        timeMs += advanceMs;
+        return create(topicName, key, value, headers, timestamp);
     }
 
     /**
@@ -270,7 +285,23 @@ public class ConsumerRecordFactory<K, V> {
     public ConsumerRecord<byte[], byte[]> create(final String topicName,
                                                  final V value,
                                                  final long timestampMs) {
-        return create(topicName, null, value, timestampMs);
+        return create(topicName, null, value, null, timestampMs);
+    }
+
+    /**
+     * Create a {@link ConsumerRecord} with {@code null}-key and the given topic name, value, headers, and timestamp.
+     *
+     * @param topicName the topic name
+     * @param value the record value
+     * @param headers the record headers
+     * @param timestampMs the record timestamp
+     * @return the generated {@link ConsumerRecord}
+     */
+    public ConsumerRecord<byte[], byte[]> create(final String topicName,
+                                                 final V value,
+                                                 final Headers headers,
+                                                 final long timestampMs) {
+        return create(topicName, null, value, headers, timestampMs);
     }
 
     /**
@@ -299,7 +330,7 @@ public class ConsumerRecordFactory<K, V> {
      */
     public ConsumerRecord<byte[], byte[]> create(final String topicName,
                                                  final V value) {
-        return create(topicName, null, value);
+        return create(topicName, null, value, null);
     }
 
     /**
@@ -374,7 +405,7 @@ public class ConsumerRecordFactory<K, V> {
 
         long timestamp = startTimestamp;
         for (final KeyValue<K, V> keyValue : keyValues) {
-            records.add(create(topicName, keyValue.key, keyValue.value, timestamp));
+            records.add(create(topicName, keyValue.key, keyValue.value, null, timestamp));
             timestamp += advanceMs;
         }
 

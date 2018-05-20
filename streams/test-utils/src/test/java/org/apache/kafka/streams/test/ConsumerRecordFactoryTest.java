@@ -68,7 +68,7 @@ public class ConsumerRecordFactoryTest {
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowToCreateTopicWithNullTopicNameWithNulKey() {
+    public void shouldNotAllowToCreateTopicWithNullTopicNameWithNullKey() {
         factory.create((String) null, value, timestamp);
     }
 
