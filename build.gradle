@@ -26,9 +26,9 @@ buildscript {
     // For Apache Rat plugin to ignore non-Git files
     classpath "org.ajoberstar:grgit:1.9.3"
     classpath 'com.github.ben-manes:gradle-versions-plugin:0.17.0'
-    classpath 'org.scoverage:gradle-scoverage:2.1.0'
-    classpath 'com.github.jengelman.gradle.plugins:shadow:2.0.2'
-    classpath 'org.owasp:dependency-check-gradle:3.1.1'
+    classpath 'org.scoverage:gradle-scoverage:2.3.0'
+    classpath 'com.github.jengelman.gradle.plugins:shadow:2.0.4'
+    classpath 'org.owasp:dependency-check-gradle:3.1.2'
   }
 }
 
@@ -76,7 +76,7 @@ allprojects {
 }
 
 ext {
-  gradleVersion = "4.5.1"
+  gradleVersion = "4.7"
   minJavaVersion = "8"
   buildVersionFileName = "kafka-version.properties"
 
@@ -351,8 +351,7 @@ subprojects {
   checkstyle {
     configFile = new File(rootDir, "checkstyle/checkstyle.xml")
     configProperties = [importControlFile: "$rootDir/checkstyle/import-control.xml"]
-    // version 7.x requires Java 8
-    toolVersion = '6.19'
+    toolVersion = '8.10'
   }
   test.dependsOn('checkstyleMain', 'checkstyleTest')
 
