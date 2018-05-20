@@ -525,7 +525,7 @@ public class Topology {
      * {@link StreamsConfig stream configuration}.
      *
      * @param name              the unique name of the sink
-     * @param topicExtractor    the extractor to determine the name of the Kafka topic to which this sink should write for reach record
+     * @param topicExtractor    the extractor to determine the name of the Kafka topic to which this sink should write for each record
      * @param parentNames       the name of one or more source or processor nodes whose output records this sink should consume
      *                          and dynamically write to topics
      * @return                  itself
@@ -557,7 +557,7 @@ public class Topology {
      * records among partitions using Kafka's default partitioning logic.
      *
      * @param name              the unique name of the sink
-     * @param topicExtractor    the extractor to determine the name of the Kafka topic to which this sink should write for reach record
+     * @param topicExtractor    the extractor to determine the name of the Kafka topic to which this sink should write for each record
      * @param partitioner       the function that should be used to determine the partition for each record processed by the sink
      * @param parentNames       the name of one or more source or processor nodes whose output records this sink should consume
      *                          and dynamically write to topics
@@ -581,7 +581,7 @@ public class Topology {
      * The sink will use the specified key and value serializers.
      *
      * @param name              the unique name of the sink
-     * @param topicExtractor    the extractor to determine the name of the Kafka topic to which this sink should write for reach record
+     * @param topicExtractor    the extractor to determine the name of the Kafka topic to which this sink should write for each record
      * @param keySerializer     the {@link Serializer key serializer} used when consuming records; may be null if the sink
      *                          should use the {@link StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG default key serializer} specified in the
      *                          {@link StreamsConfig stream configuration}
@@ -611,7 +611,7 @@ public class Topology {
      * The sink will use the specified key and value serializers, and the supplied partitioner.
      *
      * @param name              the unique name of the sink
-     * @param topicExtractor    the extractor to determine the name of the Kafka topic to which this sink should write for reach record
+     * @param topicExtractor    the extractor to determine the name of the Kafka topic to which this sink should write for each record
      * @param keySerializer     the {@link Serializer key serializer} used when consuming records; may be null if the sink
      *                          should use the {@link StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG default key serializer} specified in the
      *                          {@link StreamsConfig stream configuration}
