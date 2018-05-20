@@ -78,7 +78,6 @@ public class LoggingSignalHandler {
             @Override
             public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
                 Object signal = args[0];
-//                System.out.println(("Terminating process due to signal " + signal));
                 log.info("Terminating process due to signal {}", signal);
                 Object oldHandler = jvmSignalHandlers.get(getName(signal));
                 if (oldHandler != null)
