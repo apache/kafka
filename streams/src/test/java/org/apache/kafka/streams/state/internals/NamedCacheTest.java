@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
@@ -42,6 +46,7 @@ import static org.junit.Assert.assertSame;
 
 public class NamedCacheTest {
 
+    private final Headers headers = new RecordHeaders(new Header[]{new RecordHeader("key", "value".getBytes())});
     private NamedCache cache;
     private StreamsMetricsImpl metrics;
     private final String taskIDString = "0.0";
@@ -170,9 +175,9 @@ public class NamedCacheTest {
     @Test
     public void shouldFlushDirtEntriesOnEviction() {
         final List<ThreadCache.DirtyEntry> flushed = new ArrayList<>();
-        cache.put(Bytes.wrap(new byte[]{0}), new LRUCacheEntry(new byte[]{10}, null, true, 0, 0, 0, ""));
+        cache.put(Bytes.wrap(new byte[]{0}), new LRUCacheEntry(new byte[]{10}, headers, true, 0, 0, 0, ""));
         cache.put(Bytes.wrap(new byte[]{1}), new LRUCacheEntry(new byte[]{20}));
-        cache.put(Bytes.wrap(new byte[]{2}), new LRUCacheEntry(new byte[]{30}, null, true, 0, 0, 0, ""));
+        cache.put(Bytes.wrap(new byte[]{2}), new LRUCacheEntry(new byte[]{30}, headers, true, 0, 0, 0, ""));
 
         cache.setListener(new ThreadCache.DirtyEntryFlushListener() {
             @Override
@@ -185,6 +190,7 @@ public class NamedCacheTest {
 
         assertEquals(2, flushed.size());
         assertEquals(Bytes.wrap(new byte[] {0}), flushed.get(0).key());
+        assertEquals(headers, flushed.get(0).recordContext().headers());
         assertArrayEquals(new byte[] {10}, flushed.get(0).newValue());
         assertEquals(Bytes.wrap(new byte[] {2}), flushed.get(1).key());
         assertArrayEquals(new byte[] {30}, flushed.get(1).newValue());
@@ -193,7 +199,7 @@ public class NamedCacheTest {
 
     @Test
     public void shouldGetRangeIteratorOverKeys() {
-        cache.put(Bytes.wrap(new byte[]{0}), new LRUCacheEntry(new byte[]{10}, null, true, 0, 0, 0, ""));
+        cache.put(Bytes.wrap(new byte[]{0}), new LRUCacheEntry(new byte[]{10}, headers, true, 0, 0, 0, ""));
         cache.put(Bytes.wrap(new byte[]{1}), new LRUCacheEntry(new byte[]{20}));
         cache.put(Bytes.wrap(new byte[]{2}), new LRUCacheEntry(new byte[]{30}, null, true, 0, 0, 0, ""));
 
@@ -205,7 +211,7 @@ public class NamedCacheTest {
 
     @Test
     public void shouldGetIteratorOverAllKeys() {
-        cache.put(Bytes.wrap(new byte[]{0}), new LRUCacheEntry(new byte[]{10}, null, true, 0, 0, 0, ""));
+        cache.put(Bytes.wrap(new byte[]{0}), new LRUCacheEntry(new byte[]{10}, headers, true, 0, 0, 0, ""));
         cache.put(Bytes.wrap(new byte[]{1}), new LRUCacheEntry(new byte[]{20}));
         cache.put(Bytes.wrap(new byte[]{2}), new LRUCacheEntry(new byte[]{30}, null, true, 0, 0, 0, ""));
 
@@ -223,7 +229,7 @@ public class NamedCacheTest {
 
     @Test(expected = IllegalStateException.class)
     public void shouldThrowIllegalStateExceptionWhenTryingToOverwriteDirtyEntryWithCleanEntry() {
-        cache.put(Bytes.wrap(new byte[]{0}), new LRUCacheEntry(new byte[]{10}, null, true, 0, 0, 0, ""));
+        cache.put(Bytes.wrap(new byte[]{0}), new LRUCacheEntry(new byte[]{10}, headers, true, 0, 0, 0, ""));
         cache.put(Bytes.wrap(new byte[]{0}), new LRUCacheEntry(new byte[]{10}, null, false, 0, 0, 0, ""));
     }
 
@@ -235,7 +241,7 @@ public class NamedCacheTest {
                 // no-op
             }
         });
-        cache.put(Bytes.wrap(new byte[]{0}), new LRUCacheEntry(null, null, true, 0, 0, 0, ""));
+        cache.put(Bytes.wrap(new byte[]{0}), new LRUCacheEntry(null, headers, true, 0, 0, 0, ""));
         cache.put(Bytes.wrap(new byte[]{1}), new LRUCacheEntry(new byte[]{20}, null, true, 0, 0, 0, ""));
         cache.flush();
         assertEquals(1, cache.size());
