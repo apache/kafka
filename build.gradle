@@ -67,12 +67,10 @@ allprojects {
     }
   }
 
-  if (JavaVersion.current().isJava8Compatible()) {
-    tasks.withType(Javadoc) {
-      // disable the crazy super-strict doclint tool in Java 8
-      // noinspection SpellCheckingInspection
-      options.addStringOption('Xdoclint:none', '-quiet')
-    }
+  tasks.withType(Javadoc) {
+    // disable the crazy super-strict doclint tool in Java 8
+    // noinspection SpellCheckingInspection
+    options.addStringOption('Xdoclint:none', '-quiet')
   }
 
 }
@@ -81,10 +79,6 @@ ext {
   gradleVersion = "4.5.1"
   minJavaVersion = "8"
   buildVersionFileName = "kafka-version.properties"
-
-  maxPermSizeArgs = []
-  if (!JavaVersion.current().isJava8Compatible())
-    maxPermSizeArgs += '-XX:MaxPermSize=512m'
 
   userMaxForks = project.hasProperty('maxParallelForks') ? maxParallelForks.toInteger() : null
 
@@ -151,10 +145,7 @@ subprojects {
 
   compileJava {
     options.encoding = 'UTF-8'
-    options.compilerArgs << "-Xlint:deprecation"
-    // -Xlint:unchecked is too buggy in Java 7, so we only enable for Java 8 or higher
-    if (JavaVersion.current().isJava8Compatible())
-      options.compilerArgs << "-Xlint:unchecked"
+    options.compilerArgs << "-Xlint:deprecation,unchecked"
     // --release is the recommended way to select the target release, but it's only supported in Java 9 so we also
     // set --source and --target via `sourceCompatibility` and `targetCompatibility`. If/when Gradle supports `--release`
     // natively (https://github.com/gradle/gradle/issues/2510), we should switch to that.
@@ -203,7 +194,6 @@ subprojects {
 
     minHeapSize = "256m"
     maxHeapSize = "2048m"
-    jvmArgs = maxPermSizeArgs
 
     testLogging {
       events = userTestLoggingEvents ?: testLoggingEvents
@@ -218,7 +208,6 @@ subprojects {
 
     minHeapSize = "256m"
     maxHeapSize = "2048m"
-    jvmArgs = maxPermSizeArgs
 
     testLogging {
       events = userTestLoggingEvents ?: testLoggingEvents
@@ -237,7 +226,6 @@ subprojects {
 
     minHeapSize = "256m"
     maxHeapSize = "2048m"
-    jvmArgs = maxPermSizeArgs
 
     testLogging {
       events = userTestLoggingEvents ?: testLoggingEvents
@@ -356,7 +344,7 @@ subprojects {
 
     configure(scalaCompileOptions.forkOptions) {
       memoryMaximumSize = '1g'
-      jvmArgs = ['-Xss2m'] + maxPermSizeArgs
+      jvmArgs = ['-Xss2m']
     }
   }
 
