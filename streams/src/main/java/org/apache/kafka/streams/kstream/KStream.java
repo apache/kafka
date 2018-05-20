@@ -544,12 +544,12 @@ public interface KStream<K, V> {
 
     /**
      * Transform the value of each input record into a new value (with possible new type) of the output record.
-     * A {@link ValueTransformer} (provided by the given {@link ValueTransformerSupplier}) is applies to each input
+     * A {@link ValueTransformer} (provided by the given {@link ValueTransformerSupplier}) is applied to each input
      * record value and computes a new value for it.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
      * This is a stateful record-by-record operation (cf. {@link #mapValues(ValueMapper)}).
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress can be observed and additional
-     * periodic actions get be performed.
+     * periodic actions can be performed.
      * <p>
      * In order to assign a state, the state must be created and registered beforehand:
      * <pre>{@code
@@ -613,12 +613,12 @@ public interface KStream<K, V> {
 
     /**
      * Transform the value of each input record into a new value (with possible new type) of the output record.
-     * A {@link ValueTransformerWithKey} (provided by the given {@link ValueTransformerWithKeySupplier}) is applies to each input
+     * A {@link ValueTransformerWithKey} (provided by the given {@link ValueTransformerWithKeySupplier}) is applied to each input
      * record value and computes a new value for it.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
      * This is a stateful record-by-record operation (cf. {@link #mapValues(ValueMapperWithKey)}).
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress can be observed and additional
-     * periodic actions get be performed.
+     * periodic actions can be performed.
      * <p>
      * In order to assign a state, the state must be created and registered beforehand:
      * <pre>{@code

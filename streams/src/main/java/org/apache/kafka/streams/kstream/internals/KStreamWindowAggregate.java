@@ -145,5 +145,9 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
 
             return windowStore.fetch(key, window.start());
         }
+
+        @Override
+        public void close() {
+        }
     }
 }
