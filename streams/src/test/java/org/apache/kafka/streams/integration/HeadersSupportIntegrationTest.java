@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.integration;
 
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
@@ -28,7 +27,6 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
@@ -46,7 +44,6 @@ import org.junit.experimental.categories.Category;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
-import java.util.concurrent.ExecutionException;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -83,7 +80,7 @@ public class HeadersSupportIntegrationTest {
     }
 
     @Test
-    public void shouldCopyHeadersToIntermediateAndSinkTopic() throws ExecutionException, InterruptedException {
+    public void shouldCopyHeadersToIntermediateAndSinkTopic() throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
         builder
                 .stream(INPUT_TOPIC)
@@ -97,12 +94,7 @@ public class HeadersSupportIntegrationTest {
                         CLUSTER.bootstrapServers(),
                         Serdes.LongSerde.class.getName(),
                         Serdes.LongSerde.class.getName(),
-                        new Properties() {
-                            {
-                                put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), 1);
-                                put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
-                            }
-                        }));
+                        new Properties()));
 
         try {
             streams.start();
@@ -150,9 +142,8 @@ public class HeadersSupportIntegrationTest {
     }
 
     @Test
-    public void shouldAddHeadersToInputRecord() throws ExecutionException, InterruptedException {
+    public void shouldAddHeadersToInputRecord() throws Exception {
         final Topology topology = new Topology();
-
 
         final Headers[] headers = new Headers[1];
 
@@ -163,7 +154,7 @@ public class HeadersSupportIntegrationTest {
                     public Processor get() {
                         return new AbstractProcessor() {
                             @Override
-                            public void process(Object key, Object value) {
+                            public void process(final Object key, final Object value) {
                                 context().headers().add("hkey", "hvalue".getBytes());
                                 headers[0] = context().headers();
                                 context().forward(key, value);
@@ -180,18 +171,12 @@ public class HeadersSupportIntegrationTest {
                         CLUSTER.bootstrapServers(),
                         Serdes.LongSerde.class.getName(),
                         Serdes.LongSerde.class.getName(),
-                        new Properties() {
-                            {
-                                put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), 1);
-                                put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
-                            }
-                        }));
+                        new Properties()));
 
         try {
             streams.start();
 
             final List<KeyValue<Long, Long>> inputData = prepareData(0, 10L, 0L, 1L);
-
 
             IntegrationTestUtils.produceKeyValuesSynchronously(
                     INPUT_TOPIC,
@@ -217,12 +202,11 @@ public class HeadersSupportIntegrationTest {
 
     }
 
-    private void checkResultRecordsHasHeaders(Headers headers, List<ConsumerRecord<Long, Long>> committedRecords) {
+    private void checkResultRecordsHasHeaders(final Headers headers, final List<ConsumerRecord<Long, Long>> committedRecords) {
         for (ConsumerRecord<Long, Long> record : committedRecords) {
             assertThat(headers, equalTo(record.headers()));
         }
     }
-
 
     private List<KeyValue<Long, Long>> prepareData(final long fromInclusive, final long toExclusive, final Long... keys) {
         final List<KeyValue<Long, Long>> data = new ArrayList<>();
