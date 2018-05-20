@@ -19,18 +19,15 @@ package kafka.javaapi.consumer
 
 import java.util.Properties
 
-import kafka.server._
 import kafka.serializer._
+import kafka.server._
 import kafka.integration.KafkaServerTestHarness
-import kafka.producer.KeyedMessage
-import kafka.javaapi.producer.Producer
-import kafka.utils.IntEncoder
 import kafka.utils.{Logging, TestUtils}
-import kafka.consumer.{KafkaStream, ConsumerConfig}
+import kafka.consumer.{ConsumerConfig, KafkaStream}
 import kafka.common.MessageStreamsExistException
+import org.apache.kafka.clients.producer.ProducerRecord
+import org.apache.kafka.common.serialization.{IntegerSerializer, StringSerializer}
 import org.junit.Test
-
-import scala.collection.JavaConversions
 
 import org.apache.log4j.{Level, Logger}
 import org.junit.Assert._
@@ -86,19 +83,15 @@ class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with Logging
                    messagesPerNode: Int,
                    header: String): List[String] = {
     var messages: List[String] = Nil
-    for(server <- servers) {
-      val producer: kafka.producer.Producer[Int, String] =
-        TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
-          encoder = classOf[StringEncoder].getName,
-          keyEncoder = classOf[IntEncoder].getName)
-      val javaProducer: Producer[Int, String] = new kafka.javaapi.producer.Producer(producer)
+    for (server <- servers) {
+      val producer = TestUtils.createNewProducer[Integer, String](TestUtils.getBrokerListStrFromServers(servers),
+          keySerializer = new IntegerSerializer, valueSerializer = new StringSerializer)
       for (partition <- 0 until numParts) {
         val ms = 0.until(messagesPerNode).map(x => header + server.config.brokerId + "-" + partition + "-" + x)
         messages ++= ms
-        import JavaConversions._
-        javaProducer.send(ms.map(new KeyedMessage[Int, String](topic, partition, _)): java.util.List[KeyedMessage[Int, String]])
+        ms.map(new ProducerRecord[Integer, String](topic, partition, _)).map(producer.send).foreach(_.get)
       }
-      javaProducer.close
+      producer.close()
     }
     messages
   }

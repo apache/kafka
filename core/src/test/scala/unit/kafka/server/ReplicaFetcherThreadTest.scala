@@ -215,8 +215,6 @@ class ReplicaFetcherThreadTest {
     // Create a capture to track what partitions/offsets are truncated
     val truncateToCapture: Capture[Long] = newCapture(CaptureType.ALL)
 
-    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:1234"))
-
     // Setup all the dependencies
     val configs = TestUtils.createBrokerConfigs(1, "localhost:1234").map(KafkaConfig.fromProps)
     val quota = createNiceMock(classOf[ReplicationQuotaManager])
