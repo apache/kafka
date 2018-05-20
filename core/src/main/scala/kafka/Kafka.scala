@@ -24,7 +24,7 @@ import kafka.utils.Implicits._
 import kafka.server.{KafkaServer, KafkaServerStartable}
 import kafka.utils.{CommandLineUtils, Exit, Logging}
 import org.apache.kafka.common.KafkaException
-import org.apache.kafka.common.utils.{LoggingSignalHandler, OperatingSystem, Utils}
+import org.apache.kafka.common.utils.{Java, LoggingSignalHandler, OperatingSystem, Utils}
 
 import scala.collection.JavaConverters._
 
@@ -60,7 +60,7 @@ object Kafka extends Logging {
       val kafkaServerStartable = KafkaServerStartable.fromProps(serverProps)
 
       try {
-        if (!OperatingSystem.IS_WINDOWS)
+        if (!OperatingSystem.IS_WINDOWS && !Java.isIbmJdk)
           new LoggingSignalHandler().register()
       } catch {
         case e: ReflectiveOperationException =>
