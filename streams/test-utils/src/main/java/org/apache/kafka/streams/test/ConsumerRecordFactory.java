@@ -19,6 +19,7 @@ package org.apache.kafka.streams.test;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.KeyValue;
@@ -199,7 +200,7 @@ public class ConsumerRecordFactory<K, V> {
                                                  final K key,
                                                  final V value,
                                                  final long timestampMs) {
-        return create(topicName, key, value, null, timestampMs);
+        return create(topicName, key, value, new RecordHeaders(), timestampMs);
     }
 
     /**
@@ -235,7 +236,7 @@ public class ConsumerRecordFactory<K, V> {
                                                  final V value) {
         final long timestamp = timeMs;
         timeMs += advanceMs;
-        return create(topicName, key, value, null, timestamp);
+        return create(topicName, key, value, new RecordHeaders(), timestamp);
     }
 
     /**
@@ -285,7 +286,7 @@ public class ConsumerRecordFactory<K, V> {
     public ConsumerRecord<byte[], byte[]> create(final String topicName,
                                                  final V value,
                                                  final long timestampMs) {
-        return create(topicName, null, value, null, timestampMs);
+        return create(topicName, null, value, new RecordHeaders(), timestampMs);
     }
 
     /**
@@ -330,7 +331,7 @@ public class ConsumerRecordFactory<K, V> {
      */
     public ConsumerRecord<byte[], byte[]> create(final String topicName,
                                                  final V value) {
-        return create(topicName, null, value, null);
+        return create(topicName, null, value, new RecordHeaders());
     }
 
     /**
@@ -405,7 +406,7 @@ public class ConsumerRecordFactory<K, V> {
 
         long timestamp = startTimestamp;
         for (final KeyValue<K, V> keyValue : keyValues) {
-            records.add(create(topicName, keyValue.key, keyValue.value, null, timestamp));
+            records.add(create(topicName, keyValue.key, keyValue.value, new RecordHeaders(), timestamp));
             timestamp += advanceMs;
         }
 
