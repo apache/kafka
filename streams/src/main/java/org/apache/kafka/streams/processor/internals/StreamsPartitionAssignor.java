@@ -342,6 +342,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                                           final Map<String, Subscription> subscriptions) {
         // construct the client metadata from the decoded subscription info
         final Map<UUID, ClientMetadata> clientsMetadata = new HashMap<>();
+        final Set<String> futureConsumers = new HashSet<>();
 
         int minUserMetadataVersion = SubscriptionInfo.LATEST_SUPPORTED_VERSION;
         int futureMetadataVersion = UNKNOWN;
@@ -353,6 +354,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
             final int usedVersion = info.version();
             if (usedVersion > SubscriptionInfo.LATEST_SUPPORTED_VERSION) {
                 futureMetadataVersion = usedVersion;
+                futureConsumers.add(consumerId);
                 continue;
             }
             if (usedVersion < minUserMetadataVersion) {
@@ -376,7 +378,6 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                 log.info("Received a future (version probing) subscription (version: {}). Sending empty assignment back (with supported version {}).",
                     futureMetadataVersion,
                     SubscriptionInfo.LATEST_SUPPORTED_VERSION);
-                return emptyAssignment(subscriptions);
             } else {
                 throw new IllegalStateException("Received a future (version probing) subscription (version: " + futureMetadataVersion
                     + ") and an incompatible pre Kafka 1.2 subscription (version: " + minUserMetadataVersion + ") at the same time.");
@@ -648,6 +649,14 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
             }
         }
 
+        // add empty assignment for "future version" clients (ie, empty version probing response)
+        for (final String clientId : futureConsumers) {
+            assignment.put(clientId, new Assignment(
+                Collections.<TopicPartition>emptyList(),
+                new AssignmentInfo().encode()
+            ));
+        }
+
         return assignment;
     }
 
@@ -757,17 +766,6 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
             }
             assignedPartitions.add(partition);
         }
-    }
-
-    private Map<String, Assignment> emptyAssignment(final Map<String, Subscription> subscriptions) {
-        final Map<String, Assignment> emptyAssignment = new HashMap<>();
-        for (final String client : subscriptions.keySet()) {
-            emptyAssignment.put(client, new Assignment(
-                Collections.<TopicPartition>emptyList(),
-                new AssignmentInfo().encode()
-            ));
-        }
-        return emptyAssignment;
     }
 
     private void processVersionTwoAssignment(final AssignmentInfo info,
