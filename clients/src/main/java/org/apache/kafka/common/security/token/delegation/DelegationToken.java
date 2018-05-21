@@ -17,9 +17,9 @@
 package org.apache.kafka.common.security.token.delegation;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
-import org.apache.kafka.common.utils.Base64;
 
 import java.util.Arrays;
+import java.util.Base64;
 
 /**
  * A class representing a delegation token.
@@ -44,7 +44,7 @@ public class DelegationToken {
     }
 
     public String hmacAsBase64String() {
-        return Base64.encoder().encodeToString(hmac);
+        return Base64.getEncoder().encodeToString(hmac);
     }
 
     @Override

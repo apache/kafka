@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.data;
 
-import org.apache.kafka.common.utils.Base64;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.data.Schema.Type;
 import org.apache.kafka.connect.errors.DataException;
@@ -31,6 +30,7 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.text.StringCharacterIterator;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Calendar;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -644,7 +644,7 @@ public class Values {
                 sb.append(value);
             }
         } else if (value instanceof byte[]) {
-            value = Base64.encoder().encodeToString((byte[]) value);
+            value = Base64.getEncoder().encodeToString((byte[]) value);
             if (embedded) {
                 sb.append('"').append(value).append('"');
             } else {

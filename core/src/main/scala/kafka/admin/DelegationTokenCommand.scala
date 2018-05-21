@@ -19,6 +19,7 @@ package kafka.admin
 
 import java.text.SimpleDateFormat
 import java.util
+import java.util.Base64
 
 import joptsimple.{ArgumentAcceptingOptionSpec, OptionParser}
 import kafka.utils.{CommandLineUtils, Exit, Logging}
@@ -26,7 +27,7 @@ import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.{CreateDelegationTokenOptions, DescribeDelegationTokenOptions, ExpireDelegationTokenOptions, RenewDelegationTokenOptions, AdminClient => JAdminClient}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.token.delegation.DelegationToken
-import org.apache.kafka.common.utils.{Base64, SecurityUtils, Utils}
+import org.apache.kafka.common.utils.{SecurityUtils, Utils}
 
 import scala.collection.JavaConverters._
 import scala.collection.Set
@@ -112,7 +113,7 @@ object DelegationTokenCommand extends Logging {
     val hmac = opts.options.valueOf(opts.hmacOpt)
     val renewTimePeriodMs = opts.options.valueOf(opts.renewTimePeriodOpt).longValue()
     println("Calling renew token operation with hmac :" + hmac +" , renew-time-period :"+ renewTimePeriodMs)
-    val renewResult = adminClient.renewDelegationToken(Base64.decoder.decode(hmac), new RenewDelegationTokenOptions().renewTimePeriodMs(renewTimePeriodMs))
+    val renewResult = adminClient.renewDelegationToken(Base64.getDecoder.decode(hmac), new RenewDelegationTokenOptions().renewTimePeriodMs(renewTimePeriodMs))
     val expiryTimeStamp = renewResult.expiryTimestamp().get()
     val dateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm")
     println("Completed renew operation. New expiry date : %s".format(dateFormat.format(expiryTimeStamp)))
@@ -123,7 +124,7 @@ object DelegationTokenCommand extends Logging {
     val hmac = opts.options.valueOf(opts.hmacOpt)
     val expiryTimePeriodMs = opts.options.valueOf(opts.expiryTimePeriodOpt).longValue()
     println("Calling expire token operation with hmac :" + hmac +" , expire-time-period : "+ expiryTimePeriodMs)
-    val expireResult = adminClient.expireDelegationToken(Base64.decoder.decode(hmac), new ExpireDelegationTokenOptions().expiryTimePeriodMs(expiryTimePeriodMs))
+    val expireResult = adminClient.expireDelegationToken(Base64.getDecoder.decode(hmac), new ExpireDelegationTokenOptions().expiryTimePeriodMs(expiryTimePeriodMs))
     val expiryTimeStamp = expireResult.expiryTimestamp().get()
     val dateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm")
     println("Completed expire operation. New expiry date : %s".format(dateFormat.format(expiryTimeStamp)))

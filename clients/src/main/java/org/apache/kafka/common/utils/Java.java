@@ -38,7 +38,6 @@ public final class Java {
 
     // Having these as static final provides the best opportunity for compilar optimization
     public static final boolean IS_JAVA9_COMPATIBLE = VERSION.isJava9Compatible();
-    public static final boolean IS_JAVA8_COMPATIBLE = VERSION.isJava8Compatible();
 
     public static boolean isIbmJdk() {
         return System.getProperty("java.vendor").contains("IBM");
