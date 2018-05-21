@@ -18,11 +18,13 @@ package org.apache.kafka.connect.runtime.errors.impl;
 
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.errors.ErrorReporter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -44,7 +46,13 @@ public class ReporterFactory {
                 .define(LOG_ENABLE, ConfigDef.Type.BOOLEAN, LOG_ENABLE_DEFAULT, ConfigDef.Importance.HIGH, LOG_ENABLE_DOC);
     }
 
-    public List<ErrorReporter> forConfig(Map<String, ?> configs) {
+    public List<ErrorReporter> forConfig(Map<String, Object> workerProducerProps, ConnectorConfig connConfig) {
+        Map<String, Object> configs = new HashMap<>();
+        for (Map.Entry<String, Object> e: workerProducerProps.entrySet()) {
+            configs.put(DLQReporter.DLQ_PRODUCER_PROPERTIES + "." + e.getKey(), e.getValue());
+        }
+        configs.putAll(connConfig.errorHandlerConfig());
+
         ReporterFactoryConfig config = new ReporterFactoryConfig(getConfigDef(), configs);
         List<ErrorReporter> reporters = new ArrayList<>(3);
         log.info("Adding metrics reporter for reporting errors");

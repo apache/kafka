@@ -71,7 +71,7 @@ public class StructUtil {
                     } else if (object.getClass().isEnum()) {
                         object = String.valueOf(object);
                     } else if (Class.class.isAssignableFrom(object.getClass())) {
-                        object = String.valueOf(object);
+                        object = ((Class<?>) object).getName();
                     } else if (object instanceof Map) {
                         Map<String, String> m = new HashMap<>();
                         Map<Object, Object> mm = (Map<Object, Object>) object;
@@ -108,21 +108,21 @@ public class StructUtil {
 
             Class<?> type = method.getReturnType();
             if (method.getReturnType().equals(int.class)) {
-                schemaBuilder.field(field.value(), Schema.INT32_SCHEMA);
+                schemaBuilder.field(field.value(), Schema.OPTIONAL_INT32_SCHEMA);
             } else if (method.getReturnType().equals(String.class)) {
-                schemaBuilder.field(field.value(), Schema.STRING_SCHEMA);
+                schemaBuilder.field(field.value(), Schema.OPTIONAL_STRING_SCHEMA);
             } else if (method.getReturnType().equals(long.class)) {
-                schemaBuilder.field(field.value(), Schema.INT64_SCHEMA);
+                schemaBuilder.field(field.value(), Schema.OPTIONAL_INT64_SCHEMA);
             } else if (method.getReturnType().equals(Exception.class)) {
-                schemaBuilder.field(field.value(), Schema.STRING_SCHEMA);
+                schemaBuilder.field(field.value(), Schema.OPTIONAL_STRING_SCHEMA);
             } else if (method.getReturnType().equals(Structable.class)) {
                 schemaBuilder.field(field.value(), getSchemaFor((Class<? extends Structable>) method.getReturnType()));
             } else if (method.getReturnType().isEnum()) {
-                schemaBuilder.field(field.value(), Schema.STRING_SCHEMA);
+                schemaBuilder.field(field.value(), Schema.OPTIONAL_STRING_SCHEMA);
             } else if (Class.class.isAssignableFrom(method.getReturnType())) {
-                schemaBuilder.field(field.value(), Schema.STRING_SCHEMA);
+                schemaBuilder.field(field.value(), Schema.OPTIONAL_STRING_SCHEMA);
             } else if (Map.class.isAssignableFrom(method.getReturnType())) {
-                schemaBuilder.field(field.value(), SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.STRING_SCHEMA));
+                schemaBuilder.field(field.value(), SchemaBuilder.map(Schema.OPTIONAL_STRING_SCHEMA, Schema.OPTIONAL_STRING_SCHEMA).build());
             } else {
                 throw new DataException("Could not translate type: " + type + " for method " + method);
             }

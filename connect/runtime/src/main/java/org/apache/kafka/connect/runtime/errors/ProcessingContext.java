@@ -16,13 +16,20 @@
  */
 package org.apache.kafka.connect.runtime.errors;
 
+import org.apache.kafka.common.utils.Base64;
 import org.apache.kafka.connect.connector.ConnectRecord;
+import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.json.JsonConverter;
+import org.apache.kafka.connect.runtime.errors.impl.StructUtil;
+import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -44,6 +51,8 @@ public class ProcessingContext implements Structable {
     private int attempt;
     private ConnectRecord record;
     private long timetstamp;
+
+    private JsonConverter valueConverter = new JsonConverter();
 
     public static Builder newBuilder(ConnectorTaskId taskId, Map<String, Object> workerConfig) {
         Objects.requireNonNull(taskId);
@@ -67,6 +76,11 @@ public class ProcessingContext implements Structable {
         this.workerConfig = workerConfig;
         this.stages = stages;
         this.reporters = reporters;
+
+        Map<String, Object> config = new HashMap<>();
+        config.put("schemas.enable", false);
+        config.put("converter.type", "value");
+        valueConverter.configure(config);
     }
 
     /**
@@ -154,7 +168,54 @@ public class ProcessingContext implements Structable {
 
     @Override
     public Struct toStruct() {
-        return null;
+        Struct metadata = StructUtil.toStruct(this);
+
+        Schema valueSchema = new SchemaBuilder(Schema.Type.STRUCT)
+                .field("schema", Schema.STRING_SCHEMA)
+                .field("object", Schema.STRING_SCHEMA).build();
+        Struct value = new Struct(valueSchema);
+        value.put("schema", record.valueSchema().type().toString());
+        value.put("object", Base64.encoder().encodeToString((byte[]) record.value()));
+
+        SchemaBuilder recordSchema = new SchemaBuilder(Schema.Type.STRUCT);
+        recordSchema.field("topic", Schema.STRING_SCHEMA);
+        recordSchema.field("timestamp", Schema.INT64_SCHEMA);
+        recordSchema.field("offset", Schema.INT64_SCHEMA);
+        recordSchema.field("partition", Schema.INT32_SCHEMA);
+        recordSchema.field("value", value.schema());
+
+        Struct recordStruct = new Struct(recordSchema);
+        recordStruct.put("topic", record().topic());
+        recordStruct.put("timestamp", record().timestamp());
+        recordStruct.put("partition", record().kafkaPartition());
+        recordStruct.put("offset", ((SinkRecord) record()).kafkaOffset());
+        recordStruct.put("value", value);
+
+        Struct stage = StructUtil.toStruct(current());
+
+        SchemaBuilder finalSchemaBuilder = new SchemaBuilder(Schema.Type.STRUCT)
+                .field("record", recordSchema)
+                .field("stage", stage.schema());
+        for (org.apache.kafka.connect.data.Field f : metadata.schema().fields()) {
+            finalSchemaBuilder.field(f.name(), f.schema());
+        }
+
+        finalSchemaBuilder.field("stages", SchemaBuilder.array(stage.schema()).build());
+        Struct struct = new Struct(finalSchemaBuilder.build());
+
+        for (org.apache.kafka.connect.data.Field f : metadata.schema().fields()) {
+            struct.put(f.name(), metadata.get(f));
+        }
+        struct.put("record", recordStruct);
+        struct.put("stage", stage);
+
+        List<Struct> ll = new ArrayList<>();
+        for (Stage st : stages()) {
+            ll.add(StructUtil.toStruct(st));
+        }
+        struct.put("stages", ll);
+
+        return struct;
     }
 
     public void reset() {
@@ -177,6 +238,10 @@ public class ProcessingContext implements Structable {
         }
     }
 
+    public void next() {
+        current++;
+    }
+
     public void incrementAttempt() {
         attempt++;
     }
@@ -193,16 +258,19 @@ public class ProcessingContext implements Structable {
             this.workerConfig = workerConfig;
         }
 
-        public void prependStage(Stage stage) {
+        public Builder prependStage(Stage stage) {
             stages.addFirst(stage);
+            return this;
         }
 
-        public void appendStage(Stage stage) {
+        public Builder appendStage(Stage stage) {
             stages.addLast(stage);
+            return this;
         }
 
-        public void addReporters(Collection<ErrorReporter> reporters) {
+        public Builder addReporters(Collection<ErrorReporter> reporters) {
             this.reporters.addAll(reporters);
+            return this;
         }
 
         public ProcessingContext build() {

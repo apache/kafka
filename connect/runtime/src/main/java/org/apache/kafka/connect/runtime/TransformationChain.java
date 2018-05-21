@@ -44,13 +44,18 @@ public class TransformationChain<R extends ConnectRecord<R>> {
         for (final Transformation<R> transformation : transformations) {
             final R current = record;
 
+            // set the current record
             processingContext.setRecord(current);
+
+            // execute the operation
             record = operationExecutor.execute(new OperationExecutor.Operation<R>() {
                 @Override
                 public R apply() {
                     return transformation.apply(current);
                 }
             }, null, processingContext);
+
+            // move to the next stage
             processingContext.next();
 
             if (record == null) break;

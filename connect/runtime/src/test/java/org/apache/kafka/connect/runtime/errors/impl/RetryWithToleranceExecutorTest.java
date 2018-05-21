@@ -97,7 +97,6 @@ public class RetryWithToleranceExecutorTest {
         testHandleExceptionInStage(StageType.TASK_POLL, new Exception());
     }
 
-
     @Test(expected = Exception.class)
     public void testThrowExceptionInKafkaConsume() {
         testHandleExceptionInStage(StageType.KAFKA_CONSUME, new Exception());

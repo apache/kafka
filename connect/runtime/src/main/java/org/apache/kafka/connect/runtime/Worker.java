@@ -530,13 +530,14 @@ public class Worker {
         }
     }
 
+    /**
+     * Setup properties for dead letter queue using the producer properties from worker config before overriding them
+     * from the connector config.
+     * @param connConfig connector config
+     * @return reporters to log error context
+     */
     private List<ErrorReporter> errorReportersConfig(ConnectorConfig connConfig) {
-        Map<String, Object> reporterProps = new HashMap<>();
-        for (Map.Entry<String, Object> e: producerProps.entrySet()) {
-            reporterProps.put(DLQReporter.DLQ_PRODUCER_PROPERTIES + "." + e.getKey(), e.getValue());
-        }
-        reporterProps.putAll(connConfig.errorHandlerConfig());
-        return new ReporterFactory().forConfig(reporterProps);
+        return new ReporterFactory().forConfig(producerProps, connConfig);
     }
 
     private void stopTask(ConnectorTaskId taskId) {

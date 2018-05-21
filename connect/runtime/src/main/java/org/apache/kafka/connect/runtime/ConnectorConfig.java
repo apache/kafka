@@ -143,6 +143,9 @@ public class ConnectorConfig extends AbstractConfig {
         );
     }
 
+    /**
+     * @return properties to configure error handlers and reporters.
+     */
     public Map<String, ?> errorHandlerConfig() {
         return originalsWithPrefix(ERROR_HANDLING_CONFIG + ".");
     }
@@ -174,6 +177,10 @@ public class ConnectorConfig extends AbstractConfig {
         return transformations;
     }
 
+    /**
+     * @return an ordered list of stages describing the transformations in this connector. The order is specified by
+     * {@link #TRANSFORMS_CONFIG}.
+     */
     public List<Stage> transformationAsStages() {
         final List<String> transformAliases = getList(TRANSFORMS_CONFIG);
         List<Stage> stages = new ArrayList<>();
