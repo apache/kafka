@@ -155,24 +155,14 @@ public abstract class ConnectRecord<R extends ConnectRecord<R>> {
 
         ConnectRecord that = (ConnectRecord) o;
 
-        if (kafkaPartition != null ? !kafkaPartition.equals(that.kafkaPartition) : that.kafkaPartition != null)
-            return false;
-        if (topic != null ? !topic.equals(that.topic) : that.topic != null)
-            return false;
-        if (keySchema != null ? !keySchema.equals(that.keySchema) : that.keySchema != null)
-            return false;
-        if (key != null ? !key.equals(that.key) : that.key != null)
-            return false;
-        if (valueSchema != null ? !valueSchema.equals(that.valueSchema) : that.valueSchema != null)
-            return false;
-        if (value != null ? !value.equals(that.value) : that.value != null)
-            return false;
-        if (timestamp != null ? !timestamp.equals(that.timestamp) : that.timestamp != null)
-            return false;
-        if (!Objects.equals(headers, that.headers))
-            return false;
-
-        return true;
+        return Objects.equals(kafkaPartition, that.kafkaPartition)
+               && Objects.equals(topic, that.topic)
+               && Objects.equals(keySchema, that.keySchema)
+               && Objects.equals(key, that.key)
+               && Objects.equals(valueSchema, that.valueSchema)
+               && Objects.equals(value, that.value)
+               && Objects.equals(timestamp, that.timestamp)
+               && Objects.equals(headers, that.headers);
     }
 
     @Override

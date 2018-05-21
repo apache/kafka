@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import java.util.Objects;
+
 public abstract class AbstractStatus<T> {
 
     public enum State {
@@ -81,12 +83,11 @@ public abstract class AbstractStatus<T> {
 
         AbstractStatus<?> that = (AbstractStatus<?>) o;
 
-        if (generation != that.generation) return false;
-        if (id != null ? !id.equals(that.id) : that.id != null) return false;
-        if (state != that.state) return false;
-        if (trace != null ? !trace.equals(that.trace) : that.trace != null) return false;
-        return workerId != null ? workerId.equals(that.workerId) : that.workerId == null;
-
+        return generation == that.generation
+                && Objects.equals(id, that.id)
+                && state == that.state
+                && Objects.equals(trace, that.trace)
+                && Objects.equals(workerId, that.workerId);
     }
 
     @Override
