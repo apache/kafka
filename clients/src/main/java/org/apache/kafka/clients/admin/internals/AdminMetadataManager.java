@@ -112,8 +112,7 @@ public class AdminMetadataManager {
 
         @Override
         public void handleAuthenticationFailure(AuthenticationException e) {
-            log.info("AdminMetadataManager got AuthenticationException", e);
-            update(Cluster.empty(), time.milliseconds(), e);
+            updateFailed(e);
         }
 
         @Override
@@ -226,20 +225,30 @@ public class AdminMetadataManager {
         this.lastMetadataFetchAttemptMs = now;
     }
 
+    public void updateFailed(Throwable exception) {
+        // We depend on pending calls to request another metadata update
+        this.state = State.QUIESCENT;
+
+        if (exception instanceof AuthenticationException) {
+            log.warn("Metadata update failed due to authentication error", exception);
+            this.authException = (AuthenticationException) exception;
+        } else {
+            log.debug("Metadata update failed", exception);
+        }
+    }
+
     /**
      * Receive new metadata, and transition into the QUIESCENT state.
      * Updates lastMetadataUpdateMs, cluster, and authException.
      */
-    public void update(Cluster cluster, long now, AuthenticationException authException) {
+    public void update(Cluster cluster, long now) {
         if (cluster.isBootstrapConfigured()) {
             log.debug("Setting bootstrap cluster metadata {}.", cluster);
         } else {
-            log.debug("Received cluster metadata {}{}.",
-                cluster, authException == null ? "" : " with authentication exception.");
+            log.debug("Updating cluster metadata to {}", cluster);
         }
         this.state = State.QUIESCENT;
         this.lastMetadataUpdateMs = now;
-        this.authException = authException;
         if (!cluster.nodes().isEmpty()) {
             this.cluster = cluster;
         }
