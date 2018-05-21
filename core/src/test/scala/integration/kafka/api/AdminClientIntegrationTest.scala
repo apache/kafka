@@ -31,10 +31,10 @@ import org.apache.kafka.clients.admin._
 import kafka.utils.{Logging, TestUtils}
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.admin.NewTopic
-import org.apache.kafka.clients.consumer.KafkaConsumer
+import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.producer.ProducerRecord
-import org.apache.kafka.common.{KafkaFuture, TopicPartition, TopicPartitionReplica}
+import org.apache.kafka.common.{ConsumerGroupState, KafkaFuture, TopicPartition, TopicPartitionReplica}
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors._
@@ -49,6 +49,7 @@ import scala.collection.JavaConverters._
 import java.lang.{Long => JLong}
 
 import kafka.zk.KafkaZkClient
+import org.apache.kafka.common.internals.Topic
 import org.scalatest.Assertions.intercept
 
 import scala.concurrent.duration.Duration
@@ -98,6 +99,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       config.setProperty(KafkaConfig.InterBrokerListenerNameProp, listenerName.value)
       config.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, s"${listenerName.value}:${securityProtocol.name}")
       config.setProperty(KafkaConfig.DeleteTopicEnableProp, "true")
+      config.setProperty(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
       // We set this in order to test that we don't expose sensitive data via describe configs. This will already be
       // set for subclasses with security enabled and we don't want to overwrite it.
       if (!config.containsKey(KafkaConfig.SslTruststorePasswordProp))
@@ -958,6 +960,120 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     future2.get
     client.close()
     assertEquals(1, factory.failuresInjected)
+  }
+
+  /**
+    * Test the consumer group APIs.
+    */
+  @Test
+  def testConsumerGroups(): Unit = {
+    val config = createConfig()
+    val client = AdminClient.create(config)
+    try {
+      // Verify that initially there are no consumer groups to list.
+      val list1 = client.listConsumerGroups()
+      assertTrue(0 == list1.all().get().size())
+      assertTrue(0 == list1.errors().get().size())
+      assertTrue(0 == list1.valid().get().size())
+      val testTopicName = "test_topic"
+      val testNumPartitions = 2
+      client.createTopics(Collections.singleton(
+        new NewTopic(testTopicName, testNumPartitions, 1))).all().get()
+      val producer = createNewProducer
+      try {
+        producer.send(new ProducerRecord(testTopicName, 0, null, null)).get()
+      } finally {
+        Utils.closeQuietly(producer, "producer")
+      }
+      val testGroupId = "test_group_id"
+      val testClientId = "test_client_id"
+      val fakeGroupId = "fake_group_id"
+      val newConsumerConfig = new Properties(consumerConfig)
+      newConsumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, testGroupId)
+      newConsumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, testClientId)
+      val consumer = TestUtils.createNewConsumer(brokerList,
+        securityProtocol = this.securityProtocol,
+        trustStoreFile = this.trustStoreFile,
+        saslProperties = this.clientSaslProperties,
+        props = Some(newConsumerConfig))
+      try {
+        // Start a consumer in a thread that will subscribe to a new group.
+        val consumerThread = new Thread {
+          override def run {
+            consumer.subscribe(Collections.singleton(testTopicName))
+            while (true) {
+              consumer.poll(5000)
+              consumer.commitSync()
+            }
+          }
+        }
+        try {
+          consumerThread.start
+          // Test that we can list the new group.
+          TestUtils.waitUntilTrue(() => {
+            val matching = client.listConsumerGroups().all().get().asScala.
+              filter(listing => listing.groupId().equals(testGroupId))
+            !matching.isEmpty
+          }, s"Expected to be able to list $testGroupId")
+
+          val result = client.describeConsumerGroups(Seq(testGroupId, fakeGroupId).asJava)
+          assertEquals(2, result.describedGroups().size())
+
+          // Test that we can get information about the test consumer group.
+          assertTrue(result.describedGroups().containsKey(testGroupId))
+          val testGroupDescription = result.describedGroups().get(testGroupId).get()
+          assertEquals(testGroupId, testGroupDescription.groupId())
+          assertFalse(testGroupDescription.isSimpleConsumerGroup())
+          assertEquals(1, testGroupDescription.members().size())
+          val member = testGroupDescription.members().iterator().next()
+          assertEquals(testClientId, member.clientId())
+          val topicPartitions = member.assignment().topicPartitions()
+          assertEquals(testNumPartitions, topicPartitions.size())
+          assertEquals(testNumPartitions, topicPartitions.asScala.
+            count(tp => tp.topic().equals(testTopicName)))
+
+          // Test that the fake group is listed as dead.
+          assertTrue(result.describedGroups().containsKey(fakeGroupId))
+          val fakeGroupDescription = result.describedGroups().get(fakeGroupId).get()
+          assertEquals(fakeGroupId, fakeGroupDescription.groupId())
+          assertEquals(0, fakeGroupDescription.members().size())
+          assertEquals("", fakeGroupDescription.partitionAssignor())
+          assertEquals(ConsumerGroupState.DEAD, fakeGroupDescription.state())
+
+          // Test that all() returns 2 results
+          assertEquals(2, result.all().get().size())
+
+          // Test listConsumerGroupOffsets
+          val parts = client.listConsumerGroupOffsets(testGroupId).partitionsToOffsetAndMetadata().get()
+          TestUtils.waitUntilTrue(() => {
+            val parts = client.listConsumerGroupOffsets(testGroupId).partitionsToOffsetAndMetadata().get()
+            val part = new TopicPartition(testTopicName, 0)
+            parts.containsKey(part) && (parts.get(part).offset() == 1)
+          }, s"Expected the offset for partition 0 to eventually become 1.")
+
+          // Test consumer group deletion
+          val deleteResult = client.deleteConsumerGroups(Seq(testGroupId, fakeGroupId).asJava)
+          assertEquals(2, deleteResult.deletedGroups().size())
+
+          // Deleting the fake group ID should get GroupIdNotFoundException.
+          assertTrue(deleteResult.deletedGroups().containsKey(fakeGroupId))
+          assertFutureExceptionTypeEquals(deleteResult.deletedGroups().get(fakeGroupId),
+            classOf[GroupIdNotFoundException])
+
+          // Deleting the real group ID should get GroupNotEmptyException
+          assertTrue(deleteResult.deletedGroups().containsKey(testGroupId))
+          assertFutureExceptionTypeEquals(deleteResult.deletedGroups().get(testGroupId),
+            classOf[GroupNotEmptyException])
+        } finally {
+          consumerThread.interrupt()
+          consumerThread.join()
+        }
+      } finally {
+        Utils.closeQuietly(consumer, "consumer")
+      }
+    } finally {
+      Utils.closeQuietly(client, "adminClient")
+    }
   }
 }
 

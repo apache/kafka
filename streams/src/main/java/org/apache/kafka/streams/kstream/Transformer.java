@@ -51,6 +51,8 @@ public interface Transformer<K, V, R> {
     /**
      * Initialize this transformer.
      * This is called once per instance when the topology gets initialized.
+     * When the framework is done with the transformer, {@link #close()} will be called on it; the
+     * framework may later re-use the transformer by calling {@link #init()} again.
      * <p>
      * The provided {@link ProcessorContext context} can be used to access topology and record meta data, to
      * {@link ProcessorContext#schedule(long, PunctuationType, Punctuator) schedule} a method to be
@@ -81,7 +83,8 @@ public interface Transformer<K, V, R> {
     R transform(final K key, final V value);
 
     /**
-     * Close this processor and clean up any resources.
+     * Close this transformer and clean up any resources. The framework may
+     * later re-use this transformer by calling {@link #init()} on it again.
      * <p>
      * To generate new {@link KeyValue} pairs {@link ProcessorContext#forward(Object, Object)} and
      * {@link ProcessorContext#forward(Object, Object, To)} can be used.

@@ -84,8 +84,7 @@ class KGroupedStream[K, V](val inner: KGroupedStreamJ[K, V]) {
    * latest (rolling) aggregate for each key
    * @see `org.apache.kafka.streams.kstream.KGroupedStream#reduce`
    */ 
-  def reduce(reducer: (V, V) => V,
-    materialized: Materialized[K, V, ByteArrayKeyValueStore]): KTable[K, V] = {
+  def reduce(reducer: (V, V) => V, materialized: Materialized[K, V, ByteArrayKeyValueStore]): KTable[K, V] = {
 
     // need this explicit asReducer for Scala 2.11 or else the SAM conversion doesn't take place
     // works perfectly with Scala 2.12 though
@@ -101,9 +100,8 @@ class KGroupedStream[K, V](val inner: KGroupedStreamJ[K, V]) {
    * latest (rolling) aggregate for each key
    * @see `org.apache.kafka.streams.kstream.KGroupedStream#aggregate`
    */ 
-  def aggregate[VR](initializer: () => VR,
-    aggregator: (K, V, VR) => VR): KTable[K, VR] =
-    inner.aggregate(initializer.asInitializer, aggregator.asAggregator)
+  def aggregate[VR](initializer: => VR)(aggregator: (K, V, VR) => VR): KTable[K, VR] =
+    inner.aggregate((() => initializer).asInitializer, aggregator.asAggregator)
 
   /**
    * Aggregate the values of records in this stream by the grouped key.
@@ -115,10 +113,9 @@ class KGroupedStream[K, V](val inner: KGroupedStreamJ[K, V]) {
    * latest (rolling) aggregate for each key
    * @see `org.apache.kafka.streams.kstream.KGroupedStream#aggregate`
    */ 
-  def aggregate[VR](initializer: () => VR,
-    aggregator: (K, V, VR) => VR,
-    materialized: Materialized[K, VR, ByteArrayKeyValueStore]): KTable[K, VR] =
-    inner.aggregate(initializer.asInitializer, aggregator.asAggregator, materialized)
+  def aggregate[VR](initializer: => VR)(aggregator: (K, V, VR) => VR,
+                                        materialized: Materialized[K, VR, ByteArrayKeyValueStore]): KTable[K, VR] =
+    inner.aggregate((() => initializer).asInitializer, aggregator.asAggregator, materialized)
 
   /**
    * Create a new [[SessionWindowedKStream]] instance that can be used to perform session windowed aggregations.

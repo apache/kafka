@@ -39,8 +39,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static org.apache.kafka.streams.processor.internals.ConsumerUtils.poll;
-
 public class StoreChangelogReader implements ChangelogReader {
 
     private final Logger log;
