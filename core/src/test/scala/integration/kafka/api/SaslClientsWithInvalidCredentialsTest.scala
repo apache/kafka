@@ -158,6 +158,27 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
 
   @Test
   def testConsumerGroupServiceWithAuthenticationFailure() {
+    val consumerGroupService: ConsumerGroupService = prepareConsumerGroupService
+
+    val consumer = consumers.head
+    consumer.subscribe(List(topic).asJava)
+
+    verifyAuthenticationException(consumerGroupService.listGroups)
+  }
+
+  @Test
+  def testConsumerGroupServiceWithAuthenticationSuccess() {
+    createClientCredential()
+    val consumerGroupService: ConsumerGroupService = prepareConsumerGroupService
+
+    val consumer = consumers.head
+    consumer.subscribe(List(topic).asJava)
+
+    verifyWithRetry(consumer.poll(1000))
+    assertEquals(1, consumerGroupService.listGroups.size)
+  }
+
+  private def prepareConsumerGroupService = {
     val propsFile = TestUtils.tempFile()
     val propsStream = Files.newOutputStream(propsFile.toPath)
     propsStream.write("security.protocol=SASL_PLAINTEXT\n".getBytes())
@@ -165,19 +186,12 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
     propsStream.close()
 
     val cgcArgs = Array("--bootstrap-server", brokerList,
-                        "--describe",
-                        "--group", "test.group",
-                        "--command-config", propsFile.getAbsolutePath)
+      "--describe",
+      "--group", "test.group",
+      "--command-config", propsFile.getAbsolutePath)
     val opts = new ConsumerGroupCommandOptions(cgcArgs)
     val consumerGroupService = new ConsumerGroupService(opts)
-
-    val consumer = consumers.head
-    consumer.subscribe(List(topic).asJava)
-
-    verifyAuthenticationException(consumerGroupService.listGroups)
-    createClientCredential()
-    verifyWithRetry(consumer.poll(1000))
-    assertEquals(1, consumerGroupService.listGroups.size)
+    consumerGroupService
   }
 
   private def createClientCredential(): Unit = {
