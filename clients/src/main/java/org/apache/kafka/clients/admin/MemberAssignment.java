@@ -19,21 +19,24 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Utils;
 
-import java.util.List;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * A description of the assignments of a specific group member.
  */
 public class MemberAssignment {
-    private final List<TopicPartition> topicPartitions;
+    private final Set<TopicPartition> topicPartitions;
 
     /**
      * Creates an instance with the specified parameters.
      *
      * @param topicPartitions List of topic partitions
      */
-    public MemberAssignment(List<TopicPartition> topicPartitions) {
-        this.topicPartitions = topicPartitions;
+    MemberAssignment(Set<TopicPartition> topicPartitions) {
+        this.topicPartitions = topicPartitions == null ? Collections.<TopicPartition>emptySet() :
+            Collections.unmodifiableSet(new HashSet<>(topicPartitions));
     }
 
     @Override
@@ -54,7 +57,7 @@ public class MemberAssignment {
     /**
      * The topic partitions assigned to a group member.
      */
-    public List<TopicPartition> topicPartitions() {
+    public Set<TopicPartition> topicPartitions() {
         return topicPartitions;
     }
 
