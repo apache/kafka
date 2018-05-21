@@ -1509,7 +1509,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             Long offset = this.subscriptions.position(partition);
             while (offset == null) {
                 // batch update fetch positions for any partitions without a valid position
-                while (! updateFetchPositions(Long.MAX_VALUE) ) {
+                while (!updateFetchPositions(Long.MAX_VALUE)) {
                     log.warn("Still updating fetch positions");
                 }
                 client.poll(retryBackoffMs);
