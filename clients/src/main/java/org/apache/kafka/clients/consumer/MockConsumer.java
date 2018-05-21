@@ -235,16 +235,6 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
-    public void commitSync(final Duration timeout) {
-        commitSync(this.subscriptions.allConsumed());
-    }
-
-    @Override
-    public void commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets, final Duration timeout) {
-        commitAsync(offsets, null);
-    }
-
-    @Override
     public synchronized void commitAsync() {
         commitAsync(null);
     }
@@ -268,11 +258,6 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public synchronized OffsetAndMetadata committed(TopicPartition partition) {
-        return committed(partition, Duration.ZERO);
-    }
-
-    @Override
-    public OffsetAndMetadata committed(final TopicPartition partition, final Duration timeout) {
         ensureNotClosed();
         if (subscriptions.isAssigned(partition)) {
             return committed.get(partition);
@@ -282,11 +267,6 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public synchronized long position(TopicPartition partition) {
-        return position(partition, Duration.ZERO);
-    }
-
-    @Override
-    public long position(final TopicPartition partition, final Duration timeout) {
         ensureNotClosed();
         if (!this.subscriptions.isAssigned(partition))
             throw new IllegalArgumentException("You can only check the position for partitions assigned to this consumer.");
@@ -346,22 +326,12 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public synchronized List<PartitionInfo> partitionsFor(String topic) {
-        return partitionsFor(topic, Duration.ZERO);
-    }
-
-    @Override
-    public List<PartitionInfo> partitionsFor(final String topic, final Duration timeout) {
         ensureNotClosed();
         return this.partitions.get(topic);
     }
 
     @Override
     public synchronized Map<String, List<PartitionInfo>> listTopics() {
-        return listTopics(Duration.ZERO);
-    }
-
-    @Override
-    public Map<String, List<PartitionInfo>> listTopics(final Duration timeout) {
         ensureNotClosed();
         return partitions;
     }
@@ -393,17 +363,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
-    public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(final Map<TopicPartition, Long> timestampsToSearch, final Duration timeout) {
-        throw new UnsupportedOperationException("Not implemented yet.");
-    }
-
-    @Override
     public synchronized Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions) {
-        return beginningOffsets(partitions, Duration.ZERO);
-    }
-
-    @Override
-    public Map<TopicPartition, Long> beginningOffsets(final Collection<TopicPartition> partitions, final Duration timeout) {
         Map<TopicPartition, Long> result = new HashMap<>();
         for (TopicPartition tp : partitions) {
             Long beginningOffset = beginningOffsets.get(tp);
@@ -416,11 +376,6 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public synchronized Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions) {
-        return endOffsets(partitions, Duration.ZERO);
-    }
-
-    @Override
-    public Map<TopicPartition, Long> endOffsets(final Collection<TopicPartition> partitions, final Duration timeout) {
         Map<TopicPartition, Long> result = new HashMap<>();
         for (TopicPartition tp : partitions) {
             Long endOffset = getEndOffset(endOffsets.get(tp));
@@ -433,16 +388,11 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public synchronized void close() {
-        close(Duration.ZERO);
+        close(KafkaConsumer.DEFAULT_CLOSE_TIMEOUT_MS, TimeUnit.MILLISECONDS);
     }
 
     @Override
     public synchronized void close(long timeout, TimeUnit unit) {
-        close(Duration.ZERO);
-    }
-
-    @Override
-    public void close(final Duration timeout) {
         ensureNotClosed();
         this.closed = true;
     }
