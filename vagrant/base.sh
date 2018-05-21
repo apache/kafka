@@ -100,8 +100,9 @@ popd
 popd
 
 # Test multiple Kafka versions
-# we want to use the latest Scala version per Kafka version
-# however, we cannot pull in Scala 2.12 builds atm, because Scala 2.12 requires Java 8, but we use Java 7 to run the system tests
+# We want to use the latest Scala version per Kafka version
+# Previously we could not pull in Scala 2.12 builds, because Scala 2.12 requires Java 8 and we were running the system
+# tests with Java 7. We have since switched to Java 8, so 2.0.0 and later use Scala 2.12.
 get_kafka 0.8.2.2 2.11
 chmod a+rw /opt/kafka-0.8.2.2
 get_kafka 0.9.0.1 2.11
