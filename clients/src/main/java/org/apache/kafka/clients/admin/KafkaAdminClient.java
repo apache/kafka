@@ -577,7 +577,9 @@ public class KafkaAdminClient extends AdminClient {
             // this RPC. That is why 'tries' is not incremented.
             if ((throwable instanceof UnsupportedVersionException) &&
                      handleUnsupportedVersionException((UnsupportedVersionException) throwable)) {
-                log.trace("{} attempting protocol downgrade.", this);
+                if (log.isDebugEnabled()) {
+                    log.debug("{} attempting protocol downgrade and then retry.", this);
+                }
                 runnable.enqueue(this, now);
                 return;
             }
@@ -813,6 +815,7 @@ public class KafkaAdminClient extends AdminClient {
          * @param pendingIter   An iterator yielding pending calls.
          */
         private void chooseNodesForPendingCalls(long now, Iterator<Call> pendingIter) {
+            log.trace("Trying to choose nodes for {} at {}", pendingIter, now);
             while (pendingIter.hasNext()) {
                 Call call = pendingIter.next();
                 Node node = null;
