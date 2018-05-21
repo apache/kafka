@@ -93,6 +93,7 @@ public class LoggingSignalHandler {
         Object signal = signalConstructor.newInstance(signalName);
         Object signalHandler = createSignalHandler(jvmSignalHandlers);
         Object oldHandler = signalHandleMethod.invoke(signalHandler, signal);
-        jvmSignalHandlers.put(signalName, oldHandler);
+        if (oldHandler != null)
+            jvmSignalHandlers.put(signalName, oldHandler);
     }
 }

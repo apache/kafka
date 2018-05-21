@@ -21,7 +21,7 @@ import org.junit.Test;
 public class LoggingSignalHandlerTest {
 
     @Test
-    public void test() throws ReflectiveOperationException {
+    public void testRegister() throws ReflectiveOperationException {
         new LoggingSignalHandler().register();
     }
 
