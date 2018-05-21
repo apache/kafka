@@ -23,7 +23,6 @@ import joptsimple.OptionParser
 import kafka.utils.Implicits._
 import kafka.server.{KafkaServer, KafkaServerStartable}
 import kafka.utils.{CommandLineUtils, Exit, Logging}
-import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.utils.{Java, LoggingSignalHandler, OperatingSystem, Utils}
 
 import scala.collection.JavaConverters._
