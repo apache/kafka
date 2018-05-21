@@ -42,6 +42,7 @@ import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
+import org.apache.kafka.streams.processor.internals.StaticTopicNameExtractor;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowStore;
@@ -309,7 +310,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     public void to(final String topic, final Produced<K, V> produced) {
         Objects.requireNonNull(topic, "topic chooser can't be null");
         Objects.requireNonNull(produced, "Produced can't be null");
-        to(topic, new ProducedInternal<>(produced));
+        to(new StaticTopicNameExtractor<K, V>(topic), new ProducedInternal<>(produced));
     }
 
     @Override
@@ -323,21 +324,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         Objects.requireNonNull(topicExtractor, "topic extractor can't be null");
         Objects.requireNonNull(produced, "Produced can't be null");
         to(topicExtractor, new ProducedInternal<>(produced));
-    }
-
-    @SuppressWarnings("unchecked")
-    private void to(final String topic, final ProducedInternal<K, V> produced) {
-        final String name = builder.newProcessorName(SINK_NAME);
-        final Serializer<K> keySerializer = produced.keySerde() == null ? null : produced.keySerde().serializer();
-        final Serializer<V> valSerializer = produced.valueSerde() == null ? null : produced.valueSerde().serializer();
-        final StreamPartitioner<? super K, ? super V> partitioner = produced.streamPartitioner();
-
-        if (partitioner == null && keySerializer instanceof WindowedSerializer) {
-            final StreamPartitioner<K, V> windowedPartitioner = (StreamPartitioner<K, V>) new WindowedStreamPartitioner<Object, V>(topic, (WindowedSerializer) keySerializer);
-            builder.internalTopologyBuilder.addSink(name, topic, keySerializer, valSerializer, windowedPartitioner, this.name);
-        } else {
-            builder.internalTopologyBuilder.addSink(name, topic, keySerializer, valSerializer, partitioner, this.name);
-        }
     }
 
     @SuppressWarnings("unchecked")

@@ -320,25 +320,10 @@ public class InternalTopologyBuilder {
     }
 
     private class SinkNodeFactory<K, V> extends NodeFactory {
-        private final String topic;
         private final Serializer<K> keySerializer;
         private final Serializer<V> valSerializer;
         private final StreamPartitioner<? super K, ? super V> partitioner;
         private final TopicNameExtractor<K, V> topicExtractor;
-
-        private SinkNodeFactory(final String name,
-                                final String[] predecessors,
-                                final String topic,
-                                final Serializer<K> keySerializer,
-                                final Serializer<V> valSerializer,
-                                final StreamPartitioner<? super K, ? super V> partitioner) {
-            super(name, predecessors.clone());
-            this.topic = topic;
-            this.keySerializer = keySerializer;
-            this.valSerializer = valSerializer;
-            this.partitioner = partitioner;
-            this.topicExtractor = null;
-        }
 
         private SinkNodeFactory(final String name,
                                 final String[] predecessors,
@@ -351,17 +336,17 @@ public class InternalTopologyBuilder {
             this.keySerializer = keySerializer;
             this.valSerializer = valSerializer;
             this.partitioner = partitioner;
-            this.topic = null;
         }
 
         @Override
         public ProcessorNode build() {
-            if (topic != null) {
+            if (topicExtractor instanceof StaticTopicNameExtractor) {
+                final String topic = ((StaticTopicNameExtractor) topicExtractor).topicName;
                 if (internalTopicNames.contains(topic)) {
                     // prefix the internal topic name with the application id
-                    return new SinkNode<>(name, decorateTopic(topic), keySerializer, valSerializer, partitioner);
+                    return new SinkNode<>(name, new StaticTopicNameExtractor<K, V>(decorateTopic(topic)), keySerializer, valSerializer, partitioner);
                 } else {
-                    return new SinkNode<>(name, topic, keySerializer, valSerializer, partitioner);
+                    return new SinkNode<>(name, topicExtractor, keySerializer, valSerializer, partitioner);
                 }
             } else {
                 return new SinkNode<>(name, topicExtractor, keySerializer, valSerializer, partitioner);
@@ -370,7 +355,7 @@ public class InternalTopologyBuilder {
 
         @Override
         Sink describe() {
-            return new Sink(name, topic);
+            return new Sink(name, topicExtractor);
         }
     }
 
@@ -453,27 +438,8 @@ public class InternalTopologyBuilder {
                                      final String... predecessorNames) {
         Objects.requireNonNull(name, "name must not be null");
         Objects.requireNonNull(topic, "topic must not be null");
-        if (nodeFactories.containsKey(name)) {
-            throw new TopologyException("Processor " + name + " is already added.");
-        }
-
-        for (final String predecessor : predecessorNames) {
-            Objects.requireNonNull(predecessor, "predecessor name can't be null");
-            if (predecessor.equals(name)) {
-                throw new TopologyException("Processor " + name + " cannot be a predecessor of itself.");
-            }
-            if (!nodeFactories.containsKey(predecessor)) {
-                throw new TopologyException("Predecessor processor " + predecessor + " is not added yet.");
-            }
-            if (nodeToSinkTopic.containsKey(predecessor)) {
-                throw new TopologyException("Sink " + predecessor + " cannot be used a parent.");
-            }
-        }
-
-        nodeFactories.put(name, new SinkNodeFactory<>(name, predecessorNames, topic, keySerializer, valSerializer, partitioner));
+        addSink(name, new StaticTopicNameExtractor<K, V>(topic), keySerializer, valSerializer, partitioner, predecessorNames);
         nodeToSinkTopic.put(name, topic);
-        nodeGrouper.add(name);
-        nodeGrouper.unite(name, predecessorNames);
     }
 
     public final <K, V> void addSink(final String name,
@@ -939,13 +905,18 @@ public class InternalTopologyBuilder {
 
         for (final String predecessor : sinkNodeFactory.predecessors) {
             processorMap.get(predecessor).addChild(node);
-            if (internalTopicNames.contains(sinkNodeFactory.topic)) {
-                // prefix the internal topic name with the application id
-                final String decoratedTopic = decorateTopic(sinkNodeFactory.topic);
-                topicSinkMap.put(decoratedTopic, node);
-                repartitionTopics.add(decoratedTopic);
-            } else {
-                topicSinkMap.put(sinkNodeFactory.topic, node);
+            if (sinkNodeFactory.topicExtractor instanceof StaticTopicNameExtractor) {
+                final String topic = ((StaticTopicNameExtractor) sinkNodeFactory.topicExtractor).topicName;
+
+                if (internalTopicNames.contains(topic)) {
+                    // prefix the internal topic name with the application id
+                    final String decoratedTopic = decorateTopic(topic);
+                    topicSinkMap.put(decoratedTopic, node);
+                    repartitionTopics.add(decoratedTopic);
+                } else {
+                    topicSinkMap.put(topic, node);
+                }
+
             }
         }
     }
@@ -1540,17 +1511,26 @@ public class InternalTopologyBuilder {
     }
 
     public final static class Sink extends AbstractNode implements TopologyDescription.Sink {
-        private final String topic;
+        private final TopicNameExtractor topicNameExtractor;
+
+        public Sink(final String name,
+                    final TopicNameExtractor topicNameExtractor) {
+            super(name);
+            this.topicNameExtractor = topicNameExtractor;
+        }
 
         public Sink(final String name,
                     final String topic) {
             super(name);
-            this.topic = topic;
+            this.topicNameExtractor = new StaticTopicNameExtractor(topic);
         }
 
         @Override
         public String topic() {
-            return topic;
+            if (topicNameExtractor instanceof StaticTopicNameExtractor)
+                return ((StaticTopicNameExtractor) topicNameExtractor).topicName;
+            else
+                return topicNameExtractor.getClass().getName();
         }
 
         @Override
@@ -1560,7 +1540,7 @@ public class InternalTopologyBuilder {
 
         @Override
         public String toString() {
-            return "Sink: " + name + " (topic: " + topic + ")\n      <-- " + nodeNames(predecessors);
+            return "Sink: " + name + " (topic: " + topic() + ")\n      <-- " + nodeNames(predecessors);
         }
 
         @Override
@@ -1574,14 +1554,14 @@ public class InternalTopologyBuilder {
 
             final Sink sink = (Sink) o;
             return name.equals(sink.name)
-                && topic.equals(sink.topic)
+                && topicNameExtractor.equals(sink.topicNameExtractor)
                 && predecessors.equals(sink.predecessors);
         }
 
         @Override
         public int hashCode() {
             // omit predecessors as it might change and alter the hash code
-            return Objects.hash(name, topic);
+            return Objects.hash(name, topicNameExtractor);
         }
     }
 

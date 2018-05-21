@@ -412,7 +412,8 @@ public class Topology {
      * @param parentNames the name of one or more source or processor nodes whose output records this sink should consume
      * and write to its topic
      * @return itself
-     * @throws TopologyException itself
+     * @throws TopologyException if parent processor is not added yet, or if this processor's name is equal to the parent's name,
+     *                           or if this processor's name is equal to the parent's name
      * @see #addSink(String, String, StreamPartitioner, String...)
      * @see #addSink(String, String, Serializer, Serializer, String...)
      * @see #addSink(String, String, Serializer, Serializer, StreamPartitioner, String...)
@@ -444,7 +445,8 @@ public class Topology {
      * @param parentNames the name of one or more source or processor nodes whose output records this sink should consume
      * and write to its topic
      * @return itself
-     * @throws TopologyException if parent processor is not added yet, or if this processor's name is equal to the parent's name
+     * @throws TopologyException if parent processor is not added yet, or if this processor's name is equal to the parent's name,
+     *                           or if this processor's name is equal to the parent's name
      * @see #addSink(String, String, String...)
      * @see #addSink(String, String, Serializer, Serializer, String...)
      * @see #addSink(String, String, Serializer, Serializer, StreamPartitioner, String...)
@@ -472,7 +474,8 @@ public class Topology {
      * @param parentNames the name of one or more source or processor nodes whose output records this sink should consume
      * and write to its topic
      * @return itself
-     * @throws TopologyException if parent processor is not added yet, or if this processor's name is equal to the parent's name
+     * @throws TopologyException if parent processor is not added yet, or if this processor's name is equal to the parent's name,
+     *                           or if this processor's name is equal to the parent's name
      * @see #addSink(String, String, String...)
      * @see #addSink(String, String, StreamPartitioner, String...)
      * @see #addSink(String, String, Serializer, Serializer, StreamPartitioner, String...)
@@ -502,7 +505,8 @@ public class Topology {
      * @param parentNames the name of one or more source or processor nodes whose output records this sink should consume
      * and write to its topic
      * @return itself
-     * @throws TopologyException if parent processor is not added yet, or if this processor's name is equal to the parent's name
+     * @throws TopologyException if parent processor is not added yet, or if this processor's name is equal to the parent's name,
+     *                           or if this processor's name is equal to the parent's name
      * @see #addSink(String, String, String...)
      * @see #addSink(String, String, StreamPartitioner, String...)
      * @see #addSink(String, String, Serializer, Serializer, String...)
@@ -529,7 +533,8 @@ public class Topology {
      * @param parentNames       the name of one or more source or processor nodes whose output records this sink should consume
      *                          and dynamically write to topics
      * @return                  itself
-     * @throws TopologyException if parent processor is not added yet, or if this processor's name is not unique
+     * @throws TopologyException if parent processor is not added yet, or if this processor's name is equal to the parent's name,
+     *                           or if this processor's name is equal to the parent's name
      * @see #addSink(String, String, StreamPartitioner, String...)
      * @see #addSink(String, String, Serializer, Serializer, String...)
      * @see #addSink(String, String, Serializer, Serializer, StreamPartitioner, String...)
@@ -562,7 +567,8 @@ public class Topology {
      * @param parentNames       the name of one or more source or processor nodes whose output records this sink should consume
      *                          and dynamically write to topics
      * @return                  itself
-     * @throws TopologyException if parent processor is not added yet, or if this processor's name is not unique
+     * @throws TopologyException if parent processor is not added yet, or if this processor's name is equal to the parent's name,
+     *                           or if this processor's name is equal to the parent's name
      * @see #addSink(String, String, String...)
      * @see #addSink(String, String, Serializer, Serializer, String...)
      * @see #addSink(String, String, Serializer, Serializer, StreamPartitioner, String...)
@@ -591,7 +597,8 @@ public class Topology {
      * @param parentNames       the name of one or more source or processor nodes whose output records this sink should consume
      *                          and dynamically write to topics
      * @return                  itself
-     * @throws TopologyException if parent processor is not added yet, or if this processor's name is not unique
+     * @throws TopologyException if parent processor is not added yet, or if this processor's name is equal to the parent's name,
+     *                           or if this processor's name is equal to the parent's name
      * @see #addSink(String, String, String...)
      * @see #addSink(String, String, StreamPartitioner, String...)
      * @see #addSink(String, String, Serializer, Serializer, StreamPartitioner, String...)
@@ -622,7 +629,8 @@ public class Topology {
      * @param parentNames       the name of one or more source or processor nodes whose output records this sink should consume
      *                          and dynamically write to topics
      * @return                  itself
-     * @throws TopologyException if parent processor is not added yet, or if this processor's name is not unique
+     * @throws TopologyException if parent processor is not added yet, or if this processor's name is equal to the parent's name,
+     *                           or if this processor's name is equal to the parent's name
      * @see #addSink(String, String, String...)
      * @see #addSink(String, String, StreamPartitioner, String...)
      * @see #addSink(String, String, Serializer, Serializer, String...)
@@ -647,7 +655,8 @@ public class Topology {
      * @param parentNames the name of one or more source or processor nodes whose output records this processor should receive
      * and process
      * @return itself
-     * @throws TopologyException if parent processor is not added yet, or if this processor's name is equal to the parent's name
+     * @throws TopologyException if parent processor is not added yet, or if this processor's name is equal to the parent's name,
+     *                           or if this processor's name is equal to the parent's name
      */
     public synchronized Topology addProcessor(final String name,
                                               final ProcessorSupplier supplier,

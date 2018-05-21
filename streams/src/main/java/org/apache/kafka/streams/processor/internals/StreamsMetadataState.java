@@ -154,9 +154,7 @@ public class StreamsMetadataState {
 
         return getStreamsMetadataForKey(storeName,
                                         key,
-                                        new DefaultStreamPartitioner<>(keySerializer,
-                                                                       clusterMetadata,
-                                                                       sourceTopicsInfo.topicWithMostPartitions),
+                                        new DefaultStreamPartitioner<>(keySerializer, clusterMetadata),
                                         sourceTopicsInfo);
     }
 
@@ -254,7 +252,7 @@ public class StreamsMetadataState {
                                                          final StreamPartitioner<? super K, ?> partitioner,
                                                          final SourceTopicsInfo sourceTopicsInfo) {
 
-        final Integer partition = partitioner.partition(key, null, sourceTopicsInfo.maxPartitions);
+        final Integer partition = partitioner.partition(sourceTopicsInfo.topicWithMostPartitions, key, null, sourceTopicsInfo.maxPartitions);
         final Set<TopicPartition> matchingPartitions = new HashSet<>();
         for (String sourceTopic : sourceTopicsInfo.sourceTopics) {
             matchingPartitions.add(new TopicPartition(sourceTopic, partition));

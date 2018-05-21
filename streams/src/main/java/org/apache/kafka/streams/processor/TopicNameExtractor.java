@@ -26,7 +26,7 @@ import org.apache.kafka.streams.processor.internals.RecordContext;
 public interface TopicNameExtractor<K, V> {
 
     /**
-     * Extracts the topic name to send to. The topic name must be pre-existed, since the Kafka Streams library will not
+     * Extracts the topic name to send to. The topic name must already exist, since the Kafka Streams library will not
      * try to automatically create the topic with the extracted name.
      *
      * @param key           the record key

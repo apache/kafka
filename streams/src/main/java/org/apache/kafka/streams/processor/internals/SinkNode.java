@@ -24,27 +24,12 @@ import org.apache.kafka.streams.processor.TopicNameExtractor;
 
 public class SinkNode<K, V> extends ProcessorNode<K, V> {
 
-    private final String topic;
     private Serializer<K> keySerializer;
     private Serializer<V> valSerializer;
-    private final StreamPartitioner<? super K, ? super V> partitioner;
     private final TopicNameExtractor<K, V> topicExtractor;
+    private final StreamPartitioner<? super K, ? super V> partitioner;
 
     private InternalProcessorContext context;
-
-    SinkNode(final String name,
-             final String topic,
-             final Serializer<K> keySerializer,
-             final Serializer<V> valSerializer,
-             final StreamPartitioner<? super K, ? super V> partitioner) {
-        super(name);
-
-        this.topic = topic;
-        this.keySerializer = keySerializer;
-        this.valSerializer = valSerializer;
-        this.partitioner = partitioner;
-        this.topicExtractor = null;
-    }
 
     SinkNode(final String name,
              final TopicNameExtractor<K, V> topicExtractor,
@@ -57,7 +42,6 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
         this.keySerializer = keySerializer;
         this.valSerializer = valSerializer;
         this.partitioner = partitioner;
-        this.topic = null;
     }
 
     /**
@@ -99,7 +83,7 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
             throw new StreamsException("Invalid (negative) timestamp of " + timestamp + " for output record <" + key + ":" + value + ">.");
         }
 
-        final String topic = topicExtractor != null ? topicExtractor.extract(key, value, this.context.recordContext()) : this.topic;
+        final String topic = topicExtractor.extract(key, value, this.context.recordContext());
 
         try {
             collector.send(topic, key, value, timestamp, keySerializer, valSerializer, partitioner);
@@ -133,7 +117,7 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
     public String toString(final String indent) {
         final StringBuilder sb = new StringBuilder(super.toString(indent));
         sb.append(indent).append("\ttopic:\t\t");
-        sb.append(topic);
+        sb.append(topicExtractor);
         sb.append("\n");
         return sb.toString();
     }

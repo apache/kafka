@@ -24,21 +24,10 @@ import static org.apache.kafka.common.utils.Utils.toPositive;
 
 public class WindowedStreamPartitioner<K, V> implements StreamPartitioner<Windowed<K>, V> {
 
-    private final String topic;
     private final WindowedSerializer<K> serializer;
 
-    WindowedStreamPartitioner(final String topic, final WindowedSerializer<K> serializer) {
-        this.topic = topic;
-        this.serializer = serializer;
-    }
-
     WindowedStreamPartitioner(final WindowedSerializer<K> serializer) {
-        this.topic = null;
         this.serializer = serializer;
-    }
-
-    public String topic() {
-        return this.topic;
     }
 
     /**
@@ -46,19 +35,13 @@ public class WindowedStreamPartitioner<K, V> implements StreamPartitioner<Window
      * and the current number of partitions. The partition number id determined by the original key of the windowed key
      * using the same logic as DefaultPartitioner so that the topic is partitioned by the original key.
      *
+     * @param topic the topic name this record is sent to
      * @param windowedKey the key of the record
      * @param value the value of the record
      * @param numPartitions the total number of partitions
      * @return an integer between 0 and {@code numPartitions-1}, or {@code null} if the default partitioning logic should be used
      */
     @Override
-    public Integer partition(final Windowed<K> windowedKey, final V value, final int numPartitions) {
-        final byte[] keyBytes = serializer.serializeBaseKey(topic, windowedKey);
-
-        // hash the keyBytes to choose a partition
-        return toPositive(Utils.murmur2(keyBytes)) % numPartitions;
-    }
-
     public Integer partition(final String topic, final Windowed<K> windowedKey, final V value, final int numPartitions) {
         final byte[] keyBytes = serializer.serializeBaseKey(topic, windowedKey);
 
