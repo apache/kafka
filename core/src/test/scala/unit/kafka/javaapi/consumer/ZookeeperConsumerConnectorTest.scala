@@ -29,6 +29,8 @@ import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.serialization.{IntegerSerializer, StringSerializer}
 import org.junit.Test
 
+import scala.collection.JavaConverters._
+
 import org.apache.log4j.{Level, Logger}
 import org.junit.Assert._
 
@@ -62,14 +64,14 @@ class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with Logging
     // create a consumer
     val consumerConfig1 = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnect, group, consumer1))
     val zkConsumerConnector1 = new ZookeeperConsumerConnector(consumerConfig1, true)
-    val topicMessageStreams1 = zkConsumerConnector1.createMessageStreams(toJavaMap(Map(topic -> numNodes*numParts/2)), new StringDecoder(), new StringDecoder())
+    val topicMessageStreams1 = zkConsumerConnector1.createMessageStreams(Map[String, Integer](topic -> numNodes*numParts/2).asJava, new StringDecoder(), new StringDecoder())
 
     val receivedMessages1 = getMessages(nMessages*2, topicMessageStreams1)
     assertEquals(sentMessages1.sorted, receivedMessages1.sorted)
 
     // call createMesssageStreams twice should throw MessageStreamsExistException
     try {
-      zkConsumerConnector1.createMessageStreams(toJavaMap(Map(topic -> numNodes*numParts/2)), new StringDecoder(), new StringDecoder())
+      zkConsumerConnector1.createMessageStreams(Map[String, Integer](topic -> numNodes*numParts/2).asJava, new StringDecoder(), new StringDecoder())
       fail("Should fail with MessageStreamsExistException")
     } catch {
       case _: MessageStreamsExistException => // expected
@@ -83,31 +85,22 @@ class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with Logging
                    messagesPerNode: Int,
                    header: String): List[String] = {
     var messages: List[String] = Nil
+    val producer = TestUtils.createNewProducer[Integer, String](TestUtils.getBrokerListStrFromServers(servers),
+      keySerializer = new IntegerSerializer, valueSerializer = new StringSerializer)
     for (server <- servers) {
-      val producer = TestUtils.createNewProducer[Integer, String](TestUtils.getBrokerListStrFromServers(servers),
-          keySerializer = new IntegerSerializer, valueSerializer = new StringSerializer)
       for (partition <- 0 until numParts) {
-        val ms = 0.until(messagesPerNode).map(x => header + server.config.brokerId + "-" + partition + "-" + x)
+        val ms = (0 until messagesPerNode).map(x => header + server.config.brokerId + "-" + partition + "-" + x)
         messages ++= ms
-        ms.map(new ProducerRecord[Integer, String](topic, partition, _)).map(producer.send).foreach(_.get)
+        ms.map(new ProducerRecord[Integer, String](topic, partition, partition, _)).map(producer.send).foreach(_.get)
       }
-      producer.close()
     }
+    producer.close()
     messages
   }
 
   def getMessages(nMessagesPerThread: Int,
                   jTopicMessageStreams: java.util.Map[String, java.util.List[KafkaStream[String, String]]]): List[String] = {
-    var messages: List[String] = Nil
-    import scala.collection.JavaConversions._
-    val topicMessageStreams = jTopicMessageStreams.mapValues(_.toList)
-    messages = TestUtils.getMessages(topicMessageStreams, nMessagesPerThread)
-    messages
-  }
-
-  private def toJavaMap(scalaMap: Map[String, Int]): java.util.Map[String, java.lang.Integer] = {
-    val javaMap = new java.util.HashMap[String, java.lang.Integer]()
-    scalaMap.foreach(m => javaMap.put(m._1, m._2.asInstanceOf[java.lang.Integer]))
-    javaMap
+    val topicMessageStreams = jTopicMessageStreams.asScala.mapValues(_.asScala.toList)
+    TestUtils.getMessages(topicMessageStreams, nMessagesPerThread)
   }
 }
