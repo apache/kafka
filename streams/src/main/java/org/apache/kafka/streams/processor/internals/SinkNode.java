@@ -79,8 +79,8 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
         final RecordCollector collector = ((RecordCollector.Supplier) context).recordCollector();
 
         final long timestamp = context.timestamp();
-        if (timestamp < 0) {
-            throw new StreamsException("Invalid (negative) timestamp of " + timestamp + " for output record <" + key + ":" + value + ">.");
+        if (timestamp == -1) {
+            throw new StreamsException("Invalid timestamp of " + timestamp + " for output record <" + key + ":" + value + ">.");
         }
 
         try {

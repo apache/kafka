@@ -57,7 +57,7 @@ abstract class ExtractRecordMetadataTimestamp implements TimestampExtractor {
     public long extract(final ConsumerRecord<Object, Object> record, final long previousTimestamp) {
         final long timestamp = record.timestamp();
 
-        if (timestamp < 0) {
+        if (timestamp == -1) {
             return onInvalidTimestamp(record, timestamp, previousTimestamp);
         }
 
