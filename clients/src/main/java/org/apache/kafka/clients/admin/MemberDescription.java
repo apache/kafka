@@ -17,49 +17,42 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.TopicPartition;
+
+import java.util.Collections;
+import java.util.Objects;
+
 /**
  * A detailed description of a single group instance in the cluster.
  */
 public class MemberDescription {
-
     private final String memberId;
     private final String clientId;
     private final String host;
     private final MemberAssignment assignment;
 
-    /**
-     * Creates an instance with the specified parameters.
-     *
-     * @param memberId The consumer id
-     * @param clientId   The client id
-     * @param host       The host
-     * @param assignment The assignment
-     */
-    public MemberDescription(String memberId, String clientId, String host, MemberAssignment assignment) {
-        this.memberId = memberId;
-        this.clientId = clientId;
-        this.host = host;
-        this.assignment = assignment;
+    MemberDescription(String memberId, String clientId, String host, MemberAssignment assignment) {
+        this.memberId = memberId == null ? "" : memberId;
+        this.clientId = clientId == null ? "" : clientId;
+        this.host = host == null ? "" : host;
+        this.assignment = assignment == null ?
+            new MemberAssignment(Collections.<TopicPartition>emptySet()) : assignment;
     }
 
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-
         MemberDescription that = (MemberDescription) o;
-
-        if (memberId != null ? !memberId.equals(that.memberId) : that.memberId != null) return false;
-        if (clientId != null ? !clientId.equals(that.clientId) : that.clientId != null) return false;
-        return assignment != null ? assignment.equals(that.assignment) : that.assignment == null;
+        return memberId.equals(that.memberId) &&
+            clientId.equals(that.clientId) &&
+            host.equals(that.host) &&
+            assignment.equals(that.assignment);
     }
 
     @Override
     public int hashCode() {
-        int result = memberId != null ? memberId.hashCode() : 0;
-        result = 31 * result + (clientId != null ? clientId.hashCode() : 0);
-        result = 31 * result + (assignment != null ? assignment.hashCode() : 0);
-        return result;
+        return Objects.hash(memberId, clientId, host, assignment);
     }
 
     /**
@@ -92,7 +85,9 @@ public class MemberDescription {
 
     @Override
     public String toString() {
-        return "(memberId=" + memberId + ", clientId=" + clientId + ", host=" + host + ", assignment=" +
-            assignment + ")";
+        return "(memberId=" + memberId +
+            ", clientId=" + clientId +
+            ", host=" + host +
+            ", assignment=" + assignment + ")";
     }
 }

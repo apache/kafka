@@ -17,15 +17,7 @@
 package org.apache.kafka.common.errors;
 
 public class GroupIdNotFoundException extends ApiException {
-    private final String groupId;
-
-    public GroupIdNotFoundException(String groupId) {
-        super("The group id " + groupId + " was not found");
-        this.groupId = groupId;
+    public GroupIdNotFoundException(String message) {
+        super(message);
     }
-
-    public String groupId() {
-        return groupId;
-    }
-
 }

@@ -31,6 +31,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
@@ -120,11 +121,9 @@ import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
 import java.net.InetSocketAddress;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -2347,14 +2346,21 @@ public class KafkaAdminClient extends AdminClient {
 
                 @Override
                 void handleResponse(AbstractResponse abstractResponse) {
-                    final FindCoordinatorResponse response = (FindCoordinatorResponse) abstractResponse;
+                    final FindCoordinatorResponse fcResponse = (FindCoordinatorResponse) abstractResponse;
+                    Errors error = fcResponse.error();
+                    if (error == Errors.COORDINATOR_NOT_AVAILABLE) {
+                        // Retry COORDINATOR_NOT_AVAILABLE, in case the error is temporary.
+                        throw error.exception();
+                    } else if (error != Errors.NONE) {
+                        // All other errors are immediate failures.
+                        KafkaFutureImpl<ConsumerGroupDescription> future = futures.get(groupId);
+                        future.completeExceptionally(error.exception());
+                        return;
+                    }
 
                     final long nowDescribeConsumerGroups = time.milliseconds();
-
-                    final int nodeId = response.node().id();
-
+                    final int nodeId = fcResponse.node().id();
                     runnable.call(new Call("describeConsumerGroups", deadline, new ConstantNodeIdProvider(nodeId)) {
-
                         @Override
                         AbstractRequest.Builder createRequest(int timeoutMs) {
                             return new DescribeGroupsRequest.Builder(Collections.singletonList(groupId));
@@ -2375,24 +2381,29 @@ public class KafkaAdminClient extends AdminClient {
                                 final String protocolType = groupMetadata.protocolType();
                                 if (protocolType.equals(ConsumerProtocol.PROTOCOL_TYPE) || protocolType.isEmpty()) {
                                     final List<DescribeGroupsResponse.GroupMember> members = groupMetadata.members();
-                                    final List<MemberDescription> consumers = new ArrayList<>(members.size());
+                                    final List<MemberDescription> memberDescriptions = new ArrayList<>(members.size());
 
                                     for (DescribeGroupsResponse.GroupMember groupMember : members) {
-                                        final PartitionAssignor.Assignment assignment =
-                                                ConsumerProtocol.deserializeAssignment(
-                                                        ByteBuffer.wrap(Utils.readBytes(groupMember.memberAssignment())));
-
+                                        Set<TopicPartition> partitions = Collections.emptySet();
+                                        if (groupMember.memberAssignment().remaining() > 0) {
+                                            final PartitionAssignor.Assignment assignment = ConsumerProtocol.
+                                                deserializeAssignment(groupMember.memberAssignment().duplicate());
+                                            partitions = new HashSet<>(assignment.partitions());
+                                        }
                                         final MemberDescription memberDescription =
-                                                new MemberDescription(
-                                                        groupMember.memberId(),
-                                                        groupMember.clientId(),
-                                                        groupMember.clientHost(),
-                                                        new MemberAssignment(assignment.partitions()));
-                                        consumers.add(memberDescription);
+                                            new MemberDescription(groupMember.memberId(),
+                                                groupMember.clientId(),
+                                                groupMember.clientHost(),
+                                                new MemberAssignment(partitions));
+                                        memberDescriptions.add(memberDescription);
                                     }
-                                    final String protocol = groupMetadata.protocol();
                                     final ConsumerGroupDescription consumerGroupDescription =
-                                            new ConsumerGroupDescription(groupId, protocolType.isEmpty(), consumers, protocol);
+                                            new ConsumerGroupDescription(groupId,
+                                                protocolType.isEmpty(),
+                                                memberDescriptions,
+                                                groupMetadata.protocol(),
+                                                ConsumerGroupState.parse(groupMetadata.state()),
+                                                fcResponse.node());
                                     future.complete(consumerGroupDescription);
                                 }
                             }
