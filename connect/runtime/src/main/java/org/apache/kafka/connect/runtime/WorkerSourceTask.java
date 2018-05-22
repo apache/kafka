@@ -34,6 +34,12 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.header.Header;
 import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
+import org.apache.kafka.connect.runtime.errors.NoopExecutor;
+import org.apache.kafka.connect.runtime.errors.Operation;
+import org.apache.kafka.connect.runtime.errors.OperationExecutor;
+import org.apache.kafka.connect.runtime.errors.ProcessingContext;
+import org.apache.kafka.connect.runtime.errors.Result;
+import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.storage.Converter;
@@ -89,6 +95,9 @@ class WorkerSourceTask extends WorkerTask {
     private boolean startedShutdownBeforeStartCompleted = false;
     private boolean stopped = false;
 
+    private final ProcessingContext processingContext;
+    private final OperationExecutor operationExecutor;
+
     public WorkerSourceTask(ConnectorTaskId id,
                             SourceTask task,
                             TaskStatus.Listener statusListener,
@@ -104,6 +113,29 @@ class WorkerSourceTask extends WorkerTask {
                             ConnectMetrics connectMetrics,
                             ClassLoader loader,
                             Time time) {
+        this(id, task, statusListener, initialState, keyConverter, valueConverter, headerConverter,
+                transformationChain, producer, offsetReader, offsetWriter, workerConfig, connectMetrics,
+                loader, time, new ProcessingContext(), NoopExecutor.INSTANCE);
+    }
+
+    public WorkerSourceTask(ConnectorTaskId id,
+                            SourceTask task,
+                            TaskStatus.Listener statusListener,
+                            TargetState initialState,
+                            Converter keyConverter,
+                            Converter valueConverter,
+                            HeaderConverter headerConverter,
+                            TransformationChain<SourceRecord> transformationChain,
+                            KafkaProducer<byte[], byte[]> producer,
+                            OffsetStorageReader offsetReader,
+                            OffsetStorageWriter offsetWriter,
+                            WorkerConfig workerConfig,
+                            ConnectMetrics connectMetrics,
+                            ClassLoader loader,
+                            Time time,
+                            ProcessingContext processingContext,
+                            OperationExecutor operationExecutor) {
+
         super(id, statusListener, initialState, loader, connectMetrics);
 
         this.workerConfig = workerConfig;
@@ -124,6 +156,9 @@ class WorkerSourceTask extends WorkerTask {
         this.flushing = false;
         this.stopRequestedLatch = new CountDownLatch(1);
         this.sourceTaskMetricsGroup = new SourceTaskMetricsGroup(id, connectMetrics);
+
+        this.operationExecutor = operationExecutor;
+        this.processingContext = processingContext;
     }
 
     @Override
@@ -231,6 +266,10 @@ class WorkerSourceTask extends WorkerTask {
         }
     }
 
+    protected <V> Result<V> execute(Operation<V> operation) {
+        return operationExecutor.execute(operation, processingContext);
+    }
+
     /**
      * Try to send a batch of records. If a send fails and is retriable, this saves the remainder of the batch so it can
      * be retried after backing off. If a send fails and is not retriable, this will throw a ConnectException.
@@ -241,7 +280,8 @@ class WorkerSourceTask extends WorkerTask {
         recordBatch(toSend.size());
         final SourceRecordWriteCounter counter = new SourceRecordWriteCounter(toSend.size(), sourceTaskMetricsGroup);
         for (final SourceRecord preTransformRecord : toSend) {
-            final SourceRecord record = transformationChain.apply(preTransformRecord);
+            processingContext.sourceRecord(preTransformRecord);
+            final SourceRecord record = transformationChain.apply(preTransformRecord, operationExecutor, processingContext);
 
             if (record == null) {
                 counter.skipRecord();
@@ -249,9 +289,54 @@ class WorkerSourceTask extends WorkerTask {
                 continue;
             }
 
-            RecordHeaders headers = convertHeaderFor(record);
-            byte[] key = keyConverter.fromConnectData(record.topic(), record.keySchema(), record.key());
-            byte[] value = valueConverter.fromConnectData(record.topic(), record.valueSchema(), record.value());
+            RecordHeaders headers;
+            processingContext.setStage(Stage.HEADER_CONVERTER, headerConverter.getClass());
+            Result<RecordHeaders> headersResult = execute(new Operation<RecordHeaders>() {
+                @Override
+                public RecordHeaders apply() {
+                    return convertHeaderFor(record);
+                }
+            });
+            if (headersResult.success()) {
+                headers = headersResult.result();
+            } else {
+                counter.skipRecord();
+                commitTaskRecord(preTransformRecord);
+                continue;
+            }
+
+            byte[] key;
+            processingContext.setStage(Stage.KEY_CONVERTER, keyConverter.getClass());
+            Result<byte[]> keyResult = execute(new Operation<byte[]>() {
+                @Override
+                public byte[] apply() {
+                    return keyConverter.fromConnectData(record.topic(), record.keySchema(), record.key());
+                }
+            });
+            if (keyResult.success()) {
+                key = keyResult.result();
+            } else {
+                counter.skipRecord();
+                commitTaskRecord(preTransformRecord);
+                continue;
+            }
+
+            byte[] value;
+            processingContext.setStage(Stage.VALUE_CONVERTER, valueConverter.getClass());
+            Result<byte[]> valueResult = execute(new Operation<byte[]>() {
+                @Override
+                public byte[] apply() {
+                    return valueConverter.fromConnectData(record.topic(), record.valueSchema(), record.value());
+                }
+            });
+            if (valueResult.success()) {
+                value = valueResult.result();
+            } else {
+                counter.skipRecord();
+                commitTaskRecord(preTransformRecord);
+                continue;
+            }
+
             final ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(record.topic(), record.kafkaPartition(),
                     ConnectUtils.checkAndConvertTimestamp(record.timestamp()), key, value, headers);
             log.trace("{} Appending record with key {}, value {}", this, record.key(), record.value());

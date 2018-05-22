@@ -40,6 +40,12 @@ import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
+import org.apache.kafka.connect.runtime.errors.NoopExecutor;
+import org.apache.kafka.connect.runtime.errors.Operation;
+import org.apache.kafka.connect.runtime.errors.OperationExecutor;
+import org.apache.kafka.connect.runtime.errors.ProcessingContext;
+import org.apache.kafka.connect.runtime.errors.Result;
+import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.storage.Converter;
@@ -89,6 +95,9 @@ class WorkerSinkTask extends WorkerTask {
     private boolean pausedForRedelivery;
     private boolean committing;
 
+    private final ProcessingContext processingContext;
+    private final OperationExecutor operationExecutor;
+
     public WorkerSinkTask(ConnectorTaskId id,
                           SinkTask task,
                           TaskStatus.Listener statusListener,
@@ -101,6 +110,24 @@ class WorkerSinkTask extends WorkerTask {
                           TransformationChain<SinkRecord> transformationChain,
                           ClassLoader loader,
                           Time time) {
+        this(id, task, statusListener, initialState, workerConfig, connectMetrics, keyConverter, valueConverter,
+                headerConverter, transformationChain, loader, time, new ProcessingContext(), NoopExecutor.INSTANCE);
+    }
+
+    public WorkerSinkTask(ConnectorTaskId id,
+                          SinkTask task,
+                          TaskStatus.Listener statusListener,
+                          TargetState initialState,
+                          WorkerConfig workerConfig,
+                          ConnectMetrics connectMetrics,
+                          Converter keyConverter,
+                          Converter valueConverter,
+                          HeaderConverter headerConverter,
+                          TransformationChain<SinkRecord> transformationChain,
+                          ClassLoader loader,
+                          Time time,
+                          ProcessingContext processingContext,
+                          OperationExecutor operationExecutor) {
         super(id, statusListener, initialState, loader, connectMetrics);
 
         this.workerConfig = workerConfig;
@@ -123,6 +150,8 @@ class WorkerSinkTask extends WorkerTask {
         this.commitFailures = 0;
         this.sinkTaskMetricsGroup = new SinkTaskMetricsGroup(id, connectMetrics);
         this.sinkTaskMetricsGroup.recordOffsetSequenceNumber(commitSeqno);
+        this.processingContext = processingContext;
+        this.operationExecutor = operationExecutor;
     }
 
     @Override
@@ -472,14 +501,63 @@ class WorkerSinkTask extends WorkerTask {
         return newConsumer;
     }
 
+    protected <V> Result<V> execute(Operation<V> operation) {
+        return operationExecutor.execute(operation, processingContext);
+    }
+
     private void convertMessages(ConsumerRecords<byte[], byte[]> msgs) {
         origOffsets.clear();
-        for (ConsumerRecord<byte[], byte[]> msg : msgs) {
+        for (final ConsumerRecord<byte[], byte[]> msg : msgs) {
             log.trace("{} Consuming and converting message in topic '{}' partition {} at offset {} and timestamp {}",
                     this, msg.topic(), msg.partition(), msg.offset(), msg.timestamp());
-            SchemaAndValue keyAndSchema = toConnectData(keyConverter, "key", msg, msg.key());
-            SchemaAndValue valueAndSchema = toConnectData(valueConverter, "value", msg, msg.value());
-            Headers headers = convertHeadersFor(msg);
+
+            processingContext.record(msg);
+
+            SchemaAndValue keyAndSchema;
+            processingContext.setStage(Stage.KEY_CONVERTER, keyConverter.getClass());
+            Result<SchemaAndValue> keyResult = execute(new Operation<SchemaAndValue>() {
+                @Override
+                public SchemaAndValue apply() {
+                    return keyConverter.toConnectData(msg.topic(), msg.key());
+                }
+            });
+            if (keyResult.success()) {
+                keyAndSchema = keyResult.result();
+            } else {
+                processingContext.report();
+                continue;
+            }
+
+            processingContext.setStage(Stage.VALUE_CONVERTER, valueConverter.getClass());
+            SchemaAndValue valueAndSchema;
+            Result<SchemaAndValue> valueResult = execute(new Operation<SchemaAndValue>() {
+                @Override
+                public SchemaAndValue apply() {
+                    return valueConverter.toConnectData(msg.topic(), msg.value());
+                }
+            });
+            if (valueResult.success()) {
+                valueAndSchema = valueResult.result();
+            } else {
+                processingContext.report();
+                continue;
+            }
+
+            processingContext.setStage(Stage.HEADER_CONVERTER, headerConverter.getClass());
+            Headers headers;
+            Result<Headers> headersResult = execute(new Operation<Headers>() {
+                @Override
+                public Headers apply() {
+                    return convertHeadersFor(msg);
+                }
+            });
+            if (headersResult.success()) {
+                headers = headersResult.result();
+            } else {
+                processingContext.report();
+                continue;
+            }
+
             Long timestamp = ConnectUtils.checkAndConvertTimestamp(msg.timestamp());
             SinkRecord origRecord = new SinkRecord(msg.topic(), msg.partition(),
                     keyAndSchema.schema(), keyAndSchema.value(),
@@ -503,16 +581,6 @@ class WorkerSinkTask extends WorkerTask {
             }
         }
         sinkTaskMetricsGroup.recordConsumedOffsets(origOffsets);
-    }
-
-    private SchemaAndValue toConnectData(Converter converter, String converterName, ConsumerRecord<byte[], byte[]> msg, byte[] data) {
-        try {
-            return converter.toConnectData(msg.topic(), data);
-        } catch (Throwable e) {
-            String str = String.format("Error converting message %s in topic '%s' partition %d at offset %d and timestamp %d",
-                    converterName, msg.topic(), msg.partition(), msg.offset(), msg.timestamp());
-            throw new ConnectException(str, e);
-        }
     }
 
     private Headers convertHeadersFor(ConsumerRecord<byte[], byte[]> record) {

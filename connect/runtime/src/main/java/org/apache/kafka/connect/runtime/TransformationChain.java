@@ -17,6 +17,12 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.connect.connector.ConnectRecord;
+import org.apache.kafka.connect.runtime.errors.NoopExecutor;
+import org.apache.kafka.connect.runtime.errors.Operation;
+import org.apache.kafka.connect.runtime.errors.OperationExecutor;
+import org.apache.kafka.connect.runtime.errors.ProcessingContext;
+import org.apache.kafka.connect.runtime.errors.Result;
+import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.transforms.Transformation;
 
 import java.util.Collections;
@@ -32,10 +38,31 @@ public class TransformationChain<R extends ConnectRecord<R>> {
     }
 
     public R apply(R record) {
+        return apply(record, NoopExecutor.INSTANCE, new ProcessingContext());
+    }
+
+    public R apply(R record, OperationExecutor operationExecutor, ProcessingContext processingContext) {
         if (transformations.isEmpty()) return record;
 
-        for (Transformation<R> transformation : transformations) {
-            record = transformation.apply(record);
+        processingContext.position(Stage.TRANSFORMATION);
+        for (final Transformation<R> transformation : transformations) {
+            processingContext.executingClass(transformation.getClass());
+            final R current = record;
+
+            // execute the operation
+            Result<R> result = operationExecutor.execute(new Operation<R>() {
+                @Override
+                public R apply() {
+                    return transformation.apply(current);
+                }
+            }, processingContext);
+
+            if (result.success()) {
+                record = result.result();
+            } else {
+                processingContext.report();
+                return null;
+            }
             if (record == null) break;
         }
 

@@ -16,9 +16,13 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.DescribeTopicsResult;
+import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Frequencies;
 import org.apache.kafka.common.metrics.stats.Total;
@@ -30,6 +34,12 @@ import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.ConnectMetrics.LiteralSupplier;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
+import org.apache.kafka.connect.runtime.errors.DLQReporter;
+import org.apache.kafka.connect.runtime.errors.ErrorReporter;
+import org.apache.kafka.connect.runtime.errors.LogReporter;
+import org.apache.kafka.connect.runtime.errors.OperationExecutor;
+import org.apache.kafka.connect.runtime.errors.ProcessingContext;
+import org.apache.kafka.connect.runtime.errors.RetryWithToleranceExecutor;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.isolation.Plugins.ClassLoaderUsage;
 import org.apache.kafka.connect.sink.SinkRecord;
@@ -57,6 +67,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 
 /**
@@ -448,6 +459,9 @@ public class Worker {
                                        Converter valueConverter,
                                        HeaderConverter headerConverter,
                                        ClassLoader loader) {
+        OperationExecutor operationExecutor = new RetryWithToleranceExecutor();
+        operationExecutor.configure(connConfig.originalsWithPrefix("errors."));
+
         // Decide which type of worker task we need based on the type of task.
         if (task instanceof SourceTask) {
             TransformationChain<SourceRecord> transformationChain = new TransformationChain<>(connConfig.<SourceRecord>transformations());
@@ -461,11 +475,41 @@ public class Worker {
         } else if (task instanceof SinkTask) {
             TransformationChain<SinkRecord> transformationChain = new TransformationChain<>(connConfig.<SinkRecord>transformations());
             return new WorkerSinkTask(id, (SinkTask) task, statusListener, initialState, config, metrics, keyConverter,
-                    valueConverter, headerConverter, transformationChain, loader, time);
+                    valueConverter, headerConverter, transformationChain, loader, time, sinkProcessingContext(connConfig), operationExecutor);
         } else {
             log.error("Tasks must be a subclass of either SourceTask or SinkTask", task);
             throw new ConnectException("Tasks must be a subclass of either SourceTask or SinkTask");
         }
+    }
+
+    private ProcessingContext sinkProcessingContext(ConnectorConfig connConfig) {
+        ArrayList<ErrorReporter> reporters = new ArrayList<>();
+        ErrorReporter logReporter = new LogReporter();
+        logReporter.configure(connConfig.originalsWithPrefix(LogReporter.PREFIX));
+        reporters.add(logReporter);
+
+        // check if topic for dead letter queue exists
+        String topic = connConfig.getString(DLQReporter.PREFIX + "." + DLQReporter.DLQ_TOPIC_NAME);
+        if (topic != null && topic.length() > 0) {
+            DescribeTopicsResult topics = AdminClient.create(config.originals()).describeTopics(Collections.singleton(topic));
+            try {
+                TopicDescription description = topics.values().get(topic).get(60, TimeUnit.SECONDS);
+                if (description == null || description.partitions().size() == 0) {
+                    log.error("Topic description is {} for topic {}", description, topic);
+                    throw new ConfigException("Dead Letter Queue Topic '" + topic + "' is not available.");
+                }
+
+                KafkaProducer<byte[], byte[]> dlqProducer = new KafkaProducer<>(producerProps);
+
+                ErrorReporter dlqReporter = new DLQReporter(dlqProducer, description);
+                dlqReporter.configure(connConfig.originalsWithPrefix(DLQReporter.PREFIX));
+                reporters.add(dlqReporter);
+            } catch (Exception e) {
+                throw new ConnectException(e);
+            }
+        }
+
+        return new ProcessingContext(reporters);
     }
 
     private void stopTask(ConnectorTaskId taskId) {
