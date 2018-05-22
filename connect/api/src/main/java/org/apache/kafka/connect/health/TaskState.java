@@ -27,11 +27,22 @@ public class TaskState extends AbstractState implements Comparable<TaskState> {
 
     private final int taskId;
 
-    public TaskState(int taskId, String state, String workerId, String msg) {
-        super(state, workerId, msg);
+    /**
+     * Provides an instance of {@link TaskState}
+     * @param taskId - the id associated with the connector task
+     * @param state  - the status of the task. Can't be NULL or EMPTY.
+     * @param workerId - id of the worker the task is associated with. Can't be NULL or EMPTY.
+     * @param trace   - error message if that task had failed or errored out.
+     */
+    public TaskState(int taskId, String state, String workerId, String trace) {
+        super(state, workerId, trace);
         this.taskId = taskId;
     }
 
+    /**
+     * Provides the id of the task
+     * @return taskId
+     */
     public int taskId() {
         return taskId;
     }

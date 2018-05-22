@@ -22,7 +22,13 @@ package org.apache.kafka.connect.health;
  */
 public class ConnectorState extends AbstractState {
 
-    public ConnectorState(String state, String workerId, String msg) {
-        super(state, workerId, msg);
+    /**
+     *
+     * @param state - the status of connector. Can't be NULL or EMPTY.
+     * @param workerId - the workerId associated with the connector. Can't be NULL or EMPTY.
+     * @param trace - any error trace associated with the connector.
+     */
+    public ConnectorState(String state, String workerId, String trace) {
+        super(state, workerId, trace);
     }
 }

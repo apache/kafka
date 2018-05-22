@@ -27,13 +27,14 @@ import java.util.Map;
 /**
  * A plugin interface to allow registration of new JAX-RS resources like Filters, REST endpoints,
  * providers, etc. The implementations will be discovered by the standard Java {@link
- * java.util.ServiceLoader} mechanism by the Connect's plugin class loading mechanism.
- * The implementation need to be packaged in a jar and should provide the file
+ * java.util.ServiceLoader} mechanism by  Connect's plugin class loading mechanism.
+ * The implementation class must be packaged in a JAR that includes the
  * {@code META-INF/services/org.apache.kafka.connect.rest.extension.ConnectRestExtension} containing
- * the fully qualified implementation class name.
+ * the fully qualified name of the implementation class.
  *
- * <p> The implementations would be configured with the
- * Worker's Config through {@link Configurable#configure(Map)} by the connect framework.
+ * <p> When Connect's worker configuration uses the REST extension implementation class,
+ * upon startup Connect will instantiate the implementation and pass the configuration
+ * to the instance via {@link Configurable#configure(Map)}.
  *
  * <p> Typical use cases that can be implemented using this interface include things like security
  * (authentication and authorization), logging, request validations, etc.
@@ -41,8 +42,8 @@ import java.util.Map;
 public interface ConnectRestExtension extends Configurable, Versioned, Closeable {
 
     /**
-     * ConnectRestExtension implementations register custom JAX-RS resources via the {@link
-     * #register(ConnectRestExtensionContext)} method. Connect Framework will invoke this method
+     * ConnectRestExtension implementation can register custom JAX-RS resources via the {@link
+     * #register(ConnectRestExtensionContext)} method. The Connect Framework will invoke this method
      * after registering the default Connect resources. If the implementations attempt to
      * re-register any of the Connect resources, it will be be ignored and will be logged.
      *

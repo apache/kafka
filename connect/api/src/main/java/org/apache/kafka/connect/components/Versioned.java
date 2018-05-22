@@ -18,7 +18,7 @@
 package org.apache.kafka.connect.components;
 
 /**
- * A component can be versioned by implementing {@link Versioned}
+ * Connect requires some components implement this interface to define a version string.
  */
 public interface Versioned {
     /**
