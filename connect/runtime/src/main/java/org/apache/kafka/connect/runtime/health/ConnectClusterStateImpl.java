@@ -55,37 +55,30 @@ public class ConnectClusterStateImpl implements ConnectClusterState {
     @Override
     public ConnectorHealth connectorHealth(String connName) {
 
-        ConnectorStateInfo connectorStateFromHerder = herder.connectorStatus(connName);
-        ConnectorState connectorState =
-            new ConnectorState(
-                connectorStateFromHerder.connector().state(),
-                connectorStateFromHerder.connector().workerId(),
-                connectorStateFromHerder.connector().trace()
-            );
-        Map<Integer, TaskState> taskStates =
-            taskStates(connectorStateFromHerder.tasks());
+        ConnectorStateInfo state = herder.connectorStatus(connName);
+        ConnectorState connectorState = new ConnectorState(
+            state.connector().state(),
+            state.connector().workerId(),
+            state.connector().trace()
+        );
+        Map<Integer, TaskState> taskStates = taskStates(state.tasks());
         ConnectorHealth connectorHealth = new ConnectorHealth(
             connName,
             connectorState,
             taskStates,
-            ConnectorType.valueOf(connectorStateFromHerder.type().name())
+            ConnectorType.valueOf(state.type().name())
         );
         return connectorHealth;
     }
 
-    private Map<Integer, TaskState> taskStates(
-        List<ConnectorStateInfo.TaskState> taskStatesFromHerder) {
+    private Map<Integer, TaskState> taskStates(List<ConnectorStateInfo.TaskState> states) {
 
         Map<Integer, TaskState> taskStates = new HashMap<>();
 
-        for (ConnectorStateInfo.TaskState taskStateFromHerder : taskStatesFromHerder) {
-            taskStates.put(taskStateFromHerder.id(),
-                           new TaskState(
-                               taskStateFromHerder.id(),
-                               taskStateFromHerder.workerId(),
-                               taskStateFromHerder.state(),
-                               taskStateFromHerder.trace()
-                           )
+        for (ConnectorStateInfo.TaskState state : states) {
+            taskStates.put(
+                state.id(),
+                new TaskState(state.id(), state.workerId(), state.state(), state.trace())
             );
         }
         return taskStates;

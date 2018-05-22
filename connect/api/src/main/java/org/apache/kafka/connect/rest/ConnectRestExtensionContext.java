@@ -24,7 +24,7 @@ import javax.ws.rs.core.Configurable;
 /**
  * The interface provides the ability for {@link ConnectRestExtension} implementations to access the
  * JAX-RS {@link javax.ws.rs.core.Configurable} and cluster state {@link ConnectClusterState}.
- * The implementation for the interface is provided by the connect framework.
+ * The implementation for the interface is provided by the Connect framework.
  */
 public interface ConnectRestExtensionContext {
 

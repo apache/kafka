@@ -27,7 +27,24 @@ import java.util.Map;
 /**
  * {@link BasicAuthSecurityRestExtension} provides the ability to authenticate incoming BasicAuth
  * credentials using the configured JAAS {@link javax.security.auth.spi.LoginModule}.
- * An entry with the name KafkaConnect is expected in the JAAS config file configured in the JVM.
+ * An entry with the name {@code KafkaConnect} is expected in the JAAS config file configured in
+ * the JVM. An implementation of {@link javax.security.auth.spi.LoginModule} needs to be provided
+ * in the JAAS config file. The {@code LoginModule} implementation should configure the
+ * {@link javax.security.auth.callback.CallbackHandler} with only
+ * {@link javax.security.auth.callback.NameCallback} and {@link javax.security.auth.callback.PasswordCallback}
+ *
+ * <p>To use this extension, one needs to add the following config in the {@code worker.properties}
+ * <br>
+ * {@code rest.extension.classes = org.apache.kafka.connect.rest.extension.BasicAuthSecurityRestExtension}
+ *
+ * <p> An example JAAS config would look as below
+ * <br>
+ * <code>
+ *     KafkaConnect {
+ *          com.example.PropertyLoginModule required
+ *          filename="/mnt/secret/credentials.properties";
+ *     };
+ * </code>
  */
 public class BasicAuthSecurityRestExtension implements ConnectRestExtension {
 

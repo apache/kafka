@@ -25,13 +25,16 @@ import java.io.Closeable;
 import java.util.Map;
 
 /**
- * A plugin interface to allow registration of new JAX-RS resources like Filters, Rest endpoints,
+ * A plugin interface to allow registration of new JAX-RS resources like Filters, REST endpoints,
  * providers, etc. The implementations will be discovered by the standard Java {@link
- * java.util.ServiceLoader} mechanism by the Connect's class loader's.
+ * java.util.ServiceLoader} mechanism by the Connect's plugin class loading mechanism.
  * The implementation need to be packaged in a jar and should provide the file
- * META-INF/services/org.apache.kafka.connect.rest.ConnectRestExtension containing the
- * fully qualified implementation class name. <p> The implementations would be configured with the
+ * {@code META-INF/services/org.apache.kafka.connect.rest.extension.ConnectRestExtension} containing
+ * the fully qualified implementation class name.
+ *
+ * <p> The implementations would be configured with the
  * Worker's Config through {@link Configurable#configure(Map)} by the connect framework.
+ *
  * <p> Typical use cases that can be implemented using this interface include things like security
  * (authentication and authorization), logging, request validations, etc.
  */
@@ -39,9 +42,9 @@ public interface ConnectRestExtension extends Configurable, Versioned, Closeable
 
     /**
      * ConnectRestExtension implementations register custom JAX-RS resources via the {@link
-     * #register(ConnectRestExtensionContext)} method. Framework will invoke this method after
-     * registering the default Connect resources. If the implementations attempt to re-register any
-     * of the connect resources, it will be be ignored and will be logged.
+     * #register(ConnectRestExtensionContext)} method. Connect Framework will invoke this method
+     * after registering the default Connect resources. If the implementations attempt to
+     * re-register any of the Connect resources, it will be be ignored and will be logged.
      *
      * @param restPluginContext The context provides access to JAX-RS {@link javax.ws.rs.core.Configurable}
      *                          and {@link ConnectClusterState}.The custom JAX-RS resources can be

@@ -35,6 +35,9 @@ public class ConnectRestConfigurable implements Configurable<ResourceConfig> {
 
     private static final Logger log = LoggerFactory.getLogger(ConnectRestConfigurable.class);
 
+    private static final Boolean ALLOWED_TO_REGISTER = Boolean.TRUE;
+    private static final Boolean NOT_ALLOWED_TO_REGISTER = Boolean.FALSE;
+
     private ResourceConfig resourceConfig;
 
     public ConnectRestConfigurable(ResourceConfig resourceConfig) {
@@ -119,17 +122,17 @@ public class ConnectRestConfigurable implements Configurable<ResourceConfig> {
 
     private boolean allowedToRegister(Object component) {
         if (resourceConfig.isRegistered(component)) {
-            return true;
+            log.warn("The resource {} is already registered", component);
+            return NOT_ALLOWED_TO_REGISTER;
         }
-        log.warn("The resource {} is already registered", component);
-        return false;
+        return ALLOWED_TO_REGISTER;
     }
 
     private boolean allowedToRegister(Class componentClass) {
         if (resourceConfig.isRegistered(componentClass)) {
-            return true;
+            log.warn("The resource {} is already registered", componentClass);
+            return NOT_ALLOWED_TO_REGISTER;
         }
-        log.warn("The resource {} is already registered", componentClass);
-        return false;
+        return ALLOWED_TO_REGISTER;
     }
 }

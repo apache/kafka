@@ -309,10 +309,17 @@
       <allow pkg="org.apache.kafka.connect.storage" />
     </subpackage>
 
-    <subpackage name="rest.extension">
-      <allow pkg="org.apache.kafka.connect.rest" />
+    <subpackage name="rest">
+      <allow pkg="org.apache.kafka.connect.health" />
       <allow pkg="javax.ws.rs" />
       <allow pkg= "javax.security.auth"/>
+      <subpackage name= "extension">
+        <allow pkg="org.apache.kafka.connect.rest" />
+      </subpackage>
+    </subpackage>
+
+    <subpackage name="health">
+      <allow pkg="org.apache.kafka.connect.rest" />
     </subpackage>
 
     <subpackage name="runtime">

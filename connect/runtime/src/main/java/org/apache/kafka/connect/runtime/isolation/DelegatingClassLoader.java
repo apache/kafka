@@ -317,9 +317,7 @@ public class DelegatingClassLoader extends URLClassLoader {
     private <T> Collection<PluginDesc<T>> getServiceLoaderPluginDesc(Class<T> klass,
                                                                      ClassLoader loader) {
 
-        ServiceLoader<T> serviceLoader = loader instanceof PluginClassLoader
-                                         ? ServiceLoader.load(klass, loader)
-                                         : ServiceLoader.load(klass);
+        ServiceLoader<T> serviceLoader = ServiceLoader.load(klass, loader);
         Collection<PluginDesc<T>> result = new ArrayList<>();
         for (T impl : serviceLoader) {
             result.add(new PluginDesc<>(klass, versionFor(impl), loader));
