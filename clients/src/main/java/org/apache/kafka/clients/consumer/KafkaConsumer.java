@@ -99,7 +99,7 @@ import java.util.regex.Pattern;
  * <p>
  * The {@link #position(TopicPartition) position} of the consumer gives the offset of the next record that will be given
  * out. It will be one larger than the highest offset the consumer has seen in that partition. It automatically advances
- * every time the consumer receives messages in a call to {@link #poll(long)}.
+ * every time the consumer receives messages in a call to {@link #poll(Duration)}.
  * <p>
  * The {@link #commitSync() committed position} is the last offset that has been stored securely. Should the
  * process fail and restart, this is the offset that the consumer will recover to. The consumer can either automatically commit
@@ -150,7 +150,7 @@ import java.util.regex.Pattern;
  *
  * <h3><a name="failuredetection">Detecting Consumer Failures</a></h3>
  *
- * After subscribing to a set of topics, the consumer will automatically join the group when {@link #poll(long)} is
+ * After subscribing to a set of topics, the consumer will automatically join the group when {@link #poll(Duration)} is
  * invoked. The poll API is designed to ensure consumer liveness. As long as you continue to call poll, the consumer
  * will stay in the group and continue to receive messages from the partitions it was assigned. Underneath the covers,
  * the consumer sends periodic heartbeats to the server. If the consumer crashes or is unable to send heartbeats for
@@ -169,10 +169,10 @@ import java.util.regex.Pattern;
  * The consumer provides two configuration settings to control the behavior of the poll loop:
  * <ol>
  *     <li><code>max.poll.interval.ms</code>: By increasing the interval between expected polls, you can give
- *     the consumer more time to handle a batch of records returned from {@link #poll(long)}. The drawback
+ *     the consumer more time to handle a batch of records returned from {@link #poll(Duration)}. The drawback
  *     is that increasing this value may delay a group rebalance since the consumer will only join the rebalance
  *     inside the call to poll. You can use this setting to bound the time to finish a rebalance, but
- *     you risk slower progress if the consumer cannot actually call {@link #poll(long) poll} often enough.</li>
+ *     you risk slower progress if the consumer cannot actually call {@link #poll(Duration) poll} often enough.</li>
  *     <li><code>max.poll.records</code>: Use this setting to limit the total records returned from a single
  *     call to poll. This can make it easier to predict the maximum that must be handled within each poll
  *     interval. By tuning this value, you may be able to reduce the poll interval, which will reduce the
@@ -181,7 +181,8 @@ import java.util.regex.Pattern;
  * <p>
  * For use cases where message processing time varies unpredictably, neither of these options may be sufficient.
  * The recommended way to handle these cases is to move message processing to another thread, which allows
- * the consumer to continue calling {@link #poll(long) poll} while the processor is still working. Some care must be taken
+ * the consumer to continue calling {@link #poll(Duration) poll} while the processor is still working. Some care must be
+ * taken
  * to ensure that committed offsets do not get ahead of the actual position. Typically, you must disable automatic
  * commits and manually commit processed offsets for records only after the thread has finished handling them
  * (depending on the delivery semantics you need). Note also that you will need to {@link #pause(Collection) pause}
@@ -259,7 +260,8 @@ import java.util.regex.Pattern;
  *
  * In this example we will consume a batch of records and batch them up in memory. When we have enough records
  * batched, we will insert them into a database. If we allowed offsets to auto commit as in the previous example, records
- * would be considered consumed after they were returned to the user in {@link #poll(long) poll}. It would then be possible
+ * would be considered consumed after they were returned to the user in {@link #poll(Duration) poll}. It would then be
+ * possible
  * for our process to fail after batching the records, but before they had been inserted into the database.
  * <p>
  * To avoid this, we will manually commit the offsets only after the corresponding records have been inserted into the
@@ -271,7 +273,7 @@ import java.util.regex.Pattern;
  * time but in failure cases could be duplicated.
  * <p>
  * <b>Note: Using automatic offset commits can also give you "at-least-once" delivery, but the requirement is that
- * you must consume all data returned from each call to {@link #poll(long)} before any subsequent calls, or before
+ * you must consume all data returned from each call to {@link #poll(Duration)} before any subsequent calls, or before
  * {@link #close() closing} the consumer. If you fail to do either of these, it is possible for the committed offset
  * to get ahead of the consumed position, which results in missing records. The advantage of using manual offset
  * control is that you have direct control over when a record is considered "consumed."</b>
@@ -326,7 +328,7 @@ import java.util.regex.Pattern;
  *     consumer.assign(Arrays.asList(partition0, partition1));
  * </pre>
  *
- * Once assigned, you can call {@link #poll(long) poll} in a loop, just as in the preceding examples to consume
+ * Once assigned, you can call {@link #poll(Duration) poll} in a loop, just as in the preceding examples to consume
  * records. The group that the consumer specifies is still used for committing offsets, but now the set of partitions
  * will only change with another call to {@link #assign(Collection) assign}. Manual partition assignment does
  * not use group coordination, so consumer failures will not cause assigned partitions to be rebalanced. Each consumer
@@ -418,7 +420,7 @@ import java.util.regex.Pattern;
  * <p>
  * Kafka supports dynamic controlling of consumption flows by using {@link #pause(Collection)} and {@link #resume(Collection)}
  * to pause the consumption on the specified assigned partitions and resume the consumption
- * on the specified paused partitions respectively in the future {@link #poll(long)} calls.
+ * on the specified paused partitions respectively in the future {@link #poll(Duration)} calls.
  *
  * <h3>Reading Transactional Messages</h3>
  *
@@ -879,7 +881,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * <p>
      * When any of these events are triggered, the provided listener will be invoked first to indicate that
      * the consumer's assignment has been revoked, and then again when the new assignment has been received.
-     * Note that rebalances will only occur during an active call to {@link #poll(long)}, so callbacks will
+     * Note that rebalances will only occur during an active call to {@link #poll(Duration)}, so callbacks will
      * also only be invoked during that time.
      *
      * The provided listener will immediately override any listener set in a previous call to subscribe.
@@ -955,7 +957,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * See {@link #subscribe(Collection, ConsumerRebalanceListener)} for details on the
      * use of the {@link ConsumerRebalanceListener}. Generally rebalances are triggered when there
      * is a change to the topics matching the provided pattern and when consumer group membership changes.
-     * Group rebalances only take place during an active call to {@link #poll(long)}.
+     * Group rebalances only take place during an active call to {@link #poll(Duration)}.
      *
      * @param pattern Pattern to subscribe to
      * @param listener Non-null listener instance to get notifications on partition assignment/revocation for the
@@ -1224,9 +1226,13 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
 
+    /**
+     * Visible for testing
+     */
     @SuppressWarnings("BooleanMethodIsAlwaysInverted") // because false => timed out, in which case we return early or throw.
-    private boolean internalUpdateAssignmentMetadataIfNeeded(final Duration timeout) {
+    boolean internalUpdateAssignmentMetadataIfNeeded(final Duration timeout) {
         final long startMs = time.milliseconds();
+        System.out.println(startMs);
         if (!coordinator.poll(startMs, remainingMsAtLeastZero(startMs, timeout))) {
             return false;
         }
@@ -1268,7 +1274,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Commit offsets returned on the last {@link #poll(long) poll()} for all the subscribed list of topics and partitions.
+     * Commit offsets returned on the last {@link #poll(Duration) poll()} for all the subscribed list of topics and
+     * partitions.
      * <p>
      * This commits offsets only to Kafka. The offsets committed using this API will be used on the first fetch after
      * every rebalance and also on startup. As such, if you need to store offsets in anything other than Kafka, this API
@@ -1343,7 +1350,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Commit offsets returned on the last {@link #poll(long) poll()} for all the subscribed list of topics and partition.
+     * Commit offsets returned on the last {@link #poll(Duration) poll()} for all the subscribed list of topics and partition.
      * Same as {@link #commitAsync(OffsetCommitCallback) commitAsync(null)}
      */
     @Override
@@ -1352,7 +1359,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Commit offsets returned on the last {@link #poll(long) poll()} for the subscribed list of topics and partitions.
+     * Commit offsets returned on the last {@link #poll(Duration) poll()} for the subscribed list of topics and partitions.
      * <p>
      * This commits offsets only to Kafka. The offsets committed using this API will be used on the first fetch after
      * every rebalance and also on startup. As such, if you need to store offsets in anything other than Kafka, this API
@@ -1410,7 +1417,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Overrides the fetch offsets that the consumer will use on the next {@link #poll(long) poll(timeout)}. If this API
+     * Overrides the fetch offsets that the consumer will use on the next {@link #poll(Duration) poll(timeout)}. If this API
      * is invoked for the same partition more than once, the latest offset will be used on the next poll(). Note that
      * you may lose data if this API is arbitrarily used in the middle of consumption, to reset the fetch offsets
      *
@@ -1433,7 +1440,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     /**
      * Seek to the first offset for each of the given partitions. This function evaluates lazily, seeking to the
-     * first offset in all partitions only when {@link #poll(long)} or {@link #position(TopicPartition)} are called.
+     * first offset in all partitions only when {@link #poll(Duration)} or {@link #position(TopicPartition)} are called.
      * If no partitions are provided, seek to the first offset for all of the currently assigned partitions.
      *
      * @throws IllegalArgumentException if {@code partitions} is {@code null} or the provided TopicPartition is not assigned to this consumer
@@ -1456,7 +1463,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     /**
      * Seek to the last offset for each of the given partitions. This function evaluates lazily, seeking to the
-     * final offset in all partitions only when {@link #poll(long)} or {@link #position(TopicPartition)} are called.
+     * final offset in all partitions only when {@link #poll(Duration)} or {@link #position(TopicPartition)} are called.
      * If no partitions are provided, seek to the final offset for all of the currently assigned partitions.
      * <p>
      * If {@code isolation.level=read_committed}, the end offset will be the Last Stable Offset, i.e., the offset
@@ -1622,7 +1629,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Suspend fetching from the requested partitions. Future calls to {@link #poll(long)} will not return
+     * Suspend fetching from the requested partitions. Future calls to {@link #poll(Duration)} will not return
      * any records from these partitions until they have been resumed using {@link #resume(Collection)}.
      * Note that this method does not affect partition subscription. In particular, it does not cause a group
      * rebalance when automatic assignment is used.
@@ -1644,7 +1651,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     /**
      * Resume specified partitions which have been paused with {@link #pause(Collection)}. New calls to
-     * {@link #poll(long)} will return records from these partitions if there are any to be fetched.
+     * {@link #poll(Duration)} will return records from these partitions if there are any to be fetched.
      * If the partitions were not previously paused, this method is a no-op.
      * @param partitions The partitions which should be resumed
      * @throws IllegalStateException if one of the provided partitions is not assigned to this consumer
