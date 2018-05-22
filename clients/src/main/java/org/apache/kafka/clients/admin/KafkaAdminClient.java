@@ -577,9 +577,7 @@ public class KafkaAdminClient extends AdminClient {
             // this RPC. That is why 'tries' is not incremented.
             if ((throwable instanceof UnsupportedVersionException) &&
                      handleUnsupportedVersionException((UnsupportedVersionException) throwable)) {
-                if (log.isDebugEnabled()) {
-                    log.debug("{} attempting protocol downgrade and then retry.", this);
-                }
+                log.debug("{} attempting protocol downgrade and then retry.", this);
                 runnable.enqueue(this, now);
                 return;
             }
