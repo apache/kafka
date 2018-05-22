@@ -246,7 +246,11 @@ public class StreamsUpgradeTest {
             try (final DataOutputStream out = new DataOutputStream(baos)) {
                 out.writeInt(originalUserMetadata.getInt());
                 originalUserMetadata.getInt(); // discard original supported version
-                out.writeInt(AssignmentInfo.LATEST_SUPPORTED_VERSION + 1);
+                if (overwriteLatestSupportedVersion == null) {
+                    out.writeInt(AssignmentInfo.LATEST_SUPPORTED_VERSION + 1);
+                } else {
+                    out.writeInt(overwriteLatestSupportedVersion);
+                }
 
                 try {
                     while (true) {

@@ -63,7 +63,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
     private final static int VERSION_ONE = 1;
     private final static int VERSION_TWO = 2;
     private final static int VERSION_THREE = 3;
-    private final static int EARLIEST_PROBEABLE_VERSION = VERSION_THREE;
+    public final static int EARLIEST_PROBEABLE_VERSION = VERSION_THREE;
 
     private Logger log;
     private String logPrefix;
@@ -373,15 +373,19 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
             clientMetadata.addConsumer(consumerId, info);
         }
 
+        final boolean versionProbing;
         if (futureMetadataVersion != UNKNOWN) {
             if (minUserMetadataVersion >= EARLIEST_PROBEABLE_VERSION) {
                 log.info("Received a future (version probing) subscription (version: {}). Sending empty assignment back (with supported version {}).",
                     futureMetadataVersion,
                     SubscriptionInfo.LATEST_SUPPORTED_VERSION);
+                versionProbing = true;
             } else {
                 throw new IllegalStateException("Received a future (version probing) subscription (version: " + futureMetadataVersion
                     + ") and an incompatible pre Kafka 1.2 subscription (version: " + minUserMetadataVersion + ") at the same time.");
             }
+        } else {
+            versionProbing = false;
         }
 
         if (minUserMetadataVersion < SubscriptionInfo.LATEST_SUPPORTED_VERSION) {
@@ -597,8 +601,23 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         }
         taskManager.setPartitionsByHostState(partitionsByHostState);
 
-        // within the client, distribute tasks to its owned consumers
+        final Map<String, Assignment> assignment;
+        if (versionProbing) {
+            assignment = versionProbingAssignment(clientsMetadata, partitionsForTask, partitionsByHostState, futureConsumers, minUserMetadataVersion);
+        } else {
+            assignment = computeNewAssignment(clientsMetadata, partitionsForTask, partitionsByHostState, minUserMetadataVersion);
+        }
+
+        return assignment;
+    }
+
+    private Map<String, Assignment> computeNewAssignment(final Map<UUID, ClientMetadata> clientsMetadata,
+                                                         final Map<TaskId, Set<TopicPartition>> partitionsForTask,
+                                                         final Map<HostInfo, Set<TopicPartition>> partitionsByHostState,
+                                                         final int minUserMetadataVersion) {
         final Map<String, Assignment> assignment = new HashMap<>();
+
+        // within the client, distribute tasks to its owned consumers
         for (final Map.Entry<UUID, ClientMetadata> entry : clientsMetadata.entrySet()) {
             final Set<String> consumers = entry.getValue().consumers;
             final ClientState state = entry.getValue().state;
@@ -649,9 +668,46 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
             }
         }
 
+        return assignment;
+    }
+    private Map<String, Assignment> versionProbingAssignment(final Map<UUID, ClientMetadata> clientsMetadata,
+                                                             final Map<TaskId, Set<TopicPartition>> partitionsForTask,
+                                                             final Map<HostInfo, Set<TopicPartition>> partitionsByHostState,
+                                                             final Set<String> futureConsumers,
+                                                             final int minUserMetadataVersion) {
+        final Map<String, Assignment> assignment = new HashMap<>();
+
+        // assign previously assigned tasks to "old consumers"
+        for (final ClientMetadata clientMetadata : clientsMetadata.values()) {
+            for (final String consumerId : clientMetadata.consumers) {
+
+                final List<TaskId> activeTasks = new ArrayList<>(clientMetadata.state.prevActiveTasks());
+
+                final List<TopicPartition> assignedPartitions = new ArrayList<>();
+                for (final TaskId taskId : activeTasks) {
+                    assignedPartitions.addAll(partitionsForTask.get(taskId));
+                }
+
+                final Map<TaskId, Set<TopicPartition>> standbyTasks = new HashMap<>();
+                for (final TaskId taskId : clientMetadata.state.prevStandbyTasks()) {
+                    standbyTasks.put(taskId, partitionsForTask.get(taskId));
+                }
+
+                assignment.put(consumerId, new Assignment(
+                    assignedPartitions,
+                    new AssignmentInfo(
+                        minUserMetadataVersion,
+                        activeTasks,
+                        standbyTasks,
+                        partitionsByHostState)
+                        .encode()
+                ));
+            }
+        }
+
         // add empty assignment for "future version" clients (ie, empty version probing response)
-        for (final String clientId : futureConsumers) {
-            assignment.put(clientId, new Assignment(
+        for (final String consumerId : futureConsumers) {
+            assignment.put(consumerId, new Assignment(
                 Collections.<TopicPartition>emptyList(),
                 new AssignmentInfo().encode()
             ));
