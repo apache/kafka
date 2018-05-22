@@ -22,9 +22,9 @@ ext {
   libs = [:]
   
   // Enabled by default when commands like `testAll` are invoked
-  defaultScalaVersions = [ '2.11' ]
-  // Available if -PscalaVersion is used, this is necessary because Scala 2.12 requires Java 8 while Kafka is usually
-  // built with Java 7
+  defaultScalaVersions = [ '2.11', '2.12' ]
+  // Available if -PscalaVersion is used. This is useful when we want to support a Scala version that has
+  // a higher minimum Java requirement than Kafka. This was previously the case for Scala 2.12 and Java 7.
   availableScalaVersions = [ '2.11', '2.12' ]
 }
 
@@ -48,17 +48,17 @@ versions["baseScala"] = versions.scala.substring(0, versions.scala.lastIndexOf("
 
 versions += [
   activation: "1.1.1",
-  apacheda: "1.0.0",
+  apacheda: "1.0.1",
   apacheds: "2.0.0-M24",
   argparse4j: "0.7.0",
   bcpkix: "1.59",
   easymock: "3.6",
   jackson: "2.9.5",
-  jetty: "9.2.24.v20180105",
-  jersey: "2.25.1",
-  jmh: "1.20",
+  jetty: "9.4.10.v20180503",
+  jersey: "2.27",
+  jmh: "1.21",
   log4j: "1.2.17",
-  scalaLogging: "3.8.0",
+  scalaLogging: "3.9.0",
   jaxb: "2.3.0",
   jfreechart: "1.0.0",
   jopt: "5.0.4",
@@ -106,6 +106,7 @@ libs += [
   jettyServlet: "org.eclipse.jetty:jetty-servlet:$versions.jetty",
   jettyServlets: "org.eclipse.jetty:jetty-servlets:$versions.jetty",
   jerseyContainerServlet: "org.glassfish.jersey.containers:jersey-container-servlet:$versions.jersey",
+  jerseyHk2: "org.glassfish.jersey.inject:jersey-hk2:$versions.jersey",
   jfreechart: "1.0.0",
   jmhCore: "org.openjdk.jmh:jmh-core:$versions.jmh",
   jmhCoreBenchmarks: "org.openjdk.jmh:jmh-core-benchmarks:$versions.jmh",

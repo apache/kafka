@@ -4,9 +4,9 @@ See our [web site](http://kafka.apache.org) for details on the project.
 
 You need to have [Gradle](http://www.gradle.org/installation) and [Java](http://www.oracle.com/technetwork/java/javase/downloads/index.html) installed.
 
-Kafka requires Gradle 3.0 or higher.
+Kafka requires Gradle 4.5 or higher.
 
-Java 7 should be used for building in order to support both Java 7 and Java 8 at runtime.
+Java 8 should be used for building in order to support both Java 8 and Java 10 at runtime.
 
 ### First bootstrap and download the wrapper ###
     cd kafka_source_dir
@@ -84,8 +84,6 @@ You can pass either the major version (eg 2.11) or the full version (eg 2.11.12)
     ./gradlew -PscalaVersion=2.11 jar
     ./gradlew -PscalaVersion=2.11 test
     ./gradlew -PscalaVersion=2.11 releaseTarGz
-
-Scala 2.12.x requires Java 8.
 
 ### Running a task for a specific project ###
 This is for `core`, `examples` and `clients`
