@@ -244,7 +244,7 @@ class WorkerSourceTask extends WorkerTask {
                 if (toSend == null) {
                     log.trace("{} Nothing to send to Kafka. Polling source for additional records", this);
                     long start = time.milliseconds();
-                    toSend = task.poll();
+                    toSend = poll();
                     if (toSend != null) {
                         recordPollReturned(toSend.size(), time.milliseconds() - start);
                     }
@@ -263,6 +263,16 @@ class WorkerSourceTask extends WorkerTask {
             // and commit offsets. Worst case, task.flush() will also throw an exception causing the offset commit
             // to fail.
             commitOffsets();
+        }
+    }
+
+    protected List<SourceRecord> poll() throws InterruptedException {
+        try {
+            return task.poll();
+        } catch (RetriableException e) {
+            log.error("Encountered retriable error on polling task", e);
+            // Do nothing. Let the framework poll whenever it's ready.
+            return null;
         }
     }
 
