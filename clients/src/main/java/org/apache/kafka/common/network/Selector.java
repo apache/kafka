@@ -610,8 +610,12 @@ public class Selector implements Selectable, AutoCloseable {
     }
 
     private void unmute(KafkaChannel channel) {
-        explicitlyMutedChannels.remove(channel);
         channel.unmute();
+        // For SocketServer, the above call may not unmute depending on the mute state. Remove the channel from
+        // explicitlyMutedChannels only if the channel has been actually unmuted.
+        if (!channel.isMute()) {
+            explicitlyMutedChannels.remove(channel);
+        }
     }
 
     @Override
