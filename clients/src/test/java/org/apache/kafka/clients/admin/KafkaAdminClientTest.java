@@ -44,7 +44,6 @@ import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
-import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.CreateAclsResponse;
@@ -782,13 +781,20 @@ public class KafkaAdminClientTest {
             partitionMetadata.add(new MetadataResponse.PartitionMetadata(Errors.NONE, 0, node2,
                     singletonList(node2), singletonList(node2), Collections.<Node>emptyList()));
 
+            // Empty metadata response should be retried
+            env.kafkaClient().prepareResponse(
+                    new MetadataResponse(
+                            Collections.<Node>emptyList(),
+                            env.cluster().clusterResource().clusterId(),
+                            -1,
+                            Collections.<MetadataResponse.TopicMetadata>emptyList()));
+
             env.kafkaClient().prepareResponse(
                     new MetadataResponse(
                             env.cluster().nodes(),
                             env.cluster().clusterResource().clusterId(),
                             env.cluster().controller().id(),
-                            singletonList(new MetadataResponse.TopicMetadata(Errors.NONE,
-                                Topic.GROUP_METADATA_TOPIC_NAME, true, partitionMetadata))));
+                            Collections.<MetadataResponse.TopicMetadata>emptyList()));
 
             env.kafkaClient().prepareResponseFrom(
                     new ListGroupsResponse(
@@ -823,22 +829,6 @@ public class KafkaAdminClientTest {
                 assertTrue(listing.groupId().equals("group-1") || listing.groupId().equals("group-2"));
             }
             assertEquals(1, result.errors().get().size());
-
-            // Test handling the error where we are unable to get metadata for the __consumer_offsets topic.
-            env.kafkaClient().prepareResponse(
-                new MetadataResponse(
-                    env.cluster().nodes(),
-                    env.cluster().clusterResource().clusterId(),
-                    env.cluster().controller().id(),
-                    singletonList(new MetadataResponse.TopicMetadata(
-                        Errors.UNKNOWN_TOPIC_OR_PARTITION, Topic.GROUP_METADATA_TOPIC_NAME,
-                        true, Collections.<MetadataResponse.PartitionMetadata>emptyList()))));
-            final ListConsumerGroupsResult result2 = env.adminClient().listConsumerGroups();
-            Collection<Throwable> errors = result2.errors().get();
-            assertEquals(1, errors.size());
-            assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.forException(errors.iterator().next()));
-            assertTrue(result2.valid().get().isEmpty());
-            assertFutureError(result2.all(), UnknownTopicOrPartitionException.class);
         }
     }
 
