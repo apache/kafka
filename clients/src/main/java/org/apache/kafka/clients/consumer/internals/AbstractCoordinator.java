@@ -203,7 +203,7 @@ public abstract class AbstractCoordinator implements Closeable {
      * @param timeoutMs   Maximum time to wait to discover the coordinator
      * @return true If coordinator discovery and initial connection succeeded, false otherwise
      */
-    public synchronized boolean ensureCoordinatorReady(final long timeoutMs) {
+    protected synchronized boolean ensureCoordinatorReady(final long timeoutMs) {
         final long startTimeMs = time.milliseconds();
 
         while (coordinatorUnknown()) {

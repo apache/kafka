@@ -1232,7 +1232,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     @SuppressWarnings("BooleanMethodIsAlwaysInverted") // because false => timed out, in which case we return early or throw.
     boolean internalUpdateAssignmentMetadataIfNeeded(final Duration timeout) {
         final long startMs = time.milliseconds();
-        System.out.println(startMs);
         if (!coordinator.poll(startMs, remainingMsAtLeastZero(startMs, timeout))) {
             return false;
         }
