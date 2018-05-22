@@ -20,10 +20,10 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
@@ -127,7 +127,6 @@ public class TimeWindowedKStreamImplTest {
         assertThat(results.get(new Windowed<>("1", new TimeWindow(500, 1000))), equalTo("0+3"));
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldMaterializeCount() {
         windowedStream.count(Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("count-store")
@@ -146,7 +145,6 @@ public class TimeWindowedKStreamImplTest {
         }
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldMaterializeReduced() {
         windowedStream.reduce(MockReducer.STRING_ADDER,
@@ -166,7 +164,6 @@ public class TimeWindowedKStreamImplTest {
         }
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldMaterializeAggregated() {
         windowedStream.aggregate(MockInitializer.STRING_INIT,

@@ -20,10 +20,10 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
@@ -134,7 +134,6 @@ public class SessionWindowedKStreamImplTest {
         assertThat(results.get(new Windowed<>("1", new SessionWindow(600, 600))), equalTo("0+3"));
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldMaterializeCount() {
         stream.count(Materialized.<String, Long, SessionStore<Bytes, byte[]>>as("count-store"));
@@ -150,7 +149,6 @@ public class SessionWindowedKStreamImplTest {
         }
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldMaterializeReduced() {
         stream.reduce(MockReducer.STRING_ADDER, Materialized.<String, String, SessionStore<Bytes, byte[]>>as("reduced"));
@@ -167,7 +165,6 @@ public class SessionWindowedKStreamImplTest {
         }
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldMaterializeAggregated() {
         stream.aggregate(MockInitializer.STRING_INIT,
