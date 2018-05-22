@@ -29,7 +29,7 @@ public class StaticTopicNameExtractor<K, V> implements TopicNameExtractor<K, V> 
         this.topicName = topicName;
     }
 
-    public String extract(K key, V value, RecordContext recordContext) {
+    public String extract(final K key, final V value, final RecordContext recordContext) {
         return topicName;
     }
 

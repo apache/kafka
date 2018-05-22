@@ -34,5 +34,5 @@ public interface TopicNameExtractor<K, V> {
      * @param recordContext current context metadata of the record
      * @return              the topic name this record should be sent to
      */
-    String extract(K key, V value, RecordContext recordContext);
+    String extract(final K key, final V value, final RecordContext recordContext);
 }
