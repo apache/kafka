@@ -33,6 +33,8 @@ public class ProcessingContext {
     private Result<?> result;
     private long timeOfError;
 
+    private int attempt;
+
     public ProcessingContext() {
         this(Collections.<ErrorReporter>emptyList());
     }
@@ -54,14 +56,12 @@ public class ProcessingContext {
         return this.sourceRecord;
     }
 
-    public ProcessingContext sourceRecord(SourceRecord record) {
+    public void sourceRecord(SourceRecord record) {
         this.sourceRecord = record;
-        return this;
     }
 
-    public ProcessingContext position(Stage position) {
+    public void position(Stage position) {
         this.position = position;
-        return this;
     }
 
     public Stage stage() {
@@ -72,9 +72,8 @@ public class ProcessingContext {
         return this.klass;
     }
 
-    public ProcessingContext executingClass(Class<?> klass) {
+    public void executingClass(Class<?> klass) {
         this.klass = klass;
-        return this;
     }
 
     public ProcessingContext result(Result<?> result) {
@@ -109,5 +108,13 @@ public class ProcessingContext {
 
     public void setTimeOfError(long timeOfError) {
         this.timeOfError = timeOfError;
+    }
+
+    public void attempt(int attempt) {
+        this.attempt = attempt;
+    }
+
+    public int attempt() {
+        return this.attempt;
     }
 }

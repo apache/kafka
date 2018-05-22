@@ -89,52 +89,69 @@ public class RetryWithToleranceExecutor implements OperationExecutor {
         }
     }
 
-    private <V> Result<V> execAndHandleError(Operation<V> operation, ProcessingContext context, Class<? extends Exception> handled) {
-        Exception ex = null;
-        try {
-            boolean canRetry = true;
-            int attempt = 0;
-            long opStartTime = time.milliseconds();
-            while (canRetry) {
-                try {
-                    V v = operation.apply();
-                    attempt++;
-                    Result<V> result = new Result<>(v);
-                    context.result(result);
-                    return result;
-                } catch (RetriableException e) {
-                    log.trace("Caught a retriable exception while executing {} operation", context.stage());
-                    canRetry = checkRetry(opStartTime);
-                    ex = e;
-                }
-                if (canRetry) {
-                    backoff(attempt);
+    protected <V> Result<V> execAndRetry(Operation<V> operation, ProcessingContext context) throws Exception {
+        int attempt = 0;
+        long startTime = time.milliseconds();
+        long deadline = startTime + config.retryTimeout();
+        do {
+            try {
+                attempt++;
+                V v = operation.apply();
+                Result<V> result = new Result<>(v);
+                context.result(result);
+                return result;
+            } catch (RetriableException e) {
+                log.trace("Caught a retriable exception while executing {} operation with {}", context.stage(), context.executingClass());
+                if (checkRetry(startTime)) {
+                    backoff(attempt, deadline);
                     if (Thread.currentThread().isInterrupted()) {
-                        break;
+                        log.trace("Thread was interrupted. Marking operation as failed.");
+                        return new Result<>(e);
                     }
+                } else {
+                    return new Result<>(e);
                 }
+            } finally {
+                context.attempt(attempt);
             }
-        } catch (Exception e) {
-            if (!handled.isAssignableFrom(e.getClass())) {
-                context.result(new Result<>(e));
-                throw new ConnectException("Unhandled exception", e);
-            }
-            ex = e;
-        }
-
-        totalFailures++;
-        Result<V> exResult = new Result<>(ex);
-        context.result(exResult);
-
-        if (!withinToleranceLimits()) {
-            throw new ConnectException("Tolerance Exceeded", ex);
-        }
-
-        return exResult;
+        } while (true);
     }
 
     // Visible for testing
-    protected boolean withinToleranceLimits() {
+    protected <V> Result<V> execAndHandleError(Operation<V> operation, ProcessingContext context, Class<? extends Exception> tolerated) {
+        try {
+            Result<V> result = execAndRetry(operation, context);
+            if (!result.success()) {
+                markAsFailed();
+            }
+            context.result(result);
+            return result;
+        } catch (Exception e) {
+            markAsFailed();
+
+            Result<V> exResult = new Result<>(e);
+            context.result(exResult);
+
+            if (!tolerated.isAssignableFrom(e.getClass())) {
+                context.result(new Result<>(e));
+                throw new ConnectException("Unhandled exception in error handler", e);
+            }
+
+            if (!withinToleranceLimits()) {
+                throw new ConnectException("Tolerance exceeded in error handler", e);
+            }
+
+            return exResult;
+        }
+    }
+
+    // Visible for testing
+    void markAsFailed() {
+        totalFailures++;
+    }
+
+    // Visible for testing
+    boolean withinToleranceLimits() {
         switch (config.toleranceLimit()) {
             case NONE:
                 if (totalFailures > 0) return false;
@@ -145,49 +162,24 @@ public class RetryWithToleranceExecutor implements OperationExecutor {
         }
     }
 
-    // Visible for tests
-    protected boolean checkRetry(long startTime) {
+    // Visible for testing
+    boolean checkRetry(long startTime) {
         return (time.milliseconds() - startTime) < config.retryTimeout();
     }
 
-    protected void backoff(int attempt) {
+    // Visible for testing
+    void backoff(int attempt, long deadline) {
         int numRetry = attempt - 1;
         long delay = RETRIES_DELAY_MIN_MS << numRetry;
         if (delay > config.retryDelayMax()) {
             delay = ThreadLocalRandom.current().nextLong(config.retryDelayMax());
         }
-
+        if (delay + time.milliseconds() > deadline) {
+            delay = deadline - time.milliseconds();
+        }
         log.debug("Sleeping for {} millis", delay);
         time.sleep(delay);
     }
-
-//    private <V> void apply(Response<V> response, Operation<V> operation, Class<? extends Exception> handled) {
-//        try {
-//            response.result = operation.apply();
-//            response.ex = null;
-//            response.status = ResponseStatus.SUCCESS;
-//        } catch (Exception e) {
-//            response.ex = e;
-//            response.result = null;
-//            if (handled.isAssignableFrom(e.getClass())) {
-//                response.status = ResponseStatus.RETRY;
-//            } else {
-//                response.status = ResponseStatus.UNHANDLED_EXCEPTION;
-//            }
-//        }
-//    }
-//
-//    static class Response<V> {
-//        ResponseStatus status;
-//        Exception ex;
-//        V result;
-//    }
-//
-//    enum ResponseStatus {
-//        SUCCESS,
-//        RETRY,
-//        UNHANDLED_EXCEPTION
-//    }
 
     @Override
     public void configure(Map<String, ?> configs) {
