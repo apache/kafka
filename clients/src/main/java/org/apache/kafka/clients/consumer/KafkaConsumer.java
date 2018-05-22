@@ -471,7 +471,7 @@ import java.util.regex.Pattern;
  *         try {
  *             consumer.subscribe(Arrays.asList("topic"));
  *             while (!closed.get()) {
- *                 ConsumerRecords records = consumer.poll(10000);
+ *                 ConsumerRecords records = consumer.poll(Duration.ofMillis(10000));
  *                 // Handle new records
  *             }
  *         } catch (WakeupException e) {
@@ -1117,6 +1117,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             if (this.subscriptions.hasNoSubscriptionOrUserAssignment())
                 throw new IllegalStateException("Consumer is not subscribed to any topics or assigned any partitions");
 
+            final long start = time.milliseconds();
             long remaining = timeout;
             do {
 
@@ -1125,8 +1126,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 while (!internalUpdateAssignmentMetadataIfNeeded(Duration.ofMillis(Long.MAX_VALUE))) {
                     log.warn("Still waiting for metadata");
                 }
-
-                final long start = time.milliseconds();
 
                 final Map<TopicPartition, List<ConsumerRecord<K, V>>> records = pollForFetches(remaining);
                 if (!records.isEmpty()) {
