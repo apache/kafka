@@ -38,6 +38,7 @@ import java.util.Map.Entry;
 import java.util.Set;
 
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
+import static org.apache.kafka.common.requests.FetchMetadata.THROTTLED_SESSION_ID;
 
 /**
  * FetchSessionHandler maintains the fetch session state for connecting to a broker.
@@ -399,6 +400,10 @@ public class FetchSessionHandler {
                     node, responseDataToLogString(response));
                 nextMetadata = FetchMetadata.INITIAL;
                 return true;
+            } else if (response.sessionId() == THROTTLED_SESSION_ID) {
+                log.debug("Node {} sent an empty full fetch response due to quota violation{}", node, responseDataToLogString(response));
+                // Keep the current nextMetadata.
+                return true;
             } else {
                 // The server created a new incremental fetch session.
                 log.debug("Node {} sent a full fetch response that created a new incremental " +
@@ -417,6 +422,10 @@ public class FetchSessionHandler {
                 log.debug("Node {} sent an incremental fetch response closing session {}{}",
                     node, nextMetadata.sessionId(), responseDataToLogString(response));
                 nextMetadata = FetchMetadata.INITIAL;
+                return true;
+            } else if (response.sessionId() == THROTTLED_SESSION_ID) {
+                log.debug("Node {} sent an empty incremental fetch response due to quota violation{}", node, responseDataToLogString(response));
+                // Keep the current nextMetadata.
                 return true;
             } else {
                 // The incremental fetch session was continued by the server.

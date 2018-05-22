@@ -177,8 +177,15 @@ public class KafkaChannel {
         }
     }
 
+    /**
+     * Return whether or not the channel can be unmuted.
+     */
+    public boolean canBeUnmuted() {
+        return muteState == ChannelMuteState.MUTED;
+    }
+
     void unmute() {
-        if (muteState == ChannelMuteState.MUTED) {
+        if (canBeUnmuted()) {
             if (!disconnected) transportLayer.addInterestOps(SelectionKey.OP_READ);
             muteState = ChannelMuteState.NOT_MUTED;
         }

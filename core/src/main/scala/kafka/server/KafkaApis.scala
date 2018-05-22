@@ -53,7 +53,7 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.requests.{SaslAuthenticateResponse, SaslHandshakeResponse}
-import org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID
+import org.apache.kafka.common.requests.FetchMetadata.THROTTLED_SESSION_ID
 import org.apache.kafka.common.resource.{Resource => AdminResource}
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding}
 import DescribeLogDirsResponse.LogDirInfo
@@ -637,9 +637,10 @@ class KafkaApis(val requestChannel: RequestChannel,
           } else {
             quotas.request.throttle(request, requestThrottleTimeMs, sendActionOnlyResponse(request))
           }
-          // If throttling is required, return an empty response.
-          unconvertedFetchResponse = new FetchResponse(Errors.NONE, new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData](),
-            maxThrottleTimeMs, INVALID_SESSION_ID)
+          // If throttling is required, return an empty response. THROTTLED_SESSION_ID is a special session id used for
+          // telling FetchSessionHandler to reuse the current fetch metadata for the next fetch.
+          unconvertedFetchResponse = new FetchResponse(Errors.NONE, new util.LinkedHashMap[TopicPartition,
+            FetchResponse.PartitionData](), maxThrottleTimeMs, THROTTLED_SESSION_ID)
         } else {
           // Get the actual response. This will update the fetch context.
           unconvertedFetchResponse = fetchContext.updateAndGenerateResponseData(partitions)

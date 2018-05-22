@@ -25,7 +25,7 @@ import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.FetchMetadata.{FINAL_EPOCH, INITIAL_EPOCH, INVALID_SESSION_ID}
+import org.apache.kafka.common.requests.FetchMetadata.{FINAL_EPOCH, INITIAL_EPOCH, INVALID_SESSION_ID, THROTTLED_SESSION_ID}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
 import org.apache.kafka.common.requests.{FetchMetadata => JFetchMetadata}
 import org.apache.kafka.common.utils.{ImplicitLinkedHashSet, Time, Utils}
@@ -569,7 +569,7 @@ class FetchSessionCache(private val maxEntries: Int,
     var id = 0
     do {
       id = ThreadLocalRandom.current().nextInt(1, Int.MaxValue)
-    } while (sessions.contains(id) || id == INVALID_SESSION_ID)
+    } while (sessions.contains(id) || id == INVALID_SESSION_ID || id == THROTTLED_SESSION_ID)
     id
   }
 
