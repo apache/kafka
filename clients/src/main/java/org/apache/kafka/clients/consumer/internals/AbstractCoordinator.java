@@ -354,7 +354,9 @@ public abstract class AbstractCoordinator implements Closeable {
 
     // visible for testing. Joins the group without starting the heartbeat thread.
     void joinGroupIfNeeded() {
-        joinGroupIfNeeded(Long.MAX_VALUE);
+        while (!joinGroupIfNeeded(Long.MAX_VALUE)) {
+            log.warn("still waiting to join group");
+        }
     }
 
     /**
