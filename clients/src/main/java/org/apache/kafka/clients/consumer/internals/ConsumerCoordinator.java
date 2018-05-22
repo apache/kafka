@@ -310,9 +310,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             // When group management is used, metadata wait is already performed for this scenario as
             // coordinator is unknown, hence this check is not required.
             if (metadata.updateRequested() && !client.hasReadyNodes()) {
-                final boolean metadataUpdated = client.awaitMetadataUpdate(timeoutMs);
-                if (!metadataUpdated && !client.hasReadyNodes())
+                final boolean metadataUpdated = client.awaitMetadataUpdate(remainingTimeAtLeastZeroMillis(startTime, timeoutMs));
+                if (!metadataUpdated && !client.hasReadyNodes()) {
                     return false;
+                }
             }
         }
 
