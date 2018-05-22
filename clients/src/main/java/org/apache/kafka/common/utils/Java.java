@@ -64,10 +64,6 @@ public final class Java {
             return majorVersion >= 9;
         }
 
-        // Package private for testing
-        boolean isJava8Compatible() {
-            return majorVersion > 1 || (majorVersion == 1 && minorVersion >= 8);
-        }
     }
 
 }
