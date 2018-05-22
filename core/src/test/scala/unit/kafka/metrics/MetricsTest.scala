@@ -61,11 +61,14 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     //this assertion is only used for creating the metrics for DelayedFetchMetrics, it should never fail, but should not be removed
     assertNotNull(DelayedFetchMetrics)
 
-    val countOfStaticMetrics = Metrics.defaultRegistry.allMetrics.keySet.size
+    val originalMetrics = Metrics.defaultRegistry.allMetrics.keySet.asScala
 
     for (i <- 0 to 5) {
       createAndShutdownStep(topic, "group" + i % 3, "consumer" + i % 2, "producer" + i % 2)
-      assertEquals(countOfStaticMetrics, Metrics.defaultRegistry.allMetrics.keySet.size)
+      val missingMetricOpt = originalMetrics.filterNot(Metrics.defaultRegistry.allMetrics.keySet.asScala).headOption
+      val newMetricOpt = Metrics.defaultRegistry.allMetrics.keySet.asScala.filterNot(originalMetrics).headOption
+      assertEquals(None, missingMetricOpt)
+      assertEquals(None, newMetricOpt)
     }
   }
 
