@@ -368,7 +368,7 @@ public abstract class AbstractCoordinator implements Closeable {
     private boolean joinGroupIfNeeded(final long timeoutMs) {
         final long startTime = time.milliseconds();
         while (needRejoin()) {
-            if (!ensureCoordinatorReady(remainingTimeMsAtLeastZero(startTime,timeoutMs))) {
+            if (!ensureCoordinatorReady(remainingTimeMsAtLeastZero(startTime, timeoutMs))) {
                 return false;
             }
 
