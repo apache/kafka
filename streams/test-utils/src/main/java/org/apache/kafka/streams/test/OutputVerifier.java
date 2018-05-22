@@ -362,9 +362,9 @@ public class OutputVerifier {
     }
 
     /**
-     * Compares a {@link ProducerRecord} with the provided key, value, and headers and throws an
-     * {@link AssertionError} if the {@code ProducerRecord}'s key, value, or headers is not equal to the expected key,
-     * value, or headers.
+     * Compares a {@link ProducerRecord} with the provided key, value, headers, and timestamp and throws an
+     * {@link AssertionError} if the {@code ProducerRecord}'s key, value, headers, or timestamp is not equal to the expected key,
+     * value, headers, or timestamp.
      *
      * @param record a output {@code ProducerRecord} for verification
      * @param expectedKey the expected key of the {@code ProducerRecord}
@@ -423,14 +423,14 @@ public class OutputVerifier {
 
     /**
      * Compares the keys, values, headers, and timestamp of two {@link ProducerRecord}'s and throws an {@link AssertionError} if
-     * the keys, values, headers or timestamps are not equal to each other.
+     * the keys, values, headers, or timestamps are not equal to each other.
      *
      * @param record a output {@code ProducerRecord} for verification
      * @param expectedRecord a {@code ProducerRecord} for verification
      * @param <K> the key type
      * @param <V> the value type
-     * @throws AssertionError if {@code ProducerRecord}'s key, value, or headers is not equal to
-     *                        {@code expectedRecord}'s key, value, or headers
+     * @throws AssertionError if {@code ProducerRecord}'s key, value, headers, or timestamp is not equal to
+     *                        {@code expectedRecord}'s key, value, headers, or timestamp
      */
     public static <K, V> void compareKeyValueHeadersTimestamp(final ProducerRecord<K, V> record,
                                                               final ProducerRecord<K, V> expectedRecord) throws AssertionError {
