@@ -199,7 +199,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
     /**
      * Visible for testing.
-     * 
+     *
      * Ensure that the coordinator is ready to receive requests.
      *
      * @param timeoutMs   Maximum time to wait to discover the coordinator
@@ -298,7 +298,9 @@ public abstract class AbstractCoordinator implements Closeable {
      * Ensure that the group is active (i.e. joined and synced)
      */
     public void ensureActiveGroup() {
-        ensureActiveGroup(Long.MAX_VALUE);
+        while (!ensureActiveGroup(Long.MAX_VALUE)) {
+            log.warn("still waiting to ensure active group");
+        }
     }
 
     /**
