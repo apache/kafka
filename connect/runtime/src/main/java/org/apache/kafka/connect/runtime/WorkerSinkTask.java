@@ -477,8 +477,8 @@ class WorkerSinkTask extends WorkerTask {
         for (ConsumerRecord<byte[], byte[]> msg : msgs) {
             log.trace("{} Consuming and converting message in topic '{}' partition {} at offset {} and timestamp {}",
                     this, msg.topic(), msg.partition(), msg.offset(), msg.timestamp());
-            SchemaAndValue keyAndSchema = keyConverter.toConnectData(msg.topic(), msg.key());
-            SchemaAndValue valueAndSchema = valueConverter.toConnectData(msg.topic(), msg.value());
+            SchemaAndValue keyAndSchema = toConnectData(keyConverter, "key", msg, msg.key());
+            SchemaAndValue valueAndSchema = toConnectData(valueConverter, "value", msg, msg.value());
             Headers headers = convertHeadersFor(msg);
             Long timestamp = ConnectUtils.checkAndConvertTimestamp(msg.timestamp());
             SinkRecord origRecord = new SinkRecord(msg.topic(), msg.partition(),
@@ -503,6 +503,16 @@ class WorkerSinkTask extends WorkerTask {
             }
         }
         sinkTaskMetricsGroup.recordConsumedOffsets(origOffsets);
+    }
+
+    private SchemaAndValue toConnectData(Converter converter, String converterName, ConsumerRecord<byte[], byte[]> msg, byte[] data) {
+        try {
+            return converter.toConnectData(msg.topic(), data);
+        } catch (Throwable e) {
+            String str = String.format("Error converting message %s in topic '%s' partition %d at offset %d and timestamp %d",
+                    converterName, msg.topic(), msg.partition(), msg.offset(), msg.timestamp());
+            throw new ConnectException(str, e);
+        }
     }
 
     private Headers convertHeadersFor(ConsumerRecord<byte[], byte[]> record) {
