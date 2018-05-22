@@ -36,6 +36,7 @@ public class WorkerSourceTaskContext implements SourceTaskContext {
         this.configState = configState;
     }
 
+    @Override
     public Map<String, String> configs() {
         return configState.taskConfig(task.id());
     }

@@ -53,6 +53,7 @@ public class WorkerSinkTaskContext implements SinkTaskContext {
         this.pausedPartitions = new HashSet<>();
     }
 
+    @Override
     public Map<String, String> configs() {
         return configState.taskConfig(sinkTask.id());
     }

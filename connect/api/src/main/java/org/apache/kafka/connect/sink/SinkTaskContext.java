@@ -25,6 +25,12 @@ import java.util.Set;
  * Context passed to SinkTasks, allowing them to access utilities in the Kafka Connect runtime.
  */
 public interface SinkTaskContext {
+
+    /**
+     * Get the Task configuration.
+     */
+    public Map<String, String> configs();
+
     /**
      * Reset the consumer offsets for the given topic partitions. SinkTasks should use this if they manage offsets
      * in the sink data store rather than using Kafka consumer offsets. For example, an HDFS connector might record
