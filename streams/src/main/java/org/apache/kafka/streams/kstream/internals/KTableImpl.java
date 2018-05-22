@@ -132,7 +132,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
         ProcessorParameters processorParameters = new ProcessorParameters<>(processorSupplier, name);
 
-        StreamsGraphNode graphNode = createStreamsGraphNode(materializedInternal, name, shouldMaterialize, processorParameters);
+        StreamsGraphNode graphNode = createStreamsGraphNode(materializedInternal, name, shouldMaterialize, processorParameters, null);
 
         addGraphNode(graphNode);
 
@@ -207,7 +207,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
         ProcessorParameters processorParameters = new ProcessorParameters<>(processorSupplier, name);
 
-        StreamsGraphNode graphNode = createStreamsGraphNode(materializedInternal, name, shouldMaterialize, processorParameters);
+        StreamsGraphNode graphNode = createStreamsGraphNode(materializedInternal, name, shouldMaterialize, processorParameters, null);
 
         addGraphNode(graphNode);
 
@@ -287,6 +287,12 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
             transformerSupplier,
             shouldMaterialize ? materialized.storeName() : null);
 
+        ProcessorParameters processorParameters = new ProcessorParameters<>(processorSupplier, name);
+
+        StreamsGraphNode graphNode = createStreamsGraphNode(materialized, name, shouldMaterialize, processorParameters, stateStoreNames);
+
+        addGraphNode(graphNode);
+
         builder.internalTopologyBuilder.addProcessor(name, processorSupplier, this.name);
 
         if (stateStoreNames.length > 0) {
@@ -305,7 +311,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
             processorSupplier,
             sourceNodes,
             shouldMaterialize ? materialized.storeName() : this.queryableStoreName,
-            shouldMaterialize);
+            shouldMaterialize,
+            graphNode);
     }
 
     @Override
@@ -565,15 +572,20 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     private <VR> StreamsGraphNode createStreamsGraphNode(final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal,
                                                          final String name,
                                                          final boolean shouldMaterialize,
-                                                         final ProcessorParameters processorParameters) {
+                                                         final ProcessorParameters processorParameters,
+                                                         String[] stateStoreNames) {
         StreamsGraphNode graphNode;
 
-        if (shouldMaterialize) {
+        if (stateStoreNames == null) {
+            stateStoreNames = new String[]{};
+        }
+
+        if (shouldMaterialize || stateStoreNames.length > 0) {
             graphNode = new StatefulProcessorNode<>(name,
                                                     processorParameters,
-                                                    new String[]{},
+                                                    stateStoreNames,
                                                     null,
-                                                    new KeyValueStoreMaterializer<>(materializedInternal).materialize(),
+                                                    shouldMaterialize ? new KeyValueStoreMaterializer<>(materializedInternal).materialize() : null,
                                                     false);
         } else {
             graphNode = new StatelessProcessorNode<>(name,
@@ -582,5 +594,4 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         }
         return graphNode;
     }
-
 }
