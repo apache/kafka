@@ -257,18 +257,22 @@ public class OutputVerifier {
 
         final V recordValue = record.value();
         final Headers recordHeaders = record.headers();
-        final AssertionError error = new AssertionError("Expected <" + expectedValue + "> with headers=" + expectedHeaders +
-                "but was <" + recordValue + "> with headers=" + recordHeaders);
+        final AssertionError error = new AssertionError("Expected value=" + expectedValue + " with headers=" + expectedHeaders +
+                " but was value=" + recordValue + " with headers=" + recordHeaders);
 
         if (recordValue != null) {
             if (!recordValue.equals(expectedValue)) {
                 throw error;
             }
-        } else if (expectedHeaders != null) {
+        } else if (expectedValue != null) {
             throw error;
         }
 
-        if (recordHeaders != expectedHeaders) {
+        if (recordHeaders != null) {
+            if (!recordHeaders.equals(expectedHeaders)) {
+                throw error;
+            }
+        } else if (expectedHeaders != null) {
             throw error;
         }
     }
@@ -331,7 +335,11 @@ public class OutputVerifier {
             throw error;
         }
 
-        if (recordHeaders != expectedHeaders) {
+        if (recordHeaders != null) {
+            if (!recordHeaders.equals(expectedHeaders)) {
+                throw error;
+            }
+        } else if (expectedHeaders != null) {
             throw error;
         }
     }
@@ -351,5 +359,80 @@ public class OutputVerifier {
                                                      final ProducerRecord<K, V> expectedRecord) throws AssertionError {
         Objects.requireNonNull(expectedRecord);
         compareKeyValueHeaders(record, expectedRecord.key(), expectedRecord.value(), expectedRecord.headers());
+    }
+
+    /**
+     * Compares a {@link ProducerRecord} with the provided key, value, and headers and throws an
+     * {@link AssertionError} if the {@code ProducerRecord}'s key, value, or headers is not equal to the expected key,
+     * value, or headers.
+     *
+     * @param record a output {@code ProducerRecord} for verification
+     * @param expectedKey the expected key of the {@code ProducerRecord}
+     * @param expectedValue the expected value of the {@code ProducerRecord}
+     * @param expectedHeaders the expected headers of the {@code ProducerRecord}
+     * @param <K> the key type
+     * @param <V> the value type
+     * @throws AssertionError if {@code ProducerRecord}'s key, value, headers is not equal to {@code expectedKey},
+     *                        {@code expectedValue}, or {@code expectedHeaders}
+     */
+    public static <K, V> void compareKeyValueTimestampHeaders(final ProducerRecord<K, V> record,
+                                                              final K expectedKey,
+                                                              final V expectedValue,
+                                                              final Headers expectedHeaders,
+                                                              final long expectedTimestamp) throws AssertionError {
+        Objects.requireNonNull(record);
+
+        final K recordKey = record.key();
+        final V recordValue = record.value();
+        final Headers recordHeaders = record.headers();
+        final long recordTimestamp = record.timestamp();
+        final AssertionError error = new AssertionError("Expected <" + expectedKey + ", " + expectedValue + "> with headers=" + expectedHeaders +
+                " and timestamp=" + expectedTimestamp + " but was <" + recordKey + ", " + recordValue + ">" +
+                " with headers=" + recordHeaders + "and timestamp=" + recordTimestamp);
+
+        if (recordKey != null) {
+            if (!recordKey.equals(expectedKey)) {
+                throw error;
+            }
+        } else if (expectedKey != null) {
+            throw error;
+        }
+
+        if (recordValue != null) {
+            if (!recordValue.equals(expectedValue)) {
+                throw error;
+            }
+        } else if (expectedValue != null) {
+            throw error;
+        }
+
+        if (recordHeaders != null) {
+            if (!recordHeaders.equals(expectedHeaders)) {
+                throw error;
+            }
+        } else if (expectedHeaders != null) {
+            throw error;
+        }
+
+        if (recordTimestamp != expectedTimestamp) {
+            throw error;
+        }
+    }
+
+    /**
+     * Compares the keys, values, and headers of two {@link ProducerRecord}'s and throws an {@link AssertionError} if
+     * the keys, values, or headers are not equal to each other.
+     *
+     * @param record a output {@code ProducerRecord} for verification
+     * @param expectedRecord a {@code ProducerRecord} for verification
+     * @param <K> the key type
+     * @param <V> the value type
+     * @throws AssertionError if {@code ProducerRecord}'s key, value, or headers is not equal to
+     *                        {@code expectedRecord}'s key, value, or headers
+     */
+    public static <K, V> void compareKeyValueTimestampHeaders(final ProducerRecord<K, V> record,
+                                                              final ProducerRecord<K, V> expectedRecord) throws AssertionError {
+        Objects.requireNonNull(expectedRecord);
+        compareKeyValueTimestampHeaders(record, expectedRecord.key(), expectedRecord.value(), expectedRecord.headers(), expectedRecord.timestamp());
     }
 }
