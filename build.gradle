@@ -1444,6 +1444,7 @@ project(':connect:rest-extension') {
     testCompile libs.junit
     testCompile libs.powermockJunit4
     testCompile libs.powermockEasymock
+    testCompile project(':clients').sourceSets.test.output
 
     testRuntime libs.slf4jlog4j
   }
