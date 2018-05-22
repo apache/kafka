@@ -18,7 +18,6 @@
 package org.apache.kafka.connect.rest.extension;
 
 import org.apache.kafka.common.security.JaasUtils;
-import org.apache.kafka.common.utils.Base64;
 import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Test;
@@ -32,6 +31,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 
 import javax.security.auth.login.Configuration;
@@ -66,7 +66,7 @@ public class JaasBasicAuthFilterTest {
 
     @Test
     public void testSuccess() throws IOException {
-        String authHeader = "Basic " + Base64.encoder().encodeToString("user:password".getBytes());
+        String authHeader = "Basic " + Base64.getEncoder().encodeToString("user:password".getBytes());
         EasyMock.expect(requestContext.getHeaderString(JaasBasicAuthFilter.AUTHORIZATION))
             .andReturn(authHeader);
         replayAll();
@@ -76,7 +76,7 @@ public class JaasBasicAuthFilterTest {
 
     @Test
     public void testBadCredential() throws IOException {
-        String authHeader = "Basic " + Base64.encoder().encodeToString("user1:password".getBytes());
+        String authHeader = "Basic " + Base64.getEncoder().encodeToString("user1:password".getBytes());
         EasyMock.expect(requestContext.getHeaderString(JaasBasicAuthFilter.AUTHORIZATION))
             .andReturn(authHeader);
         requestContext.abortWith(EasyMock.anyObject(Response.class));
@@ -87,7 +87,7 @@ public class JaasBasicAuthFilterTest {
 
     @Test
     public void testBadPassword() throws IOException {
-        String authHeader = "Basic " + Base64.encoder().encodeToString("user:password1".getBytes());
+        String authHeader = "Basic " + Base64.getEncoder().encodeToString("user:password1".getBytes());
         EasyMock.expect(requestContext.getHeaderString(JaasBasicAuthFilter.AUTHORIZATION))
             .andReturn(authHeader);
         requestContext.abortWith(EasyMock.anyObject(Response.class));
@@ -99,7 +99,7 @@ public class JaasBasicAuthFilterTest {
     @Test
     public void testUnknownBearer() throws IOException {
         String authHeader =
-            "Unknown " + Base64.encoder().encodeToString("user:password".getBytes());
+            "Unknown " + Base64.getEncoder().encodeToString("user:password".getBytes());
         EasyMock.expect(requestContext.getHeaderString(JaasBasicAuthFilter.AUTHORIZATION))
             .andReturn(authHeader);
         requestContext.abortWith(EasyMock.anyObject(Response.class));
@@ -122,7 +122,7 @@ public class JaasBasicAuthFilterTest {
         Configuration.setConfiguration(null);
 
         String authHeader =
-            "Basic " + Base64.encoder().encodeToString("user:password".getBytes());
+            "Basic " + Base64.getEncoder().encodeToString("user:password".getBytes());
         EasyMock.expect(requestContext.getHeaderString(JaasBasicAuthFilter.AUTHORIZATION))
             .andReturn(authHeader);
         requestContext.abortWith(EasyMock.anyObject(Response.class));

@@ -17,10 +17,9 @@
 
 package org.apache.kafka.connect.rest.extension;
 
-import org.apache.kafka.common.utils.Base64;
-
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.CallbackHandler;
@@ -70,7 +69,7 @@ public class JaasBasicAuthFilter implements ContainerRequestFilter {
                     String method = credentials.substring(0, space);
                     if (BASIC.equalsIgnoreCase(method)) {
                         credentials = credentials.substring(space + 1);
-                        credentials = new String(Base64.decoder().decode(credentials),
+                        credentials = new String(Base64.getDecoder().decode(credentials),
                                                  StandardCharsets.UTF_8);
                         int i = credentials.indexOf(COLON);
                         if (i > 0) {
