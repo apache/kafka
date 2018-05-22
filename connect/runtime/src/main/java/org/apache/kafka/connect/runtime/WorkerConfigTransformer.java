@@ -51,7 +51,8 @@ public class WorkerConfigTransformer {
     }
 
     private void scheduleReload(String connectorName, String path, long ttl) {
-        if (worker.herder().getConnectorConfigReloadAction(connectorName)
+        Herder herder = worker.herder();
+        if (herder.getConnectorConfigReloadAction(connectorName)
                 .equals(ConnectorConfig.CONFIG_RELOAD_ACTION_RESTART)) {
             Map<String, HerderRequestId> connectorRequests = requests.get(connectorName);
             if (connectorRequests == null) {
@@ -61,10 +62,10 @@ public class WorkerConfigTransformer {
                 HerderRequestId previousRequest = connectorRequests.get(path);
                 if (previousRequest != null) {
                     // Delete previous request for ttl which is now stale
-                    worker.herder().cancelRequest(previousRequest);
+                    herder.cancelRequest(previousRequest);
                 }
             }
-            HerderRequestId request = worker.herder().restartConnector(ttl, connectorName, null);
+            HerderRequestId request = herder.restartConnector(ttl, connectorName, null);
             connectorRequests.put(path, request);
         }
     }

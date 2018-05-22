@@ -18,6 +18,7 @@ package org.apache.kafka.common.config;
 
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.Reader;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Map;
@@ -43,7 +44,7 @@ public class FileConfigProvider implements ConfigProvider {
         if (path == null || path.isEmpty()) {
             return new ConfigData(data);
         }
-        try (FileReader fileReader = new FileReader(path)) {
+        try (Reader fileReader = reader(path)) {
             Properties properties = new Properties();
             properties.load(fileReader);
             Enumeration<Object> keys = properties.keys();
@@ -56,7 +57,7 @@ public class FileConfigProvider implements ConfigProvider {
             }
             return new ConfigData(data);
         } catch (IOException e) {
-            throw new ConfigException("File name " + path + " not found for FileConfigProvider");
+            throw new ConfigException("Could not read properties from file " + path);
         }
     }
 
@@ -72,7 +73,7 @@ public class FileConfigProvider implements ConfigProvider {
         if (path == null || path.isEmpty()) {
             return new ConfigData(data);
         }
-        try (FileReader fileReader = new FileReader(path)) {
+        try (Reader fileReader = reader(path)) {
             Properties properties = new Properties();
             properties.load(fileReader);
             for (String key : keys) {
@@ -83,8 +84,13 @@ public class FileConfigProvider implements ConfigProvider {
             }
             return new ConfigData(data);
         } catch (IOException e) {
-            throw new ConfigException("File name " + path + " not found for FileConfigProvider");
+            throw new ConfigException("Could not read properties from file " + path);
         }
+    }
+
+    // visible for testing
+    protected Reader reader(String path) throws IOException {
+        return new FileReader(path);
     }
 
     /**
