@@ -73,7 +73,7 @@ import java.util.concurrent.Executors;
 public class Worker {
     private static final Logger log = LoggerFactory.getLogger(Worker.class);
 
-    private Herder herder;
+    protected Herder herder;
     private final ExecutorService executor;
     private final Time time;
     private final String workerId;
@@ -158,10 +158,6 @@ public class Worker {
 
     protected Herder herder() {
         return herder;
-    }
-
-    protected void herder(Herder herder) {
-        this.herder = herder;
     }
 
     /**

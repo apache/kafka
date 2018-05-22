@@ -25,7 +25,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
 /**
- * A wrapper class to perform configuration transformations and schedule reload for any
+ * A wrapper class to perform configuration transformations and schedule reloads for any
  * retrieved TTL values.
  */
 public class WorkerConfigTransformer {

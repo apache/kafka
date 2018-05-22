@@ -25,6 +25,7 @@ import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
 
@@ -210,5 +211,31 @@ public class ClusterConfigState {
                 ", taskConfigs=" + taskConfigs +
                 ", inconsistentConnectors=" + inconsistentConnectors +
                 '}';
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        ClusterConfigState that = (ClusterConfigState) o;
+        return offset == that.offset &&
+                Objects.equals(connectorTaskCounts, that.connectorTaskCounts) &&
+                Objects.equals(connectorConfigs, that.connectorConfigs) &&
+                Objects.equals(connectorTargetStates, that.connectorTargetStates) &&
+                Objects.equals(taskConfigs, that.taskConfigs) &&
+                Objects.equals(inconsistentConnectors, that.inconsistentConnectors) &&
+                Objects.equals(configTransformer, that.configTransformer);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(
+                offset,
+                connectorTaskCounts,
+                connectorConfigs,
+                connectorTargetStates,
+                taskConfigs,
+                inconsistentConnectors,
+                configTransformer);
     }
 }
