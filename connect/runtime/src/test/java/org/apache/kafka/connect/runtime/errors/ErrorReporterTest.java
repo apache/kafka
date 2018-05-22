@@ -19,8 +19,7 @@ package org.apache.kafka.connect.runtime.errors;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.kafka.clients.producer.internals.FutureRecordMetadata;
-import org.apache.kafka.connect.transforms.Transformation;
+import org.apache.kafka.connect.json.JsonConverter;
 import org.easymock.EasyMock;
 import org.easymock.Mock;
 import org.junit.Test;
@@ -33,6 +32,7 @@ import java.util.Map;
 import java.util.concurrent.Future;
 
 import static org.easymock.EasyMock.replay;
+import static org.junit.Assert.assertEquals;
 
 @RunWith(PowerMockRunner.class)
 public class ErrorReporterTest {
@@ -78,7 +78,7 @@ public class ErrorReporterTest {
     }
 
     @Test
-    public void testReportTwice() {
+    public void testReportDLQTwice() {
         DLQReporter dlqReporter = new DLQReporter(producer, PARTITIONS);
         dlqReporter.configure(config(DLQReporter.DLQ_TOPIC_NAME, DLQ_TOPIC));
         ProcessingContext context = processingContext();
@@ -92,10 +92,56 @@ public class ErrorReporterTest {
         PowerMock.verifyAll();
     }
 
+    @Test
+    public void testNoopOnDisabledLogReporter() {
+        LogReporter logReporter = new LogReporter();
+        logReporter.configure(config);
+
+        ProcessingContext context = processingContext();
+
+        logReporter.report(context);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void testNoopOnEnabledLogReporter() {
+        LogReporter logReporter = new LogReporter();
+        logReporter.configure(config(LogReporter.LOG_ENABLE, "true"));
+
+        ProcessingContext context = processingContext();
+
+        logReporter.report(context);
+    }
+
+    @Test
+    public void testLogMessageWithNoRecords() {
+        LogReporter logReporter = new LogReporter();
+        logReporter.configure(config(LogReporter.LOG_ENABLE, "true"));
+
+        ProcessingContext context = processingContext();
+
+        String msg = logReporter.message(context).toString();
+        assertEquals("Error encountered while performing KEY_CONVERTER operation with class " +
+                "'class org.apache.kafka.connect.json.JsonConverter'.", msg);
+    }
+
+    @Test
+    public void testLogMessageWithSinkRecords() {
+        LogReporter logReporter = new LogReporter();
+        logReporter.configure(config(LogReporter.LOG_ENABLE, "true"));
+        logReporter.configure(config(LogReporter.LOG_INCLUDE_MESSAGES, "true"));
+
+        ProcessingContext context = processingContext();
+
+        String msg = logReporter.message(context).toString();
+        assertEquals("Error encountered while performing KEY_CONVERTER operation with class " +
+                "'class org.apache.kafka.connect.json.JsonConverter', msg.topic='test-topic', " +
+                "msg.partition=5, msg.offset=100, msg.timestamp=-1, msg.timestampType=NoTimestampType.", msg);
+    }
+
     private ProcessingContext processingContext() {
         ProcessingContext context = new ProcessingContext();
-        context.sinkRecord(new ConsumerRecord<>(TOPIC, 5, 100, new byte[]{}, new byte[]{}));
-        context.setStage(Stage.TRANSFORMATION, Transformation.class);
+        context.sinkRecord(new ConsumerRecord<>(TOPIC, 5, 100, new byte[]{'a', 'b'}, new byte[]{'x'}));
+        context.setStage(Stage.KEY_CONVERTER, JsonConverter.class);
         return context;
     }
 

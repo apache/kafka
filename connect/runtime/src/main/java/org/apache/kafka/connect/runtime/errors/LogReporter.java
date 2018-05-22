@@ -55,6 +55,12 @@ public class LogReporter implements ErrorReporter {
             return;
         }
 
+        StringBuilder builder = message(context);
+        log.error(builder.toString(), context.result().error());
+    }
+
+    // Visible for testing
+    StringBuilder message(ProcessingContext context) {
         StringBuilder builder = new StringBuilder("Error encountered while performing ");
         builder.append(context.stage().name());
         builder.append(" operation with class '");
@@ -72,7 +78,7 @@ public class LogReporter implements ErrorReporter {
             builder.append(", msg.timestampType=").append(msg.timestampType());
         }
         builder.append('.');
-        log.error(builder.toString(), context.result().error());
+        return builder;
     }
 
     @Override
