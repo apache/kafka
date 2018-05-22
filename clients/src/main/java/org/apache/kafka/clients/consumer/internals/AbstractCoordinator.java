@@ -368,8 +368,7 @@ public abstract class AbstractCoordinator implements Closeable {
     private boolean joinGroupIfNeeded(final long timeoutMs) {
         final long startTime = time.milliseconds();
         while (needRejoin()) {
-            final long remainingTime = timeoutMs - (time.milliseconds() - startTime);
-            if (!ensureCoordinatorReady(remainingTime)) {
+            if (!ensureCoordinatorReady(remainingTimeMsAtLeastZero(startTime,timeoutMs))) {
                 return false;
             }
 
@@ -384,7 +383,7 @@ public abstract class AbstractCoordinator implements Closeable {
             }
 
             final RequestFuture<ByteBuffer> future = initiateJoinGroup();
-            client.poll(future, remainingTimeMsAtLeastZero(startTime, remainingTime));
+            client.poll(future, remainingTimeMsAtLeastZero(startTime, timeoutMs));
             if (!future.isDone()) {
                 // we ran out of time
                 return false;
