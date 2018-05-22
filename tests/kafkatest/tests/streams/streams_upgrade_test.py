@@ -158,7 +158,7 @@ class StreamsUpgradeTest(Test):
         random.shuffle(self.processors)
         for p in self.processors:
             p.CLEAN_NODE_ENABLED = False
-            self.do_rolling_bounce(p, None, to_version, counter)
+            self.do_stop_start_bounce(p, None, to_version, counter)
             counter = counter + 1
 
         # shutdown
@@ -208,13 +208,13 @@ class StreamsUpgradeTest(Test):
         random.shuffle(self.processors)
         for p in self.processors:
             p.CLEAN_NODE_ENABLED = False
-            self.do_rolling_bounce(p, from_version[:-2], to_version, counter)
+            self.do_stop_start_bounce(p, from_version[:-2], to_version, counter)
             counter = counter + 1
 
         # second rolling bounce
         random.shuffle(self.processors)
         for p in self.processors:
-            self.do_rolling_bounce(p, None, to_version, counter)
+            self.do_stop_start_bounce(p, None, to_version, counter)
             counter = counter + 1
 
         # shutdown
@@ -272,12 +272,14 @@ class StreamsUpgradeTest(Test):
         random.shuffle(self.processors)
         first_bounced_processor = None
         expected_new_leader_processor = None
+        expected_generation = 4
         with self.leader.node.account.monitor_log(self.leader.LOG_FILE) as leader_monitor:
             for p in self.processors:
                 if p == self.leader:
                     continue
 
-                self.do_rolling_bounce(p, None, "future_version", counter)
+                self.do_rolling_bounce(p, None, "future_version", counter, expected_generation)
+                expected_generation = expected_generation + 3
                 leader_monitor.wait_until("Received a future (version probing) subscription (version: 4). Sending empty assignment back (with supported version 3).",
                                           timeout_sec=60,
                                           err_msg="Could not detect 'version probing' attempt at leader " + str(self.leader.node.account))
@@ -296,7 +298,8 @@ class StreamsUpgradeTest(Test):
             print it.next()
             raise Exception("Future new leader should receive version probing only after current/old leader is bounced.")
 
-        self.do_rolling_bounce(self.leader, None, "future_version", counter)
+        self.do_rolling_bounce(self.leader, None, "future_version", counter, expected_generation)
+        expected_generation = expected_generation + 3
         prevLeader = self.leader
 
         expected_new_leader_processor.node.account.ssh_capture("grep \"Received a future (version probing) subscription (version: 4). Sending empty assignment back (with supported version 3).\" %s" % expected_new_leader_processor.LOG_FILE, allow_fail=False)
@@ -378,7 +381,7 @@ class StreamsUpgradeTest(Test):
         else:
             processor.set_version(version)
 
-    def do_rolling_bounce(self, processor, upgrade_from, new_version, counter):
+    def do_stop_start_bounce(self, processor, upgrade_from, new_version, counter):
         first_other_processor = None
         second_other_processor = None
         for p in self.processors:
@@ -415,12 +418,8 @@ class StreamsUpgradeTest(Test):
 
         if new_version == str(DEV_VERSION):
             processor.set_version("")  # set to TRUNK
-        elif new_version == "future_version":
-            processor.set_upgrade_to("future_version")
-            new_version = str(DEV_VERSION)
         else:
             processor.set_version(new_version)
-
         processor.set_upgrade_from(upgrade_from)
 
         grep_metadata_error = "grep \"org.apache.kafka.streams.errors.TaskAssignmentException: unable to decode subscription data: version=2\" "
@@ -450,3 +449,92 @@ class StreamsUpgradeTest(Test):
                         monitor.wait_until("processed 100 records from topic",
                                            timeout_sec=60,
                                            err_msg="Never saw output 'processed 100 records from topic' on" + str(node.account))
+
+    def do_rolling_bounce(self, processor, upgrade_from, new_version, counter, expected_generation):
+        version_probing = False
+        if upgrade_from is None and new_version == "future_version":
+            version_probing = True
+
+        first_other_processor = None
+        second_other_processor = None
+        for p in self.processors:
+            if p != processor:
+                if first_other_processor is None:
+                    first_other_processor = p
+                else:
+                    second_other_processor = p
+
+        node = processor.node
+        first_other_node = first_other_processor.node
+        second_other_node = second_other_processor.node
+
+        # stop processor and wait for rebalance of others
+        with first_other_node.account.monitor_log(first_other_processor.LOG_FILE) as first_other_monitor:
+            with second_other_node.account.monitor_log(second_other_processor.LOG_FILE) as second_other_monitor:
+                processor.stop()
+                first_other_monitor.wait_until("Successfully joined group with generation " + str(expected_generation),
+                                               timeout_sec=60,
+                                               err_msg="Never saw output 'Successfully joined group with generation " + str(expected_generation) + "' on" + str(first_other_node.account))
+                second_other_monitor.wait_until("Successfully joined group with generation " + str(expected_generation),
+                                                timeout_sec=60,
+                                                err_msg="Never saw output 'Successfully joined group with generation " + str(expected_generation) + "' on" + str(second_other_node.account))
+        node.account.ssh_capture("grep UPGRADE-TEST-CLIENT-CLOSED %s" % processor.STDOUT_FILE, allow_fail=False)
+
+        if upgrade_from is None:  # upgrade disabled -- second round of rolling bounces
+            roll_counter = ".1-"  # second round of rolling bounces
+        else:
+            roll_counter = ".0-"  # first  round of rolling boundes
+
+        node.account.ssh("mv " + processor.STDOUT_FILE + " " + processor.STDOUT_FILE + roll_counter + str(counter), allow_fail=False)
+        node.account.ssh("mv " + processor.STDERR_FILE + " " + processor.STDERR_FILE + roll_counter + str(counter), allow_fail=False)
+        node.account.ssh("mv " + processor.LOG_FILE + " " + processor.LOG_FILE + roll_counter + str(counter), allow_fail=False)
+
+        if new_version == str(DEV_VERSION):
+            processor.set_version("")  # set to TRUNK
+        elif new_version == "future_version":
+            processor.set_upgrade_to("future_version")
+            new_version = str(DEV_VERSION)
+        else:
+            processor.set_version(new_version)
+
+        processor.set_upgrade_from(upgrade_from)
+
+        grep_metadata_error = "grep \"org.apache.kafka.streams.errors.TaskAssignmentException: unable to decode subscription data: version=2\" "
+        with node.account.monitor_log(processor.LOG_FILE) as log_monitor:
+            with first_other_node.account.monitor_log(first_other_processor.LOG_FILE) as first_other_monitor:
+                with second_other_node.account.monitor_log(second_other_processor.LOG_FILE) as second_other_monitor:
+                    processor.start()
+                    expected_generation = expected_generation + 1
+
+                    log_monitor.wait_until("Kafka version : " + new_version,
+                                           timeout_sec=60,
+                                           err_msg="Could not detect Kafka Streams version " + new_version + " " + str(node.account))
+                    first_other_monitor.wait_until("Successfully joined group with generation " + str(expected_generation),
+                                                   timeout_sec=60,
+                                                   err_msg="Never saw output 'Successfully joined group with generation " + str(expected_generation) + "' on" + str(first_other_node.account))
+                    found = list(first_other_node.account.ssh_capture(grep_metadata_error + first_other_processor.STDERR_FILE, allow_fail=True))
+                    if len(found) > 0:
+                        raise Exception("Kafka Streams failed with 'unable to decode subscription data: version=2'")
+
+                    second_other_monitor.wait_until("Successfully joined group with generation " + str(expected_generation),
+                                                    timeout_sec=60,
+                                                    err_msg="Never saw output 'Successfully joined group with generation " + str(expected_generation) + "' on" + str(second_other_node.account))
+                    found = list(second_other_node.account.ssh_capture(grep_metadata_error + second_other_processor.STDERR_FILE, allow_fail=True))
+                    if len(found) > 0:
+                        raise Exception("Kafka Streams failed with 'unable to decode subscription data: version=2'")
+
+                    log_monitor.wait_until("Successfully joined group with generation " + str(expected_generation),
+                                           timeout_sec=60,
+                                           err_msg="Never saw output 'Successfully joined group with generation " + str(expected_generation) + "' on" + str(node.account))
+
+                    if version_probing:
+                        expected_generation = expected_generation + 1
+                        log_monitor.wait_until("Successfully joined group with generation " + str(expected_generation),
+                                               timeout_sec=60,
+                                               err_msg="Never saw output 'Successfully joined group with generation " + str(expected_generation) + "' on" + str(node.account))
+                        first_other_monitor.wait_until("Successfully joined group with generation " + str(expected_generation),
+                                                       timeout_sec=60,
+                                                       err_msg="Never saw output 'Successfully joined group with generation " + str(expected_generation) + "' on" + str(first_other_node.account))
+                        second_other_monitor.wait_until("Successfully joined group with generation " + str(expected_generation),
+                                                        timeout_sec=60,
+                                                        err_msg="Never saw output 'Successfully joined group with generation " + str(expected_generation) + "' on" + str(second_other_node.account))
