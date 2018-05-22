@@ -718,9 +718,8 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
      *
      * @param topicPartitions Map that contains the topic names to be created with the number of partitions
      */
-    @SuppressWarnings("deprecation")
     private void prepareTopic(final Map<String, InternalTopicMetadata> topicPartitions) {
-        log.debug("Starting to validate internal topics in partition assignor.");
+        log.debug("Starting to validate internal topics {} in partition assignor.", topicPartitions);
 
         // first construct the topics to make ready
         final Map<String, InternalTopicConfig> topicsToMakeReady = new HashMap<>();
@@ -744,7 +743,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
             internalTopicManager.makeReady(topicsToMakeReady);
         }
 
-        log.debug("Completed validating internal topics in partition assignor.");
+        log.debug("Completed validating internal topics {} in partition assignor.", topicPartitions);
     }
 
     private void ensureCopartitioning(final Collection<Set<String>> copartitionGroups,
