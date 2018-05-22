@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients;
 
-import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
@@ -29,7 +28,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -87,11 +85,11 @@ public class MockClient implements KafkaClient {
     private final Queue<ClientRequest> requests = new ConcurrentLinkedDeque<>();
     // Use concurrent queue for responses so that responses may be updated during poll() from a different thread.
     private final Queue<ClientResponse> responses = new ConcurrentLinkedDeque<>();
-    private final Queue<FutureResponse> futureResponses = new ArrayDeque<>();
-    private final Queue<MetadataUpdate> metadataUpdates = new ArrayDeque<>();
+    private final Queue<FutureResponse> futureResponses = new ConcurrentLinkedDeque<>();
+    private final Queue<MetadataUpdate> metadataUpdates = new ConcurrentLinkedDeque<>();
     private volatile NodeApiVersions nodeApiVersions = NodeApiVersions.create();
     private volatile int numBlockingWakeups = 0;
-    private final AtomicInteger totalRequestCount = new AtomicInteger(0);
+
     public MockClient(Time time) {
         this(time, null);
     }
@@ -422,7 +420,6 @@ public class MockClient implements KafkaClient {
         futureResponses.clear();
         metadataUpdates.clear();
         authenticationErrors.clear();
-        totalRequestCount.set(0);
     }
 
     public boolean hasPendingMetadataUpdates() {
@@ -490,7 +487,6 @@ public class MockClient implements KafkaClient {
     @Override
     public ClientRequest newClientRequest(String nodeId, AbstractRequest.Builder<?> requestBuilder, long createdTimeMs,
                                           boolean expectResponse, RequestCompletionHandler callback) {
-        totalRequestCount.incrementAndGet();
         return new ClientRequest(nodeId, requestBuilder, correlation++, "mockClientId", createdTimeMs,
                 expectResponse, callback);
     }
@@ -534,8 +530,4 @@ public class MockClient implements KafkaClient {
         }
     }
 
-    // visible for testing
-    public int totalRequestCount() {
-        return totalRequestCount.get();
-    }
 }

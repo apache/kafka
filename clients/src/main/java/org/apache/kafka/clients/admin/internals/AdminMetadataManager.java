@@ -25,7 +25,6 @@ import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 
 import java.util.Collections;
@@ -39,11 +38,6 @@ import java.util.List;
  */
 public class AdminMetadataManager {
     private Logger log;
-
-    /**
-     * The timer.
-     */
-    private final Time time;
 
     /**
      * The minimum amount of time that we should wait between subsequent
@@ -132,13 +126,11 @@ public class AdminMetadataManager {
     enum State {
         QUIESCENT,
         UPDATE_REQUESTED,
-        UPDATE_PENDING;
+        UPDATE_PENDING
     }
 
-    public AdminMetadataManager(LogContext logContext, Time time, long refreshBackoffMs,
-                                long metadataExpireMs) {
+    public AdminMetadataManager(LogContext logContext, long refreshBackoffMs, long metadataExpireMs) {
         this.log = logContext.logger(AdminMetadataManager.class);
-        this.time = time;
         this.refreshBackoffMs = refreshBackoffMs;
         this.metadataExpireMs = metadataExpireMs;
         this.updater = new AdminMetadataUpdater();
@@ -203,18 +195,24 @@ public class AdminMetadataManager {
                 // Calculate the time remaining until the next periodic update.
                 // We want to avoid making many metadata requests in a short amount of time,
                 // so there is a metadata refresh backoff period.
-                long timeSinceUpdate = now - lastMetadataUpdateMs;
-                long timeRemainingUntilUpdate = metadataExpireMs - timeSinceUpdate;
-                long timeSinceAttempt = now - lastMetadataFetchAttemptMs;
-                long timeRemainingUntilAttempt = refreshBackoffMs - timeSinceAttempt;
-                return Math.max(Math.max(0L, timeRemainingUntilUpdate), timeRemainingUntilAttempt);
+                return Math.max(delayBeforeNextAttemptMs(now), delayBeforeNextExpireMs(now));
             case UPDATE_REQUESTED:
-                // An update has been explicitly requested.  Do it as soon as possible.
-                return 0;
+                // Respect the backoff, even if an update has been requested
+                return delayBeforeNextAttemptMs(now);
             default:
                 // An update is already pending, so we don't need to initiate another one.
                 return Long.MAX_VALUE;
         }
+    }
+
+    private long delayBeforeNextExpireMs(long now) {
+        long timeSinceUpdate = now - lastMetadataUpdateMs;
+        return Math.max(0, metadataExpireMs - timeSinceUpdate);
+    }
+
+    private long delayBeforeNextAttemptMs(long now) {
+        long timeSinceAttempt = now - lastMetadataFetchAttemptMs;
+        return Math.max(0, refreshBackoffMs - timeSinceAttempt);
     }
 
     /**
@@ -233,7 +231,7 @@ public class AdminMetadataManager {
             log.warn("Metadata update failed due to authentication error", exception);
             this.authException = (AuthenticationException) exception;
         } else {
-            log.debug("Metadata update failed", exception);
+            log.info("Metadata update failed", exception);
         }
     }
 
@@ -246,9 +244,12 @@ public class AdminMetadataManager {
             log.debug("Setting bootstrap cluster metadata {}.", cluster);
         } else {
             log.debug("Updating cluster metadata to {}", cluster);
+            this.lastMetadataUpdateMs = now;
         }
+
         this.state = State.QUIESCENT;
-        this.lastMetadataUpdateMs = now;
+        this.authException = null;
+
         if (!cluster.nodes().isEmpty()) {
             this.cluster = cluster;
         }
