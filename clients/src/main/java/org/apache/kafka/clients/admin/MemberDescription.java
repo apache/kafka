@@ -31,7 +31,7 @@ public class MemberDescription {
     private final String host;
     private final MemberAssignment assignment;
 
-    MemberDescription(String memberId, String clientId, String host, MemberAssignment assignment) {
+    public MemberDescription(String memberId, String clientId, String host, MemberAssignment assignment) {
         this.memberId = memberId == null ? "" : memberId;
         this.clientId = clientId == null ? "" : clientId;
         this.host = host == null ? "" : host;
