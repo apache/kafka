@@ -375,7 +375,7 @@ public class OutputVerifier {
      * @throws AssertionError if {@code ProducerRecord}'s key, value, headers is not equal to {@code expectedKey},
      *                        {@code expectedValue}, or {@code expectedHeaders}
      */
-    public static <K, V> void compareKeyValueTimestampHeaders(final ProducerRecord<K, V> record,
+    public static <K, V> void compareKeyValueHeadersTimestamp(final ProducerRecord<K, V> record,
                                                               final K expectedKey,
                                                               final V expectedValue,
                                                               final Headers expectedHeaders,
@@ -430,9 +430,9 @@ public class OutputVerifier {
      * @throws AssertionError if {@code ProducerRecord}'s key, value, or headers is not equal to
      *                        {@code expectedRecord}'s key, value, or headers
      */
-    public static <K, V> void compareKeyValueTimestampHeaders(final ProducerRecord<K, V> record,
+    public static <K, V> void compareKeyValueHeadersTimestamp(final ProducerRecord<K, V> record,
                                                               final ProducerRecord<K, V> expectedRecord) throws AssertionError {
         Objects.requireNonNull(expectedRecord);
-        compareKeyValueTimestampHeaders(record, expectedRecord.key(), expectedRecord.value(), expectedRecord.headers(), expectedRecord.timestamp());
+        compareKeyValueHeadersTimestamp(record, expectedRecord.key(), expectedRecord.value(), expectedRecord.headers(), expectedRecord.timestamp());
     }
 }
