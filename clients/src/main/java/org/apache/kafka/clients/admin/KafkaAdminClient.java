@@ -46,6 +46,8 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
+import org.apache.kafka.common.errors.GroupIdNotFoundException;
+import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.InvalidTopicException;
@@ -2689,7 +2691,12 @@ public class KafkaAdminClient extends AdminClient {
                             final Errors groupError = response.get(groupId);
 
                             if (groupError != Errors.NONE) {
-                                future.completeExceptionally(groupError.exception());
+                                ApiException exception = groupError.exception();
+                                if (exception instanceof GroupIdNotFoundException || exception instanceof GroupNotEmptyException) {
+                                    future.completeExceptionally(groupError.exception(groupId));
+                                } else {
+                                    future.completeExceptionally(groupError.exception());
+                                }
                             } else {
                                 future.complete(null);
                             }
