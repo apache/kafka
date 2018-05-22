@@ -280,8 +280,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         if (subscriptions.partitionsAutoAssigned()) {
             if (coordinatorUnknown()) {
-                final long remainingTimeout = remainingTimeAtLeastZeroMillis(startTime, timeoutMs);
-                if (!ensureCoordinatorReady(remainingTimeout)) {
+                if (!ensureCoordinatorReady(remainingTimeAtLeastZeroMillis(startTime, timeoutMs))) {
                     return false;
                 }
             }
