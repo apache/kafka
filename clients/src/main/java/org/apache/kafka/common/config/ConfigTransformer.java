@@ -48,32 +48,24 @@ public class ConfigTransformer {
      * Transforms the given configuration data by using the {@link ConfigProvider} instances to
      * look up values to replace the variables in the pattern.
      *
-     * @param configs
+     * @param configs the configuration values to be transformed
      * @return an instance of {@link ConfigTransformerResult}
      */
     public ConfigTransformerResult transform(Map<String, String> configs) {
         Map<String, Map<String, Set<String>>> keysByProvider = new HashMap<>();
         Map<String, Map<String, Map<String, String>>> lookupsByProvider = new HashMap<>();
 
-        // Collect the variables that need transformation
+        // Collect the variables from the given configs that need transformation
         for (Map.Entry<String, String> config : configs.entrySet()) {
             List<ConfigVariable> vars = getVars(config.getKey(), config.getValue(), DEFAULT_PATTERN);
             for (ConfigVariable var : vars) {
-                Map<String, Set<String>> keysByPath = keysByProvider.get(var.providerName);
-                if (keysByPath == null) {
-                    keysByPath = new HashMap<>();
-                    keysByProvider.put(var.providerName, keysByPath);
-                }
-                Set<String> keys = keysByPath.get(var.path);
-                if (keys == null) {
-                    keys = new HashSet<>();
-                    keysByPath.put(var.path, keys);
-                }
+                Map<String, Set<String>> keysByPath = keysByProvider.computeIfAbsent(var.providerName, k -> new HashMap<>());
+                Set<String> keys = keysByPath.computeIfAbsent(var.path, k -> new HashSet<>());
                 keys.add(var.variable);
             }
         }
 
-        // Lookup requested variables from the ConfigProviders
+        // Retrieve requested variables from the ConfigProviders
         Map<String, Long> ttls = new HashMap<>();
         for (Map.Entry<String, Map<String, Set<String>>> entry : keysByProvider.entrySet()) {
             String providerName = entry.getKey();
@@ -89,17 +81,14 @@ public class ConfigTransformer {
                     if (ttl >= 0 && ttl < Long.MAX_VALUE) {
                         ttls.put(path, ttl);
                     }
-                    Map<String, Map<String, String>> keyValuesByPath = lookupsByProvider.get(providerName);
-                    if (keyValuesByPath == null) {
-                        keyValuesByPath = new HashMap<>();
-                        lookupsByProvider.put(providerName, keyValuesByPath);
-                    }
+                    Map<String, Map<String, String>> keyValuesByPath =
+                            lookupsByProvider.computeIfAbsent(providerName, k -> new HashMap<>());
                     keyValuesByPath.put(path, data);
                 }
             }
         }
 
-        // Perform the transformations
+        // Perform the transformations by performing variable replacements
         Map<String, String> data = new HashMap<>(configs);
         for (Map.Entry<String, String> config : configs.entrySet()) {
             data.put(config.getKey(), replace(lookupsByProvider, config.getValue(), DEFAULT_PATTERN));
@@ -130,6 +119,7 @@ public class ConfigTransformer {
                 String replacement = keyValues.get(configVar.variable);
                 builder.append(value, i, matcher.start());
                 if (replacement == null) {
+                    // No replacements will be performed; just return the original value
                     builder.append(matcher.group(0));
                 } else {
                     builder.append(replacement);

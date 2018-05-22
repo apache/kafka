@@ -44,9 +44,9 @@ public class FileConfigProvider implements ConfigProvider {
         if (path == null || path.isEmpty()) {
             return new ConfigData(data);
         }
-        try (Reader fileReader = reader(path)) {
+        try (Reader reader = reader(path)) {
             Properties properties = new Properties();
-            properties.load(fileReader);
+            properties.load(reader);
             Enumeration<Object> keys = properties.keys();
             while (keys.hasMoreElements()) {
                 String key = keys.nextElement().toString();
@@ -73,9 +73,9 @@ public class FileConfigProvider implements ConfigProvider {
         if (path == null || path.isEmpty()) {
             return new ConfigData(data);
         }
-        try (Reader fileReader = reader(path)) {
+        try (Reader reader = reader(path)) {
             Properties properties = new Properties();
-            properties.load(fileReader);
+            properties.load(reader);
             for (String key : keys) {
                 String value = properties.getProperty(key);
                 if (value != null) {
