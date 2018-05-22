@@ -271,11 +271,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
      * <p>
      * Returns early if the timeout expires
      *
-     * @param startTime The current time in milliseconds
      * @param timeoutMs The amount of time, in ms, allotted for this operation.
      * @return true iff the operation succeeded
      */
-    public boolean poll(final long startTime, final long timeoutMs) {
+    public boolean poll(final long timeoutMs) {
+        final long startTime = time.milliseconds();
         invokeCompletedOffsetCommitCallbacks();
 
         if (subscriptions.partitionsAutoAssigned()) {
@@ -327,7 +327,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     /**
-     * Return the time to the next needed invocation of {@link #poll(long, long)}.
+     * Return the time to the next needed invocation of {@link #poll(long)}.
      * @param now current time in milliseconds
      * @return the maximum time in milliseconds the caller should wait before the next invocation of poll()
      */
