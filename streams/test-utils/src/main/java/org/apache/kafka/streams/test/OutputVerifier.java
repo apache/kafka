@@ -370,6 +370,7 @@ public class OutputVerifier {
      * @param expectedKey the expected key of the {@code ProducerRecord}
      * @param expectedValue the expected value of the {@code ProducerRecord}
      * @param expectedHeaders the expected headers of the {@code ProducerRecord}
+     * @param expectedTimestamp the expected timestamp of the {@code ProducerRecord}
      * @param <K> the key type
      * @param <V> the value type
      * @throws AssertionError if {@code ProducerRecord}'s key, value, headers is not equal to {@code expectedKey},
@@ -386,9 +387,10 @@ public class OutputVerifier {
         final V recordValue = record.value();
         final Headers recordHeaders = record.headers();
         final long recordTimestamp = record.timestamp();
-        final AssertionError error = new AssertionError("Expected <" + expectedKey + ", " + expectedValue + "> with headers=" + expectedHeaders +
-                " and timestamp=" + expectedTimestamp + " but was <" + recordKey + ", " + recordValue + ">" +
-                " with headers=" + recordHeaders + "and timestamp=" + recordTimestamp);
+        final AssertionError error = new AssertionError("Expected <" + expectedKey + ", " + expectedValue + ">" +
+                " with timestamp=" + expectedTimestamp + " and headers=" + expectedHeaders +
+                " but was <" + recordKey + ", " + recordValue + ">" +
+                " with timestamp=" + recordTimestamp + " and headers=" + recordHeaders);
 
         if (recordKey != null) {
             if (!recordKey.equals(expectedKey)) {
@@ -420,8 +422,8 @@ public class OutputVerifier {
     }
 
     /**
-     * Compares the keys, values, and headers of two {@link ProducerRecord}'s and throws an {@link AssertionError} if
-     * the keys, values, or headers are not equal to each other.
+     * Compares the keys, values, headers, and timestamp of two {@link ProducerRecord}'s and throws an {@link AssertionError} if
+     * the keys, values, headers or timestamps are not equal to each other.
      *
      * @param record a output {@code ProducerRecord} for verification
      * @param expectedRecord a {@code ProducerRecord} for verification
