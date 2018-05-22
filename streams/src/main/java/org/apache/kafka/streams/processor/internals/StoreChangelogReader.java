@@ -83,7 +83,7 @@ public class StoreChangelogReader implements ChangelogReader {
                 remainingPartitions.removeAll(updatedEndOffsets.keySet());
                 updatedEndOffsets.putAll(restoreConsumer.endOffsets(remainingPartitions));
             }
-            final ConsumerRecords<byte[], byte[]> records = poll(restoreConsumer, 10);
+            final ConsumerRecords<byte[], byte[]> records = restoreConsumer.poll(10);
             final Iterator<TopicPartition> iterator = restoringPartitions.iterator();
             final Set<TopicPartition> completedPartitions = new HashSet<>();
             while (iterator.hasNext()) {
@@ -94,6 +94,7 @@ public class StoreChangelogReader implements ChangelogReader {
                 if (restorer.hasCompleted(pos, updatedEndOffsets.get(partition))) {
                     restorer.restoreDone();
                     needsRestoring.remove(partition);
+                    updatedEndOffsets.remove(partition);
                     completedPartitions.add(partition);
                 }
             }
