@@ -325,7 +325,7 @@ public class KafkaAdminClient extends AdminClient {
         try {
             // Since we only request node information, it's safe to pass true for allowAutoTopicCreation (and it
             // simplifies communication with older brokers)
-            AdminMetadataManager metadataManager = new AdminMetadataManager(logContext, time,
+            AdminMetadataManager metadataManager = new AdminMetadataManager(logContext,
                 config.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),
                 config.getLong(AdminClientConfig.METADATA_MAX_AGE_CONFIG));
             List<MetricsReporter> reporters = config.getConfiguredInstances(AdminClientConfig.METRIC_REPORTER_CLASSES_CONFIG,
@@ -373,7 +373,7 @@ public class KafkaAdminClient extends AdminClient {
         try {
             metrics = new Metrics(new MetricConfig(), new LinkedList<MetricsReporter>(), time);
             LogContext logContext = createLogContext(clientId);
-            AdminMetadataManager metadataManager = new AdminMetadataManager(logContext, time,
+            AdminMetadataManager metadataManager = new AdminMetadataManager(logContext,
                 config.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),
                 config.getLong(AdminClientConfig.METADATA_MAX_AGE_CONFIG));
             return new KafkaAdminClient(config, clientId, time, metadataManager, metrics,
@@ -398,7 +398,7 @@ public class KafkaAdminClient extends AdminClient {
         this.metadataManager = metadataManager;
         List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(
             config.getList(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG));
-        metadataManager.update(Cluster.bootstrap(addresses), time.milliseconds(), null);
+        metadataManager.update(Cluster.bootstrap(addresses), time.milliseconds());
         this.metrics = metrics;
         this.client = client;
         this.runnable = new AdminClientRunnable();
@@ -844,8 +844,7 @@ public class KafkaAdminClient extends AdminClient {
          */
         private long sendEligibleCalls(long now) {
             long pollTimeout = Long.MAX_VALUE;
-            for (Iterator<Map.Entry<Node, List<Call>>> iter = callsToSend.entrySet().iterator();
-                     iter.hasNext(); ) {
+            for (Iterator<Map.Entry<Node, List<Call>>> iter = callsToSend.entrySet().iterator(); iter.hasNext(); ) {
                 Map.Entry<Node, List<Call>> entry = iter.next();
                 List<Call> calls = entry.getValue();
                 if (calls.isEmpty()) {
@@ -1140,19 +1139,12 @@ public class KafkaAdminClient extends AdminClient {
                 @Override
                 public void handleResponse(AbstractResponse abstractResponse) {
                     MetadataResponse response = (MetadataResponse) abstractResponse;
-                    metadataManager.update(response.cluster(), time.milliseconds(), null);
+                    metadataManager.update(response.cluster(), time.milliseconds());
                 }
 
                 @Override
                 public void handleFailure(Throwable e) {
-                    if (e instanceof AuthenticationException) {
-                        log.info("Unable to fetch cluster metadata from node {} because of " +
-                            "authentication error", curNode(), e);
-                        metadataManager.update(Cluster.empty(), time.milliseconds(), (AuthenticationException) e);
-                    } else {
-                        log.info("Unable to fetch cluster metadata from node {}",
-                            curNode(), e);
-                    }
+                    metadataManager.updateFailed(e);
                 }
             };
         }
