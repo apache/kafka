@@ -313,7 +313,7 @@ public class RetryWithToleranceExecutorTest {
         return configs;
     }
 
-    private static class ExceptionThrower implements Operation {
+    private static class ExceptionThrower implements Operation<Object> {
         private Exception e;
 
         public ExceptionThrower(Exception e) {

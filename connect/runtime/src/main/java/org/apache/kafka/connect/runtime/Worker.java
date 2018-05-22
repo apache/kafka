@@ -501,7 +501,7 @@ public class Worker {
 
                 KafkaProducer<byte[], byte[]> dlqProducer = new KafkaProducer<>(producerProps);
 
-                ErrorReporter dlqReporter = new DLQReporter(dlqProducer, description);
+                ErrorReporter dlqReporter = new DLQReporter(dlqProducer, description.partitions().size());
                 dlqReporter.configure(connConfig.originalsWithPrefix(DLQReporter.PREFIX));
                 reporters.add(dlqReporter);
             } catch (Exception e) {

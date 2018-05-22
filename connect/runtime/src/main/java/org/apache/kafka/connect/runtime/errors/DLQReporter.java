@@ -16,12 +16,9 @@
  */
 package org.apache.kafka.connect.runtime.errors;
 
-import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.slf4j.Logger;
@@ -40,7 +37,7 @@ public class DLQReporter implements ErrorReporter {
     public static final String DLQ_TOPIC_NAME_DOC = "The name of the topic where these messages are written to.";
     public static final String DLQ_TOPIC_DEFAULT = "";
 
-    private final TopicDescription topicDescription;
+    private final int numPartitions;
 
     private DLQReporterConfig config;
     private KafkaProducer<byte[], byte[]> kafkaProducer;
@@ -50,9 +47,9 @@ public class DLQReporter implements ErrorReporter {
                 .define(DLQ_TOPIC_NAME, ConfigDef.Type.STRING, DLQ_TOPIC_DEFAULT, ConfigDef.Importance.HIGH, DLQ_TOPIC_NAME_DOC);
     }
 
-    public DLQReporter(KafkaProducer<byte[], byte[]> kafkaProducer, TopicDescription desc) {
+    public DLQReporter(KafkaProducer<byte[], byte[]> kafkaProducer, int numPartitions) {
         this.kafkaProducer = kafkaProducer;
-        this.topicDescription = desc;
+        this.numPartitions = numPartitions;
     }
 
     @Override
@@ -61,16 +58,17 @@ public class DLQReporter implements ErrorReporter {
     }
 
     public void report(ProcessingContext context) {
+        if (config.topic().isEmpty()) {
+            return;
+        }
+
         ConsumerRecord<byte[], byte[]> originalMessage = context.sinkRecord();
-        int partition = ThreadLocalRandom.current().nextInt(topicDescription.partitions().size());
+        int partition = ThreadLocalRandom.current().nextInt(numPartitions);
         ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(config.topic(),
                 partition, originalMessage.key(), originalMessage.value());
-        this.kafkaProducer.send(producerRecord, new Callback() {
-            @Override
-            public void onCompletion(RecordMetadata metadata, Exception exception) {
-                if (exception != null) {
-                    log.debug("Could not send object to DLQ", exception);
-                }
+        this.kafkaProducer.send(producerRecord, (metadata, exception) -> {
+            if (exception != null) {
+                log.debug("Could not send object to DLQ", exception);
             }
         });
     }
@@ -84,4 +82,5 @@ public class DLQReporter implements ErrorReporter {
             return getString(DLQ_TOPIC_NAME);
         }
     }
+
 }

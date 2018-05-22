@@ -36,14 +36,14 @@ public class ProcessingContext {
     private int attempt;
 
     public ProcessingContext() {
-        this(Collections.<ErrorReporter>emptyList());
+        this(Collections.emptyList());
     }
 
     public ProcessingContext(List<ErrorReporter> reporters) {
         this.reporters = reporters;
     }
 
-    public ProcessingContext record(ConsumerRecord<byte[], byte[]> consumedMessage) {
+    public ProcessingContext sinkRecord(ConsumerRecord<byte[], byte[]> consumedMessage) {
         this.consumedMessage = consumedMessage;
         return this;
     }
