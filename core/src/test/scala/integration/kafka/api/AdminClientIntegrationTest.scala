@@ -963,8 +963,8 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
   }
 
   /**
-    * Test the consumer group APIs.
-    */
+   * Test the consumer group APIs.
+   */
   @Test
   def testConsumerGroups(): Unit = {
     val config = createConfig()
@@ -979,6 +979,8 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       val testNumPartitions = 2
       client.createTopics(Collections.singleton(
         new NewTopic(testTopicName, testNumPartitions, 1))).all().get()
+      waitForTopics(client, List(testTopicName), List())
+
       val producer = createNewProducer
       try {
         producer.send(new ProducerRecord(testTopicName, 0, null, null)).get()
@@ -1044,7 +1046,6 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
           assertEquals(2, result.all().get().size())
 
           // Test listConsumerGroupOffsets
-          val parts = client.listConsumerGroupOffsets(testGroupId).partitionsToOffsetAndMetadata().get()
           TestUtils.waitUntilTrue(() => {
             val parts = client.listConsumerGroupOffsets(testGroupId).partitionsToOffsetAndMetadata().get()
             val part = new TopicPartition(testTopicName, 0)
