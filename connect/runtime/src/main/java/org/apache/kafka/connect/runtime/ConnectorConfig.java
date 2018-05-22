@@ -24,6 +24,8 @@ import org.apache.kafka.common.config.ConfigDef.Width;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.runtime.errors.Stage;
+import org.apache.kafka.connect.runtime.errors.StageType;
 import org.apache.kafka.connect.runtime.isolation.PluginDesc;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.transforms.Transformation;
@@ -91,6 +93,8 @@ public class ConnectorConfig extends AbstractConfig {
     private static final String TRANSFORMS_DOC = "Aliases for the transformations to be applied to records.";
     private static final String TRANSFORMS_DISPLAY = "Transforms";
 
+    public static final String ERROR_HANDLING_CONFIG = "errors";
+
     private final EnrichedConnectorConfig enrichedConfig;
     private static class EnrichedConnectorConfig extends AbstractConfig {
         EnrichedConnectorConfig(ConfigDef configDef, Map<String, String> props) {
@@ -139,6 +143,13 @@ public class ConnectorConfig extends AbstractConfig {
         );
     }
 
+    /**
+     * @return properties to configure error handlers and reporters.
+     */
+    public Map<String, ?> errorHandlerConfig() {
+        return originalsWithPrefix(ERROR_HANDLING_CONFIG + ".");
+    }
+
     @Override
     public Object get(String key) {
         return enrichedConfig.get(key);
@@ -164,6 +175,25 @@ public class ConnectorConfig extends AbstractConfig {
         }
 
         return transformations;
+    }
+
+    /**
+     * @return an ordered list of stages describing the transformations in this connector. The order is specified by
+     * {@link #TRANSFORMS_CONFIG}.
+     */
+    public List<Stage> transformationAsStages() {
+        final List<String> transformAliases = getList(TRANSFORMS_CONFIG);
+        List<Stage> stages = new ArrayList<>();
+        for (String alias : transformAliases) {
+            final String prefix = TRANSFORMS_CONFIG + "." + alias + ".";
+            stages.add(Stage.newBuilder(StageType.TRANSFORMATION)
+                    .setExecutingClass(getClass(prefix + "type"))
+                    .setConfig(originalsWithPrefix(prefix))
+                    .build()
+            );
+        }
+
+        return stages;
     }
 
     /**

@@ -18,6 +18,7 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.MetricNameTemplate;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Sensor;
@@ -25,9 +26,16 @@ import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Frequencies;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.SchemaAndValue;
+import org.apache.kafka.connect.header.ConnectHeaders;
+import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.runtime.AbstractStatus.State;
 import org.apache.kafka.connect.runtime.ConnectMetrics.LiteralSupplier;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
+import org.apache.kafka.connect.runtime.errors.OperationExecutor;
+import org.apache.kafka.connect.runtime.errors.ProcessingContext;
+import org.apache.kafka.connect.runtime.errors.impl.NoopExecutor;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.slf4j.Logger;
@@ -60,11 +68,30 @@ abstract class WorkerTask implements Runnable {
     private volatile boolean stopping;   // indicates whether the Worker has asked the task to stop
     private volatile boolean cancelled;  // indicates whether the Worker has cancelled the task (e.g. because of slow shutdown)
 
+    private final OperationExecutor operationExecutor;
+    private final ProcessingContext processingContext;
+
+    protected static final SchemaAndValue DEFAULT_SCHEMA_AND_VALUE = new SchemaAndValue(Schema.BOOLEAN_SCHEMA, false);
+    protected static final Headers DEFAULT_HEADERS = new ConnectHeaders();
+    protected static final RecordHeaders DEFAULT_RECORD_HEADERS = new RecordHeaders();
+
+    // Available for testing
     public WorkerTask(ConnectorTaskId id,
                       TaskStatus.Listener statusListener,
                       TargetState initialState,
                       ClassLoader loader,
-                      ConnectMetrics connectMetrics) {
+                      ConnectMetrics connectMetrics,
+                      ProcessingContext processingContext) {
+        this(id, statusListener, initialState, loader, connectMetrics, processingContext, NoopExecutor.INSTANCE);
+    }
+
+    public WorkerTask(ConnectorTaskId id,
+                      TaskStatus.Listener statusListener,
+                      TargetState initialState,
+                      ClassLoader loader,
+                      ConnectMetrics connectMetrics,
+                      ProcessingContext processingContext,
+                      OperationExecutor operationExecutor) {
         this.id = id;
         this.taskMetricsGroup = new TaskMetricsGroup(this.id, connectMetrics, statusListener);
         this.statusListener = taskMetricsGroup;
@@ -73,6 +100,8 @@ abstract class WorkerTask implements Runnable {
         this.stopping = false;
         this.cancelled = false;
         this.taskMetricsGroup.recordState(this.targetState);
+        this.processingContext = processingContext;
+        this.operationExecutor = operationExecutor;
     }
 
     public ConnectorTaskId id() {
@@ -98,6 +127,14 @@ abstract class WorkerTask implements Runnable {
             // wakeup any threads that are waiting for unpause
             this.notifyAll();
         }
+    }
+
+    public OperationExecutor operationExecutor() {
+        return operationExecutor;
+    }
+
+    public ProcessingContext processingContext() {
+        return processingContext;
     }
 
     /**

@@ -34,6 +34,10 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.header.Header;
 import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
+import org.apache.kafka.connect.runtime.errors.OperationExecutor;
+import org.apache.kafka.connect.runtime.errors.ProcessingContext;
+import org.apache.kafka.connect.runtime.errors.StageType;
+import org.apache.kafka.connect.runtime.errors.impl.NoopExecutor;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.storage.Converter;
@@ -103,8 +107,30 @@ class WorkerSourceTask extends WorkerTask {
                             WorkerConfig workerConfig,
                             ConnectMetrics connectMetrics,
                             ClassLoader loader,
-                            Time time) {
-        super(id, statusListener, initialState, loader, connectMetrics);
+                            Time time,
+                            ProcessingContext processingContext) {
+        this(id, task, statusListener, initialState, keyConverter, valueConverter, headerConverter, transformationChain,
+                producer, offsetReader, offsetWriter, workerConfig, connectMetrics, loader, time, processingContext, NoopExecutor.INSTANCE);
+    }
+
+    public WorkerSourceTask(ConnectorTaskId id,
+                SourceTask task,
+                TaskStatus.Listener statusListener,
+                TargetState initialState,
+                Converter keyConverter,
+                Converter valueConverter,
+                HeaderConverter headerConverter,
+                TransformationChain<SourceRecord> transformationChain,
+                KafkaProducer<byte[], byte[]> producer,
+                OffsetStorageReader offsetReader,
+                OffsetStorageWriter offsetWriter,
+                WorkerConfig workerConfig,
+                ConnectMetrics connectMetrics,
+                ClassLoader loader,
+                Time time,
+                ProcessingContext processingContext,
+                OperationExecutor operationExecutor) {
+        super(id, statusListener, initialState, loader, connectMetrics, processingContext, operationExecutor);
 
         this.workerConfig = workerConfig;
         this.task = task;
@@ -209,7 +235,13 @@ class WorkerSourceTask extends WorkerTask {
                 if (toSend == null) {
                     log.trace("{} Nothing to send to Kafka. Polling source for additional records", this);
                     long start = time.milliseconds();
-                    toSend = task.poll();
+                    processingContext().position(StageType.TASK_POLL);
+                    toSend = operationExecutor().execute(new OperationExecutor.Operation<List<SourceRecord>>() {
+                        @Override
+                        public List<SourceRecord> apply() throws InterruptedException {
+                            return task.poll();
+                        }
+                    }, processingContext());
                     if (toSend != null) {
                         recordPollReturned(toSend.size(), time.milliseconds() - start);
                     }
@@ -241,7 +273,8 @@ class WorkerSourceTask extends WorkerTask {
         recordBatch(toSend.size());
         final SourceRecordWriteCounter counter = new SourceRecordWriteCounter(toSend.size(), sourceTaskMetricsGroup);
         for (final SourceRecord preTransformRecord : toSend) {
-            final SourceRecord record = transformationChain.apply(preTransformRecord);
+            processingContext().position(StageType.TRANSFORMATION);
+            final SourceRecord record = transformationChain.apply(preTransformRecord, operationExecutor(), processingContext());
 
             if (record == null) {
                 counter.skipRecord();
@@ -249,9 +282,32 @@ class WorkerSourceTask extends WorkerTask {
                 continue;
             }
 
-            RecordHeaders headers = convertHeaderFor(record);
-            byte[] key = keyConverter.fromConnectData(record.topic(), record.keySchema(), record.key());
-            byte[] value = valueConverter.fromConnectData(record.topic(), record.valueSchema(), record.value());
+            processingContext().setRecord(record);
+
+            processingContext().position(StageType.HEADER_CONVERTER);
+            RecordHeaders headers = operationExecutor().execute(new OperationExecutor.Operation<RecordHeaders>() {
+                @Override
+                public RecordHeaders apply() {
+                    return convertHeaderFor(record);
+                }
+            }, DEFAULT_RECORD_HEADERS, processingContext());
+
+            processingContext().position(StageType.KEY_CONVERTER);
+            byte[] key = operationExecutor().execute(new OperationExecutor.Operation<byte[]>() {
+                @Override
+                public byte[] apply() {
+                    return keyConverter.fromConnectData(record.topic(), record.keySchema(), record.key());
+                }
+            }, processingContext());
+
+            processingContext().position(StageType.VALUE_CONVERTER);
+            byte[] value = operationExecutor().execute(new OperationExecutor.Operation<byte[]>() {
+                @Override
+                public byte[] apply() {
+                    return valueConverter.fromConnectData(record.topic(), record.valueSchema(), record.value());
+                }
+            }, processingContext());
+
             final ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(record.topic(), record.kafkaPartition(),
                     ConnectUtils.checkAndConvertTimestamp(record.timestamp()), key, value, headers);
             log.trace("{} Appending record with key {}, value {}", this, record.key(), record.value());
@@ -272,30 +328,37 @@ class WorkerSourceTask extends WorkerTask {
             }
             try {
                 final String topic = producerRecord.topic();
-                producer.send(
-                        producerRecord,
-                        new Callback() {
-                            @Override
-                            public void onCompletion(RecordMetadata recordMetadata, Exception e) {
-                                if (e != null) {
-                                    // Given the default settings for zero data loss, this should basically never happen --
-                                    // between "infinite" retries, indefinite blocking on full buffers, and "infinite" request
-                                    // timeouts, callbacks with exceptions should never be invoked in practice. If the
-                                    // user overrode these settings, the best we can do is notify them of the failure via
-                                    // logging.
-                                    log.error("{} failed to send record to {}: {}", this, topic, e);
-                                    log.debug("{} Failed record: {}", this, preTransformRecord);
-                                } else {
-                                    log.trace("{} Wrote record successfully: topic {} partition {} offset {}",
-                                            this,
-                                            recordMetadata.topic(), recordMetadata.partition(),
-                                            recordMetadata.offset());
-                                    commitTaskRecord(preTransformRecord);
-                                }
-                                recordSent(producerRecord);
-                                counter.completeRecord();
-                            }
-                        });
+                processingContext().position(StageType.KAFKA_PRODUCE);
+                processingContext().setRecord(record);
+                operationExecutor().execute(new OperationExecutor.Operation<Future<RecordMetadata>>() {
+                    @Override
+                    public Future<RecordMetadata> apply() {
+                        return producer.send(
+                                producerRecord,
+                                new Callback() {
+                                    @Override
+                                    public void onCompletion(RecordMetadata recordMetadata, Exception e) {
+                                        if (e != null) {
+                                            // Given the default settings for zero data loss, this should basically never happen --
+                                            // between "infinite" retries, indefinite blocking on full buffers, and "infinite" request
+                                            // timeouts, callbacks with exceptions should never be invoked in practice. If the
+                                            // user overrode these settings, the best we can do is notify them of the failure via
+                                            // logging.
+                                            log.error("{} failed to send record to {}: {}", this, topic, e);
+                                            log.debug("{} Failed record: {}", this, preTransformRecord);
+                                        } else {
+                                            log.trace("{} Wrote record successfully: topic {} partition {} offset {}",
+                                                    this,
+                                                    recordMetadata.topic(), recordMetadata.partition(),
+                                                    recordMetadata.offset());
+                                            commitTaskRecord(preTransformRecord);
+                                        }
+                                        recordSent(producerRecord);
+                                        counter.completeRecord();
+                                    }
+                                });
+                    }
+                }, processingContext());
                 lastSendFailed = false;
             } catch (RetriableException e) {
                 log.warn("{} Failed to send {}, backing off before retrying:", this, producerRecord, e);

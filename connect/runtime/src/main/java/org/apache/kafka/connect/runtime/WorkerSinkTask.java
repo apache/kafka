@@ -40,6 +40,10 @@ import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
+import org.apache.kafka.connect.runtime.errors.OperationExecutor;
+import org.apache.kafka.connect.runtime.errors.ProcessingContext;
+import org.apache.kafka.connect.runtime.errors.StageType;
+import org.apache.kafka.connect.runtime.errors.impl.NoopExecutor;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.storage.Converter;
@@ -100,8 +104,26 @@ class WorkerSinkTask extends WorkerTask {
                           HeaderConverter headerConverter,
                           TransformationChain<SinkRecord> transformationChain,
                           ClassLoader loader,
-                          Time time) {
-        super(id, statusListener, initialState, loader, connectMetrics);
+                          Time time,
+                          ProcessingContext processingContext) {
+        this(id, task, statusListener, initialState, workerConfig, connectMetrics, keyConverter, valueConverter, headerConverter, transformationChain, loader, time, processingContext, NoopExecutor.INSTANCE);
+    }
+
+    public WorkerSinkTask(ConnectorTaskId id,
+                          SinkTask task,
+                          TaskStatus.Listener statusListener,
+                          TargetState initialState,
+                          WorkerConfig workerConfig,
+                          ConnectMetrics connectMetrics,
+                          Converter keyConverter,
+                          Converter valueConverter,
+                          HeaderConverter headerConverter,
+                          TransformationChain<SinkRecord> transformationChain,
+                          ClassLoader loader,
+                          Time time,
+                          ProcessingContext processingContext,
+                          OperationExecutor operationExecutor) {
+        super(id, statusListener, initialState, loader, connectMetrics, processingContext, operationExecutor);
 
         this.workerConfig = workerConfig;
         this.task = task;
@@ -307,9 +329,16 @@ class WorkerSinkTask extends WorkerTask {
         }
 
         log.trace("{} Polling consumer with timeout {} ms", this, timeoutMs);
-        ConsumerRecords<byte[], byte[]> msgs = pollConsumer(timeoutMs);
+        final long minTimeout = timeoutMs;
+        processingContext().position(StageType.KAFKA_CONSUME);
+        ConsumerRecords<byte[], byte[]> msgs = operationExecutor().execute(new OperationExecutor.Operation<ConsumerRecords<byte[], byte[]>>() {
+            @Override
+            public ConsumerRecords<byte[], byte[]> apply() {
+                return pollConsumer(minTimeout);
+            }
+        }, ConsumerRecords.<byte[], byte[]>empty(), processingContext());
         assert messageBatch.isEmpty() || msgs.isEmpty();
-        log.trace("{} Polling returned {} messages", this, msgs.count());
+        log.info("{} Polling returned {} messages", this, msgs.count());
 
         convertMessages(msgs);
         deliverMessages();
@@ -474,12 +503,39 @@ class WorkerSinkTask extends WorkerTask {
 
     private void convertMessages(ConsumerRecords<byte[], byte[]> msgs) {
         origOffsets.clear();
-        for (ConsumerRecord<byte[], byte[]> msg : msgs) {
+        for (final ConsumerRecord<byte[], byte[]> msg : msgs) {
             log.trace("{} Consuming and converting message in topic '{}' partition {} at offset {} and timestamp {}",
                     this, msg.topic(), msg.partition(), msg.offset(), msg.timestamp());
-            SchemaAndValue keyAndSchema = keyConverter.toConnectData(msg.topic(), msg.key());
-            SchemaAndValue valueAndSchema = valueConverter.toConnectData(msg.topic(), msg.value());
-            Headers headers = convertHeadersFor(msg);
+
+            processingContext().position(StageType.KEY_CONVERTER);
+            SchemaAndValue keyAndSchema = operationExecutor().execute(new OperationExecutor.Operation<SchemaAndValue>() {
+                @Override
+                public SchemaAndValue apply() {
+                    return keyConverter.toConnectData(msg.topic(), msg.key());
+                }
+            }, DEFAULT_SCHEMA_AND_VALUE, processingContext());
+
+            processingContext().position(StageType.VALUE_CONVERTER);
+            SchemaAndValue valueAndSchema = operationExecutor().execute(new OperationExecutor.Operation<SchemaAndValue>() {
+                @Override
+                public SchemaAndValue apply() {
+                    return valueConverter.toConnectData(msg.topic(), msg.value());
+                }
+            }, DEFAULT_SCHEMA_AND_VALUE, processingContext());
+
+            processingContext().position(StageType.HEADER_CONVERTER);
+            Headers headers = operationExecutor().execute(new OperationExecutor.Operation<Headers>() {
+                @Override
+                public Headers apply() {
+                    return convertHeadersFor(msg);
+                }
+            }, DEFAULT_HEADERS, processingContext());
+
+            if (keyAndSchema == DEFAULT_SCHEMA_AND_VALUE || valueAndSchema == DEFAULT_SCHEMA_AND_VALUE
+                    || headers == DEFAULT_HEADERS) {
+                continue;
+            }
+
             Long timestamp = ConnectUtils.checkAndConvertTimestamp(msg.timestamp());
             SinkRecord origRecord = new SinkRecord(msg.topic(), msg.partition(),
                     keyAndSchema.schema(), keyAndSchema.value(),
@@ -488,9 +544,12 @@ class WorkerSinkTask extends WorkerTask {
                     timestamp,
                     msg.timestampType(),
                     headers);
+
             log.trace("{} Applying transformations to record in topic '{}' partition {} at offset {} and timestamp {} with key {} and value {}",
                     this, msg.topic(), msg.partition(), msg.offset(), timestamp, keyAndSchema.value(), valueAndSchema.value());
-            SinkRecord transRecord = transformationChain.apply(origRecord);
+            processingContext().position(StageType.TRANSFORMATION);
+            SinkRecord transRecord = transformationChain.apply(origRecord, operationExecutor(), processingContext());
+
             origOffsets.put(
                     new TopicPartition(origRecord.topic(), origRecord.kafkaPartition()),
                     new OffsetAndMetadata(origRecord.kafkaOffset() + 1)
@@ -534,7 +593,15 @@ class WorkerSinkTask extends WorkerTask {
             // Since we reuse the messageBatch buffer, ensure we give the task its own copy
             log.trace("{} Delivering batch of {} messages to task", this, messageBatch.size());
             long start = time.milliseconds();
-            task.put(new ArrayList<>(messageBatch));
+            processingContext().position(StageType.TASK_PUT);
+            operationExecutor().execute(new OperationExecutor.Operation<Object>() {
+                @Override
+                public Object apply() {
+                    task.put(new ArrayList<>(messageBatch));
+                    return null;
+                }
+            }, processingContext());
+
             recordBatch(messageBatch.size());
             sinkTaskMetricsGroup.recordPut(time.milliseconds() - start);
             currentOffsets.putAll(origOffsets);

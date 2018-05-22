@@ -28,6 +28,8 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.runtime.errors.OperationExecutor;
+import org.apache.kafka.connect.runtime.errors.ProcessingContext;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.sink.SinkConnector;
@@ -137,7 +139,8 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         workerTask = PowerMock.createPartialMock(
                 WorkerSinkTask.class, new String[]{"createConsumer"},
                 taskId, sinkTask, statusListener, initialState, workerConfig, metrics, keyConverter,
-                valueConverter, headerConverter, TransformationChain.noOp(), pluginLoader, time);
+                valueConverter, headerConverter, TransformationChain.<SinkRecord>noOp(), pluginLoader, time,
+                ProcessingContext.noop(taskId.toString()));
 
         recordsReturned = 0;
     }
@@ -573,7 +576,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         EasyMock.expect(valueConverter.toConnectData(TOPIC, RAW_VALUE)).andReturn(new SchemaAndValue(VALUE_SCHEMA, VALUE)).anyTimes();
 
         final Capture<SinkRecord> recordCapture = EasyMock.newCapture();
-        EasyMock.expect(transformationChain.apply(EasyMock.capture(recordCapture))).andAnswer(new IAnswer<SinkRecord>() {
+        EasyMock.expect(transformationChain.apply(EasyMock.capture(recordCapture), EasyMock.<OperationExecutor>anyObject(), EasyMock.<ProcessingContext>anyObject())).andAnswer(new IAnswer<SinkRecord>() {
             @Override
             public SinkRecord answer() {
                 return recordCapture.getValue();

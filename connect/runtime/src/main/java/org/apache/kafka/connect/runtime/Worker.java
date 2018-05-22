@@ -30,6 +30,14 @@ import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.ConnectMetrics.LiteralSupplier;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
+import org.apache.kafka.connect.runtime.errors.ErrorReporter;
+import org.apache.kafka.connect.runtime.errors.OperationExecutor;
+import org.apache.kafka.connect.runtime.errors.ProcessingContext;
+import org.apache.kafka.connect.runtime.errors.Stage;
+import org.apache.kafka.connect.runtime.errors.StageType;
+import org.apache.kafka.connect.runtime.errors.impl.DLQReporter;
+import org.apache.kafka.connect.runtime.errors.impl.ReporterFactory;
+import org.apache.kafka.connect.runtime.errors.impl.RetryWithToleranceExecutor;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.isolation.Plugins.ClassLoaderUsage;
 import org.apache.kafka.connect.sink.SinkRecord;
@@ -364,6 +372,8 @@ public class Worker {
         if (tasks.containsKey(id))
             throw new ConnectException("Task already exists in this worker: " + id);
 
+        ProcessingContext.Builder prContextBuilder = ProcessingContext.newBuilder(id, config.originals());
+
         final WorkerTask workerTask;
         ClassLoader savedLoader = plugins.currentThreadLoader();
         try {
@@ -395,27 +405,50 @@ public class Worker {
                     WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG,
                     ClassLoaderUsage.CURRENT_CLASSLOADER
             );
+
+            Stage.Builder keyConverterStage = Stage.newBuilder(StageType.KEY_CONVERTER);
+            Stage.Builder valueConverterStage = Stage.newBuilder(StageType.VALUE_CONVERTER);
+            Stage.Builder headerConverterStage = Stage.newBuilder(StageType.HEADER_CONVERTER);
+
             if (keyConverter == null) {
                 keyConverter = plugins.newConverter(config, WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, ClassLoaderUsage.PLUGINS);
+                keyConverterStage.setConfig(config.originalsWithPrefix(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG + "."));
                 log.info("Set up the key converter {} for task {} using the worker config", keyConverter.getClass(), id);
             } else {
+                keyConverterStage.setConfig(connConfig.originalsWithPrefix(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG + "."));
                 log.info("Set up the key converter {} for task {} using the connector config", keyConverter.getClass(), id);
             }
+            keyConverterStage.setExecutingClass(keyConverter.getClass());
+
             if (valueConverter == null) {
                 valueConverter = plugins.newConverter(config, WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, ClassLoaderUsage.PLUGINS);
+                valueConverterStage.setConfig(config.originalsWithPrefix(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG + "."));
                 log.info("Set up the value converter {} for task {} using the worker config", valueConverter.getClass(), id);
             } else {
+                valueConverterStage.setConfig(connConfig.originalsWithPrefix(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG + "."));
                 log.info("Set up the value converter {} for task {} using the connector config", valueConverter.getClass(), id);
             }
+            valueConverterStage.setExecutingClass(valueConverter.getClass());
+
             if (headerConverter == null) {
                 headerConverter = plugins.newHeaderConverter(config, WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG, ClassLoaderUsage.PLUGINS);
+                headerConverterStage.setConfig(config.originalsWithPrefix(WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG + "."));
                 log.info("Set up the header converter {} for task {} using the worker config", headerConverter.getClass(), id);
             } else {
+                headerConverterStage.setConfig(connConfig.originalsWithPrefix(WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG + "."));
                 log.info("Set up the header converter {} for task {} using the connector config", headerConverter.getClass(), id);
             }
+            headerConverterStage.setExecutingClass(headerConverter.getClass());
 
-            workerTask = buildWorkerTask(connConfig, id, task, statusListener, initialState, keyConverter, valueConverter, headerConverter, connectorLoader);
+            prContextBuilder.appendStage(keyConverterStage.build());
+            prContextBuilder.appendStage(valueConverterStage.build());
+            prContextBuilder.appendStage(headerConverterStage.build());
+
+            prContextBuilder.addReporters(errorReportersConfig(connConfig));
+
+            workerTask = buildWorkerTask(connConfig, id, task, statusListener, initialState, keyConverter, valueConverter, headerConverter, connectorLoader, prContextBuilder, new RetryWithToleranceExecutor());
             workerTask.initialize(taskConfig);
+            workerTask.operationExecutor().configure(connConfig.originalsWithPrefix("errors."));
             Plugins.compareAndSwapLoaders(savedLoader);
         } catch (Throwable t) {
             log.error("Failed to start task {}", id, t);
@@ -447,7 +480,9 @@ public class Worker {
                                        Converter keyConverter,
                                        Converter valueConverter,
                                        HeaderConverter headerConverter,
-                                       ClassLoader loader) {
+                                       ClassLoader loader,
+                                       ProcessingContext.Builder prContextBuilder,
+                                       OperationExecutor operationExecutor) {
         // Decide which type of worker task we need based on the type of task.
         if (task instanceof SourceTask) {
             TransformationChain<SourceRecord> transformationChain = new TransformationChain<>(connConfig.<SourceRecord>transformations());
@@ -456,16 +491,53 @@ public class Worker {
             OffsetStorageWriter offsetWriter = new OffsetStorageWriter(offsetBackingStore, id.connector(),
                     internalKeyConverter, internalValueConverter);
             KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps);
+
+            for (Stage stage: connConfig.transformationAsStages()) {
+                prContextBuilder.prependStage(stage);
+            }
+
+            prContextBuilder.prependStage(Stage.newBuilder(StageType.TASK_POLL)
+                    .setConfig(connConfig.originals())
+                    .setExecutingClass(task.getClass())
+                    .build()
+            );
+
+            prContextBuilder.appendStage(Stage.newBuilder(StageType.KAFKA_PRODUCE).build());
+
             return new WorkerSourceTask(id, (SourceTask) task, statusListener, initialState, keyConverter, valueConverter,
-                    headerConverter, transformationChain, producer, offsetReader, offsetWriter, config, metrics, loader, time);
+                    headerConverter, transformationChain, producer, offsetReader, offsetWriter, config, metrics, loader, time, prContextBuilder.build(), operationExecutor);
         } else if (task instanceof SinkTask) {
             TransformationChain<SinkRecord> transformationChain = new TransformationChain<>(connConfig.<SinkRecord>transformations());
+
+            for (Stage stage: connConfig.transformationAsStages()) {
+                prContextBuilder.appendStage(stage);
+            }
+
+            prContextBuilder.appendStage(Stage.newBuilder(StageType.TASK_POLL)
+                    .setConfig(connConfig.originals())
+                    .setExecutingClass(task.getClass())
+                    .build()
+            );
+
+            prContextBuilder.prependStage(Stage.newBuilder(StageType.KAFKA_CONSUME).build());
+
             return new WorkerSinkTask(id, (SinkTask) task, statusListener, initialState, config, metrics, keyConverter,
-                    valueConverter, headerConverter, transformationChain, loader, time);
+                    valueConverter, headerConverter, transformationChain, loader, time, prContextBuilder.build(), operationExecutor);
+
         } else {
             log.error("Tasks must be a subclass of either SourceTask or SinkTask", task);
             throw new ConnectException("Tasks must be a subclass of either SourceTask or SinkTask");
         }
+    }
+
+    /**
+     * Setup properties for dead letter queue using the producer properties from worker config before overriding them
+     * from the connector config.
+     * @param connConfig connector config
+     * @return reporters to log error context
+     */
+    private List<ErrorReporter> errorReportersConfig(ConnectorConfig connConfig) {
+        return new ReporterFactory().forConfig(producerProps, connConfig);
     }
 
     private void stopTask(ConnectorTaskId taskId) {
