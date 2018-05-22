@@ -63,6 +63,8 @@ import scala.collection._
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.JavaConverters._
 import scala.collection.Seq
+import org.apache.kafka.clients.consumer.internals.ConsumerCoordinator
+import java.lang.reflect.Field
 
 object DynamicBrokerReconfigurationTest {
   val SecureInternal = "INTERNAL"
@@ -921,6 +923,9 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     TestUtils.waitUntilTrue(() => servers.forall(server => server.config.listeners.size == existingListenerCount - 1),
       "Listeners not updated")
 
+    // The message has been got and cached sometime before the config changed, so we can still get it
+    assertEquals(1, consumer1.poll(0).count)
+
     // Test that connections using deleted listener don't work
     val producerFuture = verifyConnectionFailure(producer1)
     val consumerFuture = verifyConnectionFailure(consumer1)
@@ -1256,7 +1261,13 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     executors += executor
     val future = executor.submit(new Runnable() {
       def run() {
-        assertEquals(0, consumer.poll(100).count)
+        // since KAFKA-6783 fixed, poll(timeout) will always honor the timeout
+        // and no longer hang up when all bootstrap servers down
+        // so we should decide the connection failure in another way
+        val field = consumer.getClass().getDeclaredField("coordinator")
+        field.setAccessible(true);
+        val coordinator = field.get(consumer).asInstanceOf[ConsumerCoordinator]
+        coordinator.ensureCoordinatorReady() // hang up when all servers down
       }
     })
     verifyTimeout(future)

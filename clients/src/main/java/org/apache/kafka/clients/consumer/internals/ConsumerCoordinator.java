@@ -276,7 +276,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         if (subscriptions.partitionsAutoAssigned()) {
             if (coordinatorUnknown()) {
-                ensureCoordinatorReady();
+                ensureCoordinatorReady(now, remainingMs);
+
+                remainingMs = Math.max(0, remainingMs - (time.milliseconds() - now));
                 now = time.milliseconds();
             }
 
@@ -287,7 +289,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 if (subscriptions.hasPatternSubscription())
                     client.ensureFreshMetadata();
 
-                ensureActiveGroup();
+                ensureActiveGroup(now, remainingMs);
                 now = time.milliseconds();
             }
 
