@@ -50,12 +50,7 @@ public class TransformationChain<R extends ConnectRecord<R>> {
             final R current = record;
 
             // execute the operation
-            Result<R> result = operationExecutor.execute(new Operation<R>() {
-                @Override
-                public R apply() {
-                    return transformation.apply(current);
-                }
-            }, processingContext);
+            Result<R> result = operationExecutor.execute(() -> transformation.apply(current), processingContext);
 
             if (result.success()) {
                 record = result.result();

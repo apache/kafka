@@ -291,12 +291,7 @@ class WorkerSourceTask extends WorkerTask {
 
             RecordHeaders headers;
             processingContext.setStage(Stage.HEADER_CONVERTER, headerConverter.getClass());
-            Result<RecordHeaders> headersResult = execute(new Operation<RecordHeaders>() {
-                @Override
-                public RecordHeaders apply() {
-                    return convertHeaderFor(record);
-                }
-            });
+            Result<RecordHeaders> headersResult = execute(() -> convertHeaderFor(record));
             if (headersResult.success()) {
                 headers = headersResult.result();
             } else {
@@ -307,12 +302,7 @@ class WorkerSourceTask extends WorkerTask {
 
             byte[] key;
             processingContext.setStage(Stage.KEY_CONVERTER, keyConverter.getClass());
-            Result<byte[]> keyResult = execute(new Operation<byte[]>() {
-                @Override
-                public byte[] apply() {
-                    return keyConverter.fromConnectData(record.topic(), record.keySchema(), record.key());
-                }
-            });
+            Result<byte[]> keyResult = execute(() -> keyConverter.fromConnectData(record.topic(), record.keySchema(), record.key()));
             if (keyResult.success()) {
                 key = keyResult.result();
             } else {
@@ -323,12 +313,7 @@ class WorkerSourceTask extends WorkerTask {
 
             byte[] value;
             processingContext.setStage(Stage.VALUE_CONVERTER, valueConverter.getClass());
-            Result<byte[]> valueResult = execute(new Operation<byte[]>() {
-                @Override
-                public byte[] apply() {
-                    return valueConverter.fromConnectData(record.topic(), record.valueSchema(), record.value());
-                }
-            });
+            Result<byte[]> valueResult = execute(() -> valueConverter.fromConnectData(record.topic(), record.valueSchema(), record.value()));
             if (valueResult.success()) {
                 value = valueResult.result();
             } else {

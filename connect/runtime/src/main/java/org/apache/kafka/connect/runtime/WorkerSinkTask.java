@@ -515,12 +515,7 @@ class WorkerSinkTask extends WorkerTask {
 
             SchemaAndValue keyAndSchema;
             processingContext.setStage(Stage.KEY_CONVERTER, keyConverter.getClass());
-            Result<SchemaAndValue> keyResult = execute(new Operation<SchemaAndValue>() {
-                @Override
-                public SchemaAndValue apply() {
-                    return keyConverter.toConnectData(msg.topic(), msg.key());
-                }
-            });
+            Result<SchemaAndValue> keyResult = execute(() -> keyConverter.toConnectData(msg.topic(), msg.key()));
             if (keyResult.success()) {
                 keyAndSchema = keyResult.result();
             } else {
@@ -530,12 +525,7 @@ class WorkerSinkTask extends WorkerTask {
 
             processingContext.setStage(Stage.VALUE_CONVERTER, valueConverter.getClass());
             SchemaAndValue valueAndSchema;
-            Result<SchemaAndValue> valueResult = execute(new Operation<SchemaAndValue>() {
-                @Override
-                public SchemaAndValue apply() {
-                    return valueConverter.toConnectData(msg.topic(), msg.value());
-                }
-            });
+            Result<SchemaAndValue> valueResult = execute(() -> valueConverter.toConnectData(msg.topic(), msg.value()));
             if (valueResult.success()) {
                 valueAndSchema = valueResult.result();
             } else {
@@ -545,12 +535,7 @@ class WorkerSinkTask extends WorkerTask {
 
             processingContext.setStage(Stage.HEADER_CONVERTER, headerConverter.getClass());
             Headers headers;
-            Result<Headers> headersResult = execute(new Operation<Headers>() {
-                @Override
-                public Headers apply() {
-                    return convertHeadersFor(msg);
-                }
-            });
+            Result<Headers> headersResult = execute(() -> convertHeadersFor(msg));
             if (headersResult.success()) {
                 headers = headersResult.result();
             } else {

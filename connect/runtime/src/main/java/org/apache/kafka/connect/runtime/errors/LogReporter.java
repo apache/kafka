@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime.errors;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.slf4j.Logger;
@@ -62,6 +63,13 @@ public class LogReporter implements ErrorReporter {
         if (config.canLogMessages() && context.sourceRecord() != null) {
             builder.append(", with record = ");
             builder.append(context.sourceRecord());
+        } else if (config.canLogMessages() && context.sinkRecord() != null) {
+            ConsumerRecord<byte[], byte[]> msg = context.sinkRecord();
+            builder.append(", msg.topic='").append(msg.topic()).append('\'');
+            builder.append(", msg.partition=").append(msg.partition());
+            builder.append(", msg.offset=").append(msg.offset());
+            builder.append(", msg.timestamp=").append(msg.timestamp());
+            builder.append(", msg.timestampType=").append(msg.timestampType());
         }
         builder.append('.');
         log.error(builder.toString(), context.result().error());
