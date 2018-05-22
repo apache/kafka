@@ -198,12 +198,14 @@ public abstract class AbstractCoordinator implements Closeable {
                                            ByteBuffer memberAssignment);
 
     /**
+     * Visible for testing.
+     * 
      * Ensure that the coordinator is ready to receive requests.
      *
      * @param timeoutMs   Maximum time to wait to discover the coordinator
      * @return true If coordinator discovery and initial connection succeeded, false otherwise
      */
-    protected synchronized boolean ensureCoordinatorReady(final long timeoutMs) {
+    public synchronized boolean ensureCoordinatorReady(final long timeoutMs) {
         final long startTimeMs = time.milliseconds();
 
         while (coordinatorUnknown()) {
