@@ -149,7 +149,9 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
     if (!blockingChannel.isConnected && !shutdown) {
       try {
         blockingChannel.connect()
-        info("Connected to " + formatAddress(config.host, config.port) + " for producing")
+        if (blockingChannel.isConnected) {
+          info("Connected to " + formatAddress(config.host, config.port) + " for producing")
+        }
       } catch {
         case e: Exception => {
           disconnect()
