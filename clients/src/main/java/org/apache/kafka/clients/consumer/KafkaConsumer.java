@@ -1161,7 +1161,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * offset for the subscribed list of partitions
      *
      *
-     * @param timeout The maximum time to block
+     * @param timeout The maximum time to block (must not be greater than {@link Long#MAX_VALUE} milliseconds)
      *
      * @return map of topic to records since the last fetch for the subscribed list of topics and partitions
      *
@@ -1179,6 +1179,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws java.lang.IllegalArgumentException if the timeout value is negative
      * @throws java.lang.IllegalStateException if the consumer is not subscribed to any topics or manually assigned any
      *             partitions to consume from
+     * @throws java.lang.ArithmeticException if the timeout is greater than {@link Long#MAX_VALUE} milliseconds.
      */
     @Override
     public ConsumerRecords<K, V> poll(final Duration timeout) {
