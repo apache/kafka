@@ -68,8 +68,6 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                                                          consumed);
 
         root.addChildNode(streamSourceNode);
-        streamSourceNode.setParentNode(root);
-
         addNode(streamSourceNode);
 
         internalTopologyBuilder.addSource(consumed.offsetResetPolicy(),
@@ -90,9 +88,8 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                                                                 topicPattern,
                                                                                 consumed);
         root.addChildNode(streamPatternSourceNode);
-        streamPatternSourceNode.setParentNode(root);
-
         addNode(streamPatternSourceNode);
+
         internalTopologyBuilder.addSource(consumed.offsetResetPolicy(),
                                           name,
                                           consumed.timestampExtractor(),
@@ -131,7 +128,6 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                                                                .build();
 
         root.addChildNode(statefulSourceNode);
-        statefulSourceNode.setParentNode(root);
         addNode(statefulSourceNode);
 
         
@@ -147,14 +143,14 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         internalTopologyBuilder.addProcessor(name, processorSupplier, source);
 
         return new KTableImpl<>(this,
-                                       name,
-                                       processorSupplier,
-                                       consumed.keySerde(),
-                                       consumed.valueSerde(),
-                                       Collections.singleton(source),
-                                       storeBuilder.name(),
-                                       materialized.isQueryable(),
-                                       statefulSourceNode);
+                                name,
+                                processorSupplier,
+                                consumed.keySerde(),
+                                consumed.valueSerde(),
+                                Collections.singleton(source),
+                                storeBuilder.name(),
+                                materialized.isQueryable(),
+                                statefulSourceNode);
     }
 
     @SuppressWarnings("unchecked")
@@ -181,9 +177,6 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                                                                                     .build();
 
         root.addChildNode(statefulSourceNode);
-        statefulSourceNode.setParentNode(root);
-        addNode(statefulSourceNode);
-
         addNode(statefulSourceNode);
 
         internalTopologyBuilder.addGlobalStore(storeBuilder,
@@ -248,31 +241,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
 
     void addNode(final StreamsGraphNode node) {
-        //TODO uncomment when actually building graph
-//        node.setId(nodeIdCounter.getAndIncrement());
-//        node.setInternalStreamsBuilder(this);
-//
-//        LOG.debug("Adding node {}", node);
-//
-//        if (node.parentNode() == null && !node.nodeName().equals(TOPOLOGY_ROOT)) {
-//            throw new IllegalStateException(
-//                "Nodes should not have a null parent node.  Name: " + node.nodeName() + " Type: "
-//                + node.getClass().getSimpleName());
-//        }
-//
-//        if (node.triggersRepartitioning()) {
-//            repartitioningNodeToRepartitioned.put(node, new HashSet<StreamsGraphNode>());
-//        } else if (node.repartitionRequired()) {
-//            StreamsGraphNode currentNode = node;
-//            while (currentNode != null) {
-//                final StreamsGraphNode parentNode = currentNode.parentNode();
-//                if (parentNode.triggersRepartitioning()) {
-//                    repartitioningNodeToRepartitioned.get(parentNode).add(node);
-//                    break;
-//                }
-//                currentNode = parentNode.parentNode();
-//            }
-//        }
+
     }
 
     public StreamsGraphNode root() {

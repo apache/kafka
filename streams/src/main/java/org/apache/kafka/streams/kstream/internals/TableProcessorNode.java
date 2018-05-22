@@ -18,22 +18,26 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
-class TableProcessorNode<K, V, S extends StateStore> extends StatelessProcessorNode<K, V> {
+class TableProcessorNode<K, V, S extends StateStore> extends StreamsGraphNode {
 
     private final MaterializedInternal<K, V, S> materializedInternal;
+    private final ProcessorParameters<K, V> processorParameters;
 
     TableProcessorNode(final String nodeName,
-                       final ProcessorParameters processorParameters,
+                       final ProcessorParameters<K, V> processorParameters,
                        final MaterializedInternal<K, V, S> materializedInternal) {
 
         super(nodeName,
-              processorParameters,
               false);
+        this.processorParameters = processorParameters;
         this.materializedInternal = materializedInternal;
     }
 
-    MaterializedInternal<K, V, S> materializedInternal() {
-        return materializedInternal;
+
+    @Override
+    void writeToTopology(InternalTopologyBuilder topologyBuilder) {
+
     }
 }

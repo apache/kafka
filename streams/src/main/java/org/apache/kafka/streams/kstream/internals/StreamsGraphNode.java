@@ -50,8 +50,9 @@ abstract class StreamsGraphNode {
         return new LinkedHashSet<>(childNodes);
     }
 
-    void addChildNode(final StreamsGraphNode node) {
-        this.childNodes.add(node);
+    void addChildNode(final StreamsGraphNode childNode) {
+        this.childNodes.add(childNode);
+        childNode.setParentNode(this);
     }
 
     String nodeName() {

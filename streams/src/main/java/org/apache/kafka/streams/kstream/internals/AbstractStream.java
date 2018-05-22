@@ -64,7 +64,6 @@ public abstract class AbstractStream<K> {
         //TODO remove this once actually building the topology with Graph
         if (parentGraphNode != null) {
             parentGraphNode.addChildNode(newNode);
-            newNode.setParentNode(parentGraphNode);
             builder.addNode(newNode);
         }
     }
