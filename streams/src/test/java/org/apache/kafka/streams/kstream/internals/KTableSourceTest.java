@@ -20,11 +20,11 @@ import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyTestDriverWrapper;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
@@ -100,7 +100,7 @@ public class KTableSourceTest {
 
         try (final TopologyTestDriverWrapper driver = new TopologyTestDriverWrapper(builder.build(), props)) {
             final KTableValueGetter<String, String> getter1 = getterSupplier1.get();
-            getter1.init(driver.getProcessorContext(topic1));
+            getter1.init(driver.getProcessorContext("KTABLE-SOURCE-0000000002"));
 
             driver.pipeInput(recordFactory.create(topic1, "A", "01"));
             driver.pipeInput(recordFactory.create(topic1, "B", "01"));
@@ -123,8 +123,8 @@ public class KTableSourceTest {
             assertEquals("02", getter1.get("B"));
             assertEquals("01", getter1.get("C"));
 
-            driver.pipeInput(recordFactory.create(topic1, "A", null));
-            driver.pipeInput(recordFactory.create(topic1, "B", null));
+            driver.pipeInput(recordFactory.create(topic1, "A", (String) null));
+            driver.pipeInput(recordFactory.create(topic1, "B", (String) null));
 
             assertNull(getter1.get("A"));
             assertNull(getter1.get("B"));
@@ -164,8 +164,8 @@ public class KTableSourceTest {
 
             proc1.checkAndClearProcessResult("A:(03<-null)");
 
-            driver.pipeInput(recordFactory.create(topic1, "A", null));
-            driver.pipeInput(recordFactory.create(topic1, "B", null));
+            driver.pipeInput(recordFactory.create(topic1, "A", (String) null));
+            driver.pipeInput(recordFactory.create(topic1, "B", (String) null));
 
             proc1.checkAndClearProcessResult("A:(null<-null)", "B:(null<-null)");
         }
@@ -206,8 +206,8 @@ public class KTableSourceTest {
 
             proc1.checkAndClearProcessResult("A:(03<-02)");
 
-            driver.pipeInput(recordFactory.create(topic1, "A", null));
-            driver.pipeInput(recordFactory.create(topic1, "B", null));
+            driver.pipeInput(recordFactory.create(topic1, "A", (String) null));
+            driver.pipeInput(recordFactory.create(topic1, "B", (String) null));
 
             proc1.checkAndClearProcessResult("A:(null<-03)", "B:(null<-02)");
         }

@@ -20,11 +20,11 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyTestDriverWrapper;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Predicate;
@@ -106,7 +106,11 @@ public class KTableMapValuesTest {
                                    final KTableImpl<String, String, String> table1,
                                    final KTableImpl<String, String, Integer> table2,
                                    final KTableImpl<String, Integer, Integer> table3,
-                                   final KTableImpl<String, String, String> table4) {
+                                   final KTableImpl<String, String, String> table4,
+                                   final String procName1,
+                                   final String procName2,
+                                   final String procName3,
+                                   final String procName4) {
         final KTableValueGetterSupplier<String, String> getterSupplier1 = table1.valueGetterSupplier();
         final KTableValueGetterSupplier<String, Integer> getterSupplier2 = table2.valueGetterSupplier();
         final KTableValueGetterSupplier<String, Integer> getterSupplier3 = table3.valueGetterSupplier();
@@ -114,13 +118,13 @@ public class KTableMapValuesTest {
 
         try (final TopologyTestDriverWrapper driver = new TopologyTestDriverWrapper(builder.build(), props)) {
             KTableValueGetter<String, String> getter1 = getterSupplier1.get();
-            getter1.init(driver.getProcessorContext(topic1));
+            getter1.init(driver.getProcessorContext(procName1));
             KTableValueGetter<String, Integer> getter2 = getterSupplier2.get();
-            getter2.init(driver.getProcessorContext(topic1));
+            getter2.init(driver.getProcessorContext(procName2));
             KTableValueGetter<String, Integer> getter3 = getterSupplier3.get();
-            getter3.init(driver.getProcessorContext(topic1));
+            getter3.init(driver.getProcessorContext(procName3));
             KTableValueGetter<String, String> getter4 = getterSupplier4.get();
-            getter4.init(driver.getProcessorContext(topic1));
+            getter4.init(driver.getProcessorContext(procName4));
 
             driver.pipeInput(recordFactory.create(topic1, "A", "01"));
             driver.pipeInput(recordFactory.create(topic1, "B", "01"));
@@ -179,7 +183,7 @@ public class KTableMapValuesTest {
             assertEquals("02", getter4.get("B"));
             assertEquals("01", getter4.get("C"));
 
-            driver.pipeInput(recordFactory.create(topic1, "A", null));
+            driver.pipeInput(recordFactory.create(topic1, "A", (String) null));
 
             assertNull(getter1.get("A"));
             assertEquals("02", getter1.get("B"));
@@ -225,7 +229,11 @@ public class KTableMapValuesTest {
         table1.toStream().to(topic2, produced);
         final KTableImpl<String, String, String> table4 = (KTableImpl<String, String, String>) builder.table(topic2, consumed);
 
-        doTestValueGetter(builder, topic1, table1, table2, table3, table4);
+        doTestValueGetter(builder, topic1, table1, table2, table3, table4,
+                "KTABLE-SOURCE-0000000002",
+                "KTABLE-SOURCE-0000000002",
+                "KTABLE-SOURCE-0000000002",
+                "KTABLE-SOURCE-0000000009");
     }
 
     @Test
@@ -234,6 +242,8 @@ public class KTableMapValuesTest {
 
         final String topic1 = "topic1";
         final String topic2 = "topic2";
+        final String storeName2 = "anyMapName";
+        final String storeName3 = "anyFilterName";
 
         final KTableImpl<String, String, String> table1 =
             (KTableImpl<String, String, String>) builder.table(topic1, consumed);
@@ -243,18 +253,22 @@ public class KTableMapValuesTest {
                 public Integer apply(String value) {
                     return new Integer(value);
                 }
-            }, Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("anyMapName").withValueSerde(Serdes.Integer()));
+            }, Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as(storeName2).withValueSerde(Serdes.Integer()));
         final KTableImpl<String, Integer, Integer> table3 = (KTableImpl<String, Integer, Integer>) table2.filter(
             new Predicate<String, Integer>() {
                 @Override
                 public boolean test(String key, Integer value) {
                     return (value % 2) == 0;
                 }
-            }, Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("anyFilterName").withValueSerde(Serdes.Integer()));
+            }, Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as(storeName3).withValueSerde(Serdes.Integer()));
         table1.toStream().to(topic2, produced);
         final KTableImpl<String, String, String> table4 = (KTableImpl<String, String, String>) builder.table(topic2, consumed);
 
-        doTestValueGetter(builder, topic1, table1, table2, table3, table4);
+        doTestValueGetter(builder, topic1, table1, table2, table3, table4,
+                "KTABLE-SOURCE-0000000002",
+                "KTABLE-MAPVALUES-0000000003",
+                "KTABLE-FILTER-0000000004",
+                "KTABLE-SOURCE-0000000009");
     }
 
     @Test
@@ -299,7 +313,7 @@ public class KTableMapValuesTest {
 
             proc.checkAndClearProcessResult("A:(3<-null)");
 
-            driver.pipeInput(recordFactory.create(topic1, "A", null));
+            driver.pipeInput(recordFactory.create(topic1, "A", (String) null));
 
             proc.checkAndClearProcessResult("A:(null<-null)");
         }
@@ -349,7 +363,7 @@ public class KTableMapValuesTest {
 
             proc.checkAndClearProcessResult("A:(3<-2)");
 
-            driver.pipeInput(recordFactory.create(topic1, "A", null));
+            driver.pipeInput(recordFactory.create(topic1, "A", (String) null));
 
             proc.checkAndClearProcessResult("A:(null<-3)");
         }

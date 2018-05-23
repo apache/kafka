@@ -16,13 +16,12 @@
  */
 package org.apache.kafka.streams;
 
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 
-import java.util.List;
 import java.util.Properties;
-import java.util.regex.Pattern;
 
 /**
  * This class provides access to {@link TopologyTestDriver} protected methods.
@@ -37,43 +36,16 @@ public class TopologyTestDriverWrapper extends TopologyTestDriver {
         super(topology, config);
     }
 
-    public TopologyTestDriverWrapper(final Topology topology,
-                                     final Properties config,
-                                     final long initialWallClockTimeMs) {
-        super(topology, config, initialWallClockTimeMs);
-    }
-
     /**
      * Get the processor context
      *
-     * @param topicName the topic name is used to identify the source node, which is set as current node
+     * @param processorName used to search for a processor connected to this StateStore, which is set as current node
      * @return the processor context
      */
-    public ProcessorContext getProcessorContext(final String topicName) {
+    public ProcessorContext getProcessorContext(final String processorName) {
         final ProcessorContext context = task.context();
-        ((ProcessorContextImpl) context).setCurrentNode(sourceNodeByTopicName(topicName));
+        ((ProcessorContextImpl) context).setCurrentNode(getProcessor(processorName));
         return context;
-    }
-
-    /**
-     * Identify the source node for a given topic
-     *
-     * @param topicName the topic name to search for
-     * @return the source node
-     */
-    private ProcessorNode sourceNodeByTopicName(final String topicName) {
-        ProcessorNode topicNode = processorTopology.source(topicName);
-        if (topicNode == null) {
-            for (final String sourceTopic : processorTopology.sourceTopics()) {
-                if (Pattern.compile(sourceTopic).matcher(topicName).matches()) {
-                    return processorTopology.source(sourceTopic);
-                }
-            }
-            if (globalTopology != null) {
-                topicNode = globalTopology.source(topicName);
-            }
-        }
-        return topicNode;
     }
 
     /**
@@ -83,14 +55,11 @@ public class TopologyTestDriverWrapper extends TopologyTestDriver {
      * @return the processor matching the search name
      */
     public ProcessorNode getProcessor(final String name) {
-        final List<ProcessorNode> nodes = processorTopology.processors();
-
-        for (final ProcessorNode node : nodes) {
+        for (final ProcessorNode node : processorTopology.processors()) {
             if (node.name().equals(name)) {
                 return node;
             }
         }
-
-        return null;
+        throw new StreamsException("Could not find a processor named '" + name + "'");
     }
 }

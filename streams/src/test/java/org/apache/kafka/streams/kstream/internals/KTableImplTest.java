@@ -161,13 +161,13 @@ public class KTableImplTest {
             assertEquals(2, driver.getAllStateStores().size());
 
             final KTableValueGetter<String, String> getter1 = getterSupplier1.get();
-            getter1.init(driver.getProcessorContext(topic1));
+            getter1.init(driver.getProcessorContext("KTABLE-SOURCE-0000000002"));
             final KTableValueGetter<String, Integer> getter2 = getterSupplier2.get();
-            getter2.init(driver.getProcessorContext(topic1));
+            getter2.init(driver.getProcessorContext("KTABLE-SOURCE-0000000002"));
             final KTableValueGetter<String, Integer> getter3 = getterSupplier3.get();
-            getter3.init(driver.getProcessorContext(topic1));
+            getter3.init(driver.getProcessorContext("KTABLE-SOURCE-0000000002"));
             final KTableValueGetter<String, String> getter4 = getterSupplier4.get();
-            getter4.init(driver.getProcessorContext(topic1));
+            getter4.init(driver.getProcessorContext("KTABLE-SOURCE-0000000009"));
 
             driver.pipeInput(recordFactory.create(topic1, "A", "01"));
             driver.pipeInput(recordFactory.create(topic1, "B", "01"));
@@ -226,7 +226,7 @@ public class KTableImplTest {
             assertEquals("02", getter4.get("B"));
             assertEquals("01", getter4.get("C"));
 
-            driver.pipeInput(recordFactory.create(topic1, "A", null));
+            driver.pipeInput(recordFactory.create(topic1, "A", (String) null));
 
             assertNull(getter1.get("A"));
             assertEquals("02", getter1.get("B"));

@@ -20,11 +20,11 @@ import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyTestDriverWrapper;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Predicate;
@@ -126,7 +126,9 @@ public class KTableFilterTest {
     private void doTestValueGetter(final StreamsBuilder builder,
                                    final KTableImpl<String, Integer, Integer> table2,
                                    final KTableImpl<String, Integer, Integer> table3,
-                                   final String topic1) {
+                                   final String topic1,
+                                   final String procName2,
+                                   final String procName3) {
 
         KTableValueGetterSupplier<String, Integer> getterSupplier2 = table2.valueGetterSupplier();
         KTableValueGetterSupplier<String, Integer> getterSupplier3 = table3.valueGetterSupplier();
@@ -136,8 +138,8 @@ public class KTableFilterTest {
             KTableValueGetter<String, Integer> getter2 = getterSupplier2.get();
             KTableValueGetter<String, Integer> getter3 = getterSupplier3.get();
 
-            getter2.init(driver.getProcessorContext(topic1));
-            getter3.init(driver.getProcessorContext(topic1));
+            getter2.init(driver.getProcessorContext(procName2));
+            getter3.init(driver.getProcessorContext(procName3));
 
             driver.pipeInput(recordFactory.create(topic1, "A", 1));
             driver.pipeInput(recordFactory.create(topic1, "B", 1));
@@ -208,7 +210,7 @@ public class KTableFilterTest {
                     }
                 });
 
-        doTestValueGetter(builder, table2, table3, topic1);
+        doTestValueGetter(builder, table2, table3, topic1, "KTABLE-SOURCE-0000000002", "KTABLE-SOURCE-0000000002");
     }
 
     @Test
@@ -237,7 +239,7 @@ public class KTableFilterTest {
         assertEquals("anyStoreNameFilter", table2.queryableStoreName());
         assertNull(table3.queryableStoreName());
 
-        doTestValueGetter(builder, table2, table3, topic1);
+        doTestValueGetter(builder, table2, table3, topic1, "KTABLE-FILTER-0000000003", "KTABLE-SOURCE-0000000002");
     }
 
     private void doTestNotSendingOldValue(final StreamsBuilder builder,
