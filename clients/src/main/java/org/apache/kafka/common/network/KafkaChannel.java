@@ -177,11 +177,18 @@ public class KafkaChannel {
         }
     }
 
-    void unmute() {
+    /**
+     * Unmute the channel. The channel can be unmuted only if it is in the MUTED state. For other muted states
+     * (MUTED_AND_*), this is a no-op.
+     *
+     * @return Whether or not the channel is in the NOT_MUTED state after the call
+     */
+    boolean maybeUnmute() {
         if (muteState == ChannelMuteState.MUTED) {
             if (!disconnected) transportLayer.addInterestOps(SelectionKey.OP_READ);
             muteState = ChannelMuteState.NOT_MUTED;
         }
+        return muteState == ChannelMuteState.NOT_MUTED;
     }
 
     // Handle the specified channel mute-related event and transition the mute state according to the state machine.
