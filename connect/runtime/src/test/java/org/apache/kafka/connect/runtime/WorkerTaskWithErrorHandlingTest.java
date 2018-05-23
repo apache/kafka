@@ -223,6 +223,7 @@ public class WorkerTaskWithErrorHandlingTest {
         converter.configure(oo);
 
         TransformationChain<SinkRecord> sinkTransforms = new TransformationChain<>(Collections.singletonList(new FaultyPassthrough<SinkRecord>()));
+        sinkTransforms.initialize(executor, context);
 
         workerTask = PowerMock.createPartialMock(
                 WorkerSinkTask.class, new String[]{"createConsumer"},

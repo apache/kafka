@@ -65,9 +65,11 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 
 /**
@@ -467,19 +469,24 @@ public class Worker {
 
         // Decide which type of worker task we need based on the type of task.
         if (task instanceof SourceTask) {
+            ProcessingContext processingContext = sourceProcessingContext(id, connConfig, errorHandlingMetrics);
             TransformationChain<SourceRecord> transformationChain = new TransformationChain<>(connConfig.<SourceRecord>transformations());
+            transformationChain.initialize(operationExecutor, processingContext);
             OffsetStorageReader offsetReader = new OffsetStorageReaderImpl(offsetBackingStore, id.connector(),
                     internalKeyConverter, internalValueConverter);
             OffsetStorageWriter offsetWriter = new OffsetStorageWriter(offsetBackingStore, id.connector(),
                     internalKeyConverter, internalValueConverter);
             KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps);
+
             return new WorkerSourceTask(id, (SourceTask) task, statusListener, initialState, keyConverter, valueConverter,
                     headerConverter, transformationChain, producer, offsetReader, offsetWriter, config, metrics, loader,
-                    time, sourceProcessingContext(id, connConfig, errorHandlingMetrics), operationExecutor);
+                    time, processingContext, operationExecutor);
         } else if (task instanceof SinkTask) {
             TransformationChain<SinkRecord> transformationChain = new TransformationChain<>(connConfig.<SinkRecord>transformations());
+            ProcessingContext processingContext = sinkProcessingContext(id, connConfig, errorHandlingMetrics);
+            transformationChain.initialize(operationExecutor, processingContext);
             return new WorkerSinkTask(id, (SinkTask) task, statusListener, initialState, config, metrics, keyConverter,
-                    valueConverter, headerConverter, transformationChain, loader, time, sinkProcessingContext(id, connConfig, errorHandlingMetrics),
+                    valueConverter, headerConverter, transformationChain, loader, time, processingContext,
                     operationExecutor);
         } else {
             log.error("Tasks must be a subclass of either SourceTask or SinkTask", task);
@@ -515,8 +522,10 @@ public class Worker {
                 ErrorReporter dlqReporter = new DLQReporter(dlqProducer, description.partitions().size());
                 dlqReporter.configure(connConfig.originalsWithPrefix(DLQReporter.PREFIX));
                 reporters.add(dlqReporter);
-            } catch (Exception e) {
+            } catch (InterruptedException e) {
                 throw new ConnectException(e);
+            } catch (ExecutionException | TimeoutException e) {
+                log.error("Could not describe dead letter topic " + topic + ". Disabling the feature.", e);
             }
         }
 

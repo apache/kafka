@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.connect.runtime.errors;
 
+import java.util.Locale;
+
 /**
  * The different levels of error tolerance.
  */
@@ -29,6 +31,9 @@ public enum ToleranceType {
     /**
      * Tolerate all errors.
      */
-    ALL,
+    ALL;
 
+    public static ToleranceType fromString(String typeStr) {
+        return "ALL".equals(typeStr.toUpperCase(Locale.ROOT)) ? ToleranceType.ALL : ToleranceType.NONE;
+    }
 }

@@ -550,7 +550,7 @@ class WorkerSinkTask extends WorkerTask {
                     headers);
             log.trace("{} Applying transformations to record in topic '{}' partition {} at offset {} and timestamp {} with key {} and value {}",
                     this, msg.topic(), msg.partition(), msg.offset(), timestamp, keyAndSchema.value(), valueAndSchema.value());
-            SinkRecord transRecord = transformationChain.apply(origRecord, operationExecutor, processingContext);
+            SinkRecord transRecord = transformationChain.apply(origRecord);
             origOffsets.put(
                     new TopicPartition(origRecord.topic(), origRecord.kafkaPartition()),
                     new OffsetAndMetadata(origRecord.kafkaOffset() + 1)

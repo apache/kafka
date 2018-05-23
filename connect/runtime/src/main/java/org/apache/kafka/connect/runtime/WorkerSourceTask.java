@@ -291,7 +291,7 @@ class WorkerSourceTask extends WorkerTask {
         final SourceRecordWriteCounter counter = new SourceRecordWriteCounter(toSend.size(), sourceTaskMetricsGroup);
         for (final SourceRecord preTransformRecord : toSend) {
             processingContext.sourceRecord(preTransformRecord);
-            final SourceRecord record = transformationChain.apply(preTransformRecord, operationExecutor, processingContext);
+            final SourceRecord record = transformationChain.apply(preTransformRecord);
 
             if (record == null) {
                 counter.skipRecord();

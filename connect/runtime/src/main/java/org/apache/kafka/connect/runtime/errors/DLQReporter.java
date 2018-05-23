@@ -97,7 +97,7 @@ public class DLQReporter implements ErrorReporter {
 
         this.kafkaProducer.send(producerRecord, (metadata, exception) -> {
             if (exception != null) {
-                log.debug("Could not send object to Dead Letter Queue", exception);
+                log.error("Could not produce message to dead letter queue. topic=" + config.topic(), exception);
                 errorHandlingMetrics.recordDeadLetterQueueProduceFailed();
             }
         });

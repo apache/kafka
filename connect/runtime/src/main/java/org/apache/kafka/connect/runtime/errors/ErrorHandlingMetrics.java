@@ -20,9 +20,14 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Total;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.connect.converters.ByteArrayConverter;
 import org.apache.kafka.connect.runtime.ConnectMetrics;
 import org.apache.kafka.connect.runtime.ConnectMetricsRegistry;
+import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Contains various sensors used for monitoring errors.
@@ -42,6 +47,21 @@ public class ErrorHandlingMetrics {
     private final Sensor dlqProduceRequests;
     private final Sensor dlqProduceFailures;
     private long lastErrorTime = 0;
+
+    public ErrorHandlingMetrics() {
+        this(new ConnectorTaskId("noop-connector", -1),
+                new ConnectMetrics("noop-worker", new StandaloneConfig(sampleProps()), new SystemTime()));
+    }
+
+    private static Map<String, String> sampleProps() {
+        Map<String, String> workerProps = new HashMap<>();
+        workerProps.put("key.converter", ByteArrayConverter.class.getName());
+        workerProps.put("value.converter", ByteArrayConverter.class.getName());
+        workerProps.put("internal.key.converter", ByteArrayConverter.class.getName());
+        workerProps.put("internal.value.converter", ByteArrayConverter.class.getName());
+        workerProps.put("offset.storage.file.filename", "/tmp/offsets.tmp");
+        return workerProps;
+    }
 
     public ErrorHandlingMetrics(ConnectorTaskId id, ConnectMetrics connectMetrics) {
 

@@ -73,6 +73,7 @@ public class RetryWithToleranceExecutor implements OperationExecutor {
     public static final RetryWithToleranceExecutor NOOP_EXECUTOR = new RetryWithToleranceExecutor();
     static {
         NOOP_EXECUTOR.configure(Collections.emptyMap());
+        NOOP_EXECUTOR.setMetrics(new ErrorHandlingMetrics());
     }
 
     private static final Map<Stage, Class<? extends Exception>> TOLERABLE_EXCEPTIONS = new HashMap<>();
@@ -183,7 +184,6 @@ public class RetryWithToleranceExecutor implements OperationExecutor {
             context.result(exResult);
 
             if (!tolerated.isAssignableFrom(e.getClass())) {
-                context.result(new Result<>(e));
                 throw new ConnectException("Unhandled exception in error handler", e);
             }
 
@@ -265,8 +265,7 @@ public class RetryWithToleranceExecutor implements OperationExecutor {
          * @return determine how many errors to tolerate.
          */
         public ToleranceType toleranceLimit() {
-            return "ALL".equals(getString(TOLERANCE_LIMIT).toUpperCase(Locale.ROOT)) ? ToleranceType.ALL
-                    : ToleranceType.NONE;
+            return ToleranceType.fromString(getString(TOLERANCE_LIMIT));
         }
     }
 

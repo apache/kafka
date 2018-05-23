@@ -32,15 +32,14 @@ public class TransformationChain<R extends ConnectRecord<R>> {
 
     private final List<Transformation<R>> transformations;
 
+    private OperationExecutor operationExecutor = RetryWithToleranceExecutor.NOOP_EXECUTOR;
+    private ProcessingContext processingContext = new ProcessingContext();
+
     public TransformationChain(List<Transformation<R>> transformations) {
         this.transformations = transformations;
     }
 
     public R apply(R record) {
-        return apply(record, RetryWithToleranceExecutor.NOOP_EXECUTOR, new ProcessingContext());
-    }
-
-    public R apply(R record, OperationExecutor operationExecutor, ProcessingContext processingContext) {
         if (transformations.isEmpty()) return record;
 
         processingContext.position(Stage.TRANSFORMATION);
@@ -66,6 +65,11 @@ public class TransformationChain<R extends ConnectRecord<R>> {
         for (Transformation<R> transformation : transformations) {
             transformation.close();
         }
+    }
+
+    public void initialize(OperationExecutor operationExecutor, ProcessingContext processingContext) {
+        this.operationExecutor = operationExecutor;
+        this.processingContext = processingContext;
     }
 
     @Override

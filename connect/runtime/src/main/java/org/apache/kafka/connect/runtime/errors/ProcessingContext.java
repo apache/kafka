@@ -149,7 +149,11 @@ public class ProcessingContext {
         return "ProcessingContext{" +
                 "position=" + position +
                 ", class=" + klass +
+                ", consumedMessage=" + consumedMessage +
                 ", sourceRecord=" + sourceRecord +
+                ", result=" + result +
+                ", attempt=" + attempt +
+                ", reporters=" + reporters +
                 '}';
     }
 
