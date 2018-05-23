@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
@@ -44,7 +45,6 @@ import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
-import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.CreateAclsResponse;
@@ -761,34 +761,32 @@ public class KafkaAdminClientTest {
         nodes.put(1, node1);
         nodes.put(2, node2);
 
-        final Cluster cluster =
-            new Cluster(
+        final Cluster cluster = new Cluster(
                 "mockClusterId",
                 nodes.values(),
-                Collections.<PartitionInfo>emptyList(),
-                Collections.<String>emptySet(),
-                Collections.<String>emptySet(), nodes.get(0));
+                Collections.emptyList(),
+                Collections.emptySet(),
+                Collections.emptySet(), nodes.get(0));
 
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(cluster)) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
-            env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.<String>emptySet());
+            env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.emptySet());
             env.kafkaClient().setNode(env.cluster().controller());
 
-            List<MetadataResponse.PartitionMetadata> partitionMetadata = new ArrayList<>();
-            partitionMetadata.add(new MetadataResponse.PartitionMetadata(Errors.NONE, 0, node0,
-                    singletonList(node0), singletonList(node0), Collections.<Node>emptyList()));
-            partitionMetadata.add(new MetadataResponse.PartitionMetadata(Errors.NONE, 0, node1,
-                    singletonList(node1), singletonList(node1), Collections.<Node>emptyList()));
-            partitionMetadata.add(new MetadataResponse.PartitionMetadata(Errors.NONE, 0, node2,
-                    singletonList(node2), singletonList(node2), Collections.<Node>emptyList()));
+            // Empty metadata response should be retried
+            env.kafkaClient().prepareResponse(
+                    new MetadataResponse(
+                            Collections.emptyList(),
+                            env.cluster().clusterResource().clusterId(),
+                            -1,
+                            Collections.emptyList()));
 
             env.kafkaClient().prepareResponse(
                     new MetadataResponse(
                             env.cluster().nodes(),
                             env.cluster().clusterResource().clusterId(),
                             env.cluster().controller().id(),
-                            singletonList(new MetadataResponse.TopicMetadata(Errors.NONE,
-                                Topic.GROUP_METADATA_TOPIC_NAME, true, partitionMetadata))));
+                            Collections.emptyList()));
 
             env.kafkaClient().prepareResponseFrom(
                     new ListGroupsResponse(
@@ -802,7 +800,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponseFrom(
                     new ListGroupsResponse(
                             Errors.COORDINATOR_NOT_AVAILABLE,
-                            Collections.<ListGroupsResponse.Group>emptyList()
+                            Collections.emptyList()
                     ),
                     node1);
 
@@ -823,22 +821,44 @@ public class KafkaAdminClientTest {
                 assertTrue(listing.groupId().equals("group-1") || listing.groupId().equals("group-2"));
             }
             assertEquals(1, result.errors().get().size());
+        }
+    }
 
-            // Test handling the error where we are unable to get metadata for the __consumer_offsets topic.
+    @Test
+    public void testListConsumerGroupsMetadataFailure() throws Exception {
+        final HashMap<Integer, Node> nodes = new HashMap<>();
+        Node node0 = new Node(0, "localhost", 8121);
+        Node node1 = new Node(1, "localhost", 8122);
+        Node node2 = new Node(2, "localhost", 8123);
+        nodes.put(0, node0);
+        nodes.put(1, node1);
+        nodes.put(2, node2);
+
+        final Cluster cluster = new Cluster(
+                "mockClusterId",
+                nodes.values(),
+                Collections.emptyList(),
+                Collections.emptySet(),
+                Collections.emptySet(), nodes.get(0));
+        final Time time = new MockTime();
+
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time, cluster,
+                AdminClientConfig.RETRIES_CONFIG, "0")) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.emptySet());
+            env.kafkaClient().setNode(env.cluster().controller());
+
+            // Empty metadata causes the request to fail since we have no list of brokers
+            // to send the ListGroups requests to
             env.kafkaClient().prepareResponse(
-                new MetadataResponse(
-                    env.cluster().nodes(),
-                    env.cluster().clusterResource().clusterId(),
-                    env.cluster().controller().id(),
-                    singletonList(new MetadataResponse.TopicMetadata(
-                        Errors.UNKNOWN_TOPIC_OR_PARTITION, Topic.GROUP_METADATA_TOPIC_NAME,
-                        true, Collections.<MetadataResponse.PartitionMetadata>emptyList()))));
-            final ListConsumerGroupsResult result2 = env.adminClient().listConsumerGroups();
-            Collection<Throwable> errors = result2.errors().get();
-            assertEquals(1, errors.size());
-            assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.forException(errors.iterator().next()));
-            assertTrue(result2.valid().get().isEmpty());
-            assertFutureError(result2.all(), UnknownTopicOrPartitionException.class);
+                    new MetadataResponse(
+                            Collections.emptyList(),
+                            env.cluster().clusterResource().clusterId(),
+                            -1,
+                            Collections.emptyList()));
+
+            final ListConsumerGroupsResult result = env.adminClient().listConsumerGroups();
+            assertFutureError(result.all(), KafkaException.class);
         }
     }
 

@@ -23,6 +23,7 @@ import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.NetworkClient;
+import org.apache.kafka.clients.StaleMetadataException;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResult;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResults;
 import org.apache.kafka.clients.admin.DescribeReplicaLogDirsResult.ReplicaLogDirInfo;
@@ -49,13 +50,11 @@ import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.InvalidTopicException;
-import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
-import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -97,22 +96,22 @@ import org.apache.kafka.common.requests.DescribeConfigsRequest;
 import org.apache.kafka.common.requests.DescribeConfigsResponse;
 import org.apache.kafka.common.requests.DescribeDelegationTokenRequest;
 import org.apache.kafka.common.requests.DescribeDelegationTokenResponse;
+import org.apache.kafka.common.requests.DescribeGroupsRequest;
+import org.apache.kafka.common.requests.DescribeGroupsResponse;
 import org.apache.kafka.common.requests.DescribeLogDirsRequest;
 import org.apache.kafka.common.requests.DescribeLogDirsResponse;
 import org.apache.kafka.common.requests.ExpireDelegationTokenRequest;
 import org.apache.kafka.common.requests.ExpireDelegationTokenResponse;
-import org.apache.kafka.common.requests.MetadataRequest;
-import org.apache.kafka.common.requests.MetadataResponse;
-import org.apache.kafka.common.requests.RenewDelegationTokenRequest;
-import org.apache.kafka.common.requests.RenewDelegationTokenResponse;
-import org.apache.kafka.common.requests.DescribeGroupsRequest;
-import org.apache.kafka.common.requests.DescribeGroupsResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.ListGroupsRequest;
 import org.apache.kafka.common.requests.ListGroupsResponse;
+import org.apache.kafka.common.requests.MetadataRequest;
+import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.OffsetFetchRequest;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
+import org.apache.kafka.common.requests.RenewDelegationTokenRequest;
+import org.apache.kafka.common.requests.RenewDelegationTokenResponse;
 import org.apache.kafka.common.requests.Resource;
 import org.apache.kafka.common.requests.ResourceType;
 import org.apache.kafka.common.security.token.delegation.DelegationToken;
@@ -2427,9 +2426,9 @@ public class KafkaAdminClient extends AdminClient {
         private final HashSet<Node> remaining;
         private final KafkaFutureImpl<Collection<Object>> future;
 
-        ListConsumerGroupsResults(Collection<Throwable> errors, Collection<Node> leaders,
+        ListConsumerGroupsResults(Collection<Node> leaders,
                                   KafkaFutureImpl<Collection<Object>> future) {
-            this.errors = new ArrayList<>(errors);
+            this.errors = new ArrayList<>();
             this.listings = new HashMap<>();
             this.remaining = new HashSet<>(leaders);
             this.future = future;
@@ -2439,11 +2438,9 @@ public class KafkaAdminClient extends AdminClient {
         synchronized void addError(Throwable throwable, Node node) {
             ApiError error = ApiError.fromThrowable(throwable);
             if (error.message() == null || error.message().isEmpty()) {
-                errors.add(error.error().exception(
-                    "Error listing groups on " + node));
+                errors.add(error.error().exception("Error listing groups on " + node));
             } else {
-                errors.add(error.error().exception(
-                    "Error listing groups on " + node + ": " + error.message()));
+                errors.add(error.error().exception("Error listing groups on " + node + ": " + error.message()));
             }
         }
 
@@ -2470,50 +2467,38 @@ public class KafkaAdminClient extends AdminClient {
         final KafkaFutureImpl<Collection<Object>> all = new KafkaFutureImpl<>();
         final long nowMetadata = time.milliseconds();
         final long deadline = calcDeadlineMs(nowMetadata, options.timeoutMs());
-        runnable.call(new Call("findGroupsMetadata", deadline, new LeastLoadedNodeProvider()) {
+        runnable.call(new Call("findAllBrokers", deadline, new LeastLoadedNodeProvider()) {
             @Override
             AbstractRequest.Builder createRequest(int timeoutMs) {
-                return new MetadataRequest.Builder(Collections.singletonList(Topic.GROUP_METADATA_TOPIC_NAME), true);
+                return new MetadataRequest.Builder(Collections.emptyList(), true);
             }
 
             @Override
             void handleResponse(AbstractResponse abstractResponse) {
                 MetadataResponse metadataResponse = (MetadataResponse) abstractResponse;
-                final List<Throwable> metadataExceptions = new ArrayList<>();
-                final HashSet<Node> leaders = new HashSet<>();
-                for (final MetadataResponse.TopicMetadata metadata : metadataResponse.topicMetadata()) {
-                    if (metadata.error() != Errors.NONE) {
-                        metadataExceptions.add(metadata.error().exception("Unable to locate " +
-                            Topic.GROUP_METADATA_TOPIC_NAME));
-                    } else if (!metadata.topic().equals(Topic.GROUP_METADATA_TOPIC_NAME)) {
-                        metadataExceptions.add(new UnknownServerException("Server returned unrequested " +
-                            "information about unexpected topic " + metadata.topic()));
-                    } else {
-                        for (final MetadataResponse.PartitionMetadata partitionMetadata : metadata.partitionMetadata()) {
-                            final Node leader = partitionMetadata.leader();
-                            if (partitionMetadata.error() != Errors.NONE) {
-                                // TODO: KAFKA-6789, retry based on the error code
-                                metadataExceptions.add(partitionMetadata.error().exception("Unable to find " +
-                                    "leader for partition " + partitionMetadata.partition() + " of " +
-                                    Topic.GROUP_METADATA_TOPIC_NAME));
-                            } else if (leader == null || leader.equals(Node.noNode())) {
-                                metadataExceptions.add(new LeaderNotAvailableException("Unable to find leader " +
-                                    "for partition " + partitionMetadata.partition() + " of " +
-                                    Topic.GROUP_METADATA_TOPIC_NAME));
-                            } else {
-                                leaders.add(leader);
-                            }
-                        }
-                    }
-                }
-                final ListConsumerGroupsResults results =
-                    new ListConsumerGroupsResults(metadataExceptions, leaders, all);
-                for (final Node node : leaders) {
+                Cluster cluster = metadataResponse.cluster();
+
+                if (cluster.nodes().isEmpty())
+                    throw new StaleMetadataException("Metadata fetch failed due to missing broker list");
+
+                HashSet<Node> allNodes = new HashSet<>(cluster.nodes());
+                final ListConsumerGroupsResults results = new ListConsumerGroupsResults(allNodes, all);
+
+                for (final Node node : allNodes) {
                     final long nowList = time.milliseconds();
                     runnable.call(new Call("listConsumerGroups", deadline, new ConstantNodeIdProvider(node.id())) {
                         @Override
                         AbstractRequest.Builder createRequest(int timeoutMs) {
                             return new ListGroupsRequest.Builder();
+                        }
+
+                        private void maybeAddConsumerGroup(ListGroupsResponse.Group group) {
+                            String protocolType = group.protocolType();
+                            if (protocolType.equals(ConsumerProtocol.PROTOCOL_TYPE) || protocolType.isEmpty()) {
+                                final String groupId = group.groupId();
+                                final ConsumerGroupListing groupListing = new ConsumerGroupListing(groupId, protocolType.isEmpty());
+                                results.addListing(groupListing);
+                            }
                         }
 
                         @Override
@@ -2524,13 +2509,7 @@ public class KafkaAdminClient extends AdminClient {
                                     results.addError(response.error().exception(), node);
                                 } else {
                                     for (ListGroupsResponse.Group group : response.groups()) {
-                                        if (group.protocolType().equals(ConsumerProtocol.PROTOCOL_TYPE) ||
-                                            group.protocolType().isEmpty()) {
-                                            final String groupId = group.groupId();
-                                            final String protocolType = group.protocolType();
-                                            final ConsumerGroupListing groupListing = new ConsumerGroupListing(groupId, protocolType.isEmpty());
-                                            results.addListing(groupListing);
-                                        }
+                                        maybeAddConsumerGroup(group);
                                     }
                                 }
                                 results.tryComplete(node);
@@ -2550,7 +2529,8 @@ public class KafkaAdminClient extends AdminClient {
 
             @Override
             void handleFailure(Throwable throwable) {
-                all.complete(Collections.<Object>singletonList(throwable));
+                KafkaException exception = new KafkaException("Failed to find brokers to send ListGroups", throwable);
+                all.complete(Collections.singletonList(exception));
             }
         }, nowMetadata);
 
