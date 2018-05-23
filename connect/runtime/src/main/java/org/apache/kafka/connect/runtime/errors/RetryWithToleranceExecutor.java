@@ -54,6 +54,7 @@ public class RetryWithToleranceExecutor implements OperationExecutor {
     private long totalFailures = 0;
     private final Time time;
     private RetryWithToleranceExecutorConfig config;
+    private ErrorHandlingMetrics errorHandlingMetrics;
 
     public RetryWithToleranceExecutor() {
         this(new SystemTime());
@@ -84,6 +85,7 @@ public class RetryWithToleranceExecutor implements OperationExecutor {
             }
         } finally {
             if (!context.result().success()) {
+                errorHandlingMetrics.recordError();
                 context.report();
             }
         }
@@ -102,12 +104,14 @@ public class RetryWithToleranceExecutor implements OperationExecutor {
                 return result;
             } catch (RetriableException e) {
                 log.trace("Caught a retriable exception while executing {} operation with {}", context.stage(), context.executingClass());
+                errorHandlingMetrics.recordFailure();
                 if (checkRetry(startTime)) {
                     backoff(attempt, deadline);
                     if (Thread.currentThread().isInterrupted()) {
                         log.trace("Thread was interrupted. Marking operation as failed.");
                         return new Result<>(e);
                     }
+                    errorHandlingMetrics.recordRetry();
                 } else {
                     log.trace("Can't retry. start={}, attempt={}, deadline={}", startTime, attempt, deadline);
                     return new Result<>(e);
@@ -124,10 +128,12 @@ public class RetryWithToleranceExecutor implements OperationExecutor {
             Result<V> result = execAndRetry(operation, context);
             if (!result.success()) {
                 markAsFailed();
+                errorHandlingMetrics.recordSkipped();
             }
             context.result(result);
             return result;
         } catch (Exception e) {
+            errorHandlingMetrics.recordFailure();
             markAsFailed();
 
             Result<V> exResult = new Result<>(e);
@@ -142,12 +148,14 @@ public class RetryWithToleranceExecutor implements OperationExecutor {
                 throw new ConnectException("Tolerance exceeded in error handler", e);
             }
 
+            errorHandlingMetrics.recordSkipped();
             return exResult;
         }
     }
 
     // Visible for testing
     void markAsFailed() {
+        errorHandlingMetrics.recordErrorTimestamp();
         totalFailures++;
     }
 
@@ -185,6 +193,10 @@ public class RetryWithToleranceExecutor implements OperationExecutor {
     @Override
     public void configure(Map<String, ?> configs) {
         config = new RetryWithToleranceExecutorConfig(configs);
+    }
+
+    public void setMetrics(ErrorHandlingMetrics errorHandlingMetrics) {
+        this.errorHandlingMetrics = errorHandlingMetrics;
     }
 
     static class RetryWithToleranceExecutorConfig extends AbstractConfig {

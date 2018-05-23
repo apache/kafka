@@ -519,7 +519,6 @@ class WorkerSinkTask extends WorkerTask {
             if (keyResult.success()) {
                 keyAndSchema = keyResult.result();
             } else {
-                processingContext.report();
                 continue;
             }
 
@@ -529,7 +528,6 @@ class WorkerSinkTask extends WorkerTask {
             if (valueResult.success()) {
                 valueAndSchema = valueResult.result();
             } else {
-                processingContext.report();
                 continue;
             }
 
@@ -539,7 +537,6 @@ class WorkerSinkTask extends WorkerTask {
             if (headersResult.success()) {
                 headers = headersResult.result();
             } else {
-                processingContext.report();
                 continue;
             }
 

@@ -19,6 +19,7 @@ package org.apache.kafka.connect.runtime.errors;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,7 +39,18 @@ public class LogReporter implements ErrorReporter {
     public static final String LOG_INCLUDE_MESSAGES_DOC = "Include the Connect Record which failed to process in the log.";
     public static final boolean LOG_INCLUDE_MESSAGES_DEFAULT = false;
 
+    private final ConnectorTaskId id;
+
     private LogReporterConfig config;
+    private ErrorHandlingMetrics errorHandlingMetrics;
+
+    public LogReporter(ConnectorTaskId id) {
+        this.id = id;
+    }
+
+    public LogReporter() {
+        this.id = new ConnectorTaskId("UNKNOWN", 0);
+    }
 
     static ConfigDef getConfigDef() {
         return new ConfigDef()
@@ -57,11 +69,18 @@ public class LogReporter implements ErrorReporter {
 
         StringBuilder builder = message(context);
         log.error(builder.toString(), context.result().error());
+        errorHandlingMetrics.recordErrorLogged();
+    }
+
+    @Override
+    public void setMetrics(ErrorHandlingMetrics errorHandlingMetrics) {
+        this.errorHandlingMetrics = errorHandlingMetrics;
     }
 
     // Visible for testing
     StringBuilder message(ProcessingContext context) {
-        StringBuilder builder = new StringBuilder("Error encountered while performing ");
+        StringBuilder builder = new StringBuilder("Error encountered in task ");
+        builder.append(id).append(" while performing ");
         builder.append(context.stage().name());
         builder.append(" operation with class '");
         builder.append(context.executingClass());

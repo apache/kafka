@@ -49,10 +49,15 @@ public class ErrorReporterTest {
     @Mock
     Future<RecordMetadata> metadata;
 
+    @Mock
+    ErrorHandlingMetrics metrics;
+
     @Test
     public void testDLQConfigWithEmptyTopicName() {
         DLQReporter dlqReporter = new DLQReporter(producer, PARTITIONS);
         dlqReporter.configure(config);
+        dlqReporter.setMetrics(metrics);
+
         ProcessingContext context = processingContext();
 
         EasyMock.expect(producer.send(EasyMock.anyObject(), EasyMock.anyObject())).andThrow(new RuntimeException());
@@ -67,6 +72,8 @@ public class ErrorReporterTest {
     public void testDLQConfigWithValidTopicName() {
         DLQReporter dlqReporter = new DLQReporter(producer, PARTITIONS);
         dlqReporter.configure(config(DLQReporter.DLQ_TOPIC_NAME, DLQ_TOPIC));
+        dlqReporter.setMetrics(metrics);
+
         ProcessingContext context = processingContext();
 
         EasyMock.expect(producer.send(EasyMock.anyObject(), EasyMock.anyObject())).andReturn(metadata);
@@ -81,6 +88,8 @@ public class ErrorReporterTest {
     public void testReportDLQTwice() {
         DLQReporter dlqReporter = new DLQReporter(producer, PARTITIONS);
         dlqReporter.configure(config(DLQReporter.DLQ_TOPIC_NAME, DLQ_TOPIC));
+        dlqReporter.setMetrics(metrics);
+
         ProcessingContext context = processingContext();
 
         EasyMock.expect(producer.send(EasyMock.anyObject(), EasyMock.anyObject())).andReturn(metadata).times(2);
@@ -96,6 +105,7 @@ public class ErrorReporterTest {
     public void testNoopOnDisabledLogReporter() {
         LogReporter logReporter = new LogReporter();
         logReporter.configure(config);
+        logReporter.setMetrics(metrics);
 
         ProcessingContext context = processingContext();
 
@@ -106,6 +116,7 @@ public class ErrorReporterTest {
     public void testNoopOnEnabledLogReporter() {
         LogReporter logReporter = new LogReporter();
         logReporter.configure(config(LogReporter.LOG_ENABLE, "true"));
+        logReporter.setMetrics(metrics);
 
         ProcessingContext context = processingContext();
 
@@ -116,11 +127,12 @@ public class ErrorReporterTest {
     public void testLogMessageWithNoRecords() {
         LogReporter logReporter = new LogReporter();
         logReporter.configure(config(LogReporter.LOG_ENABLE, "true"));
+        logReporter.setMetrics(metrics);
 
         ProcessingContext context = processingContext();
 
         String msg = logReporter.message(context).toString();
-        assertEquals("Error encountered while performing KEY_CONVERTER operation with class " +
+        assertEquals("Error encountered in task UNKNOWN-0 while performing KEY_CONVERTER operation with class " +
                 "'class org.apache.kafka.connect.json.JsonConverter'.", msg);
     }
 
@@ -129,11 +141,12 @@ public class ErrorReporterTest {
         LogReporter logReporter = new LogReporter();
         logReporter.configure(config(LogReporter.LOG_ENABLE, "true"));
         logReporter.configure(config(LogReporter.LOG_INCLUDE_MESSAGES, "true"));
+        logReporter.setMetrics(metrics);
 
         ProcessingContext context = processingContext();
 
         String msg = logReporter.message(context).toString();
-        assertEquals("Error encountered while performing KEY_CONVERTER operation with class " +
+        assertEquals("Error encountered in task UNKNOWN-0 while performing KEY_CONVERTER operation with class " +
                 "'class org.apache.kafka.connect.json.JsonConverter', msg.topic='test-topic', " +
                 "msg.partition=5, msg.offset=100, msg.timestamp=-1, msg.timestampType=NoTimestampType.", msg);
     }

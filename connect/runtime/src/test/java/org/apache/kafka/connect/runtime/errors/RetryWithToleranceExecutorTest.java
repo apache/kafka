@@ -51,6 +51,9 @@ public class RetryWithToleranceExecutorTest {
     @Mock
     private Operation<String> mockOperation;
 
+    @Mock
+    ErrorHandlingMetrics errorHandlingMetrics;
+
     @Test
     public void testHandleExceptionInTransformations() {
         testHandleExceptionInStage(Stage.TRANSFORMATION, new Exception());
@@ -115,6 +118,7 @@ public class RetryWithToleranceExecutorTest {
         Map<String, Object> props = config(RetryWithToleranceExecutor.RETRY_TIMEOUT, "0");
         props.put(RetryWithToleranceExecutor.TOLERANCE_LIMIT, "all");
         executor.configure(props);
+        executor.setMetrics(errorHandlingMetrics);
         return executor;
     }
 
@@ -144,6 +148,7 @@ public class RetryWithToleranceExecutorTest {
         Map<String, Object> props = config(RetryWithToleranceExecutor.RETRY_TIMEOUT, "6000");
         props.put(RetryWithToleranceExecutor.TOLERANCE_LIMIT, "all");
         executor.configure(props);
+        executor.setMetrics(errorHandlingMetrics);
 
         EasyMock.expect(mockOperation.apply()).andThrow(e).times(numRetriableExceptionsThrown);
         EasyMock.expect(mockOperation.apply()).andReturn("Success");
@@ -167,6 +172,7 @@ public class RetryWithToleranceExecutorTest {
         Map<String, Object> props = config(RetryWithToleranceExecutor.RETRY_TIMEOUT, "6000");
         props.put(RetryWithToleranceExecutor.TOLERANCE_LIMIT, "all");
         executor.configure(props);
+        executor.setMetrics(errorHandlingMetrics);
 
         EasyMock.expect(mockOperation.apply()).andThrow(e).times(numRetriableExceptionsThrown);
         EasyMock.expect(mockOperation.apply()).andReturn("Success");
@@ -267,11 +273,13 @@ public class RetryWithToleranceExecutorTest {
     public void testToleranceLimit() {
         RetryWithToleranceExecutor executor = new RetryWithToleranceExecutor();
         executor.configure(config(RetryWithToleranceExecutor.TOLERANCE_LIMIT, "none"));
+        executor.setMetrics(errorHandlingMetrics);
         executor.markAsFailed();
         assertFalse("should not tolerate any errors", executor.withinToleranceLimits());
 
         executor = new RetryWithToleranceExecutor();
         executor.configure(config(RetryWithToleranceExecutor.TOLERANCE_LIMIT, "all"));
+        executor.setMetrics(errorHandlingMetrics);
         executor.markAsFailed();
         executor.markAsFailed();
         assertTrue("should tolerate all errors", executor.withinToleranceLimits());

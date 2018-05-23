@@ -22,4 +22,5 @@ public interface ErrorReporter extends Configurable {
 
     void report(ProcessingContext context);
 
+    void setMetrics(ErrorHandlingMetrics errorHandlingMetrics);
 }

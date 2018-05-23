@@ -35,9 +35,9 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.ConnectMetrics.LiteralSupplier;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.errors.DLQReporter;
+import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
 import org.apache.kafka.connect.runtime.errors.ErrorReporter;
 import org.apache.kafka.connect.runtime.errors.LogReporter;
-import org.apache.kafka.connect.runtime.errors.OperationExecutor;
 import org.apache.kafka.connect.runtime.errors.ProcessingContext;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceExecutor;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
@@ -459,8 +459,11 @@ public class Worker {
                                        Converter valueConverter,
                                        HeaderConverter headerConverter,
                                        ClassLoader loader) {
-        OperationExecutor operationExecutor = new RetryWithToleranceExecutor();
+        ErrorHandlingMetrics errorHandlingMetrics = errorHandlingMetrics(id);
+
+        RetryWithToleranceExecutor operationExecutor = new RetryWithToleranceExecutor();
         operationExecutor.configure(connConfig.originalsWithPrefix("errors."));
+        operationExecutor.setMetrics(errorHandlingMetrics);
 
         // Decide which type of worker task we need based on the type of task.
         if (task instanceof SourceTask) {
@@ -471,21 +474,29 @@ public class Worker {
                     internalKeyConverter, internalValueConverter);
             KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps);
             return new WorkerSourceTask(id, (SourceTask) task, statusListener, initialState, keyConverter, valueConverter,
-                    headerConverter, transformationChain, producer, offsetReader, offsetWriter, config, metrics, loader, time);
+                    headerConverter, transformationChain, producer, offsetReader, offsetWriter, config, metrics, loader,
+                    time, sourceProcessingContext(id, connConfig, errorHandlingMetrics), operationExecutor);
         } else if (task instanceof SinkTask) {
             TransformationChain<SinkRecord> transformationChain = new TransformationChain<>(connConfig.<SinkRecord>transformations());
             return new WorkerSinkTask(id, (SinkTask) task, statusListener, initialState, config, metrics, keyConverter,
-                    valueConverter, headerConverter, transformationChain, loader, time, sinkProcessingContext(connConfig), operationExecutor);
+                    valueConverter, headerConverter, transformationChain, loader, time, sinkProcessingContext(id, connConfig, errorHandlingMetrics),
+                    operationExecutor);
         } else {
             log.error("Tasks must be a subclass of either SourceTask or SinkTask", task);
             throw new ConnectException("Tasks must be a subclass of either SourceTask or SinkTask");
         }
     }
 
-    private ProcessingContext sinkProcessingContext(ConnectorConfig connConfig) {
+    ErrorHandlingMetrics errorHandlingMetrics(ConnectorTaskId id) {
+        return new ErrorHandlingMetrics(id, metrics);
+    }
+
+    private ProcessingContext sinkProcessingContext(ConnectorTaskId id, ConnectorConfig connConfig,
+                                                    ErrorHandlingMetrics errorHandlingMetrics) {
         ArrayList<ErrorReporter> reporters = new ArrayList<>();
-        ErrorReporter logReporter = new LogReporter();
+        ErrorReporter logReporter = new LogReporter(id);
         logReporter.configure(connConfig.originalsWithPrefix(LogReporter.PREFIX));
+        logReporter.setMetrics(errorHandlingMetrics);
         reporters.add(logReporter);
 
         // check if topic for dead letter queue exists
@@ -508,6 +519,17 @@ public class Worker {
                 throw new ConnectException(e);
             }
         }
+
+        return new ProcessingContext(reporters);
+    }
+
+    private ProcessingContext sourceProcessingContext(ConnectorTaskId id, ConnectorConfig connConfig,
+                                                      ErrorHandlingMetrics errorHandlingMetrics) {
+        ArrayList<ErrorReporter> reporters = new ArrayList<>();
+        LogReporter logReporter = new LogReporter(id);
+        logReporter.configure(connConfig.originalsWithPrefix(LogReporter.PREFIX));
+        logReporter.setMetrics(errorHandlingMetrics);
+        reporters.add(logReporter);
 
         return new ProcessingContext(reporters);
     }

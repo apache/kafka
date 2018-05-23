@@ -41,6 +41,7 @@ public class DLQReporter implements ErrorReporter {
 
     private DLQReporterConfig config;
     private KafkaProducer<byte[], byte[]> kafkaProducer;
+    private ErrorHandlingMetrics errorHandlingMetrics;
 
     static ConfigDef getConfigDef() {
         return new ConfigDef()
@@ -57,10 +58,17 @@ public class DLQReporter implements ErrorReporter {
         config = new DLQReporterConfig(configs);
     }
 
+    @Override
+    public void setMetrics(ErrorHandlingMetrics errorHandlingMetrics) {
+        this.errorHandlingMetrics = errorHandlingMetrics;
+    }
+
     public void report(ProcessingContext context) {
         if (config.topic().isEmpty()) {
             return;
         }
+
+        errorHandlingMetrics.recordDeadLetterQueueProduceRequest();
 
         ConsumerRecord<byte[], byte[]> originalMessage = context.sinkRecord();
         int partition = ThreadLocalRandom.current().nextInt(numPartitions);
@@ -68,7 +76,8 @@ public class DLQReporter implements ErrorReporter {
                 partition, originalMessage.key(), originalMessage.value());
         this.kafkaProducer.send(producerRecord, (metadata, exception) -> {
             if (exception != null) {
-                log.debug("Could not send object to DLQ", exception);
+                log.debug("Could not send object to Dead Letter Queue", exception);
+                errorHandlingMetrics.recordDeadLetterQueueProduceFailed();
             }
         });
     }

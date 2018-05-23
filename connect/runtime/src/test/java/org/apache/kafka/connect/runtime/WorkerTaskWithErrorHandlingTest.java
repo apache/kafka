@@ -28,6 +28,7 @@ import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.json.JsonConverter;
+import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
 import org.apache.kafka.connect.runtime.errors.LogReporter;
 import org.apache.kafka.connect.runtime.errors.OperationExecutor;
 import org.apache.kafka.connect.runtime.errors.ProcessingContext;
@@ -120,6 +121,8 @@ public class WorkerTaskWithErrorHandlingTest {
     @Mock
     private TaskStatus.Listener statusListener;
 
+    private ErrorHandlingMetrics errorHandlingMetrics;
+
     private long recordsReturned;
 
     @Before
@@ -137,6 +140,7 @@ public class WorkerTaskWithErrorHandlingTest {
         pluginLoader = PowerMock.createMock(PluginClassLoader.class);
         workerConfig = new StandaloneConfig(workerProps);
         recordsReturned = 0;
+        errorHandlingMetrics = new ErrorHandlingMetrics(taskId, metrics);
     }
 
     @Test
@@ -146,9 +150,11 @@ public class WorkerTaskWithErrorHandlingTest {
         reportProps.put(LogReporter.LOG_ENABLE, "true");
         reportProps.put(LogReporter.LOG_INCLUDE_MESSAGES, "true");
         reporter.configure(reportProps);
+        reporter.setMetrics(errorHandlingMetrics);
 
         RetryWithToleranceExecutor executor = new RetryWithToleranceExecutor(time);
         executor.configure(OPERATION_EXECUTOR_PROPS);
+        executor.setMetrics(errorHandlingMetrics);
         createTask(initialState, new ProcessingContext(Collections.singletonList(reporter)), executor);
 
         expectInitializeTask();
@@ -174,12 +180,21 @@ public class WorkerTaskWithErrorHandlingTest {
 
         assertSinkMetricValue("sink-record-read-total", 2.0);
         assertSinkMetricValue("sink-record-send-total", 1.0);
+        assertErrorHandlingMetricValue("processing-errors", 1.0);
+        assertErrorHandlingMetricValue("processing-failures", 3.0);
+        assertErrorHandlingMetricValue("record-skipped", 1.0);
 
         PowerMock.verifyAll();
     }
 
     private void assertSinkMetricValue(String name, double expected) {
         ConnectMetrics.MetricGroup sinkTaskGroup = workerTask.sinkTaskMetricsGroup().metricGroup();
+        double measured = metrics.currentMetricValueAsDouble(sinkTaskGroup, name);
+        assertEquals(expected, measured, 0.001d);
+    }
+
+    private void assertErrorHandlingMetricValue(String name, double expected) {
+        ConnectMetrics.MetricGroup sinkTaskGroup = errorHandlingMetrics.metricGroup();
         double measured = metrics.currentMetricValueAsDouble(sinkTaskGroup, name);
         assertEquals(expected, measured, 0.001d);
     }
