@@ -1,6 +1,5 @@
-package unit.kafka.zk
+package kafka.zk
 
-import kafka.zk.ConsumerOffset
 import org.junit.{Assert, Test}
 
 class ZkDataTest {
