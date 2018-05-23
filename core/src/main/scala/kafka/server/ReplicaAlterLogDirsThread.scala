@@ -29,7 +29,7 @@ import kafka.server.epoch.LeaderEpochCache
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.{AbstractRecords, FileRecords, MemoryRecords, Records}
+import org.apache.kafka.common.record.{FileRecords, MemoryRecords, Records}
 import org.apache.kafka.common.requests.EpochEndOffset._
 import org.apache.kafka.common.requests.{EpochEndOffset, FetchResponse, FetchRequest => JFetchRequest}
 
@@ -57,7 +57,7 @@ class ReplicaAlterLogDirsThread(name: String,
   private val fetchSize = brokerConfig.replicaFetchMaxBytes
 
   def fetch(fetchRequest: FetchRequest): Seq[(TopicPartition, PartitionData)] = {
-    var partitionData: Seq[(TopicPartition, FetchResponse.PartitionData[AbstractRecords])] = null
+    var partitionData: Seq[(TopicPartition, FetchResponse.PartitionData[Records])] = null
     val request = fetchRequest.underlying.build()
 
     def processResponseCallback(responsePartitionData: Seq[(TopicPartition, FetchPartitionData)]) {
@@ -255,7 +255,7 @@ object ReplicaAlterLogDirsThread {
     override def toString = underlying.toString
   }
 
-  private[server] class PartitionData(val underlying: FetchResponse.PartitionData[AbstractRecords]) extends AbstractFetcherThread.PartitionData {
+  private[server] class PartitionData(val underlying: FetchResponse.PartitionData[Records]) extends AbstractFetcherThread.PartitionData {
 
     def error = underlying.error
 

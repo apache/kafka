@@ -19,7 +19,7 @@ package kafka.message
 
 import java.nio._
 
-import org.apache.kafka.common.record.AbstractRecords
+import org.apache.kafka.common.record.Records
 
 /**
  * Message set helper functions
@@ -84,7 +84,7 @@ abstract class MessageSet extends Iterable[MessageAndOffset] {
   /**
    * Get the client representation of the message set
    */
-  def asRecords: AbstractRecords
+  def asRecords: Records
 
   /**
    * Print this message set's contents. If the message set has more than 100 messages, just
