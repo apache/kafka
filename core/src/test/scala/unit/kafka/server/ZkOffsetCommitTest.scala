@@ -1,19 +1,19 @@
 /**
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+  * Licensed to the Apache Software Foundation (ASF) under one or more
+  * contributor license agreements.  See the NOTICE file distributed with
+  * this work for additional information regarding copyright ownership.
+  * The ASF licenses this file to You under the Apache License, Version 2.0
+  * (the "License"); you may not use this file except in compliance with
+  * the License.  You may obtain a copy of the License at
+  *
+  * http://www.apache.org/licenses/LICENSE-2.0
+  *
+  * Unless required by applicable law or agreed to in writing, software
+  * distributed under the License is distributed on an "AS IS" BASIS,
+  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  * See the License for the specific language governing permissions and
+  * limitations under the License.
+  */
 
 package unit.kafka.server
 
@@ -29,7 +29,6 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.utils.Time
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
-
 import scala.collection._
 
 class ZkOffsetCommitTest extends ZooKeeperTestHarness {
@@ -41,11 +40,11 @@ class ZkOffsetCommitTest extends ZooKeeperTestHarness {
   @Before
   override def setUp() {
     super.setUp()
-    val config: Properties = createBrokerConfig(1, zkConnect,  enableDeleteTopic = true)
+    val config: Properties = createBrokerConfig(1, zkConnect, enableDeleteTopic = true)
     config.setProperty(KafkaConfig.OffsetsTopicReplicationFactorProp, "1")
     config.setProperty(KafkaConfig.OffsetsRetentionCheckIntervalMsProp, retentionCheckInterval.toString)
     server = TestUtils.createServer(KafkaConfig.fromProps(config), Time.SYSTEM)
-    simpleConsumer = new SimpleConsumer("localhost", TestUtils.boundPort(server), 1000000, 64*1024, "test-client")
+    simpleConsumer = new SimpleConsumer("localhost", TestUtils.boundPort(server), 1000000, 64 * 1024, "test-client")
   }
 
   @After
@@ -69,10 +68,10 @@ class ZkOffsetCommitTest extends ZooKeeperTestHarness {
     createTopic(zkClient, topic4, servers = Seq(server), numPartitions = 1)
 
     val commitRequest = OffsetCommitRequest(group, immutable.Map(
-      TopicAndPartition(topic1, 0) -> OffsetAndMetadata(offset=42L, metadata="metadata one"),
-      TopicAndPartition(topic2, 0) -> OffsetAndMetadata(offset=43L, metadata="metadata two"),
-      TopicAndPartition(topic2, 1) -> OffsetAndMetadata(offset=44L),
-      TopicAndPartition(topic3, 0) -> OffsetAndMetadata(offset=45L, metadata="metadata three")
+      TopicAndPartition(topic1, 0) -> OffsetAndMetadata(offset = 42L, metadata = "metadata one"),
+      TopicAndPartition(topic2, 0) -> OffsetAndMetadata(offset = 43L, metadata = "metadata two"),
+      TopicAndPartition(topic2, 1) -> OffsetAndMetadata(offset = 44L),
+      TopicAndPartition(topic3, 0) -> OffsetAndMetadata(offset = 45L, metadata = "metadata three")
     ), versionId = 0)
     val commitResponse = simpleConsumer.commitOffsets(commitRequest)
     assertEquals(Errors.NONE, commitResponse.commitStatus(TopicAndPartition(topic1, 0)))
@@ -87,7 +86,7 @@ class ZkOffsetCommitTest extends ZooKeeperTestHarness {
       TopicAndPartition(topic3, 0),
       TopicAndPartition(topic3, 1), // An unknown partition
       TopicAndPartition(topic4, 0), // An unused topic
-      TopicAndPartition(topic5, 0)  // An unknown topic
+      TopicAndPartition(topic5, 0) // An unknown topic
     ), versionId = 0)
     val fetchResponse = simpleConsumer.fetchOffsets(fetchRequest)
 
@@ -115,5 +114,4 @@ class ZkOffsetCommitTest extends ZooKeeperTestHarness {
     assertEquals(-1L, fetchResponse.requestInfo(TopicAndPartition(topic5, 0)).offset)
 
   }
-
 }

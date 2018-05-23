@@ -5,7 +5,6 @@ import org.junit.{Assert, Test}
 
 class ZkDataTest {
 
-
   @Test
   def testConsumerOffsetPath(): Unit = {
     def getConsumersOffsetsZkPath(consumerGroup: String, topic: String, partition: Int): String = {
@@ -21,5 +20,4 @@ class ZkDataTest {
 
     Assert.assertEquals(expectedConsumerGroupOffsetsPath, actualConsumerGroupOffsetsPath)
   }
-
 }
