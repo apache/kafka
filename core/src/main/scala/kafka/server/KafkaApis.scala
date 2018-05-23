@@ -357,11 +357,11 @@ class KafkaApis(val requestChannel: RequestChannel,
             commitTimestamp = currentTimestamp,
             expireTimestamp = {
               if (header.apiVersion >= 3)
-                OffsetCommitRequest.DEFAULT_EXPIRATION_TIMESTAMP
+                None
               else  if (partitionData.timestamp == OffsetCommitRequest.DEFAULT_TIMESTAMP)
-                defaultExpireTimestamp
+                Some(defaultExpireTimestamp)
               else
-                offsetRetention + partitionData.timestamp
+                Some(offsetRetention + partitionData.timestamp)
             }
           )
         }
@@ -1915,7 +1915,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       topicPartition -> new OffsetAndMetadata(
         offsetMetadata = OffsetMetadata(partitionData.offset, metadata),
         commitTimestamp = currentTimestamp,
-        expireTimestamp = defaultExpireTimestamp)
+        expireTimestamp = Some(defaultExpireTimestamp))
     }
   }
 

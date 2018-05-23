@@ -28,13 +28,14 @@ case class OffsetMetadata(offset: Long, metadata: String = OffsetMetadata.NoMeta
 object OffsetMetadata {
   val InvalidOffset: Long = -1L
   val NoMetadata: String = ""
+  //val DefaultExpirationTimestamp: Long = -1
 
   val InvalidOffsetMetadata = OffsetMetadata(OffsetMetadata.InvalidOffset, OffsetMetadata.NoMetadata)
 }
 
 case class OffsetAndMetadata(offsetMetadata: OffsetMetadata,
                              commitTimestamp: Long = org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_TIMESTAMP,
-                             expireTimestamp: Long = org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_EXPIRATION_TIMESTAMP) {
+                             expireTimestamp: Option[Long] = None) {
 
   def offset = offsetMetadata.offset
 
@@ -44,7 +45,7 @@ case class OffsetAndMetadata(offsetMetadata: OffsetMetadata,
 }
 
 object OffsetAndMetadata {
-  def apply(offset: Long, metadata: String, commitTimestamp: Long, expireTimestamp: Long) = new OffsetAndMetadata(OffsetMetadata(offset, metadata), commitTimestamp, expireTimestamp)
+  def apply(offset: Long, metadata: String, commitTimestamp: Long, expireTimestamp: Long) = new OffsetAndMetadata(OffsetMetadata(offset, metadata), commitTimestamp, Some(expireTimestamp))
 
   def apply(offset: Long, metadata: String, timestamp: Long) = new OffsetAndMetadata(OffsetMetadata(offset, metadata), timestamp)
 

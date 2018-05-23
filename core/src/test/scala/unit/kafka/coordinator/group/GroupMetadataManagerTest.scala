@@ -19,7 +19,7 @@ package kafka.coordinator.group
 
 import kafka.api.ApiVersion
 import kafka.cluster.Partition
-import kafka.common.OffsetAndMetadata
+import kafka.common.{OffsetAndMetadata, OffsetMetadata}
 import kafka.log.{Log, LogAppendInfo}
 import kafka.server.{FetchDataInfo, KafkaConfig, LogOffsetMetadata, ReplicaManager}
 import kafka.utils.TestUtils.fail
@@ -1381,7 +1381,7 @@ class GroupMetadataManagerTest {
     val tp1OffsetAndMetadata = OffsetAndMetadata(offset, "", startMs, startMs + 1)
     val tp2OffsetAndMetadata = OffsetAndMetadata(offset, "", startMs, startMs + 3)
     // new clients, no per-partition expiry timestamp, offsets of group expire together
-    val tp3OffsetAndMetadata = OffsetAndMetadata(offset, "", startMs, OffsetCommitRequest.DEFAULT_EXPIRATION_TIMESTAMP)
+    val tp3OffsetAndMetadata = OffsetAndMetadata(offset, "", startMs)
     val offsets = immutable.Map(
       topicPartition1 -> tp1OffsetAndMetadata,
       topicPartition2 -> tp2OffsetAndMetadata,

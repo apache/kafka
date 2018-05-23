@@ -26,7 +26,7 @@ import java.util.concurrent.locks.ReentrantLock
 
 import com.yammer.metrics.core.Gauge
 import kafka.api.{ApiVersion, KAFKA_0_10_1_IV0}
-import kafka.common.{MessageFormatter, OffsetAndMetadata}
+import kafka.common.{MessageFormatter, OffsetAndMetadata, OffsetMetadata}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.ReplicaManager
 import kafka.utils.CoreUtils.inLock
@@ -657,10 +657,10 @@ class GroupMetadataManager(brokerId: Int,
       // special handling for version 0:
       // set the expiration time stamp as commit time stamp + server default retention time
       val updatedOffsetAndMetadata =
-        if (offsetAndMetadata.expireTimestamp == org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_TIMESTAMP)
-        offsetAndMetadata.copy(expireTimestamp = offsetAndMetadata.commitTimestamp + config.offsetsRetentionMs)
-      else
-        offsetAndMetadata
+        if (offsetAndMetadata.expireTimestamp.contains(org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_TIMESTAMP))
+          offsetAndMetadata.copy(expireTimestamp = Some(offsetAndMetadata.commitTimestamp + config.offsetsRetentionMs))
+        else
+          offsetAndMetadata
       CommitRecordMetadataAndOffset(commitRecordOffset, updatedOffsetAndMetadata)
     }
     trace(s"Initialized offsets $loadedOffsets for group ${group.groupId}")
@@ -1104,13 +1104,29 @@ object GroupMetadataManager {
    * @return payload for offset commit message
    */
   private[group] def offsetCommitValue(offsetAndMetadata: OffsetAndMetadata): Array[Byte] = {
-    // generate commit value with schema version 2
-    val value = new Struct(CURRENT_OFFSET_VALUE_SCHEMA)
-    value.set(OFFSET_VALUE_OFFSET_FIELD_V2, offsetAndMetadata.offset)
-    value.set(OFFSET_VALUE_METADATA_FIELD_V2, offsetAndMetadata.metadata)
-    value.set(OFFSET_VALUE_COMMIT_TIMESTAMP_FIELD_V2, offsetAndMetadata.commitTimestamp)
+    // generate commit value according to schema version
+
+    val offsetValueSchemaVersion: Short =
+      // if expire timestamp is explicitly provided use the old schema
+      if (offsetAndMetadata.expireTimestamp.nonEmpty) 1
+      //  otherwise, use the current schema
+      else CURRENT_OFFSET_VALUE_SCHEMA_VERSION
+
+    val value = new Struct(schemaForOffset(offsetValueSchemaVersion))
+
+    if (offsetValueSchemaVersion == CURRENT_OFFSET_VALUE_SCHEMA_VERSION) {
+      value.set(OFFSET_VALUE_OFFSET_FIELD_V2, offsetAndMetadata.offset)
+      value.set(OFFSET_VALUE_METADATA_FIELD_V2, offsetAndMetadata.metadata)
+      value.set(OFFSET_VALUE_COMMIT_TIMESTAMP_FIELD_V2, offsetAndMetadata.commitTimestamp)
+    } else {
+      value.set(OFFSET_VALUE_OFFSET_FIELD_V1, offsetAndMetadata.offset)
+      value.set(OFFSET_VALUE_METADATA_FIELD_V1, offsetAndMetadata.metadata)
+      value.set(OFFSET_VALUE_COMMIT_TIMESTAMP_FIELD_V1, offsetAndMetadata.commitTimestamp)
+      value.set(OFFSET_VALUE_EXPIRE_TIMESTAMP_FIELD_V1, offsetAndMetadata.expireTimestamp.get)
+    }
+
     val byteBuffer = ByteBuffer.allocate(2 /* version */ + value.sizeOf)
-    byteBuffer.putShort(CURRENT_OFFSET_VALUE_SCHEMA_VERSION)
+    byteBuffer.putShort(offsetValueSchemaVersion)
     value.writeTo(byteBuffer)
     byteBuffer.array()
   }
@@ -1257,7 +1273,7 @@ object GroupMetadataManager {
       val valueSchema = schemaForGroup(version)
       val value = valueSchema.read(buffer)
 
-      if (version == 0 || version == 1 || version == 2) {
+      if (version >= 0 && version <= 2) {
         val generationId = value.get(GENERATION_KEY).asInstanceOf[Int]
         val protocolType = value.get(PROTOCOL_TYPE_KEY).asInstanceOf[String]
         val protocol = value.get(PROTOCOL_KEY).asInstanceOf[String]
@@ -1266,7 +1282,7 @@ object GroupMetadataManager {
         val initialState = if (memberMetadataArray.isEmpty) Empty else Stable
         val currentStateTimestamp: Long =
           if (version > 1) value.getLong(CURRENT_STATE_TIMESTAMP_KEY)
-          else OffsetCommitRequest.DEFAULT_EXPIRATION_TIMESTAMP
+          else GroupMetadata.DefaultCurrentStateTimestamp
 
         val members = memberMetadataArray.map { memberMetadataObj =>
           val memberMetadata = memberMetadataObj.asInstanceOf[Struct]
