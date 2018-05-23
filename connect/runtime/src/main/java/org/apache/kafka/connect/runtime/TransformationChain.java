@@ -17,10 +17,10 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.connect.connector.ConnectRecord;
-import org.apache.kafka.connect.runtime.errors.NoopExecutor;
 import org.apache.kafka.connect.runtime.errors.OperationExecutor;
 import org.apache.kafka.connect.runtime.errors.ProcessingContext;
 import org.apache.kafka.connect.runtime.errors.Result;
+import org.apache.kafka.connect.runtime.errors.RetryWithToleranceExecutor;
 import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.transforms.Transformation;
 
@@ -37,7 +37,7 @@ public class TransformationChain<R extends ConnectRecord<R>> {
     }
 
     public R apply(R record) {
-        return apply(record, NoopExecutor.INSTANCE, new ProcessingContext());
+        return apply(record, RetryWithToleranceExecutor.NOOP_EXECUTOR, new ProcessingContext());
     }
 
     public R apply(R record, OperationExecutor operationExecutor, ProcessingContext processingContext) {

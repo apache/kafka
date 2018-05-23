@@ -501,7 +501,7 @@ public class Worker {
 
         // check if topic for dead letter queue exists
         String topic = connConfig.getString(DLQReporter.PREFIX + "." + DLQReporter.DLQ_TOPIC_NAME);
-        if (topic != null && topic.length() > 0) {
+        if (topic != null && !topic.isEmpty()) {
             DescribeTopicsResult topics = AdminClient.create(config.originals()).describeTopics(Collections.singleton(topic));
             try {
                 TopicDescription description = topics.values().get(topic).get(60, TimeUnit.SECONDS);

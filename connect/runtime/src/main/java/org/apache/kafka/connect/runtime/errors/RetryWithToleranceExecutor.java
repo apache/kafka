@@ -26,6 +26,8 @@ import org.apache.kafka.connect.errors.RetriableException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
@@ -51,6 +53,19 @@ public class RetryWithToleranceExecutor implements OperationExecutor {
     public static final String TOLERANCE_LIMIT_DOC = "Fail the task if we exceed specified number of errors overall.";
     public static final String TOLERANCE_LIMIT_DEFAULT = "none";
 
+    public static final RetryWithToleranceExecutor NOOP_EXECUTOR = new RetryWithToleranceExecutor();
+    static {
+        NOOP_EXECUTOR.configure(Collections.emptyMap());
+    }
+
+    private static final Map<Stage, Class<? extends Exception>> TOLERABLE_EXCEPTIONS = new HashMap<>();
+    static {
+        TOLERABLE_EXCEPTIONS.put(Stage.TRANSFORMATION, Exception.class);
+        TOLERABLE_EXCEPTIONS.put(Stage.HEADER_CONVERTER, Exception.class);
+        TOLERABLE_EXCEPTIONS.put(Stage.KEY_CONVERTER, Exception.class);
+        TOLERABLE_EXCEPTIONS.put(Stage.VALUE_CONVERTER, Exception.class);
+    }
+
     private long totalFailures = 0;
     private final Time time;
     private RetryWithToleranceExecutorConfig config;
@@ -74,15 +89,8 @@ public class RetryWithToleranceExecutor implements OperationExecutor {
     @Override
     public <V> Result<V> execute(Operation<V> operation, ProcessingContext context) {
         try {
-            switch (context.stage()) {
-                case TRANSFORMATION:
-                case HEADER_CONVERTER:
-                case KEY_CONVERTER:
-                case VALUE_CONVERTER:
-                    return execAndHandleError(operation, context, Exception.class);
-                default:
-                    return execAndHandleError(operation, context, org.apache.kafka.connect.errors.RetriableException.class);
-            }
+            Class<? extends Exception> ex = TOLERABLE_EXCEPTIONS.getOrDefault(context.stage(), RetriableException.class);
+            return execAndHandleError(operation, context, ex);
         } finally {
             if (!context.result().success()) {
                 errorHandlingMetrics.recordError();

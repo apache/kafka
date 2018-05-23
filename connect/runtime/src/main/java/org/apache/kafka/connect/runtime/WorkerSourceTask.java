@@ -34,11 +34,11 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.header.Header;
 import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
-import org.apache.kafka.connect.runtime.errors.NoopExecutor;
 import org.apache.kafka.connect.runtime.errors.Operation;
 import org.apache.kafka.connect.runtime.errors.OperationExecutor;
 import org.apache.kafka.connect.runtime.errors.ProcessingContext;
 import org.apache.kafka.connect.runtime.errors.Result;
+import org.apache.kafka.connect.runtime.errors.RetryWithToleranceExecutor;
 import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
@@ -115,7 +115,7 @@ class WorkerSourceTask extends WorkerTask {
                             Time time) {
         this(id, task, statusListener, initialState, keyConverter, valueConverter, headerConverter,
                 transformationChain, producer, offsetReader, offsetWriter, workerConfig, connectMetrics,
-                loader, time, new ProcessingContext(), NoopExecutor.INSTANCE);
+                loader, time, new ProcessingContext(), RetryWithToleranceExecutor.NOOP_EXECUTOR);
     }
 
     public WorkerSourceTask(ConnectorTaskId id,
@@ -300,7 +300,7 @@ class WorkerSourceTask extends WorkerTask {
             }
 
             RecordHeaders headers;
-            processingContext.setStage(Stage.HEADER_CONVERTER, headerConverter.getClass());
+            processingContext.setCurrentContext(Stage.HEADER_CONVERTER, headerConverter.getClass());
             Result<RecordHeaders> headersResult = execute(() -> convertHeaderFor(record));
             if (headersResult.success()) {
                 headers = headersResult.result();
@@ -311,7 +311,7 @@ class WorkerSourceTask extends WorkerTask {
             }
 
             byte[] key;
-            processingContext.setStage(Stage.KEY_CONVERTER, keyConverter.getClass());
+            processingContext.setCurrentContext(Stage.KEY_CONVERTER, keyConverter.getClass());
             Result<byte[]> keyResult = execute(() -> keyConverter.fromConnectData(record.topic(), record.keySchema(), record.key()));
             if (keyResult.success()) {
                 key = keyResult.result();
@@ -322,7 +322,7 @@ class WorkerSourceTask extends WorkerTask {
             }
 
             byte[] value;
-            processingContext.setStage(Stage.VALUE_CONVERTER, valueConverter.getClass());
+            processingContext.setCurrentContext(Stage.VALUE_CONVERTER, valueConverter.getClass());
             Result<byte[]> valueResult = execute(() -> valueConverter.fromConnectData(record.topic(), record.valueSchema(), record.value()));
             if (valueResult.success()) {
                 value = valueResult.result();

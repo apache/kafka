@@ -40,11 +40,11 @@ import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
-import org.apache.kafka.connect.runtime.errors.NoopExecutor;
 import org.apache.kafka.connect.runtime.errors.Operation;
 import org.apache.kafka.connect.runtime.errors.OperationExecutor;
 import org.apache.kafka.connect.runtime.errors.ProcessingContext;
 import org.apache.kafka.connect.runtime.errors.Result;
+import org.apache.kafka.connect.runtime.errors.RetryWithToleranceExecutor;
 import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
@@ -111,7 +111,7 @@ class WorkerSinkTask extends WorkerTask {
                           ClassLoader loader,
                           Time time) {
         this(id, task, statusListener, initialState, workerConfig, connectMetrics, keyConverter, valueConverter,
-                headerConverter, transformationChain, loader, time, new ProcessingContext(), NoopExecutor.INSTANCE);
+                headerConverter, transformationChain, loader, time, new ProcessingContext(), RetryWithToleranceExecutor.NOOP_EXECUTOR);
     }
 
     public WorkerSinkTask(ConnectorTaskId id,
@@ -514,7 +514,7 @@ class WorkerSinkTask extends WorkerTask {
             processingContext.sinkRecord(msg);
 
             SchemaAndValue keyAndSchema;
-            processingContext.setStage(Stage.KEY_CONVERTER, keyConverter.getClass());
+            processingContext.setCurrentContext(Stage.KEY_CONVERTER, keyConverter.getClass());
             Result<SchemaAndValue> keyResult = execute(() -> keyConverter.toConnectData(msg.topic(), msg.key()));
             if (keyResult.success()) {
                 keyAndSchema = keyResult.result();
@@ -522,7 +522,7 @@ class WorkerSinkTask extends WorkerTask {
                 continue;
             }
 
-            processingContext.setStage(Stage.VALUE_CONVERTER, valueConverter.getClass());
+            processingContext.setCurrentContext(Stage.VALUE_CONVERTER, valueConverter.getClass());
             SchemaAndValue valueAndSchema;
             Result<SchemaAndValue> valueResult = execute(() -> valueConverter.toConnectData(msg.topic(), msg.value()));
             if (valueResult.success()) {
@@ -531,7 +531,7 @@ class WorkerSinkTask extends WorkerTask {
                 continue;
             }
 
-            processingContext.setStage(Stage.HEADER_CONVERTER, headerConverter.getClass());
+            processingContext.setCurrentContext(Stage.HEADER_CONVERTER, headerConverter.getClass());
             Headers headers;
             Result<Headers> headersResult = execute(() -> convertHeadersFor(msg));
             if (headersResult.success()) {

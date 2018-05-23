@@ -43,9 +43,8 @@ public class ProcessingContext {
         this.reporters = reporters;
     }
 
-    public ProcessingContext sinkRecord(ConsumerRecord<byte[], byte[]> consumedMessage) {
+    public void sinkRecord(ConsumerRecord<byte[], byte[]> consumedMessage) {
         this.consumedMessage = consumedMessage;
-        return this;
     }
 
     public ConsumerRecord<byte[], byte[]> sinkRecord() {
@@ -76,12 +75,11 @@ public class ProcessingContext {
         this.klass = klass;
     }
 
-    public ProcessingContext result(Result<?> result) {
+    public void result(Result<?> result) {
         this.result = result;
-        return this;
     }
 
-    public void setStage(Stage stage, Class<?> klass) {
+    public void setCurrentContext(Stage stage, Class<?> klass) {
         position(stage);
         executingClass(klass);
     }

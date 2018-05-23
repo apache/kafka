@@ -154,7 +154,7 @@ public class RetryWithToleranceExecutorTest {
         EasyMock.expect(mockOperation.apply()).andReturn("Success");
 
         ProcessingContext context = new ProcessingContext();
-        context.setStage(Stage.TRANSFORMATION, ExceptionThrower.class);
+        context.setCurrentContext(Stage.TRANSFORMATION, ExceptionThrower.class);
 
         replay(mockOperation);
 
@@ -178,7 +178,7 @@ public class RetryWithToleranceExecutorTest {
         EasyMock.expect(mockOperation.apply()).andReturn("Success");
 
         ProcessingContext context = new ProcessingContext();
-        context.setStage(Stage.TRANSFORMATION, ExceptionThrower.class);
+        context.setCurrentContext(Stage.TRANSFORMATION, ExceptionThrower.class);
 
         replay(mockOperation);
 
@@ -195,7 +195,9 @@ public class RetryWithToleranceExecutorTest {
         EasyMock.expect(processingContext.stage()).andReturn(type).anyTimes();
         EasyMock.expect(processingContext.result()).andReturn(new Result(ex));
         EasyMock.expect((Class) processingContext.executingClass()).andReturn(ExceptionThrower.class);
-        EasyMock.expect(processingContext.result(anyObject(Result.class))).andReturn(processingContext).anyTimes();
+
+        processingContext.result(anyObject(Result.class));
+        EasyMock.expectLastCall().anyTimes();
 
         processingContext.attempt(EasyMock.anyInt());
         EasyMock.expectLastCall();
