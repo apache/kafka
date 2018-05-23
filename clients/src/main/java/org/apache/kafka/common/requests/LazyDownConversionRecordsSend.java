@@ -25,15 +25,23 @@ public final class LazyDownConversionRecordsSend extends RecordsSend {
 
     private RecordsProcessingStats processingStats = null;
     private RecordsWriter convertedRecordsWriter = null;
-    private final LazyDownConversionRecordsIterator convertedRecordsIterator;
+    private LazyDownConversionRecordsIterator convertedRecordsIterator;
 
     public LazyDownConversionRecordsSend(String destination, LazyDownConversionRecords records) {
         super(destination, records);
-        this.convertedRecordsIterator = records.lazyDownConversionRecordsIterator();
+    }
+
+    private void resetState() {
+        convertedRecordsWriter = null;
+        processingStats = new RecordsProcessingStats(0, 0, 0);
+        convertedRecordsIterator = records().lazyDownConversionRecordsIterator();
     }
 
     @Override
     public long writeRecordsTo(GatheringByteChannel channel, long previouslyWritten, int remaining) throws IOException {
+        if (previouslyWritten == 0)
+            resetState();
+
         if (convertedRecordsWriter == null || convertedRecordsWriter.remaining() == 0) {
             MemoryRecords convertedRecords;
 

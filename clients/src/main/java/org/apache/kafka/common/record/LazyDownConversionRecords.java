@@ -18,7 +18,6 @@ package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.requests.LazyDownConversionRecordsSend;
-import org.apache.kafka.common.requests.RecordsSend;
 import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
@@ -69,7 +68,7 @@ public class LazyDownConversionRecords implements BaseRecords {
     }
 
     @Override
-    public RecordsSend toSend(String destination) {
+    public LazyDownConversionRecordsSend toSend(String destination) {
         return new LazyDownConversionRecordsSend(destination, this);
     }
 
@@ -81,7 +80,10 @@ public class LazyDownConversionRecords implements BaseRecords {
     public boolean equals(Object o) {
         if (o instanceof LazyDownConversionRecords) {
             LazyDownConversionRecords that = (LazyDownConversionRecords) o;
-            return (toMagic == that.toMagic) && records.equals(that.records);
+            return toMagic == that.toMagic &&
+                    firstOffset == that.firstOffset &&
+                    topicPartition.equals(that.topicPartition) &&
+                    records.equals(that.records);
         }
         return false;
     }
