@@ -534,7 +534,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     def convertedPartitionData(tp: TopicPartition,
-                               data: FetchResponse.PartitionData[AbstractRecords]): FetchResponse.PartitionData[WriteableRecords] = {
+                               data: FetchResponse.PartitionData[AbstractRecords]): FetchResponse.PartitionData[BaseRecords] = {
       // Down-conversion of the fetched records is needed when the stored magic version is
       // greater than that supported by the client (as indicated by the fetch request version). If the
       // configured magic version for the topic is less than or equal to that supported by the version of the
@@ -560,11 +560,11 @@ class KafkaApis(val requestChannel: RequestChannel,
           // down-conversion always guarantees that at least one batch of messages is down-converted and sent out to the
           // client.
           val converted = new LazyDownConversionRecords(tp, data.records, magic, fetchContext.getFetchOffset(tp).get)
-          new FetchResponse.PartitionData[WriteableRecords](data.error, data.highWatermark, FetchResponse.INVALID_LAST_STABLE_OFFSET,
+          new FetchResponse.PartitionData[BaseRecords](data.error, data.highWatermark, FetchResponse.INVALID_LAST_STABLE_OFFSET,
             data.logStartOffset, data.abortedTransactions, converted)
         }
 
-      }.getOrElse(new FetchResponse.PartitionData[WriteableRecords](data.error, data.highWatermark, data.lastStableOffset,
+      }.getOrElse(new FetchResponse.PartitionData[BaseRecords](data.error, data.highWatermark, data.lastStableOffset,
         data.logStartOffset, data.abortedTransactions, data.records))
     }
 
@@ -582,8 +582,8 @@ class KafkaApis(val requestChannel: RequestChannel,
 
       // fetch response callback invoked after any throttling
       def fetchResponseCallback(bandwidthThrottleTimeMs: Int) {
-        def createResponse(requestThrottleTimeMs: Int): FetchResponse[WriteableRecords] = {
-          val convertedData = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[WriteableRecords]]
+        def createResponse(requestThrottleTimeMs: Int): FetchResponse[BaseRecords] = {
+          val convertedData = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[BaseRecords]]
           unconvertedFetchResponse.responseData().asScala.foreach { case (tp, partitionData) =>
             if (partitionData.error != Errors.NONE)
               debug(s"Fetch request with correlation id ${request.header.correlationId} from client $clientId " +

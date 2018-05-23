@@ -16,21 +16,16 @@
  */
 package org.apache.kafka.common.record;
 
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.utils.Utils;
 import org.junit.Test;
 
-import java.io.File;
 import java.io.IOException;
-import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
-import java.nio.channels.FileChannel;
 import java.util.List;
 
 import static java.util.Arrays.asList;
-import static org.apache.kafka.test.TestUtils.tempFile;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -94,6 +89,7 @@ public class LazyDownConversionRecordsTest {
 
         buffer.flip();
 
+        /*
         try (FileRecords inputRecords = FileRecords.open(tempFile())) {
             MemoryRecords memoryRecords = MemoryRecords.readableRecords(buffer);
             inputRecords.append(memoryRecords);
@@ -137,6 +133,7 @@ public class LazyDownConversionRecordsTest {
             convertedRecords.close();
             channel.close();
         }
+        */
     }
 
     private String utf8(ByteBuffer buffer) {

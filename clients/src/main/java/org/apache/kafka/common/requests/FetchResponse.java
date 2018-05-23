@@ -26,8 +26,7 @@ import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.record.Records;
-import org.apache.kafka.common.record.WriteableRecords;
+import org.apache.kafka.common.record.BaseRecords;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
@@ -51,7 +50,7 @@ import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 /**
  * This wrapper supports all versions of the Fetch API
  */
-public class FetchResponse<T extends Records> extends AbstractResponse {
+public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
 
     private static final String RESPONSES_KEY_NAME = "responses";
 
@@ -222,7 +221,7 @@ public class FetchResponse<T extends Records> extends AbstractResponse {
         }
     }
 
-    public static final class PartitionData<T extends Records> {
+    public static final class PartitionData<T extends BaseRecords> {
         public final Errors error;
         public final long highWatermark;
         public final long lastStableOffset;
@@ -394,7 +393,7 @@ public class FetchResponse<T extends Records> extends AbstractResponse {
         return errorCounts;
     }
 
-    public static <T extends Records> FetchResponse<T> parse(ByteBuffer buffer, short version) {
+    public static <T extends BaseRecords> FetchResponse<T> parse(ByteBuffer buffer, short version) {
         return new FetchResponse<>(ApiKeys.FETCH.responseSchema(version).read(buffer));
     }
 
@@ -441,7 +440,7 @@ public class FetchResponse<T extends Records> extends AbstractResponse {
             addPartitionData(dest, sends, (Struct) partitionData);
     }
 
-    private static <T extends WriteableRecords> void addPartitionData(String dest, Queue<Send> sends, Struct partitionData) {
+    private static <T extends BaseRecords> void addPartitionData(String dest, Queue<Send> sends, Struct partitionData) {
         Struct header = partitionData.getStruct(PARTITION_HEADER_KEY_NAME);
         T records = (T) partitionData.getRecords(RECORD_SET_KEY_NAME);
 
@@ -452,11 +451,11 @@ public class FetchResponse<T extends Records> extends AbstractResponse {
         buffer.rewind();
         sends.add(new ByteBufferSend(dest, buffer));
 
-        // finally the send for the record set itself
-        sends.add(new RecordsSend(dest, records));
+        // finally the send for the record set itself'
+        sends.add(records.toSend(dest));
     }
 
-    private static <T extends Records> Struct toStruct(short version, int throttleTimeMs, Errors error,
+    private static <T extends BaseRecords> Struct toStruct(short version, int throttleTimeMs, Errors error,
                                                        Iterator<Map.Entry<TopicPartition, PartitionData<T>>> partIterator,
                                                        int sessionId) {
         Struct struct = new Struct(ApiKeys.FETCH.responseSchema(version));
@@ -522,8 +521,8 @@ public class FetchResponse<T extends Records> extends AbstractResponse {
      * @param partIterator  The partition iterator.
      * @return              The response size in bytes.
      */
-    public static <T extends Records> int sizeOf(short version,
-                                                 Iterator<Map.Entry<TopicPartition, PartitionData<T>>> partIterator) {
+    public static <T extends BaseRecords> int sizeOf(short version,
+                                                     Iterator<Map.Entry<TopicPartition, PartitionData<T>>> partIterator) {
         // Since the throttleTimeMs and metadata field sizes are constant and fixed, we can
         // use arbitrary values here without affecting the result.
         return 4 + toStruct(version, 0, Errors.NONE, partIterator, INVALID_SESSION_ID).sizeOf();

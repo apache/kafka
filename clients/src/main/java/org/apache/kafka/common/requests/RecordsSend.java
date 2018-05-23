@@ -16,25 +16,24 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.TopicPartitionRecordsStats;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.network.TransportLayers;
-import org.apache.kafka.common.record.WriteableRecords;
+import org.apache.kafka.common.record.BaseRecords;
 
 import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.GatheringByteChannel;
 
-public class RecordsSend implements Send {
+public abstract class RecordsSend implements Send {
     private static final ByteBuffer EMPTY_BYTE_BUFFER = ByteBuffer.allocate(0);
 
     private final String destination;
-    private final WriteableRecords records;
+    private final BaseRecords records;
     private int remaining;
     private boolean pending = false;
 
-    public RecordsSend(String destination, WriteableRecords records) {
+    public RecordsSend(String destination, BaseRecords records) {
         this.destination = destination;
         this.records = records;
         this.remaining = records.sizeInBytes();
@@ -55,7 +54,7 @@ public class RecordsSend implements Send {
         long written = 0;
 
         if (remaining > 0) {
-            written = records.writeTo(channel, size() - remaining, remaining);
+            written = writeRecordsTo(channel, size() - remaining, remaining);
             if (written < 0)
                 throw new EOFException("Wrote negative bytes to channel. This shouldn't happen.");
             remaining -= written;
@@ -73,11 +72,9 @@ public class RecordsSend implements Send {
         return records.sizeInBytes();
     }
 
-    /**
-     * Get processing statistics of underlying records.
-     * @return Processing statistics of records enclosed in this send
-     */
-    public TopicPartitionRecordsStats recordsProcessingStats() {
-        return records.recordsProcessingStats();
+    protected BaseRecords records() {
+        return records;
     }
+
+    protected abstract long writeRecordsTo(GatheringByteChannel channel, long position, int length) throws IOException;
 }

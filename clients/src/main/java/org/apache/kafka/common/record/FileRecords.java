@@ -18,7 +18,6 @@ package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.RecordsProcessingStats;
-import org.apache.kafka.common.TopicPartitionRecordsStats;
 import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.record.FileLogInputStream.FileChannelRecordBatch;
 import org.apache.kafka.common.utils.AbstractIterator;
@@ -241,7 +240,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
     }
 
     @Override
-    public ConvertedRecords<? extends ReadableRecords> downConvert(byte toMagic, long firstOffset, Time time) {
+    public ConvertedRecords<? extends Records> downConvert(byte toMagic, long firstOffset, Time time) {
         ConvertedRecords<MemoryRecords> convertedRecords = RecordsUtil.downConvert(batches, toMagic, firstOffset, time);
         if (convertedRecords.recordsProcessingStats().numRecordsConverted() == 0) {
             // This indicates that the message is too large, which means that the buffer is not large
@@ -380,11 +379,6 @@ public class FileRecords extends AbstractRecords implements Closeable {
             end = this.sizeInBytes();
         FileLogInputStream inputStream = new FileLogInputStream(this, start, end);
         return new RecordBatchIterator<>(inputStream);
-    }
-
-    @Override
-    public TopicPartitionRecordsStats recordsProcessingStats() {
-        return null;
     }
 
     public static FileRecords open(File file,

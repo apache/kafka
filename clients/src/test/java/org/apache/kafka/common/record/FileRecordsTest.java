@@ -345,14 +345,14 @@ public class FileRecordsTest {
         int start = fileRecords.searchForOffsetWithSize(1, 0).position;
         int size = batch.sizeInBytes();
         FileRecords slice = fileRecords.read(start, size - 1);
-        ReadableRecords messageV0 = slice.downConvert(RecordBatch.MAGIC_VALUE_V0, 0, time).records();
+        Records messageV0 = slice.downConvert(RecordBatch.MAGIC_VALUE_V0, 0, time).records();
         assertTrue("No message should be there", batches(messageV0).isEmpty());
         assertEquals("There should be " + (size - 1) + " bytes", size - 1, messageV0.sizeInBytes());
 
         // Lazy down-conversion will not return any messages for a partial input batch
         TopicPartition tp = new TopicPartition("topic-1", 0);
         LazyDownConversionRecords lazyRecords = new LazyDownConversionRecords(tp, slice, RecordBatch.MAGIC_VALUE_V0, 0);
-        LazyDownConversionRecords.LazyDownConversionRecordsIterator it = lazyRecords.lazyDownConversionRecordsIterator(16 * 1024L);
+        LazyDownConversionRecordsIterator it = lazyRecords.lazyDownConversionRecordsIterator(16 * 1024L);
         assertTrue("No messages should be returned", !it.hasNext());
     }
 
@@ -451,7 +451,7 @@ public class FileRecordsTest {
         }
 
         // Test the normal down-conversion path
-        List<ReadableRecords> convertedRecords = new ArrayList<>();
+        List<Records> convertedRecords = new ArrayList<>();
         convertedRecords.add(fileRecords.downConvert(toMagic, firstOffset, time).records());
         verifyConvertedRecords(initialRecords, initialOffsets, convertedRecords, compressionType, toMagic);
         convertedRecords.clear();
@@ -466,7 +466,7 @@ public class FileRecordsTest {
         for (long readSize : maximumReadSize) {
             TopicPartition tp = new TopicPartition("topic-1", 0);
             LazyDownConversionRecords lazyRecords = new LazyDownConversionRecords(tp, fileRecords, toMagic, firstOffset);
-            LazyDownConversionRecords.LazyDownConversionRecordsIterator it = lazyRecords.lazyDownConversionRecordsIterator(readSize);
+            LazyDownConversionRecordsIterator it = lazyRecords.lazyDownConversionRecordsIterator(readSize);
             while (it.hasNext())
                 convertedRecords.add(it.next().records());
 
@@ -490,12 +490,12 @@ public class FileRecordsTest {
 
     private void verifyConvertedRecords(List<SimpleRecord> initialRecords,
                                         List<Long> initialOffsets,
-                                        List<ReadableRecords> convertedRecordsList,
+                                        List<Records> convertedRecordsList,
                                         CompressionType compressionType,
                                         byte magicByte) {
         int i = 0;
 
-        for (ReadableRecords convertedRecords : convertedRecordsList) {
+        for (Records convertedRecords : convertedRecordsList) {
             for (RecordBatch batch : convertedRecords.batches()) {
                 assertTrue("Magic byte should be lower than or equal to " + magicByte, batch.magic() <= magicByte);
                 if (batch.magic() == RecordBatch.MAGIC_VALUE_V0)
@@ -530,7 +530,7 @@ public class FileRecordsTest {
         assertEquals(initialOffsets.size(), i);
     }
 
-    private static List<RecordBatch> batches(ReadableRecords buffer) {
+    private static List<RecordBatch> batches(Records buffer) {
         return TestUtils.toList(buffer.batches());
     }
 

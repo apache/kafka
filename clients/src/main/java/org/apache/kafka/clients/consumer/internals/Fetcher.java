@@ -49,9 +49,9 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.BufferSupplier;
 import org.apache.kafka.common.record.ControlRecordType;
 import org.apache.kafka.common.record.InvalidRecordException;
-import org.apache.kafka.common.record.ReadableRecords;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
@@ -204,7 +204,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                     .addListener(new RequestFutureListener<ClientResponse>() {
                         @Override
                         public void onSuccess(ClientResponse resp) {
-                            FetchResponse<ReadableRecords> response = (FetchResponse<ReadableRecords>) resp.responseBody();
+                            FetchResponse<Records> response = (FetchResponse<Records>) resp.responseBody();
                             FetchSessionHandler handler = sessionHandlers.get(fetchTarget.id());
                             if (handler == null) {
                                 log.error("Unable to find FetchSessionHandler for node {}. Ignoring fetch response.",
@@ -218,7 +218,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                             Set<TopicPartition> partitions = new HashSet<>(response.responseData().keySet());
                             FetchResponseMetricAggregator metricAggregator = new FetchResponseMetricAggregator(sensors, partitions);
 
-                            for (Map.Entry<TopicPartition, FetchResponse.PartitionData<ReadableRecords>> entry : response.responseData().entrySet()) {
+                            for (Map.Entry<TopicPartition, FetchResponse.PartitionData<Records>> entry : response.responseData().entrySet()) {
                                 TopicPartition partition = entry.getKey();
                                 long fetchOffset = data.sessionPartitions().get(partition).fetchOffset;
                                 FetchResponse.PartitionData fetchData = entry.getValue();
@@ -894,7 +894,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
      */
     private PartitionRecords parseCompletedFetch(CompletedFetch completedFetch) {
         TopicPartition tp = completedFetch.partition;
-        FetchResponse.PartitionData<ReadableRecords> partition = completedFetch.partitionData;
+        FetchResponse.PartitionData<Records> partition = completedFetch.partitionData;
         long fetchOffset = completedFetch.fetchedOffset;
         PartitionRecords partitionRecords = null;
         Errors error = partition.error;
@@ -1252,13 +1252,13 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     private static class CompletedFetch {
         private final TopicPartition partition;
         private final long fetchedOffset;
-        private final FetchResponse.PartitionData<ReadableRecords> partitionData;
+        private final FetchResponse.PartitionData<Records> partitionData;
         private final FetchResponseMetricAggregator metricAggregator;
         private final short responseVersion;
 
         private CompletedFetch(TopicPartition partition,
                                long fetchedOffset,
-                               FetchResponse.PartitionData<ReadableRecords> partitionData,
+                               FetchResponse.PartitionData<Records> partitionData,
                                FetchResponseMetricAggregator metricAggregator,
                                short responseVersion) {
             this.partition = partition;

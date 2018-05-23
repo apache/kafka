@@ -17,13 +17,15 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.requests.DefaultRecordsSend;
+import org.apache.kafka.common.requests.RecordsSend;
 import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.Iterator;
 
-public abstract class AbstractRecords implements ReadableRecords, WriteableRecords {
+public abstract class AbstractRecords implements Records {
 
     private final Iterable<Record> records = new Iterable<Record>() {
         @Override
@@ -55,6 +57,11 @@ public abstract class AbstractRecords implements ReadableRecords, WriteableRecor
     @Override
     public Iterable<Record> records() {
         return records;
+    }
+
+    @Override
+    public RecordsSend toSend(String destination) {
+        return new DefaultRecordsSend(destination, this);
     }
 
     private Iterator<Record> recordsIterator() {

@@ -522,7 +522,7 @@ class LogCleanerTest extends JUnitSuite {
   def testMessageLargerThanMaxMessageSizeWithCorruptHeader() {
     val (log, offsetMap) = createLogWithMessagesLargerThanMaxSize(largeMessageSize = 1024 * 1024)
     val file = new RandomAccessFile(log.logSegments.head.log.file, "rw")
-    file.seek(Records.MAGIC_OFFSET)
+    file.seek(BaseRecords.MAGIC_OFFSET)
     file.write(0xff)
     file.close()
 

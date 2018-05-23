@@ -50,8 +50,11 @@ public class MultiRecordsSend extends MultiSend {
 
     @Override
     protected void onComplete(Send completedSend) {
-        // Pull out and record any processing statistics from underlying RecordsSend
-        if (completedSend.getClass() == RecordsSend.class)
-            addTopicPartitionProcessingStats(((RecordsSend) completedSend).recordsProcessingStats());
+        // The underlying send might have accumulated statistics that need to be recorded. For example,
+        // LazyDownConversionRecordsSend accumulates statistics related to the number of bytes down-converted, the amount
+        // of temporary memory used for down-conversion, etc. Pull out any such statistics from the underlying send
+        // and fold it up appropriately.
+        if (completedSend instanceof LazyDownConversionRecordsSend)
+            addTopicPartitionProcessingStats(((LazyDownConversionRecordsSend) completedSend).recordsProcessingStats());
     }
 }
