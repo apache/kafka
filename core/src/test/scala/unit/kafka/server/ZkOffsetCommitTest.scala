@@ -15,7 +15,7 @@
   * limitations under the License.
   */
 
-package unit.kafka.server
+package kafka.server
 
 import java.util.Properties
 import kafka.api.{OffsetCommitRequest, OffsetFetchRequest}
