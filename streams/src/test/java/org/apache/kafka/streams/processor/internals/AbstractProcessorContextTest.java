@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
@@ -44,7 +48,8 @@ public class AbstractProcessorContextTest {
     private final MockStreamsMetrics metrics = new MockStreamsMetrics(new Metrics());
     private final AbstractProcessorContext context = new TestProcessorContext(metrics);
     private final MockStateStore stateStore = new MockStateStore("store", false);
-    private final RecordContext recordContext = new RecordContextStub(10, System.currentTimeMillis(), 1, "foo");
+    private final Headers headers = new RecordHeaders(new Header[]{new RecordHeader("key", "value".getBytes())});
+    private final RecordContext recordContext = new RecordContextStub(10, System.currentTimeMillis(), 1, "foo", headers);
 
     @Before
     public void before() {
@@ -139,6 +144,27 @@ public class AbstractProcessorContextTest {
     @Test
     public void shouldReturnTimestampFromRecordContext() {
         assertThat(context.timestamp(), equalTo(recordContext.timestamp()));
+    }
+
+    @Test
+    public void shouldReturnHeadersFromRecordContext() {
+        assertThat(context.headers(), equalTo(recordContext.headers()));
+    }
+
+    @Test
+    public void shouldReturnNullIfHeadersAreNotSet() {
+        context.setRecordContext(new RecordContextStub(0, 0, 0, AbstractProcessorContext.NONEXIST_TOPIC));
+        assertThat(context.headers(), nullValue());
+    }
+
+    @Test
+    public void shouldThrowIllegalStateExceptionOnHeadersIfNoRecordContext() {
+        context.setRecordContext(null);
+        try {
+            context.headers();
+        } catch (final IllegalStateException e) {
+            // pass
+        }
     }
 
     @SuppressWarnings("unchecked")

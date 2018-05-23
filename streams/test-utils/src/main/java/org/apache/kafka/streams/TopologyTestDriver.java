@@ -227,7 +227,7 @@ public class TopologyTestDriver implements Closeable {
      * @param config the configuration for the topology
      */
     TopologyTestDriver(final InternalTopologyBuilder builder,
-                              final Properties config) {
+                       final Properties config) {
         this(builder, config,  System.currentTimeMillis());
 
     }
@@ -382,14 +382,16 @@ public class TopologyTestDriver implements Closeable {
                 offset,
                 consumerRecord.timestamp(),
                 consumerRecord.timestampType(),
-                ConsumerRecord.NULL_CHECKSUM,
+                (long) ConsumerRecord.NULL_CHECKSUM,
                 consumerRecord.serializedKeySize(),
                 consumerRecord.serializedValueSize(),
                 consumerRecord.key(),
-                consumerRecord.value())));
+                consumerRecord.value(),
+                consumerRecord.headers())));
 
             // Process the record ...
-            ((InternalProcessorContext) task.context()).setRecordContext(new ProcessorRecordContext(consumerRecord.timestamp(), offset, topicPartition.partition(), topicName));
+            ((InternalProcessorContext) task.context()).setRecordContext(
+                    new ProcessorRecordContext(consumerRecord.timestamp(), offset, topicPartition.partition(), topicName, consumerRecord.headers()));
             task.process();
             task.maybePunctuateStreamTime();
             task.commit();
@@ -407,11 +409,12 @@ public class TopologyTestDriver implements Closeable {
                 offset,
                 consumerRecord.timestamp(),
                 consumerRecord.timestampType(),
-                ConsumerRecord.NULL_CHECKSUM,
+                (long) ConsumerRecord.NULL_CHECKSUM,
                 consumerRecord.serializedKeySize(),
                 consumerRecord.serializedValueSize(),
                 consumerRecord.key(),
-                consumerRecord.value()));
+                consumerRecord.value(),
+                consumerRecord.headers()));
             globalStateTask.flushState();
         }
     }
@@ -467,7 +470,8 @@ public class TopologyTestDriver implements Closeable {
                     serializedKey == null ? 0 : serializedKey.length,
                     serializedValue == null ? 0 : serializedValue.length,
                     serializedKey,
-                    serializedValue));
+                    serializedValue,
+                    record.headers()));
             }
         }
     }
@@ -536,7 +540,7 @@ public class TopologyTestDriver implements Closeable {
         }
         final K key = keyDeserializer.deserialize(record.topic(), record.key());
         final V value = valueDeserializer.deserialize(record.topic(), record.value());
-        return new ProducerRecord<>(record.topic(), record.partition(), record.timestamp(), key, value);
+        return new ProducerRecord<>(record.topic(), record.partition(), record.timestamp(), key, value, record.headers());
     }
 
     /**

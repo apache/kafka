@@ -93,7 +93,7 @@ public class KStreamKTableLeftJoinTest {
 
     private void pushNullValueToTable(final int messageCount) {
         for (int i = 0; i < messageCount; i++) {
-            driver.pipeInput(recordFactory.create(tableTopic, expectedKeys[i], null));
+            driver.pipeInput(recordFactory.create(tableTopic, expectedKeys[i], (String) null));
         }
     }
 

@@ -227,11 +227,22 @@ public class ConnectorConfig extends AbstractConfig {
         if (transformationCls == null || !Transformation.class.isAssignableFrom(transformationCls)) {
             throw new ConfigException(key, String.valueOf(transformationCls), "Not a Transformation");
         }
+        Transformation transformation;
         try {
-            return (transformationCls.asSubclass(Transformation.class).newInstance()).config();
+            transformation = transformationCls.asSubclass(Transformation.class).newInstance();
         } catch (Exception e) {
             throw new ConfigException(key, String.valueOf(transformationCls), "Error getting config definition from Transformation: " + e.getMessage());
         }
+        ConfigDef configDef = transformation.config();
+        if (null == configDef) {
+            throw new ConnectException(
+                String.format(
+                    "%s.config() must return a ConfigDef that is not null.",
+                    transformationCls.getName()
+                )
+            );
+        }
+        return configDef;
     }
 
     /**

@@ -308,7 +308,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
     public void shouldLogAndMeterWhenSkippingNullKey() {
         initStore(false);
         processor.init(context);
-        context.setRecordContext(new ProcessorRecordContext(-1, -2, -3, "topic"));
+        context.setRecordContext(new ProcessorRecordContext(-1, -2, -3, "topic", null));
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
         processor.process(null, "1");
         LogCaptureAppender.unregister(appender);
