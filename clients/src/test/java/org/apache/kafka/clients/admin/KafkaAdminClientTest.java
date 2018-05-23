@@ -848,7 +848,8 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.emptySet());
             env.kafkaClient().setNode(env.cluster().controller());
 
-            // Empty metadata response should be retried
+            // Empty metadata causes the request to fail since we have no list of brokers
+            // to send the ListGroups requests to
             env.kafkaClient().prepareResponse(
                     new MetadataResponse(
                             Collections.emptyList(),
