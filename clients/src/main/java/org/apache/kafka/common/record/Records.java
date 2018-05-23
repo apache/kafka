@@ -23,6 +23,26 @@ import java.io.IOException;
 import java.nio.channels.GatheringByteChannel;
 import java.util.Iterator;
 
+
+/**
+ * Interface for accessing the records contained in a log. The log itself is represented as a sequence of record
+ * batches (see {@link RecordBatch}).
+ *
+ * For magic versions 1 and below, each batch consists of an 8 byte offset, a 4 byte record size, and a "shallow"
+ * {@link Record record}. If the batch is not compressed, then each batch will have only the shallow record contained
+ * inside it. If it is compressed, the batch contains "deep" records, which are packed into the value field of the
+ * shallow record. To iterate over the shallow batches, use {@link Records#batches()}; for the deep records, use
+ * {@link Records#records()}. Note that the deep iterator handles both compressed and non-compressed batches:
+ * if the batch is not compressed, the shallow record is returned; otherwise, the shallow batch is decompressed and the
+ * deep records are returned.
+ *
+ * For magic version 2, every batch contains 1 or more log record, regardless of compression. You can iterate
+ * over the batches directly using {@link Records#batches()}. Records can be iterated either directly from an individual
+ * batch or through {@link Records#records()}. Just as in previous versions, iterating over the records typically involves
+ * decompression and should therefore be used with caution.
+ *
+ * See {@link MemoryRecords} for the in-memory representation and {@link FileRecords} for the on-disk representation.
+ */
 public interface Records extends BaseRecords {
    /**
     * Get the record batches. Note that the signature allows subclasses

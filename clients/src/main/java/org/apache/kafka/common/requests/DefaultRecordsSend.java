@@ -11,8 +11,8 @@ public class DefaultRecordsSend extends RecordsSend {
     }
 
     @Override
-    protected long writeRecordsTo(GatheringByteChannel channel, long position, int length) throws IOException {
-        return records().writeTo(channel, position, length);
+    protected long writeRecordsTo(GatheringByteChannel channel, long previouslyWritten, int remaining) throws IOException {
+        return records().writeTo(channel, previouslyWritten, remaining);
     }
 
     @Override

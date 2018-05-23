@@ -76,5 +76,24 @@ public abstract class RecordsSend implements Send {
         return records;
     }
 
-    protected abstract long writeRecordsTo(GatheringByteChannel channel, long position, int length) throws IOException;
+    /**
+     * Write records up to `remaining` bytes to `channel`. The implementation is allowed to be stateful. The contract
+     * from the caller is that the first invocation will be with `previouslyWritten` equal to 0, and `remaining` equal to
+     * the to maximum bytes we want to write the to `channel`. `previouslyWritten` and `remaining` will be adjusted
+     * appropriately for every subsequent invocation. For example, one way to this contract is enforced could be:
+     * <pre>
+     *     int length = ...;
+     *     int remaining = length;
+     *
+     *     while (remaining > 0)
+     *         remaining -= writeRecordsTo(channel, length - remaining, remaining);
+     * </pre>
+     * Also see {@link #writeTo} for example expected usage.
+     * @param channel
+     * @param previouslyWritten
+     * @param remaining
+     * @return
+     * @throws IOException
+     */
+    protected abstract long writeRecordsTo(GatheringByteChannel channel, long previouslyWritten, int remaining) throws IOException;
 }

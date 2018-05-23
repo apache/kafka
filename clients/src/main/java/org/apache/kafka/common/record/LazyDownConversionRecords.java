@@ -23,17 +23,11 @@ import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 
-import java.nio.channels.GatheringByteChannel;
 import java.util.Arrays;
 
 /**
- * Encapsulation for holding down-converted records with implementation for being able to "lazily" down-convert records.
- * Records are down-converted in batches and on-demand when {@link #writeTo} method is called. The implementation ensures
- * that we are able to send out at least one full batch of messages after down-conversion if {@link #writeTo} is used in
- * conjunction with {@link #sizeInBytes} - see {@link org.apache.kafka.common.requests.RecordsSend#writeTo} for an example.
- * <p> Because we do not have a full view of the underlying down-converted records, lot of methods typically associated
- * with {@link Records} are unsupported and not implemented. Specifically, this class provides implementations for
- * {@link #sizeInBytes() sizeInBytes} and {@link #writeTo(GatheringByteChannel, long, int) writeTo} methods only. </p>
+ * Encapsulation for holding records that require down-conversion in a lazy, chunked manner (KIP-283). See
+ * {@link LazyDownConversionRecordsSend} for the actual chunked send implementation.
  */
 public class LazyDownConversionRecords implements BaseRecords {
     private final TopicPartition topicPartition;
