@@ -79,7 +79,10 @@ public class ConnectDistributed {
 
             RestServer rest = new RestServer(config);
             URI advertisedUrl = rest.advertisedUrl();
-            String workerId = advertisedUrl.getHost() + ":" + advertisedUrl.getPort();
+            String workerId = CliUtil.workerId(config);
+            if (workerId == null || workerId.isEmpty()) {
+                workerId = advertisedUrl.getHost() + ":" + advertisedUrl.getPort();
+            }
 
             KafkaOffsetBackingStore offsetBackingStore = new KafkaOffsetBackingStore();
             offsetBackingStore.configure(config);

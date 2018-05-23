@@ -83,7 +83,10 @@ public class ConnectStandalone {
 
             RestServer rest = new RestServer(config);
             URI advertisedUrl = rest.advertisedUrl();
-            String workerId = advertisedUrl.getHost() + ":" + advertisedUrl.getPort();
+            String workerId = CliUtil.workerId(config);
+            if (workerId == null || workerId.isEmpty()) {
+                workerId = advertisedUrl.getHost() + ":" + advertisedUrl.getPort();
+            }
 
             Worker worker = new Worker(workerId, time, plugins, config, new FileOffsetBackingStore());
 
