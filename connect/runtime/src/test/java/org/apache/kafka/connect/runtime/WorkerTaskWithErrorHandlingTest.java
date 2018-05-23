@@ -23,7 +23,6 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Schema;
@@ -229,18 +228,19 @@ public class WorkerTaskWithErrorHandlingTest {
         public static final ConfigDef CONFIG_DEF = new ConfigDef()
                 .define(MOD_CONFIG, ConfigDef.Type.INT, MOD_CONFIG_DEFAULT, ConfigDef.Importance.MEDIUM, "Pass records without failure only if timestamp % mod == 0");
 
-        private final Time time = new SystemTime();
         private int mod = MOD_CONFIG_DEFAULT;
+
+        private int invocations = 0;
 
         @Override
         public R apply(R record) {
-            long ts = time.milliseconds();
-            if (ts % mod == 0) {
-                log.debug("Succeeding record: {} at time {}", record, ts);
+            invocations++;
+            if (invocations % mod == 0) {
+                log.debug("Succeeding record: {} where invocations={}", record, invocations);
                 return record;
             } else {
-                log.debug("Failing record: {} at time {}", record, ts);
-                throw new RetriableException("Bad timestamp " + ts + " for mod " + mod);
+                log.debug("Failing record: {} at invocations={}", record, invocations);
+                throw new RetriableException("Bad invocations " + invocations + " for mod " + mod);
             }
         }
 
@@ -257,7 +257,7 @@ public class WorkerTaskWithErrorHandlingTest {
         @Override
         public void configure(Map<String, ?> configs) {
             final SimpleConfig config = new SimpleConfig(CONFIG_DEF, configs);
-            mod = config.getInt(MOD_CONFIG);
+            mod = Math.max(config.getInt(MOD_CONFIG), 2);
             log.info("Configuring {}. Setting mod to {}", this.getClass(), mod);
         }
     }
