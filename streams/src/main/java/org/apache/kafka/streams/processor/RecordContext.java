@@ -14,10 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor.internals;
+package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.streams.processor.Processor;
 
 /**
  * The context associated with the current record being processed by
@@ -33,11 +32,6 @@ public interface RecordContext {
      * @return The timestamp extracted from the record received from Kafka
      */
     long timestamp();
-
-    /**
-     * Sets a new timestamp for the output record.
-     */
-    void setTimestamp(final long timestamp);
 
     /**
      * @return The topic the record was received on

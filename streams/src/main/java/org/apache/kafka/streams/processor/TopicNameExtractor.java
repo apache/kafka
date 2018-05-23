@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
-import org.apache.kafka.streams.processor.internals.RecordContext;
 
 /**
  * An interface that allows to dynamically determine the name of the Kafka topic to send at the sink node of the topology.
