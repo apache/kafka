@@ -96,25 +96,12 @@ class KGroupedStream[K, V](val inner: KGroupedStreamJ[K, V]) {
    *
    * @param initializer   an `Initializer` that computes an initial intermediate aggregation result
    * @param aggregator    an `Aggregator` that computes a new aggregate result
-   * @return a [[KTable]] that contains "update" records with unmodified keys, and values that represent the
-   * latest (rolling) aggregate for each key
-   * @see `org.apache.kafka.streams.kstream.KGroupedStream#aggregate`
-   */ 
-  def aggregate[VR](initializer: => VR)(aggregator: (K, V, VR) => VR): KTable[K, VR] =
-    inner.aggregate((() => initializer).asInitializer, aggregator.asAggregator)
-
-  /**
-   * Aggregate the values of records in this stream by the grouped key.
-   *
-   * @param initializer   an `Initializer` that computes an initial intermediate aggregation result
-   * @param aggregator    an `Aggregator` that computes a new aggregate result
    * @param materialized  an instance of `Materialized` used to materialize a state store. 
    * @return a [[KTable]] that contains "update" records with unmodified keys, and values that represent the
    * latest (rolling) aggregate for each key
    * @see `org.apache.kafka.streams.kstream.KGroupedStream#aggregate`
    */ 
-  def aggregate[VR](initializer: => VR)(aggregator: (K, V, VR) => VR,
-                                        materialized: Materialized[K, VR, ByteArrayKeyValueStore]): KTable[K, VR] =
+  def aggregate[VR](initializer: => VR, aggregator: (K, V, VR) => VR)(implicit materialized: Materialized[K, VR, ByteArrayKeyValueStore]): KTable[K, VR] =
     inner.aggregate((() => initializer).asInitializer, aggregator.asAggregator, materialized)
 
   /**
