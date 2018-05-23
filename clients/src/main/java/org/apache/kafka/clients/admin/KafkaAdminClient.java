@@ -2470,7 +2470,7 @@ public class KafkaAdminClient extends AdminClient {
         runnable.call(new Call("findAllBrokers", deadline, new LeastLoadedNodeProvider()) {
             @Override
             AbstractRequest.Builder createRequest(int timeoutMs) {
-                return new MetadataRequest.Builder(Collections.<String>emptyList(), true);
+                return new MetadataRequest.Builder(Collections.emptyList(), true);
             }
 
             @Override
@@ -2529,7 +2529,8 @@ public class KafkaAdminClient extends AdminClient {
 
             @Override
             void handleFailure(Throwable throwable) {
-                all.complete(Collections.<Object>singletonList(throwable));
+                KafkaException exception = new KafkaException("Failed to find brokers to send ListGroups", throwable);
+                all.complete(Collections.singletonList(exception));
             }
         }, nowMetadata);
 
