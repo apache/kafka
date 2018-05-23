@@ -112,11 +112,6 @@ class MessageTest extends JUnitSuite {
   }
 
   @Test(expected = classOf[IllegalArgumentException])
-  def testInvalidTimestamp() {
-    new Message("hello".getBytes, -3L, Message.MagicValue_V1)
-  }
-
-  @Test(expected = classOf[IllegalArgumentException])
   def testInvalidMagicByte() {
     new Message("hello".getBytes, 0L, 2.toByte)
   }
