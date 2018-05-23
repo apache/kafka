@@ -170,4 +170,11 @@ public class ProcessingContext {
     public int attempt() {
         return this.attempt;
     }
+
+    /**
+     * @return false, if the last operation encountered an error; true otherwise
+     */
+    public boolean failed() {
+        return !this.result.success();
+    }
 }

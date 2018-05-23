@@ -37,7 +37,6 @@ import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.errors.Operation;
 import org.apache.kafka.connect.runtime.errors.OperationExecutor;
 import org.apache.kafka.connect.runtime.errors.ProcessingContext;
-import org.apache.kafka.connect.runtime.errors.Result;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceExecutor;
 import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.source.SourceRecord;
@@ -276,8 +275,41 @@ class WorkerSourceTask extends WorkerTask {
         }
     }
 
-    protected <V> Result<V> execute(Operation<V> operation) {
-        return operationExecutor.execute(operation, processingContext);
+    protected <V> V execute(Operation<V> operation) {
+        return operationExecutor.execute(operation, processingContext).result();
+    }
+
+    /**
+     * Convert the source record into a producer record.
+     *
+     * @param record the transformed record
+     * @return null, if the input is null, or an error was encountered during any of the converter stages.
+     */
+    private ProducerRecord<byte[], byte[]> convertTransformedRecord(SourceRecord record) {
+        if (record == null) {
+            return null;
+        }
+
+        processingContext.setCurrentContext(Stage.HEADER_CONVERTER, headerConverter.getClass());
+        RecordHeaders headers = execute(() -> convertHeaderFor(record));
+        if (processingContext.failed()) {
+            return null;
+        }
+
+        processingContext.setCurrentContext(Stage.KEY_CONVERTER, keyConverter.getClass());
+        byte[] key = execute(() -> keyConverter.fromConnectData(record.topic(), record.keySchema(), record.key()));
+        if (processingContext.failed()) {
+            return null;
+        }
+
+        processingContext.setCurrentContext(Stage.VALUE_CONVERTER, valueConverter.getClass());
+        byte[] value = execute(() -> valueConverter.fromConnectData(record.topic(), record.valueSchema(), record.value()));
+        if (processingContext.failed()) {
+            return null;
+        }
+
+        return new ProducerRecord<>(record.topic(), record.kafkaPartition(),
+                ConnectUtils.checkAndConvertTimestamp(record.timestamp()), key, value, headers);
     }
 
     /**
@@ -290,50 +322,16 @@ class WorkerSourceTask extends WorkerTask {
         recordBatch(toSend.size());
         final SourceRecordWriteCounter counter = new SourceRecordWriteCounter(toSend.size(), sourceTaskMetricsGroup);
         for (final SourceRecord preTransformRecord : toSend) {
+
             processingContext.sourceRecord(preTransformRecord);
             final SourceRecord record = transformationChain.apply(preTransformRecord);
-
-            if (record == null) {
+            final ProducerRecord<byte[], byte[]> producerRecord = convertTransformedRecord(record);
+            if (producerRecord == null || processingContext.failed()) {
                 counter.skipRecord();
                 commitTaskRecord(preTransformRecord);
                 continue;
             }
 
-            RecordHeaders headers;
-            processingContext.setCurrentContext(Stage.HEADER_CONVERTER, headerConverter.getClass());
-            Result<RecordHeaders> headersResult = execute(() -> convertHeaderFor(record));
-            if (headersResult.success()) {
-                headers = headersResult.result();
-            } else {
-                counter.skipRecord();
-                commitTaskRecord(preTransformRecord);
-                continue;
-            }
-
-            byte[] key;
-            processingContext.setCurrentContext(Stage.KEY_CONVERTER, keyConverter.getClass());
-            Result<byte[]> keyResult = execute(() -> keyConverter.fromConnectData(record.topic(), record.keySchema(), record.key()));
-            if (keyResult.success()) {
-                key = keyResult.result();
-            } else {
-                counter.skipRecord();
-                commitTaskRecord(preTransformRecord);
-                continue;
-            }
-
-            byte[] value;
-            processingContext.setCurrentContext(Stage.VALUE_CONVERTER, valueConverter.getClass());
-            Result<byte[]> valueResult = execute(() -> valueConverter.fromConnectData(record.topic(), record.valueSchema(), record.value()));
-            if (valueResult.success()) {
-                value = valueResult.result();
-            } else {
-                counter.skipRecord();
-                commitTaskRecord(preTransformRecord);
-                continue;
-            }
-
-            final ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(record.topic(), record.kafkaPartition(),
-                    ConnectUtils.checkAndConvertTimestamp(record.timestamp()), key, value, headers);
             log.trace("{} Appending record with key {}, value {}", this, record.key(), record.value());
             // We need this queued first since the callback could happen immediately (even synchronously in some cases).
             // Because of this we need to be careful about handling retries -- we always save the previously attempted

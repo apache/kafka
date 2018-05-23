@@ -49,12 +49,11 @@ public class TransformationChain<R extends ConnectRecord<R>> {
 
             // execute the operation
             Result<R> result = operationExecutor.execute(() -> transformation.apply(current), processingContext);
-
-            if (result.success()) {
-                record = result.result();
-            } else {
+            if (processingContext.failed()) {
                 return null;
             }
+
+            record = result.result();
             if (record == null) break;
         }
 
