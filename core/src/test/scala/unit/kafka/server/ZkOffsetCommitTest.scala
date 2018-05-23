@@ -21,7 +21,6 @@ import java.util.Properties
 import kafka.api.{OffsetCommitRequest, OffsetFetchRequest}
 import kafka.common.{OffsetAndMetadata, OffsetMetadataAndError, TopicAndPartition}
 import kafka.consumer.SimpleConsumer
-import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.TestUtils._
 import kafka.utils._
 import kafka.zk.ZooKeeperTestHarness
