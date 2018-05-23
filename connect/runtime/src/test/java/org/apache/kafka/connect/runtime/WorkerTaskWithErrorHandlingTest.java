@@ -178,10 +178,15 @@ public class WorkerTaskWithErrorHandlingTest {
 
         workerTask.iteration();
 
+        // two records were consumed from Kafka
         assertSinkMetricValue("sink-record-read-total", 2.0);
+        // only one was written to the task
         assertSinkMetricValue("sink-record-send-total", 1.0);
+        // one record completely failed (converter issues)
         assertErrorHandlingMetricValue("processing-errors", 1.0);
+        // 2 failures in the transformation, and 1 in the converter
         assertErrorHandlingMetricValue("processing-failures", 3.0);
+        // one record completely failed (converter issues), and thus was skipped
         assertErrorHandlingMetricValue("record-skipped", 1.0);
 
         PowerMock.verifyAll();

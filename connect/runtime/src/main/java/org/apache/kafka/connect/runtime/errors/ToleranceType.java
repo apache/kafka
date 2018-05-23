@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.connect.runtime.errors;
 
+/**
+ * The different levels of error tolerance.
+ */
 public enum ToleranceType {
 
     /**

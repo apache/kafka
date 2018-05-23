@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.connect.runtime.errors;
 
+/**
+ * The result of evaluating an {@link Operation}.
+ * @param <V> return type of the result of the operation.
+ */
 public class Result<V> {
 
     private final V result;
@@ -36,14 +40,23 @@ public class Result<V> {
         this.error = error;
     }
 
+    /**
+     * @return the result of the operation.
+     */
     public V result() {
         return result;
     }
 
+    /**
+     * @return if true, the operation evaluated successfully; false otherwise
+     */
     public boolean success() {
         return success;
     }
 
+    /**
+     * @return errors if the operation did not succeed.
+     */
     public Throwable error() {
         return error;
     }

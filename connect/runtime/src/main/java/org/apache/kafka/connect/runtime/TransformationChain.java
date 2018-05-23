@@ -54,7 +54,6 @@ public class TransformationChain<R extends ConnectRecord<R>> {
             if (result.success()) {
                 record = result.result();
             } else {
-                processingContext.report();
                 return null;
             }
             if (record == null) break;

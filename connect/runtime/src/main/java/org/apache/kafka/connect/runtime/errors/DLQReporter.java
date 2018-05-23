@@ -27,6 +27,12 @@ import org.slf4j.LoggerFactory;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 
+/**
+ * Write the original consumed record into a dead letter queue. The dead letter queue is a Kafka topic located
+ * on the same cluster used by the worker to maintain internal topics. Each connector gets their own dead letter
+ * queue topic. By default, the topic name is not set, and if the connector config doesn't specify one, this
+ * feature is disabled.
+ */
 public class DLQReporter implements ErrorReporter {
 
     private static final Logger log = LoggerFactory.getLogger(DLQReporter.class);
@@ -48,6 +54,11 @@ public class DLQReporter implements ErrorReporter {
                 .define(DLQ_TOPIC_NAME, ConfigDef.Type.STRING, DLQ_TOPIC_DEFAULT, ConfigDef.Importance.HIGH, DLQ_TOPIC_NAME_DOC);
     }
 
+    /**
+     * Initialize the dead letter queue reporter.
+     * @param kafkaProducer a Kafka Producer to produce the original consumed records.
+     * @param numPartitions the number of partitions in the dead letter queue topic.
+     */
     public DLQReporter(KafkaProducer<byte[], byte[]> kafkaProducer, int numPartitions) {
         this.kafkaProducer = kafkaProducer;
         this.numPartitions = numPartitions;
@@ -63,6 +74,9 @@ public class DLQReporter implements ErrorReporter {
         this.errorHandlingMetrics = errorHandlingMetrics;
     }
 
+    /**
+     * @param context write the record from {@link ProcessingContext#consumerRecord()} into the dead letter queue.
+     */
     public void report(ProcessingContext context) {
         if (config.topic().isEmpty()) {
             return;
@@ -70,10 +84,17 @@ public class DLQReporter implements ErrorReporter {
 
         errorHandlingMetrics.recordDeadLetterQueueProduceRequest();
 
-        ConsumerRecord<byte[], byte[]> originalMessage = context.sinkRecord();
+        ConsumerRecord<byte[], byte[]> originalMessage = context.consumerRecord();
+        if (originalMessage == null) {
+            errorHandlingMetrics.recordDeadLetterQueueProduceFailed();
+            return;
+        }
+
         int partition = ThreadLocalRandom.current().nextInt(numPartitions);
+
         ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(config.topic(),
                 partition, originalMessage.key(), originalMessage.value());
+
         this.kafkaProducer.send(producerRecord, (metadata, exception) -> {
             if (exception != null) {
                 log.debug("Could not send object to Dead Letter Queue", exception);
@@ -87,9 +108,11 @@ public class DLQReporter implements ErrorReporter {
             super(getConfigDef(), originals, true);
         }
 
+        /**
+         * @return name of the dead letter queue topic.
+         */
         public String topic() {
             return getString(DLQ_TOPIC_NAME);
         }
     }
-
 }

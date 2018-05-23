@@ -16,6 +16,18 @@
  */
 package org.apache.kafka.connect.runtime.errors;
 
+/**
+ * A recoverable operation evaluated in the connector pipeline.
+ *
+ * @param <V> return type of the result of the operation.
+ */
 public interface Operation<V> {
+
+    /**
+     * evaluate the operation
+     * @return the result of the operation.
+     * @throws Exception if underlying operation fails.
+     */
     V apply() throws Exception;
+
 }

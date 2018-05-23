@@ -35,6 +35,23 @@ import java.util.concurrent.ThreadLocalRandom;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 
+/**
+ * <p>
+ * Attempt to recover a failed operation with retries and tolerance limits.
+ * </p>
+ *
+ * <p>
+ * A retry is attempted if the operation throws a {@link RetriableException}. Retries are accompanied by exponential backoffs, starting with
+ * {@link #RETRIES_DELAY_MIN_MS}, up to what is specified with {@link RetryWithToleranceExecutorConfig#retryDelayMax()}.
+ * Including the first attempt and future retries, the total time taken to evaluate the operation should be within
+ * {@link RetryWithToleranceExecutorConfig#retryDelayMax()} millis.
+ * </p>
+ *
+ * <p>
+ * This executor will tolerate failures, as specified by {@link RetryWithToleranceExecutorConfig#toleranceLimit()}.
+ * For transformations and converters, all exceptions are tolerated. For others operations, only {@link RetriableException} are tolerated.
+ * </p>
+ */
 public class RetryWithToleranceExecutor implements OperationExecutor {
 
     private static final Logger log = LoggerFactory.getLogger(RetryWithToleranceExecutor.class);
@@ -75,6 +92,7 @@ public class RetryWithToleranceExecutor implements OperationExecutor {
         this(new SystemTime());
     }
 
+    // Visible for testing
     public RetryWithToleranceExecutor(Time time) {
         this.time = time;
     }
@@ -99,6 +117,14 @@ public class RetryWithToleranceExecutor implements OperationExecutor {
         }
     }
 
+    /**
+     * attempt to execute an operation. Retry if a {@link RetriableException} is raised. Re-throw everything else.
+     * @param operation the operation to be executed.
+     * @param context the processing context.
+     * @param <V> the return type of the result of the operation.
+     * @return the result of the operation.
+     * @throws Exception rethrow if a non-retriable Exception is thrown by the operation
+     */
     protected <V> Result<V> execAndRetry(Operation<V> operation, ProcessingContext context) throws Exception {
         int attempt = 0;
         long startTime = time.milliseconds();
@@ -130,6 +156,15 @@ public class RetryWithToleranceExecutor implements OperationExecutor {
         } while (true);
     }
 
+    /**
+     * Execute a given operation multiple times (if needed), and tolerate certain exceptions.
+     *
+     * @param operation the operation to be executed.
+     * @param context the processing context.
+     * @param tolerated the class of exceptions which can be tolerated.
+     * @param <V> the return type of the result of the operation.
+     * @return the result of the operation
+     */
     // Visible for testing
     protected <V> Result<V> execAndHandleError(Operation<V> operation, ProcessingContext context, Class<? extends Exception> tolerated) {
         try {
@@ -212,14 +247,23 @@ public class RetryWithToleranceExecutor implements OperationExecutor {
             super(getConfigDef(), originals, true);
         }
 
+        /**
+         * @return the total time an operation can take to succeed (including the first attempt and retries).
+         */
         public long retryTimeout() {
             return getLong(RETRY_TIMEOUT);
         }
 
+        /**
+         * @return the maximum delay between two subsequent retries in milliseconds.
+         */
         public long retryDelayMax() {
             return getLong(RETRY_DELAY_MAX_MS);
         }
 
+        /**
+         * @return determine how many errors to tolerate.
+         */
         public ToleranceType toleranceLimit() {
             return "ALL".equals(getString(TOLERANCE_LIMIT).toUpperCase(Locale.ROOT)) ? ToleranceType.ALL
                     : ToleranceType.NONE;

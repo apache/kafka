@@ -153,7 +153,7 @@ public class ErrorReporterTest {
 
     private ProcessingContext processingContext() {
         ProcessingContext context = new ProcessingContext();
-        context.sinkRecord(new ConsumerRecord<>(TOPIC, 5, 100, new byte[]{'a', 'b'}, new byte[]{'x'}));
+        context.consumerRecord(new ConsumerRecord<>(TOPIC, 5, 100, new byte[]{'a', 'b'}, new byte[]{'x'}));
         context.setCurrentContext(Stage.KEY_CONVERTER, JsonConverter.class);
         return context;
     }

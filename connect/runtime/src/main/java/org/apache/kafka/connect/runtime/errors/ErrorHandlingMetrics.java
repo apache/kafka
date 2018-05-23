@@ -24,6 +24,9 @@ import org.apache.kafka.connect.runtime.ConnectMetrics;
 import org.apache.kafka.connect.runtime.ConnectMetricsRegistry;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
+/**
+ * Contains various sensors used for monitoring errors.
+ */
 public class ErrorHandlingMetrics {
 
     private final Time time = new SystemTime();
@@ -73,38 +76,65 @@ public class ErrorHandlingMetrics {
         metricGroup.addValueMetric(registry.lastErrorTimestamp, now -> lastErrorTime);
     }
 
+    /**
+     * increment the number of failed operations (retriable and non-retriable).
+     */
     public void recordFailure() {
         recordProcessingFailures.record();
     }
 
+    /**
+     * increment the number of operations which could not successfully executed.
+     */
     public void recordError() {
         recordProcessingErrors.record();
     }
 
+    /**
+     * increment the number of records skipped.
+     */
     public void recordSkipped() {
         recordsSkipped.record();
     }
 
+    /**
+     * number of retries made while executing operations.
+     */
     public void recordRetry() {
         retries.record();
     }
 
+    /**
+     * number of errors logged by the {@link LogReporter}.
+     */
     public void recordErrorLogged() {
         errorsLogged.record();
     }
 
+    /**
+     * number of produce requests to the {@link DLQReporter}.
+     */
     public void recordDeadLetterQueueProduceRequest() {
         dlqProduceRequests.record();
     }
 
+    /**
+     * number of produce requests to the {@link DLQReporter} which failed to be successfully produced into Kafka.
+     */
     public void recordDeadLetterQueueProduceFailed() {
         dlqProduceFailures.record();
     }
 
+    /**
+     * record the timestamp of the failure. the time of failure is when this method was called.
+     */
     public void recordErrorTimestamp() {
         this.lastErrorTime = time.milliseconds();
     }
 
+    /**
+     * @return the metric group for this class.
+     */
     public ConnectMetrics.MetricGroup metricGroup() {
         return metricGroup;
     }

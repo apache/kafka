@@ -25,6 +25,9 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 
+/**
+ * Log error context with application logs.
+ */
 public class LogReporter implements ErrorReporter {
 
     private static final Logger log = LoggerFactory.getLogger(LogReporter.class);
@@ -88,8 +91,8 @@ public class LogReporter implements ErrorReporter {
         if (config.canLogMessages() && context.sourceRecord() != null) {
             builder.append(", with record = ");
             builder.append(context.sourceRecord());
-        } else if (config.canLogMessages() && context.sinkRecord() != null) {
-            ConsumerRecord<byte[], byte[]> msg = context.sinkRecord();
+        } else if (config.canLogMessages() && context.consumerRecord() != null) {
+            ConsumerRecord<byte[], byte[]> msg = context.consumerRecord();
             builder.append(", msg.topic='").append(msg.topic()).append('\'');
             builder.append(", msg.partition=").append(msg.partition());
             builder.append(", msg.offset=").append(msg.offset());
@@ -110,10 +113,16 @@ public class LogReporter implements ErrorReporter {
             super(getConfigDef(), originals, true);
         }
 
+        /**
+         * @return true, if logging of error context is desired; false otherwise.
+         */
         public boolean isEnabled() {
             return getBoolean(LOG_ENABLE);
         }
 
+        /**
+         * @return if false, the connect record which caused the exception is not logged.
+         */
         public boolean canLogMessages() {
             return getBoolean(LOG_INCLUDE_MESSAGES);
         }

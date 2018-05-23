@@ -18,8 +18,19 @@ package org.apache.kafka.connect.runtime.errors;
 
 import org.apache.kafka.common.Configurable;
 
+/**
+ * Execute a recoverable operation in the Connector pipeline.
+ */
 public interface OperationExecutor extends Configurable {
 
+    /**
+     * Execute the recoverable operation
+     *
+     * @param operation the recoverable operation
+     * @param context processing context
+     * @param <V> return type of the result of the operation.
+     * @return result of the operation
+     */
     <V> Result<V> execute(Operation<V> operation, ProcessingContext context);
 
 }

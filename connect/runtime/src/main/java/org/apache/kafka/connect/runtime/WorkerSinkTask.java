@@ -511,7 +511,7 @@ class WorkerSinkTask extends WorkerTask {
             log.trace("{} Consuming and converting message in topic '{}' partition {} at offset {} and timestamp {}",
                     this, msg.topic(), msg.partition(), msg.offset(), msg.timestamp());
 
-            processingContext.sinkRecord(msg);
+            processingContext.consumerRecord(msg);
 
             SchemaAndValue keyAndSchema;
             processingContext.setCurrentContext(Stage.KEY_CONVERTER, keyConverter.getClass());

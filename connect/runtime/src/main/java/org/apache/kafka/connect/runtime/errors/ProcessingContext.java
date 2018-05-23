@@ -19,9 +19,12 @@ package org.apache.kafka.connect.runtime.errors;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.connect.source.SourceRecord;
 
+import java.util.Collection;
 import java.util.Collections;
-import java.util.List;
 
+/**
+ * Contains all the metadata related to the currently evaluating operation.
+ */
 public class ProcessingContext {
 
     private Stage position;
@@ -29,67 +32,114 @@ public class ProcessingContext {
     private ConsumerRecord<byte[], byte[]> consumedMessage;
     private SourceRecord sourceRecord;
 
-    private final List<ErrorReporter> reporters;
+    private final Collection<ErrorReporter> reporters;
     private Result<?> result;
-    private long timeOfError;
 
     private int attempt;
 
+    /**
+     * Create a ProcessingContext object with no error reporters.
+     */
     public ProcessingContext() {
         this(Collections.emptyList());
     }
 
-    public ProcessingContext(List<ErrorReporter> reporters) {
+    /**
+     * Create a ProcessingContext object with a collection of initialized and configured error reporters.
+     * @param reporters the error reporters.
+     */
+    public ProcessingContext(Collection<ErrorReporter> reporters) {
         this.reporters = reporters;
     }
 
-    public void sinkRecord(ConsumerRecord<byte[], byte[]> consumedMessage) {
+    /**
+     * set the record consumed from Kafka in a sink connector.
+     * @param consumedMessage the record
+     */
+    public void consumerRecord(ConsumerRecord<byte[], byte[]> consumedMessage) {
         this.consumedMessage = consumedMessage;
     }
 
-    public ConsumerRecord<byte[], byte[]> sinkRecord() {
+    /**
+     * @return the record consumed from Kafka. could be null
+     */
+    public ConsumerRecord<byte[], byte[]> consumerRecord() {
         return this.consumedMessage;
     }
 
+    /**
+     * @return the source record being processed.
+     */
     public SourceRecord sourceRecord() {
         return this.sourceRecord;
     }
 
+    /**
+     * Set the source record being processed in the connect pipeline.
+     * @param record the source record
+     */
     public void sourceRecord(SourceRecord record) {
         this.sourceRecord = record;
     }
 
+    /**
+     * set the stage in the connector pipeline which is currently executing.
+     * @param position the stage
+     */
     public void position(Stage position) {
         this.position = position;
     }
 
+    /**
+     * @return the stage in the connector pipeline which is currently executing.
+     */
     public Stage stage() {
         return position;
     }
 
+    /**
+     * @return the class which is going to execute the current operation.
+     */
     public Class<?> executingClass() {
         return this.klass;
     }
 
+    /**
+     * @param klass set the class which is currently executing.
+     */
     public void executingClass(Class<?> klass) {
         this.klass = klass;
     }
 
+    /**
+     * @param result set the result of the operation.
+     */
     public void result(Result<?> result) {
         this.result = result;
     }
 
+    /**
+     * a helper method to set both the stage and the class which
+     * @param stage the stage
+     * @param klass the class which will execute the operation in this stage.
+     */
     public void setCurrentContext(Stage stage, Class<?> klass) {
         position(stage);
         executingClass(klass);
     }
 
+    /**
+     * Report errors. Should be called only if an error was encountered while executing the operation.
+     */
     public void report() {
         for (ErrorReporter reporter: reporters) {
             reporter.report(this);
         }
     }
 
+    /**
+     * @return result of executing the operation.
+     */
     public Result result() {
         return this.result;
     }
@@ -98,20 +148,21 @@ public class ProcessingContext {
     public String toString() {
         return "ProcessingContext{" +
                 "position=" + position +
-                ", klass=" + klass +
-                ", timeOfError=" + timeOfError +
+                ", class=" + klass +
                 ", sourceRecord=" + sourceRecord +
                 '}';
     }
 
-    public void setTimeOfError(long timeOfError) {
-        this.timeOfError = timeOfError;
-    }
-
+    /**
+     * @param attempt the number of attempts made to execute the current operation.
+     */
     public void attempt(int attempt) {
         this.attempt = attempt;
     }
 
+    /**
+     * @return the number of attempts made to execute the current operation.
+     */
     public int attempt() {
         return this.attempt;
     }
