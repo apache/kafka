@@ -35,6 +35,7 @@ public class LoggingSignalHandler {
     private final Class<?> signalClass;
     private final Method signalHandleMethod;
     private final Method signalGetNameMethod;
+    private final Method signalHandlerHandleMethod;
 
     /**
      * Create an instance of this class.
@@ -45,7 +46,8 @@ public class LoggingSignalHandler {
         signalClass = Class.forName("sun.misc.Signal");
         signalConstructor = signalClass.getConstructor(String.class);
         signalHandlerClass = Class.forName("sun.misc.SignalHandler");
-        signalHandleMethod = signalHandlerClass.getMethod("handle", signalClass);
+        signalHandlerHandleMethod = signalHandlerClass.getMethod("handle", signalClass);
+        signalHandleMethod = signalClass.getMethod("handle", signalClass, signalHandlerClass);
         signalGetNameMethod = signalClass.getMethod("getName");
     }
 
@@ -72,7 +74,7 @@ public class LoggingSignalHandler {
             }
 
             private void handle(Object signalHandler, Object signal) throws ReflectiveOperationException {
-                signalHandleMethod.invoke(signalHandler, signal);
+                signalHandlerHandleMethod.invoke(signalHandler, signal);
             }
 
             @Override
@@ -92,7 +94,7 @@ public class LoggingSignalHandler {
     private void register(String signalName, final Map<String, Object> jvmSignalHandlers) throws ReflectiveOperationException {
         Object signal = signalConstructor.newInstance(signalName);
         Object signalHandler = createSignalHandler(jvmSignalHandlers);
-        Object oldHandler = signalHandleMethod.invoke(signalHandler, signal);
+        Object oldHandler = signalHandleMethod.invoke(null, signal, signalHandler);
         if (oldHandler != null)
             jvmSignalHandlers.put(signalName, oldHandler);
     }
