@@ -181,13 +181,12 @@ import java.util.regex.Pattern;
  * <p>
  * For use cases where message processing time varies unpredictably, neither of these options may be sufficient.
  * The recommended way to handle these cases is to move message processing to another thread, which allows
- * the consumer to continue calling {@link #poll(Duration) poll} while the processor is still working. Some care must be
- * taken
- * to ensure that committed offsets do not get ahead of the actual position. Typically, you must disable automatic
- * commits and manually commit processed offsets for records only after the thread has finished handling them
- * (depending on the delivery semantics you need). Note also that you will need to {@link #pause(Collection) pause}
- * the partition so that no new records are received from poll until after thread has finished handling those
- * previously returned.
+ * the consumer to continue calling {@link #poll(Duration) poll} while the processor is still working.
+ * Some care must be taken to ensure that committed offsets do not get ahead of the actual position.
+ * Typically, you must disable automatic commits and manually commit processed offsets for records only after the
+ * thread has finished handling them (depending on the delivery semantics you need).
+ * Note also that you will need to {@link #pause(Collection) pause} the partition so that no new records are received
+ * from poll until after thread has finished handling those previously returned.
  *
  * <h3>Usage Examples</h3>
  * The consumer APIs offer flexibility to cover a variety of consumption use cases. Here are some examples to
