@@ -95,9 +95,13 @@ object ConsumerGroupCommand extends Logging {
 
   val MISSING_COLUMN_VALUE = "-"
 
-  def printError(msg: String, e: Option[Throwable] = None): Unit = {
+  def printError(msg: String, t: Option[Throwable] = None): Unit = {
     println(s"Error: $msg")
-    e.foreach(debug("Exception in consumer group command", _))
+    t.foreach(e => {
+      val errorMessage = "Exception in consumer group command"
+      error(errorMessage, e)
+      System.err.println(errorMessage + System.lineSeparator() + Utils.stackTrace(e))
+    })
   }
 
   def convertTimestamp(timeString: String): java.lang.Long = {
