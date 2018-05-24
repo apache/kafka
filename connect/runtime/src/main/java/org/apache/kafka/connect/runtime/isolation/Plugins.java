@@ -99,6 +99,11 @@ public class Plugins {
         );
     }
 
+    protected static boolean isInternalConverter(String classPropertyName) {
+        return classPropertyName.equals(WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG)
+            || classPropertyName.equals(WorkerConfig.INTERNAL_VALUE_CONVERTER_CLASS_CONFIG);
+    }
+
     public static ClassLoader compareAndSwapLoaders(ClassLoader loader) {
         ClassLoader current = Thread.currentThread().getContextClassLoader();
         if (!current.equals(loader)) {
@@ -197,8 +202,9 @@ public class Plugins {
      * @throws ConnectException if the {@link Converter} implementation class could not be found
      */
     public Converter newConverter(AbstractConfig config, String classPropertyName, ClassLoaderUsage classLoaderUsage) {
-        if (!config.originals().containsKey(classPropertyName)) {
-            // This configuration does not define the converter via the specified property name
+        if (!config.originals().containsKey(classPropertyName) && !isInternalConverter(classPropertyName)) {
+            // This configuration does not define the converter via the specified property name, and
+            // it does not represent an internal converter (which has a default available)
             return null;
         }
         Converter plugin = null;
@@ -242,15 +248,11 @@ public class Plugins {
         // Have to override schemas.enable from true to false for internal JSON converters
         // Don't have to warn the user about anything since all deprecation warnings take place in the
         // WorkerConfig class
-        if (plugin instanceof JsonConverter) {
-            if (classPropertyName.equals(WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG) ||
-                classPropertyName.equals(WorkerConfig.INTERNAL_VALUE_CONVERTER_CLASS_CONFIG)) {
-
-                // If they haven't explicitly specified values for internal.key.converter.schemas.enable
-                // or internal.value.converter.schemas.enable, we can safely default them to false
-                if (!converterConfig.containsKey(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG)) {
-                    converterConfig.put(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, false);
-                }
+        if (plugin instanceof JsonConverter && isInternalConverter(classPropertyName)) {
+            // If they haven't explicitly specified values for internal.key.converter.schemas.enable
+            // or internal.value.converter.schemas.enable, we can safely default them to false
+            if (!converterConfig.containsKey(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG)) {
+                converterConfig.put(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, false);
             }
         }
 
