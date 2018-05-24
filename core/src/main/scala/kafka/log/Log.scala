@@ -477,14 +477,18 @@ class Log(@volatile var dir: File,
     // We might encounter legacy log segments with offset overflow (KAFKA-6264). Such segments would be split by
     // Log#recoverSegment operation. When this happens, restart loading segment files from scratch. Theoretically, it is
     // possible that we see IndexOffsetOverflowException as many times as the number of log segments.
-    Log.maybeRetryOnOffsetOverflow(dir.listFiles.length) {
+    var maxTries = 1
+    for (file <- dir.listFiles)
+      if (isLogFile(file))
+        maxTries += 1
+    Log.maybeRetryOnOffsetOverflow(maxTries) {
       loadSegmentFiles()
     }
 
     // Finally, complete any interrupted swap operations. To be crash-safe,
     // log files that are replaced by the swap segment should be renamed to .deleted
     // before the swap file is restored as the new segment file.
-    try completeSwapOperations(swapFiles)
+    completeSwapOperations(swapFiles)
 
     if (logSegments.isEmpty) {
       // no existing segments, create a new mutable segment beginning at offset 0
@@ -497,9 +501,10 @@ class Log(@volatile var dir: File,
         preallocate = config.preallocate))
       0
     } else if (!dir.getAbsolutePath.endsWith(Log.DeleteDirSuffix)) {
-      val nextOffset = Log.maybeRetryOnOffsetOverflow(dir.listFiles.length) {
+      val nextOffset = Log.maybeRetryOnOffsetOverflow(maxTries) {
         recoverLog()
       }
+
       // reset the index size of the currently active log segment to allow more entries
       activeSegment.resizeIndexes(config.maxIndexSize)
       nextOffset
@@ -2018,14 +2023,22 @@ object Log extends Logging {
     file.getPath.endsWith(LogFileSuffix)
 
   @throws(classOf[IndexOffsetOverflowException])
-  private[log] def maybeRetryOnOffsetOverflow[T](retries: Int = 1)(fn: => T): T = {
-    try fn
-    catch {
-      case e: IndexOffsetOverflowException if (retries > 0) => {
-        info(s"Caught IndexOffsetOverflowException ${e.getMessage}. Retrying operation.")
-        maybeRetryOnOffsetOverflow(retries - 1)(fn)
+  private[log] def maybeRetryOnOffsetOverflow[T](maxTries: Int = 1)(fn: => T): T = {
+    var triesSoFar = 0
+    while (triesSoFar < maxTries) {
+      try {
+        return fn
+      }
+      catch {
+        case e: IndexOffsetOverflowException => {
+          info(s"Caught IndexOffsetOverflowException ${e.getMessage}. Retrying operation (${triesSoFar}/${maxTries}).")
+          triesSoFar += 1
+          if (triesSoFar == maxTries)
+            throw e
+        }
       }
     }
+    throw new IllegalStateException()
   }
 
   /**
