@@ -118,10 +118,6 @@ public class AdminMetadataManager {
         public void requestUpdate() {
             AdminMetadataManager.this.requestUpdate();
         }
-
-        public long lastMetadataUpdateMs() {
-            return lastMetadataUpdateMs;
-        }
     }
 
     /**

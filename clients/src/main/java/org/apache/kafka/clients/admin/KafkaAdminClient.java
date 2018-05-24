@@ -1011,7 +1011,6 @@ public class KafkaAdminClient extends AdminClient {
         @Override
         public void run() {
             long now = time.milliseconds();
-            long lastIterationTimeMs = Long.MAX_VALUE;
             log.trace("Thread starting");
             while (true) {
                 // Copy newCalls into pendingCalls.
@@ -1031,18 +1030,6 @@ public class KafkaAdminClient extends AdminClient {
                 long pollTimeout = Math.min(1200000, timeoutProcessor.nextTimeoutMs());
                 if (curHardShutdownTimeMs != INVALID_SHUTDOWN_TIME) {
                     pollTimeout = Math.min(pollTimeout, curHardShutdownTimeMs - now);
-                }
-
-                // For calls which have not yet been sent, update the node to send to if
-                // metadata has been refreshed. This is to handle controller change and
-                // node disconnections.
-                if (metadataManager.updater().lastMetadataUpdateMs() > lastIterationTimeMs) {
-                    ArrayList<Call> pendingCallsToSend = new ArrayList<>();
-                    for (List<Call> pending : callsToSend.values()) {
-                        pendingCallsToSend.addAll(pending);
-                    }
-                    callsToSend.clear();
-                    chooseNodesForPendingCalls(now, pendingCallsToSend.iterator());
                 }
 
                 // Choose nodes for our pending calls.
@@ -1067,7 +1054,6 @@ public class KafkaAdminClient extends AdminClient {
                 log.trace("KafkaClient#poll retrieved {} response(s)", responses.size());
 
                 // Update the current time and handle the latest responses.
-                lastIterationTimeMs = now;
                 now = time.milliseconds();
                 handleResponses(now, responses);
             }
@@ -1152,7 +1138,18 @@ public class KafkaAdminClient extends AdminClient {
                 @Override
                 public void handleResponse(AbstractResponse abstractResponse) {
                     MetadataResponse response = (MetadataResponse) abstractResponse;
-                    metadataManager.update(response.cluster(), time.milliseconds());
+                    long now = time.milliseconds();
+                    metadataManager.update(response.cluster(), now);
+
+                    // For calls which have not yet been sent, update the node to send to when
+                    // metadata is refreshed. This is to handle controller change and
+                    // node disconnections.
+                    ArrayList<Call> pendingCallsToSend = new ArrayList<>();
+                    for (List<Call> pending : callsToSend.values()) {
+                        pendingCallsToSend.addAll(pending);
+                    }
+                    callsToSend.clear();
+                    chooseNodesForPendingCalls(now, pendingCallsToSend.iterator());
                 }
 
                 @Override
