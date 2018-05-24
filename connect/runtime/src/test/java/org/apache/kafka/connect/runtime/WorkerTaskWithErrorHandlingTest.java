@@ -25,7 +25,6 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.connector.ConnectRecord;
-import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
@@ -38,7 +37,6 @@ import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
-import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
@@ -70,14 +68,7 @@ public class WorkerTaskWithErrorHandlingTest {
     private static final String TOPIC = "test";
     private static final int PARTITION1 = 12;
     private static final int PARTITION2 = 13;
-    private static final int PARTITION3 = 14;
     private static final long FIRST_OFFSET = 45;
-    private static final Schema KEY_SCHEMA = Schema.INT32_SCHEMA;
-    private static final int KEY = 12;
-    private static final Schema VALUE_SCHEMA = Schema.STRING_SCHEMA;
-    private static final String VALUE = "VALUE";
-    private static final byte[] RAW_KEY = "key".getBytes();
-    private static final byte[] RAW_VALUE = "value".getBytes();
 
     private static final Map<String, String> TASK_PROPS = new HashMap<>();
 
@@ -102,28 +93,26 @@ public class WorkerTaskWithErrorHandlingTest {
     private TargetState initialState = TargetState.STARTED;
     private Time time;
     private MockConnectMetrics metrics;
+    @SuppressWarnings("unused")
     @Mock
     private SinkTask sinkTask;
     private Capture<WorkerSinkTaskContext> sinkTaskContext = EasyMock.newCapture();
     private WorkerConfig workerConfig;
     @Mock
     private PluginClassLoader pluginLoader;
-    @Mock
-    private Converter keyConverter;
-    @Mock
-    private Converter valueConverter;
+    @SuppressWarnings("unused")
     @Mock
     private HeaderConverter headerConverter;
     private WorkerSinkTask workerTask;
+    @SuppressWarnings("unused")
     @Mock
     private KafkaConsumer<byte[], byte[]> consumer;
     private Capture<ConsumerRebalanceListener> rebalanceListener = EasyMock.newCapture();
+    @SuppressWarnings("unused")
     @Mock
     private TaskStatus.Listener statusListener;
 
     private ErrorHandlingMetrics errorHandlingMetrics;
-
-    private long recordsReturned;
 
     @Before
     public void setup() {
@@ -139,7 +128,6 @@ public class WorkerTaskWithErrorHandlingTest {
         workerProps.put("offset.storage.file.filename", "/tmp/connect.offsets");
         pluginLoader = PowerMock.createMock(PluginClassLoader.class);
         workerConfig = new StandaloneConfig(workerProps);
-        recordsReturned = 0;
         errorHandlingMetrics = new ErrorHandlingMetrics(taskId, metrics);
     }
 
