@@ -52,6 +52,7 @@ import org.apache.kafka.connect.transforms.util.SimpleConfig;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -153,6 +154,13 @@ public class ErrorHandlingTaskTest {
         pluginLoader = PowerMock.createMock(PluginClassLoader.class);
         workerConfig = new StandaloneConfig(workerProps);
         errorHandlingMetrics = new ErrorHandlingMetrics(taskId, metrics);
+    }
+
+    @After
+    public void tearDown() {
+        if (metrics != null) {
+            metrics.stop();
+        }
     }
 
     @Test

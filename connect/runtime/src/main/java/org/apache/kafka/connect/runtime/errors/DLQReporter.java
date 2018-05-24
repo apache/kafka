@@ -16,16 +16,26 @@
  */
 package org.apache.kafka.connect.runtime.errors;
 
+import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.errors.TopicExistsException;
+import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.runtime.ConnectorConfig;
+import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Map;
-import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+
+import static java.util.Collections.singleton;
 
 /**
  * Write the original consumed record into a dead letter queue. The dead letter queue is a Kafka topic located
@@ -37,13 +47,15 @@ public class DLQReporter implements ErrorReporter {
 
     private static final Logger log = LoggerFactory.getLogger(DLQReporter.class);
 
+    private static final int ADMIN_OPERATIONS_TIMEOUT_MILLIS = 10000;
+    private static final int DLQ_MAX_DESIRED_REPLICATION_FACTOR = 3;
+    private static final int DLQ_NUM_DESIRED_PARTITIONS = 1;
+
     public static final String PREFIX = "errors.deadletterqueue.";
 
     public static final String DLQ_TOPIC_NAME = "topic.name";
     public static final String DLQ_TOPIC_NAME_DOC = "The name of the topic where these messages are written to.";
     public static final String DLQ_TOPIC_DEFAULT = "";
-
-    private final int numPartitions;
 
     private DLQReporterConfig config;
     private KafkaProducer<byte[], byte[]> kafkaProducer;
@@ -54,14 +66,36 @@ public class DLQReporter implements ErrorReporter {
                 .define(DLQ_TOPIC_NAME, ConfigDef.Type.STRING, DLQ_TOPIC_DEFAULT, ConfigDef.Importance.HIGH, DLQ_TOPIC_NAME_DOC);
     }
 
+    public static DLQReporter createAndSetup(WorkerConfig workerConfig, ConnectorConfig connConfig, Map<String, Object> producerProps) {
+        String topic = connConfig.getString(PREFIX + "." + DLQ_TOPIC_NAME);
+
+        try (AdminClient admin = AdminClient.create(workerConfig.originals())) {
+            if (!admin.listTopics().names().get(ADMIN_OPERATIONS_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS).contains(topic)) {
+                log.error("Topic {} doesn't exist. Will attempt to create topic.", topic);
+                int maxReplicationFactor = admin.describeCluster().nodes().get(ADMIN_OPERATIONS_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS).size();
+                int replicationFactor = Math.min(maxReplicationFactor, DLQ_MAX_DESIRED_REPLICATION_FACTOR);
+                NewTopic schemaTopicRequest = new NewTopic(topic, DLQ_NUM_DESIRED_PARTITIONS, (short) replicationFactor);
+                admin.createTopics(singleton(schemaTopicRequest)).all().get(ADMIN_OPERATIONS_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
+            }
+        } catch (TimeoutException | InterruptedException e) {
+            throw new ConnectException("Could not initialize dead letter queue with topic=" + topic, e);
+        } catch (ExecutionException e) {
+            if (!(e.getCause() instanceof TopicExistsException)) {
+                throw new ConnectException("Could not initialize dead letter queue with topic=" + topic, e);
+            }
+        }
+
+        KafkaProducer<byte[], byte[]> dlqProducer = new KafkaProducer<>(producerProps);
+        return new DLQReporter(dlqProducer);
+    }
+
     /**
      * Initialize the dead letter queue reporter.
+     *
      * @param kafkaProducer a Kafka Producer to produce the original consumed records.
-     * @param numPartitions the number of partitions in the dead letter queue topic.
      */
-    public DLQReporter(KafkaProducer<byte[], byte[]> kafkaProducer, int numPartitions) {
+    DLQReporter(KafkaProducer<byte[], byte[]> kafkaProducer) {
         this.kafkaProducer = kafkaProducer;
-        this.numPartitions = numPartitions;
     }
 
     @Override
@@ -90,10 +124,14 @@ public class DLQReporter implements ErrorReporter {
             return;
         }
 
-        int partition = ThreadLocalRandom.current().nextInt(numPartitions);
-
-        ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(config.topic(),
-                partition, originalMessage.key(), originalMessage.value(), originalMessage.headers());
+        ProducerRecord<byte[], byte[]> producerRecord;
+        if (originalMessage.timestamp() > 0) {
+            producerRecord = new ProducerRecord<>(config.topic(), null, originalMessage.timestamp(),
+                    originalMessage.key(), originalMessage.value(), originalMessage.headers());
+        } else {
+            producerRecord = new ProducerRecord<>(config.topic(), null,
+                    originalMessage.key(), originalMessage.value(), originalMessage.headers());
+        }
 
         this.kafkaProducer.send(producerRecord, (metadata, exception) -> {
             if (exception != null) {

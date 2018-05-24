@@ -16,13 +16,9 @@
  */
 package org.apache.kafka.connect.runtime;
 
-import org.apache.kafka.clients.admin.AdminClient;
-import org.apache.kafka.clients.admin.DescribeTopicsResult;
-import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Frequencies;
 import org.apache.kafka.common.metrics.stats.Total;
@@ -65,11 +61,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 
 /**
@@ -509,24 +502,8 @@ public class Worker {
         // check if topic for dead letter queue exists
         String topic = connConfig.getString(DLQReporter.PREFIX + "." + DLQReporter.DLQ_TOPIC_NAME);
         if (topic != null && !topic.isEmpty()) {
-            DescribeTopicsResult topics = AdminClient.create(config.originals()).describeTopics(Collections.singleton(topic));
-            try {
-                TopicDescription description = topics.values().get(topic).get(60, TimeUnit.SECONDS);
-                if (description == null || description.partitions().size() == 0) {
-                    log.error("Topic description is {} for topic {}", description, topic);
-                    throw new ConfigException("Dead Letter Queue Topic '" + topic + "' is not available.");
-                }
-
-                KafkaProducer<byte[], byte[]> dlqProducer = new KafkaProducer<>(producerProps);
-
-                ErrorReporter dlqReporter = new DLQReporter(dlqProducer, description.partitions().size());
-                dlqReporter.configure(connConfig.originalsWithPrefix(DLQReporter.PREFIX));
-                reporters.add(dlqReporter);
-            } catch (InterruptedException e) {
-                throw new ConnectException(e);
-            } catch (ExecutionException | TimeoutException e) {
-                log.error("Could not describe dead letter topic " + topic + ". Disabling the feature.", e);
-            }
+            DLQReporter reporter = DLQReporter.createAndSetup(config, connConfig, producerProps);
+            reporters.add(reporter);
         }
 
         return new ProcessingContext(reporters);

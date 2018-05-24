@@ -25,6 +25,7 @@ import org.apache.kafka.connect.runtime.MockConnectMetrics;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.easymock.EasyMock;
 import org.easymock.Mock;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -43,7 +44,6 @@ import static org.junit.Assert.assertEquals;
 @PowerMockIgnore("javax.management.*")
 public class ErrorReporterTest {
 
-    private static final int PARTITIONS = 10;
     private static final String TOPIC = "test-topic";
     private static final String DLQ_TOPIC = "test-topic-errors";
 
@@ -64,9 +64,16 @@ public class ErrorReporterTest {
         errorHandlingMetrics = new ErrorHandlingMetrics(new ConnectorTaskId("connector-", 1), metrics);
     }
 
+    @After
+    public void tearDown() {
+        if (metrics != null) {
+            metrics.stop();
+        }
+    }
+
     @Test
     public void testDLQConfigWithEmptyTopicName() {
-        DLQReporter dlqReporter = new DLQReporter(producer, PARTITIONS);
+        DLQReporter dlqReporter = new DLQReporter(producer);
         dlqReporter.configure(config);
         dlqReporter.setMetrics(errorHandlingMetrics);
 
@@ -82,7 +89,7 @@ public class ErrorReporterTest {
 
     @Test
     public void testDLQConfigWithValidTopicName() {
-        DLQReporter dlqReporter = new DLQReporter(producer, PARTITIONS);
+        DLQReporter dlqReporter = new DLQReporter(producer);
         dlqReporter.configure(config(DLQReporter.DLQ_TOPIC_NAME, DLQ_TOPIC));
         dlqReporter.setMetrics(errorHandlingMetrics);
 
@@ -98,7 +105,7 @@ public class ErrorReporterTest {
 
     @Test
     public void testReportDLQTwice() {
-        DLQReporter dlqReporter = new DLQReporter(producer, PARTITIONS);
+        DLQReporter dlqReporter = new DLQReporter(producer);
         dlqReporter.configure(config(DLQReporter.DLQ_TOPIC_NAME, DLQ_TOPIC));
         dlqReporter.setMetrics(errorHandlingMetrics);
 
