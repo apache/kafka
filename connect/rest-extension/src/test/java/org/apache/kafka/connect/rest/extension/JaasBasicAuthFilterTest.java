@@ -66,7 +66,7 @@ public class JaasBasicAuthFilterTest {
         lines = new ArrayList<>();
         lines.add("KafkaConnect { org.apache.kafka.connect.rest.extension.PropertyFileLoginModule"
                   + " required ");
-        lines.add("file=\""+credentialFile.getPath()+"\"");
+        lines.add("file=\"" + credentialFile.getPath() + "\"");
         lines.add(";};");
         Files.write(jaasConfigFile.toPath(), lines, StandardCharsets.UTF_8);
         Configuration.setConfiguration(null);
