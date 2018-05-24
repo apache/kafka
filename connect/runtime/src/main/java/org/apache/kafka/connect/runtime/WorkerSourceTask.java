@@ -292,18 +292,13 @@ class WorkerSourceTask extends WorkerTask {
 
         processingContext.setCurrentContext(Stage.HEADER_CONVERTER, headerConverter.getClass());
         RecordHeaders headers = execute(() -> convertHeaderFor(record));
-        if (processingContext.failed()) {
-            return null;
-        }
 
         processingContext.setCurrentContext(Stage.KEY_CONVERTER, keyConverter.getClass());
         byte[] key = execute(() -> keyConverter.fromConnectData(record.topic(), record.keySchema(), record.key()));
-        if (processingContext.failed()) {
-            return null;
-        }
 
         processingContext.setCurrentContext(Stage.VALUE_CONVERTER, valueConverter.getClass());
         byte[] value = execute(() -> valueConverter.fromConnectData(record.topic(), record.valueSchema(), record.value()));
+
         if (processingContext.failed()) {
             return null;
         }
