@@ -21,6 +21,7 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.RetriableException;
 import org.easymock.EasyMock;
 import org.easymock.Mock;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.powermock.api.easymock.PowerMock;
@@ -32,7 +33,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.apache.kafka.connect.runtime.errors.RetryWithToleranceExecutor.RetryWithToleranceExecutorConfig;
-import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.replay;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -45,8 +45,6 @@ import static org.junit.Assert.assertTrue;
 @PowerMockIgnore("javax.management.*")
 public class RetryWithToleranceExecutorTest {
 
-    @SuppressWarnings("unused")
-    @Mock
     private ProcessingContext processingContext;
 
     @SuppressWarnings("unused")
@@ -55,6 +53,11 @@ public class RetryWithToleranceExecutorTest {
 
     @Mock
     ErrorHandlingMetrics errorHandlingMetrics;
+
+    @Before
+    public void setup() {
+        processingContext = new ProcessingContext();
+    }
 
     @Test
     public void testHandleExceptionInTransformations() {
@@ -108,10 +111,10 @@ public class RetryWithToleranceExecutorTest {
 
     private void testHandleExceptionInStage(Stage type, Exception ex) {
         RetryWithToleranceExecutor executor = setupExecutor();
-        setupProcessingContext(type, ex);
-        replay(processingContext);
-        Result r = executor.execute(new ExceptionThrower(ex), processingContext);
-        assertNotNull(r.error());
+        setupProcessingContext(type);
+
+        executor.execute(new ExceptionThrower(ex), processingContext);
+        assertNotNull(processingContext.error());
         PowerMock.verifyAll();
     }
 
@@ -124,20 +127,8 @@ public class RetryWithToleranceExecutorTest {
         return executor;
     }
 
-    private void setupProcessingContext(Stage type, Exception ex) {
-        EasyMock.expect(processingContext.stage()).andReturn(type).anyTimes();
-        EasyMock.expect(processingContext.result()).andReturn(null);
-        EasyMock.expect(processingContext.result()).andReturn(new Result(ex)).anyTimes();
-        EasyMock.expect((Class) processingContext.executingClass()).andReturn(ExceptionThrower.class);
-
-        processingContext.result(anyObject(Result.class));
-        EasyMock.expectLastCall().anyTimes();
-
-        processingContext.attempt(EasyMock.anyInt());
-        EasyMock.expectLastCall();
-
-        processingContext.report();
-        EasyMock.expectLastCall();
+    private void setupProcessingContext(Stage type) {
+        processingContext.position(type);
     }
 
     @Test
@@ -176,9 +167,9 @@ public class RetryWithToleranceExecutorTest {
 
         replay(mockOperation);
 
-        Result<String> result = executor.execAndHandleError(mockOperation, context, Exception.class);
-        assertTrue(result.success());
-        assertEquals("Success", result.result());
+        String result = executor.execAndHandleError(mockOperation, context, Exception.class);
+        assertFalse(context.failed());
+        assertEquals("Success", result);
         assertEquals(expectedWait, time.hiResClockMs());
 
         PowerMock.verifyAll();
@@ -200,9 +191,9 @@ public class RetryWithToleranceExecutorTest {
 
         replay(mockOperation);
 
-        Result<String> result = executor.execAndHandleError(mockOperation, context, Exception.class);
-        assertFalse(result.success());
-        assertNull(result.result());
+        String result = executor.execAndHandleError(mockOperation, context, Exception.class);
+        assertTrue(context.failed());
+        assertNull(result);
         assertEquals(expectedWait, time.hiResClockMs());
         assertEquals(1, context.attempt());
 
@@ -244,8 +235,6 @@ public class RetryWithToleranceExecutorTest {
         Map<String, Object> props = config(RetryWithToleranceExecutor.RETRY_TIMEOUT, "5");
         props.put(RetryWithToleranceExecutor.RETRY_DELAY_MAX_MS, "5000");
         executor.configure(props);
-
-        replay(processingContext);
 
         long prevTs = time.hiResClockMs();
         executor.backoff(1, 5000);

@@ -20,11 +20,16 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.connect.json.JsonConverter;
+import org.apache.kafka.connect.runtime.ConnectMetrics;
+import org.apache.kafka.connect.runtime.MockConnectMetrics;
+import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.easymock.EasyMock;
 import org.easymock.Mock;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.powermock.api.easymock.PowerMock;
+import org.powermock.core.classloader.annotations.PowerMockIgnore;
 import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.util.HashMap;
@@ -35,13 +40,12 @@ import static org.easymock.EasyMock.replay;
 import static org.junit.Assert.assertEquals;
 
 @RunWith(PowerMockRunner.class)
+@PowerMockIgnore("javax.management.*")
 public class ErrorReporterTest {
 
     private static final int PARTITIONS = 10;
     private static final String TOPIC = "test-topic";
     private static final String DLQ_TOPIC = "test-topic-errors";
-
-    private final HashMap<String, Object> config = new HashMap<>();
 
     @Mock
     KafkaProducer<byte[], byte[]> producer;
@@ -49,14 +53,22 @@ public class ErrorReporterTest {
     @Mock
     Future<RecordMetadata> metadata;
 
-    @Mock
-    ErrorHandlingMetrics metrics;
+    private HashMap<String, Object> config;
+    private ErrorHandlingMetrics errorHandlingMetrics;
+    private MockConnectMetrics metrics;
+
+    @Before
+    public void setup() {
+        config = new HashMap<>();
+        metrics = new MockConnectMetrics();
+        errorHandlingMetrics = new ErrorHandlingMetrics(new ConnectorTaskId("connector-", 1), metrics);
+    }
 
     @Test
     public void testDLQConfigWithEmptyTopicName() {
         DLQReporter dlqReporter = new DLQReporter(producer, PARTITIONS);
         dlqReporter.configure(config);
-        dlqReporter.setMetrics(metrics);
+        dlqReporter.setMetrics(errorHandlingMetrics);
 
         ProcessingContext context = processingContext();
 
@@ -72,7 +84,7 @@ public class ErrorReporterTest {
     public void testDLQConfigWithValidTopicName() {
         DLQReporter dlqReporter = new DLQReporter(producer, PARTITIONS);
         dlqReporter.configure(config(DLQReporter.DLQ_TOPIC_NAME, DLQ_TOPIC));
-        dlqReporter.setMetrics(metrics);
+        dlqReporter.setMetrics(errorHandlingMetrics);
 
         ProcessingContext context = processingContext();
 
@@ -88,7 +100,7 @@ public class ErrorReporterTest {
     public void testReportDLQTwice() {
         DLQReporter dlqReporter = new DLQReporter(producer, PARTITIONS);
         dlqReporter.configure(config(DLQReporter.DLQ_TOPIC_NAME, DLQ_TOPIC));
-        dlqReporter.setMetrics(metrics);
+        dlqReporter.setMetrics(errorHandlingMetrics);
 
         ProcessingContext context = processingContext();
 
@@ -102,32 +114,38 @@ public class ErrorReporterTest {
     }
 
     @Test
-    public void testNoopOnDisabledLogReporter() {
+    public void testLogOnDisabledLogReporter() {
         LogReporter logReporter = new LogReporter();
         logReporter.configure(config);
-        logReporter.setMetrics(metrics);
+        logReporter.setMetrics(errorHandlingMetrics);
 
         ProcessingContext context = processingContext();
+        context.error(new RuntimeException());
 
+        // reporting a context without an error should not cause any errors.
         logReporter.report(context);
+        assertErrorHandlingMetricValue("errors-logged", 0.0);
     }
 
-    @Test(expected = NullPointerException.class)
-    public void testNoopOnEnabledLogReporter() {
+    @Test
+    public void testLogOnEnabledLogReporter() {
         LogReporter logReporter = new LogReporter();
         logReporter.configure(config(LogReporter.LOG_ENABLE, "true"));
-        logReporter.setMetrics(metrics);
+        logReporter.setMetrics(errorHandlingMetrics);
 
         ProcessingContext context = processingContext();
+        context.error(new RuntimeException());
 
+        // reporting a context without an error should not cause any errors.
         logReporter.report(context);
+        assertErrorHandlingMetricValue("errors-logged", 1.0);
     }
 
     @Test
     public void testLogMessageWithNoRecords() {
         LogReporter logReporter = new LogReporter();
         logReporter.configure(config(LogReporter.LOG_ENABLE, "true"));
-        logReporter.setMetrics(metrics);
+        logReporter.setMetrics(errorHandlingMetrics);
 
         ProcessingContext context = processingContext();
 
@@ -141,7 +159,7 @@ public class ErrorReporterTest {
         LogReporter logReporter = new LogReporter();
         logReporter.configure(config(LogReporter.LOG_ENABLE, "true"));
         logReporter.configure(config(LogReporter.LOG_INCLUDE_MESSAGES, "true"));
-        logReporter.setMetrics(metrics);
+        logReporter.setMetrics(errorHandlingMetrics);
 
         ProcessingContext context = processingContext();
 
@@ -161,6 +179,12 @@ public class ErrorReporterTest {
     private Map<String, Object> config(String key, Object val) {
         config.put(key, val);
         return config;
+    }
+
+    private void assertErrorHandlingMetricValue(String name, double expected) {
+        ConnectMetrics.MetricGroup sinkTaskGroup = errorHandlingMetrics.metricGroup();
+        double measured = metrics.currentMetricValueAsDouble(sinkTaskGroup, name);
+        assertEquals(expected, measured, 0.001d);
     }
 
 }

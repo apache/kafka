@@ -276,7 +276,7 @@ class WorkerSourceTask extends WorkerTask {
     }
 
     protected <V> V execute(Operation<V> operation) {
-        return operationExecutor.execute(operation, processingContext).result();
+        return operationExecutor.execute(operation, processingContext);
     }
 
     /**

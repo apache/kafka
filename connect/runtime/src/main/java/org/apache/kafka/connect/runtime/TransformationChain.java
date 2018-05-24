@@ -19,7 +19,6 @@ package org.apache.kafka.connect.runtime;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.runtime.errors.OperationExecutor;
 import org.apache.kafka.connect.runtime.errors.ProcessingContext;
-import org.apache.kafka.connect.runtime.errors.Result;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceExecutor;
 import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.transforms.Transformation;
@@ -48,12 +47,11 @@ public class TransformationChain<R extends ConnectRecord<R>> {
             final R current = record;
 
             // execute the operation
-            Result<R> result = operationExecutor.execute(() -> transformation.apply(current), processingContext);
+            record = operationExecutor.execute(() -> transformation.apply(current), processingContext);
             if (processingContext.failed()) {
                 return null;
             }
 
-            record = result.result();
             if (record == null) break;
         }
 

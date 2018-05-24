@@ -31,6 +31,6 @@ public interface OperationExecutor extends Configurable {
      * @param <V> return type of the result of the operation.
      * @return result of the operation
      */
-    <V> Result<V> execute(Operation<V> operation, ProcessingContext context);
+    <V> V execute(Operation<V> operation, ProcessingContext context);
 
 }

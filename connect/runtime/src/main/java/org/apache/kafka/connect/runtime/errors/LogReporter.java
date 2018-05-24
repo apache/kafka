@@ -66,12 +66,12 @@ public class LogReporter implements ErrorReporter {
             return;
         }
 
-        if (context.result().success()) {
+        if (!context.failed()) {
             return;
         }
 
         StringBuilder builder = message(context);
-        log.error(builder.toString(), context.result().error());
+        log.error(builder.toString(), context.error());
         errorHandlingMetrics.recordErrorLogged();
     }
 

@@ -54,8 +54,8 @@ import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
  * <p>
  * There are three outcomes to executing an operation. It might succeed, in which case the result is returned to the caller.
  * If it fails, this class does one of these two things: (1) if the failure occurred due to a tolerable exception, then
- * return a {@link Result} object with appropriate error reason, or (2) if the exception is not tolerated, then it is wrapped into
- * a ConnectException and rethrown to the user.
+ * set appropriate error reason in the {@link ProcessingContext} and return null, or (2) if the exception is not tolerated,
+ * then it is wrapped into a ConnectException and rethrown to the caller.
  * </p>
  */
 public class RetryWithToleranceExecutor implements OperationExecutor {
@@ -121,17 +121,17 @@ public class RetryWithToleranceExecutor implements OperationExecutor {
      * @return result of the operation
      */
     @Override
-    public <V> Result<V> execute(Operation<V> operation, ProcessingContext context) {
-        if (context.result() != null && !context.result().success()) {
+    public <V> V execute(Operation<V> operation, ProcessingContext context) {
+        if (context.failed()) {
             log.debug("ProcessingContext is already in failed state. Ignoring requested operation.");
-            return new Result<>(context.result().error());
+            return null;
         }
 
         try {
             Class<? extends Exception> ex = TOLERABLE_EXCEPTIONS.getOrDefault(context.stage(), RetriableException.class);
             return execAndHandleError(operation, context, ex);
         } finally {
-            if (!context.result().success()) {
+            if (context.failed()) {
                 errorHandlingMetrics.recordError();
                 context.report();
             }
@@ -146,17 +146,14 @@ public class RetryWithToleranceExecutor implements OperationExecutor {
      * @return the result of the operation.
      * @throws Exception rethrow if a non-retriable Exception is thrown by the operation
      */
-    protected <V> Result<V> execAndRetry(Operation<V> operation, ProcessingContext context) throws Exception {
+    protected <V> V execAndRetry(Operation<V> operation, ProcessingContext context) throws Exception {
         int attempt = 0;
         long startTime = time.milliseconds();
         long deadline = startTime + config.retryTimeout();
         do {
             try {
                 attempt++;
-                V v = operation.apply();
-                Result<V> result = new Result<>(v);
-                context.result(result);
-                return result;
+                return operation.apply();
             } catch (RetriableException e) {
                 log.trace("Caught a retriable exception while executing {} operation with {}", context.stage(), context.executingClass());
                 errorHandlingMetrics.recordFailure();
@@ -164,12 +161,14 @@ public class RetryWithToleranceExecutor implements OperationExecutor {
                     backoff(attempt, deadline);
                     if (Thread.currentThread().isInterrupted()) {
                         log.trace("Thread was interrupted. Marking operation as failed.");
-                        return new Result<>(e);
+                        context.error(e);
+                        return null;
                     }
                     errorHandlingMetrics.recordRetry();
                 } else {
                     log.trace("Can't retry. start={}, attempt={}, deadline={}", startTime, attempt, deadline);
-                    return new Result<>(e);
+                    context.error(e);
+                    return null;
                 }
             } finally {
                 context.attempt(attempt);
@@ -187,21 +186,18 @@ public class RetryWithToleranceExecutor implements OperationExecutor {
      * @return the result of the operation
      */
     // Visible for testing
-    protected <V> Result<V> execAndHandleError(Operation<V> operation, ProcessingContext context, Class<? extends Exception> tolerated) {
+    protected <V> V execAndHandleError(Operation<V> operation, ProcessingContext context, Class<? extends Exception> tolerated) {
         try {
-            Result<V> result = execAndRetry(operation, context);
-            if (!result.success()) {
+            V result = execAndRetry(operation, context);
+            if (context.failed()) {
                 markAsFailed();
                 errorHandlingMetrics.recordSkipped();
             }
-            context.result(result);
             return result;
         } catch (Exception e) {
             errorHandlingMetrics.recordFailure();
             markAsFailed();
-
-            Result<V> exResult = new Result<>(e);
-            context.result(exResult);
+            context.error(e);
 
             if (!tolerated.isAssignableFrom(e.getClass())) {
                 throw new ConnectException("Unhandled exception in error handler", e);
@@ -212,7 +208,7 @@ public class RetryWithToleranceExecutor implements OperationExecutor {
             }
 
             errorHandlingMetrics.recordSkipped();
-            return exResult;
+            return null;
         }
     }
 
