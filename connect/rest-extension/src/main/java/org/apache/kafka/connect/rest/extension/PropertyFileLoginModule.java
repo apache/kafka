@@ -17,7 +17,15 @@
 
 package org.apache.kafka.connect.rest.extension;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.Map;
+import java.util.Properties;
+import java.util.concurrent.ConcurrentHashMap;
 
 import javax.security.auth.Subject;
 import javax.security.auth.callback.Callback;
@@ -27,17 +35,35 @@ import javax.security.auth.callback.PasswordCallback;
 import javax.security.auth.login.LoginException;
 import javax.security.auth.spi.LoginModule;
 
-public class TestLoginModule implements LoginModule {
+/**
+ * {@link PropertyFileLoginModule} authenticates against a properties file.
+ * The credentials should be stored in the format {username}={password} in teh properties file.
+ * The absolute path of the file needs to specified using the option <b>file</b>
+ */
+public class PropertyFileLoginModule implements LoginModule {
+    private static final Logger log = LoggerFactory.getLogger(PropertyFileLoginModule.class);
 
-    CallbackHandler callbackHandler;
-    private String expectedUsername = "user";
-    private String expectedPassword = "password";
+    private CallbackHandler callbackHandler;
+    private static final String FILE_OPTIONS = "file";
+    private String fileName;
     private boolean authenticated;
+
+    private static Map<String, Properties> credentialPropertiesMap = new ConcurrentHashMap<>();
 
     @Override
     public void initialize(Subject subject, CallbackHandler callbackHandler,
                            Map<String, ?> sharedState, Map<String, ?> options) {
         this.callbackHandler = callbackHandler;
+        fileName = (String) options.get(FILE_OPTIONS);
+        if (fileName != null || !fileName.isEmpty()) {
+            Properties credentialProperties = new Properties();
+            try {
+                credentialProperties.load(Files.newInputStream(Paths.get(fileName)));
+                credentialPropertiesMap.putIfAbsent(fileName, credentialProperties);
+            } catch (IOException e) {
+                log.error("Error loading credentials file ", e);
+            }
+        }
     }
 
     @Override
@@ -50,8 +76,12 @@ public class TestLoginModule implements LoginModule {
         }
 
         String username = ((NameCallback) callbacks[0]).getName();
-        String password = new String(((PasswordCallback) callbacks[1]).getPassword());
-        authenticated = expectedUsername.equals(username) && expectedPassword.equals(password);
+        String password = ((PasswordCallback) callbacks[1]).getPassword() != null
+                          ? new String(((PasswordCallback) callbacks[1]).getPassword())
+                          : null;
+        Properties credentialProperties = credentialPropertiesMap.get(fileName);
+        authenticated = credentialProperties.isEmpty() ||
+                        (password != null && password.equals(credentialProperties.get(username)));
         return authenticated;
     }
 

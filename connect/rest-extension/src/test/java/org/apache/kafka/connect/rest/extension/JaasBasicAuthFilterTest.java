@@ -53,13 +53,21 @@ public class JaasBasicAuthFilterTest {
     public void setup() throws IOException {
 
         EasyMock.reset(requestContext);
+        File credentialFile = File.createTempFile("credential", ".properties");
+        credentialFile.deleteOnExit();
+        List<String> lines = new ArrayList<>();
+        lines.add("user=password");
+        lines.add("user1=password1");
+        Files.write(credentialFile.toPath(), lines, StandardCharsets.UTF_8);
+
         File jaasConfigFile = File.createTempFile("ks-jaas-", ".conf");
         jaasConfigFile.deleteOnExit();
-
         System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, jaasConfigFile.getPath());
-        List<String> lines = new ArrayList<>();
-        lines.add("KafkaConnect { org.apache.kafka.connect.rest.extension"
-                  + ".TestLoginModule required ;};");
+        lines = new ArrayList<>();
+        lines.add("KafkaConnect { org.apache.kafka.connect.rest.extension.PropertyFileLoginModule"
+                  + " required ");
+        lines.add("file=\""+credentialFile.getPath()+"\"");
+        lines.add(";};");
         Files.write(jaasConfigFile.toPath(), lines, StandardCharsets.UTF_8);
         Configuration.setConfiguration(null);
     }
@@ -117,7 +125,7 @@ public class JaasBasicAuthFilterTest {
         System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, jaasConfigFile.getPath());
         List<String> lines = new ArrayList<>();
         lines.add("KafkaConnect1 { org.apache.kafka.connect.rest.extension"
-                  + ".TestLoginModule required ;};");
+                  + ".PropertyFileLoginModule required ;};");
         Files.write(jaasConfigFile.toPath(), lines, StandardCharsets.UTF_8);
         Configuration.setConfiguration(null);
 

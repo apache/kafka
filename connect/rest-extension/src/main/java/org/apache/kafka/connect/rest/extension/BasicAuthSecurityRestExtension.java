@@ -41,8 +41,8 @@ import java.util.Map;
  * <br>
  * <code>
  *     KafkaConnect {
- *          com.example.PropertyLoginModule required
- *          filename="/mnt/secret/credentials.properties";
+ *          org.apache.kafka.connect.rest.extension.PropertyFileLoginModule required
+ *          file="/mnt/secret/credentials.properties";
  *     };
  * </code>
  */
