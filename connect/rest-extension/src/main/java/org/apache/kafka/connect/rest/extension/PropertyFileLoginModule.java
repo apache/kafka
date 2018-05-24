@@ -55,7 +55,7 @@ public class PropertyFileLoginModule implements LoginModule {
                            Map<String, ?> sharedState, Map<String, ?> options) {
         this.callbackHandler = callbackHandler;
         fileName = (String) options.get(FILE_OPTIONS);
-        if (fileName != null || !fileName.isEmpty()) {
+        if (fileName != null && !fileName.isEmpty()) {
             Properties credentialProperties = new Properties();
             try {
                 credentialProperties.load(Files.newInputStream(Paths.get(fileName)));
