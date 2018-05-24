@@ -1331,7 +1331,7 @@ project(':connect:runtime') {
     compile project(':connect:api')
     compile project(':clients')
     compile project(':tools')
-    compileOnly project(':connect:json')
+    compile project(':connect:json')
     compileOnly project(':connect:transforms')
 
     compile libs.slf4jApi
