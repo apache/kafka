@@ -357,8 +357,8 @@ public class KafkaConsumerTest {
         // We need two update calls:
         // 1. the first call "sends" the metadata update requests
         // 2. the second one gets the response we already queued up
-        consumer.internalUpdateAssignmentMetadataIfNeeded(Duration.ZERO);
-        consumer.internalUpdateAssignmentMetadataIfNeeded(Duration.ZERO);
+        consumer.updateAssignmentMetadataIfNeeded(Duration.ZERO);
+        consumer.updateAssignmentMetadataIfNeeded(Duration.ZERO);
 
         assertEquals(singleton(tp0), consumer.assignment());
 
@@ -368,8 +368,8 @@ public class KafkaConsumerTest {
         time.sleep(heartbeatIntervalMs);
         Thread.sleep(heartbeatIntervalMs);
 
-        consumer.internalUpdateAssignmentMetadataIfNeeded(Duration.ZERO);
-        consumer.internalUpdateAssignmentMetadataIfNeeded(Duration.ZERO);
+        consumer.updateAssignmentMetadataIfNeeded(Duration.ZERO);
+        consumer.updateAssignmentMetadataIfNeeded(Duration.ZERO);
 
         assertTrue(heartbeatReceived.get());
         consumer.close(0, TimeUnit.MILLISECONDS);
@@ -392,8 +392,8 @@ public class KafkaConsumerTest {
         consumer.subscribe(singleton(topic), getConsumerRebalanceListener(consumer));
         Node coordinator = prepareRebalance(client, node, assignor, singletonList(tp0), null);
 
-        consumer.internalUpdateAssignmentMetadataIfNeeded(Duration.ZERO);
-        consumer.internalUpdateAssignmentMetadataIfNeeded(Duration.ZERO);
+        consumer.updateAssignmentMetadataIfNeeded(Duration.ZERO);
+        consumer.updateAssignmentMetadataIfNeeded(Duration.ZERO);
         consumer.poll(Duration.ZERO);
 
         // respond to the outstanding fetch so that we have data available on the next poll
@@ -626,8 +626,8 @@ public class KafkaConsumerTest {
         consumer.subscribe(singleton(topic), getConsumerRebalanceListener(consumer));
         Node coordinator = prepareRebalance(client, node, assignor, singletonList(tp0), null);
 
-        consumer.internalUpdateAssignmentMetadataIfNeeded(Duration.ZERO);
-        consumer.internalUpdateAssignmentMetadataIfNeeded(Duration.ZERO);
+        consumer.updateAssignmentMetadataIfNeeded(Duration.ZERO);
+        consumer.updateAssignmentMetadataIfNeeded(Duration.ZERO);
         consumer.poll(Duration.ZERO);
 
         // respond to the outstanding fetch so that we have data available on the next poll
@@ -671,8 +671,8 @@ public class KafkaConsumerTest {
 
         client.prepareMetadataUpdate(cluster, Collections.<String>emptySet());
 
-        consumer.internalUpdateAssignmentMetadataIfNeeded(Duration.ZERO);
-        consumer.internalUpdateAssignmentMetadataIfNeeded(Duration.ZERO);
+        consumer.updateAssignmentMetadataIfNeeded(Duration.ZERO);
+        consumer.updateAssignmentMetadataIfNeeded(Duration.ZERO);
 
         assertEquals(singleton(topic), consumer.subscription());
         assertEquals(singleton(tp0), consumer.assignment());
@@ -707,8 +707,8 @@ public class KafkaConsumerTest {
         Node coordinator = prepareRebalance(client, node, singleton(topic), assignor, singletonList(tp0), null);
         consumer.subscribe(Pattern.compile(topic), getConsumerRebalanceListener(consumer));
 
-        consumer.internalUpdateAssignmentMetadataIfNeeded(Duration.ZERO);
-        consumer.internalUpdateAssignmentMetadataIfNeeded(Duration.ZERO);
+        consumer.updateAssignmentMetadataIfNeeded(Duration.ZERO);
+        consumer.updateAssignmentMetadataIfNeeded(Duration.ZERO);
         consumer.poll(Duration.ZERO);
 
         assertEquals(singleton(topic), consumer.subscription());
@@ -739,8 +739,8 @@ public class KafkaConsumerTest {
         consumer.subscribe(singleton(topic), getConsumerRebalanceListener(consumer));
         prepareRebalance(client, node, assignor, singletonList(tp0), null);
 
-        consumer.internalUpdateAssignmentMetadataIfNeeded(Duration.ZERO);
-        consumer.internalUpdateAssignmentMetadataIfNeeded(Duration.ZERO);
+        consumer.updateAssignmentMetadataIfNeeded(Duration.ZERO);
+        consumer.updateAssignmentMetadataIfNeeded(Duration.ZERO);
         consumer.poll(Duration.ZERO);
 
         // respond to the outstanding fetch so that we have data available on the next poll
@@ -791,8 +791,8 @@ public class KafkaConsumerTest {
         consumer.subscribe(singleton(topic), getConsumerRebalanceListener(consumer));
         prepareRebalance(client, node, assignor, singletonList(tp0), null);
 
-        consumer.internalUpdateAssignmentMetadataIfNeeded(Duration.ZERO);
-        consumer.internalUpdateAssignmentMetadataIfNeeded(Duration.ZERO);
+        consumer.updateAssignmentMetadataIfNeeded(Duration.ZERO);
+        consumer.updateAssignmentMetadataIfNeeded(Duration.ZERO);
         consumer.poll(Duration.ZERO);
 
         // interrupt the thread and call poll
@@ -830,8 +830,8 @@ public class KafkaConsumerTest {
         fetches1.put(t2p0, new FetchInfo(0, 10)); // not assigned and not fetched
         client.prepareResponseFrom(fetchResponse(fetches1), node);
 
-        consumer.internalUpdateAssignmentMetadataIfNeeded(Duration.ZERO);
-        consumer.internalUpdateAssignmentMetadataIfNeeded(Duration.ZERO);
+        consumer.updateAssignmentMetadataIfNeeded(Duration.ZERO);
+        consumer.updateAssignmentMetadataIfNeeded(Duration.ZERO);
 
         ConsumerRecords<String, String> records = consumer.poll(Duration.ZERO);
         assertEquals(0, records.count());
@@ -875,8 +875,8 @@ public class KafkaConsumerTest {
         // mock rebalance responses
         Node coordinator = prepareRebalance(client, node, assignor, Arrays.asList(tp0, t2p0), null);
 
-        consumer.internalUpdateAssignmentMetadataIfNeeded(Duration.ZERO);
-        consumer.internalUpdateAssignmentMetadataIfNeeded(Duration.ZERO);
+        consumer.updateAssignmentMetadataIfNeeded(Duration.ZERO);
+        consumer.updateAssignmentMetadataIfNeeded(Duration.ZERO);
         consumer.poll(Duration.ZERO);
 
         // verify that subscription is still the same, and now assignment has caught up
@@ -990,8 +990,8 @@ public class KafkaConsumerTest {
         // mock rebalance responses
         prepareRebalance(client, node, assignor, singletonList(tp0), null);
 
-        consumer.internalUpdateAssignmentMetadataIfNeeded(Duration.ZERO);
-        consumer.internalUpdateAssignmentMetadataIfNeeded(Duration.ZERO);
+        consumer.updateAssignmentMetadataIfNeeded(Duration.ZERO);
+        consumer.updateAssignmentMetadataIfNeeded(Duration.ZERO);
         consumer.poll(Duration.ZERO);
 
         // verify that subscription is still the same, and now assignment has caught up
@@ -1297,8 +1297,8 @@ public class KafkaConsumerTest {
         client.prepareResponseFrom(fetchResponse(tp0, 0, 1), node);
         client.prepareResponseFrom(fetchResponse(tp0, 1, 0), node);
 
-        consumer.internalUpdateAssignmentMetadataIfNeeded(Duration.ZERO);
-        consumer.internalUpdateAssignmentMetadataIfNeeded(Duration.ZERO);
+        consumer.updateAssignmentMetadataIfNeeded(Duration.ZERO);
+        consumer.updateAssignmentMetadataIfNeeded(Duration.ZERO);
         consumer.poll(Duration.ZERO);
 
         // heartbeat fails due to rebalance in progress
@@ -1335,8 +1335,8 @@ public class KafkaConsumerTest {
         }, fetchResponse(tp0, 1, 1), node);
         time.sleep(heartbeatIntervalMs);
         Thread.sleep(heartbeatIntervalMs);
-        consumer.internalUpdateAssignmentMetadataIfNeeded(Duration.ZERO);
-        consumer.internalUpdateAssignmentMetadataIfNeeded(Duration.ZERO);
+        consumer.updateAssignmentMetadataIfNeeded(Duration.ZERO);
+        consumer.updateAssignmentMetadataIfNeeded(Duration.ZERO);
         final ConsumerRecords<String, String> records = consumer.poll(Duration.ZERO);
         assertFalse(records.isEmpty());
         consumer.close(0, TimeUnit.MILLISECONDS);
@@ -1364,8 +1364,8 @@ public class KafkaConsumerTest {
 
         client.prepareMetadataUpdate(cluster, Collections.<String>emptySet());
 
-        consumer.internalUpdateAssignmentMetadataIfNeeded(Duration.ZERO);
-        consumer.internalUpdateAssignmentMetadataIfNeeded(Duration.ZERO);
+        consumer.updateAssignmentMetadataIfNeeded(Duration.ZERO);
+        consumer.updateAssignmentMetadataIfNeeded(Duration.ZERO);
 
         // Poll with responses
         client.prepareResponseFrom(fetchResponse(tp0, 0, 1), node);

@@ -55,7 +55,6 @@ import org.slf4j.Logger;
 
 import java.net.InetSocketAddress;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.ConcurrentModificationException;
@@ -1105,50 +1104,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     @Deprecated
     @Override
     public ConsumerRecords<K, V> poll(final long timeout) {
-        // note that this method can't defer to its replacement because its semantics are different wrt waiting for
-        // metadata updates (this method waits forever for metadata and applies timeout to the fetch).
-
-        acquireAndEnsureOpen();
-        try {
-            if (timeout < 0)
-                throw new IllegalArgumentException("Timeout must not be negative");
-
-            if (this.subscriptions.hasNoSubscriptionOrUserAssignment())
-                throw new IllegalStateException("Consumer is not subscribed to any topics or assigned any partitions");
-
-            final long start = time.milliseconds();
-            long remaining = timeout;
-            do {
-
-                client.maybeTriggerWakeup();
-
-                while (!internalUpdateAssignmentMetadataIfNeeded(Duration.ofMillis(Long.MAX_VALUE))) {
-                    log.warn("Still waiting for metadata");
-                }
-
-                final Map<TopicPartition, List<ConsumerRecord<K, V>>> records = pollForFetches(remaining);
-                if (!records.isEmpty()) {
-                    // before returning the fetched records, we can send off the next round of fetches
-                    // and avoid block waiting for their responses to enable pipelining while the user
-                    // is handling the fetched records.
-                    //
-                    // NOTE: since the consumed position has already been updated, we must not allow
-                    // wakeups or any other errors to be triggered prior to returning the fetched records.
-                    if (fetcher.sendFetches() > 0 || client.hasPendingRequests()) {
-                        client.pollNoWakeup();
-                    }
-
-                    return this.interceptors.onConsume(new ConsumerRecords<>(records));
-                }
-
-                final long elapsed = time.milliseconds() - start;
-                remaining = timeout - elapsed;
-            } while (remaining > 0);
-
-            return ConsumerRecords.empty();
-        } finally {
-            release();
-        }
+        return poll(Duration.ofMillis(timeout), false);
     }
 
     /**
@@ -1182,25 +1138,39 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public ConsumerRecords<K, V> poll(final Duration timeout) {
-        if (timeout.isNegative()) throw new IllegalArgumentException("Timeout must not be negative");
+        return poll(timeout, true);
+    }
 
+    private ConsumerRecords<K, V> poll(final Duration timeout, final boolean includeMetadataInTimeout) {
         acquireAndEnsureOpen();
         try {
-            if (this.subscriptions.hasNoSubscriptionOrUserAssignment())
+            if (timeout.isNegative()) throw new IllegalArgumentException("Timeout must not be negative");
+
+            if (this.subscriptions.hasNoSubscriptionOrUserAssignment()) {
                 throw new IllegalStateException("Consumer is not subscribed to any topics or assigned any partitions");
+            }
 
             // poll for new data until the timeout expires
-            final Instant start = Instant.ofEpochMilli(time.milliseconds());
+            long remainingMs = timeout.toMillis();
             do {
 
                 client.maybeTriggerWakeup();
 
-                if (!internalUpdateAssignmentMetadataIfNeeded(remainingTimeAtLeastZero(start, timeout))) {
-                    return ConsumerRecords.empty();
+                if (includeMetadataInTimeout) {
+                    final long metadataStart = time.milliseconds();
+                    if (!updateAssignmentMetadataIfNeeded(Duration.ofMillis(remainingMs))) {
+                        return ConsumerRecords.empty();
+                    }
+                    final long metadataEnd = time.milliseconds();
+                    remainingMs = Math.max(0L, remainingMs - (metadataEnd - metadataStart));
+                } else {
+                    while (!updateAssignmentMetadataIfNeeded(Duration.ofMillis(Long.MAX_VALUE))) {
+                        log.warn("Still waiting for metadata");
+                    }
                 }
 
-                final Map<TopicPartition, List<ConsumerRecord<K, V>>> records =
-                    pollForFetches(remainingMsAtLeastZero(start.toEpochMilli(), timeout));
+                final long fetchStart = time.milliseconds();
+                final Map<TopicPartition, List<ConsumerRecord<K, V>>> records = pollForFetches(remainingMs);
 
                 if (!records.isEmpty()) {
                     // before returning the fetched records, we can send off the next round of fetches
@@ -1215,8 +1185,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
                     return this.interceptors.onConsume(new ConsumerRecords<>(records));
                 }
+                final long fetchEnd = time.milliseconds();
+                remainingMs = Math.max(0L, remainingMs - (fetchEnd - fetchStart));
 
-            } while (!remainingTimeAtLeastZero(start, timeout).isZero());
+            } while (remainingMs > 0);
 
             return ConsumerRecords.empty();
         } finally {
@@ -1229,7 +1201,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * Visible for testing
      */
     @SuppressWarnings("BooleanMethodIsAlwaysInverted") // because false => timed out, in which case we return early or throw.
-    boolean internalUpdateAssignmentMetadataIfNeeded(final Duration timeout) {
+    boolean updateAssignmentMetadataIfNeeded(final Duration timeout) {
         final long startMs = time.milliseconds();
         if (!coordinator.poll(remainingMsAtLeastZero(startMs, timeout))) {
             return false;
@@ -1238,7 +1210,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         return updateFetchPositions(remainingMsAtLeastZero(startMs, timeout));
     }
 
-    private Map<TopicPartition, List<ConsumerRecord<K, V>>> pollForFetches(final long timeoutMs) {
+    private Map<TopicPartition, List<ConsumerRecord<K, V>>> pollForFetches(final long upperBoundTimeoutMs) {
+        final long startMs = time.milliseconds();
+        long pollTimeout = Math.min(coordinator.timeToNextPoll(startMs), upperBoundTimeoutMs);
+
         // if data is available already, return it immediately
         final Map<TopicPartition, List<ConsumerRecord<K, V>>> records = fetcher.fetchedRecords();
         if (!records.isEmpty()) {
@@ -1248,15 +1223,13 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         // send any new fetches (won't resend pending fetches)
         fetcher.sendFetches();
 
-        final long nowMs = time.milliseconds();
-        long pollTimeout = Math.min(coordinator.timeToNextPoll(nowMs), timeoutMs);
-
         // We do not want to be stuck blocking in poll if we are missing some positions
         // since the offset lookup may be backing off after a failure
-        if (!subscriptions.hasAllFetchPositions() && pollTimeout > retryBackoffMs)
+        if (!subscriptions.hasAllFetchPositions() && pollTimeout > retryBackoffMs) {
             pollTimeout = retryBackoffMs;
+        }
 
-        client.poll(pollTimeout, nowMs, () -> {
+        client.poll(pollTimeout, startMs, () -> {
             // since a fetch might be completed by the background thread, we need this poll condition
             // to ensure that we do not block unnecessarily in poll()
             return !fetcher.hasCompletedFetches();
@@ -1934,14 +1907,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG + " configuration property");
     }
 
-    private Duration remainingTimeAtLeastZero(final Instant start, final Duration timeout) {
-        final Instant now = Instant.ofEpochMilli(time.milliseconds());
-        final Duration elapsed = Duration.between(start, now);
-        final Duration remaining = timeout.minus(elapsed);
-        return remaining.isNegative() ? Duration.ZERO : remaining;
-    }
-
     private long remainingMsAtLeastZero(final long startMs, final Duration timeout) {
-        return Math.max(0, timeout.minusMillis(time.milliseconds() - startMs).toMillis());
+        return Math.max(0, timeout.toMillis() - (time.milliseconds() - startMs));
     }
 }
