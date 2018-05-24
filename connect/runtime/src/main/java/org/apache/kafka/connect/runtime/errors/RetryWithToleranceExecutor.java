@@ -50,6 +50,13 @@ import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
  * This executor will tolerate failures, as specified by {@link RetryWithToleranceExecutorConfig#toleranceLimit()}.
  * For transformations and converters, all exceptions are tolerated. For others operations, only {@link RetriableException} are tolerated.
  * </p>
+ *
+ * <p>
+ * There are three outcomes to executing an operation. It might succeed, in which case the result is returned to the caller.
+ * If it fails, this class does one of these two things: (1) if the failure occurred due to a tolerable exception, then
+ * return a {@link Result} object with appropriate error reason, or (2) if the exception is not tolerated, then it is wrapped into
+ * a ConnectException and rethrown to the user.
+ * </p>
  */
 public class RetryWithToleranceExecutor implements OperationExecutor {
 
@@ -104,8 +111,22 @@ public class RetryWithToleranceExecutor implements OperationExecutor {
                 .define(TOLERANCE_LIMIT, ConfigDef.Type.STRING, TOLERANCE_LIMIT_DEFAULT, in("none", "all"), ConfigDef.Importance.HIGH, TOLERANCE_LIMIT_DOC);
     }
 
+    /**
+     * Execute the recoverable operation. If the operation is already in a failed state, then simply return
+     * with the existing failure.
+     *
+     * @param operation the recoverable operation
+     * @param context processing context
+     * @param <V> return type of the result of the operation.
+     * @return result of the operation
+     */
     @Override
     public <V> Result<V> execute(Operation<V> operation, ProcessingContext context) {
+        if (context.result() != null && !context.result().success()) {
+            log.debug("ProcessingContext is already in failed state. Ignoring requested operation.");
+            return new Result<>(context.result().error());
+        }
+
         try {
             Class<? extends Exception> ex = TOLERABLE_EXCEPTIONS.getOrDefault(context.stage(), RetriableException.class);
             return execAndHandleError(operation, context, ex);

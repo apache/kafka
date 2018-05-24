@@ -124,6 +124,22 @@ public class RetryWithToleranceExecutorTest {
         return executor;
     }
 
+    private void setupProcessingContext(Stage type, Exception ex) {
+        EasyMock.expect(processingContext.stage()).andReturn(type).anyTimes();
+        EasyMock.expect(processingContext.result()).andReturn(null);
+        EasyMock.expect(processingContext.result()).andReturn(new Result(ex)).anyTimes();
+        EasyMock.expect((Class) processingContext.executingClass()).andReturn(ExceptionThrower.class);
+
+        processingContext.result(anyObject(Result.class));
+        EasyMock.expectLastCall().anyTimes();
+
+        processingContext.attempt(EasyMock.anyInt());
+        EasyMock.expectLastCall();
+
+        processingContext.report();
+        EasyMock.expectLastCall();
+    }
+
     @Test
     public void testExecAndHandleRetriableErrorOnce() throws Exception {
         execAndHandleRetriableError(1, 300, new RetriableException("Test"));
@@ -191,21 +207,6 @@ public class RetryWithToleranceExecutorTest {
         assertEquals(1, context.attempt());
 
         PowerMock.verifyAll();
-    }
-
-    private void setupProcessingContext(Stage type, Exception ex) {
-        EasyMock.expect(processingContext.stage()).andReturn(type).anyTimes();
-        EasyMock.expect(processingContext.result()).andReturn(new Result(ex));
-        EasyMock.expect((Class) processingContext.executingClass()).andReturn(ExceptionThrower.class);
-
-        processingContext.result(anyObject(Result.class));
-        EasyMock.expectLastCall().anyTimes();
-
-        processingContext.attempt(EasyMock.anyInt());
-        EasyMock.expectLastCall();
-
-        processingContext.report();
-        EasyMock.expectLastCall();
     }
 
     @Test
