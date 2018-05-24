@@ -14,11 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.requests;
+package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.network.TransportLayers;
-import org.apache.kafka.common.record.BaseRecords;
 
 import java.io.EOFException;
 import java.io.IOException;
@@ -33,7 +32,7 @@ public abstract class RecordsSend implements Send {
     private int remaining;
     private boolean pending = false;
 
-    public RecordsSend(String destination, BaseRecords records) {
+    protected RecordsSend(String destination, BaseRecords records) {
         this.destination = destination;
         this.records = records;
         this.remaining = records.sizeInBytes();

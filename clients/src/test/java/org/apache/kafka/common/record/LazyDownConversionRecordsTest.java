@@ -19,7 +19,6 @@ package org.apache.kafka.common.record;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
-import org.apache.kafka.common.requests.LazyDownConversionRecordsSend;
 import org.apache.kafka.common.utils.Utils;
 import org.junit.Test;
 

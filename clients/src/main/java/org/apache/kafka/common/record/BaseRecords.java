@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.common.record;
 
-import org.apache.kafka.common.requests.RecordsSend;
-
 /**
  * Base interface for accessing records which could be contained in the log, or an in-memory materialization of log records.
  */

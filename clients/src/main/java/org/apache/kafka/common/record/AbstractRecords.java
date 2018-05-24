@@ -17,8 +17,6 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.header.Header;
-import org.apache.kafka.common.requests.DefaultRecordsSend;
-import org.apache.kafka.common.requests.RecordsSend;
 import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.Utils;
 

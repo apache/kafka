@@ -21,6 +21,8 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionRecordsStats;
 import org.apache.kafka.common.network.MultiSend;
 import org.apache.kafka.common.network.Send;
+import org.apache.kafka.common.record.LazyDownConversionRecordsSend;
+import org.apache.kafka.common.record.RecordsSend;
 
 import java.util.HashMap;
 import java.util.Map;

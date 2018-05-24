@@ -17,7 +17,6 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.requests.LazyDownConversionRecordsSend;
 import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
