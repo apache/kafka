@@ -214,18 +214,18 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
 
   @Test
   def testProduceConsumeWithWildcardAcls(): Unit = {
-    setWildcardAclsAndProduce()
+    setWildcardResourceAcls()
+    sendRecords(numRecords, tp)
     consumers.head.subscribe(List(topic).asJava)
     consumeRecords(this.consumers.head, numRecords)
   }
 
-  private def setWildcardAclsAndProduce() {
+  private def setWildcardResourceAcls() {
     AclCommand.main(produceConsumeWildcardAclArgs)
     servers.foreach { s =>
       TestUtils.waitAndVerifyAcls(TopicReadAcl ++ TopicWriteAcl ++ TopicDescribeAcl ++ TopicBrokerReadAcl, s.apis.authorizer.get, wildcardTopicResource)
       TestUtils.waitAndVerifyAcls(GroupReadAcl, s.apis.authorizer.get, wildcardGroupResource)
     }
-    sendRecords(numRecords, tp)
   }
 
   protected def setAclsAndProduce() {
