@@ -79,9 +79,9 @@ public class LoggingSignalHandler {
             public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
                 Object signal = args[0];
                 log.info("Terminating process due to signal {}", signal);
-                Object oldHandler = jvmSignalHandlers.get(getName(signal));
-                if (oldHandler != null)
-                    handle(oldHandler, signal);
+                Object handler = jvmSignalHandlers.get(getName(signal));
+                if (handler != null)
+                    handle(handler, signal);
                 return null;
             }
         };
