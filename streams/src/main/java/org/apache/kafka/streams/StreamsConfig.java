@@ -137,8 +137,6 @@ public class StreamsConfig extends AbstractConfig {
     private final boolean eosEnabled;
     private final static long DEFAULT_COMMIT_INTERVAL_MS = 30000L;
     private final static long EOS_DEFAULT_COMMIT_INTERVAL_MS = 100L;
-    private final static String NO_OPTIMIZATION = "none";
-    private final static String OPTIMIZE = "all";
 
     /**
      * Prefix used to provide default topic configs to be applied when creating internal topics.
@@ -196,6 +194,16 @@ public class StreamsConfig extends AbstractConfig {
      * properties}.
      */
     public static final String ADMIN_CLIENT_PREFIX = "admin.";
+
+    /**
+     * Config value for parameter (@link #TOPOLOGY_OPTIMIZATION "topology.optimization" for disabling topology optimization
+     */
+    public static final String NO_OPTIMIZATION = "none";
+
+    /**
+     * Config value for parameter (@link #TOPOLOGY_OPTIMIZATION "topology.optimization" for enabling topology optimization
+     */
+    public static final String OPTIMIZE = "all";
 
     /**
      * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 0.10.0.x}.
@@ -331,10 +339,6 @@ public class StreamsConfig extends AbstractConfig {
     public static final String NUM_STREAM_THREADS_CONFIG = "num.stream.threads";
     private static final String NUM_STREAM_THREADS_DOC = "The number of threads to execute stream processing.";
 
-    /** {@code topology.optimization} */
-    public static final String TOPOLOGY_OPTIMIZATION = "topology.optimization";
-    private static final String TOPOLOGY_OPTIMIZATION_DOC = "A configuration telling Kafka Streams if it should optimize the topology, none by default";
-
     /** {@code partition.grouper} */
     public static final String PARTITION_GROUPER_CLASS_CONFIG = "partition.grouper";
     private static final String PARTITION_GROUPER_CLASS_DOC = "Partition grouper class that implements the <code>org.apache.kafka.streams.processor.PartitionGrouper</code> interface.";
@@ -387,6 +391,10 @@ public class StreamsConfig extends AbstractConfig {
     /** {@code state.dir} */
     public static final String STATE_DIR_CONFIG = "state.dir";
     private static final String STATE_DIR_DOC = "Directory location for state store.";
+
+    /** {@code topology.optimization} */
+    public static final String TOPOLOGY_OPTIMIZATION = "topology.optimization";
+    private static final String TOPOLOGY_OPTIMIZATION_DOC = "A configuration telling Kafka Streams if it should optimize the topology, disabled by default";
 
     /** {@code upgrade.from} */
     public static final String UPGRADE_FROM_CONFIG = "upgrade.from";
@@ -475,12 +483,6 @@ public class StreamsConfig extends AbstractConfig {
                     1,
                     Importance.MEDIUM,
                     NUM_STREAM_THREADS_DOC)
-            .define(TOPOLOGY_OPTIMIZATION,
-                    Type.STRING,
-                    NO_OPTIMIZATION,
-                    in(NO_OPTIMIZATION, OPTIMIZE),
-                    Importance.MEDIUM,
-                    TOPOLOGY_OPTIMIZATION_DOC)
             .define(PROCESSING_GUARANTEE_CONFIG,
                     Type.STRING,
                     AT_LEAST_ONCE,
@@ -492,6 +494,12 @@ public class StreamsConfig extends AbstractConfig {
                     CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
                     Importance.MEDIUM,
                     CommonClientConfigs.SECURITY_PROTOCOL_DOC)
+            .define(TOPOLOGY_OPTIMIZATION,
+                    Type.STRING,
+                    NO_OPTIMIZATION,
+                    in(NO_OPTIMIZATION, OPTIMIZE),
+                    Importance.MEDIUM,
+                    TOPOLOGY_OPTIMIZATION_DOC)
 
             // LOW
 
