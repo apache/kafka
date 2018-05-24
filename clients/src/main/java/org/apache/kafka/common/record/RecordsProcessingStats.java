@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common;
+package org.apache.kafka.common.record;
 
 public class RecordsProcessingStats {
 
@@ -30,7 +30,7 @@ public class RecordsProcessingStats {
         this.conversionTimeNanos = conversionTimeNanos;
     }
 
-    public void addToProcessingStats(RecordsProcessingStats stats) {
+    public void add(RecordsProcessingStats stats) {
         temporaryMemoryBytes += stats.temporaryMemoryBytes;
         numRecordsConverted += stats.numRecordsConverted;
         conversionTimeNanos += stats.conversionTimeNanos;

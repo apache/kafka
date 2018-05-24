@@ -14,7 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common;
+package org.apache.kafka.common.record;
+
+import org.apache.kafka.common.TopicPartition;
 
 public class TopicPartitionRecordsStats {
     private final TopicPartition topicPartition;

@@ -18,7 +18,6 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.network.ByteBufferSend;
-import org.apache.kafka.common.network.MultiSend;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -336,7 +335,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
                     }
                 }
 
-                PartitionData partitionData = new PartitionData(error, highWatermark, lastStableOffset, logStartOffset,
+                PartitionData<T> partitionData = new PartitionData<>(error, highWatermark, lastStableOffset, logStartOffset,
                         abortedTransactions, records);
                 responseData.put(new TopicPartition(topic, partition), partitionData);
             }
@@ -366,7 +365,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
         Queue<Send> sends = new ArrayDeque<>();
         sends.add(new ByteBufferSend(dest, buffer));
         addResponseData(responseBodyStruct, throttleTimeMs, dest, sends);
-        return new MultiSend(dest, sends);
+        return new MultiRecordsSend(dest, sends);
     }
 
     public Errors error() {

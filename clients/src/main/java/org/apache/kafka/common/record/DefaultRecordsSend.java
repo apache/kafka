@@ -19,7 +19,7 @@ package org.apache.kafka.common.record;
 import java.io.IOException;
 import java.nio.channels.GatheringByteChannel;
 
-public class DefaultRecordsSend extends RecordsSend {
+public class DefaultRecordsSend extends RecordsSend<Records> {
     public DefaultRecordsSend(String destination, Records records) {
         super(destination, records);
     }
@@ -27,10 +27,5 @@ public class DefaultRecordsSend extends RecordsSend {
     @Override
     protected long writeRecordsTo(GatheringByteChannel channel, long previouslyWritten, int remaining) throws IOException {
         return records().writeTo(channel, previouslyWritten, remaining);
-    }
-
-    @Override
-    protected Records records() {
-        return (Records) super.records();
     }
 }

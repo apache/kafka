@@ -24,15 +24,15 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.GatheringByteChannel;
 
-public abstract class RecordsSend implements Send {
+public abstract class RecordsSend<T extends BaseRecords> implements Send {
     private static final ByteBuffer EMPTY_BYTE_BUFFER = ByteBuffer.allocate(0);
 
     private final String destination;
-    private final BaseRecords records;
+    private final T records;
     private int remaining;
     private boolean pending = false;
 
-    protected RecordsSend(String destination, BaseRecords records) {
+    protected RecordsSend(String destination, T records) {
         this.destination = destination;
         this.records = records;
         this.remaining = records.sizeInBytes();
@@ -71,7 +71,7 @@ public abstract class RecordsSend implements Send {
         return records.sizeInBytes();
     }
 
-    protected BaseRecords records() {
+    protected T records() {
         return records;
     }
 

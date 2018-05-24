@@ -28,9 +28,9 @@ import kafka.server._
 import kafka.utils._
 import kafka.utils.timer.MockTimer
 import kafka.zk.KafkaZkClient
-import org.apache.kafka.common.{RecordsProcessingStats, TopicPartition}
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record.{MemoryRecords, RecordBatch}
+import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, RecordsProcessingStats}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.easymock.EasyMock
 import org.junit.{After, Before}

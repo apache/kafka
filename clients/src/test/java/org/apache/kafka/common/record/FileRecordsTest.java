@@ -352,7 +352,7 @@ public class FileRecordsTest {
         // Lazy down-conversion will not return any messages for a partial input batch
         TopicPartition tp = new TopicPartition("topic-1", 0);
         LazyDownConversionRecords lazyRecords = new LazyDownConversionRecords(tp, slice, RecordBatch.MAGIC_VALUE_V0, 0);
-        LazyDownConversionRecordsIterator it = lazyRecords.lazyDownConversionRecordsIterator(16 * 1024L);
+        LazyDownConversionRecords.Iterator it = lazyRecords.lazyDownConversionRecordsIterator(16 * 1024L);
         assertTrue("No messages should be returned", !it.hasNext());
     }
 
@@ -466,18 +466,19 @@ public class FileRecordsTest {
         for (long readSize : maximumReadSize) {
             TopicPartition tp = new TopicPartition("topic-1", 0);
             LazyDownConversionRecords lazyRecords = new LazyDownConversionRecords(tp, fileRecords, toMagic, firstOffset);
-            LazyDownConversionRecordsIterator it = lazyRecords.lazyDownConversionRecordsIterator(readSize);
+            LazyDownConversionRecords.Iterator it = lazyRecords.lazyDownConversionRecordsIterator(readSize);
             while (it.hasNext())
                 convertedRecords.add(it.next().records());
 
             // Check if chunking works as expected. The only way to predictably test for this is by testing the edge cases.
             // 1. If maximum read size is greater than the size of all batches combined, we must get all down-conversion
-            //    records in a single chunk.
+            //    records in exactly two batches; the first chunk is pre down-converted and returned, and the second chunk
+            //    contains the remaining batches.
             // 2. If maximum read size is just smaller than the size of all batches combined, we must get results in two
             //    chunks.
             // 3. If maximum read size is less than the size of a single record, we get one batch in each chunk.
             if (readSize >= fileRecords.sizeInBytes())
-                assertEquals(1, convertedRecords.size());
+                assertEquals(2, convertedRecords.size());
             else if (readSize == fileRecords.sizeInBytes() - 1)
                 assertEquals(2, convertedRecords.size());
             else if (readSize <= minBatchSize)

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.record;
 
-import org.apache.kafka.common.RecordsProcessingStats;
 import org.apache.kafka.common.utils.Time;
 
 import java.nio.ByteBuffer;

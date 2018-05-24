@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.RecordsProcessingStats;
+import org.apache.kafka.common.record.RecordsProcessingStats;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.TopicPartitionRecordsStats;
+import org.apache.kafka.common.record.TopicPartitionRecordsStats;
 import org.apache.kafka.common.network.MultiSend;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.record.LazyDownConversionRecordsSend;
@@ -45,7 +45,7 @@ public class MultiRecordsSend extends MultiSend {
         return processingStats;
     }
 
-    private void addTopicPartitionProcessingStats(TopicPartitionRecordsStats stats) {
+    private void addToProcessingStats(TopicPartitionRecordsStats stats) {
         if (stats != null)
             processingStats.put(stats.topicPartition(), stats.recordsProcessingStats());
     }
@@ -57,6 +57,6 @@ public class MultiRecordsSend extends MultiSend {
         // of temporary memory used for down-conversion, etc. Pull out any such statistics from the underlying send
         // and fold it up appropriately.
         if (completedSend instanceof LazyDownConversionRecordsSend)
-            addTopicPartitionProcessingStats(((LazyDownConversionRecordsSend) completedSend).recordsProcessingStats());
+            addToProcessingStats(((LazyDownConversionRecordsSend) completedSend).recordsProcessingStats());
     }
 }

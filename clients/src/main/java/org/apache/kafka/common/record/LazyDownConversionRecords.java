@@ -18,10 +18,11 @@ package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.AbstractIterator;
-import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 /**
  * Encapsulation for holding records that require down-conversion in a lazy, chunked manner (KIP-283). See
@@ -32,8 +33,8 @@ public class LazyDownConversionRecords implements BaseRecords {
     private final Records records;
     private final byte toMagic;
     private final long firstOffset;
+    private final ConvertedRecords firstConvertedBatch;
     private final int minimumSize;
-    private static final long MAX_READ_SIZE = 128L * 1024L;
 
     /**
      * @param records Records to lazily down-convert
@@ -47,12 +48,16 @@ public class LazyDownConversionRecords implements BaseRecords {
         this.toMagic = toMagic;
         this.firstOffset = firstOffset;
 
+        // Consumers require at least one full batch of messages for every topic-partition, so down-convert the first
+        // batch so that we can factor in its size appropriately (for example, in the sizeInBytes method).
         AbstractIterator<? extends RecordBatch> it = records.batchIterator();
-        if (it.hasNext())
-            minimumSize = RecordsUtil.downConvert(
-                    Arrays.asList(it.peek()), toMagic, firstOffset, new SystemTime()).records().sizeInBytes();
-        else
+        if (it.hasNext()) {
+            firstConvertedBatch = RecordsUtil.downConvert(Arrays.asList(it.peek()), toMagic, firstOffset, Time.SYSTEM);
+            minimumSize = firstConvertedBatch.records().sizeInBytes();
+        } else {
+            firstConvertedBatch = null;
             minimumSize = 0;
+        }
     }
 
     /**
@@ -89,15 +94,69 @@ public class LazyDownConversionRecords implements BaseRecords {
 
     @Override
     public int hashCode() {
-        return records.hashCode();
+        int result = toMagic;
+        result = 31 * result + (int) (firstOffset ^ (firstOffset >>> 32));
+        result = 31 * result + topicPartition.hashCode();
+        result = 31 * result + records.hashCode();
+        return result;
     }
 
-    // Protected for unit tests
-    protected LazyDownConversionRecordsIterator lazyDownConversionRecordsIterator(long maximumReadSize) {
-        return new LazyDownConversionRecordsIterator(records, toMagic, firstOffset, maximumReadSize);
+    public Iterator lazyDownConversionRecordsIterator(long maximumReadSize) {
+        return new Iterator(records, maximumReadSize);
     }
 
-    public LazyDownConversionRecordsIterator lazyDownConversionRecordsIterator() {
-        return lazyDownConversionRecordsIterator(MAX_READ_SIZE);
+    /**
+     * Implementation for being able to iterate over down-converted records. Goal of this implementation is to keep
+     * it as memory-efficient as possible by not having to maintain all down-converted records in-memory. Maintains
+     * a view into batches of down-converted records.
+     */
+    public class Iterator extends AbstractIterator<ConvertedRecords> {
+        private final AbstractIterator<? extends RecordBatch> batchIterator;
+        private final long maximumReadSize;
+        private boolean returnedFirstBatch;
+
+        /**
+         * @param recordsToDownConvert Records that require down-conversion
+         * @param maximumReadSize Maximum possible size of underlying records that will be down-converted in each call to
+         *                        {@link #makeNext()}. This is a soft limit as {@link #makeNext()} will always convert
+         *                        and return at least one full message batch.
+         */
+        private Iterator(Records recordsToDownConvert, long maximumReadSize) {
+            this.batchIterator = recordsToDownConvert.batchIterator();
+            this.maximumReadSize = maximumReadSize;
+            this.returnedFirstBatch = false;
+        }
+
+        /**
+         * Make next set of down-converted records
+         * @return Down-converted records
+         */
+        @Override
+        protected ConvertedRecords makeNext() {
+            // If we already have the first down-converted batch, return that now and advance the underlying records
+            // iterator to the next batch.
+            if (!returnedFirstBatch && firstConvertedBatch != null) {
+                if (batchIterator.hasNext())
+                    batchIterator.next();
+                returnedFirstBatch = true;
+                return firstConvertedBatch;
+            }
+
+            if (!batchIterator.hasNext())
+                return allDone();
+
+            // Figure out batches we should down-convert based on the size constraints
+            List<RecordBatch> batches = new ArrayList<>();
+            boolean isFirstBatch = true;
+            long sizeSoFar = 0;
+            while (batchIterator.hasNext() &&
+                    (isFirstBatch || (batchIterator.peek().sizeInBytes() + sizeSoFar) <= maximumReadSize)) {
+                RecordBatch currentBatch = batchIterator.next();
+                batches.add(currentBatch);
+                sizeSoFar += currentBatch.sizeInBytes();
+                isFirstBatch = false;
+            }
+            return RecordsUtil.downConvert(batches, toMagic, firstOffset, Time.SYSTEM);
+        }
     }
 }

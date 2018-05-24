@@ -55,7 +55,7 @@ import org.apache.kafka.common.resource.{Resource => AdminResource}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.common.{Node, RecordsProcessingStats, TopicPartition}
+import org.apache.kafka.common.{Node, TopicPartition}
 
 import scala.collection.JavaConverters._
 import scala.collection._

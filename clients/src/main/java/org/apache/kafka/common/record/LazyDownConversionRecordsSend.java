@@ -16,9 +16,7 @@
  */
 package org.apache.kafka.common.record;
 
-import org.apache.kafka.common.RecordsProcessingStats;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.TopicPartitionRecordsStats;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,12 +29,13 @@ import java.nio.channels.GatheringByteChannel;
  * Encapsulation for {@link RecordsSend} for {@link LazyDownConversionRecords}. Records are down-converted in batches and
  * on-demand when {@link #writeRecordsTo} method is called.
  */
-public final class LazyDownConversionRecordsSend extends RecordsSend {
+public final class LazyDownConversionRecordsSend extends RecordsSend<LazyDownConversionRecords> {
     private static final Logger log = LoggerFactory.getLogger(LazyDownConversionRecordsSend.class);
+    private static final int MAX_READ_SIZE = 128 * 1024;
 
     private RecordsProcessingStats processingStats = null;
-    private RecordsWriter convertedRecordsWriter = null;
-    private LazyDownConversionRecordsIterator convertedRecordsIterator;
+    private DefaultRecordsSend convertedRecordsWriter = null;
+    private LazyDownConversionRecords.Iterator convertedRecordsIterator;
 
     public LazyDownConversionRecordsSend(String destination, LazyDownConversionRecords records) {
         super(destination, records);
@@ -45,7 +44,7 @@ public final class LazyDownConversionRecordsSend extends RecordsSend {
     private void resetState() {
         convertedRecordsWriter = null;
         processingStats = new RecordsProcessingStats(0, 0, 0);
-        convertedRecordsIterator = records().lazyDownConversionRecordsIterator();
+        convertedRecordsIterator = records().lazyDownConversionRecordsIterator(MAX_READ_SIZE);
     }
 
     @Override
@@ -53,7 +52,7 @@ public final class LazyDownConversionRecordsSend extends RecordsSend {
         if (previouslyWritten == 0)
             resetState();
 
-        if (convertedRecordsWriter == null || convertedRecordsWriter.remaining() == 0) {
+        if (convertedRecordsWriter == null || convertedRecordsWriter.completed()) {
             MemoryRecords convertedRecords;
 
             // Check if we have more chunks left to down-convert
@@ -62,13 +61,14 @@ public final class LazyDownConversionRecordsSend extends RecordsSend {
                 ConvertedRecords<MemoryRecords> recordsAndStats = convertedRecordsIterator.next();
                 convertedRecords = recordsAndStats.records();
 
-                if ((previouslyWritten == 0) && (convertedRecords.batchIterator().peek().sizeInBytes() > size()))
+                int sizeOfFirstConvertedBatch = convertedRecords.batchIterator().peek().sizeInBytes();
+                if (previouslyWritten == 0 && sizeOfFirstConvertedBatch > size())
                     throw new EOFException("Unable to send first batch completely." +
                             " maximum_size: " + size() +
-                            " converted_records_size: " + convertedRecords.batchIterator().peek().sizeInBytes());
+                            " converted_records_size: " + sizeOfFirstConvertedBatch);
 
-                processingStats.addToProcessingStats(recordsAndStats.recordsProcessingStats());
-                log.info("Got lazy converted records for {" + topicPartition() + "} with length=" + convertedRecords.sizeInBytes());
+                processingStats.add(recordsAndStats.recordsProcessingStats());
+                log.debug("Got lazy converted records for {" + topicPartition() + "} with length=" + convertedRecords.sizeInBytes());
             } else {
                 if (previouslyWritten == 0)
                     throw new EOFException("Unable to get the first batch of down-converted records");
@@ -81,22 +81,17 @@ public final class LazyDownConversionRecordsSend extends RecordsSend {
                 //      Length => Int32
                 //      ...
                 // TODO: check if there is a better way to encapsulate this logic, perhaps in DefaultRecordBatch
-                log.info("Constructing fake message batch for topic-partition {" + topicPartition() + "} for remaining length " + remaining);
+                log.debug("Constructing fake message batch for topic-partition {" + topicPartition() + "} for remaining length " + remaining);
                 int minLength = (Long.SIZE / Byte.SIZE) + (Integer.SIZE / Byte.SIZE);
-                ByteBuffer fakeMessageBatch = ByteBuffer.allocate(Math.max(minLength, remaining + 1));
+                ByteBuffer fakeMessageBatch = ByteBuffer.allocate(Math.max(minLength, Math.min(remaining + 1, MAX_READ_SIZE)));
                 fakeMessageBatch.putLong(-1L);
                 fakeMessageBatch.putInt(remaining + 1);
                 convertedRecords = MemoryRecords.readableRecords(fakeMessageBatch);
             }
 
-            convertedRecordsWriter = new RecordsWriter(convertedRecords);
+            convertedRecordsWriter = new DefaultRecordsSend(destination(), convertedRecords);
         }
-        return convertedRecordsWriter.writeTo(channel, remaining);
-    }
-
-    @Override
-    protected LazyDownConversionRecords records() {
-        return (LazyDownConversionRecords) super.records();
+        return convertedRecordsWriter.writeTo(channel);
     }
 
     public TopicPartitionRecordsStats recordsProcessingStats() {
@@ -105,39 +100,5 @@ public final class LazyDownConversionRecordsSend extends RecordsSend {
 
     private TopicPartition topicPartition() {
         return records().topicPartition();
-    }
-
-    /**
-     * Implementation for writing {@link Records} to a particular channel. Internally tracks the progress of writes.
-     */
-    private static class RecordsWriter {
-        private final Records records;
-        private int position;
-
-        RecordsWriter(Records records) {
-            if (records == null)
-                throw new IllegalArgumentException();
-            this.records = records;
-            position = 0;
-        }
-
-        private int position() {
-            return position;
-        }
-
-        public int remaining() {
-            return records.sizeInBytes() - position();
-        }
-
-        private void advancePosition(long numBytes) {
-            position += numBytes;
-        }
-
-        public long writeTo(GatheringByteChannel channel, int length) throws IOException {
-            int maxLength = Math.min(remaining(), length);
-            long written = records.writeTo(channel, position(), maxLength);
-            advancePosition(written);
-            return written;
-        }
     }
 }
