@@ -93,7 +93,7 @@ public class DLQReporter implements ErrorReporter {
         int partition = ThreadLocalRandom.current().nextInt(numPartitions);
 
         ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(config.topic(),
-                partition, originalMessage.key(), originalMessage.value());
+                partition, originalMessage.key(), originalMessage.value(), originalMessage.headers());
 
         this.kafkaProducer.send(producerRecord, (metadata, exception) -> {
             if (exception != null) {
