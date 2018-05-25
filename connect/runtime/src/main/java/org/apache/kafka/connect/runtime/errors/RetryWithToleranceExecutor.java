@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime.errors;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
@@ -23,11 +24,13 @@ import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.RetriableException;
+import org.apache.kafka.connect.source.SourceRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -95,6 +98,8 @@ public class RetryWithToleranceExecutor implements OperationExecutor {
     private RetryWithToleranceExecutorConfig config;
     private ErrorHandlingMetrics errorHandlingMetrics;
 
+    protected ProcessingContext context = new ProcessingContext();
+
     public RetryWithToleranceExecutor() {
         this(new SystemTime());
     }
@@ -116,12 +121,13 @@ public class RetryWithToleranceExecutor implements OperationExecutor {
      * with the existing failure.
      *
      * @param operation the recoverable operation
-     * @param context processing context
      * @param <V> return type of the result of the operation.
      * @return result of the operation
      */
     @Override
-    public <V> V execute(Operation<V> operation, ProcessingContext context) {
+    public <V> V execute(Operation<V> operation, Stage stage, Class<?> executingClass) {
+        context.setCurrentContext(stage, executingClass);
+
         if (context.failed()) {
             log.debug("ProcessingContext is already in failed state. Ignoring requested operation.");
             return null;
@@ -129,7 +135,7 @@ public class RetryWithToleranceExecutor implements OperationExecutor {
 
         try {
             Class<? extends Exception> ex = TOLERABLE_EXCEPTIONS.getOrDefault(context.stage(), RetriableException.class);
-            return execAndHandleError(operation, context, ex);
+            return execAndHandleError(operation, ex);
         } finally {
             if (context.failed()) {
                 errorHandlingMetrics.recordError();
@@ -141,12 +147,11 @@ public class RetryWithToleranceExecutor implements OperationExecutor {
     /**
      * attempt to execute an operation. Retry if a {@link RetriableException} is raised. Re-throw everything else.
      * @param operation the operation to be executed.
-     * @param context the processing context.
      * @param <V> the return type of the result of the operation.
      * @return the result of the operation.
      * @throws Exception rethrow if a non-retriable Exception is thrown by the operation
      */
-    protected <V> V execAndRetry(Operation<V> operation, ProcessingContext context) throws Exception {
+    protected <V> V execAndRetry(Operation<V> operation) throws Exception {
         int attempt = 0;
         long startTime = time.milliseconds();
         long deadline = startTime + config.retryTimeout();
@@ -180,15 +185,14 @@ public class RetryWithToleranceExecutor implements OperationExecutor {
      * Execute a given operation multiple times (if needed), and tolerate certain exceptions.
      *
      * @param operation the operation to be executed.
-     * @param context the processing context.
      * @param tolerated the class of exceptions which can be tolerated.
      * @param <V> the return type of the result of the operation.
      * @return the result of the operation
      */
     // Visible for testing
-    protected <V> V execAndHandleError(Operation<V> operation, ProcessingContext context, Class<? extends Exception> tolerated) {
+    protected <V> V execAndHandleError(Operation<V> operation, Class<? extends Exception> tolerated) {
         try {
-            V result = execAndRetry(operation, context);
+            V result = execAndRetry(operation);
             if (context.failed()) {
                 markAsFailed();
                 errorHandlingMetrics.recordSkipped();
@@ -290,5 +294,21 @@ public class RetryWithToleranceExecutor implements OperationExecutor {
         return "RetryWithToleranceExecutor{" +
                 "config=" + config +
                 '}';
+    }
+
+    public void setReporters(List<ErrorReporter> reporters) {
+        this.context.setReporters(reporters);
+    }
+
+    public void sourceRecord(SourceRecord preTransformRecord) {
+        this.context.sourceRecord(preTransformRecord);
+    }
+
+    public void consumerRecord(ConsumerRecord<byte[], byte[]> consumedMessage) {
+        this.context.consumerRecord(consumedMessage);
+    }
+
+    public boolean failed() {
+        return this.context.failed();
     }
 }

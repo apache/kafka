@@ -34,7 +34,6 @@ import org.apache.kafka.connect.runtime.errors.DLQReporter;
 import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
 import org.apache.kafka.connect.runtime.errors.ErrorReporter;
 import org.apache.kafka.connect.runtime.errors.LogReporter;
-import org.apache.kafka.connect.runtime.errors.ProcessingContext;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceExecutor;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.isolation.Plugins.ClassLoaderUsage;
@@ -462,9 +461,9 @@ public class Worker {
 
         // Decide which type of worker task we need based on the type of task.
         if (task instanceof SourceTask) {
-            ProcessingContext processingContext = sourceProcessingContext(id, connConfig, errorHandlingMetrics);
+            operationExecutor.setReporters(sourceTaskReporters(id, connConfig, errorHandlingMetrics));
             TransformationChain<SourceRecord> transformationChain = new TransformationChain<>(connConfig.<SourceRecord>transformations());
-            transformationChain.initialize(operationExecutor, processingContext);
+            transformationChain.initialize(operationExecutor);
             OffsetStorageReader offsetReader = new OffsetStorageReaderImpl(offsetBackingStore, id.connector(),
                     internalKeyConverter, internalValueConverter);
             OffsetStorageWriter offsetWriter = new OffsetStorageWriter(offsetBackingStore, id.connector(),
@@ -473,13 +472,13 @@ public class Worker {
 
             return new WorkerSourceTask(id, (SourceTask) task, statusListener, initialState, keyConverter, valueConverter,
                     headerConverter, transformationChain, producer, offsetReader, offsetWriter, config, metrics, loader,
-                    time, processingContext, operationExecutor);
+                    time, operationExecutor);
         } else if (task instanceof SinkTask) {
             TransformationChain<SinkRecord> transformationChain = new TransformationChain<>(connConfig.<SinkRecord>transformations());
-            ProcessingContext processingContext = sinkProcessingContext(id, connConfig, errorHandlingMetrics);
-            transformationChain.initialize(operationExecutor, processingContext);
+            operationExecutor.setReporters(sinkTaskReporters(id, connConfig, errorHandlingMetrics));
+            transformationChain.initialize(operationExecutor);
             return new WorkerSinkTask(id, (SinkTask) task, statusListener, initialState, config, metrics, keyConverter,
-                    valueConverter, headerConverter, transformationChain, loader, time, processingContext,
+                    valueConverter, headerConverter, transformationChain, loader, time,
                     operationExecutor);
         } else {
             log.error("Tasks must be a subclass of either SourceTask or SinkTask", task);
@@ -491,10 +490,10 @@ public class Worker {
         return new ErrorHandlingMetrics(id, metrics);
     }
 
-    private ProcessingContext sinkProcessingContext(ConnectorTaskId id, ConnectorConfig connConfig,
+    private List<ErrorReporter> sinkTaskReporters(ConnectorTaskId id, ConnectorConfig connConfig,
                                                     ErrorHandlingMetrics errorHandlingMetrics) {
         ArrayList<ErrorReporter> reporters = new ArrayList<>();
-        ErrorReporter logReporter = new LogReporter(id);
+        LogReporter logReporter = new LogReporter(id);
         logReporter.configure(connConfig.originalsWithPrefix(LogReporter.PREFIX));
         logReporter.setMetrics(errorHandlingMetrics);
         reporters.add(logReporter);
@@ -506,10 +505,10 @@ public class Worker {
             reporters.add(reporter);
         }
 
-        return new ProcessingContext(reporters);
+        return reporters;
     }
 
-    private ProcessingContext sourceProcessingContext(ConnectorTaskId id, ConnectorConfig connConfig,
+    private List<ErrorReporter> sourceTaskReporters(ConnectorTaskId id, ConnectorConfig connConfig,
                                                       ErrorHandlingMetrics errorHandlingMetrics) {
         ArrayList<ErrorReporter> reporters = new ArrayList<>();
         LogReporter logReporter = new LogReporter(id);
@@ -517,7 +516,7 @@ public class Worker {
         logReporter.setMetrics(errorHandlingMetrics);
         reporters.add(logReporter);
 
-        return new ProcessingContext(reporters);
+        return reporters;
     }
 
     private void stopTask(ConnectorTaskId taskId) {

@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.connect.runtime.errors;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.Configurable;
+import org.apache.kafka.connect.source.SourceRecord;
 
 /**
  * Execute a recoverable operation in the Connector pipeline.
@@ -27,10 +29,15 @@ public interface OperationExecutor extends Configurable {
      * Execute the recoverable operation
      *
      * @param operation the recoverable operation
-     * @param context processing context
+     * @param stage stage of operation
      * @param <V> return type of the result of the operation.
      * @return result of the operation
      */
-    <V> V execute(Operation<V> operation, ProcessingContext context);
+    <V> V execute(Operation<V> operation, Stage stage, Class<?> executingClass);
 
+    void sourceRecord(SourceRecord preTransformRecord);
+
+    void consumerRecord(ConsumerRecord<byte[], byte[]> consumedMessage);
+
+    boolean failed();
 }

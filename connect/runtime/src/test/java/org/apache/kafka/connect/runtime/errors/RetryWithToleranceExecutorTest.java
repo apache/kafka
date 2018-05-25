@@ -21,7 +21,6 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.RetriableException;
 import org.easymock.EasyMock;
 import org.easymock.Mock;
-import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.powermock.api.easymock.PowerMock;
@@ -36,7 +35,6 @@ import static org.apache.kafka.connect.runtime.errors.RetryWithToleranceExecutor
 import static org.easymock.EasyMock.replay;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
@@ -45,19 +43,12 @@ import static org.junit.Assert.assertTrue;
 @PowerMockIgnore("javax.management.*")
 public class RetryWithToleranceExecutorTest {
 
-    private ProcessingContext processingContext;
-
     @SuppressWarnings("unused")
     @Mock
     private Operation<String> mockOperation;
 
     @Mock
     ErrorHandlingMetrics errorHandlingMetrics;
-
-    @Before
-    public void setup() {
-        processingContext = new ProcessingContext();
-    }
 
     @Test
     public void testHandleExceptionInTransformations() {
@@ -111,10 +102,8 @@ public class RetryWithToleranceExecutorTest {
 
     private void testHandleExceptionInStage(Stage type, Exception ex) {
         RetryWithToleranceExecutor executor = setupExecutor();
-        setupProcessingContext(type);
-
-        executor.execute(new ExceptionThrower(ex), processingContext);
-        assertNotNull(processingContext.error());
+        executor.execute(new ExceptionThrower(ex), type, ExceptionThrower.class);
+        assertTrue(executor.failed());
         PowerMock.verifyAll();
     }
 
@@ -125,10 +114,6 @@ public class RetryWithToleranceExecutorTest {
         executor.configure(props);
         executor.setMetrics(errorHandlingMetrics);
         return executor;
-    }
-
-    private void setupProcessingContext(Stage type) {
-        processingContext.position(type);
     }
 
     @Test
@@ -162,13 +147,10 @@ public class RetryWithToleranceExecutorTest {
         EasyMock.expect(mockOperation.apply()).andThrow(e).times(numRetriableExceptionsThrown);
         EasyMock.expect(mockOperation.apply()).andReturn("Success");
 
-        ProcessingContext context = new ProcessingContext();
-        context.setCurrentContext(Stage.TRANSFORMATION, ExceptionThrower.class);
-
         replay(mockOperation);
 
-        String result = executor.execAndHandleError(mockOperation, context, Exception.class);
-        assertFalse(context.failed());
+        String result = executor.execAndHandleError(mockOperation, Exception.class);
+        assertFalse(executor.failed());
         assertEquals("Success", result);
         assertEquals(expectedWait, time.hiResClockMs());
 
@@ -186,16 +168,12 @@ public class RetryWithToleranceExecutorTest {
         EasyMock.expect(mockOperation.apply()).andThrow(e).times(numRetriableExceptionsThrown);
         EasyMock.expect(mockOperation.apply()).andReturn("Success");
 
-        ProcessingContext context = new ProcessingContext();
-        context.setCurrentContext(Stage.TRANSFORMATION, ExceptionThrower.class);
-
         replay(mockOperation);
 
-        String result = executor.execAndHandleError(mockOperation, context, Exception.class);
-        assertTrue(context.failed());
+        String result = executor.execAndHandleError(mockOperation, Exception.class);
+        assertTrue(executor.failed());
         assertNull(result);
         assertEquals(expectedWait, time.hiResClockMs());
-        assertEquals(1, context.attempt());
 
         PowerMock.verifyAll();
     }

@@ -18,7 +18,6 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.runtime.errors.OperationExecutor;
-import org.apache.kafka.connect.runtime.errors.ProcessingContext;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceExecutor;
 import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.transforms.Transformation;
@@ -32,7 +31,6 @@ public class TransformationChain<R extends ConnectRecord<R>> {
     private final List<Transformation<R>> transformations;
 
     private OperationExecutor operationExecutor = RetryWithToleranceExecutor.NOOP_EXECUTOR;
-    private ProcessingContext processingContext = new ProcessingContext();
 
     public TransformationChain(List<Transformation<R>> transformations) {
         this.transformations = transformations;
@@ -41,14 +39,12 @@ public class TransformationChain<R extends ConnectRecord<R>> {
     public R apply(R record) {
         if (transformations.isEmpty()) return record;
 
-        processingContext.position(Stage.TRANSFORMATION);
         for (final Transformation<R> transformation : transformations) {
-            processingContext.executingClass(transformation.getClass());
             final R current = record;
 
             // execute the operation
-            record = operationExecutor.execute(() -> transformation.apply(current), processingContext);
-            if (processingContext.failed()) {
+            record = operationExecutor.execute(() -> transformation.apply(current), Stage.TRANSFORMATION, transformation.getClass());
+            if (operationExecutor.failed()) {
                 return null;
             }
 
@@ -64,9 +60,8 @@ public class TransformationChain<R extends ConnectRecord<R>> {
         }
     }
 
-    public void initialize(OperationExecutor operationExecutor, ProcessingContext processingContext) {
+    public void initialize(OperationExecutor operationExecutor) {
         this.operationExecutor = operationExecutor;
-        this.processingContext = processingContext;
     }
 
     @Override

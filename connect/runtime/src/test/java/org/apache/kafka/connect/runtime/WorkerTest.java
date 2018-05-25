@@ -22,6 +22,7 @@ import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
@@ -34,7 +35,6 @@ import org.apache.kafka.connect.json.JsonConverterConfig;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.MockConnectMetrics.MockMetricsReporter;
 import org.apache.kafka.connect.runtime.errors.OperationExecutor;
-import org.apache.kafka.connect.runtime.errors.ProcessingContext;
 import org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
@@ -49,7 +49,6 @@ import org.apache.kafka.connect.storage.OffsetBackingStore;
 import org.apache.kafka.connect.storage.OffsetStorageReader;
 import org.apache.kafka.connect.storage.OffsetStorageWriter;
 import org.apache.kafka.connect.util.ConnectorTaskId;
-import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.connect.util.ThreadedTest;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
@@ -495,7 +494,6 @@ public class WorkerTest extends ThreadedTest {
                 anyObject(ConnectMetrics.class),
                 anyObject(ClassLoader.class),
                 anyObject(Time.class),
-                anyObject(ProcessingContext.class),
                 anyObject(OperationExecutor.class))
                 .andReturn(workerTask);
         Map<String, String> origProps = new HashMap<>();
@@ -634,7 +632,6 @@ public class WorkerTest extends ThreadedTest {
                 anyObject(ConnectMetrics.class),
                 EasyMock.eq(pluginLoader),
                 anyObject(Time.class),
-                anyObject(ProcessingContext.class),
                 anyObject(OperationExecutor.class))
                 .andReturn(workerTask);
         Map<String, String> origProps = new HashMap<>();
@@ -727,7 +724,6 @@ public class WorkerTest extends ThreadedTest {
                 anyObject(ConnectMetrics.class),
                 EasyMock.eq(pluginLoader),
                 anyObject(Time.class),
-                anyObject(ProcessingContext.class),
                 anyObject(OperationExecutor.class))
                 .andReturn(workerTask);
         Map<String, String> origProps = new HashMap<>();

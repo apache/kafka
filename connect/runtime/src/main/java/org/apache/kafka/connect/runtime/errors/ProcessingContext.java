@@ -21,13 +21,14 @@ import org.apache.kafka.connect.source.SourceRecord;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Objects;
 
 /**
  * Contains all the metadata related to the currently evaluating operation.
  */
-public class ProcessingContext {
+class ProcessingContext {
 
-    private final Collection<ErrorReporter> reporters;
+    private Collection<ErrorReporter> reporters = Collections.emptyList();
 
     private ConsumerRecord<byte[], byte[]> consumedMessage;
     private SourceRecord sourceRecord;
@@ -40,21 +41,6 @@ public class ProcessingContext {
     private Class<?> klass;
     private int attempt;
     private Throwable error;
-
-    /**
-     * Create a ProcessingContext object with no error reporters.
-     */
-    public ProcessingContext() {
-        this(Collections.emptyList());
-    }
-
-    /**
-     * Create a ProcessingContext object with a collection of initialized and configured error reporters.
-     * @param reporters the error reporters.
-     */
-    public ProcessingContext(Collection<ErrorReporter> reporters) {
-        this.reporters = reporters;
-    }
 
     /**
      * Only one instance of this class is meant to exist per task in a JVM. This method resets the internal fields
@@ -194,4 +180,10 @@ public class ProcessingContext {
     public boolean failed() {
         return this.error() != null;
     }
+
+    public void setReporters(Collection<ErrorReporter> reporters) {
+        Objects.requireNonNull(reporters);
+        this.reporters = reporters;
+    }
+
 }

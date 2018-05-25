@@ -34,7 +34,6 @@ import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
 import org.apache.kafka.connect.runtime.errors.LogReporter;
 import org.apache.kafka.connect.runtime.errors.OperationExecutor;
-import org.apache.kafka.connect.runtime.errors.ProcessingContext;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceExecutor;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
@@ -175,7 +174,8 @@ public class ErrorHandlingTaskTest {
         RetryWithToleranceExecutor executor = new RetryWithToleranceExecutor(time);
         executor.configure(OPERATION_EXECUTOR_PROPS);
         executor.setMetrics(errorHandlingMetrics);
-        createSinkTask(initialState, new ProcessingContext(singletonList(reporter)), executor);
+        executor.setReporters(singletonList(reporter));
+        createSinkTask(initialState, executor);
 
         expectInitializeTask();
 
@@ -224,7 +224,8 @@ public class ErrorHandlingTaskTest {
         RetryWithToleranceExecutor executor = new RetryWithToleranceExecutor(time);
         executor.configure(OPERATION_EXECUTOR_PROPS);
         executor.setMetrics(errorHandlingMetrics);
-        createSourceTask(initialState, new ProcessingContext(singletonList(reporter)), executor);
+        executor.setReporters(singletonList(reporter));
+        createSourceTask(initialState, executor);
 
         // valid json
         Schema valSchema = SchemaBuilder.struct().field("val", Schema.INT32_SCHEMA).build();
@@ -282,7 +283,8 @@ public class ErrorHandlingTaskTest {
         RetryWithToleranceExecutor executor = new RetryWithToleranceExecutor(time);
         executor.configure(OPERATION_EXECUTOR_PROPS);
         executor.setMetrics(errorHandlingMetrics);
-        createSourceTask(initialState, new ProcessingContext(singletonList(reporter)), executor, badConverter());
+        executor.setReporters(singletonList(reporter));
+        createSourceTask(initialState, executor, badConverter());
 
         // valid json
         Schema valSchema = SchemaBuilder.struct().field("val", Schema.INT32_SCHEMA).build();
@@ -357,7 +359,7 @@ public class ErrorHandlingTaskTest {
         PowerMock.expectLastCall();
     }
 
-    private void createSinkTask(TargetState initialState, ProcessingContext context, OperationExecutor executor) {
+    private void createSinkTask(TargetState initialState, OperationExecutor executor) {
         JsonConverter converter = new JsonConverter();
         Map<String, Object> oo = workerConfig.originalsWithPrefix("value.converter.");
         oo.put("converter.type", "value");
@@ -365,22 +367,22 @@ public class ErrorHandlingTaskTest {
         converter.configure(oo);
 
         TransformationChain<SinkRecord> sinkTransforms = new TransformationChain<>(singletonList(new FaultyPassthrough<SinkRecord>()));
-        sinkTransforms.initialize(executor, context);
+        sinkTransforms.initialize(executor);
 
         workerSinkTask = PowerMock.createPartialMock(
                 WorkerSinkTask.class, new String[]{"createConsumer"},
                 taskId, sinkTask, statusListener, initialState, workerConfig, metrics, converter, converter,
-                headerConverter, sinkTransforms, pluginLoader, time, context, executor);
+                headerConverter, sinkTransforms, pluginLoader, time, executor);
     }
 
-    private void createSourceTask(TargetState initialState, ProcessingContext context, OperationExecutor executor) {
+    private void createSourceTask(TargetState initialState, OperationExecutor executor) {
         JsonConverter converter = new JsonConverter();
         Map<String, Object> oo = workerConfig.originalsWithPrefix("value.converter.");
         oo.put("converter.type", "value");
         oo.put("schemas.enable", "false");
         converter.configure(oo);
 
-        createSourceTask(initialState, context, executor, converter);
+        createSourceTask(initialState, executor, converter);
     }
 
     private Converter badConverter() {
@@ -392,14 +394,14 @@ public class ErrorHandlingTaskTest {
         return converter;
     }
 
-    private void createSourceTask(TargetState initialState, ProcessingContext context, OperationExecutor executor, Converter converter) {
+    private void createSourceTask(TargetState initialState, OperationExecutor executor, Converter converter) {
         TransformationChain<SourceRecord> sourceTransforms = new TransformationChain<>(singletonList(new FaultyPassthrough<SourceRecord>()));
-        sourceTransforms.initialize(executor, context);
+        sourceTransforms.initialize(executor);
 
         workerSourceTask = PowerMock.createPartialMock(
                 WorkerSourceTask.class, new String[]{"commitOffsets", "isStopping"},
                 taskId, sourceTask, statusListener, initialState, converter, converter, headerConverter, sourceTransforms,
-                producer, offsetReader, offsetWriter, workerConfig, metrics, pluginLoader, time, context, executor);
+                producer, offsetReader, offsetWriter, workerConfig, metrics, pluginLoader, time, executor);
     }
 
     private ConsumerRecords<byte[], byte[]> records(ConsumerRecord<byte[], byte[]> record) {

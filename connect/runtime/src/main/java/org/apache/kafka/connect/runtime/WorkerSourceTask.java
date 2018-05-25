@@ -34,9 +34,7 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.header.Header;
 import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
-import org.apache.kafka.connect.runtime.errors.Operation;
 import org.apache.kafka.connect.runtime.errors.OperationExecutor;
-import org.apache.kafka.connect.runtime.errors.ProcessingContext;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceExecutor;
 import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.source.SourceRecord;
@@ -94,9 +92,6 @@ class WorkerSourceTask extends WorkerTask {
     private boolean startedShutdownBeforeStartCompleted = false;
     private boolean stopped = false;
 
-    private final ProcessingContext processingContext;
-    private final OperationExecutor operationExecutor;
-
     public WorkerSourceTask(ConnectorTaskId id,
                             SourceTask task,
                             TaskStatus.Listener statusListener,
@@ -114,7 +109,7 @@ class WorkerSourceTask extends WorkerTask {
                             Time time) {
         this(id, task, statusListener, initialState, keyConverter, valueConverter, headerConverter,
                 transformationChain, producer, offsetReader, offsetWriter, workerConfig, connectMetrics,
-                loader, time, new ProcessingContext(), RetryWithToleranceExecutor.NOOP_EXECUTOR);
+                loader, time, RetryWithToleranceExecutor.NOOP_EXECUTOR);
     }
 
     public WorkerSourceTask(ConnectorTaskId id,
@@ -132,10 +127,9 @@ class WorkerSourceTask extends WorkerTask {
                             ConnectMetrics connectMetrics,
                             ClassLoader loader,
                             Time time,
-                            ProcessingContext processingContext,
                             OperationExecutor operationExecutor) {
 
-        super(id, statusListener, initialState, loader, connectMetrics);
+        super(id, statusListener, initialState, loader, connectMetrics, operationExecutor);
 
         this.workerConfig = workerConfig;
         this.task = task;
@@ -155,9 +149,6 @@ class WorkerSourceTask extends WorkerTask {
         this.flushing = false;
         this.stopRequestedLatch = new CountDownLatch(1);
         this.sourceTaskMetricsGroup = new SourceTaskMetricsGroup(id, connectMetrics);
-
-        this.operationExecutor = operationExecutor;
-        this.processingContext = processingContext;
     }
 
     @Override
@@ -275,10 +266,6 @@ class WorkerSourceTask extends WorkerTask {
         }
     }
 
-    protected <V> V execute(Operation<V> operation) {
-        return operationExecutor.execute(operation, processingContext);
-    }
-
     /**
      * Convert the source record into a producer record.
      *
@@ -290,16 +277,15 @@ class WorkerSourceTask extends WorkerTask {
             return null;
         }
 
-        processingContext.setCurrentContext(Stage.HEADER_CONVERTER, headerConverter.getClass());
-        RecordHeaders headers = execute(() -> convertHeaderFor(record));
+        RecordHeaders headers = executeOperation(() -> convertHeaderFor(record), Stage.HEADER_CONVERTER, headerConverter.getClass());
 
-        processingContext.setCurrentContext(Stage.KEY_CONVERTER, keyConverter.getClass());
-        byte[] key = execute(() -> keyConverter.fromConnectData(record.topic(), record.keySchema(), record.key()));
+        byte[] key = executeOperation(() -> keyConverter.fromConnectData(record.topic(), record.keySchema(), record.key()),
+                Stage.KEY_CONVERTER, keyConverter.getClass());
 
-        processingContext.setCurrentContext(Stage.VALUE_CONVERTER, valueConverter.getClass());
-        byte[] value = execute(() -> valueConverter.fromConnectData(record.topic(), record.valueSchema(), record.value()));
+        byte[] value = executeOperation(() -> valueConverter.fromConnectData(record.topic(), record.valueSchema(), record.value()),
+                Stage.VALUE_CONVERTER, valueConverter.getClass());
 
-        if (processingContext.failed()) {
+        if (operationExecutor.failed()) {
             return null;
         }
 
@@ -318,10 +304,10 @@ class WorkerSourceTask extends WorkerTask {
         final SourceRecordWriteCounter counter = new SourceRecordWriteCounter(toSend.size(), sourceTaskMetricsGroup);
         for (final SourceRecord preTransformRecord : toSend) {
 
-            processingContext.sourceRecord(preTransformRecord);
+            operationExecutor.sourceRecord(preTransformRecord);
             final SourceRecord record = transformationChain.apply(preTransformRecord);
             final ProducerRecord<byte[], byte[]> producerRecord = convertTransformedRecord(record);
-            if (producerRecord == null || processingContext.failed()) {
+            if (producerRecord == null || operationExecutor.failed()) {
                 counter.skipRecord();
                 commitTaskRecord(preTransformRecord);
                 continue;
