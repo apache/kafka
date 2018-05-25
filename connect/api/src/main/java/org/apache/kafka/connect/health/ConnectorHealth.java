@@ -19,6 +19,9 @@ package org.apache.kafka.connect.health;
 
 import java.util.Map;
 
+/**
+ * Provides basic health information about the connector and its tasks
+ */
 public class ConnectorHealth {
 
     private final String name;
@@ -37,18 +40,34 @@ public class ConnectorHealth {
         this.type = type;
     }
 
+    /**
+     * provides connector name
+     * @return name
+     */
     public String name() {
         return name;
     }
 
+    /**
+     * provides the current status of the connector
+     * @return instance of {@link ConnectorState}
+     */
     public ConnectorState connectorState() {
         return connector;
     }
 
+    /**
+     * provides a map of task ids and its state
+     * @return instance of {@link Map<Integer, TaskState>}
+     */
     public Map<Integer, TaskState> tasksState() {
         return tasks;
     }
 
+    /**
+     * provides the connector type
+     * @return {@link ConnectorType}
+     */
     public ConnectorType type() {
         return type;
     }

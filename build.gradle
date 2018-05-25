@@ -1432,8 +1432,8 @@ project(':connect:file') {
   }
 }
 
-project(':connect:rest-extension') {
-  archivesBaseName = "connect-rest-extension"
+project(':connect:basic-auth-extension') {
+  archivesBaseName = "connect-basic-auth-extension"
 
   dependencies {
     compile project(':connect:api')
