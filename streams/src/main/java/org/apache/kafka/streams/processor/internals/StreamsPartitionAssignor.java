@@ -227,7 +227,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                 case StreamsConfig.UPGRADE_FROM_0110:
                 case StreamsConfig.UPGRADE_FROM_10:
                 case StreamsConfig.UPGRADE_FROM_11:
-                    log.info("Downgrading metadata version from {} to 2 for upgrade from " + upgradeFrom + ".x.", SubscriptionInfo.LATEST_SUPPORTED_VERSION);
+                    log.info("Downgrading metadata version from {} to 2 for upgrade from {}.x.", SubscriptionInfo.LATEST_SUPPORTED_VERSION, upgradeFrom);
                     usedSubscriptionMetadataVersion = VERSION_TWO;
                     break;
                 default:
