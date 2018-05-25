@@ -99,16 +99,17 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                               final Generation generationAtRequestTime,
                                               final RequestFuture<Map<TopicPartition, OffsetAndMetadata>> response
         ) {
+            if (request == null) throw new NullPointerException();
+            if (generationAtRequestTime == null) throw new NullPointerException();
+            if (response == null) throw new NullPointerException();
+
             this.request = request;
             this.generation = generationAtRequestTime;
             this.response = response;
         }
 
         private boolean sameRequest(final Set<TopicPartition> currentRequest, final Generation currentGeneration) {
-            return currentGeneration.generationId == generation.generationId
-                && currentGeneration.memberId.equals(generation.memberId)
-                && currentGeneration.protocol.equals(generation.protocol)
-                && currentRequest.equals(request);
+            return generation.equals(currentGeneration) && request.equals(currentRequest);
         }
     }
 
