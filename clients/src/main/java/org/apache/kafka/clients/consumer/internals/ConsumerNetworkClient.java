@@ -165,10 +165,6 @@ public class ConsumerNetworkClient implements Closeable {
      * until it has completed).
      */
     boolean ensureFreshMetadata(final long timeout) {
-        if (timeout < 0) {
-            return false;
-        }
-
         if (this.metadata.updateRequested() || this.metadata.timeToNextUpdate(time.milliseconds()) == 0) {
             return awaitMetadataUpdate(timeout);
         } else {
