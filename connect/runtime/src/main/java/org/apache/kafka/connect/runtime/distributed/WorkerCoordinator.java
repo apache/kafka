@@ -103,6 +103,12 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
         return "connect";
     }
 
+    // expose for tests
+    @Override
+    protected synchronized boolean ensureCoordinatorReady(final long timeoutMs) {
+        return super.ensureCoordinatorReady(timeoutMs);
+    }
+
     public void poll(long timeout) {
         // poll for io until the timeout expires
         final long start = time.milliseconds();
