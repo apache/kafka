@@ -297,6 +297,8 @@ class StreamsUpgradeTest(Test):
             for p in self.processors:
                 found = list(p.node.account.ssh_capture("grep \"Finished assignment for group\" %s" % p.LOG_FILE, allow_fail=True))
                 if len(found) == self.leader_counter[p] + 1:
+                    if self.leader is not None:
+                        raise Exception("Could not uniquely identify leader")
                     self.leader = p
                     self.leader_counter[p] = self.leader_counter[p] + 1
 
@@ -491,6 +493,8 @@ class StreamsUpgradeTest(Test):
 
                     if processor == self.leader:
                         self.update_leader()
+                    else:
+                        self.leader_counter[self.leader] = self.leader_counter[self.leader] + 1
 
                     if processor == self.leader:
                         leader_monitor = log_monitor
@@ -537,8 +541,10 @@ class StreamsUpgradeTest(Test):
                                                timeout_sec=60,
                                                err_msg="Never saw output 'Successfully joined group with generation " + str(current_generation) + "' on" + str(p.node.account))
 
-                    if self.leader == processor:
+                    if processor == self.leader:
                         self.update_leader()
+                    else:
+                        self.leader_counter[self.leader] = self.leader_counter[self.leader] + 1
 
                     if self.leader in self.old_processors or len(self.old_processors) > 0:
                         self.verify_metadata_no_upgraded_yet()
