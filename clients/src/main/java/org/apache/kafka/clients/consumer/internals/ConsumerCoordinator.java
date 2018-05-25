@@ -487,7 +487,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         try {
             maybeAutoCommitOffsetsSync(timeoutMs);
             now = time.milliseconds();
-            if (pendingAsyncCommits.get() > 0 && endTimeMs > now) {
+            if (pendingAsyncCommits.get() > 0 && now - endTimeMs < 0) {
                 ensureCoordinatorReady(now, endTimeMs - now);
                 now = time.milliseconds();
             }

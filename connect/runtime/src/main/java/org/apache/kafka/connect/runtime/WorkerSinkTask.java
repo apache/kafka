@@ -207,7 +207,7 @@ class WorkerSinkTask extends WorkerTask {
             final long commitTimeoutMs = commitStarted + workerConfig.getLong(WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG);
 
             // Check for timed out commits
-            if (committing && now >= commitTimeoutMs) {
+            if (committing && commitTimeoutMs - now <= 0) {
                 log.warn("{} Commit of offsets timed out", this);
                 commitFailures++;
                 committing = false;

@@ -65,7 +65,7 @@ public final class NetworkClientUtils {
             return true;
 
         long attemptStartTime = time.milliseconds();
-        while (!client.isReady(node, attemptStartTime) && attemptStartTime < expiryTime) {
+        while (!client.isReady(node, attemptStartTime) && attemptStartTime - expiryTime < 0) {
             if (client.connectionFailed(node)) {
                 throw new IOException("Connection to " + node + " failed.");
             }
