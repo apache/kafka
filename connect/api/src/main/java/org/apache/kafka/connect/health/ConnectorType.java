@@ -18,8 +18,22 @@ package org.apache.kafka.connect.health;
 
 import java.util.Locale;
 
+/**
+ * Enum definition that identifies the type of the connector.
+ */
 public enum ConnectorType {
-    SOURCE, SINK, UNKNOWN;
+    /**
+     * Identifies a source connector
+     */
+    SOURCE,
+    /**
+     * Identifies a sink connector
+     */
+    SINK,
+    /**
+     * Identifies a connector whose type could not be inferred
+     */
+    UNKNOWN;
 
     @Override
     public String toString() {

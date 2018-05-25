@@ -18,54 +18,53 @@
 package org.apache.kafka.connect.health;
 
 /**
- * {@link AbstractState} provides the current status along with identifier for Connect worker and
- * tasks
+ * {@link AbstractState} provides the current status along with identifier for Connect worker and tasks.
  */
 public abstract class AbstractState {
 
     private final String state;
-    private final String trace;
+    private final String traceMessage;
     private final String workerId;
 
     /**
+     * Construct a state for connector or task.
      *
-     * @param state - the status of connector or task. Can't be NULL or EMPTY.
-     * @param workerId - the workerId associated with the connector or the task.Can't be NULL or EMPTY.
-     * @param trace - any error trace associated with the connector or the task. Can be NULL or
-     *              EMPTY
+     * @param state  the status of connector or task; may not be null or empty
+     * @param workerId  the workerId associated with the connector or the task; may not be null or empty
+     * @param traceMessage  any error trace message associated with the connector or the task; may be null or empty
      */
-    public AbstractState(String state, String workerId, String trace) {
-        assert state != null && !state.isEmpty();
-        assert workerId != null && !workerId.isEmpty();
+    public AbstractState(String state, String workerId, String traceMessage) {
+        assert state != null && !state.trim().isEmpty();
+        assert workerId != null && !workerId.trim().isEmpty();
         this.state = state;
         this.workerId = workerId;
-        this.trace = trace;
+        this.traceMessage = traceMessage;
     }
 
     /**
-     * Return the state of the connector or task as a String. Returned string will not ne NULL or
-     * EMPTY
-     * @return state of the connector or task as a String.
+     * Provides the current state of the connector or task.
+     *
+     * @return state, never {@code null} or empty
      */
     public String state() {
         return state;
     }
 
     /**
-     * The Id of the worker associated with the connector or the task. Returned string will not ne
-     * NULL or
-     * EMPTY
-     * @return workerId
+     * The identifier of the worker associated with the connector or the task.
+     *
+     * @return workerId, never {@code null} or empty.
      */
     public String workerId() {
         return workerId;
     }
 
     /**
-     * The error message associated with the connector or task. It can be NULL or EMPTY.
-     * @return trace
+     * The error message associated with the connector or task.
+     *
+     * @return traceMessage, can be {@code null} or empty.
      */
-    public String trace() {
-        return trace;
+    public String traceMessage() {
+        return traceMessage;
     }
 }

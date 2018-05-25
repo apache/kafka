@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.connect.rest.extension;
+package org.apache.kafka.connect.rest.basic.auth.extenstion;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;

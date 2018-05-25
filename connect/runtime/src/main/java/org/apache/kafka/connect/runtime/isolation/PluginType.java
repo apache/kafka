@@ -31,7 +31,7 @@ public enum PluginType {
     CONNECTOR(Connector.class),
     CONVERTER(Converter.class),
     TRANSFORMATION(Transformation.class),
-    CONNECT_REST_EXTENSION(ConnectRestExtension.class),
+    REST_EXTENSION(ConnectRestExtension.class),
     UNKNOWN(Object.class);
 
     private Class<?> klass;

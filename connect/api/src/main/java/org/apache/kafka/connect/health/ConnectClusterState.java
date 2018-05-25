@@ -22,16 +22,16 @@ import org.apache.kafka.connect.rest.ConnectRestExtension;
 import java.util.Collection;
 
 /**
- * Provides the ability to lookup connector metadata and its health. This is made available to
- * the {@link ConnectRestExtension} implementations. Connect Framework provides the implementation
- * for this interface.
+ * Provides the ability to lookup connector metadata and its health. This is made available to the {@link ConnectRestExtension}
+ * implementations. Connect Framework provides the implementation for this interface.
  */
 public interface ConnectClusterState {
 
     /**
-     * Get the names of the connectors currently deployed in this cluster. This is a full list of
-     * connectors in the cluster gathered from the current configuration.
-     * @return collection of connector names
+     * Get the names of the connectors currently deployed in this cluster. This is a full list of connectors in the cluster gathered from
+     * the current configuration.
+     *
+     * @return collection of connector names, never {@code null}
      */
     Collection<String> connectors();
 

@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.connect.rest.extension;
+package org.apache.kafka.connect.rest.basic.auth.extenstion;
 
 import org.apache.kafka.common.security.JaasUtils;
 import org.easymock.EasyMock;
@@ -47,11 +47,10 @@ public class JaasBasicAuthFilterTest {
     @MockStrict
     private ContainerRequestContext requestContext;
 
-    JaasBasicAuthFilter jaasBasicAuthFilter = new JaasBasicAuthFilter();
+    private JaasBasicAuthFilter jaasBasicAuthFilter = new JaasBasicAuthFilter();
 
     @Before
     public void setup() throws IOException {
-
         EasyMock.reset(requestContext);
         File credentialFile = File.createTempFile("credential", ".properties");
         credentialFile.deleteOnExit();
@@ -64,8 +63,7 @@ public class JaasBasicAuthFilterTest {
         jaasConfigFile.deleteOnExit();
         System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, jaasConfigFile.getPath());
         lines = new ArrayList<>();
-        lines.add("KafkaConnect { org.apache.kafka.connect.rest.extension.PropertyFileLoginModule"
-                  + " required ");
+        lines.add("KafkaConnect { org.apache.kafka.connect.rest.basic.auth.extenstion.PropertyFileLoginModule required ");
         lines.add("file=\"" + credentialFile.getPath() + "\"");
         lines.add(";};");
         Files.write(jaasConfigFile.toPath(), lines, StandardCharsets.UTF_8);

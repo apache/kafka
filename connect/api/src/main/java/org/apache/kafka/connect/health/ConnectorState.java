@@ -18,15 +18,16 @@
 package org.apache.kafka.connect.health;
 
 /**
- * {@link ConnectorState} provides the status, workerId and any associated errors with a connector
+ * Describes the status, worker ID, and any errors associated with a connector.
  */
 public class ConnectorState extends AbstractState {
 
     /**
+     * Provides an instance of the ConnectorState.
      *
-     * @param state - the status of connector. Can't be NULL or EMPTY.
-     * @param workerId - the workerId associated with the connector. Can't be NULL or EMPTY.
-     * @param trace - any error trace associated with the connector.
+     * @param state - the status of connector, may not be {@code null} or empty
+     * @param workerId - the workerId associated with the connector, may not be {@code null} or empty
+     * @param trace - any error traceMessage associated with the connector, may be {@code null} or empty
      */
     public ConnectorState(String state, String workerId, String trace) {
         super(state, workerId, trace);

@@ -22,22 +22,23 @@ import org.apache.kafka.connect.health.ConnectClusterState;
 import javax.ws.rs.core.Configurable;
 
 /**
- * The interface provides the ability for {@link ConnectRestExtension} implementations to access the
- * JAX-RS {@link javax.ws.rs.core.Configurable} and cluster state {@link ConnectClusterState}.
- * The implementation for the interface is provided by the Connect framework.
+ * The interface provides the ability for {@link ConnectRestExtension} implementations to access the JAX-RS
+ * {@link javax.ws.rs.core.Configurable} and cluster state {@link ConnectClusterState}. The implementation for the interface is provided
+ * by the Connect framework.
  */
 public interface ConnectRestExtensionContext {
 
     /**
-     * Provides an implementation of {@link javax.ws.rs.core.Configurable} that be used ot
-     * register JAX-RS resources
-     * @return instance of {@link javax.ws.rs.core.Configurable}
+     * Provides an implementation of {@link javax.ws.rs.core.Configurable} that be used to register JAX-RS resources.
+     *
+     * @return @return the JAX-RS {@link javax.ws.rs.core.Configurable}; never {@code null}
      */
     Configurable<? extends Configurable> configurable();
 
     /**
-     * Provides meta data about connector's and its health
-     * @return instance of {@link ConnectClusterState}
+     * Provides the cluster state and health information about the connectors and tasks.
+     *
+     * @return the cluster state information; never {@code null}
      */
     ConnectClusterState clusterState();
 }

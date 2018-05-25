@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.connect.rest.extension;
+package org.apache.kafka.connect.rest.basic.auth.extenstion;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,6 +39,9 @@ import javax.security.auth.spi.LoginModule;
  * {@link PropertyFileLoginModule} authenticates against a properties file.
  * The credentials should be stored in the format {username}={password} in teh properties file.
  * The absolute path of the file needs to specified using the option <b>file</b>
+ *
+ * <p><b>NOTE: This implementation is NOT intended to be used in production since the credentials are stored in PLAINTEXT in the
+ * properties file.</b>
  */
 public class PropertyFileLoginModule implements LoginModule {
     private static final Logger log = LoggerFactory.getLogger(PropertyFileLoginModule.class);

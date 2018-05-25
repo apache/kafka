@@ -18,55 +18,64 @@ package org.apache.kafka.connect.health;
 
 
 import java.util.Map;
+import java.util.Objects;
 
 /**
- * Provides basic health information about the connector and its tasks
+ * Provides basic health information about the connectorState and its tasks.
  */
 public class ConnectorHealth {
 
     private final String name;
-    private final ConnectorState connector;
+    private final ConnectorState connectorState;
     private final Map<Integer, TaskState> tasks;
     private final ConnectorType type;
 
 
     public ConnectorHealth(String name,
-                           ConnectorState connector,
+                           ConnectorState connectorState,
                            Map<Integer, TaskState> tasks,
                            ConnectorType type) {
+        assert name != null && !name.trim().isEmpty();
+        Objects.requireNonNull(connectorState, "connectorState can't be null");
+        Objects.requireNonNull(tasks, "tasks can't be null");
+        Objects.requireNonNull(type, "type can't be null");
         this.name = name;
-        this.connector = connector;
+        this.connectorState = connectorState;
         this.tasks = tasks;
         this.type = type;
     }
 
     /**
-     * provides connector name
-     * @return name
+     * Provides the name of the connector.
+     *
+     * @return name, never {@code null} or empty
      */
     public String name() {
         return name;
     }
 
     /**
-     * provides the current status of the connector
-     * @return instance of {@link ConnectorState}
+     * Provides the current state of the connector.
+     *
+     * @return connectorState, never {@code null}
      */
     public ConnectorState connectorState() {
-        return connector;
+        return connectorState;
     }
 
     /**
-     * provides a map of task ids and its state
-     * @return instance of {@link Map<Integer, TaskState>}
+     * provides the current state of the connector tasks.
+     *
+     * @return the state for each task ID; never {@code null}
      */
     public Map<Integer, TaskState> tasksState() {
         return tasks;
     }
 
     /**
-     * provides the connector type
-     * @return {@link ConnectorType}
+     * provides the type of the connector.
+     *
+     * @return type, never {@code null}
      */
     public ConnectorType type() {
         return type;

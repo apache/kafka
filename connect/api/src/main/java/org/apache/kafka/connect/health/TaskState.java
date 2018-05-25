@@ -20,19 +20,19 @@ package org.apache.kafka.connect.health;
 import java.util.Objects;
 
 /**
- * {@link TaskState} provides the state, ids and any errors associated with Connector
- * tasks.
+ * Describes the state, IDs, and any errors of a connector task.
  */
 public class TaskState extends AbstractState implements Comparable<TaskState> {
 
     private final int taskId;
 
     /**
-     * Provides an instance of {@link TaskState}
-     * @param taskId - the id associated with the connector task
-     * @param state  - the status of the task. Can't be NULL or EMPTY.
-     * @param workerId - id of the worker the task is associated with. Can't be NULL or EMPTY.
-     * @param trace   - error message if that task had failed or errored out.
+     * Provides an instance of {@link TaskState}.
+     *
+     * @param taskId   the id associated with the connector task
+     * @param state    the status of the task, may not be {@code null} or empty
+     * @param workerId id of the worker the task is associated with, may not be {@code null} or empty
+     * @param trace    error message if that task had failed or errored out, may be {@code null} or empty
      */
     public TaskState(int taskId, String state, String workerId, String trace) {
         super(state, workerId, trace);
@@ -40,8 +40,9 @@ public class TaskState extends AbstractState implements Comparable<TaskState> {
     }
 
     /**
-     * Provides the id of the task
-     * @return taskId
+     * Provides the ID of the task
+     *
+     * @return the task ID
      */
     public int taskId() {
         return taskId;

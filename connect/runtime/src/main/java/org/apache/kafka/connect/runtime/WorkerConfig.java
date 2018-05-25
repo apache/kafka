@@ -194,9 +194,8 @@ public class WorkerConfig extends AbstractConfig {
     protected static final String REST_EXTENSION_CLASSES_DOC =
             "Comma-separated names of <code>ConnectRestExtension</code> classes, loaded and called "
             + "in the order specified. Implementing the interface  "
-            + "<code>ConnectRestExtension</code> allows you to inject in to Connect's REST API "
-            + "user defined resources  like filters. Typically used to add custom capability "
-            + "like logging, security, etc.";
+            + "<code>ConnectRestExtension</code> allows you to inject into Connect's REST API user defined resources  like filters. "
+            + "Typically used to add custom capability like logging, security, etc.";
 
     public static final String METRICS_SAMPLE_WINDOW_MS_CONFIG = CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG;
     public static final String METRICS_NUM_SAMPLES_CONFIG = CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG;

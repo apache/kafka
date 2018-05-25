@@ -313,9 +313,7 @@
       <allow pkg="org.apache.kafka.connect.health" />
       <allow pkg="javax.ws.rs" />
       <allow pkg= "javax.security.auth"/>
-      <subpackage name= "extension">
-        <allow pkg="org.apache.kafka.connect.rest" />
-      </subpackage>
+      <allow pkg="org.apache.kafka.connect.rest" />
     </subpackage>
 
     <subpackage name="health">

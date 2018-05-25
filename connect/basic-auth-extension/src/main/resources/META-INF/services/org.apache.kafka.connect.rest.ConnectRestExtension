@@ -13,4 +13,4 @@
  # See the License for the specific language governing permissions and
  # limitations under the License.
 
-org.apache.kafka.connect.rest.extension.BasicAuthSecurityRestExtension
+org.apache.kafka.connect.rest.basic.auth.extenstion.BasicAuthSecurityRestExtension
