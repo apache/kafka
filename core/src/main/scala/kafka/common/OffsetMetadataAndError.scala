@@ -28,7 +28,6 @@ case class OffsetMetadata(offset: Long, metadata: String = OffsetMetadata.NoMeta
 object OffsetMetadata {
   val InvalidOffset: Long = -1L
   val NoMetadata: String = ""
-  //val DefaultExpirationTimestamp: Long = -1
 
   val InvalidOffsetMetadata = OffsetMetadata(OffsetMetadata.InvalidOffset, OffsetMetadata.NoMetadata)
 }

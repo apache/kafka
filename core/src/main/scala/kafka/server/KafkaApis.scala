@@ -358,7 +358,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             expireTimestamp = {
               if (header.apiVersion >= 3)
                 None
-              else  if (partitionData.timestamp == OffsetCommitRequest.DEFAULT_TIMESTAMP)
+              else if (partitionData.timestamp == OffsetCommitRequest.DEFAULT_TIMESTAMP)
                 Some(defaultExpireTimestamp)
               else
                 Some(offsetRetention + partitionData.timestamp)

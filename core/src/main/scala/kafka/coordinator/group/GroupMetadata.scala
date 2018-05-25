@@ -16,17 +16,14 @@
  */
 package kafka.coordinator.group
 
-import java.nio.ByteBuffer
 import java.util.UUID
 import java.util.concurrent.locks.ReentrantLock
 
 import kafka.common.OffsetAndMetadata
 import kafka.utils.{CoreUtils, Logging, nonthreadsafe}
-import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Time
 
-import scala.collection.JavaConverters._
 import scala.collection.{Seq, immutable, mutable}
 
 private[group] sealed trait GroupState
@@ -117,16 +114,6 @@ private object GroupMetadata {
       Empty -> Set(PreparingRebalance))
 
   val DefaultCurrentStateTimestamp: Long = -1
-
-  def loadGroup(groupId: String,
-                initialState: GroupState,
-                generationId: Int,
-                protocolType: String,
-                protocol: String,
-                leaderId: String,
-                members: Iterable[MemberMetadata]): GroupMetadata = {
-    loadGroup(groupId, initialState, generationId, protocolType, protocol, leaderId, DefaultCurrentStateTimestamp, members)
-  }
 
   def loadGroup(groupId: String,
                 initialState: GroupState,
