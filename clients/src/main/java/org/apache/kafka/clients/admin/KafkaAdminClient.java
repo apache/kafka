@@ -971,6 +971,29 @@ public class KafkaAdminClient extends AdminClient {
             }
         }
 
+        /**
+         * Reassign calls that have not yet been sent. When metadata is refreshed,
+         * all unsent calls are reassigned to handle controller change and node changes.
+         * When a node is disconnected, all calls assigned to the node are reassigned.
+         *
+         * @param now The current time in milliseconds
+         * @param disconnectedOnly Reassign only calls to nodes that were disconnected
+         *                         in the last poll
+         */
+        private void reassignUnsentCalls(long now, boolean disconnectedOnly) {
+            ArrayList<Call> pendingCallsToSend = new ArrayList<>();
+            for (Iterator<Map.Entry<Node, List<Call>>> iter = callsToSend.entrySet().iterator(); iter.hasNext(); ) {
+                Map.Entry<Node, List<Call>> entry = iter.next();
+                if (!disconnectedOnly || client.connectionFailed(entry.getKey())) {
+                    for (Call call : entry.getValue()) {
+                        pendingCallsToSend.add(call);
+                    }
+                    iter.remove();
+                }
+            }
+            chooseNodesForPendingCalls(now, pendingCallsToSend.iterator());
+        }
+
         private boolean hasActiveExternalCalls(Collection<Call> calls) {
             for (Call call : calls) {
                 if (!call.isInternal()) {
@@ -1055,6 +1078,7 @@ public class KafkaAdminClient extends AdminClient {
 
                 // Update the current time and handle the latest responses.
                 now = time.milliseconds();
+                reassignUnsentCalls(now, true); // reassign calls to disconnected nodes
                 handleResponses(now, responses);
             }
             int numTimedOut = 0;
@@ -1140,16 +1164,7 @@ public class KafkaAdminClient extends AdminClient {
                     MetadataResponse response = (MetadataResponse) abstractResponse;
                     long now = time.milliseconds();
                     metadataManager.update(response.cluster(), now);
-
-                    // For calls which have not yet been sent, update the node to send to when
-                    // metadata is refreshed. This is to handle controller change and
-                    // node disconnections.
-                    ArrayList<Call> pendingCallsToSend = new ArrayList<>();
-                    for (List<Call> pending : callsToSend.values()) {
-                        pendingCallsToSend.addAll(pending);
-                    }
-                    callsToSend.clear();
-                    chooseNodesForPendingCalls(now, pendingCallsToSend.iterator());
+                    reassignUnsentCalls(now, false);
                 }
 
                 @Override
