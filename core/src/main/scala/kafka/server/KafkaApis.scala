@@ -611,6 +611,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
+  // Traffic from both in-sync and out of sync replicas are accounted for in replication quota to ensure total replication
+  // traffic doesn't exceed quota.
   private def sizeOfThrottledPartitions(versionId: Short,
                                         fetchRequest: FetchRequest,
                                         mergedPartitionData: Seq[(TopicPartition, FetchResponse.PartitionData)],
