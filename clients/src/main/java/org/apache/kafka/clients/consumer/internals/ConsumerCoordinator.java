@@ -86,6 +86,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private MetadataSnapshot assignmentSnapshot;
     private long nextAutoCommitDeadline;
 
+    // hold onto request&future for commited offset requests to enable async calls.
+    private Set<TopicPartition> pendingCommittedOffsetRequest = null;
+    private RequestFuture<Map<TopicPartition, OffsetAndMetadata>> pendingCommittedOffsetResponse = null;
+
     /**
      * Initialize the coordination manager.
      */
@@ -276,13 +280,16 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
      */
     public boolean poll(final long timeoutMs) {
         final long startTime = time.milliseconds();
+        long remainingTime = timeoutMs;
+
         invokeCompletedOffsetCommitCallbacks();
 
         if (subscriptions.partitionsAutoAssigned()) {
             if (coordinatorUnknown()) {
-                if (!ensureCoordinatorReady(remainingTimeAtLeastZeroMillis(startTime, timeoutMs))) {
+                if (!ensureCoordinatorReady(remainingTime)) {
                     return false;
                 }
+                remainingTime = remainingTime > 0 ? remainingTimeAtLeastZeroMillis(startTime, timeoutMs) : 0;
             }
 
             if (needRejoin()) {
@@ -290,17 +297,18 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 // we need to ensure that the metadata is fresh before joining initially. This ensures
                 // that we have matched the pattern against the cluster's topics at least once before joining.
                 if (subscriptions.hasPatternSubscription()) {
-                    if (!client.ensureFreshMetadata(remainingTimeAtLeastZeroMillis(startTime, timeoutMs))) {
+                    if (!client.ensureFreshMetadata(remainingTime)) {
                         return false;
                     }
+                    remainingTime = remainingTime > 0 ? remainingTimeAtLeastZeroMillis(startTime, timeoutMs) : 0;
                 }
 
-                if (!ensureActiveGroup(remainingTimeAtLeastZeroMillis(startTime, timeoutMs))) {
+                if (!ensureActiveGroup(remainingTime)) {
                     return false;
                 }
             }
 
-            pollHeartbeat(time.milliseconds());
+            pollHeartbeat(startTime);
         } else {
             // For manually assigned partitions, if there are no ready nodes, await metadata.
             // If connections to all nodes fail, wakeups triggered while attempting to send fetch
@@ -310,14 +318,14 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             // When group management is used, metadata wait is already performed for this scenario as
             // coordinator is unknown, hence this check is not required.
             if (metadata.updateRequested() && !client.hasReadyNodes()) {
-                final boolean metadataUpdated = client.awaitMetadataUpdate(remainingTimeAtLeastZeroMillis(startTime, timeoutMs));
+                final boolean metadataUpdated = client.awaitMetadataUpdate(remainingTime);
                 if (!metadataUpdated && !client.hasReadyNodes()) {
                     return false;
                 }
             }
         }
 
-        maybeAutoCommitOffsetsAsync(time.milliseconds());
+        maybeAutoCommitOffsetsAsync(startTime);
         return true;
     }
 
@@ -474,9 +482,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         return true;
     }
 
-    private Set<TopicPartition> pendingCommittedOffsetRequest = null;
-    private RequestFuture<Map<TopicPartition, OffsetAndMetadata>> pendingCommittedOffsetResponse = null;
-
     /**
      * Fetch the current committed offsets from the coordinator for a set of partitions.
      *
@@ -492,10 +497,12 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
 
         final long startMs = time.milliseconds();
+        long remainingTime = timeoutMs;
         if (partitions.isEmpty()) return Collections.emptyMap();
 
         while (true) {
-            if (!ensureCoordinatorReady(remainingTimeAtLeastZeroMillis(startMs, timeoutMs))) return null;
+            if (!ensureCoordinatorReady(remainingTime)) return null;
+            remainingTime = remainingTime > 0 ? remainingTimeAtLeastZeroMillis(startMs, timeoutMs) : 0;
 
             // contact coordinator to fetch committed offsets
             final RequestFuture<Map<TopicPartition, OffsetAndMetadata>> future;
@@ -506,7 +513,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 pendingCommittedOffsetResponse = future = sendOffsetFetchRequest(partitions);
 
             }
-            client.poll(future, remainingTimeAtLeastZeroMillis(startMs, timeoutMs));
+            client.poll(future, remainingTime);
 
             if (future.isDone()) {
                 pendingCommittedOffsetRequest = null;
@@ -517,12 +524,14 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 } else if (!future.isRetriable()) {
                     throw future.exception();
                 } else {
-                    time.sleep(Math.min(retryBackoffMs, remainingTimeAtLeastZeroMillis(startMs, timeoutMs)));
+                    final long sleepTime = Math.min(retryBackoffMs, remainingTimeAtLeastZeroMillis(startMs, timeoutMs));
+                    time.sleep(sleepTime);
+                    // save a call to time.millis by assuming that we really do sleep for the desired time.
+                    remainingTime = Math.max(0, remainingTime - sleepTime);
                 }
             } else {
                 return null;
             }
-
         }
     }
 

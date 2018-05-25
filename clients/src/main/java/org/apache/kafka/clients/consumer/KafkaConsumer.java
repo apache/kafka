@@ -1156,20 +1156,21 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
                 client.maybeTriggerWakeup();
 
+                final long metadataEnd;
                 if (includeMetadataInTimeout) {
                     final long metadataStart = time.milliseconds();
                     if (!updateAssignmentMetadataIfNeeded(Duration.ofMillis(remainingMs))) {
                         return ConsumerRecords.empty();
                     }
-                    final long metadataEnd = time.milliseconds();
+                    metadataEnd = time.milliseconds();
                     remainingMs = Math.max(0L, remainingMs - (metadataEnd - metadataStart));
                 } else {
                     while (!updateAssignmentMetadataIfNeeded(Duration.ofMillis(Long.MAX_VALUE))) {
                         log.warn("Still waiting for metadata");
                     }
+                    metadataEnd = time.milliseconds();
                 }
 
-                final long fetchStart = time.milliseconds();
                 final Map<TopicPartition, List<ConsumerRecord<K, V>>> records = pollForFetches(remainingMs);
 
                 if (!records.isEmpty()) {
@@ -1186,7 +1187,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     return this.interceptors.onConsume(new ConsumerRecords<>(records));
                 }
                 final long fetchEnd = time.milliseconds();
-                remainingMs = Math.max(0L, remainingMs - (fetchEnd - fetchStart));
+                remainingMs = Math.max(0L, remainingMs - (fetchEnd - metadataEnd));
 
             } while (remainingMs > 0);
 
@@ -1203,16 +1204,16 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     @SuppressWarnings("BooleanMethodIsAlwaysInverted") // because false => timed out, in which case we return early or throw.
     boolean updateAssignmentMetadataIfNeeded(final Duration timeout) {
         final long startMs = time.milliseconds();
-        if (!coordinator.poll(remainingMsAtLeastZero(startMs, timeout))) {
+        if (!coordinator.poll(timeout.toMillis())) {
             return false;
         }
 
         return updateFetchPositions(remainingMsAtLeastZero(startMs, timeout));
     }
 
-    private Map<TopicPartition, List<ConsumerRecord<K, V>>> pollForFetches(final long upperBoundTimeoutMs) {
+    private Map<TopicPartition, List<ConsumerRecord<K, V>>> pollForFetches(final long timeoutMs) {
         final long startMs = time.milliseconds();
-        long pollTimeout = Math.min(coordinator.timeToNextPoll(startMs), upperBoundTimeoutMs);
+        long pollTimeout = Math.min(coordinator.timeToNextPoll(startMs), timeoutMs);
 
         // if data is available already, return it immediately
         final Map<TopicPartition, List<ConsumerRecord<K, V>>> records = fetcher.fetchedRecords();
