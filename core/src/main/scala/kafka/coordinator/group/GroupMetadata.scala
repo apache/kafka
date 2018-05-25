@@ -474,19 +474,10 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
         }.toMap
 
       case Some(protocol) =>
-        // there are active consumers in the group =>
-        // expire offsets of partitions the group is no longer subscribed to, assuming retention period
-        // has passed since their last commit
-        val subscribedTopics = allMemberMetadata.flatMap { memberMetadata =>
-          memberMetadata.supportedProtocols.flatMap { supportedProtocol =>
-            ConsumerProtocol.deserializeSubscription(ByteBuffer.wrap(supportedProtocol._2)).topics().asScala.toSet
-          }
-        }.toSet
-
-        offsets.filter { case (topicPartition, commitRecordMetadataAndOffset) =>
-          !subscribedTopics.contains(topicPartition.topic()) &&
-            !pendingOffsetCommits.contains(topicPartition) &&
-            currentTimestamp - commitRecordMetadataAndOffset.offsetAndMetadata.commitTimestamp >= offsetRetentionMs }.toMap
+        //TODO (KIP-211): expire offsets of partitions the group is no longer subscribed to, assuming retention period
+        //TODO: ... has passed since their last commit, while the group still has active consumers
+        //TODO: ... (for now all offsets expire together after the group becomes Empty by the first case statement above)
+        Map()
 
       case None =>
         // protocolType is None => standalone (simple) consumer, that uses Kafka for offset storage only
