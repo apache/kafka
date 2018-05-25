@@ -44,9 +44,6 @@ public class TransformationChain<R extends ConnectRecord<R>> {
 
             // execute the operation
             record = operationExecutor.execute(() -> transformation.apply(current), Stage.TRANSFORMATION, transformation.getClass());
-            if (operationExecutor.failed()) {
-                return null;
-            }
 
             if (record == null) break;
         }
