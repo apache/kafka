@@ -224,8 +224,17 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
     }
 
     private void putInternal(final Bytes key, final byte[] value) {
-        cache.put(cacheName, key, new LRUCacheEntry(value, true, context.offset(),
-              context.timestamp(), context.partition(), context.topic()));
+        cache.put(
+            cacheName,
+            key,
+            new LRUCacheEntry(
+                value,
+                context.headers(),
+                true,
+                context.offset(),
+                context.timestamp(),
+                context.partition(),
+                context.topic()));
     }
 
     @Override

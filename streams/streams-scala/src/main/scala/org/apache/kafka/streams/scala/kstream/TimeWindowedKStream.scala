@@ -44,9 +44,8 @@ class TimeWindowedKStream[K, V](val inner: TimeWindowedKStreamJ[K, V]) {
    * latest (rolling) aggregate for each key
    * @see `org.apache.kafka.streams.kstream.TimeWindowedKStream#aggregate`
    */
-  def aggregate[VR](initializer: () => VR,
-    aggregator: (K, V, VR) => VR): KTable[Windowed[K], VR] =
-    inner.aggregate(initializer.asInitializer, aggregator.asAggregator)
+  def aggregate[VR](initializer: => VR)(aggregator: (K, V, VR) => VR): KTable[Windowed[K], VR] =
+    inner.aggregate((() => initializer).asInitializer, aggregator.asAggregator)
 
   /**
    * Aggregate the values of records in this stream by the grouped key.
@@ -58,10 +57,11 @@ class TimeWindowedKStream[K, V](val inner: TimeWindowedKStreamJ[K, V]) {
    * latest (rolling) aggregate for each key
    * @see `org.apache.kafka.streams.kstream.TimeWindowedKStream#aggregate`
    */
-  def aggregate[VR](initializer: () => VR,
+  def aggregate[VR](initializer: => VR)(
     aggregator: (K, V, VR) => VR,
-    materialized: Materialized[K, VR, ByteArrayWindowStore]): KTable[Windowed[K], VR] =
-    inner.aggregate(initializer.asInitializer, aggregator.asAggregator, materialized)
+    materialized: Materialized[K, VR, ByteArrayWindowStore]
+  ): KTable[Windowed[K], VR] =
+    inner.aggregate((() => initializer).asInitializer, aggregator.asAggregator, materialized)
 
   /**
    * Count the number of records in this stream by the grouped key and the defined windows.

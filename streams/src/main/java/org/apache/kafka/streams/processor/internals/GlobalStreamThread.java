@@ -29,7 +29,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LockException;
-import org.apache.kafka.streams.errors.ShutdownException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -43,7 +42,6 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-import static org.apache.kafka.streams.processor.internals.ConsumerUtils.poll;
 import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.DEAD;
 import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.PENDING_SHUTDOWN;
 
@@ -106,10 +104,6 @@ public class GlobalStreamThread extends Thread {
 
         public boolean isRunning() {
             return equals(RUNNING);
-        }
-
-        public boolean isStarting() {
-            return equals(CREATED);
         }
 
         @Override
@@ -179,12 +173,6 @@ public class GlobalStreamThread extends Thread {
         }
     }
 
-    private boolean stillStarting() {
-        synchronized (stateLock) {
-            return state.isStarting();
-        }
-    }
-
     public GlobalStreamThread(final ProcessorTopology topology,
                               final StreamsConfig config,
                               final Consumer<byte[], byte[]> globalConsumer,
@@ -247,7 +235,7 @@ public class GlobalStreamThread extends Thread {
 
         void pollAndUpdate() {
             try {
-                final ConsumerRecords<byte[], byte[]> received = poll(globalConsumer, pollMs);
+                final ConsumerRecords<byte[], byte[]> received = globalConsumer.poll(pollMs);
                 for (final ConsumerRecord<byte[], byte[]> record : received) {
                     stateMaintainer.update(record);
                 }
@@ -278,19 +266,7 @@ public class GlobalStreamThread extends Thread {
 
     @Override
     public void run() {
-        final StateConsumer stateConsumer;
-        try {
-            stateConsumer = initialize();
-        } catch (final ShutdownException e) {
-            log.info("Shutting down from initialization");
-            // Almost certainly, we arrived here because the state is already PENDING_SHUTDOWN, but it's harmless to
-            // just make sure
-            setState(State.PENDING_SHUTDOWN);
-            setState(State.DEAD);
-            streamsMetrics.removeAllThreadLevelSensors();
-            log.info("Shutdown complete");
-            return;
-        }
+        final StateConsumer stateConsumer = initialize();
 
         if (stateConsumer == null) {
             // during initialization, the caller thread would wait for the state consumer
@@ -342,14 +318,7 @@ public class GlobalStreamThread extends Thread {
                 globalConsumer,
                 stateDirectory,
                 stateRestoreListener,
-                config,
-                new GlobalStateManagerImpl.IsRunning() {
-                    @Override
-                    public boolean check() {
-                        return stillStarting() || stillRunning();
-                    }
-                }
-            );
+                config);
 
             final GlobalProcessorContextImpl globalProcessorContext = new GlobalProcessorContextImpl(
                 config,
@@ -402,7 +371,6 @@ public class GlobalStreamThread extends Thread {
         // one could call shutdown() multiple times, so ignore subsequent calls
         // if already shutting down or dead
         setState(PENDING_SHUTDOWN);
-        globalConsumer.wakeup();
     }
 
     public Map<MetricName, Metric> consumerMetrics() {

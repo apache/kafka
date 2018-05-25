@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -196,6 +197,12 @@ public interface ProcessorContext {
      * @return the offset
      */
     long offset();
+
+    /**
+     * Returns the headers of the current input record
+     * @return the headers
+     */
+    Headers headers();
 
     /**
      * Returns the current timestamp.

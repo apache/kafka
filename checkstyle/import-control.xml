@@ -207,6 +207,8 @@
     <allow pkg="org.apache.kafka.clients"/>
     <allow pkg="org.apache.kafka.clients.producer" exact-match="true"/>
     <allow pkg="org.apache.kafka.clients.consumer" exact-match="true"/>
+    <!-- Temporary until EosTestDriver migrates to the Java AdminClient -->
+    <allow pkg="kafka.admin" exact-match="true"/>
 
     <allow pkg="org.apache.kafka.streams"/>
 

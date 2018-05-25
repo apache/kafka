@@ -18,6 +18,10 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
@@ -64,12 +68,16 @@ public class ProcessorTopologyTest {
     private static final String OUTPUT_TOPIC_2 = "output-topic-2";
     private static final String THROUGH_TOPIC_1 = "through-topic-1";
 
+    private static final Header HEADER = new RecordHeader("key", "value".getBytes());
+    private static final Headers HEADERS = new RecordHeaders(new Header[]{HEADER});
+
     private final TopologyWrapper topology = new TopologyWrapper();
     private final MockProcessorSupplier mockProcessorSupplier = new MockProcessorSupplier();
     private final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(STRING_SERIALIZER, STRING_SERIALIZER, 0L);
 
     private TopologyTestDriver driver;
     private final Properties props = new Properties();
+
 
     @Before
     public void setup() {
@@ -338,10 +346,33 @@ public class ProcessorTopologyTest {
         assertNextOutputRecord(OUTPUT_TOPIC_1, "key3", "value3", partition, 40L);
     }
 
+    @Test
+    public void shouldConsiderHeaders() {
+        final int partition = 10;
+        driver = new TopologyTestDriver(createSimpleTopology(partition), props);
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key1", "value1", HEADERS, 10L));
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key2", "value2", HEADERS, 20L));
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key3", "value3", HEADERS, 30L));
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key1", "value1", HEADERS, partition, 10L);
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key2", "value2", HEADERS, partition, 20L);
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key3", "value3", HEADERS, partition, 30L);
+    }
+
+    @Test
+    public void shouldAddHeaders() {
+        driver = new TopologyTestDriver(createAddHeaderTopology(), props);
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key1", "value1", 10L));
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key2", "value2", 20L));
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key3", "value3", 30L));
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key1", "value1", HEADERS, 10L);
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key2", "value2", HEADERS, 20L);
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key3", "value3", HEADERS, 30L);
+    }
+
     private void assertNextOutputRecord(final String topic,
                                         final String key,
                                         final String value) {
-        assertNextOutputRecord(topic, key, value, null, 0L);
+        assertNextOutputRecord(topic, key, value, (Integer) null, 0L);
     }
 
     private void assertNextOutputRecord(final String topic,
@@ -354,6 +385,23 @@ public class ProcessorTopologyTest {
     private void assertNextOutputRecord(final String topic,
                                         final String key,
                                         final String value,
+                                        final Headers headers,
+                                        final Long timestamp) {
+        assertNextOutputRecord(topic, key, value, headers, null, timestamp);
+    }
+
+    private void assertNextOutputRecord(final String topic,
+                                        final String key,
+                                        final String value,
+                                        final Integer partition,
+                                        final Long timestamp) {
+        assertNextOutputRecord(topic, key, value, new RecordHeaders(), partition, timestamp);
+    }
+
+    private void assertNextOutputRecord(final String topic,
+                                        final String key,
+                                        final String value,
+                                        final Headers headers,
                                         final Integer partition,
                                         final Long timestamp) {
         final ProducerRecord<String, String> record = driver.readOutput(topic, STRING_DESERIALIZER, STRING_DESERIALIZER);
@@ -362,6 +410,7 @@ public class ProcessorTopologyTest {
         assertEquals(value, record.value());
         assertEquals(partition, record.partition());
         assertEquals(timestamp, record.timestamp());
+        assertEquals(headers, record.headers());
     }
 
     private void assertNoOutputRecord(final String topic) {
@@ -458,6 +507,12 @@ public class ProcessorTopologyTest {
                 .addSink("sink-2", OUTPUT_TOPIC_2, constantPartitioner(partition), "processor-2");
     }
 
+    private Topology createAddHeaderTopology() {
+        return topology.addSource("source-1", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
+                .addProcessor("processor-1", define(new AddHeaderProcessor()), "source-1")
+                .addSink("sink-1", OUTPUT_TOPIC_1, "processor-1");
+    }
+
     /**
      * A processor that simply forwards all messages to all children.
      */
@@ -475,6 +530,14 @@ public class ProcessorTopologyTest {
         @Override
         public void process(final String key, final String value) {
             context().forward(key, value, To.all().withTimestamp(context().timestamp() + 10));
+        }
+    }
+
+    protected static class AddHeaderProcessor extends AbstractProcessor<String, String> {
+        @Override
+        public void process(final String key, final String value) {
+            context().headers().add(HEADER);
+            context().forward(key, value);
         }
     }
 

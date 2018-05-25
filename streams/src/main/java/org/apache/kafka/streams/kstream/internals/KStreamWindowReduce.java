@@ -141,5 +141,9 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
 
             return windowStore.fetch(key, window.start());
         }
+
+        @Override
+        public void close() {
+        }
     }
 }

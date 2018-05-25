@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.streams.processor.Processor;
 
 /**
@@ -47,4 +48,10 @@ public interface RecordContext {
      * @return The partition the record was received on
      */
     int partition();
+
+    /**
+     * @return The headers from the record received from Kafka
+     */
+    Headers headers();
+
 }

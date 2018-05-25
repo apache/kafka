@@ -17,13 +17,12 @@
 
 package kafka.integration
 
-import kafka.utils.{ZKGroupTopicDirs, Logging}
-import kafka.consumer.{ConsumerTimeoutException, ConsumerConfig, ConsumerConnector, Consumer}
+import kafka.utils.{Logging, ZKGroupTopicDirs}
+import kafka.consumer.{Consumer, ConsumerConfig, ConsumerConnector, ConsumerTimeoutException}
 import kafka.server._
 import kafka.utils.TestUtils
-import kafka.serializer._
-import kafka.producer.{Producer, KeyedMessage}
-
+import kafka.utils.TestUtils.createNewProducer
+import org.apache.kafka.clients.producer.ProducerRecord
 import org.junit.{After, Before, Test}
 import org.apache.log4j.{Level, Logger}
 import org.junit.Assert._
@@ -79,12 +78,10 @@ class AutoOffsetResetTest extends KafkaServerTestHarness with Logging {
   def resetAndConsume(numMessages: Int, resetTo: String, offset: Long): Int = {
     createTopic(topic, 1, 1)
 
-    val producer: Producer[String, Array[Byte]] = TestUtils.createProducer(
-      TestUtils.getBrokerListStrFromServers(servers),
-      keyEncoder = classOf[StringEncoder].getName)
+    val producer = createNewProducer(TestUtils.getBrokerListStrFromServers(servers), retries = 5)
 
-    for(_ <- 0 until numMessages)
-      producer.send(new KeyedMessage[String, Array[Byte]](topic, topic, "test".getBytes))
+    val futures = (0 until numMessages).map(_ => producer.send(new ProducerRecord(topic, topic.getBytes, "test".getBytes)))
+    futures.foreach(_.get)
 
     // update offset in ZooKeeper for consumer to jump "forward" in time
     val dirs = new ZKGroupTopicDirs(group, topic)

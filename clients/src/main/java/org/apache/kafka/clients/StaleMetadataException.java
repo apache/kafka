@@ -14,13 +14,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer.internals;
+package org.apache.kafka.clients;
 
 import org.apache.kafka.common.errors.InvalidMetadataException;
 
 /**
- * Thrown when metadata is old and needs to be refreshed.
+ * Thrown when current metadata cannot be used. This is often used as a way to trigger a metadata
+ * update before retrying another operation.
+ *
+ * Note: this is not a public API.
  */
 public class StaleMetadataException extends InvalidMetadataException {
     private static final long serialVersionUID = 1L;
+
+    public StaleMetadataException() {}
+
+    public StaleMetadataException(String message) {
+        super(message);
+    }
 }

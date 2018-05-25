@@ -22,7 +22,8 @@ import java.nio._
 import java.nio.channels._
 import java.util.concurrent.locks.{Lock, ReadWriteLock}
 import java.lang.management._
-import java.util.{Properties, UUID}
+import java.util.{Base64, Properties, UUID}
+
 import javax.management._
 
 import scala.collection._
@@ -30,7 +31,7 @@ import scala.collection.mutable
 import kafka.cluster.EndPoint
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.utils.{Base64, KafkaThread, Utils}
+import org.apache.kafka.common.utils.{KafkaThread, Utils}
 import org.slf4j.event.Level
 
 /**
@@ -316,7 +317,7 @@ object CoreUtils extends Logging {
 
   def generateUuidAsBase64(): String = {
     val uuid = UUID.randomUUID()
-    Base64.urlEncoderNoPadding.encodeToString(getBytesFromUuid(uuid))
+    Base64.getUrlEncoder.withoutPadding.encodeToString(getBytesFromUuid(uuid))
   }
 
   def getBytesFromUuid(uuid: UUID): Array[Byte] = {

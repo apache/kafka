@@ -96,8 +96,7 @@ public class InternalTopologyBuilder {
     // are connected to these state stores
     private final Map<String, Set<Pattern>> stateStoreNameToSourceRegex = new HashMap<>();
 
-    // map from state store names to this state store's corresponding changelog topic if possible,
-    // this is used in the extended KStreamBuilder.
+    // map from state store names to this state store's corresponding changelog topic if possible
     private final Map<String, String> storeToChangelogTopic = new HashMap<>();
 
     // all global topics
@@ -121,7 +120,7 @@ public class InternalTopologyBuilder {
 
     private Map<Integer, Set<String>> nodeGroups = null;
 
-    interface StateStoreFactory {
+    public interface StateStoreFactory {
         Set<String> users();
         boolean loggingEnabled();
         StateStore build();
@@ -1013,12 +1012,16 @@ public class InternalTopologyBuilder {
                     }
                 }
 
-                // if the node is connected to a state, add to the state topics
+                // if the node is connected to a state store whose changelog topics are not predefined, add to the changelog topics
                 for (final StateStoreFactory stateFactory : stateFactories.values()) {
                     if (stateFactory.loggingEnabled() && stateFactory.users().contains(node)) {
-                        final String name = ProcessorStateManager.storeChangelogTopic(applicationId, stateFactory.name());
-                        final InternalTopicConfig internalTopicConfig = createChangelogTopicConfig(stateFactory, name);
-                        stateChangelogTopics.put(name, internalTopicConfig);
+                        final String topicName = storeToChangelogTopic.containsKey(stateFactory.name()) ?
+                                storeToChangelogTopic.get(stateFactory.name()) :
+                                ProcessorStateManager.storeChangelogTopic(applicationId, stateFactory.name());
+                        if (!stateChangelogTopics.containsKey(topicName)) {
+                            final InternalTopicConfig internalTopicConfig = createChangelogTopicConfig(stateFactory, topicName);
+                            stateChangelogTopics.put(topicName, internalTopicConfig);
+                        }
                     }
                 }
             }
@@ -1795,5 +1798,9 @@ public class InternalTopologyBuilder {
 
     public synchronized Set<String> getSourceTopicNames() {
         return sourceTopicNames;
+    }
+
+    public synchronized Map<String, StateStoreFactory> getStateStores() {
+        return stateFactories;
     }
 }

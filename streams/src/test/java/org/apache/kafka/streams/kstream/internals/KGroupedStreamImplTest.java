@@ -22,7 +22,7 @@ import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.Consumed;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TopologyTestDriver;
@@ -531,7 +531,7 @@ public class KGroupedStreamImplTest {
         driver.pipeInput(recordFactory.create(TOPIC, "1", "D"));
         driver.pipeInput(recordFactory.create(TOPIC, "3", "E"));
         driver.pipeInput(recordFactory.create(TOPIC, "3", "F"));
-        driver.pipeInput(recordFactory.create(TOPIC, "3", null));
+        driver.pipeInput(recordFactory.create(TOPIC, "3", (String) null));
     }
 
     private void doCountWindowed(final List<KeyValue<Windowed<String>, Long>> results) {
