@@ -63,7 +63,9 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
     private final static int VERSION_ONE = 1;
     private final static int VERSION_TWO = 2;
     private final static int VERSION_THREE = 3;
-    public final static int EARLIEST_PROBEABLE_VERSION = VERSION_THREE;
+    private final static int EARLIEST_PROBEABLE_VERSION = VERSION_THREE;
+    protected int minUserMetadataVersion = UNKNOWN;
+    protected Set<Integer> supportedVersions = new HashSet<>();
 
     private Logger log;
     private String logPrefix;
@@ -344,7 +346,8 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         final Map<UUID, ClientMetadata> clientsMetadata = new HashMap<>();
         final Set<String> futureConsumers = new HashSet<>();
 
-        int minUserMetadataVersion = SubscriptionInfo.LATEST_SUPPORTED_VERSION;
+        minUserMetadataVersion = SubscriptionInfo.LATEST_SUPPORTED_VERSION;
+        supportedVersions.clear();
         int futureMetadataVersion = UNKNOWN;
         for (final Map.Entry<String, Subscription> entry : subscriptions.entrySet()) {
             final String consumerId = entry.getKey();
@@ -352,6 +355,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
 
             final SubscriptionInfo info = SubscriptionInfo.decode(subscription.userData());
             final int usedVersion = info.version();
+            supportedVersions.add(info.latestSupportedVersion());
             if (usedVersion > SubscriptionInfo.LATEST_SUPPORTED_VERSION) {
                 futureMetadataVersion = usedVersion;
                 futureConsumers.add(consumerId);
@@ -382,7 +386,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                 versionProbing = true;
             } else {
                 throw new IllegalStateException("Received a future (version probing) subscription (version: " + futureMetadataVersion
-                    + ") and an incompatible pre Kafka 1.2 subscription (version: " + minUserMetadataVersion + ") at the same time.");
+                    + ") and an incompatible pre Kafka 2.0 subscription (version: " + minUserMetadataVersion + ") at the same time.");
             }
         } else {
             versionProbing = false;
@@ -746,15 +750,25 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
 
         final AssignmentInfo info = AssignmentInfo.decode(assignment.userData());
         final int receivedAssignmentMetadataVersion = info.version();
+        final int supportedVersion = info.latestSupportedVersion();
 
         if (usedSubscriptionMetadataVersion > receivedAssignmentMetadataVersion
             && receivedAssignmentMetadataVersion >= EARLIEST_PROBEABLE_VERSION) {
 
-            log.info("Sent a version {} subscription and got version {} assignment back (successful version probing). " +
-                     "Downgrading subscription metadata to received version and trigger new rebalance.",
-                usedSubscriptionMetadataVersion,
-                receivedAssignmentMetadataVersion);
-            usedSubscriptionMetadataVersion = receivedAssignmentMetadataVersion;
+            if (info.version() == supportedVersion) {
+                log.info("Sent a version {} subscription and got version {} assignment back (successful version probing). " +
+                        "Downgrading subscription metadata to received version and trigger new rebalance.",
+                    usedSubscriptionMetadataVersion,
+                    receivedAssignmentMetadataVersion);
+                usedSubscriptionMetadataVersion = receivedAssignmentMetadataVersion;
+            } else {
+                log.info("Sent a version {} subscription and got version {} assignment back (successful version probing). " +
+                    "Setting subscription metadata to leaders supported version {} and trigger new rebalance.",
+                    usedSubscriptionMetadataVersion,
+                    receivedAssignmentMetadataVersion,
+                    supportedVersion);
+                usedSubscriptionMetadataVersion = supportedVersion;
+            }
             versionProbingFlag.set(true);
             return;
         }
@@ -777,13 +791,12 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
             case VERSION_THREE:
                 final int latestSupportedVersionGroupLeader = info.latestSupportedVersion();
                 if (latestSupportedVersionGroupLeader > usedSubscriptionMetadataVersion) {
-                    final int newSubscriptionMetadataVersion = Math.min(latestSupportedVersionGroupLeader, SubscriptionInfo.LATEST_SUPPORTED_VERSION);
                     log.info("Sent a version {} subscription and group leader's latest supported version is {}. " +
                         "Upgrading subscription metadata version to {} for next rebalance.",
                         usedSubscriptionMetadataVersion,
                         latestSupportedVersionGroupLeader,
-                        newSubscriptionMetadataVersion);
-                    usedSubscriptionMetadataVersion = newSubscriptionMetadataVersion;
+                        latestSupportedVersionGroupLeader);
+                    usedSubscriptionMetadataVersion = latestSupportedVersionGroupLeader;
                 }
                 processVersionThreeAssignment(info, partitions, activeTasks, topicToPartitionInfo);
                 partitionsByHost = info.partitionsByHost();

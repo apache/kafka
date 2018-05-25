@@ -159,7 +159,7 @@ public class SubscriptionInfo {
     protected void encodeTasks(final ByteBuffer buf,
                                final Collection<TaskId> taskIds) {
         buf.putInt(taskIds.size());
-        for (TaskId id : taskIds) {
+        for (final TaskId id : taskIds) {
             id.writeTo(buf);
         }
     }
@@ -236,6 +236,7 @@ public class SubscriptionInfo {
         data.rewind();
 
         final int usedVersion = data.getInt();
+        final int latestSupportedVersion;
         switch (usedVersion) {
             case 1:
                 subscriptionInfo = new SubscriptionInfo(usedVersion, UNKNOWN);
@@ -246,12 +247,13 @@ public class SubscriptionInfo {
                 decodeVersionTwoData(subscriptionInfo, data);
                 break;
             case 3:
-                final int latestSupportedVersion = data.getInt();
+                latestSupportedVersion = data.getInt();
                 subscriptionInfo = new SubscriptionInfo(usedVersion, latestSupportedVersion);
                 decodeVersionThreeData(subscriptionInfo, data);
                 break;
             default:
-                subscriptionInfo = new SubscriptionInfo(usedVersion, UNKNOWN);
+                latestSupportedVersion = data.getInt();
+                subscriptionInfo = new SubscriptionInfo(usedVersion, latestSupportedVersion);
                 log.info("Unable to decode subscription data: used version: {}; latest supported version: {}", usedVersion, LATEST_SUPPORTED_VERSION);
         }
 
@@ -293,7 +295,7 @@ public class SubscriptionInfo {
 
     private static void decodeUserEndPoint(final SubscriptionInfo subscriptionInfo,
                                            final ByteBuffer data) {
-        int bytesLength = data.getInt();
+        final int bytesLength = data.getInt();
         if (bytesLength != 0) {
             final byte[] bytes = new byte[bytesLength];
             data.get(bytes);

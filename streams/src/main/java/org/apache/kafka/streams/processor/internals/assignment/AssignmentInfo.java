@@ -20,7 +20,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.ByteBufferInputStream;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
 import org.apache.kafka.streams.state.HostInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,7 +46,6 @@ public class AssignmentInfo {
 
     private final int usedVersion;
     private final int latestSupportedVersion;
-    protected Integer overwriteLatestSupportedVersion = null;
     private List<TaskId> activeTasks;
     private Map<TaskId, Set<TopicPartition>> standbyTasks;
     private Map<HostInfo, Set<TopicPartition>> partitionsByHost;
@@ -67,9 +65,9 @@ public class AssignmentInfo {
 
     public AssignmentInfo() {
         this(LATEST_SUPPORTED_VERSION,
-            Collections.<TaskId>emptyList(),
-            Collections.<TaskId, Set<TopicPartition>>emptyMap(),
-            Collections.<HostInfo, Set<TopicPartition>>emptyMap());
+            Collections.emptyList(),
+            Collections.emptyMap(),
+            Collections.emptyMap());
     }
 
     public AssignmentInfo(final int version,
@@ -115,17 +113,6 @@ public class AssignmentInfo {
 
     public Map<HostInfo, Set<TopicPartition>> partitionsByHost() {
         return partitionsByHost;
-    }
-
-    public void downgradeLatestSupportedVersion(final int overwriteLatestSupportedVersion) {
-        if (overwriteLatestSupportedVersion < StreamsPartitionAssignor.EARLIEST_PROBEABLE_VERSION
-            || overwriteLatestSupportedVersion > SubscriptionInfo.LATEST_SUPPORTED_VERSION) {
-            throw new IllegalArgumentException(String.format(
-                "Downgrading metadata version to %d not possible. Must be in range [%d,%d]",
-                overwriteLatestSupportedVersion,
-                StreamsPartitionAssignor.EARLIEST_PROBEABLE_VERSION,
-                SubscriptionInfo.LATEST_SUPPORTED_VERSION));
-        }
     }
 
     /**
@@ -211,11 +198,7 @@ public class AssignmentInfo {
 
     private void encodeVersionThree(final DataOutputStream out) throws IOException {
         out.writeInt(3);
-        if (overwriteLatestSupportedVersion == null) {
-            out.writeInt(LATEST_SUPPORTED_VERSION);
-        } else {
-            out.writeInt(overwriteLatestSupportedVersion);
-        }
+        out.writeInt(LATEST_SUPPORTED_VERSION);
         encodeActiveAndStandbyTaskAssignment(out);
         encodePartitionsByHost(out);
     }

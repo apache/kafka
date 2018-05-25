@@ -24,6 +24,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
+import org.apache.kafka.common.utils.ByteBufferInputStream;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.KafkaStreams;
@@ -40,6 +41,7 @@ import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
 import org.apache.kafka.streams.state.HostInfo;
 
 import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.BufferUnderflowException;
@@ -143,20 +145,30 @@ public class StreamsUpgradeTest {
             try {
                 super.onAssignment(assignment);
                 return;
-            } catch (final IllegalStateException cannotProcessFutureVersion) {
+            } catch (final TaskAssignmentException cannotProcessFutureVersion) {
                 // continue
             }
 
-            final List<TopicPartition> partitions = new ArrayList<>(assignment.partitions());
-            Collections.sort(partitions, PARTITION_COMPARATOR);
+            final ByteBuffer data = assignment.userData();
+            data.rewind();
 
-            final AssignmentInfo info = AssignmentInfo.decode(assignment.userData());
-            final int receivedAssignmentMetadataVersion = info.version();
+            final int usedVersion;
+            try (final DataInputStream in = new DataInputStream(new ByteBufferInputStream(data))) {
+                usedVersion = in.readInt();
+            } catch (final IOException ex) {
+                throw new TaskAssignmentException("Failed to decode AssignmentInfo", ex);
+            }
 
-            if (receivedAssignmentMetadataVersion > AssignmentInfo.LATEST_SUPPORTED_VERSION + 1) {
-                throw new IllegalStateException("Unknown metadata version: " + receivedAssignmentMetadataVersion
+            if (usedVersion > AssignmentInfo.LATEST_SUPPORTED_VERSION + 1) {
+                throw new IllegalStateException("Unknown metadata version: " + usedVersion
                     + "; latest supported version: " + AssignmentInfo.LATEST_SUPPORTED_VERSION + 1);
             }
+
+            final AssignmentInfo info = AssignmentInfo.decode(
+                assignment.userData().putInt(0, AssignmentInfo.LATEST_SUPPORTED_VERSION));
+
+            final List<TopicPartition> partitions = new ArrayList<>(assignment.partitions());
+            Collections.sort(partitions, PARTITION_COMPARATOR);
 
             // version 1 field
             final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
@@ -177,15 +189,57 @@ public class StreamsUpgradeTest {
         @Override
         public Map<String, Assignment> assign(final Cluster metadata,
                                               final Map<String, Subscription> subscriptions) {
-            final Map<String, Assignment> assignment = super.assign(metadata, subscriptions);
-            final Map<String, Assignment> newAssignment = new HashMap<>();
+            Map<String, Assignment> assignment = null;
 
+            final Map<String, Subscription> downgradedSubscriptions = new HashMap<>();
+            for (final Subscription subscription : subscriptions.values()) {
+                final SubscriptionInfo info = SubscriptionInfo.decode(subscription.userData());
+                if (info.version() < SubscriptionInfo.LATEST_SUPPORTED_VERSION + 1) {
+                    assignment = super.assign(metadata, subscriptions);
+                    break;
+                }
+            }
+
+            boolean bumpUsedVersion = false;
+            final boolean bumpSupportedVersion;
+            if (assignment != null) {
+                bumpSupportedVersion = supportedVersions.size() == 1 && supportedVersions.iterator().next() == SubscriptionInfo.LATEST_SUPPORTED_VERSION + 1;
+            } else {
+                for (final Map.Entry<String, Subscription> entry : subscriptions.entrySet()) {
+                    final Subscription subscription = entry.getValue();
+
+                    final SubscriptionInfo info = SubscriptionInfo.decode(subscription.userData()
+                        .putInt(0, SubscriptionInfo.LATEST_SUPPORTED_VERSION)
+                        .putInt(4, SubscriptionInfo.LATEST_SUPPORTED_VERSION));
+
+                    downgradedSubscriptions.put(
+                        entry.getKey(),
+                        new Subscription(
+                            subscription.topics(),
+                            new SubscriptionInfo(
+                                info.processId(),
+                                info.prevTasks(),
+                                info.standbyTasks(),
+                                info.userEndPoint())
+                                .encode()));
+                }
+                assignment = super.assign(metadata, downgradedSubscriptions);
+                bumpUsedVersion = true;
+                bumpSupportedVersion = true;
+            }
+
+            final Map<String, Assignment> newAssignment = new HashMap<>();
             for (final Map.Entry<String, Assignment> entry : assignment.entrySet()) {
                 final Assignment singleAssignment = entry.getValue();
                 newAssignment.put(
                     entry.getKey(),
-                    new Assignment(singleAssignment.partitions(),
-                                   new FutureAssignmentInfo(singleAssignment.userData()).encode()));
+                    new Assignment(
+                        singleAssignment.partitions(),
+                        new FutureAssignmentInfo(
+                            bumpUsedVersion,
+                            bumpSupportedVersion,
+                            singleAssignment.userData())
+                            .encode()));
             }
 
             return newAssignment;
@@ -205,7 +259,11 @@ public class StreamsUpgradeTest {
 
         public ByteBuffer encode() {
             if (version() <= SubscriptionInfo.LATEST_SUPPORTED_VERSION) {
-                return super.encode();
+                final ByteBuffer buf = super.encode();
+                // super.encode() always encodes `LATEST_SUPPORTED_VERSION` as "latest supported version"
+                // need to update to future version
+                buf.putInt(4, latestSupportedVersion());
+                return buf;
             }
 
             final ByteBuffer buf = encodeFutureVersion();
@@ -231,9 +289,15 @@ public class StreamsUpgradeTest {
     }
 
     private static class FutureAssignmentInfo extends AssignmentInfo {
+        private final boolean bumpUsedVersion;
+        private final boolean bumpSupportedVersion;
         final ByteBuffer originalUserMetadata;
 
-        private FutureAssignmentInfo(final ByteBuffer bytes) {
+        private FutureAssignmentInfo(final boolean bumpUsedVersion,
+                                     final boolean bumpSupportedVersion,
+                                     final ByteBuffer bytes) {
+            this.bumpUsedVersion = bumpUsedVersion;
+            this.bumpSupportedVersion = bumpSupportedVersion;
             originalUserMetadata = bytes;
         }
 
@@ -244,12 +308,15 @@ public class StreamsUpgradeTest {
             originalUserMetadata.rewind();
 
             try (final DataOutputStream out = new DataOutputStream(baos)) {
-                out.writeInt(originalUserMetadata.getInt());
-                originalUserMetadata.getInt(); // discard original supported version
-                if (overwriteLatestSupportedVersion == null) {
+                if (bumpUsedVersion) {
+                    originalUserMetadata.getInt(); // discard original used version
                     out.writeInt(AssignmentInfo.LATEST_SUPPORTED_VERSION + 1);
                 } else {
-                    out.writeInt(overwriteLatestSupportedVersion);
+                    out.writeInt(originalUserMetadata.getInt());
+                }
+                if (bumpSupportedVersion) {
+                    originalUserMetadata.getInt(); // discard original supported version
+                    out.writeInt(AssignmentInfo.LATEST_SUPPORTED_VERSION + 1);
                 }
 
                 try {
