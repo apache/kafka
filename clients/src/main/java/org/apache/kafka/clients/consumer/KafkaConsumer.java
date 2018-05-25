@@ -1192,7 +1192,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 final long fetchEnd = time.milliseconds();
                 elapsedTime += fetchEnd - metadataEnd;
 
-            } while (elapsedTime > timeoutMs);
+            } while (elapsedTime < timeoutMs);
 
             return ConsumerRecords.empty();
         } finally {
