@@ -80,11 +80,13 @@ public class SubscriptionInfoTest {
     public void shouldAllowToDecodeFutureSupportedVersion() {
         final SubscriptionInfo info = SubscriptionInfo.decode(encodeFutureVersion());
         assertEquals(SubscriptionInfo.LATEST_SUPPORTED_VERSION + 1, info.version());
-        assertEquals(SubscriptionInfo.UNKNOWN, info.latestSupportedVersion());
+        assertEquals(SubscriptionInfo.LATEST_SUPPORTED_VERSION + 1, info.latestSupportedVersion());
     }
 
     private ByteBuffer encodeFutureVersion() {
-        final ByteBuffer buf = ByteBuffer.allocate(4 /* version */);
+        final ByteBuffer buf = ByteBuffer.allocate(4 /* used version */
+                                                   + 4 /* supported version */);
+        buf.putInt(SubscriptionInfo.LATEST_SUPPORTED_VERSION + 1);
         buf.putInt(SubscriptionInfo.LATEST_SUPPORTED_VERSION + 1);
         return buf;
     }

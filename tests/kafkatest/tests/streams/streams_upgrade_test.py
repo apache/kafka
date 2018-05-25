@@ -272,9 +272,7 @@ class StreamsUpgradeTest(Test):
 
         for p in self.processors:
             p.CLEAN_NODE_ENABLED = False
-            print "trigger bounce for " + str(p.node.account)
             current_generation = self.do_rolling_bounce(p, counter, current_generation)
-            print "bounce done"
             counter = counter + 1
 
         # shutdown
