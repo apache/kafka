@@ -31,6 +31,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.RetriableException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Measurable;
@@ -268,7 +269,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         // update the metadata and enforce a refresh to make sure the fetcher can start
         // fetching data in the next iteration
         this.metadata.setTopics(subscriptions.groupSubscription());
-        client.ensureFreshMetadata();
+        if (!client.ensureFreshMetadata(Long.MAX_VALUE)) throw new TimeoutException();
 
         // give the assignor a chance to update internal state based on the received assignment
         assignor.onAssignment(assignment);
@@ -393,7 +394,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         // update metadata (if needed) and keep track of the metadata used for assignment so that
         // we can check after rebalance completion whether anything has changed
-        client.ensureFreshMetadata();
+        if (!client.ensureFreshMetadata(Long.MAX_VALUE)) throw new TimeoutException();
 
         isLeader = true;
 
@@ -429,7 +430,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             allSubscribedTopics.addAll(assignedTopics);
             this.subscriptions.groupSubscribe(allSubscribedTopics);
             metadata.setTopics(this.subscriptions.groupSubscription());
-            client.ensureFreshMetadata();
+            if (!client.ensureFreshMetadata(Long.MAX_VALUE)) throw new TimeoutException();
         }
 
         assignmentSnapshot = metadataSnapshot;

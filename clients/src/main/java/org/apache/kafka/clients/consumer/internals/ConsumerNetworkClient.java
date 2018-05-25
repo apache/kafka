@@ -164,12 +164,6 @@ public class ConsumerNetworkClient implements Closeable {
      * Ensure our metadata is fresh (if an update is expected, this will block
      * until it has completed).
      */
-    public void ensureFreshMetadata() {
-        if (this.metadata.updateRequested() || this.metadata.timeToNextUpdate(time.milliseconds()) == 0) {
-            awaitMetadataUpdate();
-        }
-    }
-
     boolean ensureFreshMetadata(final long timeout) {
         if (timeout < 0) {
             return false;
