@@ -21,7 +21,7 @@ import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.Time;
 
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -34,7 +34,7 @@ public class LazyDownConversionRecords implements BaseRecords {
     private final byte toMagic;
     private final long firstOffset;
     private final ConvertedRecords firstConvertedBatch;
-    private final int minimumSize;
+    private final int sizeInBytes;
 
     /**
      * @param records Records to lazily down-convert
@@ -48,15 +48,17 @@ public class LazyDownConversionRecords implements BaseRecords {
         this.toMagic = toMagic;
         this.firstOffset = firstOffset;
 
-        // Consumers require at least one full batch of messages for every topic-partition, so down-convert the first
-        // batch so that we can factor in its size appropriately (for example, in the sizeInBytes method).
+        // Kafka consumers expect at least one full batch of messages for every topic-partition. To guarantee this, we
+        // need to make sure that we are able to accommodate one full batch of down-converted messages. The way we achieve
+        // this is by having sizeInBytes method factor in the size of the first down-converted batch and return at least
+        // its size.
         AbstractIterator<? extends RecordBatch> it = records.batchIterator();
         if (it.hasNext()) {
-            firstConvertedBatch = RecordsUtil.downConvert(Arrays.asList(it.peek()), toMagic, firstOffset, Time.SYSTEM);
-            minimumSize = firstConvertedBatch.records().sizeInBytes();
+            firstConvertedBatch = RecordsUtil.downConvert(Collections.singletonList(it.peek()), toMagic, firstOffset, Time.SYSTEM);
+            sizeInBytes = Math.max(records.sizeInBytes(), firstConvertedBatch.records().sizeInBytes());
         } else {
             firstConvertedBatch = null;
-            minimumSize = 0;
+            sizeInBytes = 0;
         }
     }
 
@@ -68,7 +70,7 @@ public class LazyDownConversionRecords implements BaseRecords {
      */
     @Override
     public int sizeInBytes() {
-        return Math.max(records.sizeInBytes(), minimumSize);
+        return sizeInBytes;
     }
 
     @Override
@@ -101,8 +103,8 @@ public class LazyDownConversionRecords implements BaseRecords {
         return result;
     }
 
-    public Iterator lazyDownConversionRecordsIterator(long maximumReadSize) {
-        return new Iterator(records, maximumReadSize);
+    public java.util.Iterator<ConvertedRecords> iterator(long maximumReadSize) {
+        return new Iterator(records, maximumReadSize, firstConvertedBatch);
     }
 
     /**
@@ -110,10 +112,10 @@ public class LazyDownConversionRecords implements BaseRecords {
      * it as memory-efficient as possible by not having to maintain all down-converted records in-memory. Maintains
      * a view into batches of down-converted records.
      */
-    public class Iterator extends AbstractIterator<ConvertedRecords> {
+    private class Iterator extends AbstractIterator<ConvertedRecords> {
         private final AbstractIterator<? extends RecordBatch> batchIterator;
         private final long maximumReadSize;
-        private boolean returnedFirstBatch;
+        private ConvertedRecords firstConvertedBatch;
 
         /**
          * @param recordsToDownConvert Records that require down-conversion
@@ -121,10 +123,13 @@ public class LazyDownConversionRecords implements BaseRecords {
          *                        {@link #makeNext()}. This is a soft limit as {@link #makeNext()} will always convert
          *                        and return at least one full message batch.
          */
-        private Iterator(Records recordsToDownConvert, long maximumReadSize) {
+        private Iterator(Records recordsToDownConvert, long maximumReadSize, ConvertedRecords firstConvertedBatch) {
             this.batchIterator = recordsToDownConvert.batchIterator();
             this.maximumReadSize = maximumReadSize;
-            this.returnedFirstBatch = false;
+            this.firstConvertedBatch = firstConvertedBatch;
+            // If we already have the first down-converted batch, advance the underlying records iterator to next batch
+            if (firstConvertedBatch != null)
+                this.batchIterator.next();
         }
 
         /**
@@ -133,13 +138,11 @@ public class LazyDownConversionRecords implements BaseRecords {
          */
         @Override
         protected ConvertedRecords makeNext() {
-            // If we already have the first down-converted batch, return that now and advance the underlying records
-            // iterator to the next batch.
-            if (!returnedFirstBatch && firstConvertedBatch != null) {
-                if (batchIterator.hasNext())
-                    batchIterator.next();
-                returnedFirstBatch = true;
-                return firstConvertedBatch;
+            // If we have cached the first down-converted batch, return that now
+            if (firstConvertedBatch != null) {
+                ConvertedRecords convertedBatch = firstConvertedBatch;
+                firstConvertedBatch = null;
+                return convertedBatch;
             }
 
             if (!batchIterator.hasNext())

@@ -29,13 +29,15 @@ public abstract class RecordsSend<T extends BaseRecords> implements Send {
 
     private final String destination;
     private final T records;
+    private final int maxBytesToWrite;
     private int remaining;
     private boolean pending = false;
 
-    protected RecordsSend(String destination, T records) {
+    protected RecordsSend(String destination, T records, int maxBytesToWrite) {
         this.destination = destination;
         this.records = records;
-        this.remaining = records.sizeInBytes();
+        this.maxBytesToWrite = maxBytesToWrite;
+        this.remaining = maxBytesToWrite;
     }
 
     @Override
@@ -53,7 +55,7 @@ public abstract class RecordsSend<T extends BaseRecords> implements Send {
         long written = 0;
 
         if (remaining > 0) {
-            written = writeRecordsTo(channel, size() - remaining, remaining);
+            written = writeTo(channel, size() - remaining, remaining);
             if (written < 0)
                 throw new EOFException("Wrote negative bytes to channel. This shouldn't happen.");
             remaining -= written;
@@ -68,7 +70,7 @@ public abstract class RecordsSend<T extends BaseRecords> implements Send {
 
     @Override
     public long size() {
-        return records.sizeInBytes();
+        return maxBytesToWrite;
     }
 
     protected T records() {
@@ -85,14 +87,14 @@ public abstract class RecordsSend<T extends BaseRecords> implements Send {
      *     int remaining = length;
      *
      *     while (remaining > 0)
-     *         remaining -= writeRecordsTo(channel, length - remaining, remaining);
+     *         remaining -= writeTo(channel, length - remaining, remaining);
      * </pre>
      * Also see {@link #writeTo} for example expected usage.
-     * @param channel
-     * @param previouslyWritten
-     * @param remaining
-     * @return
-     * @throws IOException
+     * @param channel The channel to write to
+     * @param previouslyWritten Bytes written in previous calls to {@link #writeTo(GatheringByteChannel, long, int)}; 0 if being called for the first time
+     * @param remaining Number of bytes remaining to be written
+     * @return The number of bytes actually written
+     * @throws IOException For any IO errors
      */
-    protected abstract long writeRecordsTo(GatheringByteChannel channel, long previouslyWritten, int remaining) throws IOException;
+    protected abstract long writeTo(GatheringByteChannel channel, long previouslyWritten, int remaining) throws IOException;
 }

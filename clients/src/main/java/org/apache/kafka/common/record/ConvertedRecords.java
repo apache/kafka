@@ -19,18 +19,18 @@ package org.apache.kafka.common.record;
 public class ConvertedRecords<T extends Records> {
 
     private final T records;
-    private final RecordsProcessingStats recordsProcessingStats;
+    private final RecordConversionStats recordConversionStats;
 
-    public ConvertedRecords(T records, RecordsProcessingStats recordsProcessingStats) {
+    public ConvertedRecords(T records, RecordConversionStats recordConversionStats) {
         this.records = records;
-        this.recordsProcessingStats = recordsProcessingStats;
+        this.recordConversionStats = recordConversionStats;
     }
 
     public T records() {
         return records;
     }
 
-    public RecordsProcessingStats recordsProcessingStats() {
-        return recordsProcessingStats;
+    public RecordConversionStats recordsProcessingStats() {
+        return recordConversionStats;
     }
 }

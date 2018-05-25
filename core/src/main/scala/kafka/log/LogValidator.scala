@@ -22,7 +22,7 @@ import kafka.common.LongRef
 import kafka.message.{CompressionCodec, NoCompressionCodec}
 import kafka.utils.Logging
 import org.apache.kafka.common.errors.{InvalidTimestampException, UnsupportedForMessageFormatException}
-import org.apache.kafka.common.record.{RecordsProcessingStats, _}
+import org.apache.kafka.common.record.{RecordConversionStats, _}
 import org.apache.kafka.common.utils.Time
 
 import scala.collection.mutable
@@ -155,7 +155,7 @@ private[kafka] object LogValidator extends Logging {
     val convertedRecords = builder.build()
 
     val info = builder.info
-    val recordsProcessingStats = new RecordsProcessingStats(builder.uncompressedBytesWritten,
+    val recordsProcessingStats = new RecordConversionStats(builder.uncompressedBytesWritten,
       builder.numRecords, time.nanoseconds - startNanos)
     ValidationAndOffsetAssignResult(
       validatedRecords = convertedRecords,
@@ -224,7 +224,7 @@ private[kafka] object LogValidator extends Logging {
       maxTimestamp = maxTimestamp,
       shallowOffsetOfMaxTimestamp = offsetOfMaxTimestamp,
       messageSizeMaybeChanged = false,
-      recordsProcessingStats = RecordsProcessingStats.EMPTY)
+      recordsProcessingStats = RecordConversionStats.EMPTY)
   }
 
   /**
@@ -315,7 +315,7 @@ private[kafka] object LogValidator extends Logging {
         if (toMagic >= RecordBatch.MAGIC_VALUE_V2)
           batch.setPartitionLeaderEpoch(partitionLeaderEpoch)
 
-        val recordsProcessingStats = new RecordsProcessingStats(uncompressedSizeInBytes, 0, -1)
+        val recordsProcessingStats = new RecordConversionStats(uncompressedSizeInBytes, 0, -1)
         ValidationAndOffsetAssignResult(validatedRecords = records,
           maxTimestamp = maxTimestamp,
           shallowOffsetOfMaxTimestamp = lastOffset,
@@ -358,7 +358,7 @@ private[kafka] object LogValidator extends Logging {
     // message format V0 or if the inner offsets are not consecutive. This is OK since the impact is the same: we have
     // to rebuild the records (including recompression if enabled).
     val conversionCount = builder.numRecords
-    val recordsProcessingStats = new RecordsProcessingStats(uncompresssedSizeInBytes + builder.uncompressedBytesWritten,
+    val recordsProcessingStats = new RecordConversionStats(uncompresssedSizeInBytes + builder.uncompressedBytesWritten,
       conversionCount, time.nanoseconds - startNanos)
 
     ValidationAndOffsetAssignResult(
@@ -397,6 +397,6 @@ private[kafka] object LogValidator extends Logging {
                                              maxTimestamp: Long,
                                              shallowOffsetOfMaxTimestamp: Long,
                                              messageSizeMaybeChanged: Boolean,
-                                             recordsProcessingStats: RecordsProcessingStats)
+                                             recordsProcessingStats: RecordConversionStats)
 
 }

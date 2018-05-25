@@ -24,35 +24,36 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.GatheringByteChannel;
+import java.util.Iterator;
 
 /**
  * Encapsulation for {@link RecordsSend} for {@link LazyDownConversionRecords}. Records are down-converted in batches and
- * on-demand when {@link #writeRecordsTo} method is called.
+ * on-demand when {@link #writeTo} method is called.
  */
 public final class LazyDownConversionRecordsSend extends RecordsSend<LazyDownConversionRecords> {
     private static final Logger log = LoggerFactory.getLogger(LazyDownConversionRecordsSend.class);
     private static final int MAX_READ_SIZE = 128 * 1024;
 
-    private RecordsProcessingStats processingStats = null;
-    private RecordsWriter convertedRecordsWriter = null;
-    private LazyDownConversionRecords.Iterator convertedRecordsIterator;
+    private RecordConversionStats processingStats = null;
+    private RecordsSend convertedRecordsWriter = null;
+    private Iterator<ConvertedRecords> convertedRecordsIterator;
 
     public LazyDownConversionRecordsSend(String destination, LazyDownConversionRecords records) {
-        super(destination, records);
+        super(destination, records, records.sizeInBytes());
     }
 
     private void resetState() {
         convertedRecordsWriter = null;
-        processingStats = new RecordsProcessingStats(0, 0, 0);
-        convertedRecordsIterator = records().lazyDownConversionRecordsIterator(MAX_READ_SIZE);
+        processingStats = new RecordConversionStats(0, 0, 0);
+        convertedRecordsIterator = records().iterator(MAX_READ_SIZE);
     }
 
     @Override
-    public long writeRecordsTo(GatheringByteChannel channel, long previouslyWritten, int remaining) throws IOException {
+    public long writeTo(GatheringByteChannel channel, long previouslyWritten, int remaining) throws IOException {
         if (previouslyWritten == 0)
             resetState();
 
-        if (convertedRecordsWriter == null || convertedRecordsWriter.remaining() == 0) {
+        if (convertedRecordsWriter == null || convertedRecordsWriter.completed()) {
             MemoryRecords convertedRecords;
 
             // Check if we have more chunks left to down-convert
@@ -61,7 +62,7 @@ public final class LazyDownConversionRecordsSend extends RecordsSend<LazyDownCon
                 ConvertedRecords<MemoryRecords> recordsAndStats = convertedRecordsIterator.next();
                 convertedRecords = recordsAndStats.records();
 
-                int sizeOfFirstConvertedBatch = convertedRecords.batchIterator().peek().sizeInBytes();
+                int sizeOfFirstConvertedBatch = convertedRecords.batchIterator().next().sizeInBytes();
                 if (previouslyWritten == 0 && sizeOfFirstConvertedBatch > size())
                     throw new EOFException("Unable to send first batch completely." +
                             " maximum_size: " + size() +
@@ -89,50 +90,16 @@ public final class LazyDownConversionRecordsSend extends RecordsSend<LazyDownCon
                 convertedRecords = MemoryRecords.readableRecords(fakeMessageBatch);
             }
 
-            convertedRecordsWriter = new RecordsWriter(convertedRecords);
+            convertedRecordsWriter = new DefaultRecordsSend(destination(), convertedRecords, Math.min(convertedRecords.sizeInBytes(), remaining));
         }
-        return convertedRecordsWriter.writeTo(channel, remaining);
+        return convertedRecordsWriter.writeTo(channel);
     }
 
-    public TopicPartitionRecordsStats recordsProcessingStats() {
-        return new TopicPartitionRecordsStats(topicPartition(), processingStats);
+    public TopicPartitionRecordConversionStats recordsProcessingStats() {
+        return new TopicPartitionRecordConversionStats(topicPartition(), processingStats);
     }
 
     private TopicPartition topicPartition() {
         return records().topicPartition();
-    }
-
-    /**
-     * Implementation for writing {@link Records} to a particular channel. Internally tracks the progress of writes.
-     */
-    private static class RecordsWriter {
-        private final Records records;
-        private int position;
-
-        RecordsWriter(Records records) {
-            if (records == null)
-                throw new IllegalArgumentException();
-            this.records = records;
-            position = 0;
-        }
-
-        private int position() {
-            return position;
-        }
-
-        public int remaining() {
-            return records.sizeInBytes() - position();
-        }
-
-        private void advancePosition(long numBytes) {
-            position += numBytes;
-        }
-
-        public long writeTo(GatheringByteChannel channel, int length) throws IOException {
-            int maxLength = Math.min(remaining(), length);
-            long written = records.writeTo(channel, position(), maxLength);
-            advancePosition(written);
-            return written;
-        }
     }
 }

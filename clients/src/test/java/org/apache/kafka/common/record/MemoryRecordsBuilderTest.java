@@ -678,7 +678,7 @@ public class MemoryRecordsBuilderTest {
         assertTrue("Memory usage too high: " + memUsed, iterations < 100);
     }
 
-    private void verifyRecordsProcessingStats(RecordsProcessingStats processingStats, int numRecords,
+    private void verifyRecordsProcessingStats(RecordConversionStats processingStats, int numRecords,
                                               int numRecordsConverted, long finalBytes, long preConvertedBytes) {
         assertNotNull("Records processing info is null", processingStats);
         assertEquals(numRecordsConverted, processingStats.numRecordsConverted());

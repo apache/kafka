@@ -105,8 +105,8 @@ public class LazyDownConversionRecordsTest {
             File outputFile = tempFile();
             FileChannel channel = new RandomAccessFile(outputFile, "rw").getChannel();
 
-            // Size of lazy records is always equal to the size of underlying records
-            assertEquals(lazyRecords.sizeInBytes(), inputRecords.sizeInBytes());
+            // Size of lazy records is at least as much as the size of underlying records
+            assertTrue(lazyRecords.sizeInBytes() >= inputRecords.sizeInBytes());
 
             int toWrite;
             int written = 0;
@@ -127,7 +127,7 @@ public class LazyDownConversionRecordsTest {
                     throw new IllegalArgumentException();
             }
             while (written < toWrite)
-                written += lazySend.writeRecordsTo(channel, written, toWrite - written);
+                written += lazySend.writeTo(channel, written, toWrite - written);
 
             FileRecords convertedRecords = FileRecords.open(outputFile, true, (int) channel.size(), false);
             ByteBuffer convertedRecordsBuffer = ByteBuffer.allocate(convertedRecords.sizeInBytes());

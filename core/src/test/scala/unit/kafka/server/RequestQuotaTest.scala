@@ -381,7 +381,7 @@ class RequestQuotaTest extends BaseRequestTest {
   private def responseThrottleTime(apiKey: ApiKeys, response: Struct): Int = {
     apiKey match {
       case ApiKeys.PRODUCE => new ProduceResponse(response).getThrottleTime
-      case ApiKeys.FETCH => new FetchResponse[Records](response).throttleTimeMs
+      case ApiKeys.FETCH => FetchResponse.parse(response).throttleTimeMs
       case ApiKeys.LIST_OFFSETS => new ListOffsetResponse(response).throttleTimeMs
       case ApiKeys.METADATA => new MetadataResponse(response).throttleTimeMs
       case ApiKeys.OFFSET_COMMIT => new OffsetCommitResponse(response).throttleTimeMs

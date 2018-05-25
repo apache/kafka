@@ -557,7 +557,7 @@ public abstract class Type {
         }
 
         @Override
-        public BaseRecords read(ByteBuffer buffer) {
+        public MemoryRecords read(ByteBuffer buffer) {
             ByteBuffer recordsBuffer = (ByteBuffer) NULLABLE_BYTES.read(buffer);
             return MemoryRecords.readableRecords(recordsBuffer);
         }

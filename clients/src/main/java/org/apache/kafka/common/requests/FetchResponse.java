@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.network.ByteBufferSend;
+import org.apache.kafka.common.network.MultiRecordsSend;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -26,6 +27,7 @@ import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.BaseRecords;
+import org.apache.kafka.common.record.MemoryRecords;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
@@ -301,8 +303,8 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
         this.sessionId = sessionId;
     }
 
-    public FetchResponse(Struct struct) {
-        LinkedHashMap<TopicPartition, PartitionData<T>> responseData = new LinkedHashMap<>();
+    public static FetchResponse<MemoryRecords> parse(Struct struct) {
+        LinkedHashMap<TopicPartition, PartitionData<MemoryRecords>> responseData = new LinkedHashMap<>();
         for (Object topicResponseObj : struct.getArray(RESPONSES_KEY_NAME)) {
             Struct topicResponse = (Struct) topicResponseObj;
             String topic = topicResponse.get(TOPIC_NAME);
@@ -319,7 +321,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
                 if (partitionResponseHeader.hasField(LOG_START_OFFSET_KEY_NAME))
                     logStartOffset = partitionResponseHeader.getLong(LOG_START_OFFSET_KEY_NAME);
 
-                T records = (T) partitionResponse.getRecords(RECORD_SET_KEY_NAME);
+                MemoryRecords records = (MemoryRecords) partitionResponse.getRecords(RECORD_SET_KEY_NAME);
 
                 List<AbortedTransaction> abortedTransactions = null;
                 if (partitionResponseHeader.hasField(ABORTED_TRANSACTIONS_KEY_NAME)) {
@@ -335,15 +337,13 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
                     }
                 }
 
-                PartitionData<T> partitionData = new PartitionData<>(error, highWatermark, lastStableOffset, logStartOffset,
-                        abortedTransactions, records);
+                PartitionData<MemoryRecords> partitionData = new PartitionData<>(error, highWatermark, lastStableOffset,
+                        logStartOffset, abortedTransactions, records);
                 responseData.put(new TopicPartition(topic, partition), partitionData);
             }
         }
-        this.responseData = responseData;
-        this.throttleTimeMs = struct.getOrElse(THROTTLE_TIME_MS, DEFAULT_THROTTLE_TIME);
-        this.error = Errors.forCode(struct.getOrElse(ERROR_CODE, (short) 0));
-        this.sessionId = struct.getOrElse(SESSION_ID, INVALID_SESSION_ID);
+        return new FetchResponse<>(Errors.forCode(struct.getOrElse(ERROR_CODE, (short) 0)), responseData,
+                struct.getOrElse(THROTTLE_TIME_MS, DEFAULT_THROTTLE_TIME), struct.getOrElse(SESSION_ID, INVALID_SESSION_ID));
     }
 
     @Override
@@ -392,8 +392,8 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
         return errorCounts;
     }
 
-    public static <T extends BaseRecords> FetchResponse<T> parse(ByteBuffer buffer, short version) {
-        return new FetchResponse<>(ApiKeys.FETCH.responseSchema(version).read(buffer));
+    public static FetchResponse<MemoryRecords> parse(ByteBuffer buffer, short version) {
+        return parse(ApiKeys.FETCH.responseSchema(version).read(buffer));
     }
 
     private static void addResponseData(Struct struct, int throttleTimeMs, String dest, Queue<Send> sends) {
@@ -450,7 +450,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
         buffer.rewind();
         sends.add(new ByteBufferSend(dest, buffer));
 
-        // finally the send for the record set itself'
+        // finally the send for the record set itself
         sends.add(records.toSend(dest));
     }
 

@@ -18,20 +18,20 @@ package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.TopicPartition;
 
-public class TopicPartitionRecordsStats {
+public class TopicPartitionRecordConversionStats {
     private final TopicPartition topicPartition;
-    private final RecordsProcessingStats recordsProcessingStats;
+    private final RecordConversionStats recordConversionStats;
 
-    public TopicPartitionRecordsStats(TopicPartition topicPartition, RecordsProcessingStats recordsProcessingStats) {
+    public TopicPartitionRecordConversionStats(TopicPartition topicPartition, RecordConversionStats recordConversionStats) {
         this.topicPartition = topicPartition;
-        this.recordsProcessingStats = recordsProcessingStats;
+        this.recordConversionStats = recordConversionStats;
     }
 
     public TopicPartition topicPartition() {
         return topicPartition;
     }
 
-    public RecordsProcessingStats recordsProcessingStats() {
-        return recordsProcessingStats;
+    public RecordConversionStats recordsProcessingStats() {
+        return recordConversionStats;
     }
 }

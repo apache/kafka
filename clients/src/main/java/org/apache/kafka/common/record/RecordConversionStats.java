@@ -16,21 +16,21 @@
  */
 package org.apache.kafka.common.record;
 
-public class RecordsProcessingStats {
+public class RecordConversionStats {
 
-    public static final RecordsProcessingStats EMPTY = new RecordsProcessingStats(0L, 0, -1);
+    public static final RecordConversionStats EMPTY = new RecordConversionStats(0L, 0, -1);
 
     private long temporaryMemoryBytes;
     private int numRecordsConverted;
     private long conversionTimeNanos;
 
-    public RecordsProcessingStats(long temporaryMemoryBytes, int numRecordsConverted, long conversionTimeNanos) {
+    public RecordConversionStats(long temporaryMemoryBytes, int numRecordsConverted, long conversionTimeNanos) {
         this.temporaryMemoryBytes = temporaryMemoryBytes;
         this.numRecordsConverted = numRecordsConverted;
         this.conversionTimeNanos = conversionTimeNanos;
     }
 
-    public void add(RecordsProcessingStats stats) {
+    public void add(RecordConversionStats stats) {
         temporaryMemoryBytes += stats.temporaryMemoryBytes;
         numRecordsConverted += stats.numRecordsConverted;
         conversionTimeNanos += stats.conversionTimeNanos;
@@ -60,7 +60,7 @@ public class RecordsProcessingStats {
 
     @Override
     public String toString() {
-        return String.format("RecordsProcessingStats(temporaryMemoryBytes=%d, numRecordsConverted=%d, conversionTimeNanos=%d)",
+        return String.format("RecordConversionStats(temporaryMemoryBytes=%d, numRecordsConverted=%d, conversionTimeNanos=%d)",
                 temporaryMemoryBytes, numRecordsConverted, conversionTimeNanos);
     }
 }

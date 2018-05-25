@@ -84,7 +84,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                 time: Time,
                 val tokenManager: DelegationTokenManager) extends Logging {
 
-  type FetchResponseStats = Map[TopicPartition, RecordsProcessingStats]
+  type FetchResponseStats = Map[TopicPartition, RecordConversionStats]
   this.logIdent = "[KafkaApi-%d] ".format(brokerId)
   val adminZkClient = new AdminZkClient(zkClient)
 
@@ -2207,7 +2207,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def updateRecordsProcessingStats(request: RequestChannel.Request, tp: TopicPartition,
-                                           processingStats: RecordsProcessingStats): Unit = {
+                                           processingStats: RecordConversionStats): Unit = {
     val conversionCount = processingStats.numRecordsConverted
     if (conversionCount > 0) {
       request.header.apiKey match {

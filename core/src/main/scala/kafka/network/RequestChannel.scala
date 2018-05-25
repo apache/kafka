@@ -29,7 +29,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.network.Send
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.RecordsProcessingStats
+import org.apache.kafka.common.record.RecordConversionStats
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{Sanitizer, Time}
@@ -242,7 +242,7 @@ object RequestChannel extends Logging {
   class SendResponse(request: Request,
                      val responseSend: Send,
                      val responseAsString: Option[String],
-                     val processingStatsCallback: Option[Map[TopicPartition, RecordsProcessingStats] => Unit]) extends Response(request) {
+                     val processingStatsCallback: Option[Map[TopicPartition, RecordConversionStats] => Unit]) extends Response(request) {
     override def toString: String =
       s"Response(request=$request, responseSend=$responseSend, responseAction=SendAction), responseAsString=$responseAsString"
   }
