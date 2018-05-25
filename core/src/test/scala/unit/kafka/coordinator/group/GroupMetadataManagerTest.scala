@@ -31,6 +31,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.{IsolationLevel, OffsetCommitRequest, OffsetFetchResponse}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
+import org.apache.kafka.common.utils.Time
 import org.easymock.{Capture, EasyMock, IAnswer}
 import org.junit.Assert.{assertEquals, assertFalse, assertNull, assertTrue}
 import org.junit.{Before, Test}
@@ -511,7 +512,7 @@ class GroupMetadataManagerTest {
     // group is owned but does not exist yet
     assertTrue(groupMetadataManager.groupNotExists(groupId))
 
-    val group = new GroupMetadata(groupId, initialState = Empty)
+    val group = new GroupMetadata(groupId, Empty, Time.SYSTEM)
     groupMetadataManager.addGroup(group)
 
     // group is owned but not Dead
@@ -734,9 +735,9 @@ class GroupMetadataManagerTest {
 
   @Test
   def testAddGroup() {
-    val group = new GroupMetadata("foo", initialState = Empty)
+    val group = new GroupMetadata("foo", Empty, Time.SYSTEM)
     assertEquals(group, groupMetadataManager.addGroup(group))
-    assertEquals(group, groupMetadataManager.addGroup(new GroupMetadata("foo", initialState = Empty)))
+    assertEquals(group, groupMetadataManager.addGroup(new GroupMetadata("foo", Empty, Time.SYSTEM)))
   }
 
   @Test
@@ -772,7 +773,7 @@ class GroupMetadataManagerTest {
 
   @Test
   def testStoreEmptySimpleGroup() {
-    val group = new GroupMetadata(groupId, initialState = Empty)
+    val group = new GroupMetadata(groupId, Empty, Time.SYSTEM)
     groupMetadataManager.addGroup(group)
 
     val capturedRecords = expectAppendMessage(Errors.NONE)
@@ -815,7 +816,7 @@ class GroupMetadataManagerTest {
   private def assertStoreGroupErrorMapping(appendError: Errors, expectedError: Errors) {
     EasyMock.reset(replicaManager)
 
-    val group = new GroupMetadata(groupId, initialState = Empty)
+    val group = new GroupMetadata(groupId, Empty, Time.SYSTEM)
     groupMetadataManager.addGroup(group)
 
     expectAppendMessage(appendError)
@@ -838,7 +839,7 @@ class GroupMetadataManagerTest {
     val clientId = "clientId"
     val clientHost = "localhost"
 
-    val group = new GroupMetadata(groupId, initialState = Empty)
+    val group = new GroupMetadata(groupId, Empty, Time.SYSTEM)
     groupMetadataManager.addGroup(group)
 
     val member = new MemberMetadata(memberId, groupId, clientId, clientHost, rebalanceTimeout, sessionTimeout,
@@ -869,7 +870,7 @@ class GroupMetadataManagerTest {
     val clientId = "clientId"
     val clientHost = "localhost"
 
-    val group = new GroupMetadata(groupId, initialState = Empty)
+    val group = new GroupMetadata(groupId, Empty, Time.SYSTEM)
 
     val member = new MemberMetadata(memberId, groupId, clientId, clientHost, rebalanceTimeout, sessionTimeout,
       protocolType, List(("protocol", Array[Byte]())))
@@ -899,7 +900,7 @@ class GroupMetadataManagerTest {
 
     groupMetadataManager.addPartitionOwnership(groupPartitionId)
 
-    val group = new GroupMetadata(groupId, initialState = Empty)
+    val group = new GroupMetadata(groupId, Empty, Time.SYSTEM)
     groupMetadataManager.addGroup(group)
 
     val offsets = immutable.Map(topicPartition -> OffsetAndMetadata(offset))
@@ -941,7 +942,7 @@ class GroupMetadataManagerTest {
 
     groupMetadataManager.addPartitionOwnership(groupPartitionId)
 
-    val group = new GroupMetadata(groupId, initialState = Empty)
+    val group = new GroupMetadata(groupId, Empty, Time.SYSTEM)
     groupMetadataManager.addGroup(group)
 
     val offsets = immutable.Map(topicPartition -> OffsetAndMetadata(offset))
@@ -981,7 +982,7 @@ class GroupMetadataManagerTest {
 
     groupMetadataManager.addPartitionOwnership(groupPartitionId)
 
-    val group = new GroupMetadata(groupId, initialState = Empty)
+    val group = new GroupMetadata(groupId, Empty, Time.SYSTEM)
     groupMetadataManager.addGroup(group)
 
     val offsets = immutable.Map(topicPartition -> OffsetAndMetadata(offset))
@@ -1020,7 +1021,7 @@ class GroupMetadataManagerTest {
 
     groupMetadataManager.addPartitionOwnership(groupPartitionId)
 
-    val group = new GroupMetadata(groupId, initialState = Empty)
+    val group = new GroupMetadata(groupId, Empty, Time.SYSTEM)
     groupMetadataManager.addGroup(group)
 
     val offsets = immutable.Map(topicPartition -> OffsetAndMetadata(offset))
@@ -1058,7 +1059,7 @@ class GroupMetadataManagerTest {
 
     groupMetadataManager.addPartitionOwnership(groupPartitionId)
 
-    val group = new GroupMetadata(groupId, initialState = Empty)
+    val group = new GroupMetadata(groupId, Empty, Time.SYSTEM)
     groupMetadataManager.addGroup(group)
 
     val offsets = immutable.Map(topicPartition -> OffsetAndMetadata(offset))
@@ -1100,7 +1101,7 @@ class GroupMetadataManagerTest {
 
     groupMetadataManager.addPartitionOwnership(groupPartitionId)
 
-    val group = new GroupMetadata(groupId, initialState = Empty)
+    val group = new GroupMetadata(groupId, Empty, Time.SYSTEM)
     groupMetadataManager.addGroup(group)
 
     val offsets = immutable.Map(topicPartition -> OffsetAndMetadata(offset))
@@ -1138,7 +1139,7 @@ class GroupMetadataManagerTest {
 
     groupMetadataManager.addPartitionOwnership(groupPartitionId)
 
-    val group = new GroupMetadata(groupId, initialState = Empty)
+    val group = new GroupMetadata(groupId, Empty, Time.SYSTEM)
     groupMetadataManager.addGroup(group)
 
     // expire the offset after 1 millisecond
@@ -1191,7 +1192,7 @@ class GroupMetadataManagerTest {
 
     groupMetadataManager.addPartitionOwnership(groupPartitionId)
 
-    val group = new GroupMetadata(groupId, initialState = Empty)
+    val group = new GroupMetadata(groupId, Empty, Time.SYSTEM)
     groupMetadataManager.addGroup(group)
     group.generationId = 5
 
@@ -1239,7 +1240,7 @@ class GroupMetadataManagerTest {
 
     groupMetadataManager.addPartitionOwnership(groupPartitionId)
 
-    val group = new GroupMetadata(groupId, initialState = Empty)
+    val group = new GroupMetadata(groupId, Empty, Time.SYSTEM)
     groupMetadataManager.addGroup(group)
     group.generationId = 5
 
@@ -1293,7 +1294,7 @@ class GroupMetadataManagerTest {
 
     groupMetadataManager.addPartitionOwnership(groupPartitionId)
 
-    val group = new GroupMetadata(groupId, initialState = Empty)
+    val group = new GroupMetadata(groupId, Empty, Time.SYSTEM)
     groupMetadataManager.addGroup(group)
 
     // expire the offset after 1 millisecond
@@ -1366,7 +1367,7 @@ class GroupMetadataManagerTest {
 
     groupMetadataManager.addPartitionOwnership(groupPartitionId)
 
-    val group = new GroupMetadata(groupId, initialState = Empty)
+    val group = new GroupMetadata(groupId, Empty, Time.SYSTEM)
     groupMetadataManager.addGroup(group)
 
     val subscription = new Subscription(List(topic).asJava)
@@ -1527,7 +1528,7 @@ class GroupMetadataManagerTest {
 
     groupMetadataManager.addPartitionOwnership(groupPartitionId)
 
-    val group = new GroupMetadata(groupId, initialState = Empty)
+    val group = new GroupMetadata(groupId, Empty, Time.SYSTEM)
     groupMetadataManager.addGroup(group)
 
     // expire the offset after 1 and 3 milliseconds (old clients) and after default retention (new clients)
@@ -1723,7 +1724,7 @@ class GroupMetadataManagerTest {
   def testMetrics() {
     groupMetadataManager.cleanupGroupMetadata()
     expectMetrics(groupMetadataManager, 0, 0, 0)
-    val group = new GroupMetadata("foo2", Stable)
+    val group = new GroupMetadata("foo2", Stable, Time.SYSTEM)
     groupMetadataManager.addGroup(group)
     expectMetrics(groupMetadataManager, 1, 0, 0)
     group.transitionTo(PreparingRebalance)

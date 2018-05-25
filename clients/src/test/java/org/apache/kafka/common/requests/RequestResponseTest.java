@@ -821,7 +821,6 @@ public class RequestResponseTest {
         return new OffsetCommitRequest.Builder("group1", commitData)
                 .setGenerationId(100)
                 .setMemberId("consumer1")
-                .setRetentionTime(version <= 3 ? 1000000 : OffsetCommitRequest.DEFAULT_RETENTION_TIME)
                 .build((short) version);
     }
 

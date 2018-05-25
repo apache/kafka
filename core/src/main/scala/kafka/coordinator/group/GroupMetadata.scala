@@ -123,7 +123,7 @@ private object GroupMetadata {
                 leaderId: String,
                 timestamp: Long,
                 members: Iterable[MemberMetadata]): GroupMetadata = {
-    val group = new GroupMetadata(groupId, initialState)
+    val group = new GroupMetadata(groupId, initialState, Time.SYSTEM)
     group.generationId = generationId
     group.protocolType = if (protocolType == null || protocolType.isEmpty) None else Some(protocolType)
     group.protocol = Option(protocol)
@@ -172,7 +172,7 @@ case class CommitRecordMetadataAndOffset(appendedBatchOffset: Option[Long], offs
  *  3. leader id
  */
 @nonthreadsafe
-private[group] class GroupMetadata(val groupId: String, initialState: GroupState, time: Time = Time.SYSTEM) extends Logging {
+private[group] class GroupMetadata(val groupId: String, initialState: GroupState, time: Time) extends Logging {
   private[group] val lock = new ReentrantLock
 
   private var state: GroupState = initialState
@@ -460,12 +460,6 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
             }
         }.toMap
 
-      case Some(protocol) =>
-        //TODO (KIP-211): expire offsets of partitions the group is no longer subscribed to, assuming retention period
-        //TODO: ... has passed since their last commit, while the group still has active consumers
-        //TODO: ... (for now all offsets expire together after the group becomes Empty by the first case statement above)
-        Map()
-
       case None =>
         // protocolType is None => standalone (simple) consumer, that uses Kafka for offset storage only
         // expire offsets that retention period has passed since their last commit
@@ -480,6 +474,9 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
                 currentTimestamp >= expireTimestamp
             }
         }.toMap
+
+      case _ =>
+        Map()
     }
 
     debug(s"Expired offsets from group '$groupId': ${expiredOffsets.keySet}")

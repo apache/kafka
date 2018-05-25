@@ -172,7 +172,6 @@ public class OffsetCommitRequest extends AbstractRequest {
         private final Map<TopicPartition, PartitionData> offsetData;
         private String memberId = DEFAULT_MEMBER_ID;
         private int generationId = DEFAULT_GENERATION_ID;
-        private long retentionTime = DEFAULT_RETENTION_TIME;
 
         public Builder(String groupId, Map<TopicPartition, PartitionData> offsetData) {
             super(ApiKeys.OFFSET_COMMIT);
@@ -190,11 +189,6 @@ public class OffsetCommitRequest extends AbstractRequest {
             return this;
         }
 
-        public Builder setRetentionTime(long retentionTime) {
-            this.retentionTime = retentionTime;
-            return this;
-        }
-
         @Override
         public OffsetCommitRequest build(short version) {
             switch (version) {
@@ -206,8 +200,7 @@ public class OffsetCommitRequest extends AbstractRequest {
                 case 3:
                 case 4:
                 case 5:
-                    long retentionTime = version == 1 || version == 5 ? DEFAULT_RETENTION_TIME : this.retentionTime;
-                    return new OffsetCommitRequest(groupId, generationId, memberId, retentionTime, offsetData, version);
+                    return new OffsetCommitRequest(groupId, generationId, memberId, DEFAULT_RETENTION_TIME, offsetData, version);
                 default:
                     throw new UnsupportedVersionException("Unsupported version " + version);
             }
@@ -220,7 +213,6 @@ public class OffsetCommitRequest extends AbstractRequest {
                 append(", groupId=").append(groupId).
                 append(", memberId=").append(memberId).
                 append(", generationId=").append(generationId).
-                append(", retentionTime=").append(retentionTime).
                 append(", offsetData=").append(offsetData).
                 append(")");
             return bld.toString();

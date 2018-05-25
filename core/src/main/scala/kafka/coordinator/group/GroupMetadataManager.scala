@@ -630,7 +630,7 @@ class GroupMetadataManager(brokerId: Int,
         // load groups which store offsets in kafka, but which have no active members and thus no group
         // metadata stored in the log
         (emptyGroupOffsets.keySet ++ pendingEmptyGroupOffsets.keySet).foreach { groupId =>
-          val group = new GroupMetadata(groupId, initialState = Empty)
+          val group = new GroupMetadata(groupId, Empty, Time.SYSTEM)
           val offsets = emptyGroupOffsets.getOrElse(groupId, Map.empty[TopicPartition, CommitRecordMetadataAndOffset])
           val pendingOffsets = pendingEmptyGroupOffsets.getOrElse(groupId, Map.empty[Long, mutable.Map[TopicPartition, CommitRecordMetadataAndOffset]])
           debug(s"Loaded group metadata $group with offsets $offsets and pending offsets $pendingOffsets")
@@ -660,7 +660,7 @@ class GroupMetadataManager(brokerId: Int,
         if (offsetAndMetadata.expireTimestamp.contains(OffsetCommitRequest.DEFAULT_TIMESTAMP))
           new OffsetAndMetadata(offsetAndMetadata.offsetMetadata,
             offsetAndMetadata.commitTimestamp,
-            expireTimestamp = Some(offsetAndMetadata.commitTimestamp + config.offsetsRetentionMs))
+            Some(offsetAndMetadata.commitTimestamp + config.offsetsRetentionMs))
         else
           offsetAndMetadata
       CommitRecordMetadataAndOffset(commitRecordOffset, updatedOffsetAndMetadata)
