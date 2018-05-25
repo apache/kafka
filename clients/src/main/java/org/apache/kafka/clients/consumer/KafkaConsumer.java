@@ -1166,7 +1166,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                         return ConsumerRecords.empty();
                     }
                     metadataEnd = time.milliseconds();
-                    elapsedTime += (metadataEnd - metadataStart);
+                    elapsedTime += metadataEnd - metadataStart;
                 } else {
                     while (!updateAssignmentMetadataIfNeeded(Long.MAX_VALUE)) {
                         log.warn("Still waiting for metadata");
@@ -1190,7 +1190,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     return this.interceptors.onConsume(new ConsumerRecords<>(records));
                 }
                 final long fetchEnd = time.milliseconds();
-                elapsedTime += (fetchEnd - metadataEnd);
+                elapsedTime += fetchEnd - metadataEnd;
 
             } while (elapsedTime > timeoutMs);
 

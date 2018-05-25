@@ -311,7 +311,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 if (!ensureCoordinatorReady(remainingTimeAtLeastZero(timeoutMs, elapsed))) {
                     return false;
                 }
-                elapsed = (time.milliseconds() - startTime);
+                elapsed = time.milliseconds() - startTime;
             }
 
             if (rejoinNeededOrPending()) {
@@ -322,7 +322,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     if (!client.ensureFreshMetadata(remainingTimeAtLeastZero(timeoutMs, elapsed))) {
                         return false;
                     }
-                    elapsed = (time.milliseconds() - startTime);
+                    elapsed = time.milliseconds() - startTime;
                 }
 
                 if (!ensureActiveGroup(remainingTimeAtLeastZero(timeoutMs, elapsed))) {
