@@ -325,9 +325,8 @@ public class DelegatingClassLoader extends URLClassLoader {
         return result;
     }
 
-    private <T> String versionFor(T pluginImpl) {
-        return pluginImpl instanceof Versioned ? ((Versioned) pluginImpl).version()
-                                               : "undefined";
+    private static <T>  String versionFor(T pluginImpl) {
+        return pluginImpl instanceof Versioned ? ((Versioned) pluginImpl).version() : "undefined";
     }
 
     @Override

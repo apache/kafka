@@ -320,23 +320,15 @@ public class Plugins {
 
     /**
      * If the given Class Names are available in the classloader, return a list of new configured
-     * instances.
-     * If the instances implement {@link Configurable}, they are configured with provided {@param
-     * config}
+     * instances. If the instances implement {@link Configurable}, they are configured with provided {@param config}
      *
-     * @param klassNames         the list of Class Names of plugins that
-     *                           needs to instantiated and configured
-     * @param config             the configuration containing the {@link org.apache.kafka.connect.runtime.Worker}'s configuration;
-     *                           may not be null
+     * @param klassNames         the list of class names of plugins that needs to instantiated and configured
+     * @param config             the configuration containing the {@link org.apache.kafka.connect.runtime.Worker}'s configuration; may not be {@code null}
      * @param pluginKlass        the type of the plugin class that is being instantiated
-     *
-     * @return the instantiated and configured list of  plugins of type <T>; EMPTY if
-     * the {@param klassNames} is NULL or EMPTY
+     * @return the instantiated and configured list of plugins of type <T>; empty list if the {@param klassNames} is {@code null} or empty
      * @throws ConnectException if the implementation class could not be found
      */
-    public <T> List<T> newPlugins(List<String> klassNames,
-                                  AbstractConfig config,
-                                  Class<T> pluginKlass) {
+    public <T> List<T> newPlugins(List<String> klassNames, AbstractConfig config, Class<T> pluginKlass) {
         List<T> plugins = new ArrayList<>();
         if (klassNames != null) {
             for (String klassName : klassNames) {
