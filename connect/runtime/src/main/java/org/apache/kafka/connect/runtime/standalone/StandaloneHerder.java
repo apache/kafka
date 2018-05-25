@@ -271,7 +271,7 @@ public class StandaloneHerder extends AbstractHerder {
     }
 
     @Override
-    public synchronized org.apache.kafka.connect.runtime.HerderRequest restartConnector(long delayMs, final String connName, final Callback<Void> cb) {
+    public synchronized HerderRequest restartConnector(long delayMs, final String connName, final Callback<Void> cb) {
         ScheduledFuture<?> future = requestExecutorService.schedule(new Runnable() {
             @Override
             public void run() {
