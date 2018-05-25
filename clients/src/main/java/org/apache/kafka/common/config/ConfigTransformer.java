@@ -28,6 +28,22 @@ import java.util.regex.Pattern;
 /**
  * This class wraps a set of {@link ConfigProvider} instances and uses them to perform
  * transformations.
+ *
+ * <p>The default variable pattern is of the form <code>${provider:[path:]key}</code>,
+ * where the <code>provider</code> corresponds to a {@link ConfigProvider} instance, as passed to
+ * {@link ConfigTransformer#ConfigTransformer(Map)}.  The pattern will extract a set
+ * of paths (which are optional) and keys and then pass them to {@link ConfigProvider#get(String, Set)} to obtain the
+ * values with which to replace the variables.
+ *
+ * <p>For example, if a Map consisting of an entry with a provider name "file" and provider instance
+ * {@link FileConfigProvider} is passed to the {@link ConfigTransformer#ConfigTransformer(Map)}, and a Properties
+ * file with contents
+ * <pre>
+ * fileKey=someValue
+ * </pre>
+ * resides at the path "/tmp/properties.txt", then when a configuration Map which has an entry with a key "someKey" and
+ * a value "${file:/tmp/properties.txt:fileKey}" is passed to the {@link #transform(Map)} method, then the transformed
+ * Map will have an entry with key "someKey" and a value "someValue".
  */
 public class ConfigTransformer {
     private static final Pattern DEFAULT_PATTERN = Pattern.compile("\\$\\{(.*?):((.*?):)?(.*?)\\}");
@@ -38,7 +54,7 @@ public class ConfigTransformer {
     /**
      * Creates a ConfigTransformer with the default pattern, of the form <code>${provider:[path:]key}</code>.
      *
-     * @param configProviders the set of {@link ConfigProvider} instances.
+     * @param configProviders a Map of provider names and {@link ConfigProvider} instances.
      */
     public ConfigTransformer(Map<String, ConfigProvider> configProviders) {
         this.configProviders = configProviders;

@@ -95,20 +95,6 @@ public class FileConfigProvider implements ConfigProvider {
         return new InputStreamReader(new FileInputStream(path), StandardCharsets.UTF_8);
     }
 
-    /**
-     * Not supported for the FileConfigProvider.
-     */
-    public void subscribe(String path, Set<String> keys, ConfigChangeCallback callback) {
-        throw new UnsupportedOperationException();
-    }
-
-    /**
-     * Not supported for the FileConfigProvider.
-     */
-    public void unsubscribe(String path, Set<String> keys) {
-        throw new UnsupportedOperationException();
-    }
-
     public void close() {
     }
 }

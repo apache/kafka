@@ -16,6 +16,6 @@
  */
 package org.apache.kafka.connect.runtime;
 
-public interface HerderRequestId {
+public interface HerderRequest {
     void cancel();
 }

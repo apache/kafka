@@ -38,7 +38,8 @@ public class ConfigTransformerResult {
     }
 
     /**
-     * Returns the data.
+     * Returns the transformed data, with variables replaced with corresponding values from the
+     * ConfigProvider instances if found.
      *
      * @return data a Map of key-value pairs
      */
@@ -47,7 +48,7 @@ public class ConfigTransformerResult {
     }
 
     /**
-     * Returns the TTL values (in milliseconds).
+     * Returns the TTL values (in milliseconds) returned from the ConfigProvider instances for a given set of paths.
      *
      * @return data a Map of path and TTL values
      */

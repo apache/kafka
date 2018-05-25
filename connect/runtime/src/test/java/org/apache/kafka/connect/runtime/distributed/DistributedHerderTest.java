@@ -820,10 +820,10 @@ public class DistributedHerderTest {
 
     @Test
     public void testRequestProcessingOrder() throws Exception {
-        final DistributedHerder.HerderRequest req1 = herder.addRequest(100, null, null);
-        final DistributedHerder.HerderRequest req2 = herder.addRequest(10, null, null);
-        final DistributedHerder.HerderRequest req3 = herder.addRequest(200, null, null);
-        final DistributedHerder.HerderRequest req4 = herder.addRequest(200, null, null);
+        final DistributedHerder.DistributedHerderRequest req1 = herder.addRequest(100, null, null);
+        final DistributedHerder.DistributedHerderRequest req2 = herder.addRequest(10, null, null);
+        final DistributedHerder.DistributedHerderRequest req3 = herder.addRequest(200, null, null);
+        final DistributedHerder.DistributedHerderRequest req4 = herder.addRequest(200, null, null);
 
         assertEquals(req2, herder.requests.pollFirst()); // lowest delay
         assertEquals(req1, herder.requests.pollFirst()); // next lowest delay

@@ -174,7 +174,9 @@ public class WorkerConfig extends AbstractConfig {
             + "/opt/connectors";
 
     public static final String CONFIG_PROVIDERS_CONFIG = "config.providers";
-    protected static final String CONFIG_PROVIDERS_DOC = "List of configuration providers.";
+    protected static final String CONFIG_PROVIDERS_DOC = "List of configuration providers. "
+            + "This is a comma-separated list of the fully-qualified names of the ConfigProvider implementations, "
+            + "in the order they will be created, configured, and used.";
 
     public static final String METRICS_SAMPLE_WINDOW_MS_CONFIG = CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG;
     public static final String METRICS_NUM_SAMPLES_CONFIG = CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG;

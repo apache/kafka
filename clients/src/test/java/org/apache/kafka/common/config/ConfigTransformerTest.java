@@ -29,6 +29,14 @@ import static org.junit.Assert.assertTrue;
 
 public class ConfigTransformerTest {
 
+    public static final String MY_KEY = "myKey";
+    public static final String TEST_INDIRECTION = "testIndirection";
+    public static final String TEST_KEY = "testKey";
+    public static final String TEST_KEY_WITH_TTL = "testKeyWithTTL";
+    public static final String TEST_PATH = "testPath";
+    public static final String TEST_RESULT = "testResult";
+    public static final String TEST_RESULT_WITH_TTL = "testResultWithTTL";
+
     private ConfigTransformer configTransformer;
 
     @Before
@@ -38,41 +46,41 @@ public class ConfigTransformerTest {
 
     @Test
     public void testReplaceVariable() throws Exception {
-        ConfigTransformerResult result = configTransformer.transform(Collections.singletonMap("myKey", "${test:testPath:testKey}"));
+        ConfigTransformerResult result = configTransformer.transform(Collections.singletonMap(MY_KEY, "${test:testPath:testKey}"));
         Map<String, String> data = result.data();
         Map<String, Long> ttls = result.ttls();
-        assertEquals("testResult", data.get("myKey"));
+        assertEquals(TEST_RESULT, data.get(MY_KEY));
         assertTrue(ttls.isEmpty());
     }
 
     @Test
     public void testReplaceVariableWithTTL() throws Exception {
-        ConfigTransformerResult result = configTransformer.transform(Collections.singletonMap("myKey", "${test:testPath:testKeyWithTTL}"));
+        ConfigTransformerResult result = configTransformer.transform(Collections.singletonMap(MY_KEY, "${test:testPath:testKeyWithTTL}"));
         Map<String, String> data = result.data();
         Map<String, Long> ttls = result.ttls();
-        assertEquals("testResultWithTTL", data.get("myKey"));
-        assertEquals(1L, ttls.get("testPath").longValue());
+        assertEquals(TEST_RESULT_WITH_TTL, data.get(MY_KEY));
+        assertEquals(1L, ttls.get(TEST_PATH).longValue());
     }
 
     @Test
     public void testReplaceMultipleVariablesInValue() throws Exception {
-        ConfigTransformerResult result = configTransformer.transform(Collections.singletonMap("myKey", "hello, ${test:testPath:testKey}; goodbye, ${test:testPath:testKeyWithTTL}!!!"));
+        ConfigTransformerResult result = configTransformer.transform(Collections.singletonMap(MY_KEY, "hello, ${test:testPath:testKey}; goodbye, ${test:testPath:testKeyWithTTL}!!!"));
         Map<String, String> data = result.data();
-        assertEquals("hello, testResult; goodbye, testResultWithTTL!!!", data.get("myKey"));
+        assertEquals("hello, testResult; goodbye, testResultWithTTL!!!", data.get(MY_KEY));
     }
 
     @Test
     public void testNoReplacement() throws Exception {
-        ConfigTransformerResult result = configTransformer.transform(Collections.singletonMap("myKey", "${test:testPath:missingKey}"));
+        ConfigTransformerResult result = configTransformer.transform(Collections.singletonMap(MY_KEY, "${test:testPath:missingKey}"));
         Map<String, String> data = result.data();
-        assertEquals("${test:testPath:missingKey}", data.get("myKey"));
+        assertEquals("${test:testPath:missingKey}", data.get(MY_KEY));
     }
 
     @Test
     public void testSingleLevelOfIndirection() throws Exception {
-        ConfigTransformerResult result = configTransformer.transform(Collections.singletonMap("myKey", "${test:testPath:testIndirection}"));
+        ConfigTransformerResult result = configTransformer.transform(Collections.singletonMap(MY_KEY, "${test:testPath:testIndirection}"));
         Map<String, String> data = result.data();
-        assertEquals("${test:testPath:testResult}", data.get("myKey"));
+        assertEquals("${test:testPath:testResult}", data.get(MY_KEY));
     }
 
     public static class TestConfigProvider implements ConfigProvider {
@@ -87,16 +95,16 @@ public class ConfigTransformerTest {
         public ConfigData get(String path, Set<String> keys) {
             Map<String, String> data = new HashMap<>();
             long ttl = Long.MAX_VALUE;
-            if (path.equals("testPath")) {
-                if (keys.contains("testKey")) {
-                    data.put("testKey", "testResult");
+            if (path.equals(TEST_PATH)) {
+                if (keys.contains(TEST_KEY)) {
+                    data.put(TEST_KEY, TEST_RESULT);
                 }
-                if (keys.contains("testKeyWithTTL")) {
-                    data.put("testKeyWithTTL", "testResultWithTTL");
+                if (keys.contains(TEST_KEY_WITH_TTL)) {
+                    data.put(TEST_KEY_WITH_TTL, TEST_RESULT_WITH_TTL);
                     ttl = 1L;
                 }
-                if (keys.contains("testIndirection")) {
-                    data.put("testIndirection", "${test:testPath:testResult}");
+                if (keys.contains(TEST_INDIRECTION)) {
+                    data.put(TEST_INDIRECTION, "${test:testPath:testResult}");
                 }
             }
             return new ConfigData(data, ttl);

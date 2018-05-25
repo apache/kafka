@@ -31,7 +31,7 @@ import java.util.concurrent.ConcurrentMap;
 public class WorkerConfigTransformer {
     private final Worker worker;
     private final ConfigTransformer configTransformer;
-    private final ConcurrentMap<String, Map<String, HerderRequestId>> requests = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, Map<String, HerderRequest>> requests = new ConcurrentHashMap<>();
 
     public WorkerConfigTransformer(Worker worker, Map<String, ConfigProvider> configProviders) {
         this.worker = worker;
@@ -52,20 +52,19 @@ public class WorkerConfigTransformer {
 
     private void scheduleReload(String connectorName, String path, long ttl) {
         Herder herder = worker.herder();
-        if (herder.getConnectorConfigReloadAction(connectorName)
-                .equals(ConnectorConfig.CONFIG_RELOAD_ACTION_RESTART)) {
-            Map<String, HerderRequestId> connectorRequests = requests.get(connectorName);
+        if (herder.getConnectorConfigReloadAction(connectorName) == Herder.ConfigReloadAction.RESTART) {
+            Map<String, HerderRequest> connectorRequests = requests.get(connectorName);
             if (connectorRequests == null) {
                 connectorRequests = new ConcurrentHashMap<>();
                 requests.put(connectorName, connectorRequests);
             } else {
-                HerderRequestId previousRequest = connectorRequests.get(path);
+                HerderRequest previousRequest = connectorRequests.get(path);
                 if (previousRequest != null) {
                     // Delete previous request for ttl which is now stale
                     previousRequest.cancel();
                 }
             }
-            HerderRequestId request = herder.restartConnector(ttl, connectorName, null);
+            HerderRequest request = herder.restartConnector(ttl, connectorName, null);
             connectorRequests.put(path, request);
         }
     }

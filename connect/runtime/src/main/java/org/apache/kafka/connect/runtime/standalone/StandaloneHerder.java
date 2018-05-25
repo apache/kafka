@@ -22,7 +22,7 @@ import org.apache.kafka.connect.errors.NotFoundException;
 import org.apache.kafka.connect.runtime.AbstractHerder;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.HerderConnectorContext;
-import org.apache.kafka.connect.runtime.HerderRequestId;
+import org.apache.kafka.connect.runtime.HerderRequest;
 import org.apache.kafka.connect.runtime.SinkConnectorConfig;
 import org.apache.kafka.connect.runtime.SourceConnectorConfig;
 import org.apache.kafka.connect.runtime.TargetState;
@@ -252,8 +252,9 @@ public class StandaloneHerder extends AbstractHerder {
     }
 
     @Override
-    public String getConnectorConfigReloadAction(final String connName) {
-        return configState.connectorConfig(connName).get(ConnectorConfig.CONFIG_RELOAD_ACTION_CONFIG);
+    public ConfigReloadAction getConnectorConfigReloadAction(final String connName) {
+        return ConfigReloadAction.valueOf(
+                configState.connectorConfig(connName).get(ConnectorConfig.CONFIG_RELOAD_ACTION_CONFIG));
     }
 
     @Override
@@ -270,7 +271,7 @@ public class StandaloneHerder extends AbstractHerder {
     }
 
     @Override
-    public synchronized HerderRequestId restartConnector(long delayMs, final String connName, final Callback<Void> cb) {
+    public synchronized org.apache.kafka.connect.runtime.HerderRequest restartConnector(long delayMs, final String connName, final Callback<Void> cb) {
         ScheduledFuture<?> future = requestExecutorService.schedule(new Runnable() {
             @Override
             public void run() {
@@ -278,7 +279,7 @@ public class StandaloneHerder extends AbstractHerder {
             }
         }, delayMs, TimeUnit.MILLISECONDS);
 
-        return new HerderRequest(requestSeqNum.incrementAndGet(), future);
+        return new StandaloneHerderRequest(requestSeqNum.incrementAndGet(), future);
     }
 
     private boolean startConnector(Map<String, String> connectorProps) {
@@ -376,11 +377,11 @@ public class StandaloneHerder extends AbstractHerder {
         }
     }
 
-    static class HerderRequest implements HerderRequestId {
+    static class StandaloneHerderRequest implements HerderRequest {
         private final long seq;
         private final ScheduledFuture<?> future;
 
-        public HerderRequest(long seq, ScheduledFuture<?> future) {
+        public StandaloneHerderRequest(long seq, ScheduledFuture<?> future) {
             this.seq = seq;
             this.future = future;
         }
@@ -393,9 +394,9 @@ public class StandaloneHerder extends AbstractHerder {
         @Override
         public boolean equals(Object o) {
             if (this == o) return true;
-            if (!(o instanceof HerderRequest))
+            if (!(o instanceof StandaloneHerderRequest))
                 return false;
-            HerderRequest other = (HerderRequest) o;
+            StandaloneHerderRequest other = (StandaloneHerderRequest) o;
             return seq == other.seq;
         }
 
