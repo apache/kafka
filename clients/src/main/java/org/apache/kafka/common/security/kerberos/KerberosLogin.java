@@ -165,7 +165,7 @@ public class KerberosLogin extends AbstractLogin {
                         // We should not allow the ticket to expire, but we should take into consideration
                         // minTimeBeforeRelogin. Will not sleep less than minTimeBeforeRelogin, unless doing so
                         // would cause ticket expiration.
-                        if ((nextRefresh > expiry) || (now + minTimeBeforeRelogin > expiry)) {
+                        if ((nextRefresh > expiry) || (expiry - (now + minTimeBeforeRelogin) < 0)) {
                             // expiry is before next scheduled refresh).
                             log.info("[Principal={}]: Refreshing now because expiry is before next scheduled refresh time.", principal);
                             nextRefresh = now;
