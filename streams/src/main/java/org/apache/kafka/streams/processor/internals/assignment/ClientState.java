@@ -57,8 +57,14 @@ public class ClientState {
     }
 
     public ClientState copy() {
-        return new ClientState(new HashSet<>(activeTasks), new HashSet<>(standbyTasks), new HashSet<>(assignedTasks),
-                new HashSet<>(prevActiveTasks), new HashSet<>(prevStandbyTasks),new HashSet<>(prevAssignedTasks), capacity);
+        return new ClientState(
+            new HashSet<>(activeTasks),
+            new HashSet<>(standbyTasks),
+            new HashSet<>(assignedTasks),
+            new HashSet<>(prevActiveTasks),
+            new HashSet<>(prevStandbyTasks),
+            new HashSet<>(prevAssignedTasks),
+            capacity);
     }
 
     public void assign(final TaskId taskId, final boolean active) {
