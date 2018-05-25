@@ -240,9 +240,8 @@ fi
 
 # version option
 for args in "$@" ; do
-  if [ "$args" == "--version" ]; then
+  if [ "$args" = "--version" ]; then
     exec $JAVA $KAFKA_HEAP_OPTS $KAFKA_JVM_PERFORMANCE_OPTS $KAFKA_GC_LOG_OPTS $KAFKA_JMX_OPTS $KAFKA_LOG4J_OPTS -cp $CLASSPATH $KAFKA_OPTS "kafka.utils.VersionInfo"
-    exit $?
   fi
 done
 
