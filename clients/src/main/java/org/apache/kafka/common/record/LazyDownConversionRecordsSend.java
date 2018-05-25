@@ -34,7 +34,7 @@ public final class LazyDownConversionRecordsSend extends RecordsSend<LazyDownCon
     private static final int MAX_READ_SIZE = 128 * 1024;
 
     private RecordsProcessingStats processingStats = null;
-    private DefaultRecordsSend convertedRecordsWriter = null;
+    private RecordsWriter convertedRecordsWriter = null;
     private LazyDownConversionRecords.Iterator convertedRecordsIterator;
 
     public LazyDownConversionRecordsSend(String destination, LazyDownConversionRecords records) {
@@ -52,7 +52,7 @@ public final class LazyDownConversionRecordsSend extends RecordsSend<LazyDownCon
         if (previouslyWritten == 0)
             resetState();
 
-        if (convertedRecordsWriter == null || convertedRecordsWriter.completed()) {
+        if (convertedRecordsWriter == null || convertedRecordsWriter.remaining() == 0) {
             MemoryRecords convertedRecords;
 
             // Check if we have more chunks left to down-convert
@@ -89,9 +89,9 @@ public final class LazyDownConversionRecordsSend extends RecordsSend<LazyDownCon
                 convertedRecords = MemoryRecords.readableRecords(fakeMessageBatch);
             }
 
-            convertedRecordsWriter = new DefaultRecordsSend(destination(), convertedRecords);
+            convertedRecordsWriter = new RecordsWriter(convertedRecords);
         }
-        return convertedRecordsWriter.writeTo(channel);
+        return convertedRecordsWriter.writeTo(channel, remaining);
     }
 
     public TopicPartitionRecordsStats recordsProcessingStats() {
@@ -100,5 +100,39 @@ public final class LazyDownConversionRecordsSend extends RecordsSend<LazyDownCon
 
     private TopicPartition topicPartition() {
         return records().topicPartition();
+    }
+
+    /**
+     * Implementation for writing {@link Records} to a particular channel. Internally tracks the progress of writes.
+     */
+    private static class RecordsWriter {
+        private final Records records;
+        private int position;
+
+        RecordsWriter(Records records) {
+            if (records == null)
+                throw new IllegalArgumentException();
+            this.records = records;
+            position = 0;
+        }
+
+        private int position() {
+            return position;
+        }
+
+        public int remaining() {
+            return records.sizeInBytes() - position();
+        }
+
+        private void advancePosition(long numBytes) {
+            position += numBytes;
+        }
+
+        public long writeTo(GatheringByteChannel channel, int length) throws IOException {
+            int maxLength = Math.min(remaining(), length);
+            long written = records.writeTo(channel, position(), maxLength);
+            advancePosition(written);
+            return written;
+        }
     }
 }
