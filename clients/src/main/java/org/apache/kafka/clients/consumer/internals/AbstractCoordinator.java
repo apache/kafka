@@ -207,11 +207,11 @@ public abstract class AbstractCoordinator implements Closeable {
      */
     protected synchronized boolean ensureCoordinatorReady(final long timeoutMs) {
         final long startTimeMs = time.milliseconds();
-        long remainingTime = timeoutMs;
+        long elapsedTime = 0L;
 
         while (coordinatorUnknown()) {
             final RequestFuture<Void> future = lookupCoordinator();
-            client.poll(future, remainingTime);
+            client.poll(future, remainingTimeAtLeastZero(timeoutMs, elapsedTime));
             if (!future.isDone()) {
                 // ran out of time
                 break;
@@ -219,22 +219,22 @@ public abstract class AbstractCoordinator implements Closeable {
 
             if (future.failed()) {
                 if (future.isRetriable()) {
-                    remainingTime = remainingTime > 0 ? remainingTimeMsAtLeastZero(startTimeMs, timeoutMs) : 0;
+                    elapsedTime = time.milliseconds() - startTimeMs;
 
-                    if (remainingTime <= 0) break;
+                    if (elapsedTime >= timeoutMs) break;
 
                     log.debug("Coordinator discovery failed, refreshing metadata");
-                    client.awaitMetadataUpdate(remainingTime);
-                    remainingTime = remainingTimeMsAtLeastZero(startTimeMs, timeoutMs);
+                    client.awaitMetadataUpdate(remainingTimeAtLeastZero(timeoutMs, elapsedTime));
+                    elapsedTime = time.milliseconds() - startTimeMs;
                 } else
                     throw future.exception();
             } else if (coordinator != null && client.isUnavailable(coordinator)) {
                 // we found the coordinator, but the connection has failed, so mark
                 // it dead and backoff before retrying discovery
                 markCoordinatorUnknown();
-                final long sleepTime = Math.min(retryBackoffMs, remainingTime);
+                final long sleepTime = Math.min(retryBackoffMs, remainingTimeAtLeastZero(timeoutMs, elapsedTime));
                 time.sleep(sleepTime);
-                remainingTime = Math.max(0, remainingTime - sleepTime);
+                elapsedTime += sleepTime;
             }
         }
 
@@ -325,8 +325,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
         startHeartbeatThreadIfNeeded();
 
-        final long remainingTimeoutMs = timeoutMs - (time.milliseconds() - startTime);
-        return joinGroupIfNeeded(remainingTimeoutMs);
+        return joinGroupIfNeeded(remainingTimeAtLeastZero(timeoutMs, time.milliseconds() - startTime));
     }
 
     private synchronized void startHeartbeatThreadIfNeeded() {
@@ -368,13 +367,13 @@ public abstract class AbstractCoordinator implements Closeable {
      */
     boolean joinGroupIfNeeded(final long timeoutMs) {
         final long startTime = time.milliseconds();
-        long remainingTime = timeoutMs;
+        long elapsedTime = 0L;
 
         while (rejoinNeededOrPending()) {
-            if (!ensureCoordinatorReady(remainingTime)) {
+            if (!ensureCoordinatorReady(remainingTimeAtLeastZero(timeoutMs, elapsedTime))) {
                 return false;
             }
-            remainingTime = remainingTime > 0 ? remainingTimeMsAtLeastZero(startTime, timeoutMs) : 0;
+            elapsedTime = time.milliseconds() - startTime;
 
             // call onJoinPrepare if needed. We set a flag to make sure that we do not call it a second
             // time if the client is woken up before a pending rebalance completes. This must be called
@@ -387,7 +386,7 @@ public abstract class AbstractCoordinator implements Closeable {
             }
 
             final RequestFuture<ByteBuffer> future = initiateJoinGroup();
-            client.poll(future, remainingTime);
+            client.poll(future, remainingTimeAtLeastZero(timeoutMs, elapsedTime));
             if (!future.isDone()) {
                 // we ran out of time
                 return false;
@@ -413,10 +412,14 @@ public abstract class AbstractCoordinator implements Closeable {
             }
 
             if (rejoinNeededOrPending()) {
-                remainingTime = remainingTime > 0 ? remainingTimeMsAtLeastZero(startTime, timeoutMs) : 0;
+                elapsedTime = time.milliseconds() - startTime;
             }
         }
         return true;
+    }
+
+    private long remainingTimeAtLeastZero(final long timeout, final long elapsedTime) {
+        return Math.max(0, timeout - elapsedTime);
     }
 
     private synchronized void resetJoinGroupFuture() {
@@ -752,12 +755,9 @@ public abstract class AbstractCoordinator implements Closeable {
                 // yet sent to the broker. Wait up to close timeout for these pending requests to be processed.
                 // If coordinator is not known, requests are aborted.
                 Node coordinator = checkAndGetCoordinator();
-                if (coordinator != null && !client.awaitPendingRequests(coordinator, timeoutMs)) {
-                    log.warn(
-                        "Close timed out with {} pending requests to coordinator, terminating client connections",
-                        client.pendingRequestCount(coordinator)
-                    );
-                }
+                if (coordinator != null && !client.awaitPendingRequests(coordinator, timeoutMs))
+                    log.warn("Close timed out with {} pending requests to coordinator, terminating client connections",
+                            client.pendingRequestCount(coordinator));
             }
         }
     }
@@ -1077,12 +1077,6 @@ public abstract class AbstractCoordinator implements Closeable {
 
     private static class UnjoinedGroupException extends RetriableException {
 
-    }
-
-    private long remainingTimeMsAtLeastZero(final long startTime, final long executionTimeBudget) {
-        final long now = time.milliseconds();
-        final long remaining = executionTimeBudget - (now - startTime);
-        return Math.max(0, remaining);
     }
 
 }

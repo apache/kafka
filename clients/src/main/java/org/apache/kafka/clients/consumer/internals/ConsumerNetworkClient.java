@@ -259,9 +259,8 @@ public class ConsumerNetworkClient implements Closeable {
             // handler), the client will be woken up.
             if (pendingCompletion.isEmpty() && (pollCondition == null || pollCondition.shouldBlock())) {
                 // if there are no requests in flight, do not block longer than the retry backoff
-                if (client.inFlightRequestCount() == 0) {
+                if (client.inFlightRequestCount() == 0)
                     timeout = Math.min(timeout, retryBackoffMs);
-                }
                 client.poll(Math.min(maxPollTimeoutMs, timeout), now);
                 now = time.milliseconds();
             } else {
