@@ -36,6 +36,7 @@ import static org.apache.kafka.common.protocol.CommonFields.OPERATION;
 import static org.apache.kafka.common.protocol.CommonFields.PERMISSION_TYPE;
 import static org.apache.kafka.common.protocol.CommonFields.PRINCIPAL;
 import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_NAME;
+import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_NAME_TYPE;
 import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_TYPE;
 
 public class CreateAclsRequest extends AbstractRequest {
@@ -50,8 +51,18 @@ public class CreateAclsRequest extends AbstractRequest {
                     OPERATION,
                     PERMISSION_TYPE))));
 
+    private static final Schema CREATE_ACLS_REQUEST_V1 = new Schema(
+            new Field(CREATIONS_KEY_NAME, new ArrayOf(new Schema(
+                    RESOURCE_TYPE,
+                    RESOURCE_NAME,
+                    RESOURCE_NAME_TYPE,
+                    PRINCIPAL,
+                    HOST,
+                    OPERATION,
+                    PERMISSION_TYPE))));
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{CREATE_ACLS_REQUEST_V0};
+        return new Schema[]{CREATE_ACLS_REQUEST_V0, CREATE_ACLS_REQUEST_V1};
     }
 
     public static class AclCreation {
@@ -137,9 +148,13 @@ public class CreateAclsRequest extends AbstractRequest {
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable throwable) {
         short versionId = version();
+        List<CreateAclsResponse.AclCreationResponse> responses = new ArrayList<>();
         switch (versionId) {
             case 0:
-                List<CreateAclsResponse.AclCreationResponse> responses = new ArrayList<>();
+                for (int i = 0; i < aclCreations.size(); i++)
+                    responses.add(new CreateAclsResponse.AclCreationResponse(ApiError.fromThrowable(throwable)));
+                return new CreateAclsResponse(throttleTimeMs, responses);
+            case 1:
                 for (int i = 0; i < aclCreations.size(); i++)
                     responses.add(new CreateAclsResponse.AclCreationResponse(ApiError.fromThrowable(throwable)));
                 return new CreateAclsResponse(throttleTimeMs, responses);

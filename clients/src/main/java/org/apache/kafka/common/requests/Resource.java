@@ -20,10 +20,16 @@ package org.apache.kafka.common.requests;
 public final class Resource {
     private final ResourceType type;
     private final String name;
+    private final ResourceNameType resourceNameType;
 
-    public Resource(ResourceType type, String name) {
+    public Resource(ResourceType type, String name, ResourceNameType resourceNameType) {
         this.type = type;
         this.name = name;
+        this.resourceNameType = resourceNameType;
+    }
+
+    public Resource(ResourceType type, String name) {
+        this(type, name, ResourceNameType.LITERAL);
     }
 
     public ResourceType type() {

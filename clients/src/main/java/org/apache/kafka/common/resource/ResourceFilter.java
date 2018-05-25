@@ -18,6 +18,8 @@
 package org.apache.kafka.common.resource;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.utils.SecurityUtils;
+
 
 import java.util.Objects;
 
@@ -30,6 +32,7 @@ import java.util.Objects;
 public class ResourceFilter {
     private final ResourceType resourceType;
     private final String name;
+    private final ResourceNameType resourceNameType;
 
     /**
      * Matches any resource.
@@ -43,9 +46,22 @@ public class ResourceFilter {
      * @param name resource name or null
      */
     public ResourceFilter(ResourceType resourceType, String name) {
+        this(resourceType, name, ResourceNameType.LITERAL);
+    }
+
+    /**
+     * Create an instance of this class with the provided parameters.
+     *
+     * @param resourceType non-null resource type
+     * @param name resource name or null
+     * @param resourceNameType non-null resource name type
+     */
+    public ResourceFilter(ResourceType resourceType, String name, ResourceNameType resourceNameType) {
         Objects.requireNonNull(resourceType);
         this.resourceType = resourceType;
         this.name = name;
+        Objects.requireNonNull(resourceNameType);
+        this.resourceNameType = resourceNameType;
     }
 
     /**
@@ -60,6 +76,13 @@ public class ResourceFilter {
      */
     public String name() {
         return name;
+    }
+
+    /**
+     * Return the resource name type.
+     */
+    public ResourceNameType resourceNameType() {
+        return resourceNameType;
     }
 
     @Override
@@ -91,7 +114,7 @@ public class ResourceFilter {
      * Return true if this filter matches the given Resource.
      */
     public boolean matches(Resource other) {
-        if ((name != null) && (!name.equals(other.name())))
+        if ((name != null) && (!SecurityUtils.matchWildcardSuffixedString(other.name(), name)))
             return false;
         if ((resourceType != ResourceType.ANY) && (!resourceType.equals(other.resourceType())))
             return false;
@@ -115,6 +138,10 @@ public class ResourceFilter {
             return "Resource type is UNKNOWN.";
         if (name == null)
             return "Resource name is NULL.";
+        if (resourceNameType == ResourceNameType.ANY)
+            return "Resource name type is ANY.";
+        if (resourceNameType == ResourceNameType.UNKNOWN)
+            return "Resource name type is UNKNOWN.";
         return null;
     }
 }

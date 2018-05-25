@@ -143,16 +143,35 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     } else false
   }
 
-  private def aclMatch(operations: Operation, resource: Resource, principal: KafkaPrincipal, host: String, permissionType: PermissionType, acls: Set[Acl]): Boolean = {
+  private def aclMatch(operation: Operation, resource: Resource, principal: KafkaPrincipal, host: String, permissionType: PermissionType, acls: Set[Acl]): Boolean = {
     acls.find { acl =>
       acl.permissionType == permissionType &&
-        (acl.principal == principal || acl.principal == Acl.WildCardPrincipal) &&
-        (operations == acl.operation || acl.operation == All) &&
+        matchPrincipal(acl.principal, principal) &&
+        (operation == acl.operation || acl.operation == All) &&
         (acl.host == host || acl.host == Acl.WildCardHost)
     }.exists { acl =>
-      authorizerLogger.debug(s"operation = $operations on resource = $resource from host = $host is $permissionType based on acl = $acl")
+      authorizerLogger.debug(s"operation = $operation on resource = $resource from host = $host is $permissionType based on acl = $acl")
       true
     }
+  }
+
+  /**
+    * @param valueInAcl KafkaPrincipal value present in Acl.
+    * @param input KafkaPrincipal present in the request.
+    * @return true if there is a match (including wildcard-suffix matching).
+    */
+  def matchPrincipal(valueInAcl: KafkaPrincipal, input: KafkaPrincipal): Boolean = {
+    (valueInAcl.getPrincipalType == input.getPrincipalType || valueInAcl.getPrincipalType == Acl.WildCardString) &&
+      (valueInAcl.getName.equals(input.getName) || valueInAcl.getName.equals(Acl.WildCardString)) // TODO
+  }
+
+  /**
+    * @param valueInZk Resource value stored on ZK.
+    * @param input Resource present in the request.
+    * @return true if there is a match (including wildcard-suffix matching).
+    */
+  def matchResource(valueInZk: Resource, input: Resource): Boolean = {
+    valueInZk.resourceType == input.resourceType && SecurityUtils.matchWildcardSuffixedString(valueInZk.name, input.name)
   }
 
   override def addAcls(acls: Set[Acl], resource: Resource) {
@@ -198,6 +217,22 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     }
   }
 
+//  override def getMatchingAcls(resource: Resource): Set[Acl] = {
+//    inReadLock(lock) {
+//      aclCache.filterKeys(matchResource(_, resource)).flatMap(_._2.acls).toSet
+//    }
+//  }
+//
+//  override def getMatchingAcls(principal: KafkaPrincipal): Map[Resource, Set[Acl]] = {
+//    inReadLock(lock) {
+//      aclCache.mapValues { versionedAcls =>
+//        versionedAcls.acls.filter(acl => matchPrincipal(acl.principal, principal))
+//      }.filter { case (_, acls) =>
+//        acls.nonEmpty
+//      }.toMap
+//    }
+//  }
+
   override def getAcls(): Map[Resource, Set[Acl]] = {
     inReadLock(lock) {
       aclCache.mapValues(_.acls).toMap
@@ -216,7 +251,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
         val resourceType = ResourceType.fromString(rType)
         val resourceNames = zkClient.getResourceNames(resourceType.name)
         for (resourceName <- resourceNames) {
-          val versionedAcls = getAclsFromZk(Resource(resourceType, resourceName))
+          val versionedAcls = getAclsFromZk(new Resource(resourceType, resourceName))
           updateCache(new Resource(resourceType, resourceName), versionedAcls)
         }
       }

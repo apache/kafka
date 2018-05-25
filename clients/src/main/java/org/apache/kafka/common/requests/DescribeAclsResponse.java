@@ -41,6 +41,7 @@ import static org.apache.kafka.common.protocol.CommonFields.OPERATION;
 import static org.apache.kafka.common.protocol.CommonFields.PERMISSION_TYPE;
 import static org.apache.kafka.common.protocol.CommonFields.PRINCIPAL;
 import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_NAME;
+import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_NAME_TYPE;
 import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_TYPE;
 import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
 
@@ -48,9 +49,19 @@ public class DescribeAclsResponse extends AbstractResponse {
     private final static String RESOURCES_KEY_NAME = "resources";
     private final static String ACLS_KEY_NAME = "acls";
 
-    private static final Schema DESCRIBE_ACLS_RESOURCE = new Schema(
+    private static final Schema DESCRIBE_ACLS_RESOURCE_V0 = new Schema(
             RESOURCE_TYPE,
             RESOURCE_NAME,
+            new Field(ACLS_KEY_NAME, new ArrayOf(new Schema(
+                    PRINCIPAL,
+                    HOST,
+                    OPERATION,
+                    PERMISSION_TYPE))));
+
+    private static final Schema DESCRIBE_ACLS_RESOURCE_V1 = new Schema(
+            RESOURCE_TYPE,
+            RESOURCE_NAME,
+            RESOURCE_NAME_TYPE,
             new Field(ACLS_KEY_NAME, new ArrayOf(new Schema(
                     PRINCIPAL,
                     HOST,
@@ -61,10 +72,16 @@ public class DescribeAclsResponse extends AbstractResponse {
             THROTTLE_TIME_MS,
             ERROR_CODE,
             ERROR_MESSAGE,
-            new Field(RESOURCES_KEY_NAME, new ArrayOf(DESCRIBE_ACLS_RESOURCE), "The resources and their associated ACLs."));
+            new Field(RESOURCES_KEY_NAME, new ArrayOf(DESCRIBE_ACLS_RESOURCE_V0), "The resources and their associated ACLs."));
+
+    private static final Schema DESCRIBE_ACLS_RESPONSE_V1 = new Schema(
+            THROTTLE_TIME_MS,
+            ERROR_CODE,
+            ERROR_MESSAGE,
+            new Field(RESOURCES_KEY_NAME, new ArrayOf(DESCRIBE_ACLS_RESOURCE_V1), "The resources and their associated ACLs."));
 
     public static Schema[] schemaVersions() {
-        return new Schema[]{DESCRIBE_ACLS_RESPONSE_V0};
+        return new Schema[]{DESCRIBE_ACLS_RESPONSE_V0, DESCRIBE_ACLS_RESPONSE_V1};
     }
 
     private final int throttleTimeMs;

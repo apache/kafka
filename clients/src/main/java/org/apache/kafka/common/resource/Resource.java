@@ -30,6 +30,7 @@ import java.util.Objects;
 public class Resource {
     private final ResourceType resourceType;
     private final String name;
+    private final ResourceNameType resourceNameType;
 
     /**
      * The name of the CLUSTER resource.
@@ -46,12 +47,25 @@ public class Resource {
      *
      * @param resourceType non-null resource type
      * @param name non-null resource name
+     * @param resourceNameType non-null resource name type
      */
-    public Resource(ResourceType resourceType, String name) {
+    public Resource(ResourceType resourceType, String name, ResourceNameType resourceNameType) {
         Objects.requireNonNull(resourceType);
         this.resourceType = resourceType;
         Objects.requireNonNull(name);
         this.name = name;
+        Objects.requireNonNull(resourceNameType);
+        this.resourceNameType = resourceNameType;
+    }
+
+    /**
+     * Create an instance of this class with the provided parameters.
+     *
+     * @param resourceType non-null resource type
+     * @param name non-null resource name
+     */
+    public Resource(ResourceType resourceType, String name) {
+        this(resourceType, name, ResourceNameType.LITERAL);
     }
 
     /**
@@ -59,6 +73,13 @@ public class Resource {
      */
     public ResourceType resourceType() {
         return resourceType;
+    }
+
+    /**
+     * Return the resource name type.
+     */
+    public ResourceNameType resourceNameType() {
+        return resourceNameType;
     }
 
     /**
@@ -72,7 +93,7 @@ public class Resource {
      * Create a filter which matches only this Resource.
      */
     public ResourceFilter toFilter() {
-        return new ResourceFilter(resourceType, name);
+        return new ResourceFilter(resourceType, name, resourceNameType);
     }
 
     @Override
@@ -92,11 +113,11 @@ public class Resource {
         if (!(o instanceof Resource))
             return false;
         Resource other = (Resource) o;
-        return resourceType.equals(other.resourceType) && Objects.equals(name, other.name);
+        return resourceType.equals(other.resourceType) && Objects.equals(name, other.name) && resourceNameType.equals(other.resourceNameType);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(resourceType, name);
+        return Objects.hash(resourceType, name, resourceNameType);
     }
 }

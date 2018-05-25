@@ -25,8 +25,8 @@ object Resource {
 
   def fromString(str: String): Resource = {
     str.split(Separator, 2) match {
-      case Array(resourceType, name, _*) => new Resource(ResourceType.fromString(resourceType), name)
-      case _ => throw new IllegalArgumentException("expected a string in format ResourceType:ResourceName but got " + str)
+      case Array(resourceType, resourceNameType, name, _*) => new Resource(ResourceType.fromString(resourceType), name, ResourceNameType.fromString(resourceNameType))
+      case _ => throw new IllegalArgumentException("expected a string in format ResourceType:ResourceNameType:ResourceName but got " + str)
     }
   }
 }
@@ -36,11 +36,16 @@ object Resource {
  * @param resourceType type of resource.
  * @param name name of the resource, for topic this will be topic name , for group it will be group name. For cluster type
  *             it will be a constant string kafka-cluster.
+ * @param resourceNameType type of resource name: literal, wildcard-suffixed, etc.
  */
-case class Resource(resourceType: ResourceType, name: String) {
+case class Resource(resourceType: ResourceType, name: String, resourceNameType: ResourceNameType) {
+
+  def this(resourceType: ResourceType, name: String) {
+    this(resourceType, name, ResourceNameType.fromString("Literal"))
+  }
 
   override def toString: String = {
-    resourceType.name + Resource.Separator + name
+    resourceType.name + Resource.Separator + resourceNameType.name + Resource.Separator + name
   }
 }
 

@@ -25,6 +25,7 @@ import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.apache.kafka.common.utils.SecurityUtils
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
@@ -38,6 +39,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
   var resource: Resource = null
   val superUsers = "User:superuser1; User:superuser2"
   val username = "alice"
+  val principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
   var config: KafkaConfig = null
 
   @Before
@@ -417,6 +419,204 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
 
     TestUtils.waitAndVerifyAcls(Set.empty[Acl], simpleAclAuthorizer, resource)
     TestUtils.waitAndVerifyAcls(Set.empty[Acl], simpleAclAuthorizer2, resource)
+  }
+
+  @Test
+  def testAuthorizeTrueOnWildCardAcl(): Unit = {
+    val session = Session(principal, InetAddress.getByName("192.168.3.1"))
+
+    // verify authorize fails with no acls present
+    assertFalse(simpleAclAuthorizer.authorize(session, Read, resource))
+
+    // add wildcard acl and verify authorize succeeds
+    val acl = new Acl(principal, Allow, WildCardHost, Read)
+    simpleAclAuthorizer.addAcls(Set[Acl](acl), new Resource(Topic, Acl.WildCardString))
+    assertTrue(simpleAclAuthorizer.authorize(session, Read, resource))
+
+    // remove wildcard acl and verify authorize fails again
+    simpleAclAuthorizer.removeAcls(Set[Acl](acl), new Resource(Topic, Acl.WildCardString))
+    assertFalse(simpleAclAuthorizer.authorize(session, Read, resource))
+
+    // add wildcard-suffixed acl and verify authorize succeeds
+    simpleAclAuthorizer.addAcls(Set[Acl](acl), new Resource(Topic, resource.name.charAt(0) + Acl.WildCardString))
+    assertTrue(simpleAclAuthorizer.authorize(session, Read, resource))
+  }
+
+  @Test
+  def testmatchWildcardSuffixedString(): Unit = {
+    // everything should match wildcard string
+    assertTrue(SecurityUtils.matchWildcardSuffixedString(Acl.WildCardString, Acl.WildCardString))
+    assertTrue(SecurityUtils.matchWildcardSuffixedString(Acl.WildCardString, "f"))
+    assertTrue(SecurityUtils.matchWildcardSuffixedString(Acl.WildCardString, "foo"))
+    assertTrue(SecurityUtils.matchWildcardSuffixedString(Acl.WildCardString, "fo" + Acl.WildCardString))
+    assertTrue(SecurityUtils.matchWildcardSuffixedString(Acl.WildCardString, "f" + Acl.WildCardString))
+
+    assertTrue(SecurityUtils.matchWildcardSuffixedString("f", Acl.WildCardString))
+    assertTrue(SecurityUtils.matchWildcardSuffixedString("f", "f"))
+    assertTrue(SecurityUtils.matchWildcardSuffixedString("f", "f" + Acl.WildCardString))
+    assertFalse(SecurityUtils.matchWildcardSuffixedString("f", "foo"))
+    assertFalse(SecurityUtils.matchWildcardSuffixedString("f", "fo" + Acl.WildCardString))
+
+    assertTrue(SecurityUtils.matchWildcardSuffixedString("foo", Acl.WildCardString))
+    assertTrue(SecurityUtils.matchWildcardSuffixedString("foo", "foo"))
+    assertTrue(SecurityUtils.matchWildcardSuffixedString("foo", "fo" + Acl.WildCardString))
+    assertTrue(SecurityUtils.matchWildcardSuffixedString("foo", "f" + Acl.WildCardString))
+    assertTrue(SecurityUtils.matchWildcardSuffixedString("foo", "foo" + Acl.WildCardString))
+    assertFalse(SecurityUtils.matchWildcardSuffixedString("foo", "f"))
+    assertFalse(SecurityUtils.matchWildcardSuffixedString("foo", "foot" + Acl.WildCardString))
+
+    assertTrue(SecurityUtils.matchWildcardSuffixedString("fo" + Acl.WildCardString, Acl.WildCardString))
+    assertTrue(SecurityUtils.matchWildcardSuffixedString("fo" + Acl.WildCardString, "fo"))
+    assertTrue(SecurityUtils.matchWildcardSuffixedString("fo" + Acl.WildCardString, "foo"))
+    assertTrue(SecurityUtils.matchWildcardSuffixedString("fo" + Acl.WildCardString, "foot"))
+    assertTrue(SecurityUtils.matchWildcardSuffixedString("fo" + Acl.WildCardString, "fo" + Acl.WildCardString))
+
+    assertTrue(SecurityUtils.matchWildcardSuffixedString("fo" + Acl.WildCardString, "foo" + Acl.WildCardString))
+    assertTrue(SecurityUtils.matchWildcardSuffixedString("fo" + Acl.WildCardString, "foot" + Acl.WildCardString))
+    assertFalse(SecurityUtils.matchWildcardSuffixedString("fo" + Acl.WildCardString, "f"))
+    assertFalse(SecurityUtils.matchWildcardSuffixedString("fo" + Acl.WildCardString, "f" + Acl.WildCardString))
+  }
+
+  @Test
+  def testMatchPrincipal(): Unit = {
+    // same username should match
+    assertTrue(
+      simpleAclAuthorizer.matchPrincipal(
+        new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "rob"),
+        new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "rob")
+      )
+    )
+
+    // different username shouldn't match
+    assertFalse(
+      simpleAclAuthorizer.matchPrincipal(
+        new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "rob"),
+        new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob")
+      )
+    )
+
+    // any username should match wildcard principal
+    assertTrue(
+      simpleAclAuthorizer.matchPrincipal(
+        Acl.WildCardPrincipal,
+        new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "rob")
+      )
+    )
+
+    // wildcard principal type should match
+    assertTrue(
+      simpleAclAuthorizer.matchPrincipal(
+        new KafkaPrincipal(Acl.WildCardString, "rob"),
+        new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "rob")
+      )
+    )
+
+    // different principal type shouldn't match
+    assertFalse(
+      simpleAclAuthorizer.matchPrincipal(
+        new KafkaPrincipal("userType1", "rob"),
+        new KafkaPrincipal("userType2", "rob")
+      )
+    )
+  }
+
+  @Test
+  def testMatchResource(): Unit = {
+    // same resource should match
+    assertTrue(
+      simpleAclAuthorizer.matchResource(
+        new Resource(Topic, "topicA"),
+        new Resource(Topic, "topicA")
+      )
+    )
+
+    // different resource shouldn't match
+    assertFalse(
+      simpleAclAuthorizer.matchResource(
+        new Resource(Topic, "topicA"),
+        new Resource(Topic, "topicB")
+      )
+    )
+    assertFalse(
+      simpleAclAuthorizer.matchResource(
+        new Resource(Topic, "topicA"),
+        new Resource(Group, "topicA")
+      )
+    )
+
+    // wildcard resource should match
+    assertTrue(
+      simpleAclAuthorizer.matchResource(
+        new Resource(Topic, Acl.WildCardString),
+        new Resource(Topic, "topicA")
+      )
+    )
+
+    // wildcard-suffix resource should match
+    assertTrue(
+      simpleAclAuthorizer.matchResource(
+        new Resource(Topic, "topic" + Acl.WildCardString),
+        new Resource(Topic, "topicA")
+      )
+    )
+    assertFalse(
+      simpleAclAuthorizer.matchResource(
+        new Resource(Topic, "topic" + Acl.WildCardString),
+        new Resource(Topic, "topiA")
+      )
+    )
+  }
+
+  @Test
+  def testMatchingGetAclsResource(): Unit = {
+    assertEquals(0, simpleAclAuthorizer.getAcls(resource).size)
+    assertEquals(0, simpleAclAuthorizer.getAcls(new Resource(Topic, Acl.WildCardString)).size)
+    assertEquals(0, simpleAclAuthorizer.getAcls(new Resource(Topic, resource.name.charAt(0) + Acl.WildCardString)).size)
+    assertEquals(0, simpleAclAuthorizer.getAcls(new Resource(Topic, resource.name + "t")).size)
+
+    val acl1 = new Acl(principal, Allow, WildCardHost, Read)
+    simpleAclAuthorizer.addAcls(Set[Acl](acl1), resource)
+    assertEquals(1, simpleAclAuthorizer.getAcls(resource).size)
+    assertEquals(1, simpleAclAuthorizer.getAcls(new Resource(Topic, Acl.WildCardString)).size)
+    assertEquals(1, simpleAclAuthorizer.getAcls(new Resource(Topic, resource.name.charAt(0) + Acl.WildCardString)).size)
+    assertEquals(0, simpleAclAuthorizer.getAcls(new Resource(Topic, resource.name + "t")).size)
+
+    // add same acl on wildcard resource
+    simpleAclAuthorizer.addAcls(Set[Acl](acl1), new Resource(Topic, Acl.WildCardString))
+    assertEquals(1, simpleAclAuthorizer.getAcls(resource).size)
+    assertEquals(1, simpleAclAuthorizer.getAcls(new Resource(Topic, Acl.WildCardString)).size)
+    assertEquals(1, simpleAclAuthorizer.getAcls(new Resource(Topic, resource.name.charAt(0) + Acl.WildCardString)).size)
+    assertEquals(1, simpleAclAuthorizer.getAcls(new Resource(Topic, resource.name + "t")).size)
+
+    // add different acl on resource
+    val acl2 = new Acl(principal, Allow, WildCardHost, Write)
+    simpleAclAuthorizer.addAcls(Set[Acl](acl2), resource)
+    assertEquals(2, simpleAclAuthorizer.getAcls(resource).size)
+    assertEquals(2, simpleAclAuthorizer.getAcls(new Resource(Topic, Acl.WildCardString)).size)
+    assertEquals(2, simpleAclAuthorizer.getAcls(new Resource(Topic, resource.name.charAt(0) + Acl.WildCardString)).size)
+    assertEquals(1, simpleAclAuthorizer.getAcls(new Resource(Topic, resource.name + "t")).size)
+
+  }
+
+  @Test
+  def testMatchingGetAclsPrincipal(): Unit = {
+    assertEquals(0, simpleAclAuthorizer.getAcls(principal).size)
+
+    val acl1 = new Acl(principal, Allow, WildCardHost, Write)
+    simpleAclAuthorizer.addAcls(Set[Acl](acl1), resource)
+    assertEquals(1, simpleAclAuthorizer.getAcls(principal).size)
+
+    simpleAclAuthorizer.addAcls(Set[Acl](acl1), new Resource(Topic, Acl.WildCardString))
+    assertEquals(2, simpleAclAuthorizer.getAcls(principal).size)
+
+    val acl2 = new Acl(Acl.WildCardPrincipal, Allow, WildCardHost, Write)
+    simpleAclAuthorizer.addAcls(Set[Acl](acl1), new Resource(Group, "groupA"))
+    assertEquals(3, simpleAclAuthorizer.getAcls(principal).size)
+
+    // add wildcard-suffixed principal acl on wildcard group name
+    val acl3 = new Acl(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, principal.getName.charAt(0) + Acl.WildCardString), Allow, WildCardHost, Write)
+    simpleAclAuthorizer.addAcls(Set[Acl](acl1), new Resource(Group, Acl.WildCardString))
+    assertEquals(4, simpleAclAuthorizer.getAcls(principal).size)
   }
 
   private def changeAclAndVerify(originalAcls: Set[Acl], addedAcls: Set[Acl], removedAcls: Set[Acl], resource: Resource = resource): Set[Acl] = {
