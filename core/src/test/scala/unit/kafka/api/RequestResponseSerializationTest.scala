@@ -80,16 +80,6 @@ object SerializationTestUtils {
   private val brokers = List(createBroker(0, "localhost", 1011), createBroker(0, "localhost", 1012),
     createBroker(0, "localhost", 1013))
 
-  def createTestProducerRequest: ProducerRequest = {
-    new ProducerRequest(1, "client 1", 0, 1000, topicDataProducerRequest)
-  }
-
-  def createTestProducerResponse: ProducerResponse =
-    ProducerResponse(1, Map(
-      TopicAndPartition(topic1, 0) -> ProducerResponseStatus(Errors.forCode(0.toShort), 10001),
-      TopicAndPartition(topic2, 0) -> ProducerResponseStatus(Errors.forCode(0.toShort), 20001)
-    ), ProducerRequest.CurrentVersion, 100)
-
   def createTestFetchRequest: FetchRequest = new FetchRequest(requestInfo = requestInfos.toVector)
 
   def createTestFetchResponse: FetchResponse = FetchResponse(1, topicDataFetchResponse.toVector)
@@ -163,8 +153,6 @@ object SerializationTestUtils {
 }
 
 class RequestResponseSerializationTest extends JUnitSuite {
-  private val producerRequest = SerializationTestUtils.createTestProducerRequest
-  private val producerResponse = SerializationTestUtils.createTestProducerResponse
   private val fetchRequest = SerializationTestUtils.createTestFetchRequest
   private val offsetRequest = SerializationTestUtils.createTestOffsetRequest
   private val offsetResponse = SerializationTestUtils.createTestOffsetResponse
@@ -182,8 +170,7 @@ class RequestResponseSerializationTest extends JUnitSuite {
   def testSerializationAndDeserialization() {
 
     val requestsAndResponses =
-      collection.immutable.Seq(producerRequest, producerResponse,
-                               fetchRequest, offsetRequest, offsetResponse,
+      collection.immutable.Seq(fetchRequest, offsetRequest, offsetResponse,
                                offsetCommitRequestV0, offsetCommitRequestV1, offsetCommitRequestV2, offsetCommitResponse,
                                offsetFetchRequest, offsetFetchResponse,
                                consumerMetadataRequest, consumerMetadataResponse,
@@ -199,27 +186,6 @@ class RequestResponseSerializationTest extends JUnitSuite {
                   buffer.hasRemaining)
       assertEquals("The original and deserialized for " + original.getClass.getSimpleName + " should be the same.", original, deserialized)
     }
-  }
-
-  @Test
-  def testProduceResponseVersion() {
-    val oldClientResponse = ProducerResponse(1, Map(
-      TopicAndPartition("t1", 0) -> ProducerResponseStatus(Errors.NONE, 10001),
-      TopicAndPartition("t2", 0) -> ProducerResponseStatus(Errors.NONE, 20001)
-    ))
-
-    val newClientResponse = ProducerResponse(1, Map(
-      TopicAndPartition("t1", 0) -> ProducerResponseStatus(Errors.NONE, 10001),
-      TopicAndPartition("t2", 0) -> ProducerResponseStatus(Errors.NONE, 20001)
-    ), 1, 100)
-
-    // new response should have 4 bytes more than the old response since delayTime is an INT32
-    assertEquals(oldClientResponse.sizeInBytes + 4, newClientResponse.sizeInBytes)
-
-    val buffer = ByteBuffer.allocate(newClientResponse.sizeInBytes)
-    newClientResponse.writeTo(buffer)
-    buffer.rewind()
-    assertEquals(ProducerResponse.readFrom(buffer).throttleTime, 100)
   }
 
   @Test
