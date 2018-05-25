@@ -490,6 +490,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
      */
     public Map<TopicPartition, OffsetAndMetadata> fetchCommittedOffsets(final Set<TopicPartition> partitions,
                                                                         final long timeoutMs) {
+        if (partitions.isEmpty()) return Collections.emptyMap();
+
         if (!partitions.equals(pendingCommittedOffsetRequest)) {
             // if we were waiting for a different request, then just clear it.
             pendingCommittedOffsetRequest = null;
@@ -498,7 +500,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         final long startMs = time.milliseconds();
         long remainingTime = timeoutMs;
-        if (partitions.isEmpty()) return Collections.emptyMap();
 
         while (true) {
             if (!ensureCoordinatorReady(remainingTime)) return null;
