@@ -88,6 +88,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -410,6 +411,57 @@ public class KafkaConsumerTest {
 
         assertTrue(heartbeatReceived.get());
         consumer.close(0, TimeUnit.MILLISECONDS);
+    }
+
+    @Test
+    public void verifyPollTimesOutDuringMetadataUpdate() throws Exception {
+        final Time time = new MockTime();
+        final Cluster cluster = TestUtils.singletonCluster(topic, 1);
+        final Node node = cluster.nodes().get(0);
+
+        final Metadata metadata = createMetadata();
+        metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
+
+        final MockClient client = new MockClient(time, metadata);
+        client.setNode(node);
+        final PartitionAssignor assignor = new RoundRobinAssignor();
+
+        final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, true);
+        consumer.subscribe(singleton(topic), getConsumerRebalanceListener(consumer));
+        prepareRebalance(client, node, assignor, singletonList(tp0), null);
+
+        consumer.poll(Duration.ZERO);
+
+        // The underlying client should NOT get a fetch request
+        final Queue<ClientRequest> requests = client.requests();
+        Assert.assertEquals(0, requests.size());
+    }
+
+    @Test
+    public void verifyDeprecatedPollDoesNotTimeOutDuringMetadataUpdate() throws Exception {
+        final Time time = new MockTime();
+        final Cluster cluster = TestUtils.singletonCluster(topic, 1);
+        final Node node = cluster.nodes().get(0);
+
+        final Metadata metadata = createMetadata();
+        metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
+
+        final MockClient client = new MockClient(time, metadata);
+        client.setNode(node);
+        final PartitionAssignor assignor = new RoundRobinAssignor();
+
+        final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, true);
+        consumer.subscribe(singleton(topic), getConsumerRebalanceListener(consumer));
+        prepareRebalance(client, node, assignor, singletonList(tp0), null);
+
+        //noinspection deprecation
+        consumer.poll(0L);
+
+        // The underlying client SHOULD get a fetch request
+        final Queue<ClientRequest> requests = client.requests();
+        Assert.assertEquals(1, requests.size());
+        final Class<? extends AbstractRequest.Builder> aClass = requests.peek().requestBuilder().getClass();
+        Assert.assertEquals(FetchRequest.Builder.class, aClass);
     }
 
     @Test
