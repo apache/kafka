@@ -262,7 +262,7 @@ public abstract class AbstractCoordinator implements Closeable {
      * Check whether the group should be rejoined (e.g. if metadata changes)
      * @return true if it should, false otherwise
      */
-    protected synchronized boolean needRejoin() {
+    protected synchronized boolean rejoinNeededOrPending() {
         // if there's a pending joinFuture, we should try to complete handling it.
         return rejoinNeeded || joinFuture != null;
     }
@@ -375,7 +375,7 @@ public abstract class AbstractCoordinator implements Closeable {
         final long startTime = time.milliseconds();
         long remainingTime = timeoutMs;
 
-        while (needRejoin()) {
+        while (rejoinNeededOrPending()) {
             if (!ensureCoordinatorReady(remainingTime)) {
                 return false;
             }
@@ -417,7 +417,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 time.sleep(retryBackoffMs);
             }
 
-            if (needRejoin()) {
+            if (rejoinNeededOrPending()) {
                 remainingTime = remainingTime > 0 ? remainingTimeMsAtLeastZero(startTime, timeoutMs) : 0;
             }
         }

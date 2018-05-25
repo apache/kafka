@@ -292,7 +292,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 remainingTime = remainingTime > 0 ? remainingTimeAtLeastZeroMillis(startTime, timeoutMs) : 0;
             }
 
-            if (needRejoin()) {
+            if (rejoinNeededOrPending()) {
                 // due to a race condition between the initial metadata fetch and the initial rebalance,
                 // we need to ensure that the metadata is fresh before joining initially. This ensures
                 // that we have matched the pattern against the cluster's topics at least once before joining.
@@ -446,7 +446,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     @Override
-    public boolean needRejoin() {
+    public boolean rejoinNeededOrPending() {
         if (!subscriptions.partitionsAutoAssigned())
             return false;
 
@@ -458,7 +458,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         if (joinedSubscription != null && !joinedSubscription.equals(subscriptions.subscription()))
             return true;
 
-        return super.needRejoin();
+        return super.rejoinNeededOrPending();
     }
 
     /**

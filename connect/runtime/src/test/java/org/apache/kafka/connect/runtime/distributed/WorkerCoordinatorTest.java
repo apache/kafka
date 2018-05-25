@@ -227,7 +227,7 @@ public class WorkerCoordinatorTest {
                 Collections.<ConnectorTaskId>emptyList(), Errors.NONE));
         coordinator.ensureActiveGroup();
 
-        assertFalse(coordinator.needRejoin());
+        assertFalse(coordinator.rejoinNeededOrPending());
         assertEquals(0, rebalanceListener.revokedCount);
         assertEquals(1, rebalanceListener.assignedCount);
         assertFalse(rebalanceListener.assignment.failed());
@@ -264,7 +264,7 @@ public class WorkerCoordinatorTest {
                 Collections.singletonList(taskId1x0), Errors.NONE));
         coordinator.ensureActiveGroup();
 
-        assertFalse(coordinator.needRejoin());
+        assertFalse(coordinator.rejoinNeededOrPending());
         assertEquals(0, rebalanceListener.revokedCount);
         assertEquals(1, rebalanceListener.assignedCount);
         assertFalse(rebalanceListener.assignment.failed());

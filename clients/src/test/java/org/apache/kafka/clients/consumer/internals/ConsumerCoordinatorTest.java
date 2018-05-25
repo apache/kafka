@@ -298,7 +298,7 @@ public class ConsumerCoordinatorTest {
         assertTrue(future.isDone());
         assertTrue(future.failed());
         assertEquals(Errors.ILLEGAL_GENERATION.exception(), future.exception());
-        assertTrue(coordinator.needRejoin());
+        assertTrue(coordinator.rejoinNeededOrPending());
     }
 
     @Test
@@ -322,7 +322,7 @@ public class ConsumerCoordinatorTest {
         assertTrue(future.isDone());
         assertTrue(future.failed());
         assertEquals(Errors.UNKNOWN_MEMBER_ID.exception(), future.exception());
-        assertTrue(coordinator.needRejoin());
+        assertTrue(coordinator.rejoinNeededOrPending());
     }
 
     @Test
@@ -393,7 +393,7 @@ public class ConsumerCoordinatorTest {
         }, syncGroupResponse(singletonList(t1p), Errors.NONE));
         coordinator.poll(Long.MAX_VALUE);
 
-        assertFalse(coordinator.needRejoin());
+        assertFalse(coordinator.rejoinNeededOrPending());
         assertEquals(singleton(t1p), subscriptions.assignedPartitions());
         assertEquals(singleton(topic1), subscriptions.groupSubscription());
         assertEquals(1, rebalanceListener.revokedCount);
@@ -435,7 +435,7 @@ public class ConsumerCoordinatorTest {
 
         coordinator.poll(Long.MAX_VALUE);
 
-        assertFalse(coordinator.needRejoin());
+        assertFalse(coordinator.rejoinNeededOrPending());
         assertEquals(2, subscriptions.assignedPartitions().size());
         assertEquals(2, subscriptions.groupSubscription().size());
         assertEquals(2, subscriptions.subscription().size());
@@ -498,7 +498,7 @@ public class ConsumerCoordinatorTest {
 
         coordinator.poll(Long.MAX_VALUE);
 
-        assertFalse(coordinator.needRejoin());
+        assertFalse(coordinator.rejoinNeededOrPending());
         assertEquals(updatedSubscriptionSet, subscriptions.subscription());
         assertEquals(newAssignmentSet, subscriptions.assignedPartitions());
         assertEquals(2, rebalanceListener.revokedCount);
@@ -537,7 +537,7 @@ public class ConsumerCoordinatorTest {
         client.prepareResponse(syncGroupResponse(singletonList(t1p), Errors.NONE));
         coordinator.poll(Long.MAX_VALUE);
 
-        assertFalse(coordinator.needRejoin());
+        assertFalse(coordinator.rejoinNeededOrPending());
         assertEquals(singleton(t1p), subscriptions.assignedPartitions());
         assertEquals(1, rebalanceListener.revokedCount);
         assertEquals(Collections.emptySet(), rebalanceListener.revoked);
@@ -568,7 +568,7 @@ public class ConsumerCoordinatorTest {
 
         coordinator.joinGroupIfNeeded();
 
-        assertFalse(coordinator.needRejoin());
+        assertFalse(coordinator.rejoinNeededOrPending());
         assertEquals(singleton(t1p), subscriptions.assignedPartitions());
         assertEquals(singleton(topic1), subscriptions.groupSubscription());
         assertEquals(1, rebalanceListener.revokedCount);
@@ -607,7 +607,7 @@ public class ConsumerCoordinatorTest {
 
         coordinator.joinGroupIfNeeded();
 
-        assertFalse(coordinator.needRejoin());
+        assertFalse(coordinator.rejoinNeededOrPending());
         assertEquals(2, subscriptions.assignedPartitions().size());
         assertEquals(2, subscriptions.subscription().size());
         assertEquals(1, rebalanceListener.revokedCount);
@@ -700,7 +700,7 @@ public class ConsumerCoordinatorTest {
 
         coordinator.joinGroupIfNeeded();
 
-        assertFalse(coordinator.needRejoin());
+        assertFalse(coordinator.rejoinNeededOrPending());
         assertEquals(singleton(t1p), subscriptions.assignedPartitions());
     }
 
@@ -723,7 +723,7 @@ public class ConsumerCoordinatorTest {
 
         coordinator.joinGroupIfNeeded();
 
-        assertFalse(coordinator.needRejoin());
+        assertFalse(coordinator.rejoinNeededOrPending());
         assertEquals(singleton(t1p), subscriptions.assignedPartitions());
     }
 
@@ -752,7 +752,7 @@ public class ConsumerCoordinatorTest {
 
         coordinator.joinGroupIfNeeded();
 
-        assertFalse(coordinator.needRejoin());
+        assertFalse(coordinator.rejoinNeededOrPending());
         assertEquals(singleton(t1p), subscriptions.assignedPartitions());
     }
 
@@ -778,13 +778,13 @@ public class ConsumerCoordinatorTest {
 
         coordinator.poll(Long.MAX_VALUE);
 
-        assertFalse(coordinator.needRejoin());
+        assertFalse(coordinator.rejoinNeededOrPending());
 
         // a new partition is added to the topic
         metadata.update(TestUtils.singletonCluster(topic1, 2), Collections.<String>emptySet(), time.milliseconds());
 
         // we should detect the change and ask for reassignment
-        assertTrue(coordinator.needRejoin());
+        assertTrue(coordinator.rejoinNeededOrPending());
     }
 
     @Test
@@ -835,7 +835,7 @@ public class ConsumerCoordinatorTest {
 
         coordinator.poll(Long.MAX_VALUE);
 
-        assertFalse(coordinator.needRejoin());
+        assertFalse(coordinator.rejoinNeededOrPending());
         assertEquals(new HashSet<>(Arrays.asList(tp1, tp2)), subscriptions.assignedPartitions());
     }
 
@@ -882,7 +882,7 @@ public class ConsumerCoordinatorTest {
         client.prepareResponse(syncGroupResponse(Collections.<TopicPartition>emptyList(), Errors.NONE));
         coordinator.poll(Long.MAX_VALUE);
         if (!assign) {
-            assertFalse(coordinator.needRejoin());
+            assertFalse(coordinator.rejoinNeededOrPending());
             assertEquals(Collections.<TopicPartition>emptySet(), rebalanceListener.assigned);
         }
         assertTrue("Metadata refresh not requested for unavailable partitions", metadata.updateRequested());
@@ -895,7 +895,7 @@ public class ConsumerCoordinatorTest {
 
         assertFalse("Metadata refresh requested unnecessarily", metadata.updateRequested());
         if (!assign) {
-            assertFalse(coordinator.needRejoin());
+            assertFalse(coordinator.rejoinNeededOrPending());
             assertEquals(singleton(t1p), rebalanceListener.assigned);
         }
     }
@@ -959,7 +959,7 @@ public class ConsumerCoordinatorTest {
         client.prepareResponse(syncGroupResponse(singletonList(t1p), Errors.NONE));
         coordinator.joinGroupIfNeeded();
 
-        assertFalse(coordinator.needRejoin());
+        assertFalse(coordinator.rejoinNeededOrPending());
         assertEquals(singleton(t1p), subscriptions.assignedPartitions());
         assertEquals(1, rebalanceListener.revokedCount);
         assertEquals(1, rebalanceListener.assignedCount);

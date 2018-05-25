@@ -121,7 +121,7 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
                 now = time.milliseconds();
             }
 
-            if (needRejoin()) {
+            if (rejoinNeededOrPending()) {
                 ensureActiveGroup();
                 now = time.milliseconds();
             }
@@ -288,8 +288,8 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
     }
 
     @Override
-    protected boolean needRejoin() {
-        return super.needRejoin() || (assignmentSnapshot == null || assignmentSnapshot.failed()) || rejoinRequested;
+    protected boolean rejoinNeededOrPending() {
+        return super.rejoinNeededOrPending() || (assignmentSnapshot == null || assignmentSnapshot.failed()) || rejoinRequested;
     }
 
     public String memberId() {
@@ -304,13 +304,13 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
     }
 
     public String ownerUrl(String connector) {
-        if (needRejoin() || !isLeader())
+        if (rejoinNeededOrPending() || !isLeader())
             return null;
         return leaderState.ownerUrl(connector);
     }
 
     public String ownerUrl(ConnectorTaskId task) {
-        if (needRejoin() || !isLeader())
+        if (rejoinNeededOrPending() || !isLeader())
             return null;
         return leaderState.ownerUrl(task);
     }
