@@ -114,7 +114,7 @@
               files="Values.java"/>
 
     <suppress checks="NPathComplexity"
-              files="(DistributedHerder|JsonConverter|KafkaConfigBackingStore).java"/>
+              files="(DistributedHerder|JsonConverter|KafkaConfigBackingStore|FileStreamSourceTask).java"/>
 
     <suppress checks="MethodLength"
               files="Values.java"/>
