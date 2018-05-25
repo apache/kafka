@@ -25,11 +25,7 @@ import java.util.Map;
  */
 public class NumberConverterConfig extends ConverterConfig {
 
-    private final static ConfigDef CONFIG;
-
-    static {
-        CONFIG = ConverterConfig.newConfigDef();
-    }
+    private final static ConfigDef CONFIG = ConverterConfig.newConfigDef();
 
     public static ConfigDef configDef() {
         return CONFIG;

@@ -64,7 +64,7 @@ public abstract class NumberConverter<T extends Number> implements Converter, He
 
     @Override
     public ConfigDef config() {
-        return null;
+        return NumberConverterConfig.configDef();
     }
 
     @Override
