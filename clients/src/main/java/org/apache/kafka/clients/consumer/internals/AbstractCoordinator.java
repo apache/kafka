@@ -202,7 +202,7 @@ public abstract class AbstractCoordinator implements Closeable {
      *
      * Ensure that the coordinator is ready to receive requests.
      *
-     * @param timeoutMs   Maximum time to wait to discover the coordinator
+     * @param timeoutMs Maximum time to wait to discover the coordinator
      * @return true If coordinator discovery and initial connection succeeded, false otherwise
      */
     protected synchronized boolean ensureCoordinatorReady(final long timeoutMs) {
