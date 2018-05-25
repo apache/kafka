@@ -87,8 +87,29 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private long nextAutoCommitDeadline;
 
     // hold onto request&future for commited offset requests to enable async calls.
-    private Set<TopicPartition> pendingCommittedOffsetRequest = null;
-    private RequestFuture<Map<TopicPartition, OffsetAndMetadata>> pendingCommittedOffsetResponse = null;
+    private PendingCommittedOffsetRequest pendingCommittedOffsetRequest = null;
+
+    private static class PendingCommittedOffsetRequest {
+        private final Set<TopicPartition> request;
+        private final Generation generation;
+        private final RequestFuture<Map<TopicPartition, OffsetAndMetadata>> response;
+
+        private PendingCommittedOffsetRequest(final Set<TopicPartition> request,
+                                              final Generation generationAtRequestTime,
+                                              final RequestFuture<Map<TopicPartition, OffsetAndMetadata>> response
+        ) {
+            this.request = request;
+            this.generation = generationAtRequestTime;
+            this.response = response;
+        }
+
+        private boolean sameRequest(final Set<TopicPartition> currentRequest, final Generation currentGeneration) {
+            return currentGeneration.generationId == generation.generationId
+                && currentGeneration.memberId.equals(generation.memberId)
+                && currentGeneration.protocol.equals(generation.protocol)
+                && currentRequest.equals(request);
+        }
+    }
 
     /**
      * Initialize the coordination manager.
@@ -492,10 +513,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                                                         final long timeoutMs) {
         if (partitions.isEmpty()) return Collections.emptyMap();
 
-        if (!partitions.equals(pendingCommittedOffsetRequest)) {
+        final Generation generation = generation();
+        if (pendingCommittedOffsetRequest != null && !pendingCommittedOffsetRequest.sameRequest(partitions, generation)) {
             // if we were waiting for a different request, then just clear it.
             pendingCommittedOffsetRequest = null;
-            pendingCommittedOffsetResponse = null;
         }
 
         final long startMs = time.milliseconds();
@@ -507,18 +528,17 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
             // contact coordinator to fetch committed offsets
             final RequestFuture<Map<TopicPartition, OffsetAndMetadata>> future;
-            if (pendingCommittedOffsetResponse != null) {
-                future = pendingCommittedOffsetResponse;
+            if (pendingCommittedOffsetRequest != null) {
+                future = pendingCommittedOffsetRequest.response;
             } else {
-                pendingCommittedOffsetRequest = partitions;
-                pendingCommittedOffsetResponse = future = sendOffsetFetchRequest(partitions);
+                future = sendOffsetFetchRequest(partitions);
+                pendingCommittedOffsetRequest = new PendingCommittedOffsetRequest(partitions, generation, future);
 
             }
             client.poll(future, remainingTime);
 
             if (future.isDone()) {
                 pendingCommittedOffsetRequest = null;
-                pendingCommittedOffsetResponse = null;
 
                 if (future.succeeded()) {
                     return future.value();
