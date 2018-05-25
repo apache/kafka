@@ -540,7 +540,7 @@ public class KafkaAdminClient extends AdminClient {
         private int tries = 0;
         private boolean aborted = false;
         private Node curNode = null;
-        private long nextAllowedRetryMs = 0;
+        private long nextAllowedTryMs = 0;
 
         Call(boolean internal, String callName, long deadlineMs, NodeProvider nodeProvider) {
             this.internal = internal;
@@ -590,7 +590,7 @@ public class KafkaAdminClient extends AdminClient {
                 return;
             }
             tries++;
-            nextAllowedRetryMs = now + retryBackoffMs;
+            nextAllowedTryMs = now + retryBackoffMs;
 
             // If the call has timed out, fail.
             if (calcTimeoutMsRemainingAsInt(now, deadlineMs) < 0) {
@@ -829,8 +829,8 @@ public class KafkaAdminClient extends AdminClient {
                 Call call = pendingIter.next();
 
                 // If the call is being retried, await the proper backoff before finding the node
-                if (now < call.nextAllowedRetryMs) {
-                    pollTimeout = Math.min(pollTimeout, call.nextAllowedRetryMs - now);
+                if (now < call.nextAllowedTryMs) {
+                    pollTimeout = Math.min(pollTimeout, call.nextAllowedTryMs - now);
                     continue;
                 }
 
