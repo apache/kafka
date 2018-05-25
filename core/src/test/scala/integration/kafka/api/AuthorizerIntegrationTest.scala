@@ -595,6 +595,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       case e: TopicAuthorizationException => assertEquals(Collections.singleton(newTopic), e.unauthorizedTopics())
     }
 
+    // using cluster-level create Acl in this test, leaving topic-level create Acl in the matching `read` test
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Create)), Resource.ClusterResource)
     sendRecords(numRecords, topicPartition)
   }
@@ -839,7 +840,6 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     val newTopicResource = new Resource(Topic, newTopic)
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Read)), newTopicResource)
     addAndVerifyAcls(groupReadAcl(groupResource), groupResource)
-    addAndVerifyAcls(clusterAcl(Resource.ClusterResource), Resource.ClusterResource)
     try {
       this.consumers.head.assign(List(topicPartition).asJava)
       consumeRecords(this.consumers.head)
@@ -849,8 +849,9 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
         assertEquals(Collections.singleton(newTopic), e.unauthorizedTopics())
     }
 
-    addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Write)), newTopicResource)
-    addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Create)), Resource.ClusterResource)
+    // using topic-level create Acl in this test, leaving cluster-level create Acl in the matching `write` test
+    addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Write), new Acl(userPrincipal, Allow, Acl.WildCardHost, Create)),
+      newTopicResource)
 
     sendRecords(numRecords, topicPartition)
     consumeRecords(this.consumers.head, topic = newTopic, part = 0)
