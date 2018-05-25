@@ -32,7 +32,7 @@ import kafka.utils.Logging
 import kafka.zookeeper._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.zookeeper.KeeperException.{Code, NodeExistsException}
 import org.apache.zookeeper.data.{ACL, Stat}
 import org.apache.zookeeper.{CreateMode, KeeperException, ZooKeeper}
@@ -597,7 +597,7 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
     setDataResponse.resultCode match {
       case Code.OK =>
         debug("Conditional update of path %s with value %s and expected version %d succeeded, returning the new version: %d"
-          .format(path, data, expectVersion, setDataResponse.stat.getVersion))
+          .format(path, Utils.utf8(data), expectVersion, setDataResponse.stat.getVersion))
         (true, setDataResponse.stat.getVersion)
 
       case Code.BADVERSION =>
@@ -606,18 +606,18 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
           case _ =>
             debug("Checker method is not passed skipping zkData match")
             debug("Conditional update of path %s with data %s and expected version %d failed due to %s"
-              .format(path, data, expectVersion, setDataResponse.resultException.get.getMessage))
+              .format(path, Utils.utf8(data), expectVersion, setDataResponse.resultException.get.getMessage))
             (false, ZkVersion.NoVersion)
         }
 
       case Code.NONODE =>
-        debug("Conditional update of path %s with data %s and expected version %d failed due to %s".format(path, data,
-          expectVersion, setDataResponse.resultException.get.getMessage))
+        debug("Conditional update of path %s with data %s and expected version %d failed due to %s".format(path,
+          Utils.utf8(data), expectVersion, setDataResponse.resultException.get.getMessage))
         (false, ZkVersion.NoVersion)
 
       case _ =>
-        debug("Conditional update of path %s with data %s and expected version %d failed due to %s".format(path, data,
-          expectVersion, setDataResponse.resultException.get.getMessage))
+        debug("Conditional update of path %s with data %s and expected version %d failed due to %s".format(path,
+          Utils.utf8(data), expectVersion, setDataResponse.resultException.get.getMessage))
         throw setDataResponse.resultException.get
     }
   }
