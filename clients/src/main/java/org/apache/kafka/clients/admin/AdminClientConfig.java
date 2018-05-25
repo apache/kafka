@@ -122,9 +122,9 @@ public class AdminClientConfig extends AbstractConfig {
                                         Importance.LOW,
                                         RECONNECT_BACKOFF_MAX_MS_DOC)
                                 .define(RETRY_BACKOFF_MS_CONFIG,
-                                        Type.INT,
-                                        100,
-                                        atLeast(0),
+                                        Type.LONG,
+                                        100L,
+                                        atLeast(0L),
                                         Importance.LOW,
                                         RETRY_BACKOFF_MS_DOC)
                                 .define(REQUEST_TIMEOUT_MS_CONFIG,

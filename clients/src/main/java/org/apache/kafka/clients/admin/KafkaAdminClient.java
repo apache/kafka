@@ -220,7 +220,7 @@ public class KafkaAdminClient extends AdminClient {
 
     private final int maxRetries;
 
-    private final int retryBackoffMs;
+    private final long retryBackoffMs;
 
     /**
      * Get or create a list value from a map.
@@ -327,7 +327,7 @@ public class KafkaAdminClient extends AdminClient {
             // Since we only request node information, it's safe to pass true for allowAutoTopicCreation (and it
             // simplifies communication with older brokers)
             AdminMetadataManager metadataManager = new AdminMetadataManager(logContext,
-                config.getInt(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),
+                config.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),
                 config.getLong(AdminClientConfig.METADATA_MAX_AGE_CONFIG));
             List<MetricsReporter> reporters = config.getConfiguredInstances(AdminClientConfig.METRIC_REPORTER_CLASSES_CONFIG,
                 MetricsReporter.class);
@@ -375,7 +375,7 @@ public class KafkaAdminClient extends AdminClient {
             metrics = new Metrics(new MetricConfig(), new LinkedList<MetricsReporter>(), time);
             LogContext logContext = createLogContext(clientId);
             AdminMetadataManager metadataManager = new AdminMetadataManager(logContext,
-                config.getInt(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),
+                config.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),
                 config.getLong(AdminClientConfig.METADATA_MAX_AGE_CONFIG));
             return new KafkaAdminClient(config, clientId, time, metadataManager, metrics,
                 client, null, logContext);
@@ -413,7 +413,7 @@ public class KafkaAdminClient extends AdminClient {
         this.timeoutProcessorFactory = (timeoutProcessorFactory == null) ?
             new TimeoutProcessorFactory() : timeoutProcessorFactory;
         this.maxRetries = config.getInt(AdminClientConfig.RETRIES_CONFIG);
-        this.retryBackoffMs = config.getInt(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG);
+        this.retryBackoffMs = config.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG);
         config.logUnused();
         AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics);
         log.debug("Kafka admin client initialized");
