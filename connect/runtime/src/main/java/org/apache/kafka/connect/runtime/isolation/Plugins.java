@@ -319,7 +319,7 @@ public class Plugins {
 
 
     /**
-     * If the given Class Names are available in the classloader, return a list of new configured
+     * If the given class names are available in the classloader, return a list of new configured
      * instances. If the instances implement {@link Configurable}, they are configured with provided {@param config}
      *
      * @param klassNames         the list of class names of plugins that needs to instantiated and configured
