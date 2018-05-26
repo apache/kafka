@@ -426,6 +426,10 @@ public class MockClient implements KafkaClient {
         return !metadataUpdates.isEmpty();
     }
 
+    public int numAwaitingResponses() {
+        return futureResponses.size();
+    }
+
     public void prepareMetadataUpdate(Cluster cluster, Set<String> unavailableTopics) {
         metadataUpdates.add(new MetadataUpdate(cluster, unavailableTopics, false));
     }

@@ -220,6 +220,8 @@ public class KafkaAdminClient extends AdminClient {
 
     private final int maxRetries;
 
+    private final long retryBackoffMs;
+
     /**
      * Get or create a list value from a map.
      *
@@ -387,9 +389,14 @@ public class KafkaAdminClient extends AdminClient {
         return new LogContext("[AdminClient clientId=" + clientId + "] ");
     }
 
-    private KafkaAdminClient(AdminClientConfig config, String clientId, Time time,
-                AdminMetadataManager metadataManager, Metrics metrics, KafkaClient client,
-                TimeoutProcessorFactory timeoutProcessorFactory, LogContext logContext) {
+    private KafkaAdminClient(AdminClientConfig config,
+                             String clientId,
+                             Time time,
+                             AdminMetadataManager metadataManager,
+                             Metrics metrics,
+                             KafkaClient client,
+                             TimeoutProcessorFactory timeoutProcessorFactory,
+                             LogContext logContext) {
         this.defaultTimeoutMs = config.getInt(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG);
         this.clientId = clientId;
         this.log = logContext.logger(KafkaAdminClient.class);
@@ -406,6 +413,7 @@ public class KafkaAdminClient extends AdminClient {
         this.timeoutProcessorFactory = (timeoutProcessorFactory == null) ?
             new TimeoutProcessorFactory() : timeoutProcessorFactory;
         this.maxRetries = config.getInt(AdminClientConfig.RETRIES_CONFIG);
+        this.retryBackoffMs = config.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG);
         config.logUnused();
         AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics);
         log.debug("Kafka admin client initialized");
@@ -532,6 +540,7 @@ public class KafkaAdminClient extends AdminClient {
         private int tries = 0;
         private boolean aborted = false;
         private Node curNode = null;
+        private long nextAllowedTryMs = 0;
 
         Call(boolean internal, String callName, long deadlineMs, NodeProvider nodeProvider) {
             this.internal = internal;
@@ -581,6 +590,8 @@ public class KafkaAdminClient extends AdminClient {
                 return;
             }
             tries++;
+            nextAllowedTryMs = now + retryBackoffMs;
+
             // If the call has timed out, fail.
             if (calcTimeoutMsRemainingAsInt(now, deadlineMs) < 0) {
                 if (log.isDebugEnabled()) {
@@ -811,10 +822,18 @@ public class KafkaAdminClient extends AdminClient {
          * @param now           The current time in milliseconds.
          * @param pendingIter   An iterator yielding pending calls.
          */
-        private void chooseNodesForPendingCalls(long now, Iterator<Call> pendingIter) {
+        private long chooseNodesForPendingCalls(long now, Iterator<Call> pendingIter) {
+            long pollTimeout = Long.MAX_VALUE;
             log.trace("Trying to choose nodes for {} at {}", pendingIter, now);
             while (pendingIter.hasNext()) {
                 Call call = pendingIter.next();
+
+                // If the call is being retried, await the proper backoff before finding the node
+                if (now < call.nextAllowedTryMs) {
+                    pollTimeout = Math.min(pollTimeout, call.nextAllowedTryMs - now);
+                    continue;
+                }
+
                 Node node = null;
                 try {
                     node = call.nodeProvider.provide();
@@ -833,6 +852,7 @@ public class KafkaAdminClient extends AdminClient {
                     log.trace("Unable to assign {} to a node.", call);
                 }
             }
+            return pollTimeout;
         }
 
         /**
@@ -1033,7 +1053,7 @@ public class KafkaAdminClient extends AdminClient {
                 }
 
                 // Choose nodes for our pending calls.
-                chooseNodesForPendingCalls(now, pendingCalls.iterator());
+                pollTimeout = Math.min(pollTimeout, chooseNodesForPendingCalls(now, pendingCalls.iterator()));
                 long metadataFetchDelayMs = metadataManager.metadataFetchDelayMs(now);
                 if (metadataFetchDelayMs == 0) {
                     metadataManager.transitionToUpdatePending(now);
