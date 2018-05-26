@@ -26,6 +26,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -398,7 +399,7 @@ public class RecordAccumulatorTest {
                 accum.deallocate(batch);
 
         // should be complete with no unsent records.
-        accum.awaitFlushCompletion();
+        accum.awaitFlushCompletion(Integer.MAX_VALUE);
         assertFalse(accum.hasUndrained());
         assertFalse(accum.hasIncomplete());
     }
@@ -424,12 +425,29 @@ public class RecordAccumulatorTest {
         assertTrue(accum.flushInProgress());
         delayedInterrupt(Thread.currentThread(), 1000L);
         try {
-            accum.awaitFlushCompletion();
+            accum.awaitFlushCompletion(Integer.MAX_VALUE);
             fail("awaitFlushCompletion should throw InterruptException");
         } catch (InterruptedException e) {
             assertFalse("flushInProgress count should be decremented even if thread is interrupted", accum.flushInProgress());
         }
     }
+
+    @Test
+    public void testAwaitFlushTimeout() throws Exception {
+        RecordAccumulator accum = createTestRecordAccumulator(
+             4 * 1024 + DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 64 * 1024, CompressionType.NONE, Integer.MAX_VALUE);
+        accum.append(new TopicPartition(topic, 0), 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, false);
+
+        accum.beginFlush();
+        assertTrue(accum.flushInProgress());
+        try {
+            accum.awaitFlushCompletion(100);
+            fail("testAwaitFlushTimeout should throw TimeoutException");
+        } catch (TimeoutException e) {
+            assertFalse("flushInProgress count should be decremented even if flush timeout expires", accum.flushInProgress());
+        }
+    }
+
 
     @Test
     public void testAbortIncompleteBatches() throws Exception {

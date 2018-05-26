@@ -29,6 +29,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.TimeUnit;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.common.Cluster;
@@ -37,6 +38,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.metrics.Measurable;
@@ -703,12 +705,21 @@ public final class RecordAccumulator {
     }
 
     /**
-     * Mark all partitions as ready to send and block until the send is complete
+     * Mark all partitions as ready to send and block until the send is complete or time expires
      */
-    public void awaitFlushCompletion() throws InterruptedException {
+    public void awaitFlushCompletion(long timeoutMs) throws InterruptedException {
         try {
-            for (ProducerBatch batch : this.incomplete.copyAll())
-                batch.produceFuture.await();
+            Long expireMs = System.currentTimeMillis() + timeoutMs;
+            for (ProducerBatch batch : this.incomplete.copyAll()) {
+                Long currentMs = System.currentTimeMillis();
+                if (currentMs > expireMs) {
+                    throw new TimeoutException("Failed to flush accumulated records within" + timeoutMs + "milliseconds.");
+                }
+                boolean completed = batch.produceFuture.await(Math.max(expireMs - currentMs, 0), TimeUnit.MILLISECONDS);
+                if (!completed) {
+                    throw new TimeoutException("Failed to flush accumulated records within" + timeoutMs + "milliseconds.");
+                }
+            }
         } finally {
             this.flushesInProgress.decrementAndGet();
         }

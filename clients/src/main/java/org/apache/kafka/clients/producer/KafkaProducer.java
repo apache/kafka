@@ -1103,11 +1103,27 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     @Override
     public void flush() {
-        log.trace("Flushing accumulated records in producer.");
-        this.accumulator.beginFlush();
-        this.sender.wakeup();
+        flush(Integer.MAX_VALUE, TimeUnit.MILLISECONDS);
+    }
+
+    /**
+     * This method waits up to <code>timeout</code> for the producer to send out all the buffered records.
+     * @param timeout The maximum time to wait for producer to complete. The value should be non-negative.
+     * @param unit The time unit for the <code>timeout</code>
+     * @throws TimeoutException If producer fail to finish in time
+     * @throws InterruptException If the thread is interrupted while blocked
+     * @throws IllegalArgumentException If the <code>timeout</code> is negative.
+     */
+    @Override
+    public void flush(long timeout, TimeUnit unit) {
+        if (timeout < 0)
+            throw new IllegalArgumentException("The timeout cannot be negative.");
         try {
-            this.accumulator.awaitFlushCompletion();
+            this.accumulator.beginFlush();
+            this.sender.wakeup();
+            this.accumulator.awaitFlushCompletion(unit.toMillis(timeout));
+        } catch (TimeoutException e) {
+            throw e;
         } catch (InterruptedException e) {
             throw new InterruptException("Flush interrupted.", e);
         }
