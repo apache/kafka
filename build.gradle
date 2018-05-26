@@ -787,6 +787,7 @@ project(':clients') {
     compile libs.lz4
     compile libs.snappy
     compile libs.slf4jApi
+    compile libs.jacksonDatabind // for SASL/OAUTHBEARER bearer token parsing
 
     testCompile libs.bcpkix
     testCompile libs.junit
@@ -858,6 +859,7 @@ project(':clients') {
     include "**/org/apache/kafka/common/security/auth/*"
     include "**/org/apache/kafka/server/policy/*"
     include "**/org/apache/kafka/common/security/token/delegation/*"
+    include "**/org/apache/kafka/common/security/oauthbearer/*"
   }
 }
 

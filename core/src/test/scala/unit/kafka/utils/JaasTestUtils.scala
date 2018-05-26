@@ -83,6 +83,17 @@ object JaasTestUtils {
     ) ++ tokenProps.map { case (name, value) => name -> value }
   }
 
+  case class OAuthBearerLoginModule(username: String,
+                              debug: Boolean = false) extends JaasModule {
+
+    def name = "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule"
+
+    def entries: Map[String, String] = Map(
+      "unsecuredLoginStringClaim_sub" -> username
+    )
+
+  }
+
   sealed trait JaasModule {
     def name: String
     def debug: Boolean
@@ -134,6 +145,10 @@ object JaasTestUtils {
   val KafkaScramAdmin = "scram-admin"
   val KafkaScramAdminPassword = "scram-admin-secret"
 
+  val KafkaOAuthBearerUser = "oauthbearer-user"
+  val KafkaOAuthBearerUser2 = "oauthbearer-user2"
+  val KafkaOAuthBearerAdmin = "oauthbearer-admin"
+
   val serviceName = "kafka"
 
   def saslConfigs(saslProperties: Option[Properties]): Properties = {
@@ -156,7 +171,7 @@ object JaasTestUtils {
 
   // Returns the dynamic configuration, using credentials for user #1
   def clientLoginModule(mechanism: String, keytabLocation: Option[File]): String =
-    kafkaClientModule(mechanism, keytabLocation, KafkaClientPrincipal, KafkaPlainUser, KafkaPlainPassword, KafkaScramUser, KafkaScramPassword).toString
+    kafkaClientModule(mechanism, keytabLocation, KafkaClientPrincipal, KafkaPlainUser, KafkaPlainPassword, KafkaScramUser, KafkaScramPassword, KafkaOAuthBearerUser).toString
 
   def tokenClientLoginModule(tokenId: String, password: String): String = {
     ScramLoginModule(
@@ -200,6 +215,8 @@ object JaasTestUtils {
           KafkaScramAdmin,
           KafkaScramAdminPassword,
           debug = false)
+      case "OAUTHBEARER" =>
+        OAuthBearerLoginModule(KafkaOAuthBearerAdmin)
       case mechanism => throw new IllegalArgumentException("Unsupported server mechanism " + mechanism)
     }
     JaasSection(contextName, modules)
@@ -209,7 +226,7 @@ object JaasTestUtils {
   private def kafkaClientModule(mechanism: String, 
       keytabLocation: Option[File], clientPrincipal: String,
       plainUser: String, plainPassword: String, 
-      scramUser: String, scramPassword: String): JaasModule = {
+      scramUser: String, scramPassword: String, oauthBearerUser: String): JaasModule = {
     mechanism match {
       case "GSSAPI" =>
         Krb5LoginModule(
@@ -230,6 +247,10 @@ object JaasTestUtils {
           scramUser,
           scramPassword
         )
+      case "OAUTHBEARER" =>
+        OAuthBearerLoginModule(
+          oauthBearerUser
+        )
       case mechanism => throw new IllegalArgumentException("Unsupported client mechanism " + mechanism)
     }
   }
@@ -239,7 +260,7 @@ object JaasTestUtils {
    */
   def kafkaClientSection(mechanism: Option[String], keytabLocation: Option[File]): JaasSection = {
     JaasSection(KafkaClientContextName, mechanism.map(m =>
-      kafkaClientModule(m, keytabLocation, KafkaClientPrincipal2, KafkaPlainUser2, KafkaPlainPassword2, KafkaScramUser2, KafkaScramPassword2)).toSeq)
+      kafkaClientModule(m, keytabLocation, KafkaClientPrincipal2, KafkaPlainUser2, KafkaPlainPassword2, KafkaScramUser2, KafkaScramPassword2, KafkaOAuthBearerUser2)).toSeq)
   }
 
   private def jaasSectionsToString(jaasSections: Seq[JaasSection]): String =
