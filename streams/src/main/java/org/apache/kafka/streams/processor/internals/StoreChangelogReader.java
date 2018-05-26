@@ -78,11 +78,9 @@ public class StoreChangelogReader implements ChangelogReader {
 
         final Set<TopicPartition> restoringPartitions = new HashSet<>(needsRestoring.keySet());
         try {
-            if (!needsRestoring.isEmpty()) {
-                final Set<TopicPartition> remainingPartitions = new HashSet<>(needsRestoring.keySet());
-                remainingPartitions.removeAll(updatedEndOffsets.keySet());
-                updatedEndOffsets.putAll(restoreConsumer.endOffsets(remainingPartitions));
-            }
+            final Set<TopicPartition> remainingPartitions = new HashSet<>(needsRestoring.keySet());
+            remainingPartitions.removeAll(updatedEndOffsets.keySet());
+            updatedEndOffsets.putAll(restoreConsumer.endOffsets(remainingPartitions));
             final ConsumerRecords<byte[], byte[]> records = restoreConsumer.poll(10);
             final Iterator<TopicPartition> iterator = restoringPartitions.iterator();
             final Set<TopicPartition> completedPartitions = new HashSet<>();
@@ -305,7 +303,6 @@ public class StoreChangelogReader implements ChangelogReader {
                 return true;
             }
         }
-
         return false;
     }
 }
