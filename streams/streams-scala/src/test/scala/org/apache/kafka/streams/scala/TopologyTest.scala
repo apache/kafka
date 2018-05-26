@@ -19,7 +19,6 @@
  */
 package org.apache.kafka.streams.scala
 
-import java.util.Properties
 import java.util.regex.Pattern
 
 import org.scalatest.junit.JUnitSuite
@@ -28,11 +27,9 @@ import org.junit._
 
 import org.apache.kafka.streams.scala.kstream._
 
-import org.apache.kafka.common.serialization._
-
 import ImplicitConversions._
 
-import org.apache.kafka.streams.{KafkaStreams => KafkaStreamsJ, StreamsBuilder => StreamsBuilderJ, _}
+import org.apache.kafka.streams.{StreamsBuilder => StreamsBuilderJ, _}
 import org.apache.kafka.streams.kstream.{KTable => KTableJ, KStream => KStreamJ, KGroupedStream => KGroupedStreamJ, _}
 import collection.JavaConverters._
 
@@ -53,7 +50,6 @@ class TopologyTest extends JUnitSuite {
     def getTopologyScala(): TopologyDescription = {
 
       import Serdes._
-      import collection.JavaConverters._
   
       val streamBuilder = new StreamsBuilder
       val textLines = streamBuilder.stream[String, String](inputTopic)
@@ -88,7 +84,6 @@ class TopologyTest extends JUnitSuite {
     def getTopologyScala(): TopologyDescription = {
 
       import Serdes._
-      import collection.JavaConverters._
   
       val streamBuilder = new StreamsBuilder
       val textLines = streamBuilder.stream[String, String](inputTopic)
@@ -142,7 +137,7 @@ class TopologyTest extends JUnitSuite {
   
       val clicksPerRegion: KTable[String, Long] =
         userClicksStream
-          .leftJoin(userRegionsTable, (clicks: Long, region: String) => (if (region == null) "UNKNOWN" else region, clicks))
+          .leftJoin(userRegionsTable)((clicks, region) => (if (region == null) "UNKNOWN" else region, clicks))
           .map((_, regionWithClicks) => regionWithClicks)
           .groupByKey
           .reduce(_ + _)

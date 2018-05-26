@@ -108,6 +108,7 @@ public class InternalTopicManager {
                     .configs(topicConfig));
             }
 
+            // TODO: KAFKA-6928. should not need retries in the outer caller as it will be retried internally in admin client
             int remainingRetries = retries;
             boolean retry;
             do {
@@ -171,6 +172,9 @@ public class InternalTopicManager {
      */
     // visible for testing
     protected Map<String, Integer> getNumPartitions(final Set<String> topics) {
+        log.debug("Trying to check if topics {} have been created with expected number of partitions.", topics);
+
+        // TODO: KAFKA-6928. should not need retries in the outer caller as it will be retried internally in admin client
         int remainingRetries = retries;
         boolean retry;
         do {

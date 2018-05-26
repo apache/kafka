@@ -19,6 +19,7 @@ package org.apache.kafka.connect.connector;
 import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigValue;
+import org.apache.kafka.connect.errors.ConnectException;
 
 import java.util.List;
 import java.util.Map;
@@ -130,13 +131,18 @@ public abstract class Connector {
      */
     public Config validate(Map<String, String> connectorConfigs) {
         ConfigDef configDef = config();
+        if (null == configDef) {
+            throw new ConnectException(
+                String.format("%s.config() must return a ConfigDef that is not null.", this.getClass().getName())
+            );
+        }
         List<ConfigValue> configValues = configDef.validate(connectorConfigs);
         return new Config(configValues);
     }
 
     /**
      * Define the configuration for the connector.
-     * @return The ConfigDef for this connector.
+     * @return The ConfigDef for this connector; may not be null.
      */
     public abstract ConfigDef config();
 }

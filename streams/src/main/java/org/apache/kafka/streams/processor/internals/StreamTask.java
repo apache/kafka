@@ -343,7 +343,13 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     }
 
     private void updateProcessorContext(final StampedRecord record, final ProcessorNode currNode) {
-        processorContext.setRecordContext(new ProcessorRecordContext(record.timestamp, record.offset(), record.partition(), record.topic()));
+        processorContext.setRecordContext(
+            new ProcessorRecordContext(
+                record.timestamp,
+                record.offset(),
+                record.partition(),
+                record.topic(),
+                record.headers()));
         processorContext.setCurrentNode(currNode);
     }
 
@@ -741,5 +747,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     // visible for testing only
     RecordCollector recordCollector() {
         return recordCollector;
+    }
+
+    Producer<byte[], byte[]> getProducer() {
+        return producer;
     }
 }

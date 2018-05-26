@@ -20,9 +20,11 @@
 package org.apache.kafka.streams.scala
 package kstream
 
+import org.apache.kafka.common.utils.Bytes
 import org.apache.kafka.streams.kstream.{KTable => KTableJ, _}
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.FunctionConversions._
+import org.apache.kafka.streams.state.KeyValueStore
 
 /**
  * Wraps the Java class [[org.apache.kafka.streams.kstream.KTable]] and delegates method calls to the underlying Java object.
@@ -163,6 +165,59 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
     inner.toStream[KR](mapper.asKeyValueMapper)
 
   /**
+    * Create a new `KTable` by transforming the value of each record in this `KTable` into a new value, (with possibly new type).
+    * Transform the value of each input record into a new value (with possible new type) of the output record.
+    * A `ValueTransformerWithKey` (provided by the given `ValueTransformerWithKeySupplier`) is applied to each input
+    * record value and computes a new value for it.
+    * This is similar to `#mapValues(ValueMapperWithKey)`, but more flexible, allowing access to additional state-stores,
+    * and to the `ProcessorContext`.
+    * If the downstream topology uses aggregation functions, (e.g. `KGroupedTable#reduce`, `KGroupedTable#aggregate`, etc),
+    * care must be taken when dealing with state, (either held in state-stores or transformer instances), to ensure correct
+    * aggregate results.
+    * In contrast, if the resulting KTable is materialized, (cf. `#transformValues(ValueTransformerWithKeySupplier, Materialized, String...)`),
+    * such concerns are handled for you.
+    * In order to assign a state, the state must be created and registered
+    * beforehand via stores added via `addStateStore` or `addGlobalStore` before they can be connected to the `Transformer`
+    *
+    * @param valueTransformerWithKeySupplier a instance of `ValueTransformerWithKeySupplier` that generates a `ValueTransformerWithKey`.
+    *                                 At least one transformer instance will be created per streaming task.
+    *                                 Transformer implementations doe not need to be thread-safe.
+    * @param stateStoreNames          the names of the state stores used by the processor
+    * @return a [[KStream]] that contains records with unmodified key and new values (possibly of different type)
+    * @see `org.apache.kafka.streams.kstream.KStream#transformValues`
+    */
+  def transformValues[VR](valueTransformerWithKeySupplier: ValueTransformerWithKeySupplier[K, V, VR],
+                          stateStoreNames: String*): KTable[K, VR] = {
+    inner.transformValues[VR](valueTransformerWithKeySupplier, stateStoreNames: _*)
+  }
+
+  /**
+    * Create a new `KTable` by transforming the value of each record in this `KTable` into a new value, (with possibly new type).
+    * A `ValueTransformer` (provided by the given `ValueTransformerSupplier`) is applied to each input
+    * record value and computes a new value for it.
+    * This is similar to `#mapValues(ValueMapperWithKey)`, but more flexible, allowing stateful, rather than stateless,
+    * record-by-record operation, access to additional state-stores, and access to the `ProcessorContext`.
+    * In order to assign a state, the state must be created and registered
+    * beforehand via stores added via `addStateStore` or `addGlobalStore` before they can be connected to the `Transformer`
+    * The resulting `KTable` is materialized into another state store (additional to the provided state store names)
+    * as specified by the user via `Materialized` parameter, and is queryable through its given name.
+    *
+    * @param valueTransformerWithKeySupplier a instance of `ValueTransformerWithKeySupplier` that generates a `ValueTransformerWithKey`
+    *                                 At least one transformer instance will be created per streaming task.
+    *                                 Transformer implementations doe not need to be thread-safe.
+    * @param materialized             an instance of `Materialized` used to describe how the state store of the
+    *                                 resulting table should be materialized.
+    * @param stateStoreNames          the names of the state stores used by the processor
+    * @return a [[KStream]] that contains records with unmodified key and new values (possibly of different type)
+    * @see `org.apache.kafka.streams.kstream.KStream#transformValues`
+    */
+  def transformValues[VR](valueTransformerWithKeySupplier: ValueTransformerWithKeySupplier[K, V, VR],
+                          materialized: Materialized[K, VR, KeyValueStore[Bytes, Array[Byte]]],
+                          stateStoreNames: String*): KTable[K, VR] = {
+    inner.transformValues[VR](valueTransformerWithKeySupplier, materialized, stateStoreNames: _*)
+  }
+
+  /**
    * Re-groups the records of this [[KTable]] using the provided key/value mapper
    * and `Serde`s as specified by `Serialized`.
    *
@@ -170,7 +225,7 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
    * @param serialized    the `Serialized` instance used to specify `Serdes`
    * @return a [[KGroupedTable]] that contains the re-grouped records of the original [[KTable]]
    * @see `org.apache.kafka.streams.kstream.KTable#groupBy`
-   */ 
+   */
   def groupBy[KR, VR](selector: (K, V) => (KR, VR))(implicit serialized: Serialized[KR, VR]): KGroupedTable[KR, VR] =
     inner.groupBy(selector.asKeyValueMapper, serialized)
 
@@ -182,9 +237,8 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
    * @return a [[KTable]] that contains join-records for each key and values computed by the given joiner,
    * one for each matched record-pair with the same key
    * @see `org.apache.kafka.streams.kstream.KTable#join`
-   */ 
-  def join[VO, VR](other: KTable[K, VO],
-    joiner: (V, VO) => VR): KTable[K, VR] =
+   */
+  def join[VO, VR](other: KTable[K, VO])(joiner: (V, VO) => VR): KTable[K, VR] =
     inner.join[VO, VR](other.inner, joiner.asValueJoiner)
 
   /**
@@ -197,10 +251,11 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
    * @return a [[KTable]] that contains join-records for each key and values computed by the given joiner,
    * one for each matched record-pair with the same key
    * @see `org.apache.kafka.streams.kstream.KTable#join`
-   */ 
-  def join[VO, VR](other: KTable[K, VO],
+   */
+  def join[VO, VR](other: KTable[K, VO])(
     joiner: (V, VO) => VR,
-    materialized: Materialized[K, VR, ByteArrayKeyValueStore]): KTable[K, VR] =
+    materialized: Materialized[K, VR, ByteArrayKeyValueStore]
+  ): KTable[K, VR] =
     inner.join[VO, VR](other.inner, joiner.asValueJoiner, materialized)
 
   /**
@@ -211,9 +266,8 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
    * @return a [[KTable]] that contains join-records for each key and values computed by the given joiner,
    * one for each matched record-pair with the same key
    * @see `org.apache.kafka.streams.kstream.KTable#leftJoin`
-   */ 
-  def leftJoin[VO, VR](other: KTable[K, VO],
-    joiner: (V, VO) => VR): KTable[K, VR] =
+   */
+  def leftJoin[VO, VR](other: KTable[K, VO])(joiner: (V, VO) => VR): KTable[K, VR] =
     inner.leftJoin[VO, VR](other.inner, joiner.asValueJoiner)
 
   /**
@@ -226,10 +280,11 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
    * @return a [[KTable]] that contains join-records for each key and values computed by the given joiner,
    * one for each matched record-pair with the same key
    * @see `org.apache.kafka.streams.kstream.KTable#leftJoin`
-   */ 
-  def leftJoin[VO, VR](other: KTable[K, VO],
+   */
+  def leftJoin[VO, VR](other: KTable[K, VO])(
     joiner: (V, VO) => VR,
-    materialized: Materialized[K, VR, ByteArrayKeyValueStore]): KTable[K, VR] =
+    materialized: Materialized[K, VR, ByteArrayKeyValueStore]
+  ): KTable[K, VR] =
     inner.leftJoin[VO, VR](other.inner, joiner.asValueJoiner, materialized)
 
   /**
@@ -240,9 +295,8 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
    * @return a [[KTable]] that contains join-records for each key and values computed by the given joiner,
    * one for each matched record-pair with the same key
    * @see `org.apache.kafka.streams.kstream.KTable#leftJoin`
-   */ 
-  def outerJoin[VO, VR](other: KTable[K, VO],
-    joiner: (V, VO) => VR): KTable[K, VR] =
+   */
+  def outerJoin[VO, VR](other: KTable[K, VO])(joiner: (V, VO) => VR): KTable[K, VR] =
     inner.outerJoin[VO, VR](other.inner, joiner.asValueJoiner)
 
   /**
@@ -256,9 +310,10 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
    * one for each matched record-pair with the same key
    * @see `org.apache.kafka.streams.kstream.KTable#leftJoin`
    */ 
-  def outerJoin[VO, VR](other: KTable[K, VO],
+  def outerJoin[VO, VR](other: KTable[K, VO])(
     joiner: (V, VO) => VR,
-    materialized: Materialized[K, VR, ByteArrayKeyValueStore]): KTable[K, VR] =
+    materialized: Materialized[K, VR, ByteArrayKeyValueStore]
+  ): KTable[K, VR] =
     inner.outerJoin[VO, VR](other.inner, joiner.asValueJoiner, materialized)
 
   /**
@@ -268,3 +323,4 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
    */
   def queryableStoreName: String = inner.queryableStoreName
 }
+

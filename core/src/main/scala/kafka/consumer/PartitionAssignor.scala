@@ -79,7 +79,7 @@ class RoundRobinAssignor() extends PartitionAssignor with Logging {
 
     if (ctx.consumersForTopic.nonEmpty) {
       // Collect consumer thread ids across all topics, remove duplicates, and sort to ensure determinism
-      val allThreadIds = ctx.consumersForTopic.flatMap { case (topic, threadIds) =>
+      val allThreadIds = ctx.consumersForTopic.flatMap { case (_, threadIds) =>
          threadIds
       }.toSet.toSeq.sorted
 

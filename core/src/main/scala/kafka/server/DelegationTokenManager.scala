@@ -20,9 +20,10 @@ package kafka.server
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 import java.security.InvalidKeyException
+import java.util.Base64
+
 import javax.crypto.spec.SecretKeySpec
 import javax.crypto.{Mac, SecretKey}
-
 import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.{CoreUtils, Json, Logging}
@@ -33,7 +34,7 @@ import org.apache.kafka.common.security.scram.internal.{ScramFormatter, ScramMec
 import org.apache.kafka.common.security.scram.ScramCredential
 import org.apache.kafka.common.security.token.delegation.internal.DelegationTokenCache
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
-import org.apache.kafka.common.utils.{Base64, Sanitizer, SecurityUtils, Time}
+import org.apache.kafka.common.utils.{Sanitizer, SecurityUtils, Time}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
@@ -78,7 +79,7 @@ object DelegationTokenManager {
    */
   def createBase64HMAC(tokenId: String, secretKey: SecretKey) : String = {
     val hmac = createHmac(tokenId, secretKey)
-    Base64.encoder.encodeToString(hmac)
+    Base64.getEncoder.encodeToString(hmac)
   }
 
   /**
@@ -344,7 +345,7 @@ class DelegationTokenManager(val config: KafkaConfig,
     try {
       val byteArray = new Array[Byte](hmac.remaining)
       hmac.get(byteArray)
-      val base64Pwd = Base64.encoder.encodeToString(byteArray)
+      val base64Pwd = Base64.getEncoder.encodeToString(byteArray)
       val tokenInfo = tokenCache.tokenForHmac(base64Pwd)
       if (tokenInfo == null) None else Some(new DelegationToken(tokenInfo, byteArray))
     } catch {
