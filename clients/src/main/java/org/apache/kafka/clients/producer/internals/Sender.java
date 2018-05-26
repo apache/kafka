@@ -265,7 +265,7 @@ public class Sender implements Runnable {
             Node node = iter.next();
             if (!this.client.ready(node, now)) {
                 iter.remove();
-                notReadyTimeout = Math.min(notReadyTimeout, this.client.connectionDelay(node, now));
+                notReadyTimeout = Math.min(notReadyTimeout, this.client.pollDelayMs(node, now));
             }
         }
 

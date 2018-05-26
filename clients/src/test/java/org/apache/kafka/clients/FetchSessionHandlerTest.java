@@ -38,6 +38,7 @@ import java.util.TreeSet;
 
 import static org.apache.kafka.common.requests.FetchMetadata.INITIAL_EPOCH;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
+import static org.apache.kafka.common.requests.FetchMetadata.THROTTLED_SESSION_ID;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -257,27 +258,38 @@ public class FetchSessionHandlerTest {
             0, 123);
         handler.handleResponse(resp2);
 
+        // Skip building a new request.  Test that handling an empty throttled response for throttling does not change
+        // the fetch metadata.
+        FetchResponse resp3 = new FetchResponse(Errors.NONE, respMap(), 0, THROTTLED_SESSION_ID);
+        handler.handleResponse(resp3);
+        // The metadata should be same as data2.metadata(), except for the epoch, which was increased by 1 when resp2
+        // was handled above.
+        FetchSessionHandler.FetchRequestData data3 = handler.newBuilder().build();
+        assertEquals(data2.metadata().isFull(), data3.metadata().isFull());
+        assertEquals(data2.metadata().sessionId(), data3.metadata().sessionId());
+        assertEquals(data2.metadata().epoch() + 1, data3.metadata().epoch());
+
         // Skip building a new request.  Test that handling an invalid fetch session epoch response results
         // in a request which closes the session.
-        FetchResponse resp3 = new FetchResponse(Errors.INVALID_FETCH_SESSION_EPOCH, respMap(),
+        FetchResponse resp4 = new FetchResponse(Errors.INVALID_FETCH_SESSION_EPOCH, respMap(),
             0, INVALID_SESSION_ID);
-        handler.handleResponse(resp3);
+        handler.handleResponse(resp4);
 
-        FetchSessionHandler.Builder builder4 = handler.newBuilder();
-        builder4.add(new TopicPartition("foo", 0),
+        FetchSessionHandler.Builder builder5 = handler.newBuilder();
+        builder5.add(new TopicPartition("foo", 0),
             new FetchRequest.PartitionData(0, 100, 200));
-        builder4.add(new TopicPartition("foo", 1),
+        builder5.add(new TopicPartition("foo", 1),
             new FetchRequest.PartitionData(10, 120, 210));
-        builder4.add(new TopicPartition("bar", 0),
+        builder5.add(new TopicPartition("bar", 0),
             new FetchRequest.PartitionData(20, 200, 200));
-        FetchSessionHandler.FetchRequestData data4 = builder4.build();
-        assertTrue(data4.metadata().isFull());
-        assertEquals(data2.metadata().sessionId(), data4.metadata().sessionId());
-        assertEquals(INITIAL_EPOCH, data4.metadata().epoch());
+        FetchSessionHandler.FetchRequestData data5 = builder5.build();
+        assertTrue(data5.metadata().isFull());
+        assertEquals(data2.metadata().sessionId(), data5.metadata().sessionId());
+        assertEquals(INITIAL_EPOCH, data5.metadata().epoch());
         assertMapsEqual(reqMap(new ReqEntry("foo", 0, 0, 100, 200),
             new ReqEntry("foo", 1, 10, 120, 210),
             new ReqEntry("bar", 0, 20, 200, 200)),
-            data4.sessionPartitions(), data4.toSend());
+            data5.sessionPartitions(), data5.toSend());
     }
 
     /**

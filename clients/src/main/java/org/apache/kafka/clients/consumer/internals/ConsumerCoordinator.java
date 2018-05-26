@@ -300,11 +300,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             // awaitMetadataUpdate() initiates new connections with configured backoff and avoids the busy loop.
             // When group management is used, metadata wait is already performed for this scenario as
             // coordinator is unknown, hence this check is not required.
-            if (metadata.updateRequested() && !client.hasReadyNodes()) {
+            if (metadata.updateRequested() && !client.hasReadyNodes(now)) {
                 boolean metadataUpdated = client.awaitMetadataUpdate(remainingMs);
-                if (!metadataUpdated && !client.hasReadyNodes())
-                    return;
                 now = time.milliseconds();
+                if (!metadataUpdated && !client.hasReadyNodes(now))
+                    return;
             }
         }
 

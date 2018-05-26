@@ -31,6 +31,11 @@ public class FetchMetadata {
     public static final int INVALID_SESSION_ID = 0;
 
     /**
+     * The session ID used when returning an empty fetch response due to quota violation.
+     */
+    public static final int THROTTLED_SESSION_ID = 1;
+
+    /**
      * The first epoch.  When used in a fetch request, indicates that the client
      * wants to create or recreate a session.
      */
@@ -139,6 +144,8 @@ public class FetchMetadata {
         StringBuilder bld = new StringBuilder();
         if (sessionId == INVALID_SESSION_ID) {
             bld.append("(sessionId=INVALID, ");
+        } else if (sessionId == THROTTLED_SESSION_ID) {
+            bld.append("(sessionId=THROTTLED, ");
         } else {
             bld.append("(sessionId=").append(sessionId).append(", ");
         }

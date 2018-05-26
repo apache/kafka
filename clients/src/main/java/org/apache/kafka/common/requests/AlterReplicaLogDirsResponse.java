@@ -54,8 +54,13 @@ public class AlterReplicaLogDirsResponse extends AbstractResponse {
                             PARTITION_ID,
                             ERROR_CODE)))))));
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema ALTER_REPLICA_LOG_DIRS_RESPONSE_V1 = ALTER_REPLICA_LOG_DIRS_RESPONSE_V0;
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{ALTER_REPLICA_LOG_DIRS_RESPONSE_V0};
+        return new Schema[]{ALTER_REPLICA_LOG_DIRS_RESPONSE_V0, ALTER_REPLICA_LOG_DIRS_RESPONSE_V1};
     }
 
     /**
@@ -116,6 +121,7 @@ public class AlterReplicaLogDirsResponse extends AbstractResponse {
         return struct;
     }
 
+    @Override
     public int throttleTimeMs() {
         return throttleTimeMs;
     }
@@ -131,5 +137,10 @@ public class AlterReplicaLogDirsResponse extends AbstractResponse {
 
     public static AlterReplicaLogDirsResponse parse(ByteBuffer buffer, short version) {
         return new AlterReplicaLogDirsResponse(ApiKeys.ALTER_REPLICA_LOG_DIRS.responseSchema(version).read(buffer));
+    }
+
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 1;
     }
 }

@@ -20,11 +20,13 @@ import java.{lang, util}
 import java.util.concurrent.{ConcurrentHashMap, DelayQueue, TimeUnit}
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
-import kafka.network.RequestChannel.Session
+import kafka.network.RequestChannel
+import kafka.network.RequestChannel._
 import kafka.server.ClientQuotaManager._
 import kafka.utils.{Logging, ShutdownableThread}
 import org.apache.kafka.common.{Cluster, MetricName}
 import org.apache.kafka.common.metrics._
+import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.metrics.stats.{Avg, Rate, Total}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{Sanitizer, Time}
@@ -169,9 +171,9 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
       else QuotaTypes.ClientIdQuotaEnabled
   }
   private val lock = new ReentrantReadWriteLock()
-  private val delayQueue = new DelayQueue[ThrottledResponse]()
+  private val delayQueue = new DelayQueue[ThrottledChannel]()
   private val sensorAccessor = new SensorAccess(lock, metrics)
-  private[server] val throttledRequestReaper = new ThrottledRequestReaper(delayQueue, threadNamePrefix)
+  private[server] val throttledChannelReaper = new ThrottledChannelReaper(delayQueue, threadNamePrefix)
   private val quotaCallback = clientQuotaCallback.getOrElse(new DefaultQuotaCallback)
 
   private val delayQueueSensor = metrics.sensor(quotaType + "-delayQueue")
@@ -180,23 +182,23 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
     "Tracks the size of the delay queue"), new Total())
   start() // Use start method to keep findbugs happy
   private def start() {
-    throttledRequestReaper.start()
+    throttledChannelReaper.start()
   }
 
   /**
-   * Reaper thread that triggers callbacks on all throttled requests
+   * Reaper thread that triggers channel unmute callbacks on all throttled channels
    * @param delayQueue DelayQueue to dequeue from
    */
-  class ThrottledRequestReaper(delayQueue: DelayQueue[ThrottledResponse], prefix: String) extends ShutdownableThread(
-    s"${prefix}ThrottledRequestReaper-$quotaType", false) {
+  class ThrottledChannelReaper(delayQueue: DelayQueue[ThrottledChannel], prefix: String) extends ShutdownableThread(
+    s"${prefix}ThrottledChannelReaper-$quotaType", false) {
 
     override def doWork(): Unit = {
-      val response: ThrottledResponse = delayQueue.poll(1, TimeUnit.SECONDS)
-      if (response != null) {
+      val throttledChannel: ThrottledChannel = delayQueue.poll(1, TimeUnit.SECONDS)
+      if (throttledChannel != null) {
         // Decrement the size of the delay queue
         delayQueueSensor.record(-1)
-        trace("Response throttled for: " + response.throttleTimeMs + " ms")
-        response.execute()
+        // Notify the socket server that throttling is done for this channel, so that it can try to unmute the channel.
+        throttledChannel.notifyThrottlingDone()
       }
     }
   }
@@ -211,48 +213,78 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
   def quotasEnabled: Boolean = quotaTypesEnabled != QuotaTypes.NoQuotas
 
   /**
-   * Records that a user/clientId changed some metric being throttled (produced/consumed bytes, request processing time etc.)
-   * If quota has been violated, callback is invoked after a delay, otherwise the callback is invoked immediately.
-   * Throttle time calculation may be overridden by sub-classes.
-   *
-   * @param session  the session associated with this request
-   * @param clientId clientId that produced/fetched the data
-   * @param value    amount of data in bytes or request processing time as a percentage
-   * @param callback Callback function. This will be triggered immediately if quota is not violated.
-   *                 If there is a quota violation, this callback will be triggered after a delay
-   * @return Number of milliseconds to delay the response in case of Quota violation.
-   *         Zero otherwise
-   */
-  def maybeRecordAndThrottle(session: Session, clientId: String, value: Double, callback: Int => Unit): Int = {
+    * Records that a user/clientId changed produced/consumed bytes being throttled at the specified time. If quota has
+    * been violated, return throttle time in milliseconds. Throttle time calculation may be overridden by sub-classes.
+    * @param request client request
+    * @param value amount of data in bytes or request processing time as a percentage
+    * @param timeMs time to record the value at
+    * @return throttle time in milliseconds
+    */
+  def maybeRecordAndGetThrottleTimeMs(request: RequestChannel.Request, value: Double, timeMs: Long): Int = {
+    maybeRecordAndGetThrottleTimeMs(request.session, request.header.clientId, value, timeMs)
+  }
+
+  def maybeRecordAndGetThrottleTimeMs(session: Session, clientId: String, value: Double, timeMs: Long): Int = {
+    // Record metrics only if quotas are enabled.
     if (quotasEnabled) {
-      val clientSensors = getOrCreateQuotaSensors(session, clientId)
-      recordAndThrottleOnQuotaViolation(clientSensors, value, callback)
+      recordAndGetThrottleTimeMs(session, clientId, value, timeMs)
     } else {
-      // Don't record any metrics if quotas are not enabled at any level
-      val throttleTimeMs = 0
-      callback(throttleTimeMs)
-      throttleTimeMs
+      0
     }
   }
 
-  def recordAndThrottleOnQuotaViolation(clientSensors: ClientSensors, value: Double, callback: Int => Unit): Int = {
+  def recordAndGetThrottleTimeMs(session: Session, clientId: String, value: Double, timeMs: Long): Int = {
     var throttleTimeMs = 0
+    val clientSensors = getOrCreateQuotaSensors(session, clientId)
     try {
-      clientSensors.quotaSensor.record(value)
-      // trigger the callback immediately if quota is not violated
-      callback(0)
+      clientSensors.quotaSensor.record(value, timeMs)
     } catch {
       case _: QuotaViolationException =>
         // Compute the delay
         val clientMetric = metrics.metrics().get(clientRateMetricName(clientSensors.metricTags))
         throttleTimeMs = throttleTime(clientMetric).toInt
-        clientSensors.throttleTimeSensor.record(throttleTimeMs)
-        // If delayed, add the element to the delayQueue
-        delayQueue.add(new ThrottledResponse(time, throttleTimeMs, callback))
-        delayQueueSensor.record()
         debug("Quota violated for sensor (%s). Delay time: (%d)".format(clientSensors.quotaSensor.name(), throttleTimeMs))
     }
     throttleTimeMs
+  }
+
+  /** "Unrecord" the given value that has already been recorded for the given user/client by recording a negative value
+    * of the same quantity.
+    *
+    * For a throttled fetch, the broker should return an empty response and thus should not record the value. Ideally,
+    * we would like to compute the throttle time before actually recording the value, but the current Sensor code
+    * couples value recording and quota checking very tightly. As a workaround, we will unrecord the value for the fetch
+    * in case of throttling. Rate keeps the sum of values that fall in each time window, so this should bring the
+    * overall sum back to the previous value.
+    */
+  def unrecordQuotaSensor(request: RequestChannel.Request, value: Double, timeMs: Long): Unit = {
+    val clientSensors = getOrCreateQuotaSensors(request.session, request.header.clientId)
+    clientSensors.quotaSensor.record(value * (-1), timeMs, false)
+  }
+
+  /**
+    * Throttle a client by muting the associated channel for the given throttle time.
+    * @param request client request
+    * @param throttleTimeMs Duration in milliseconds for which the channel is to be muted.
+    * @param channelThrottlingCallback Callback for channel throttling
+    * @return ThrottledChannel object
+    */
+  def throttle(request: RequestChannel.Request, throttleTimeMs: Int,
+               channelThrottlingCallback: (ResponseAction) => Unit) {
+    throttle(request.session, request.header.clientId, throttleTimeMs, channelThrottlingCallback)
+  }
+
+  def throttle(session: Session, clientId: String, throttleTimeMs: Int,
+               channelThrottlingCallback: (ResponseAction) => Unit) {
+    if (throttleTimeMs > 0) {
+      val clientSensors = getOrCreateQuotaSensors(session, clientId)
+
+      clientSensors.throttleTimeSensor.record(throttleTimeMs)
+      val throttledChannel = new ThrottledChannel(time, throttleTimeMs, channelThrottlingCallback)
+      delayQueue.add(throttledChannel)
+      delayQueueSensor.record()
+      debug("Channel throttled for sensor (%s). Delay time: (%d)".format(clientSensors.quotaSensor.name(), throttleTimeMs))
+    }
   }
 
   /**
@@ -502,7 +534,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
   }
 
   def shutdown(): Unit = {
-    throttledRequestReaper.shutdown()
+    throttledChannelReaper.shutdown()
   }
 
   class DefaultQuotaCallback extends ClientQuotaCallback {

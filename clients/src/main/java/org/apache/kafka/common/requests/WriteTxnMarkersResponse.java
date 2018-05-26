@@ -164,4 +164,8 @@ public class WriteTxnMarkersResponse extends AbstractResponse {
         return new WriteTxnMarkersResponse(ApiKeys.WRITE_TXN_MARKERS.parseResponse(version, buffer));
     }
 
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 1;
+    }
 }
