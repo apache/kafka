@@ -16,32 +16,6 @@
  */
 package org.apache.kafka.common.security.authenticator;
 
-import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.nio.ByteBuffer;
-import java.nio.channels.SelectionKey;
-import java.security.NoSuchAlgorithmException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Random;
-import java.util.concurrent.atomic.AtomicInteger;
-
-import javax.security.auth.Subject;
-import javax.security.auth.callback.Callback;
-import javax.security.auth.callback.CallbackHandler;
-import javax.security.auth.callback.NameCallback;
-import javax.security.auth.callback.PasswordCallback;
-import javax.security.auth.callback.UnsupportedCallbackException;
-import javax.security.auth.login.Configuration;
-import javax.security.auth.login.AppConfigurationEntry;
-import javax.security.auth.login.LoginContext;
-import javax.security.auth.login.LoginException;
-
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SaslConfigs;
@@ -63,14 +37,11 @@ import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.security.auth.Login;
-import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.ApiVersionsRequest;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.ApiVersionsResponse.ApiVersion;
-import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.ResponseHeader;
 import org.apache.kafka.common.requests.SaslAuthenticateRequest;
@@ -78,23 +49,47 @@ import org.apache.kafka.common.requests.SaslHandshakeRequest;
 import org.apache.kafka.common.requests.SaslHandshakeResponse;
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.TestSecurityConfig;
+import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
-import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
+import org.apache.kafka.common.security.auth.Login;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.common.security.authenticator.TestDigestLoginModule.DigestServerCallbackHandler;
 import org.apache.kafka.common.security.plain.PlainLoginModule;
+import org.apache.kafka.common.security.plain.internals.PlainServerCallbackHandler;
 import org.apache.kafka.common.security.scram.ScramCredential;
+import org.apache.kafka.common.security.scram.ScramLoginModule;
 import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils;
 import org.apache.kafka.common.security.scram.internals.ScramFormatter;
-import org.apache.kafka.common.security.scram.ScramLoginModule;
 import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.utils.SecurityUtils;
-import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
-import org.apache.kafka.common.security.authenticator.TestDigestLoginModule.DigestServerCallbackHandler;
-import org.apache.kafka.common.security.plain.internals.PlainServerCallbackHandler;
-
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+
+import javax.security.auth.Subject;
+import javax.security.auth.callback.Callback;
+import javax.security.auth.callback.CallbackHandler;
+import javax.security.auth.callback.NameCallback;
+import javax.security.auth.callback.PasswordCallback;
+import javax.security.auth.callback.UnsupportedCallbackException;
+import javax.security.auth.login.AppConfigurationEntry;
+import javax.security.auth.login.Configuration;
+import javax.security.auth.login.LoginContext;
+import javax.security.auth.login.LoginException;
+import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
+import java.nio.channels.SelectionKey;
+import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -163,38 +158,6 @@ public class SaslAuthenticatorTest {
         server = createEchoServer(securityProtocol);
         createAndCheckClientConnection(securityProtocol, node);
         server.verifyAuthenticationMetrics(1, 0);
-    }
-
-    /**
-     * Tests that SASL/PLAIN clients with invalid password fail authentication.
-     */
-    @Test
-    public void testInvalidPasswordSaslPlain() throws Exception {
-        String node = "0";
-        SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
-        TestJaasConfig jaasConfig = configureMechanisms("PLAIN", Arrays.asList("PLAIN"));
-        jaasConfig.setClientOptions("PLAIN", TestJaasConfig.USERNAME, "invalidpassword");
-
-        server = createEchoServer(securityProtocol);
-        createAndCheckClientAuthenticationFailure(securityProtocol, node, "PLAIN",
-                "Authentication failed: Invalid username or password");
-        server.verifyAuthenticationMetrics(0, 1);
-    }
-
-    /**
-     * Tests that SASL/PLAIN clients with invalid username fail authentication.
-     */
-    @Test
-    public void testInvalidUsernameSaslPlain() throws Exception {
-        String node = "0";
-        SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
-        TestJaasConfig jaasConfig = configureMechanisms("PLAIN", Arrays.asList("PLAIN"));
-        jaasConfig.setClientOptions("PLAIN", "invaliduser", TestJaasConfig.PASSWORD);
-
-        server = createEchoServer(securityProtocol);
-        createAndCheckClientAuthenticationFailure(securityProtocol, node, "PLAIN",
-                "Authentication failed: Invalid username or password");
-        server.verifyAuthenticationMetrics(0, 1);
     }
 
     /**
@@ -319,66 +282,6 @@ public class SaslAuthenticatorTest {
     }
 
     /**
-     * Tests that SASL/SCRAM clients fail authentication if password is invalid.
-     */
-    @Test
-    public void testInvalidPasswordSaslScram() throws Exception {
-        SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
-        TestJaasConfig jaasConfig = configureMechanisms("SCRAM-SHA-256", Arrays.asList("SCRAM-SHA-256"));
-        Map<String, Object> options = new HashMap<>();
-        options.put("username", TestJaasConfig.USERNAME);
-        options.put("password", "invalidpassword");
-        jaasConfig.createOrUpdateEntry(TestJaasConfig.LOGIN_CONTEXT_CLIENT, ScramLoginModule.class.getName(), options);
-
-        String node = "0";
-        server = createEchoServer(securityProtocol);
-        updateScramCredentialCache(TestJaasConfig.USERNAME, TestJaasConfig.PASSWORD);
-        createAndCheckClientAuthenticationFailure(securityProtocol, node, "SCRAM-SHA-256", null);
-        server.verifyAuthenticationMetrics(0, 1);
-    }
-
-    /**
-     * Tests that SASL/SCRAM clients without valid username fail authentication.
-     */
-    @Test
-    public void testUnknownUserSaslScram() throws Exception {
-        SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
-        TestJaasConfig jaasConfig = configureMechanisms("SCRAM-SHA-256", Arrays.asList("SCRAM-SHA-256"));
-        Map<String, Object> options = new HashMap<>();
-        options.put("username", "unknownUser");
-        options.put("password", TestJaasConfig.PASSWORD);
-        jaasConfig.createOrUpdateEntry(TestJaasConfig.LOGIN_CONTEXT_CLIENT, ScramLoginModule.class.getName(), options);
-
-        String node = "0";
-        server = createEchoServer(securityProtocol);
-        updateScramCredentialCache(TestJaasConfig.USERNAME, TestJaasConfig.PASSWORD);
-        createAndCheckClientAuthenticationFailure(securityProtocol, node, "SCRAM-SHA-256", null);
-        server.verifyAuthenticationMetrics(0, 1);
-    }
-
-    /**
-     * Tests that SASL/SCRAM clients fail authentication if credentials are not available for
-     * the specific SCRAM mechanism.
-     */
-    @Test
-    public void testUserCredentialsUnavailableForScramMechanism() throws Exception {
-        SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
-        configureMechanisms("SCRAM-SHA-256", new ArrayList<>(ScramMechanism.mechanismNames()));
-        server = createEchoServer(securityProtocol);
-        updateScramCredentialCache(TestJaasConfig.USERNAME, TestJaasConfig.PASSWORD);
-
-        server.credentialCache().cache(ScramMechanism.SCRAM_SHA_256.mechanismName(), ScramCredential.class).remove(TestJaasConfig.USERNAME);
-        String node = "1";
-        saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, "SCRAM-SHA-256");
-        createAndCheckClientAuthenticationFailure(securityProtocol, node, "SCRAM-SHA-256", null);
-        server.verifyAuthenticationMetrics(0, 1);
-
-        saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, "SCRAM-SHA-512");
-        createAndCheckClientConnection(securityProtocol, "2");
-        server.verifyAuthenticationMetrics(1, 1);
-    }
-
-    /**
      * Tests SASL/SCRAM with username containing characters that need
      * to be encoded.
      */
@@ -397,7 +300,6 @@ public class SaslAuthenticatorTest {
         updateScramCredentialCache(username, password);
         createAndCheckClientConnection(securityProtocol, "0");
     }
-
 
     @Test
     public void testTokenAuthenticationOverSaslScram() throws Exception {
@@ -534,151 +436,6 @@ public class SaslAuthenticatorTest {
 
         // Test good connection still works
         createAndCheckClientConnection(securityProtocol, "good1");
-    }
-
-    /**
-     * Tests that any invalid data during Kafka SASL handshake request flow
-     * or the actual SASL authentication flow result in authentication failure
-     * and do not cause any failures in the server.
-     */
-    @Test
-    public void testInvalidSaslPacket() throws Exception {
-        SecurityProtocol securityProtocol = SecurityProtocol.SASL_PLAINTEXT;
-        configureMechanisms("PLAIN", Arrays.asList("PLAIN"));
-        server = createEchoServer(securityProtocol);
-
-        // Send invalid SASL packet after valid handshake request
-        String node1 = "invalid1";
-        createClientConnection(SecurityProtocol.PLAINTEXT, node1);
-        sendHandshakeRequestReceiveResponse(node1, (short) 1);
-        Random random = new Random();
-        byte[] bytes = new byte[1024];
-        random.nextBytes(bytes);
-        selector.send(new NetworkSend(node1, ByteBuffer.wrap(bytes)));
-        NetworkTestUtils.waitForChannelClose(selector, node1, ChannelState.READY.state());
-        selector.close();
-
-        // Test good connection still works
-        createAndCheckClientConnection(securityProtocol, "good1");
-
-        // Send invalid SASL packet before handshake request
-        String node2 = "invalid2";
-        createClientConnection(SecurityProtocol.PLAINTEXT, node2);
-        random.nextBytes(bytes);
-        selector.send(new NetworkSend(node2, ByteBuffer.wrap(bytes)));
-        NetworkTestUtils.waitForChannelClose(selector, node2, ChannelState.READY.state());
-        selector.close();
-
-        // Test good connection still works
-        createAndCheckClientConnection(securityProtocol, "good2");
-    }
-
-    /**
-     * Tests that ApiVersionsRequest after Kafka SASL handshake request flow,
-     * but prior to actual SASL authentication, results in authentication failure.
-     * This is similar to {@link #testUnauthenticatedApiVersionsRequest(SecurityProtocol, short)}
-     * where a non-SASL client is used to send requests that are processed by
-     * {@link SaslServerAuthenticator} of the server prior to client authentication.
-     */
-    @Test
-    public void testInvalidApiVersionsRequestSequence() throws Exception {
-        SecurityProtocol securityProtocol = SecurityProtocol.SASL_PLAINTEXT;
-        configureMechanisms("PLAIN", Arrays.asList("PLAIN"));
-        server = createEchoServer(securityProtocol);
-
-        // Send handshake request followed by ApiVersionsRequest
-        String node1 = "invalid1";
-        createClientConnection(SecurityProtocol.PLAINTEXT, node1);
-        sendHandshakeRequestReceiveResponse(node1, (short) 1);
-
-        ApiVersionsRequest request = createApiVersionsRequestV0();
-        RequestHeader versionsHeader = new RequestHeader(ApiKeys.API_VERSIONS, request.version(), "someclient", 2);
-        selector.send(request.toSend(node1, versionsHeader));
-        NetworkTestUtils.waitForChannelClose(selector, node1, ChannelState.READY.state());
-        selector.close();
-
-        // Test good connection still works
-        createAndCheckClientConnection(securityProtocol, "good1");
-    }
-
-    /**
-     * Tests that packets that are too big during Kafka SASL handshake request flow
-     * or the actual SASL authentication flow result in authentication failure
-     * and do not cause any failures in the server.
-     */
-    @Test
-    public void testPacketSizeTooBig() throws Exception {
-        SecurityProtocol securityProtocol = SecurityProtocol.SASL_PLAINTEXT;
-        configureMechanisms("PLAIN", Arrays.asList("PLAIN"));
-        server = createEchoServer(securityProtocol);
-
-        // Send SASL packet with large size after valid handshake request
-        String node1 = "invalid1";
-        createClientConnection(SecurityProtocol.PLAINTEXT, node1);
-        sendHandshakeRequestReceiveResponse(node1, (short) 1);
-        ByteBuffer buffer = ByteBuffer.allocate(1024);
-        buffer.putInt(Integer.MAX_VALUE);
-        buffer.put(new byte[buffer.capacity() - 4]);
-        buffer.rewind();
-        selector.send(new NetworkSend(node1, buffer));
-        NetworkTestUtils.waitForChannelClose(selector, node1, ChannelState.READY.state());
-        selector.close();
-
-        // Test good connection still works
-        createAndCheckClientConnection(securityProtocol, "good1");
-
-        // Send packet with large size before handshake request
-        String node2 = "invalid2";
-        createClientConnection(SecurityProtocol.PLAINTEXT, node2);
-        buffer.clear();
-        buffer.putInt(Integer.MAX_VALUE);
-        buffer.put(new byte[buffer.capacity() - 4]);
-        buffer.rewind();
-        selector.send(new NetworkSend(node2, buffer));
-        NetworkTestUtils.waitForChannelClose(selector, node2, ChannelState.READY.state());
-        selector.close();
-
-        // Test good connection still works
-        createAndCheckClientConnection(securityProtocol, "good2");
-    }
-
-    /**
-     * Tests that Kafka requests that are forbidden until successful authentication result
-     * in authentication failure and do not cause any failures in the server.
-     */
-    @Test
-    public void testDisallowedKafkaRequestsBeforeAuthentication() throws Exception {
-        SecurityProtocol securityProtocol = SecurityProtocol.SASL_PLAINTEXT;
-        configureMechanisms("PLAIN", Arrays.asList("PLAIN"));
-        server = createEchoServer(securityProtocol);
-
-        // Send metadata request before Kafka SASL handshake request
-        String node1 = "invalid1";
-        createClientConnection(SecurityProtocol.PLAINTEXT, node1);
-        MetadataRequest metadataRequest1 = new MetadataRequest.Builder(Collections.singletonList("sometopic"),
-                true).build();
-        RequestHeader metadataRequestHeader1 = new RequestHeader(ApiKeys.METADATA, metadataRequest1.version(),
-                "someclient", 1);
-        selector.send(metadataRequest1.toSend(node1, metadataRequestHeader1));
-        NetworkTestUtils.waitForChannelClose(selector, node1, ChannelState.READY.state());
-        selector.close();
-
-        // Test good connection still works
-        createAndCheckClientConnection(securityProtocol, "good1");
-
-        // Send metadata request after Kafka SASL handshake request
-        String node2 = "invalid2";
-        createClientConnection(SecurityProtocol.PLAINTEXT, node2);
-        sendHandshakeRequestReceiveResponse(node2, (short) 1);
-        MetadataRequest metadataRequest2 = new MetadataRequest.Builder(Collections.singletonList("sometopic"), true).build();
-        RequestHeader metadataRequestHeader2 = new RequestHeader(ApiKeys.METADATA,
-                metadataRequest2.version(), "someclient", 2);
-        selector.send(metadataRequest2.toSend(node2, metadataRequestHeader2));
-        NetworkTestUtils.waitForChannelClose(selector, node2, ChannelState.READY.state());
-        selector.close();
-
-        // Test good connection still works
-        createAndCheckClientConnection(securityProtocol, "good2");
     }
 
     /**
@@ -901,36 +658,6 @@ public class SaslAuthenticatorTest {
     }
 
     /**
-     * Tests that mechanisms with default implementation in Kafka may be disabled in
-     * the Kafka server by removing from the enabled mechanism list.
-     */
-    @Test
-    public void testDisabledMechanism() throws Exception {
-        String node = "0";
-        SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
-        configureMechanisms("PLAIN", Arrays.asList("DIGEST-MD5"));
-
-        server = createEchoServer(securityProtocol);
-        createAndCheckClientConnectionFailure(securityProtocol, node);
-        server.verifyAuthenticationMetrics(0, 1);
-    }
-
-    /**
-     * Tests that clients using invalid SASL mechanisms fail authentication.
-     */
-    @Test
-    public void testInvalidMechanism() throws Exception {
-        String node = "0";
-        SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
-        configureMechanisms("PLAIN", Arrays.asList("PLAIN"));
-        saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, "INVALID");
-
-        server = createEchoServer(securityProtocol);
-        createAndCheckClientConnectionFailure(securityProtocol, node);
-        server.verifyAuthenticationMetrics(0, 1);
-    }
-
-    /**
      * Tests dynamic JAAS configuration property for SASL clients. Invalid client credentials
      * are set in the static JVM-wide configuration instance to ensure that the dynamic
      * property override is used during authentication.
@@ -1122,78 +849,6 @@ public class SaslAuthenticatorTest {
     }
 
     /**
-     * Tests SASL/PLAIN authentication failure over PLAINTEXT with old version of server
-     * that does not support SASL_AUTHENTICATE headers and new version of client.
-     */
-    @Test
-    public void oldSaslPlainPlaintextServerWithoutSaslAuthenticateHeaderFailure() throws Exception {
-        verifySaslAuthenticateHeaderInteropWithFailure(false, true, SecurityProtocol.SASL_PLAINTEXT, "PLAIN");
-    }
-
-    /**
-     * Tests SASL/PLAIN authentication failure over PLAINTEXT with old version of client
-     * that does not support SASL_AUTHENTICATE headers and new version of server.
-     */
-    @Test
-    public void oldSaslPlainPlaintextClientWithoutSaslAuthenticateHeaderFailure() throws Exception {
-        verifySaslAuthenticateHeaderInteropWithFailure(true, false, SecurityProtocol.SASL_PLAINTEXT, "PLAIN");
-    }
-
-    /**
-     * Tests SASL/SCRAM authentication failure over PLAINTEXT with old version of server
-     * that does not support SASL_AUTHENTICATE headers and new version of client.
-     */
-    @Test
-    public void oldSaslScramPlaintextServerWithoutSaslAuthenticateHeaderFailure() throws Exception {
-        verifySaslAuthenticateHeaderInteropWithFailure(false, true, SecurityProtocol.SASL_PLAINTEXT, "SCRAM-SHA-256");
-    }
-
-    /**
-     * Tests SASL/SCRAM authentication failure over PLAINTEXT with old version of client
-     * that does not support SASL_AUTHENTICATE headers and new version of server.
-     */
-    @Test
-    public void oldSaslScramPlaintextClientWithoutSaslAuthenticateHeaderFailure() throws Exception {
-        verifySaslAuthenticateHeaderInteropWithFailure(true, false, SecurityProtocol.SASL_PLAINTEXT, "SCRAM-SHA-256");
-    }
-
-    /**
-     * Tests SASL/PLAIN authentication failure over SSL with old version of server
-     * that does not support SASL_AUTHENTICATE headers and new version of client.
-     */
-    @Test
-    public void oldSaslPlainSslServerWithoutSaslAuthenticateHeaderFailure() throws Exception {
-        verifySaslAuthenticateHeaderInteropWithFailure(false, true, SecurityProtocol.SASL_SSL, "PLAIN");
-    }
-
-    /**
-     * Tests SASL/PLAIN authentication failure over SSL with old version of client
-     * that does not support SASL_AUTHENTICATE headers and new version of server.
-     */
-    @Test
-    public void oldSaslPlainSslClientWithoutSaslAuthenticateHeaderFailure() throws Exception {
-        verifySaslAuthenticateHeaderInteropWithFailure(true, false, SecurityProtocol.SASL_SSL, "PLAIN");
-    }
-
-    /**
-     * Tests SASL/SCRAM authentication failure over SSL with old version of server
-     * that does not support SASL_AUTHENTICATE headers and new version of client.
-     */
-    @Test
-    public void oldSaslScramSslServerWithoutSaslAuthenticateHeaderFailure() throws Exception {
-        verifySaslAuthenticateHeaderInteropWithFailure(false, true, SecurityProtocol.SASL_SSL, "SCRAM-SHA-512");
-    }
-
-    /**
-     * Tests SASL/SCRAM authentication failure over SSL with old version of client
-     * that does not support SASL_AUTHENTICATE headers and new version of server.
-     */
-    @Test
-    public void oldSaslScramSslClientWithoutSaslAuthenticateHeaderFailure() throws Exception {
-        verifySaslAuthenticateHeaderInteropWithFailure(true, false, SecurityProtocol.SASL_SSL, "SCRAM-SHA-512");
-    }
-
-    /**
      * Tests OAUTHBEARER client and server channels.
      */
     @Test
@@ -1205,25 +860,6 @@ public class SaslAuthenticatorTest {
         createAndCheckClientConnection(securityProtocol, node);
     }
 
-    /**
-     * Tests OAUTHBEARER fails the connection when the client presents a token with
-     * insufficient scope .
-     */
-    @Test
-    public void testInsufficientScopeSaslOauthBearerMechanism() throws Exception {
-        SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
-        TestJaasConfig jaasConfig = configureMechanisms("OAUTHBEARER", Arrays.asList("OAUTHBEARER"));
-        // now update the server side to require a scope the client does not provide
-        Map<String, Object> serverJaasConfigOptionsMap = TestJaasConfig.defaultServerOptions("OAUTHBEARER");
-        serverJaasConfigOptionsMap.put("unsecuredValidatorRequiredScope", "LOGIN_TO_KAFKA"); // causes the failure
-        jaasConfig.createOrUpdateEntry("KafkaServer",
-                "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule", serverJaasConfigOptionsMap);
-        server = createEchoServer(securityProtocol);
-        createAndCheckClientAuthenticationFailure(securityProtocol,
-                "node-" + OAuthBearerLoginModule.OAUTHBEARER_MECHANISM, OAuthBearerLoginModule.OAUTHBEARER_MECHANISM,
-                "{\"status\":\"insufficient_scope\", \"scope\":\"[LOGIN_TO_KAFKA]\"}");
-    }
-
     private void verifySaslAuthenticateHeaderInterop(boolean enableHeaderOnServer, boolean enableHeaderOnClient,
             SecurityProtocol securityProtocol, String saslMechanism) throws Exception {
         configureMechanisms(saslMechanism, Arrays.asList(saslMechanism));
@@ -1232,20 +868,6 @@ public class SaslAuthenticatorTest {
         String node = "0";
         createClientConnection(securityProtocol, saslMechanism, node, enableHeaderOnClient);
         NetworkTestUtils.checkClientConnection(selector, "0", 100, 10);
-    }
-
-    private void verifySaslAuthenticateHeaderInteropWithFailure(boolean enableHeaderOnServer, boolean enableHeaderOnClient,
-            SecurityProtocol securityProtocol, String saslMechanism) throws Exception {
-        TestJaasConfig jaasConfig = configureMechanisms(saslMechanism, Arrays.asList(saslMechanism));
-        jaasConfig.setClientOptions(saslMechanism, TestJaasConfig.USERNAME, "invalidpassword");
-        createServer(securityProtocol, saslMechanism, enableHeaderOnServer);
-
-        String node = "0";
-        createClientConnection(securityProtocol, saslMechanism, node, enableHeaderOnClient);
-        // Without SASL_AUTHENTICATE headers, disconnect state is ChannelState.AUTHENTICATE which is
-        // a hint that channel was closed during authentication, unlike ChannelState.AUTHENTICATE_FAILED
-        // which is an actual authentication failure reported by the broker.
-        NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.AUTHENTICATE.state());
     }
 
     private void createServer(SecurityProtocol securityProtocol, String saslMechanism,
@@ -1475,16 +1097,6 @@ public class SaslAuthenticatorTest {
         NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
         selector.close();
         selector = null;
-    }
-
-    private void createAndCheckClientAuthenticationFailure(SecurityProtocol securityProtocol, String node,
-            String mechanism, String expectedErrorMessage) throws Exception {
-        ChannelState finalState = createAndCheckClientConnectionFailure(securityProtocol, node);
-        Exception exception = finalState.exception();
-        assertTrue("Invalid exception class " + exception.getClass(), exception instanceof SaslAuthenticationException);
-        if (expectedErrorMessage == null)
-            expectedErrorMessage = "Authentication failed due to invalid credentials with SASL mechanism " + mechanism;
-        assertEquals(expectedErrorMessage, exception.getMessage());
     }
 
     private ChannelState createAndCheckClientConnectionFailure(SecurityProtocol securityProtocol, String node)

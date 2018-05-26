@@ -196,5 +196,9 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
         public boolean complete() {
             return true;
         }
+
+        @Override
+        public void handleAuthenticationFailure() throws IOException {
+        }
     }
 }

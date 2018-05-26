@@ -754,7 +754,7 @@ public class SslTransportLayer implements TransportLayer {
     public void removeInterestOps(int ops) {
         if (!key.isValid())
             throw new CancelledKeyException();
-        else if (state != State.READY)
+        else if (state != State.READY && state != State.HANDSHAKE_FAILED)
             throw new IllegalStateException("handshake is not completed");
 
         key.interestOps(key.interestOps() & ~ops);

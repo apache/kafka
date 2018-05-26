@@ -69,7 +69,13 @@ public class NioEchoServer extends Thread {
     private final DelegationTokenCache tokenCache;
 
     public NioEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol, AbstractConfig config,
-            String serverHost, ChannelBuilder channelBuilder, CredentialCache credentialCache) throws Exception {
+                         String serverHost, ChannelBuilder channelBuilder, CredentialCache credentialCache) throws Exception {
+        this(listenerName, securityProtocol, config, serverHost, channelBuilder, credentialCache, 100);
+    }
+
+    public NioEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol, AbstractConfig config,
+                         String serverHost, ChannelBuilder channelBuilder, CredentialCache credentialCache,
+                         int failedAuthenticationDelayMs) throws Exception {
         super("echoserver");
         setDaemon(true);
         serverSocketChannel = ServerSocketChannel.open();
@@ -89,7 +95,7 @@ public class NioEchoServer extends Thread {
         if (channelBuilder == null)
             channelBuilder = ChannelBuilders.serverChannelBuilder(listenerName, false, securityProtocol, config, credentialCache, tokenCache);
         this.metrics = new Metrics();
-        this.selector = new Selector(5000, metrics, new MockTime(), "MetricGroup", channelBuilder, new LogContext());
+        this.selector = new Selector(5000, failedAuthenticationDelayMs, metrics, new MockTime(), "MetricGroup", channelBuilder, new LogContext());
         acceptorThread = new AcceptorThread();
     }
 

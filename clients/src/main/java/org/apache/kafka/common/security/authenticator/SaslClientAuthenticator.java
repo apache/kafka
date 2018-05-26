@@ -322,6 +322,10 @@ public class SaslClientAuthenticator implements Authenticator {
         return saslState == SaslState.COMPLETE;
     }
 
+    @Override
+    public void handleAuthenticationFailure() throws IOException {
+    }
+
     public void close() throws IOException {
         if (saslClient != null)
             saslClient.dispose();

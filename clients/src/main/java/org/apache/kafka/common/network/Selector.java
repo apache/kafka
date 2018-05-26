@@ -49,8 +49,10 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
@@ -86,6 +88,7 @@ import java.util.concurrent.TimeUnit;
 public class Selector implements Selectable, AutoCloseable {
 
     public static final long NO_IDLE_TIMEOUT_MS = -1;
+    public static final int NO_FAILED_AUTHENTICATION_DELAY = 0;
 
     private enum CloseMode {
         GRACEFUL(true),            // process outstanding staged receives, notify disconnect
@@ -109,6 +112,7 @@ public class Selector implements Selectable, AutoCloseable {
     private final Map<KafkaChannel, Deque<NetworkReceive>> stagedReceives;
     private final Set<SelectionKey> immediatelyConnectedKeys;
     private final Map<String, KafkaChannel> closingChannels;
+    private final Queue<DelayedChannelClose> delayedClosingChannels;
     private Set<SelectionKey> keysWithBufferedRead;
     private final Map<String, ChannelState> disconnected;
     private final List<String> connected;
@@ -121,6 +125,8 @@ public class Selector implements Selectable, AutoCloseable {
     private final IdleExpiryManager idleExpiryManager;
     private final MemoryPool memoryPool;
     private final long lowMemThreshold;
+    private final int failedAuthenticationDelayMs;
+
     //indicates if the previous call to poll was able to make progress in reading already-buffered data.
     //this is used to prevent tight loops when memory is not available to read any more data
     private boolean madeReadProgressLastPoll = true;
@@ -139,6 +145,7 @@ public class Selector implements Selectable, AutoCloseable {
      */
     public Selector(int maxReceiveSize,
             long connectionMaxIdleMs,
+            int failedAuthenticationDelayMs,
             Metrics metrics,
             Time time,
             String metricGrpPrefix,
@@ -174,7 +181,23 @@ public class Selector implements Selectable, AutoCloseable {
         this.memoryPool = memoryPool;
         this.lowMemThreshold = (long) (0.1 * this.memoryPool.size());
         this.log = logContext.logger(Selector.class);
+        this.failedAuthenticationDelayMs = failedAuthenticationDelayMs;
+        this.delayedClosingChannels = (failedAuthenticationDelayMs > NO_FAILED_AUTHENTICATION_DELAY) ? new LinkedList<>() : null;
     }
+
+    public Selector(int maxReceiveSize,
+                long connectionMaxIdleMs,
+                int failedAuthenticationDelayMs,
+                Metrics metrics,
+                Time time,
+                String metricGrpPrefix,
+                Map<String, String> metricTags,
+                boolean metricsPerConnection,
+                ChannelBuilder channelBuilder,
+                LogContext logContext) {
+        this(maxReceiveSize, connectionMaxIdleMs, failedAuthenticationDelayMs, metrics, time, metricGrpPrefix, metricTags, metricsPerConnection, false, channelBuilder, MemoryPool.NONE, logContext);
+    }
+
 
     public Selector(int maxReceiveSize,
             long connectionMaxIdleMs,
@@ -185,11 +208,15 @@ public class Selector implements Selectable, AutoCloseable {
             boolean metricsPerConnection,
             ChannelBuilder channelBuilder,
             LogContext logContext) {
-        this(maxReceiveSize, connectionMaxIdleMs, metrics, time, metricGrpPrefix, metricTags, metricsPerConnection, false, channelBuilder, MemoryPool.NONE, logContext);
+        this(maxReceiveSize, connectionMaxIdleMs, NO_FAILED_AUTHENTICATION_DELAY, metrics, time, metricGrpPrefix, metricTags, metricsPerConnection, channelBuilder, logContext);
     }
 
     public Selector(long connectionMaxIdleMS, Metrics metrics, Time time, String metricGrpPrefix, ChannelBuilder channelBuilder, LogContext logContext) {
         this(NetworkReceive.UNLIMITED, connectionMaxIdleMS, metrics, time, metricGrpPrefix, Collections.<String, String>emptyMap(), true, channelBuilder, logContext);
+    }
+
+    public Selector(long connectionMaxIdleMS, int failedAuthenticationDelayMs, Metrics metrics, Time time, String metricGrpPrefix, ChannelBuilder channelBuilder, LogContext logContext) {
+        this(NetworkReceive.UNLIMITED, connectionMaxIdleMS, failedAuthenticationDelayMs, metrics, time, metricGrpPrefix, Collections.<String, String>emptyMap(), true, channelBuilder, logContext);
     }
 
     /**
@@ -442,6 +469,9 @@ public class Selector implements Selectable, AutoCloseable {
         // Add to completedReceives after closing expired connections to avoid removing
         // channels with completed receives until all staged receives are completed.
         addToCompletedReceives();
+
+        // Close channels that were delayed and are now ready to be closed
+        completeDelayedChannelClose();
     }
 
     /**
@@ -457,15 +487,15 @@ public class Selector implements Selectable, AutoCloseable {
         for (SelectionKey key : determineHandlingOrder(selectionKeys)) {
             KafkaChannel channel = channel(key);
             long channelStartTimeNanos = recordTimePerConnection ? time.nanoseconds() : 0;
+            boolean sendFailed = false;
+            boolean prepareFailed = false;
 
             // register all per-connection metrics at once
             sensors.maybeRegisterConnectionMetrics(channel.id());
             if (idleExpiryManager != null)
                 idleExpiryManager.update(channel.id(), currentTimeNanos);
 
-            boolean sendFailed = false;
             try {
-
                 /* complete any connections that have finished their handshake (either normally or immediately) */
                 if (isImmediatelyConnected || key.isConnectable()) {
                     if (channel.finishConnect()) {
@@ -477,8 +507,9 @@ public class Selector implements Selectable, AutoCloseable {
                                 socketChannel.socket().getSendBufferSize(),
                                 socketChannel.socket().getSoTimeout(),
                                 channel.id());
-                    } else
+                    } else {
                         continue;
+                    }
                 }
 
                 /* if channel is not ready finish prepare */
@@ -487,6 +518,7 @@ public class Selector implements Selectable, AutoCloseable {
                         channel.prepare();
                     } catch (AuthenticationException e) {
                         sensors.failedAuthentication.record();
+                        prepareFailed = true;
                         throw e;
                     }
                     if (channel.ready())
@@ -532,7 +564,11 @@ public class Selector implements Selectable, AutoCloseable {
                     log.debug("Connection with {} disconnected due to authentication exception", desc, e);
                 else
                     log.warn("Unexpected error from {}; closing connection", desc, e);
-                close(channel, sendFailed ? CloseMode.NOTIFY_ONLY : CloseMode.GRACEFUL);
+                CloseMode closeMode = sendFailed ? CloseMode.NOTIFY_ONLY : CloseMode.GRACEFUL;
+                if (prepareFailed && e instanceof AuthenticationException)
+                    mayBeDelayCloseOnPrepareFailure(channel, closeMode);
+                else
+                    close(channel, closeMode);
             } finally {
                 maybeRecordTimePerConnection(channel, channelStartTimeNanos);
             }
@@ -631,6 +667,17 @@ public class Selector implements Selectable, AutoCloseable {
             unmute(channel);
     }
 
+    private void completeDelayedChannelClose() throws IOException {
+        if (delayedClosingChannels == null)
+            return;
+
+        DelayedChannelClose delayedClose;
+        while (((delayedClose = delayedClosingChannels.peek()) != null) && delayedClose.isCloseable()) {
+            handleCloseOnPrepareFailure(delayedClose.channel, delayedClose.closeMode);
+            delayedClosingChannels.remove();
+        }
+    }
+
     private void maybeCloseOldestConnection(long currentTimeNanos) {
         if (idleExpiryManager == null)
             return;
@@ -707,6 +754,24 @@ public class Selector implements Selectable, AutoCloseable {
         }
     }
 
+    private void mayBeDelayCloseOnPrepareFailure(KafkaChannel channel, CloseMode closeMode) {
+        if (delayedClosingChannels != null)
+            delayedClosingChannels.add(new DelayedChannelClose(Time.SYSTEM, channel.prepareStartTimeMs(),
+                    failedAuthenticationDelayMs, channel, closeMode));
+        else
+            handleCloseOnPrepareFailure(channel, closeMode);
+    }
+
+    private void handleCloseOnPrepareFailure(KafkaChannel channel, CloseMode closeMode) {
+        try {
+            channel.completeCloseOnPrepareFailure();
+        } catch (IOException e) {
+            log.error("Exception handling close on prepare failure node {}:", channel.id(), e);
+        } finally {
+            close(channel, closeMode);
+        }
+    }
+
     /**
      * Begin closing this connection.
      * If 'closeMode' is `CloseMode.GRACEFUL`, the channel is disconnected here, but staged receives
@@ -735,8 +800,9 @@ public class Selector implements Selectable, AutoCloseable {
             // stagedReceives will be moved to completedReceives later along with receives from other channels
             closingChannels.put(channel.id(), channel);
             log.debug("Tracking closing connection {} to process outstanding requests", channel.id());
-        } else
+        } else {
             doClose(channel, closeMode.notifyDisconnect);
+        }
         this.channels.remove(channel.id());
 
         if (idleExpiryManager != null)
@@ -968,11 +1034,11 @@ public class Selector implements Selectable, AutoCloseable {
         }
 
         private Meter createMeter(Metrics metrics, String groupName, Map<String, String> metricTags,
-                SampledStat stat, String baseName, String descriptiveName) {
+                                  SampledStat stat, String baseName, String descriptiveName) {
             MetricName rateMetricName = metrics.metricName(baseName + "-rate", groupName,
-                            String.format("The number of %s per second", descriptiveName), metricTags);
+                    String.format("The number of %s per second", descriptiveName), metricTags);
             MetricName totalMetricName = metrics.metricName(baseName + "-total", groupName,
-                            String.format("The total number of %s", descriptiveName), metricTags);
+                    String.format("The total number of %s", descriptiveName), metricTags);
             if (stat == null)
                 return new Meter(rateMetricName, totalMetricName);
             else
@@ -980,12 +1046,12 @@ public class Selector implements Selectable, AutoCloseable {
         }
 
         private Meter createMeter(Metrics metrics, String groupName,  Map<String, String> metricTags,
-                String baseName, String descriptiveName) {
+                                  String baseName, String descriptiveName) {
             return createMeter(metrics, groupName, metricTags, null, baseName, descriptiveName);
         }
 
         private Meter createIOThreadRatioMeter(Metrics metrics, String groupName,  Map<String, String> metricTags,
-                String baseName, String action) {
+                                               String baseName, String action) {
             MetricName rateMetricName = metrics.metricName(baseName + "-ratio", groupName,
                     String.format("The fraction of time the I/O thread spent %s", action), metricTags);
             MetricName totalMetricName = metrics.metricName(baseName + "time-total", groupName,
@@ -1061,6 +1127,37 @@ public class Selector implements Selectable, AutoCloseable {
                 metrics.removeMetric(metricName);
             for (Sensor sensor : sensors)
                 metrics.removeSensor(sensor.name());
+        }
+    }
+
+    private static class DelayedChannelClose {
+        private final Time time;
+        private final KafkaChannel channel;
+        private final CloseMode closeMode;
+        private final long endTime;
+
+        public DelayedChannelClose(Time time, long startMs, int minimumDelayMs, KafkaChannel channel, CloseMode closeMode) {
+            this.time = time;
+            this.channel = channel;
+            this.closeMode = closeMode;
+            this.endTime = computeDelay(time, startMs, minimumDelayMs);
+        }
+
+        private long computeDelay(Time time, long startMs, int minimumDelayMs) {
+            if (startMs < 0)
+                throw new IllegalArgumentException();
+
+            long now = time.milliseconds();
+            long elapsed = now - startMs;
+            long delayMs = minimumDelayMs;
+            long remainingMs;
+            while ((remainingMs = delayMs - elapsed) < 0)
+                delayMs *= 2;
+            return now + remainingMs;
+        }
+
+        public boolean isCloseable() {
+            return endTime <= time.milliseconds();
         }
     }
 

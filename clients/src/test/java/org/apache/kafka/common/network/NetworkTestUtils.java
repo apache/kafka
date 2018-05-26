@@ -35,16 +35,21 @@ import org.apache.kafka.test.TestUtils;
  * Common utility functions used by transport layer and authenticator tests.
  */
 public class NetworkTestUtils {
+    public static NioEchoServer createEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol,
+                                                 AbstractConfig serverConfig, CredentialCache credentialCache) throws Exception {
+        return createEchoServer(listenerName, securityProtocol, serverConfig, credentialCache, 100);
+    }
 
     public static NioEchoServer createEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol,
-            AbstractConfig serverConfig, CredentialCache credentialCache) throws Exception {
-        NioEchoServer server = new NioEchoServer(listenerName, securityProtocol, serverConfig, "localhost", null, credentialCache);
+            AbstractConfig serverConfig, CredentialCache credentialCache, int failedAuthenticationDelayMs) throws Exception {
+        NioEchoServer server = new NioEchoServer(listenerName, securityProtocol, serverConfig, "localhost",
+                null, credentialCache, failedAuthenticationDelayMs);
         server.start();
         return server;
     }
 
     public static Selector createSelector(ChannelBuilder channelBuilder) {
-        return new Selector(5000, new Metrics(), new MockTime(), "MetricGroup", channelBuilder, new LogContext());
+        return new Selector(5000, 100, new Metrics(), new MockTime(), "MetricGroup", channelBuilder, new LogContext());
     }
 
     public static void checkClientConnection(Selector selector, String node, int minMessageSize, int messageCount) throws Exception {

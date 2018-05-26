@@ -19,6 +19,7 @@ package org.apache.kafka.common.network;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 
 import java.io.IOException;
@@ -89,6 +90,7 @@ public class KafkaChannel {
     private boolean disconnected;
     private ChannelMuteState muteState;
     private ChannelState state;
+    private long prepareStartTimeMs;
 
     public KafkaChannel(String id, TransportLayer transportLayer, Authenticator authenticator, int maxReceiveSize, MemoryPool memoryPool) throws IOException {
         this.id = id;
@@ -100,6 +102,7 @@ public class KafkaChannel {
         this.disconnected = false;
         this.muteState = ChannelMuteState.NOT_MUTED;
         this.state = ChannelState.NOT_CONNECTED;
+        this.prepareStartTimeMs = -1;
     }
 
     public void close() throws IOException {
@@ -121,6 +124,7 @@ public class KafkaChannel {
      */
     public void prepare() throws AuthenticationException, IOException {
         try {
+            prepareStartTimeMs = Time.SYSTEM.milliseconds();
             if (!transportLayer.ready())
                 transportLayer.handshake();
             if (transportLayer.ready() && !authenticator.complete())
@@ -129,6 +133,7 @@ public class KafkaChannel {
             // Clients are notified of authentication exceptions to enable operations to be terminated
             // without retries. Other errors are handled as network exceptions in Selector.
             state = new ChannelState(ChannelState.State.AUTHENTICATION_FAILED, e);
+            muteOnPrepareFailure();
             throw e;
         }
         if (ready())
@@ -234,6 +239,27 @@ public class KafkaChannel {
 
     public ChannelMuteState muteState() {
         return muteState;
+    }
+
+    /**
+     * Mute this channel on {@link #prepare()} failure. This will remove all operations from this channel.
+     */
+    private void muteOnPrepareFailure() {
+        mute();
+        transportLayer.removeInterestOps(SelectionKey.OP_WRITE | SelectionKey.OP_CONNECT | SelectionKey.OP_ACCEPT);
+    }
+
+    /**
+     * Finish up any processing on {@link #prepare()} failure.
+     * @throws IOException
+     */
+    void completeCloseOnPrepareFailure() throws IOException {
+        // If transport layer is ready but authentication failed, invoke the underlying handler to finish up any
+        // processing on authentication failure
+        if (transportLayer.ready()) {
+            transportLayer.addInterestOps(SelectionKey.OP_WRITE);
+            authenticator.handleAuthenticationFailure();
+        }
     }
 
     /**
@@ -348,6 +374,14 @@ public class KafkaChannel {
      */
     public boolean hasBytesBuffered() {
         return transportLayer.hasBytesBuffered();
+    }
+
+    /**
+     * @return Time (in milliseconds) at which {@link #prepare()} was last called for this channel; -1 if {@link #prepare()}
+     *         has not yet been called.
+     */
+    public long prepareStartTimeMs() {
+        return prepareStartTimeMs;
     }
 
     @Override
