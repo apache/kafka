@@ -40,22 +40,25 @@ class ClientRequestQuotaManager(private val config: ClientQuotaManagerConfig,
     exemptSensor.record(value)
   }
 
-  def maybeRecordAndThrottle(request: RequestChannel.Request, sendResponseCallback: Int => Unit): Unit = {
+  /**
+    * Records that a user/clientId changed request processing time being throttled. If quota has been violated, return
+    * throttle time in milliseconds. Throttle time calculation may be overridden by sub-classes.
+    * @param request client request
+    * @return Number of milliseconds to throttle in case of quota violation. Zero otherwise
+    */
+  def maybeRecordAndGetThrottleTimeMs(request: RequestChannel.Request): Int = {
     if (request.apiRemoteCompleteTimeNanos == -1) {
       // When this callback is triggered, the remote API call has completed
       request.apiRemoteCompleteTimeNanos = time.nanoseconds
     }
 
     if (quotasEnabled) {
-      val quotaSensors = getOrCreateQuotaSensors(request.session, request.header.clientId)
-      request.recordNetworkThreadTimeCallback = Some(timeNanos => recordNoThrottle(quotaSensors, nanosToPercentage(timeNanos)))
-
-      recordAndThrottleOnQuotaViolation(
-          quotaSensors,
-          nanosToPercentage(request.requestThreadTimeNanos),
-          sendResponseCallback)
+      request.recordNetworkThreadTimeCallback = Some(timeNanos => recordNoThrottle(
+        getOrCreateQuotaSensors(request.session, request.header.clientId), nanosToPercentage(timeNanos)))
+      recordAndGetThrottleTimeMs(request.session, request.header.clientId,
+        nanosToPercentage(request.requestThreadTimeNanos), time.milliseconds())
     } else {
-      sendResponseCallback(0)
+      0
     }
   }
 

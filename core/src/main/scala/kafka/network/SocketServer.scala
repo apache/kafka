@@ -35,6 +35,7 @@ import org.apache.kafka.common.Reconfigurable
 import org.apache.kafka.common.memory.{MemoryPool, SimpleMemoryPool}
 import org.apache.kafka.common.metrics._
 import org.apache.kafka.common.metrics.stats.Meter
+import org.apache.kafka.common.network.KafkaChannel.ChannelMuteEvent
 import org.apache.kafka.common.network.{ChannelBuilder, ChannelBuilders, KafkaChannel, ListenerName, Selectable, Send, Selector => KSelector}
 import org.apache.kafka.common.requests.{RequestContext, RequestHeader}
 import org.apache.kafka.common.security.auth.SecurityProtocol
@@ -424,7 +425,7 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
    */
   private def openServerSocket(host: String, port: Int): ServerSocketChannel = {
     val socketAddress =
-      if(host == null || host.trim.isEmpty)
+      if (host == null || host.trim.isEmpty)
         new InetSocketAddress(port)
       else
         new InetSocketAddress(host, port)
@@ -626,7 +627,11 @@ private[kafka] class Processor(val id: Int,
             // that are sitting in the server's socket buffer
             updateRequestMetrics(curr)
             trace("Socket server received empty response to send, registering for read: " + curr)
-            openOrClosingChannel(channelId).foreach(c => selector.unmute(c.id))
+            // Try unmuting the channel. If there was no quota violation and the channel has not been throttled,
+            // it will be unmuted immediately. If the channel has been throttled, it will be unmuted only if the
+            // throttling delay has already passed by now.
+            handleChannelMuteEvent(channelId, ChannelMuteEvent.RESPONSE_SENT)
+            tryUnmuteChannel(channelId)
           case RequestChannel.SendAction =>
             val responseSend = curr.responseSend.getOrElse(
               throw new IllegalStateException(s"responseSend must be defined for SendAction, response: $curr"))
@@ -635,6 +640,13 @@ private[kafka] class Processor(val id: Int,
             updateRequestMetrics(curr)
             trace("Closing socket connection actively according to the response code.")
             close(channelId)
+          case RequestChannel.StartThrottlingAction =>
+            handleChannelMuteEvent(channelId, ChannelMuteEvent.THROTTLE_STARTED)
+          case RequestChannel.EndThrottlingAction =>
+            // Try unmuting the channel. The channel will be unmuted only if the response has already been sent out to
+            // the client.
+            handleChannelMuteEvent(channelId, ChannelMuteEvent.THROTTLE_ENDED)
+            tryUnmuteChannel(channelId)
         }
       } catch {
         case e: Throwable =>
@@ -677,12 +689,14 @@ private[kafka] class Processor(val id: Int,
         openOrClosingChannel(receive.source) match {
           case Some(channel) =>
             val header = RequestHeader.parse(receive.payload)
-            val context = new RequestContext(header, receive.source, channel.socketAddress,
+            val connectionId = receive.source
+            val context = new RequestContext(header, connectionId, channel.socketAddress,
               channel.principal, listenerName, securityProtocol)
             val req = new RequestChannel.Request(processor = id, context = context,
               startTimeNanos = time.nanoseconds, memoryPool, receive.payload, requestChannel.metrics)
             requestChannel.sendRequest(req)
-            selector.mute(receive.source)
+            selector.mute(connectionId)
+            handleChannelMuteEvent(connectionId, ChannelMuteEvent.REQUEST_RECEIVED)
           case None =>
             // This should never happen since completed receives are processed immediately after `poll()`
             throw new IllegalStateException(s"Channel ${receive.source} removed from selector before processing completed receive")
@@ -703,10 +717,15 @@ private[kafka] class Processor(val id: Int,
           throw new IllegalStateException(s"Send for ${send.destination} completed, but not in `inflightResponses`")
         }
         updateRequestMetrics(resp)
-        selector.unmute(send.destination)
+
+        // Try unmuting the channel. If there was no quota violation and the channel has not been throttled,
+        // it will be unmuted immediately. If the channel has been throttled, it will unmuted only if the throttling
+        // delay has already passed by now.
+        handleChannelMuteEvent(send.destination, ChannelMuteEvent.RESPONSE_SENT)
+        tryUnmuteChannel(send.destination)
       } catch {
         case e: Throwable => processChannelException(send.destination,
-            s"Exception while processing completed send to ${send.destination}", e)
+          s"Exception while processing completed send to ${send.destination}", e)
       }
     }
   }
@@ -821,7 +840,17 @@ private[kafka] class Processor(val id: Int,
   // Visible for testing
   // Only methods that are safe to call on a disconnected channel should be invoked on 'openOrClosingChannel'.
   private[network] def openOrClosingChannel(connectionId: String): Option[KafkaChannel] =
-     Option(selector.channel(connectionId)).orElse(Option(selector.closingChannel(connectionId)))
+    Option(selector.channel(connectionId)).orElse(Option(selector.closingChannel(connectionId)))
+
+  // Indicate the specified channel that the specified channel mute-related event has happened so that it can change its
+  // mute state.
+  private def handleChannelMuteEvent(connectionId: String, event: ChannelMuteEvent): Unit = {
+    openOrClosingChannel(connectionId).foreach(c => c.handleChannelMuteEvent(event))
+  }
+
+  private def tryUnmuteChannel(connectionId: String) = {
+    openOrClosingChannel(connectionId).foreach(c => selector.unmute(c.id))
+  }
 
   /* For test usage */
   private[network] def channel(connectionId: String): Option[KafkaChannel] =

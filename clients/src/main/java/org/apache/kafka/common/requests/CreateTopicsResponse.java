@@ -58,8 +58,14 @@ public class CreateTopicsResponse extends AbstractResponse {
             THROTTLE_TIME_MS,
             new Field(TOPIC_ERRORS_KEY_NAME, new ArrayOf(TOPIC_ERROR), "An array of per topic errors."));
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema CREATE_TOPICS_RESPONSE_V3 = CREATE_TOPICS_RESPONSE_V2;
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{CREATE_TOPICS_RESPONSE_V0, CREATE_TOPICS_RESPONSE_V1, CREATE_TOPICS_RESPONSE_V2};
+        return new Schema[]{CREATE_TOPICS_RESPONSE_V0, CREATE_TOPICS_RESPONSE_V1, CREATE_TOPICS_RESPONSE_V2,
+            CREATE_TOPICS_RESPONSE_V3};
     }
 
     /**
@@ -118,6 +124,7 @@ public class CreateTopicsResponse extends AbstractResponse {
         return struct;
     }
 
+    @Override
     public int throttleTimeMs() {
         return throttleTimeMs;
     }
@@ -133,5 +140,10 @@ public class CreateTopicsResponse extends AbstractResponse {
 
     public static CreateTopicsResponse parse(ByteBuffer buffer, short version) {
         return new CreateTopicsResponse(ApiKeys.CREATE_TOPICS.responseSchema(version).read(buffer));
+    }
+
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 3;
     }
 }

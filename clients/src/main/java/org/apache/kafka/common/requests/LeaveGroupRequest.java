@@ -34,8 +34,14 @@ public class LeaveGroupRequest extends AbstractRequest {
     /* v1 request is the same as v0. Throttle time has been added to response */
     private static final Schema LEAVE_GROUP_REQUEST_V1 = LEAVE_GROUP_REQUEST_V0;
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema LEAVE_GROUP_REQUEST_V2 = LEAVE_GROUP_REQUEST_V1;
+
     public static Schema[] schemaVersions() {
-        return new Schema[] {LEAVE_GROUP_REQUEST_V0, LEAVE_GROUP_REQUEST_V1};
+        return new Schema[] {LEAVE_GROUP_REQUEST_V0, LEAVE_GROUP_REQUEST_V1,
+            LEAVE_GROUP_REQUEST_V2};
     }
 
     public static class Builder extends AbstractRequest.Builder<LeaveGroupRequest> {
@@ -86,6 +92,7 @@ public class LeaveGroupRequest extends AbstractRequest {
             case 0:
                 return new LeaveGroupResponse(Errors.forException(e));
             case 1:
+            case 2:
                 return new LeaveGroupResponse(throttleTimeMs, Errors.forException(e));
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",

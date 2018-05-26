@@ -42,6 +42,11 @@ public class RenewDelegationTokenResponse extends AbstractResponse {
             new Field(EXPIRY_TIMESTAMP_KEY_NAME, INT64, "timestamp (in msec) at which this token expires.."),
             THROTTLE_TIME_MS);
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema TOKEN_RENEW_RESPONSE_V1 = TOKEN_RENEW_RESPONSE_V0;
+
     public RenewDelegationTokenResponse(int throttleTimeMs, Errors error, long expiryTimestamp) {
         this.throttleTimeMs = throttleTimeMs;
         this.error = error;
@@ -63,7 +68,7 @@ public class RenewDelegationTokenResponse extends AbstractResponse {
     }
 
     public static Schema[] schemaVersions() {
-        return new Schema[] {TOKEN_RENEW_RESPONSE_V0};
+        return new Schema[] {TOKEN_RENEW_RESPONSE_V0, TOKEN_RENEW_RESPONSE_V1};
     }
 
     @Override
@@ -82,6 +87,7 @@ public class RenewDelegationTokenResponse extends AbstractResponse {
         return struct;
     }
 
+    @Override
     public int throttleTimeMs() {
         return throttleTimeMs;
     }
@@ -96,5 +102,10 @@ public class RenewDelegationTokenResponse extends AbstractResponse {
 
     public boolean hasError() {
         return this.error != Errors.NONE;
+    }
+
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 1;
     }
 }

@@ -106,9 +106,14 @@ public class OffsetCommitRequest extends AbstractRequest {
     /* v3 request is same as v2. Throttle time has been added to response */
     private static final Schema OFFSET_COMMIT_REQUEST_V3 = OFFSET_COMMIT_REQUEST_V2;
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema OFFSET_COMMIT_REQUEST_V4 = OFFSET_COMMIT_REQUEST_V3;
+
     public static Schema[] schemaVersions() {
         return new Schema[] {OFFSET_COMMIT_REQUEST_V0, OFFSET_COMMIT_REQUEST_V1, OFFSET_COMMIT_REQUEST_V2,
-            OFFSET_COMMIT_REQUEST_V3};
+            OFFSET_COMMIT_REQUEST_V3, OFFSET_COMMIT_REQUEST_V4};
     }
 
     // default values for the current version
@@ -193,6 +198,7 @@ public class OffsetCommitRequest extends AbstractRequest {
                 case 1:
                 case 2:
                 case 3:
+                case 4:
                     long retentionTime = version == 1 ? DEFAULT_RETENTION_TIME : this.retentionTime;
                     return new OffsetCommitRequest(groupId, generationId, memberId, retentionTime, offsetData, version);
                 default:
@@ -309,6 +315,7 @@ public class OffsetCommitRequest extends AbstractRequest {
             case 2:
                 return new OffsetCommitResponse(responseData);
             case 3:
+            case 4:
                 return new OffsetCommitResponse(throttleTimeMs, responseData);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
