@@ -14,14 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.network;
+package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.record.LazyDownConversionRecordsSend;
-import org.apache.kafka.common.record.RecordConversionStats;
-import org.apache.kafka.common.record.RecordsSend;
-import org.apache.kafka.common.record.TopicPartitionRecordConversionStats;
+import org.apache.kafka.common.network.Send;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

@@ -34,8 +34,8 @@ public final class LazyDownConversionRecordsSend extends RecordsSend<LazyDownCon
     private static final Logger log = LoggerFactory.getLogger(LazyDownConversionRecordsSend.class);
     private static final int MAX_READ_SIZE = 128 * 1024;
 
-    private RecordConversionStats processingStats = null;
-    private RecordsSend convertedRecordsWriter = null;
+    private RecordConversionStats stats;
+    private RecordsSend convertedRecordsWriter;
     private Iterator<ConvertedRecords> convertedRecordsIterator;
 
     public LazyDownConversionRecordsSend(String destination, LazyDownConversionRecords records) {
@@ -44,7 +44,7 @@ public final class LazyDownConversionRecordsSend extends RecordsSend<LazyDownCon
 
     private void resetState() {
         convertedRecordsWriter = null;
-        processingStats = new RecordConversionStats(0, 0, 0);
+        stats = new RecordConversionStats(0, 0, 0);
         convertedRecordsIterator = records().iterator(MAX_READ_SIZE);
     }
 
@@ -68,7 +68,7 @@ public final class LazyDownConversionRecordsSend extends RecordsSend<LazyDownCon
                             " maximum_size: " + size() +
                             " converted_records_size: " + sizeOfFirstConvertedBatch);
 
-                processingStats.add(recordsAndStats.recordsProcessingStats());
+                stats.add(recordsAndStats.recordsProcessingStats());
                 log.debug("Got lazy converted records for {" + topicPartition() + "} with length=" + convertedRecords.sizeInBytes());
             } else {
                 if (previouslyWritten == 0)
@@ -96,7 +96,7 @@ public final class LazyDownConversionRecordsSend extends RecordsSend<LazyDownCon
     }
 
     public TopicPartitionRecordConversionStats recordsProcessingStats() {
-        return new TopicPartitionRecordConversionStats(topicPartition(), processingStats);
+        return new TopicPartitionRecordConversionStats(topicPartition(), stats);
     }
 
     private TopicPartition topicPartition() {

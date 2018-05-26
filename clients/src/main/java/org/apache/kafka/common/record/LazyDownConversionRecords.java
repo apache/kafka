@@ -23,6 +23,7 @@ import org.apache.kafka.common.utils.Time;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Encapsulation for holding records that require down-conversion in a lazy, chunked manner (KIP-283). See
@@ -33,7 +34,7 @@ public class LazyDownConversionRecords implements BaseRecords {
     private final Records records;
     private final byte toMagic;
     private final long firstOffset;
-    private final ConvertedRecords firstConvertedBatch;
+    private final AtomicReference<ConvertedRecords> firstConvertedBatch;
     private final int sizeInBytes;
 
     /**
@@ -54,10 +55,11 @@ public class LazyDownConversionRecords implements BaseRecords {
         // its size.
         AbstractIterator<? extends RecordBatch> it = records.batchIterator();
         if (it.hasNext()) {
-            firstConvertedBatch = RecordsUtil.downConvert(Collections.singletonList(it.peek()), toMagic, firstOffset, Time.SYSTEM);
-            sizeInBytes = Math.max(records.sizeInBytes(), firstConvertedBatch.records().sizeInBytes());
+            ConvertedRecords firstBatch = RecordsUtil.downConvert(Collections.singletonList(it.peek()), toMagic, firstOffset, Time.SYSTEM);
+            firstConvertedBatch = new AtomicReference<>(firstBatch);
+            sizeInBytes = Math.max(records.sizeInBytes(), firstBatch.records().sizeInBytes());
         } else {
-            firstConvertedBatch = null;
+            firstConvertedBatch = new AtomicReference<>(null);
             sizeInBytes = 0;
         }
     }
@@ -104,7 +106,12 @@ public class LazyDownConversionRecords implements BaseRecords {
     }
 
     public java.util.Iterator<ConvertedRecords> iterator(long maximumReadSize) {
-        return new Iterator(records, maximumReadSize, firstConvertedBatch);
+        // We typically expect only one iterator instance to be created, so null out the first converted batch after
+        // first use to make it available for GC.
+        ConvertedRecords firstBatch = null;
+        if (firstConvertedBatch.get() != null)
+            firstBatch = firstConvertedBatch.getAndSet(null);
+        return new Iterator(records, maximumReadSize, firstBatch);
     }
 
     /**
