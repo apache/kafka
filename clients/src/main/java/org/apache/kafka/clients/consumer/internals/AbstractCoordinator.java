@@ -262,7 +262,7 @@ public abstract class AbstractCoordinator implements Closeable {
     /**
      * Check whether the group should be rejoined (e.g. if metadata changes) or whether a
      * rejoin request is already in flight and needs to be completed.
-     * 
+     *
      * @return true if it should, false otherwise
      */
     protected synchronized boolean rejoinNeededOrPending() {

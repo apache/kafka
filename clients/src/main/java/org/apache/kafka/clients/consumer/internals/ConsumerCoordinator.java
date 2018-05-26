@@ -100,7 +100,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                               final RequestFuture<Map<TopicPartition, OffsetAndMetadata>> response
         ) {
             if (request == null) throw new NullPointerException();
-            if (generationAtRequestTime == null) throw new NullPointerException();
             if (response == null) throw new NullPointerException();
 
             this.request = request;
@@ -109,7 +108,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
 
         private boolean sameRequest(final Set<TopicPartition> currentRequest, final Generation currentGeneration) {
-            return generation.equals(currentGeneration) && request.equals(currentRequest);
+            return (generation == null ? currentGeneration == null : generation.equals(currentGeneration))
+                && request.equals(currentRequest);
         }
     }
 
