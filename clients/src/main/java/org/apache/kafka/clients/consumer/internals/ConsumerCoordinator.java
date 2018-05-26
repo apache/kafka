@@ -593,7 +593,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         if (partitions.isEmpty())
             return Collections.emptyMap();
         while (time.milliseconds() < startMs + timeoutMs) {
-            ensureCoordinatorReady(startMs, timeoutMs);
+            ensureCoordinatorReady(startMs);
             if (time.milliseconds() > startMs + timeoutMs) throw new TimeoutException("Error, coordinator is not ready in allocated time!");
 
             // contact coordinator to fetch committed offsets
