@@ -156,7 +156,7 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
 
         private SslAuthenticator(Map<String, ?> configs, SslTransportLayer transportLayer, ListenerName listenerName) {
             this.transportLayer = transportLayer;
-            this.principalBuilder = ChannelBuilders.createPrincipalBuilder(configs, transportLayer, this, null);
+            this.principalBuilder = ChannelBuilders.createPrincipalBuilder(configs, null);
             this.listenerName = listenerName;
         }
         /**
