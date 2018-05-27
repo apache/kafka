@@ -89,7 +89,7 @@ public class DefaultKafkaPrincipalBuilderTest extends EasyMockSupport {
         EasyMock.expect(server.getMechanismName()).andReturn(SaslConfigs.GSSAPI_MECHANISM);
         EasyMock.expect(server.getAuthorizationID()).andReturn("foo/host@REALM.COM");
         EasyMock.expect(kerberosShortNamer.shortName(EasyMock.anyObject(KerberosName.class)))
-            .andReturn("foo");
+                .andReturn("foo");
 
         replayAll();
 
