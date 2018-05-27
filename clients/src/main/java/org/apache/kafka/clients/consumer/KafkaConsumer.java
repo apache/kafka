@@ -1478,7 +1478,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *
      * @param partition The partition to get the position for
      * @return The current position of the consumer (that is, the offset of the next record to be fetched)
-     * @throws IllegalArgumentException if the provided TopicPartition is not assigned to this consumer
+     * @throws IllegalStateException if the provided TopicPartition is not assigned to this consumer
      * @throws org.apache.kafka.clients.consumer.InvalidOffsetException if no offset is currently defined for
      *             the partition
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
@@ -1494,7 +1494,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         acquireAndEnsureOpen();
         try {
             if (!this.subscriptions.isAssigned(partition))
-                throw new IllegalArgumentException("You can only check the position for partitions assigned to this consumer.");
+                throw new IllegalStateException("You can only check the position for partitions assigned to this consumer.");
             Long offset = this.subscriptions.position(partition);
             while (offset == null) {
                 // batch update fetch positions for any partitions without a valid position
