@@ -1332,7 +1332,7 @@ project(':connect:runtime') {
     compile project(':clients')
     compile project(':tools')
     compile project(':connect:json')
-    compileOnly project(':connect:transforms')
+    compile project(':connect:transforms')
 
     compile libs.slf4jApi
     compile libs.jacksonJaxrsJsonProvider
@@ -1352,8 +1352,6 @@ project(':connect:runtime') {
     testCompile libs.powermockJunit4
     testCompile libs.powermockEasymock
 
-    testCompile project(':connect:json')
-    testCompile project(':connect:transforms')
     testCompile project(':clients').sourceSets.test.output
 
     testRuntime libs.slf4jlog4j
