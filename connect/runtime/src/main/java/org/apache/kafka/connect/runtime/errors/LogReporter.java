@@ -51,10 +51,6 @@ public class LogReporter implements ErrorReporter {
         this.id = id;
     }
 
-    public LogReporter() {
-        this.id = new ConnectorTaskId("UNKNOWN", 0);
-    }
-
     static ConfigDef getConfigDef() {
         return new ConfigDef()
                 .define(LOG_ENABLE, ConfigDef.Type.BOOLEAN, LOG_ENABLE_DEFAULT, ConfigDef.Importance.MEDIUM, LOG_ENABLE_DOC)

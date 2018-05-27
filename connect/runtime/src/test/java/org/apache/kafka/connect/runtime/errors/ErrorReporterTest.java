@@ -46,6 +46,7 @@ public class ErrorReporterTest {
 
     private static final String TOPIC = "test-topic";
     private static final String DLQ_TOPIC = "test-topic-errors";
+    private static final ConnectorTaskId TASK_ID = new ConnectorTaskId("job", 0);
 
     @Mock
     KafkaProducer<byte[], byte[]> producer;
@@ -122,7 +123,7 @@ public class ErrorReporterTest {
 
     @Test
     public void testLogOnDisabledLogReporter() {
-        LogReporter logReporter = new LogReporter();
+        LogReporter logReporter = new LogReporter(TASK_ID);
         logReporter.configure(config);
         logReporter.setMetrics(errorHandlingMetrics);
 
@@ -136,7 +137,7 @@ public class ErrorReporterTest {
 
     @Test
     public void testLogOnEnabledLogReporter() {
-        LogReporter logReporter = new LogReporter();
+        LogReporter logReporter = new LogReporter(TASK_ID);
         logReporter.configure(config(LogReporter.LOG_ENABLE, "true"));
         logReporter.setMetrics(errorHandlingMetrics);
 
@@ -150,20 +151,20 @@ public class ErrorReporterTest {
 
     @Test
     public void testLogMessageWithNoRecords() {
-        LogReporter logReporter = new LogReporter();
+        LogReporter logReporter = new LogReporter(TASK_ID);
         logReporter.configure(config(LogReporter.LOG_ENABLE, "true"));
         logReporter.setMetrics(errorHandlingMetrics);
 
         ProcessingContext context = processingContext();
 
         String msg = logReporter.message(context).toString();
-        assertEquals("Error encountered in task UNKNOWN-0 while performing KEY_CONVERTER operation with class " +
+        assertEquals("Error encountered in task job-0 while performing KEY_CONVERTER operation with class " +
                 "'class org.apache.kafka.connect.json.JsonConverter'.", msg);
     }
 
     @Test
     public void testLogMessageWithSinkRecords() {
-        LogReporter logReporter = new LogReporter();
+        LogReporter logReporter = new LogReporter(TASK_ID);
         logReporter.configure(config(LogReporter.LOG_ENABLE, "true"));
         logReporter.configure(config(LogReporter.LOG_INCLUDE_MESSAGES, "true"));
         logReporter.setMetrics(errorHandlingMetrics);
@@ -171,7 +172,7 @@ public class ErrorReporterTest {
         ProcessingContext context = processingContext();
 
         String msg = logReporter.message(context).toString();
-        assertEquals("Error encountered in task UNKNOWN-0 while performing KEY_CONVERTER operation with class " +
+        assertEquals("Error encountered in task job-0 while performing KEY_CONVERTER operation with class " +
                 "'class org.apache.kafka.connect.json.JsonConverter', msg.topic='test-topic', " +
                 "msg.partition=5, msg.offset=100, msg.timestamp=-1, msg.timestampType=NoTimestampType.", msg);
     }

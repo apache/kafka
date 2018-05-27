@@ -163,7 +163,7 @@ public class ErrorHandlingTaskTest {
 
     @Test
     public void testErrorHandlingInSinkTasks() throws Exception {
-        LogReporter reporter = new LogReporter();
+        LogReporter reporter = new LogReporter(taskId);
         Map<String, Object> reportProps = new HashMap<>();
         reportProps.put(LogReporter.LOG_ENABLE, "true");
         reportProps.put(LogReporter.LOG_INCLUDE_MESSAGES, "true");
@@ -213,7 +213,7 @@ public class ErrorHandlingTaskTest {
 
     @Test
     public void testErrorHandlingInSourceTasks() throws Exception {
-        LogReporter reporter = new LogReporter();
+        LogReporter reporter = new LogReporter(taskId);
         Map<String, Object> reportProps = new HashMap<>();
         reportProps.put(LogReporter.LOG_ENABLE, "true");
         reportProps.put(LogReporter.LOG_INCLUDE_MESSAGES, "true");
@@ -272,7 +272,7 @@ public class ErrorHandlingTaskTest {
 
     @Test
     public void testErrorHandlingInSourceTasksWthBadConverter() throws Exception {
-        LogReporter reporter = new LogReporter();
+        LogReporter reporter = new LogReporter(taskId);
         Map<String, Object> reportProps = new HashMap<>();
         reportProps.put(LogReporter.LOG_ENABLE, "true");
         reportProps.put(LogReporter.LOG_INCLUDE_MESSAGES, "true");
