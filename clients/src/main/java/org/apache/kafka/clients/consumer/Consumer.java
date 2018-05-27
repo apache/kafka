@@ -95,6 +95,7 @@ public interface Consumer<K, V> extends Closeable {
     /**
      * @see KafkaConsumer#commitSync(Map)
      */
+    @Deprecated
     void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets);
 
     /**
@@ -135,6 +136,7 @@ public interface Consumer<K, V> extends Closeable {
     /**
      * @see KafkaConsumer#position(TopicPartition)
      */
+    @Deprecated
     public long position(TopicPartition partition);
     
     /**
@@ -145,6 +147,7 @@ public interface Consumer<K, V> extends Closeable {
     /**
      * @see KafkaConsumer#committed(TopicPartition)
      */
+    @Deprecated
     OffsetAndMetadata committed(TopicPartition partition);
 
     /**
@@ -160,12 +163,24 @@ public interface Consumer<K, V> extends Closeable {
     /**
      * @see KafkaConsumer#partitionsFor(String)
      */
+    @Deprecated
     List<PartitionInfo> partitionsFor(String topic);
+
+    /**
+     * @see KafkaConsumer#partitionsFor(String, Duration)
+     */
+    List<PartitionInfo> partitionsFor(String topic, Duration timeout);
 
     /**
      * @see KafkaConsumer#listTopics()
      */
+    @Deprecated
     Map<String, List<PartitionInfo>> listTopics();
+
+    /**
+     * @see KafkaConsumer#listTopics(Duration)
+     */
+    Map<String, List<PartitionInfo>> listTopics(Duration timeout);
 
     /**
      * @see KafkaConsumer#paused()
@@ -185,17 +200,35 @@ public interface Consumer<K, V> extends Closeable {
     /**
      * @see KafkaConsumer#offsetsForTimes(java.util.Map)
      */
+    @Deprecated
     Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch);
+
+    /**
+     * @see KafkaConsumer#offsetsForTimes(java.util.Map, Duration)
+     */
+    Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch, Duration timeout);
 
     /**
      * @see KafkaConsumer#beginningOffsets(java.util.Collection)
      */
+    @Deprecated
     Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions);
+
+    /**
+     * @see KafkaConsumer#beginningOffsets(java.util.Collection, Duration)
+     */
+    Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions, Duration timeout);
 
     /**
      * @see KafkaConsumer#endOffsets(java.util.Collection)
      */
+    @Deprecated
     Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions);
+
+    /**
+     * @see KafkaConsumer#endOffsets(java.util.Collection, Duration)
+     */
+    Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions, Duration duration);
 
     /**
      * @see KafkaConsumer#close()
@@ -205,7 +238,13 @@ public interface Consumer<K, V> extends Closeable {
     /**
      * @see KafkaConsumer#close(long, TimeUnit)
      */
+    @Deprecated
     void close(long timeout, TimeUnit unit);
+
+    /**
+     * @see KafkaConsumer#close(Duration)
+     */
+    void close(Duration duration);
 
     /**
      * @see KafkaConsumer#wakeup()

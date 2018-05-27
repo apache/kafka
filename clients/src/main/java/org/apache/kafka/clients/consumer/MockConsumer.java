@@ -485,4 +485,35 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         }
         return offsets.size() > 1 ? offsets.remove(0) : offsets.get(0);
     }
+
+    @Override
+    public List<PartitionInfo> partitionsFor(String topic, Duration timeout) {
+        return partitionsFor(topic);
+    }
+
+    @Override
+    public Map<String, List<PartitionInfo>> listTopics(Duration timeout) {
+        return listTopics();
+    }
+
+    @Override
+    public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch,
+            Duration timeout) {
+        return offsetsForTimes(timestampsToSearch);
+    }
+
+    @Override
+    public Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions, Duration timeout) {
+        return beginningOffsets(partitions);
+    }
+
+    @Override
+    public Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions, Duration duration) {
+        return endOffsets(partitions);
+    }
+
+    @Override
+    public void close(Duration duration) {
+        close();
+    }
 }
