@@ -462,8 +462,7 @@ public class Worker {
         // Decide which type of worker task we need based on the type of task.
         if (task instanceof SourceTask) {
             operationExecutor.setReporters(sourceTaskReporters(id, connConfig, errorHandlingMetrics));
-            TransformationChain<SourceRecord> transformationChain = new TransformationChain<>(connConfig.<SourceRecord>transformations());
-            transformationChain.initialize(operationExecutor);
+            TransformationChain<SourceRecord> transformationChain = new TransformationChain<>(connConfig.<SourceRecord>transformations(), operationExecutor);
             OffsetStorageReader offsetReader = new OffsetStorageReaderImpl(offsetBackingStore, id.connector(),
                     internalKeyConverter, internalValueConverter);
             OffsetStorageWriter offsetWriter = new OffsetStorageWriter(offsetBackingStore, id.connector(),
@@ -474,9 +473,8 @@ public class Worker {
                     headerConverter, transformationChain, producer, offsetReader, offsetWriter, config, metrics, loader,
                     time, operationExecutor);
         } else if (task instanceof SinkTask) {
-            TransformationChain<SinkRecord> transformationChain = new TransformationChain<>(connConfig.<SinkRecord>transformations());
+            TransformationChain<SinkRecord> transformationChain = new TransformationChain<>(connConfig.<SinkRecord>transformations(), operationExecutor);
             operationExecutor.setReporters(sinkTaskReporters(id, connConfig, errorHandlingMetrics));
-            transformationChain.initialize(operationExecutor);
             return new WorkerSinkTask(id, (SinkTask) task, statusListener, initialState, config, metrics, keyConverter,
                     valueConverter, headerConverter, transformationChain, loader, time,
                     operationExecutor);

@@ -365,8 +365,7 @@ public class ErrorHandlingTaskTest {
         oo.put("schemas.enable", "false");
         converter.configure(oo);
 
-        TransformationChain<SinkRecord> sinkTransforms = new TransformationChain<>(singletonList(new FaultyPassthrough<SinkRecord>()));
-        sinkTransforms.initialize(executor);
+        TransformationChain<SinkRecord> sinkTransforms = new TransformationChain<>(singletonList(new FaultyPassthrough<SinkRecord>()), executor);
 
         workerSinkTask = PowerMock.createPartialMock(
                 WorkerSinkTask.class, new String[]{"createConsumer"},
@@ -394,8 +393,7 @@ public class ErrorHandlingTaskTest {
     }
 
     private void createSourceTask(TargetState initialState, RetryWithToleranceExecutor executor, Converter converter) {
-        TransformationChain<SourceRecord> sourceTransforms = new TransformationChain<>(singletonList(new FaultyPassthrough<SourceRecord>()));
-        sourceTransforms.initialize(executor);
+        TransformationChain<SourceRecord> sourceTransforms = new TransformationChain<>(singletonList(new FaultyPassthrough<SourceRecord>()), executor);
 
         workerSourceTask = PowerMock.createPartialMock(
                 WorkerSourceTask.class, new String[]{"commitOffsets", "isStopping"},

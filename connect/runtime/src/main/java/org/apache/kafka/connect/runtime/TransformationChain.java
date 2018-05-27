@@ -28,14 +28,14 @@ import java.util.Objects;
 public class TransformationChain<R extends ConnectRecord<R>> {
 
     private final List<Transformation<R>> transformations;
-
-    private RetryWithToleranceExecutor operationExecutor = RetryWithToleranceExecutor.NOOP_EXECUTOR;
+    private final RetryWithToleranceExecutor operationExecutor;
 
     public TransformationChain(List<Transformation<R>> transformations) {
-        this.transformations = transformations;
+        this(transformations, RetryWithToleranceExecutor.NOOP_EXECUTOR);
     }
 
-    public void initialize(RetryWithToleranceExecutor operationExecutor) {
+    public TransformationChain(List<Transformation<R>> transformations, RetryWithToleranceExecutor operationExecutor) {
+        this.transformations = transformations;
         this.operationExecutor = operationExecutor;
     }
 
