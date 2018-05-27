@@ -1755,6 +1755,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
             Map<String, List<PartitionInfo>> topicMetadata = fetcher.getTopicMetadata(
                     new MetadataRequest.Builder(Collections.singletonList(topic), true), timeoutMs);
+            if (topicMetadata.isEmpty()) {
+                throw new TimeoutException("Fetcher was unable to retrieve requested partition info in allocated time.");
+            }
             return topicMetadata.get(topic);
         } finally {
             release();
@@ -1805,7 +1808,13 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public Map<String, List<PartitionInfo>> listTopics(Duration timeout) {
         acquireAndEnsureOpen();
         try {
-            return fetcher.getAllTopicMetadata(timeout.toMillis());
+            long currMillis = time.milliseconds();
+            Map<String, List<PartitionInfo>> topicMetadata = fetcher.getAllTopicMetadata(timeout.toMillis());
+            boolean timeoutExceeded = time.milliseconds() - currMillis > timeout.toMillis();
+            if (timeoutExceeded) {
+                throw new TimeoutException("Unable to retrieve all partition information within allocated interval of time.");
+            }
+            return topicMetadata;
         } finally {
             release();
         }
@@ -1939,7 +1948,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     throw new IllegalArgumentException("The target time for partition " + entry.getKey() + " is " +
                             entry.getValue() + ". The target time cannot be negative.");
             }
-            return fetcher.offsetsByTimes(timestampsToSearch, timeout.toMillis());
+            final long currMillis = time.milliseconds();
+            final Map<TopicPartition, OffsetAndTimestamp> offsets = fetcher.offsetsByTimes(timestampsToSearch, timeout.toMillis());
+            if (time.milliseconds() - currMillis > timeout.toMillis()) {
+                throw new TimeoutException("Unable to retrieve all offsets for requested times within allocated timeout.");
+            }
+            return offsets;
         } finally {
             release();
         }
@@ -1991,7 +2005,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions, Duration timeout) {
         acquireAndEnsureOpen();
         try {
-            return fetcher.beginningOffsets(partitions, timeout.toMillis());
+            final long currMillis = time.milliseconds();
+            final Map<TopicPartition, Long> offsets = fetcher.beginningOffsets(partitions, timeout.toMillis());
+            if (time.milliseconds() - currMillis > timeout.toMillis()) {
+                throw new TimeoutException("Unable to retrieve all beginning offsets within allocated timeout.");
+            }
+            return offsets;
         } finally {
             release();
         }
@@ -2052,7 +2071,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions, Duration timeout) {
         acquireAndEnsureOpen();
         try {
-            return fetcher.endOffsets(partitions, timeout.toMillis());
+            final long currMillis = time.milliseconds();
+            final Map<TopicPartition, Long> offsets = fetcher.endOffsets(partitions, timeout.toMillis());
+            if (time.milliseconds() - currMillis > timeout.toMillis()) {
+                throw new TimeoutException("Unable to retrieve all end offsets within allocated period of time.");
+            }
+            return offsets;
         } finally {
             release();
         }
@@ -2125,7 +2149,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         try {
             if (!closed) {
                 closed = true;
+                final long currMillis = time.milliseconds();
                 close(timeout.toMillis(), false);
+                if (time.milliseconds() - currMillis > timeout.toMillis()) {
+                    throw new TimeoutException("Unable to properly close consumer within set interval of time.");
+                }
             }
         } finally {
             release();
