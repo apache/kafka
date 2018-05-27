@@ -508,9 +508,6 @@ public class TopologyTestDriver implements Closeable {
             task.maybePunctuateSystemTime();
             task.commit();
         }
-        if (eosEnabled) {
-            producer.commitTransaction();
-        }
         captureOutputRecords();
     }
 
