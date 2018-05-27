@@ -17,7 +17,6 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.connect.connector.ConnectRecord;
-import org.apache.kafka.connect.runtime.errors.OperationExecutor;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceExecutor;
 import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.transforms.Transformation;
@@ -30,10 +29,14 @@ public class TransformationChain<R extends ConnectRecord<R>> {
 
     private final List<Transformation<R>> transformations;
 
-    private OperationExecutor operationExecutor = RetryWithToleranceExecutor.NOOP_EXECUTOR;
+    private RetryWithToleranceExecutor operationExecutor = RetryWithToleranceExecutor.NOOP_EXECUTOR;
 
     public TransformationChain(List<Transformation<R>> transformations) {
         this.transformations = transformations;
+    }
+
+    public void initialize(RetryWithToleranceExecutor operationExecutor) {
+        this.operationExecutor = operationExecutor;
     }
 
     public R apply(R record) {
@@ -55,10 +58,6 @@ public class TransformationChain<R extends ConnectRecord<R>> {
         for (Transformation<R> transformation : transformations) {
             transformation.close();
         }
-    }
-
-    public void initialize(OperationExecutor operationExecutor) {
-        this.operationExecutor = operationExecutor;
     }
 
     @Override

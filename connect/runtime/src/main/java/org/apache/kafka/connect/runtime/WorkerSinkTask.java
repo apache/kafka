@@ -40,7 +40,6 @@ import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
-import org.apache.kafka.connect.runtime.errors.OperationExecutor;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceExecutor;
 import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.sink.SinkRecord;
@@ -120,7 +119,7 @@ class WorkerSinkTask extends WorkerTask {
                           TransformationChain<SinkRecord> transformationChain,
                           ClassLoader loader,
                           Time time,
-                          OperationExecutor operationExecutor) {
+                          RetryWithToleranceExecutor operationExecutor) {
         super(id, statusListener, initialState, loader, connectMetrics, operationExecutor);
 
         this.workerConfig = workerConfig;

@@ -33,7 +33,6 @@ import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
 import org.apache.kafka.connect.runtime.errors.LogReporter;
-import org.apache.kafka.connect.runtime.errors.OperationExecutor;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceExecutor;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
@@ -359,7 +358,7 @@ public class ErrorHandlingTaskTest {
         PowerMock.expectLastCall();
     }
 
-    private void createSinkTask(TargetState initialState, OperationExecutor executor) {
+    private void createSinkTask(TargetState initialState, RetryWithToleranceExecutor executor) {
         JsonConverter converter = new JsonConverter();
         Map<String, Object> oo = workerConfig.originalsWithPrefix("value.converter.");
         oo.put("converter.type", "value");
@@ -375,7 +374,7 @@ public class ErrorHandlingTaskTest {
                 headerConverter, sinkTransforms, pluginLoader, time, executor);
     }
 
-    private void createSourceTask(TargetState initialState, OperationExecutor executor) {
+    private void createSourceTask(TargetState initialState, RetryWithToleranceExecutor executor) {
         JsonConverter converter = new JsonConverter();
         Map<String, Object> oo = workerConfig.originalsWithPrefix("value.converter.");
         oo.put("converter.type", "value");
@@ -394,7 +393,7 @@ public class ErrorHandlingTaskTest {
         return converter;
     }
 
-    private void createSourceTask(TargetState initialState, OperationExecutor executor, Converter converter) {
+    private void createSourceTask(TargetState initialState, RetryWithToleranceExecutor executor, Converter converter) {
         TransformationChain<SourceRecord> sourceTransforms = new TransformationChain<>(singletonList(new FaultyPassthrough<SourceRecord>()));
         sourceTransforms.initialize(executor);
 

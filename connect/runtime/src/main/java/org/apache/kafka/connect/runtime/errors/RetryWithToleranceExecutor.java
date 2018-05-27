@@ -61,7 +61,7 @@ import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
  * then it is wrapped into a ConnectException and rethrown to the caller.
  * </p>
  */
-public class RetryWithToleranceExecutor implements OperationExecutor {
+public class RetryWithToleranceExecutor {
 
     private static final Logger log = LoggerFactory.getLogger(RetryWithToleranceExecutor.class);
 
@@ -124,7 +124,6 @@ public class RetryWithToleranceExecutor implements OperationExecutor {
      * @param <V> return type of the result of the operation.
      * @return result of the operation
      */
-    @Override
     public <V> V execute(Operation<V> operation, Stage stage, Class<?> executingClass) {
         context.setCurrentContext(stage, executingClass);
 
@@ -253,7 +252,6 @@ public class RetryWithToleranceExecutor implements OperationExecutor {
         time.sleep(delay);
     }
 
-    @Override
     public void configure(Map<String, ?> configs) {
         config = new RetryWithToleranceExecutorConfig(configs);
     }

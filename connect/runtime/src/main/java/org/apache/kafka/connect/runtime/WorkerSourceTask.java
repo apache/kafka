@@ -34,7 +34,6 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.header.Header;
 import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
-import org.apache.kafka.connect.runtime.errors.OperationExecutor;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceExecutor;
 import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.source.SourceRecord;
@@ -127,7 +126,7 @@ class WorkerSourceTask extends WorkerTask {
                             ConnectMetrics connectMetrics,
                             ClassLoader loader,
                             Time time,
-                            OperationExecutor operationExecutor) {
+                            RetryWithToleranceExecutor operationExecutor) {
 
         super(id, statusListener, initialState, loader, connectMetrics, operationExecutor);
 

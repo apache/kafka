@@ -18,7 +18,6 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.WorkerTask.TaskMetricsGroup;
-import org.apache.kafka.connect.runtime.errors.OperationExecutor;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceExecutor;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.util.ConnectorTaskId;
@@ -82,7 +81,7 @@ public class WorkerTaskTest {
                         TargetState.class,
                         ClassLoader.class,
                         ConnectMetrics.class,
-                        OperationExecutor.class
+                        RetryWithToleranceExecutor.class
                 )
                 .withArgs(taskId, statusListener, TargetState.STARTED, loader, metrics, executor)
                 .addMockedMethod("initialize")
@@ -129,7 +128,7 @@ public class WorkerTaskTest {
                         TargetState.class,
                         ClassLoader.class,
                         ConnectMetrics.class,
-                        OperationExecutor.class
+                        RetryWithToleranceExecutor.class
                 )
                 .withArgs(taskId, statusListener, TargetState.STARTED, loader, metrics, executor)
                 .addMockedMethod("initialize")
@@ -169,7 +168,7 @@ public class WorkerTaskTest {
                         TargetState.class,
                         ClassLoader.class,
                         ConnectMetrics.class,
-                        OperationExecutor.class
+                        RetryWithToleranceExecutor.class
                 )
                 .withArgs(taskId, statusListener, TargetState.STARTED, loader, metrics, executor)
                 .addMockedMethod("initialize")
