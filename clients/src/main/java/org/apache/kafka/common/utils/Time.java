@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.utils;
 
+import java.util.concurrent.TimeUnit;
+
 /**
  * An interface abstracting the clock to use in unit testing classes that make use of clock time.
  *
@@ -33,7 +35,9 @@ public interface Time {
     /**
      * Returns the value returned by `nanoseconds` converted into milliseconds.
      */
-    long hiResClockMs();
+    default long hiResClockMs() {
+        return TimeUnit.NANOSECONDS.toMillis(nanoseconds());
+    }
 
     /**
      * Returns the current value of the running JVM's high-resolution time source, in nanoseconds.
@@ -53,4 +57,7 @@ public interface Time {
      */
     void sleep(long ms);
 
+    default Timer timer(long timeoutMs) {
+        return new Timer(this, timeoutMs);
+    }
 }

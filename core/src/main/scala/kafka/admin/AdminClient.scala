@@ -59,7 +59,7 @@ class AdminClient(val time: Time,
     override def run() {
       try {
         while (running)
-          client.poll(Long.MaxValue)
+          client.poll(time.timer(Long.MaxValue))
       } catch {
         case t : Throwable =>
           error("admin-client-network-thread exited", t)
