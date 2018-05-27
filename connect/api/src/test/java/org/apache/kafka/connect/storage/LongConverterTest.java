@@ -17,56 +17,27 @@
 package org.apache.kafka.connect.storage;
 
 import org.apache.kafka.common.serialization.LongSerializer;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.connect.data.Schema;
-import org.apache.kafka.connect.data.SchemaAndValue;
-import org.junit.Test;
 
-import java.io.UnsupportedEncodingException;
+public class LongConverterTest extends NumberConverterTest<Long> {
 
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-
-public class LongConverterTest {
-    private static final String TOPIC = "topic";
-    private static final Long SAMPLE_VALUE = 1234L;
-    private static final byte[] SAMPLE_VALUE_BYTES = new LongSerializer().serialize(TOPIC, SAMPLE_VALUE);
-    private static final Schema SAMPLE_SCHEMA = Schema.OPTIONAL_INT64_SCHEMA;
-    private static final LongConverter CONVERTER = new LongConverter();
-
-    @Test
-    public void testNumberToBytes() throws UnsupportedEncodingException {
-        assertArrayEquals(SAMPLE_VALUE_BYTES, CONVERTER.fromConnectData(TOPIC, SAMPLE_SCHEMA, SAMPLE_VALUE));
+    public Long[] samples() {
+        return new Long[]{Long.MIN_VALUE, 1234L, Long.MAX_VALUE};
     }
 
-    @Test
-    public void testNullToBytes() {
-        assertEquals(null, CONVERTER.fromConnectData(TOPIC, SAMPLE_SCHEMA, null));
+    @Override
+    protected Schema schema() {
+        return Schema.OPTIONAL_INT64_SCHEMA;
     }
 
-    @Test
-    public void testBytesToNumber() {
-        SchemaAndValue data = CONVERTER.toConnectData(TOPIC, SAMPLE_VALUE_BYTES);
-        assertEquals(SAMPLE_SCHEMA, data.schema());
-        assertEquals(SAMPLE_VALUE, data.value());
+    @Override
+    protected NumberConverter<Long> createConverter() {
+        return new LongConverter();
     }
 
-    @Test
-    public void testBytesNullToNumber() {
-        SchemaAndValue data = CONVERTER.toConnectData(TOPIC, null);
-        assertEquals(SAMPLE_SCHEMA, data.schema());
-        assertEquals(null, data.value());
-    }
-
-    // Note: the header conversion methods delegates to the data conversion methods, which are tested above.
-    // The following simply verify that the delegation works.
-
-    @Test
-    public void testHeaderValueToBytes() throws UnsupportedEncodingException {
-        assertArrayEquals(SAMPLE_VALUE_BYTES, CONVERTER.fromConnectHeader(TOPIC, "hdr", SAMPLE_SCHEMA, SAMPLE_VALUE));
-    }
-
-    @Test
-    public void testNullHeaderValueToBytes() {
-        assertEquals(null, CONVERTER.fromConnectHeader(TOPIC, "hdr", SAMPLE_SCHEMA, null));
+    @Override
+    protected Serializer<Long> createSerializer() {
+        return new LongSerializer();
     }
 }
