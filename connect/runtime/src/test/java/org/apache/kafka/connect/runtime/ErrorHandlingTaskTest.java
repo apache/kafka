@@ -202,11 +202,11 @@ public class ErrorHandlingTaskTest {
         // only one was written to the task
         assertSinkMetricValue("sink-record-send-total", 1.0);
         // one record completely failed (converter issues)
-        assertErrorHandlingMetricValue("processing-errors", 1.0);
+        assertErrorHandlingMetricValue("total-record-errors", 1.0);
         // 2 failures in the transformation, and 1 in the converter
-        assertErrorHandlingMetricValue("processing-failures", 3.0);
+        assertErrorHandlingMetricValue("total-record-failures", 3.0);
         // one record completely failed (converter issues), and thus was skipped
-        assertErrorHandlingMetricValue("record-skipped", 1.0);
+        assertErrorHandlingMetricValue("total-records-skipped", 1.0);
 
         PowerMock.verifyAll();
     }
@@ -261,11 +261,11 @@ public class ErrorHandlingTaskTest {
         // only one was written to the task
         assertSourceMetricValue("source-record-write-total", 0.0);
         // one record completely failed (converter issues)
-        assertErrorHandlingMetricValue("processing-errors", 0.0);
+        assertErrorHandlingMetricValue("total-record-errors", 0.0);
         // 2 failures in the transformation, and 1 in the converter
-        assertErrorHandlingMetricValue("processing-failures", 4.0);
+        assertErrorHandlingMetricValue("total-record-failures", 4.0);
         // one record completely failed (converter issues), and thus was skipped
-        assertErrorHandlingMetricValue("record-skipped", 0.0);
+        assertErrorHandlingMetricValue("total-records-skipped", 0.0);
 
         PowerMock.verifyAll();
     }
@@ -320,11 +320,11 @@ public class ErrorHandlingTaskTest {
         // only one was written to the task
         assertSourceMetricValue("source-record-write-total", 0.0);
         // one record completely failed (converter issues)
-        assertErrorHandlingMetricValue("processing-errors", 0.0);
+        assertErrorHandlingMetricValue("total-record-errors", 0.0);
         // 2 failures in the transformation, and 1 in the converter
-        assertErrorHandlingMetricValue("processing-failures", 8.0);
+        assertErrorHandlingMetricValue("total-record-failures", 8.0);
         // one record completely failed (converter issues), and thus was skipped
-        assertErrorHandlingMetricValue("record-skipped", 0.0);
+        assertErrorHandlingMetricValue("total-records-skipped", 0.0);
 
         PowerMock.verifyAll();
     }

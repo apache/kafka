@@ -72,19 +72,19 @@ public class ErrorHandlingMetrics {
         // prevent collisions by removing any previously created metrics in this group.
         metricGroup.close();
 
-        recordProcessingFailures = metricGroup.sensor("processing-failures");
+        recordProcessingFailures = metricGroup.sensor("total-record-failures");
         recordProcessingFailures.add(metricGroup.metricName(registry.recordProcessingFailures), new Total());
 
-        recordProcessingErrors = metricGroup.sensor("processing-errors");
+        recordProcessingErrors = metricGroup.sensor("total-record-errors");
         recordProcessingErrors.add(metricGroup.metricName(registry.recordProcessingErrors), new Total());
 
-        recordsSkipped = metricGroup.sensor("record-skipped");
+        recordsSkipped = metricGroup.sensor("total-records-skipped");
         recordsSkipped.add(metricGroup.metricName(registry.recordsSkipped), new Total());
 
-        retries = metricGroup.sensor("retries");
+        retries = metricGroup.sensor("total-retries");
         retries.add(metricGroup.metricName(registry.retries), new Total());
 
-        errorsLogged = metricGroup.sensor("errors-logged");
+        errorsLogged = metricGroup.sensor("total-errors-logged");
         errorsLogged.add(metricGroup.metricName(registry.errorsLogged), new Total());
 
         dlqProduceRequests = metricGroup.sensor("deadletterqueue-produce-requests");

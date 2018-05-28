@@ -309,21 +309,21 @@ public class ConnectMetricsRegistry {
         taskErrorHandlingTags.add(CONNECTOR_TAG_NAME);
         taskErrorHandlingTags.add(TASK_TAG_NAME);
 
-        recordProcessingFailures = createTemplate("processing-failures", TASK_ERROR_HANDLING_GROUP_NAME,
+        recordProcessingFailures = createTemplate("total-record-failures", TASK_ERROR_HANDLING_GROUP_NAME,
                 "The number of record processing failures in this task.", taskErrorHandlingTags);
-        recordProcessingErrors = createTemplate("processing-errors", TASK_ERROR_HANDLING_GROUP_NAME,
+        recordProcessingErrors = createTemplate("total-record-errors", TASK_ERROR_HANDLING_GROUP_NAME,
                 "The number of record processing errors in this task. ", taskErrorHandlingTags);
-        recordsSkipped = createTemplate("record-skipped", TASK_ERROR_HANDLING_GROUP_NAME,
+        recordsSkipped = createTemplate("total-records-skipped", TASK_ERROR_HANDLING_GROUP_NAME,
                 "The number of records skipped due to errors.", taskErrorHandlingTags);
-        retries = createTemplate("retries", TASK_ERROR_HANDLING_GROUP_NAME,
+        retries = createTemplate("total-retries", TASK_ERROR_HANDLING_GROUP_NAME,
                 "The number of operations retried.", taskErrorHandlingTags);
-        errorsLogged = createTemplate("errors-logged", TASK_ERROR_HANDLING_GROUP_NAME,
+        errorsLogged = createTemplate("total-errors-logged", TASK_ERROR_HANDLING_GROUP_NAME,
                 "The number of times, error context was logged due to an error.", taskErrorHandlingTags);
         dlqProduceRequests = createTemplate("deadletterqueue-produce-requests", TASK_ERROR_HANDLING_GROUP_NAME,
                 "The number of times a report request was made to the dead letter queue reporter.", taskErrorHandlingTags);
         dlqProduceFailures = createTemplate("deadletterqueue-produce-failures", TASK_ERROR_HANDLING_GROUP_NAME,
                 "The number of times a report request to the dead letter queue reporter failed.", taskErrorHandlingTags);
-        lastErrorTimestamp = createTemplate("last-failure-timestamp", TASK_ERROR_HANDLING_GROUP_NAME,
+        lastErrorTimestamp = createTemplate("last-error-timestamp", TASK_ERROR_HANDLING_GROUP_NAME,
                 "The epoch timestamp when this task encountered an error.", taskErrorHandlingTags);
     }
 

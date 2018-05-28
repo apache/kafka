@@ -132,7 +132,7 @@ public class ErrorReporterTest {
 
         // reporting a context without an error should not cause any errors.
         logReporter.report(context);
-        assertErrorHandlingMetricValue("errors-logged", 0.0);
+        assertErrorHandlingMetricValue("total-errors-logged", 0.0);
     }
 
     @Test
@@ -146,7 +146,7 @@ public class ErrorReporterTest {
 
         // reporting a context without an error should not cause any errors.
         logReporter.report(context);
-        assertErrorHandlingMetricValue("errors-logged", 1.0);
+        assertErrorHandlingMetricValue("total-errors-logged", 1.0);
     }
 
     @Test
