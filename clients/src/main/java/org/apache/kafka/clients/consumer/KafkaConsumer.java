@@ -1402,7 +1402,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * you may lose data if this API is arbitrarily used in the middle of consumption, to reset the fetch offsets
      *
      * @throws IllegalArgumentException if the provided offset is negative
-     * @throws IllegalStateException  if the provided TopicPartition is not assigned to this consumer
+     * @throws IllegalStateException if the provided TopicPartition is not assigned to this consumer
      */
     @Override
     public void seek(TopicPartition partition, long offset) {
@@ -1424,7 +1424,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * If no partitions are provided, seek to the first offset for all of the currently assigned partitions.
      *
      * @throws IllegalArgumentException if {@code partitions} is {@code null}
-     * @throws IllegalStateException if one of the provided partitions is not assigned to this consumer
+     * @throws IllegalStateException if any of the provided partitions are not currently assigned to this consumer
      */
     public void seekToBeginning(Collection<TopicPartition> partitions) {
         if (partitions == null)
@@ -1451,7 +1451,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * of the first message with an open transaction.
      *
      * @throws IllegalArgumentException if {@code partitions} is {@code null}
-     * @throws IllegalStateException if one of the provided partitions is not assigned to this consumer
+     * @throws IllegalStateException if any of the provided partitions are not currently assigned to this consumer
      */
     public void seekToEnd(Collection<TopicPartition> partitions) {
         if (partitions == null)
@@ -1616,7 +1616,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * Note that this method does not affect partition subscription. In particular, it does not cause a group
      * rebalance when automatic assignment is used.
      * @param partitions The partitions which should be paused
-     * @throws IllegalStateException if one of the provided partitions is not assigned to this consumer
+     * @throws IllegalStateException if any of the provided partitions are not currently assigned to this consumer
      */
     @Override
     public void pause(Collection<TopicPartition> partitions) {
@@ -1636,7 +1636,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * {@link #poll(Duration)} will return records from these partitions if there are any to be fetched.
      * If the partitions were not previously paused, this method is a no-op.
      * @param partitions The partitions which should be resumed
-     * @throws IllegalStateException if one of the provided partitions is not assigned to this consumer
+     * @throws IllegalStateException if any of the provided partitions are not currently assigned to this consumer
      */
     @Override
     public void resume(Collection<TopicPartition> partitions) {
