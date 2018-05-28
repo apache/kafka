@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.serialization;
 
+import org.apache.kafka.common.header.Headers;
+
 import java.nio.ByteBuffer;
 import java.util.Map;
 
@@ -42,6 +44,11 @@ public class ByteBufferSerializer implements Serializer<ByteBuffer> {
         data.get(ret, 0, ret.length);
         data.rewind();
         return ret;
+    }
+
+    @Override
+    public byte[] serialize(String topic, Headers headers, ByteBuffer data) {
+        return new byte[0];
     }
 
     public void close() {

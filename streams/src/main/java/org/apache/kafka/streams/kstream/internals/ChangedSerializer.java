@@ -17,23 +17,20 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.serialization.ExtendedSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.errors.StreamsException;
 
 import java.nio.ByteBuffer;
 import java.util.Map;
 
-import static org.apache.kafka.common.serialization.ExtendedSerializer.Wrapper.ensureExtended;
-
-public class ChangedSerializer<T> implements ExtendedSerializer<Change<T>> {
+public class ChangedSerializer<T> implements Serializer<Change<T>> {
 
     private static final int NEWFLAG_SIZE = 1;
 
-    private ExtendedSerializer<T> inner;
+    private Serializer<T> inner;
 
     public ChangedSerializer(final Serializer<T> inner) {
-        this.inner = ensureExtended(inner);
+        this.inner = inner;
     }
 
     public Serializer<T> inner() {
@@ -41,7 +38,7 @@ public class ChangedSerializer<T> implements ExtendedSerializer<Change<T>> {
     }
 
     public void setInner(final Serializer<T> inner) {
-        this.inner = ensureExtended(inner);
+        this.inner = inner;
     }
 
     @Override
