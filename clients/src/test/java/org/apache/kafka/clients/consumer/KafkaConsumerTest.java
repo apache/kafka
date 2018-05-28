@@ -587,6 +587,7 @@ public class KafkaConsumerTest {
 
         client.prepareResponseFrom(offsetResponse(Collections.singletonMap(tp0, 539L), Errors.NONE), coordinator);
 
+        consumer.poll(Duration.ZERO);
         assertEquals(539L, consumer.position(tp0, Duration.ofSeconds(2)));
     }
 

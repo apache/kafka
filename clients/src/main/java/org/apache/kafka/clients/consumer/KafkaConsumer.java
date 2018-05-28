@@ -1529,7 +1529,20 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors
      */
     public long position(TopicPartition partition) {
-        return position(partition, Duration.ofMillis(requestTimeoutMs));
+        acquireAndEnsureOpen();
+        try {
+            if (!this.subscriptions.isAssigned(partition))
+                throw new IllegalArgumentException("You can only check the position for partitions assigned to this consumer.");
+            Long offset = this.subscriptions.position(partition);
+            while (offset == null) {
+                updateFetchPositions(10);
+                client.poll(10);
+                offset = this.subscriptions.position(partition);
+            }
+            return offset;
+        } finally {
+            release();
+        }
     }
 
     /**
@@ -1564,7 +1577,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 throw new IllegalArgumentException("You can only check the position for partitions assigned to this consumer.");
             Long offset = this.subscriptions.position(partition);
             final long startMs = time.milliseconds();
-            long finishMs = time.milliseconds();
+            long finishMs = startMs;
             while (offset == null && finishMs - startMs < timeout) {
                 // batch update fetch positions for any partitions without a valid position
                 updateFetchPositions(timeout - (time.milliseconds() - startMs));
@@ -1631,7 +1644,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         acquireAndEnsureOpen();
         try {
             Map<TopicPartition, OffsetAndMetadata> offsets = coordinator.fetchCommittedOffsets(Collections.singleton(partition), 
-                                                                                               time.milliseconds());
+                                                                                               duration.toMillis());
+            if (offsets == null) {
+                throw new TimeoutException("Unable to find committed offsets for partition within set duration.");
+            }
             return offsets.get(partition);
         } finally {
             release();
@@ -1698,9 +1714,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
             Map<String, List<PartitionInfo>> topicMetadata = fetcher.getTopicMetadata(
                     new MetadataRequest.Builder(Collections.singletonList(topic), true), timeoutMs);
-            if (topicMetadata.isEmpty()) {
-                throw new TimeoutException("Fetcher was unable to retrieve requested partition info in allocated time.");
-            }
             return topicMetadata.get(topic);
         } finally {
             release();
@@ -1912,12 +1925,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions, Duration timeout) {
         acquireAndEnsureOpen();
         try {
-            final long currMillis = time.milliseconds();
-            final Map<TopicPartition, Long> offsets = fetcher.beginningOffsets(partitions, timeout.toMillis());
-            if (time.milliseconds() - currMillis > timeout.toMillis()) {
-                throw new TimeoutException("Unable to retrieve all beginning offsets within allocated timeout.");
-            }
-            return offsets;
+            return fetcher.beginningOffsets(partitions, timeout.toMillis());
         } finally {
             release();
         }
@@ -1972,12 +1980,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions, Duration timeout) {
         acquireAndEnsureOpen();
         try {
-            final long currMillis = time.milliseconds();
-            final Map<TopicPartition, Long> offsets = fetcher.endOffsets(partitions, timeout.toMillis());
-            if (time.milliseconds() - currMillis > timeout.toMillis()) {
-                throw new TimeoutException("Unable to retrieve all end offsets within allocated period of time.");
-            }
-            return offsets;
+            return fetcher.endOffsets(partitions, timeout.toMillis());
         } finally {
             release();
         }
@@ -2015,17 +2018,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Deprecated
     public void close(long timeout, TimeUnit timeUnit) {
-        if (timeout < 0)
-            throw new IllegalArgumentException("The timeout cannot be negative.");
-        acquire();
-        try {
-            if (!closed) {
-                closed = true;
-                close(timeUnit.toMillis(timeout), false);
-            }
-        } finally {
-            release();
-        }
+        close(Duration.ofMillis(TimeUnit.MILLISECONDS.toMillis(timeout)));
     }
 
     /**
@@ -2050,11 +2043,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         try {
             if (!closed) {
                 closed = true;
-                final long currMillis = time.milliseconds();
                 close(timeout.toMillis(), false);
-                if (time.milliseconds() - currMillis > timeout.toMillis()) {
-                    throw new TimeoutException("Unable to properly close consumer within set interval of time.");
-                }
             }
         } finally {
             release();
