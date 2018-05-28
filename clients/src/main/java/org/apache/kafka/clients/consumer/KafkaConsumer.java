@@ -1629,7 +1629,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     @Override
     public OffsetAndMetadata committed(TopicPartition partition, final Duration duration) {
         acquireAndEnsureOpen();
-        final long totalWaitTime = duration.toMillis();
         try {
             Map<TopicPartition, OffsetAndMetadata> offsets = coordinator.fetchCommittedOffsets(Collections.singleton(partition), 
                                                                                                time.milliseconds());
