@@ -17,23 +17,65 @@
 
 package kafka.security.auth.storage
 
-import kafka.security.auth.ResourceNameType
+import java.nio.charset.StandardCharsets.UTF_8
+
+import kafka.security.auth.SimpleAclAuthorizer.VersionedAcls
+import kafka.security.auth.{Acl, Resource, ResourceNameType, ResourceType}
+import kafka.utils.Json
+import org.apache.zookeeper.data.Stat
+
+import scala.collection.JavaConverters._
 
 /**
   *
   */
-// TODO
 trait AclStore {
 
-  val aclZkPath: String
+  def aclZNode: AclZNode
 
-  val aclChangeZkPath: String
+  def aclChangesZNode: AclChangesZNode
 
-  //val aclCache: scala.collection.mutable.HashMap[Resource, VersionedAcls]
+  def resourceNameType: ResourceNameType
 
-  val resourceNameType: ResourceNameType
+  def resourceTypeZNode: ResourceTypeZNode = new ResourceTypeZNode {
+    override def aclZNode: AclZNode = aclZNode
+  }
 
-  //prefix of all the change notification sequence node.
-  val AclChangedPrefix = "acl_changes_"
+  def resourceZNode: ResourceZNode = new ResourceZNode {
+    override def aclZNode: AclZNode = aclZNode
+  }
+
+  def aclChangeNotificationSequenceZNode: AclChangeNotificationSequenceZNode = new AclChangeNotificationSequenceZNode {
+    override def aclChangesZNode: AclChangesZNode = aclChangesZNode
+  }
+
+  trait AclZNode {
+    def path: String
+  }
+
+  trait AclChangesZNode {
+    def path: String
+  }
+
+  trait ResourceTypeZNode {
+    def aclZNode: AclZNode
+    def path(resourceType: ResourceType) = s"${aclZNode.path}/${resourceType.name}"
+  }
+
+  trait ResourceZNode {
+    def aclZNode: AclZNode
+    def path(resource: Resource) = s"${aclZNode.path}/${resource.resourceType.name}/${resource.name}"
+    def encode(acls: Set[Acl]): Array[Byte] = Json.encodeAsBytes(Acl.toJsonCompatibleMap(acls).asJava)
+    def decode(bytes: Array[Byte], stat: Stat): VersionedAcls = VersionedAcls(Acl.fromBytes(bytes), stat.getVersion)
+  }
+
+  trait AclChangeNotificationSequenceZNode {
+    def aclChangesZNode: AclChangesZNode
+    def SequenceNumberPrefix = "acl_changes_"
+    def createPath = s"${aclChangesZNode.path}/$SequenceNumberPrefix"
+    def deletePath(sequenceNode: String) = s"${aclChangesZNode.path}/$sequenceNode"
+    def encode(resourceName : String): Array[Byte] = resourceName.getBytes(UTF_8)
+    def decode(bytes: Array[Byte]): String = new String(bytes, UTF_8)
+  }
 
 }

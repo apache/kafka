@@ -22,25 +22,27 @@ import kafka.utils.ZkUtils
 
 class LiteralAclStore extends AclStore {
 
-  /**
-    * The root acl storage node. Under this node there will be one child node per resource type (Topic, Cluster, Group).
-    * under each resourceType there will be a unique child for each resource instance and the data for that child will contain
-    * list of its acls as a json object. Following gives an example:
-    *
-    * <pre>
-    * /kafka-acl/Topic/topic-1 => {"version": 1, "acls": [ { "host":"host1", "permissionType": "Allow","operation": "Read","principal": "User:alice"}]}
-    * /kafka-acl/Cluster/kafka-cluster => {"version": 1, "acls": [ { "host":"host1", "permissionType": "Allow","operation": "Read","principal": "User:alice"}]}
-    * /kafka-acl/Group/group-1 => {"version": 1, "acls": [ { "host":"host1", "permissionType": "Allow","operation": "Read","principal": "User:alice"}]}
-    * </pre>
-    */
-  override val aclZkPath: String = ZkUtils.KafkaAclPath
+  override val aclZNode: AclZNode = new AclZNode {
+    /**
+      * The root acl storage node. Under this node there will be one child node per resource type (Topic, Cluster, Group).
+      * under each resourceType there will be a unique child for each resource instance and the data for that child will contain
+      * list of its acls as a json object. Following gives an example:
+      *
+      * <pre>
+      * /kafka-acl/Topic/topic-1 => {"version": 1, "acls": [ { "host":"host1", "permissionType": "Allow","operation": "Read","principal": "User:alice"}]}
+      * /kafka-acl/Cluster/kafka-cluster => {"version": 1, "acls": [ { "host":"host1", "permissionType": "Allow","operation": "Read","principal": "User:alice"}]}
+      * /kafka-acl/Group/group-1 => {"version": 1, "acls": [ { "host":"host1", "permissionType": "Allow","operation": "Read","principal": "User:alice"}]}
+      * </pre>
+      */
+    override val path: String = ZkUtils.KafkaAclPath
+  }
 
-  /**
-    * Notification node which gets updated with the resource name when acl on a resource is changed.
-    */
-  override val aclChangeZkPath: String = ZkUtils.KafkaAclChangesPath
-
-  //override val aclCache: mutable.HashMap[Resource, VersionedAcls] = new scala.collection.mutable.HashMap[Resource, VersionedAcls]
+  override val aclChangesZNode: AclChangesZNode = new AclChangesZNode {
+    /**
+      * Notification node which gets updated with the resource name when acl on a resource is changed.
+      */
+    override val path: String = ZkUtils.KafkaAclChangesPath
+  }
 
   override val resourceNameType: ResourceNameType = ResourceNameType.fromString("Literal")
 

@@ -427,16 +427,16 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
   @Test
   def testAclManagementMethods() {
 
-    assertFalse(zkClient.pathExists(AclZNode.path))
-    assertFalse(zkClient.pathExists(AclChangeNotificationZNode.path))
-    ResourceType.values.foreach(resource => assertFalse(zkClient.pathExists(ResourceTypeZNode.path(resource.name))))
+    assertFalse(zkClient.pathExists(ZkData.literalAclStore.aclZNode.path))
+    assertFalse(zkClient.pathExists(ZkData.literalAclStore.aclChangesZNode.path))
+    ResourceType.values.foreach(resource => assertFalse(zkClient.pathExists(ZkData.literalAclStore.resourceTypeZNode.path(resource))))
 
     // create acl paths
     zkClient.createAclPaths
 
-    assertTrue(zkClient.pathExists(AclZNode.path))
-    assertTrue(zkClient.pathExists(AclChangeNotificationZNode.path))
-    ResourceType.values.foreach(resource => assertTrue(zkClient.pathExists(ResourceTypeZNode.path(resource.name))))
+    assertTrue(zkClient.pathExists(ZkData.literalAclStore.aclZNode.path))
+    assertTrue(zkClient.pathExists(ZkData.literalAclStore.aclChangesZNode.path))
+    ResourceType.values.foreach(resource => assertTrue(zkClient.pathExists(ZkData.literalAclStore.resourceTypeZNode.path(resource))))
 
     val resource1 = new Resource(Topic, UUID.randomUUID().toString)
     val resource2 = new Resource(Topic, UUID.randomUUID().toString)
@@ -469,10 +469,10 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     assertEquals(1, versionedAcls.zkVersion)
 
     //get resource Types
-    assertTrue(ResourceType.values.map( rt => rt.name).toSet == zkClient.getResourceTypes().toSet)
+    assertTrue(ResourceType.values.map( rt => rt.name).toSet == zkClient.getResourceTypes(ZkData.literalAclStore).toSet)
 
     //get resource name
-    val resourceNames = zkClient.getResourceNames(Topic.name)
+    val resourceNames = zkClient.getResourceNames(ZkData.literalAclStore, Topic)
     assertEquals(2, resourceNames.size)
     assertTrue(Set(resource1.name,resource2.name) == resourceNames.toSet)
 
@@ -486,13 +486,13 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     assertTrue(zkClient.conditionalDelete(resource2, 0))
 
 
-    zkClient.createAclChangeNotification("resource1")
-    zkClient.createAclChangeNotification("resource2")
+    zkClient.createAclChangeNotification(ZkData.literalAclStore, "resource1")
+    zkClient.createAclChangeNotification(ZkData.literalAclStore, "resource2")
 
-    assertEquals(2, zkClient.getChildren(AclChangeNotificationZNode.path).size)
+    assertEquals(2, zkClient.getChildren(ZkData.literalAclStore.aclChangesZNode.path).size)
 
     zkClient.deleteAclChangeNotifications()
-    assertTrue(zkClient.getChildren(AclChangeNotificationZNode.path).isEmpty)
+    assertTrue(zkClient.getChildren(ZkData.literalAclStore.aclChangesZNode.path).isEmpty)
   }
 
   @Test

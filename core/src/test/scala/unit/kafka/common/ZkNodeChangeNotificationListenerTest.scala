@@ -19,7 +19,7 @@ package kafka.common
 import java.nio.charset.StandardCharsets
 
 import kafka.utils.TestUtils
-import kafka.zk.{AclChangeNotificationSequenceZNode, AclChangeNotificationZNode, ZooKeeperTestHarness}
+import kafka.zk.{ZkData, ZooKeeperTestHarness}
 import org.junit.Test
 
 class ZkNodeChangeNotificationListenerTest extends ZooKeeperTestHarness {
@@ -40,11 +40,11 @@ class ZkNodeChangeNotificationListenerTest extends ZooKeeperTestHarness {
     val notificationMessage2 = "message2"
     val changeExpirationMs = 1000
 
-    val notificationListener = new ZkNodeChangeNotificationListener(zkClient,  AclChangeNotificationZNode.path,
-      AclChangeNotificationSequenceZNode.SequenceNumberPrefix, notificationHandler, changeExpirationMs)
+    val notificationListener = new ZkNodeChangeNotificationListener(zkClient,  ZkData.literalAclStore.aclChangesZNode.path,
+      ZkData.literalAclStore.aclChangeNotificationSequenceZNode.SequenceNumberPrefix, notificationHandler, changeExpirationMs)
     notificationListener.init()
 
-    zkClient.createAclChangeNotification(notificationMessage1)
+    zkClient.createAclChangeNotification(ZkData.literalAclStore, notificationMessage1)
     TestUtils.waitUntilTrue(() => invocationCount == 1 && notification == notificationMessage1,
       "Failed to send/process notification message in the timeout period.")
 
@@ -56,11 +56,11 @@ class ZkNodeChangeNotificationListenerTest extends ZooKeeperTestHarness {
      * can fail as the second node can be deleted depending on how threads get scheduled.
      */
 
-    zkClient.createAclChangeNotification(notificationMessage2)
+    zkClient.createAclChangeNotification(ZkData.literalAclStore, notificationMessage2)
     TestUtils.waitUntilTrue(() => invocationCount == 2 && notification == notificationMessage2,
       "Failed to send/process notification message in the timeout period.")
 
-    (3 to 10).foreach(i => zkClient.createAclChangeNotification("message" + i))
+    (3 to 10).foreach(i => zkClient.createAclChangeNotification(ZkData.literalAclStore, "message" + i))
 
     TestUtils.waitUntilTrue(() => invocationCount == 10 ,
       s"Expected 10 invocations of processNotifications, but there were $invocationCount")

@@ -22,19 +22,25 @@ import kafka.utils.ZkUtils
 
 class WildcardSuffixedAclStore extends AclStore {
 
-  /**
-    * Similar to AclZkPath but stores wildcard suffixed Acls.
-    */
-  override val aclZkPath: String = ZkUtils.KafkaWildcardSuffixedAclPath
+  override val aclZNode: AclZNode = new AclZNode {
+    override val path: String = ZkUtils.KafkaWildcardSuffixedAclPath
+  }
 
-  /**
-    * Notification node which gets updated with the resource name when wild suffixed acls on a resource is changed.
-    *
-    */
-  override val aclChangeZkPath: String = ZkUtils.KafkaWildcardSuffixedAclChangesPath
-
-  //override val aclCache: mutable.HashMap[Resource, VersionedAcls] = new scala.collection.mutable.HashMap[Resource, VersionedAcls]
+  override val aclChangesZNode: AclChangesZNode = new AclChangesZNode {
+    override val path: String = ZkUtils.KafkaWildcardSuffixedAclChangesPath
+  }
 
   override val resourceNameType: ResourceNameType = ResourceNameType.fromString("WildcardSuffixed")
+
+
+//
+//  /**
+//    * Similar to AclZkPath but stores wildcard suffixed Acls.
+//    */
+//
+//  /**
+//    * Notification node which gets updated with the resource name when wildcard suffixed acls on a resource is changed.
+//    *
+//    */
 
 }
