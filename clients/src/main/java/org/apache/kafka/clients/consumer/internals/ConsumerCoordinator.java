@@ -505,27 +505,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     /**
-     * Refresh the committed offsets for provided partitions.
-     * 
-     * @param startMs   The time in which the operation starts
-     * @param timeout   The maximum allowable duration of the method
-     * @throws TimeoutException if committed offsets cannot be retrieved within set amount of time
-     */
-    public void refreshCommittedOffsetsIfNeeded(long startMs, long timeout) {
-        Set<TopicPartition> missingFetchPositions = subscriptions.missingFetchPositions();
-        Map<TopicPartition, OffsetAndMetadata> offsets = fetchCommittedOffsets(missingFetchPositions, startMs, timeout, time);
-        if (offsets == null) {
-            throw new TimeoutException("Offsets cannot be retrieved within set duration");
-        }
-        for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
-            TopicPartition tp = entry.getKey();
-            long offset = entry.getValue().offset();
-            log.debug("Setting offset for partition {} to the committed offset {}", tp, offset);
-            this.subscriptions.seek(tp, offset);
-        }
-    }
-
-    /**
      * Fetch the current committed offsets from the coordinator for a set of partitions.
      *
      * @param partitions The partitions to fetch offsets for
@@ -576,39 +555,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 return null;
             }
         }
-    }
-    
-    /**
-     * Fetch the current committed offsets from the coordinator for a set of partitions 
-     * within a given set of time.
-     * @param partitions The partitions to fetch offsets for
-     * @param startMs    The start time of the operation
-     * @param timeoutMs    The maximum duration of the method
-     * @param time       Java utility which keeps track of time in form of long (milliseconds)
-     * @throws TimeoutException if offsets cannot be retrieved within set amount of time
-     * @return A map from partition to the committed offset
-     */
-    public Map<TopicPartition, OffsetAndMetadata> fetchCommittedOffsets(Set<TopicPartition> partitions, 
-                                                                        long startMs, long timeoutMs, Time time) {
-        if (partitions.isEmpty())
-            return Collections.emptyMap();
-        while (time.milliseconds() < startMs + timeoutMs) {
-            ensureCoordinatorReady(startMs);
-            if (time.milliseconds() > startMs + timeoutMs) throw new TimeoutException("Error, coordinator is not ready in allocated time!");
-
-            // contact coordinator to fetch committed offsets
-            RequestFuture<Map<TopicPartition, OffsetAndMetadata>> future = sendOffsetFetchRequest(partitions);
-            client.poll(timeoutMs, time.milliseconds(), future);
-
-            if (future.succeeded())
-                return future.value();
-
-            if (future.isDone())
-                throw future.exception();
-
-            time.sleep(retryBackoffMs);
-        }
-        return null;
     }
 
     public void close(final long timeoutMs) {
