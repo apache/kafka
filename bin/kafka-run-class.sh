@@ -20,8 +20,8 @@ then
   exit 1
 fi
 
-# CYGINW == 1 if Cygwin is detected, else 0.
-if [[ $(uname -a) =~ "CYGWIN" ]]; then
+# CYGINW == 1 if Cygwin is detected or Msys is detected, else 0.
+if [[ $(uname -a) =~ "CYGWIN" ]] || [[ $(uname -a) =~ "Msys" ]]; then
   CYGWIN=1
 else
   CYGWIN=0
