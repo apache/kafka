@@ -219,6 +219,21 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     waitForTopics(client, List(), topics)
   }
 
+  @Test
+  def testMetadataRefresh(): Unit = {
+    client = AdminClient.create(createConfig())
+    val topics = Seq("mytopic")
+    val newTopics = Seq(new NewTopic("mytopic", 3, 3))
+    client.createTopics(newTopics.asJava).all.get()
+    waitForTopics(client, expectedPresent = topics, expectedMissing = List())
+
+    val controller = servers.find(_.config.brokerId == TestUtils.waitUntilControllerElected(zkClient)).get
+    controller.shutdown()
+    controller.awaitShutdown()
+    val topicDesc = client.describeTopics(topics.asJava).all.get()
+    assertEquals(topics.toSet, topicDesc.keySet.asScala)
+  }
+
   /**
     * describe should not auto create topics
     */
