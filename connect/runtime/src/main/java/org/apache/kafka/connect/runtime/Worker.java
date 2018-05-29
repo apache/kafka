@@ -492,7 +492,7 @@ public class Worker {
                                                     ErrorHandlingMetrics errorHandlingMetrics) {
         ArrayList<ErrorReporter> reporters = new ArrayList<>();
         LogReporter logReporter = new LogReporter(id);
-        logReporter.configure(connConfig.originalsWithPrefix(LogReporter.PREFIX));
+        logReporter.configure(connConfig.originalsWithPrefix(LogReporter.PREFIX + "."));
         logReporter.setMetrics(errorHandlingMetrics);
         reporters.add(logReporter);
 
@@ -511,7 +511,7 @@ public class Worker {
                                                       ErrorHandlingMetrics errorHandlingMetrics) {
         ArrayList<ErrorReporter> reporters = new ArrayList<>();
         LogReporter logReporter = new LogReporter(id);
-        logReporter.configure(connConfig.originalsWithPrefix(LogReporter.PREFIX));
+        logReporter.configure(connConfig.originalsWithPrefix(LogReporter.PREFIX + "."));
         logReporter.setMetrics(errorHandlingMetrics);
         reporters.add(logReporter);
 

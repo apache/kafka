@@ -32,7 +32,7 @@ public class LogReporter implements ErrorReporter {
 
     private static final Logger log = LoggerFactory.getLogger(LogReporter.class);
 
-    public static final String PREFIX = "errors.log.";
+    public static final String PREFIX = "errors.log";
 
     public static final String LOG_ENABLE = "enable";
     public static final String LOG_ENABLE_DOC = "Log the error context along with the other application logs.";

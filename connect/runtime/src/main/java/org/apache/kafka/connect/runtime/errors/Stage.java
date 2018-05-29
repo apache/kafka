@@ -32,7 +32,7 @@ public enum Stage {
     TASK_PUT,
 
     /**
-     * When running any transform operation on a record
+     * When running any transformation operation on a record
      */
     TRANSFORMATION,
 
