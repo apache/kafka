@@ -33,7 +33,7 @@ import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
 import org.apache.kafka.connect.runtime.errors.LogReporter;
-import org.apache.kafka.connect.runtime.errors.RetryWithToleranceExecutor;
+import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.sink.SinkConnector;
@@ -92,11 +92,11 @@ public class ErrorHandlingTaskTest {
     private static final Map<String, String> OPERATION_EXECUTOR_PROPS = new HashMap<>();
 
     static {
-        OPERATION_EXECUTOR_PROPS.put(RetryWithToleranceExecutor.TOLERANCE_LIMIT, "all");
+        OPERATION_EXECUTOR_PROPS.put(RetryWithToleranceOperator.TOLERANCE_LIMIT, "all");
         // wait up to 1 minute for an operation
-        OPERATION_EXECUTOR_PROPS.put(RetryWithToleranceExecutor.RETRY_TIMEOUT, "60000");
+        OPERATION_EXECUTOR_PROPS.put(RetryWithToleranceOperator.RETRY_TIMEOUT, "60000");
         // wait up 5 seconds between subsequent retries
-        OPERATION_EXECUTOR_PROPS.put(RetryWithToleranceExecutor.RETRY_DELAY_MAX_MS, "5000");
+        OPERATION_EXECUTOR_PROPS.put(RetryWithToleranceOperator.RETRY_DELAY_MAX_MS, "5000");
     }
 
     private ConnectorTaskId taskId = new ConnectorTaskId("job", 0);
@@ -170,11 +170,11 @@ public class ErrorHandlingTaskTest {
         reporter.configure(reportProps);
         reporter.setMetrics(errorHandlingMetrics);
 
-        RetryWithToleranceExecutor executor = new RetryWithToleranceExecutor(time);
-        executor.configure(OPERATION_EXECUTOR_PROPS);
-        executor.setMetrics(errorHandlingMetrics);
-        executor.setReporters(singletonList(reporter));
-        createSinkTask(initialState, executor);
+        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(time);
+        retryWithToleranceOperator.configure(OPERATION_EXECUTOR_PROPS);
+        retryWithToleranceOperator.setMetrics(errorHandlingMetrics);
+        retryWithToleranceOperator.setReporters(singletonList(reporter));
+        createSinkTask(initialState, retryWithToleranceOperator);
 
         expectInitializeTask();
 
@@ -220,11 +220,11 @@ public class ErrorHandlingTaskTest {
         reporter.configure(reportProps);
         reporter.setMetrics(errorHandlingMetrics);
 
-        RetryWithToleranceExecutor executor = new RetryWithToleranceExecutor(time);
-        executor.configure(OPERATION_EXECUTOR_PROPS);
-        executor.setMetrics(errorHandlingMetrics);
-        executor.setReporters(singletonList(reporter));
-        createSourceTask(initialState, executor);
+        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(time);
+        retryWithToleranceOperator.configure(OPERATION_EXECUTOR_PROPS);
+        retryWithToleranceOperator.setMetrics(errorHandlingMetrics);
+        retryWithToleranceOperator.setReporters(singletonList(reporter));
+        createSourceTask(initialState, retryWithToleranceOperator);
 
         // valid json
         Schema valSchema = SchemaBuilder.struct().field("val", Schema.INT32_SCHEMA).build();
@@ -279,11 +279,11 @@ public class ErrorHandlingTaskTest {
         reporter.configure(reportProps);
         reporter.setMetrics(errorHandlingMetrics);
 
-        RetryWithToleranceExecutor executor = new RetryWithToleranceExecutor(time);
-        executor.configure(OPERATION_EXECUTOR_PROPS);
-        executor.setMetrics(errorHandlingMetrics);
-        executor.setReporters(singletonList(reporter));
-        createSourceTask(initialState, executor, badConverter());
+        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(time);
+        retryWithToleranceOperator.configure(OPERATION_EXECUTOR_PROPS);
+        retryWithToleranceOperator.setMetrics(errorHandlingMetrics);
+        retryWithToleranceOperator.setReporters(singletonList(reporter));
+        createSourceTask(initialState, retryWithToleranceOperator, badConverter());
 
         // valid json
         Schema valSchema = SchemaBuilder.struct().field("val", Schema.INT32_SCHEMA).build();
@@ -358,29 +358,29 @@ public class ErrorHandlingTaskTest {
         PowerMock.expectLastCall();
     }
 
-    private void createSinkTask(TargetState initialState, RetryWithToleranceExecutor executor) {
+    private void createSinkTask(TargetState initialState, RetryWithToleranceOperator retryWithToleranceOperator) {
         JsonConverter converter = new JsonConverter();
         Map<String, Object> oo = workerConfig.originalsWithPrefix("value.converter.");
         oo.put("converter.type", "value");
         oo.put("schemas.enable", "false");
         converter.configure(oo);
 
-        TransformationChain<SinkRecord> sinkTransforms = new TransformationChain<>(singletonList(new FaultyPassthrough<SinkRecord>()), executor);
+        TransformationChain<SinkRecord> sinkTransforms = new TransformationChain<>(singletonList(new FaultyPassthrough<SinkRecord>()), retryWithToleranceOperator);
 
         workerSinkTask = PowerMock.createPartialMock(
                 WorkerSinkTask.class, new String[]{"createConsumer"},
                 taskId, sinkTask, statusListener, initialState, workerConfig, metrics, converter, converter,
-                headerConverter, sinkTransforms, pluginLoader, time, executor);
+                headerConverter, sinkTransforms, pluginLoader, time, retryWithToleranceOperator);
     }
 
-    private void createSourceTask(TargetState initialState, RetryWithToleranceExecutor executor) {
+    private void createSourceTask(TargetState initialState, RetryWithToleranceOperator retryWithToleranceOperator) {
         JsonConverter converter = new JsonConverter();
         Map<String, Object> oo = workerConfig.originalsWithPrefix("value.converter.");
         oo.put("converter.type", "value");
         oo.put("schemas.enable", "false");
         converter.configure(oo);
 
-        createSourceTask(initialState, executor, converter);
+        createSourceTask(initialState, retryWithToleranceOperator, converter);
     }
 
     private Converter badConverter() {
@@ -392,13 +392,13 @@ public class ErrorHandlingTaskTest {
         return converter;
     }
 
-    private void createSourceTask(TargetState initialState, RetryWithToleranceExecutor executor, Converter converter) {
-        TransformationChain<SourceRecord> sourceTransforms = new TransformationChain<>(singletonList(new FaultyPassthrough<SourceRecord>()), executor);
+    private void createSourceTask(TargetState initialState, RetryWithToleranceOperator retryWithToleranceOperator, Converter converter) {
+        TransformationChain<SourceRecord> sourceTransforms = new TransformationChain<>(singletonList(new FaultyPassthrough<SourceRecord>()), retryWithToleranceOperator);
 
         workerSourceTask = PowerMock.createPartialMock(
                 WorkerSourceTask.class, new String[]{"commitOffsets", "isStopping"},
                 taskId, sourceTask, statusListener, initialState, converter, converter, headerConverter, sourceTransforms,
-                producer, offsetReader, offsetWriter, workerConfig, metrics, pluginLoader, time, executor);
+                producer, offsetReader, offsetWriter, workerConfig, metrics, pluginLoader, time, retryWithToleranceOperator);
     }
 
     private ConsumerRecords<byte[], byte[]> records(ConsumerRecord<byte[], byte[]> record) {

@@ -17,7 +17,7 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.connect.connector.ConnectRecord;
-import org.apache.kafka.connect.runtime.errors.RetryWithToleranceExecutor;
+import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.transforms.Transformation;
 
@@ -28,15 +28,15 @@ import java.util.Objects;
 public class TransformationChain<R extends ConnectRecord<R>> {
 
     private final List<Transformation<R>> transformations;
-    private final RetryWithToleranceExecutor operationExecutor;
+    private final RetryWithToleranceOperator retryWithToleranceOperator;
 
     public TransformationChain(List<Transformation<R>> transformations) {
-        this(transformations, RetryWithToleranceExecutor.NOOP_EXECUTOR);
+        this(transformations, RetryWithToleranceOperator.NOOP_OPERATOR);
     }
 
-    public TransformationChain(List<Transformation<R>> transformations, RetryWithToleranceExecutor operationExecutor) {
+    public TransformationChain(List<Transformation<R>> transformations, RetryWithToleranceOperator retryWithToleranceOperator) {
         this.transformations = transformations;
-        this.operationExecutor = operationExecutor;
+        this.retryWithToleranceOperator = retryWithToleranceOperator;
     }
 
     public R apply(R record) {
@@ -46,7 +46,7 @@ public class TransformationChain<R extends ConnectRecord<R>> {
             final R current = record;
 
             // execute the operation
-            record = operationExecutor.execute(() -> transformation.apply(current), Stage.TRANSFORMATION, transformation.getClass());
+            record = retryWithToleranceOperator.execute(() -> transformation.apply(current), Stage.TRANSFORMATION, transformation.getClass());
 
             if (record == null) break;
         }

@@ -34,7 +34,7 @@ import org.apache.kafka.connect.runtime.errors.DeadLetterQueueReporter;
 import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
 import org.apache.kafka.connect.runtime.errors.ErrorReporter;
 import org.apache.kafka.connect.runtime.errors.LogReporter;
-import org.apache.kafka.connect.runtime.errors.RetryWithToleranceExecutor;
+import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.isolation.Plugins.ClassLoaderUsage;
 import org.apache.kafka.connect.sink.SinkRecord;
@@ -455,14 +455,14 @@ public class Worker {
                                        ClassLoader loader) {
         ErrorHandlingMetrics errorHandlingMetrics = errorHandlingMetrics(id);
 
-        RetryWithToleranceExecutor operationExecutor = new RetryWithToleranceExecutor();
-        operationExecutor.configure(connConfig.originalsWithPrefix("errors."));
-        operationExecutor.setMetrics(errorHandlingMetrics);
+        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator();
+        retryWithToleranceOperator.configure(connConfig.originalsWithPrefix("errors."));
+        retryWithToleranceOperator.setMetrics(errorHandlingMetrics);
 
         // Decide which type of worker task we need based on the type of task.
         if (task instanceof SourceTask) {
-            operationExecutor.setReporters(sourceTaskReporters(id, connConfig, errorHandlingMetrics));
-            TransformationChain<SourceRecord> transformationChain = new TransformationChain<>(connConfig.<SourceRecord>transformations(), operationExecutor);
+            retryWithToleranceOperator.setReporters(sourceTaskReporters(id, connConfig, errorHandlingMetrics));
+            TransformationChain<SourceRecord> transformationChain = new TransformationChain<>(connConfig.<SourceRecord>transformations(), retryWithToleranceOperator);
             OffsetStorageReader offsetReader = new OffsetStorageReaderImpl(offsetBackingStore, id.connector(),
                     internalKeyConverter, internalValueConverter);
             OffsetStorageWriter offsetWriter = new OffsetStorageWriter(offsetBackingStore, id.connector(),
@@ -471,13 +471,13 @@ public class Worker {
 
             return new WorkerSourceTask(id, (SourceTask) task, statusListener, initialState, keyConverter, valueConverter,
                     headerConverter, transformationChain, producer, offsetReader, offsetWriter, config, metrics, loader,
-                    time, operationExecutor);
+                    time, retryWithToleranceOperator);
         } else if (task instanceof SinkTask) {
-            TransformationChain<SinkRecord> transformationChain = new TransformationChain<>(connConfig.<SinkRecord>transformations(), operationExecutor);
-            operationExecutor.setReporters(sinkTaskReporters(id, connConfig, errorHandlingMetrics));
+            TransformationChain<SinkRecord> transformationChain = new TransformationChain<>(connConfig.<SinkRecord>transformations(), retryWithToleranceOperator);
+            retryWithToleranceOperator.setReporters(sinkTaskReporters(id, connConfig, errorHandlingMetrics));
             return new WorkerSinkTask(id, (SinkTask) task, statusListener, initialState, config, metrics, keyConverter,
                     valueConverter, headerConverter, transformationChain, loader, time,
-                    operationExecutor);
+                    retryWithToleranceOperator);
         } else {
             log.error("Tasks must be a subclass of either SourceTask or SinkTask", task);
             throw new ConnectException("Tasks must be a subclass of either SourceTask or SinkTask");

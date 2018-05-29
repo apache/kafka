@@ -44,13 +44,13 @@ import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
  *
  * <p>
  * A retry is attempted if the operation throws a {@link RetriableException}. Retries are accompanied by exponential backoffs, starting with
- * {@link #RETRIES_DELAY_MIN_MS}, up to what is specified with {@link RetryWithToleranceExecutorConfig#retryDelayMax()}.
+ * {@link #RETRIES_DELAY_MIN_MS}, up to what is specified with {@link RetryWithToleranceOperatorConfig#retryDelayMax()}.
  * Including the first attempt and future retries, the total time taken to evaluate the operation should be within
- * {@link RetryWithToleranceExecutorConfig#retryDelayMax()} millis.
+ * {@link RetryWithToleranceOperatorConfig#retryDelayMax()} millis.
  * </p>
  *
  * <p>
- * This executor will tolerate failures, as specified by {@link RetryWithToleranceExecutorConfig#toleranceLimit()}.
+ * This executor will tolerate failures, as specified by {@link RetryWithToleranceOperatorConfig#toleranceLimit()}.
  * For transformations and converters, all exceptions are tolerated. For others operations, only {@link RetriableException} are tolerated.
  * </p>
  *
@@ -61,9 +61,9 @@ import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
  * then it is wrapped into a ConnectException and rethrown to the caller.
  * </p>
  */
-public class RetryWithToleranceExecutor {
+public class RetryWithToleranceOperator {
 
-    private static final Logger log = LoggerFactory.getLogger(RetryWithToleranceExecutor.class);
+    private static final Logger log = LoggerFactory.getLogger(RetryWithToleranceOperator.class);
 
     public static final String RETRY_TIMEOUT = "retry.timeout";
     public static final String RETRY_TIMEOUT_DOC = "The maximum number of retries before failing an operation";
@@ -79,10 +79,10 @@ public class RetryWithToleranceExecutor {
     public static final String TOLERANCE_LIMIT_DOC = "Fail the task if we exceed specified number of errors overall.";
     public static final String TOLERANCE_LIMIT_DEFAULT = "none";
 
-    public static final RetryWithToleranceExecutor NOOP_EXECUTOR = new RetryWithToleranceExecutor();
+    public static final RetryWithToleranceOperator NOOP_OPERATOR = new RetryWithToleranceOperator();
     static {
-        NOOP_EXECUTOR.configure(Collections.emptyMap());
-        NOOP_EXECUTOR.setMetrics(new ErrorHandlingMetrics());
+        NOOP_OPERATOR.configure(Collections.emptyMap());
+        NOOP_OPERATOR.setMetrics(new ErrorHandlingMetrics());
     }
 
     private static final Map<Stage, Class<? extends Exception>> TOLERABLE_EXCEPTIONS = new HashMap<>();
@@ -95,17 +95,17 @@ public class RetryWithToleranceExecutor {
 
     private long totalFailures = 0;
     private final Time time;
-    private RetryWithToleranceExecutorConfig config;
+    private RetryWithToleranceOperatorConfig config;
     private ErrorHandlingMetrics errorHandlingMetrics;
 
     protected ProcessingContext context = new ProcessingContext();
 
-    public RetryWithToleranceExecutor() {
+    public RetryWithToleranceOperator() {
         this(new SystemTime());
     }
 
     // Visible for testing
-    public RetryWithToleranceExecutor(Time time) {
+    public RetryWithToleranceOperator(Time time) {
         this.time = time;
     }
 
@@ -254,15 +254,15 @@ public class RetryWithToleranceExecutor {
     }
 
     public void configure(Map<String, ?> configs) {
-        config = new RetryWithToleranceExecutorConfig(configs);
+        config = new RetryWithToleranceOperatorConfig(configs);
     }
 
     public void setMetrics(ErrorHandlingMetrics errorHandlingMetrics) {
         this.errorHandlingMetrics = errorHandlingMetrics;
     }
 
-    static class RetryWithToleranceExecutorConfig extends AbstractConfig {
-        public RetryWithToleranceExecutorConfig(Map<?, ?> originals) {
+    static class RetryWithToleranceOperatorConfig extends AbstractConfig {
+        public RetryWithToleranceOperatorConfig(Map<?, ?> originals) {
             super(getConfigDef(), originals, true);
         }
 
@@ -290,7 +290,7 @@ public class RetryWithToleranceExecutor {
 
     @Override
     public String toString() {
-        return "RetryWithToleranceExecutor{" +
+        return "RetryWithToleranceOperator{" +
                 "config=" + config +
                 '}';
     }

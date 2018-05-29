@@ -40,7 +40,7 @@ import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
-import org.apache.kafka.connect.runtime.errors.RetryWithToleranceExecutor;
+import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
@@ -104,7 +104,7 @@ class WorkerSinkTask extends WorkerTask {
                           ClassLoader loader,
                           Time time) {
         this(id, task, statusListener, initialState, workerConfig, connectMetrics, keyConverter, valueConverter,
-                headerConverter, transformationChain, loader, time, RetryWithToleranceExecutor.NOOP_EXECUTOR);
+                headerConverter, transformationChain, loader, time, RetryWithToleranceOperator.NOOP_OPERATOR);
     }
 
     public WorkerSinkTask(ConnectorTaskId id,
@@ -119,8 +119,8 @@ class WorkerSinkTask extends WorkerTask {
                           TransformationChain<SinkRecord> transformationChain,
                           ClassLoader loader,
                           Time time,
-                          RetryWithToleranceExecutor operationExecutor) {
-        super(id, statusListener, initialState, loader, connectMetrics, operationExecutor);
+                          RetryWithToleranceOperator retryWithToleranceOperator) {
+        super(id, statusListener, initialState, loader, connectMetrics, retryWithToleranceOperator);
 
         this.workerConfig = workerConfig;
         this.task = task;
@@ -497,7 +497,7 @@ class WorkerSinkTask extends WorkerTask {
             log.trace("{} Consuming and converting message in topic '{}' partition {} at offset {} and timestamp {}",
                     this, msg.topic(), msg.partition(), msg.offset(), msg.timestamp());
 
-            operationExecutor.consumerRecord(msg);
+            retryWithToleranceOperator.consumerRecord(msg);
 
             SinkRecord transRecord = convertAndTransformRecord(msg);
 
@@ -516,15 +516,15 @@ class WorkerSinkTask extends WorkerTask {
     }
 
     private SinkRecord convertAndTransformRecord(final ConsumerRecord<byte[], byte[]> msg) {
-        SchemaAndValue keyAndSchema = operationExecutor.execute(() -> keyConverter.toConnectData(msg.topic(), msg.key()),
+        SchemaAndValue keyAndSchema = retryWithToleranceOperator.execute(() -> keyConverter.toConnectData(msg.topic(), msg.key()),
                 Stage.KEY_CONVERTER, keyConverter.getClass());
 
-        SchemaAndValue valueAndSchema = operationExecutor.execute(() -> valueConverter.toConnectData(msg.topic(), msg.value()),
+        SchemaAndValue valueAndSchema = retryWithToleranceOperator.execute(() -> valueConverter.toConnectData(msg.topic(), msg.value()),
                 Stage.VALUE_CONVERTER, valueConverter.getClass());
 
-        Headers headers = operationExecutor.execute(() -> convertHeadersFor(msg), Stage.HEADER_CONVERTER, headerConverter.getClass());
+        Headers headers = retryWithToleranceOperator.execute(() -> convertHeadersFor(msg), Stage.HEADER_CONVERTER, headerConverter.getClass());
 
-        if (operationExecutor.failed()) {
+        if (retryWithToleranceOperator.failed()) {
             return null;
         }
 

@@ -34,7 +34,7 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.header.Header;
 import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
-import org.apache.kafka.connect.runtime.errors.RetryWithToleranceExecutor;
+import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
@@ -108,7 +108,7 @@ class WorkerSourceTask extends WorkerTask {
                             Time time) {
         this(id, task, statusListener, initialState, keyConverter, valueConverter, headerConverter,
                 transformationChain, producer, offsetReader, offsetWriter, workerConfig, connectMetrics,
-                loader, time, RetryWithToleranceExecutor.NOOP_EXECUTOR);
+                loader, time, RetryWithToleranceOperator.NOOP_OPERATOR);
     }
 
     public WorkerSourceTask(ConnectorTaskId id,
@@ -126,9 +126,9 @@ class WorkerSourceTask extends WorkerTask {
                             ConnectMetrics connectMetrics,
                             ClassLoader loader,
                             Time time,
-                            RetryWithToleranceExecutor operationExecutor) {
+                            RetryWithToleranceOperator retryWithToleranceOperator) {
 
-        super(id, statusListener, initialState, loader, connectMetrics, operationExecutor);
+        super(id, statusListener, initialState, loader, connectMetrics, retryWithToleranceOperator);
 
         this.workerConfig = workerConfig;
         this.task = task;
@@ -277,15 +277,15 @@ class WorkerSourceTask extends WorkerTask {
             return null;
         }
 
-        RecordHeaders headers = operationExecutor.execute(() -> convertHeaderFor(record), Stage.HEADER_CONVERTER, headerConverter.getClass());
+        RecordHeaders headers = retryWithToleranceOperator.execute(() -> convertHeaderFor(record), Stage.HEADER_CONVERTER, headerConverter.getClass());
 
-        byte[] key = operationExecutor.execute(() -> keyConverter.fromConnectData(record.topic(), record.keySchema(), record.key()),
+        byte[] key = retryWithToleranceOperator.execute(() -> keyConverter.fromConnectData(record.topic(), record.keySchema(), record.key()),
                 Stage.KEY_CONVERTER, keyConverter.getClass());
 
-        byte[] value = operationExecutor.execute(() -> valueConverter.fromConnectData(record.topic(), record.valueSchema(), record.value()),
+        byte[] value = retryWithToleranceOperator.execute(() -> valueConverter.fromConnectData(record.topic(), record.valueSchema(), record.value()),
                 Stage.VALUE_CONVERTER, valueConverter.getClass());
 
-        if (operationExecutor.failed()) {
+        if (retryWithToleranceOperator.failed()) {
             return null;
         }
 
@@ -304,10 +304,10 @@ class WorkerSourceTask extends WorkerTask {
         final SourceRecordWriteCounter counter = new SourceRecordWriteCounter(toSend.size(), sourceTaskMetricsGroup);
         for (final SourceRecord preTransformRecord : toSend) {
 
-            operationExecutor.sourceRecord(preTransformRecord);
+            retryWithToleranceOperator.sourceRecord(preTransformRecord);
             final SourceRecord record = transformationChain.apply(preTransformRecord);
             final ProducerRecord<byte[], byte[]> producerRecord = convertTransformedRecord(record);
-            if (producerRecord == null || operationExecutor.failed()) {
+            if (producerRecord == null || retryWithToleranceOperator.failed()) {
                 counter.skipRecord();
                 commitTaskRecord(preTransformRecord);
                 continue;
