@@ -30,18 +30,21 @@ import scala.collection.Seq
 /**
   * Acl Store.
   */
-case class AclStore(aclZNode: AclZNode, aclChangesZNode: AclChangesZNode, resourceNameType: ResourceNameType) {
+class AclStore(aclZNod: AclZNode, aclChangesZNod: AclChangesZNode, resourceNameTyp: ResourceNameType) {
+  def aclZNode: AclZNode = aclZNod
+  def aclChangesZNode: AclChangesZNode = aclChangesZNod
+  def resourceNameType: ResourceNameType = resourceNameTyp
   def resourceTypeZNode = ResourceTypeZNode(aclZNode)
   def resourceZNode = ResourceZNode(aclZNode)
   def aclChangeNotificationSequenceZNode = AclChangeNotificationSequenceZNode(aclChangesZNode)
 }
 
-trait AclZNode {
-  def path: String
+case class AclZNode(nodePath: String) {
+  def path: String = nodePath
 }
 
-trait AclChangesZNode {
-  def path: String
+case class AclChangesZNode(nodePath: String) {
+  def path: String = nodePath
 }
 
 case class ResourceTypeZNode(aclZNode: AclZNode) {
@@ -63,8 +66,8 @@ case class AclChangeNotificationSequenceZNode(aclChangesZNode: AclChangesZNode) 
 }
 
 object AclStore {
-  val literalAclStore = AclStore(
-    new AclZNode {
+  val literalAclStore: AclStore = new AclStore(
+    AclZNode(
       /**
         * The root acl storage node. Under this node there will be one child node per resource type (Topic, Cluster, Group).
         * under each resourceType there will be a unique child for each resource instance and the data for that child will contain
@@ -76,19 +79,18 @@ object AclStore {
         * /kafka-acl/Group/group-1 => {"version": 1, "acls": [ { "host":"host1", "permissionType": "Allow","operation": "Read","principal": "User:alice"}]}
         * </pre>
         */
-      override def path: String = ZkUtils.KafkaAclPath},
-    new AclChangesZNode {
+      ZkUtils.KafkaAclPath),
+    AclChangesZNode(
       /**
         * Notification node which gets updated with the resource name when acl on a resource is changed.
         */
-      override def path: String = ZkUtils.KafkaAclChangesPath
-    },
+      ZkUtils.KafkaAclChangesPath),
     Literal
   )
 
-  val wildcardSuffixedAclStore = AclStore(
-    new AclZNode {override def path: String = ZkUtils.KafkaWildcardSuffixedAclPath},
-    new AclChangesZNode {override def path: String = ZkUtils.KafkaWildcardSuffixedAclChangesPath},
+  val wildcardSuffixedAclStore: AclStore = new AclStore(
+    AclZNode(ZkUtils.KafkaWildcardSuffixedAclPath),
+    AclChangesZNode(ZkUtils.KafkaWildcardSuffixedAclChangesPath),
     WildcardSuffixed
   )
 

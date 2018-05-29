@@ -51,15 +51,17 @@ public class SecurityUtils {
             case LITERAL:
                 switch (input.resourceNameType()) {
                     case ANY:
-                        return  input.name() == null
+                        return input.name() == null
                                 || input.name().equals(stored.name())
                                 || stored.name().equals(WILDCARD_MARKER)
                                 || SecurityUtils.matchWildcardSuffixedString(stored.name(), input.name() + WILDCARD_MARKER);
                     case LITERAL:
-                        return stored.name().equals(input.name())
+                        return input.name() == null
+                                || stored.name().equals(input.name())
                                 || stored.name().equals(WILDCARD_MARKER);
                     case WILDCARD_SUFFIXED:
-                        return SecurityUtils.matchWildcardSuffixedString(stored.name(), input.name() + WILDCARD_MARKER);
+                        return input.name() == null
+                                || SecurityUtils.matchWildcardSuffixedString(stored.name(), input.name() + WILDCARD_MARKER);
                     default:
                         return false;
                 }
@@ -70,9 +72,11 @@ public class SecurityUtils {
                                 || SecurityUtils.matchWildcardSuffixedString(stored.name() + WILDCARD_MARKER, input.name())
                                 || SecurityUtils.matchWildcardSuffixedString(stored.name() + WILDCARD_MARKER, input.name() + WILDCARD_MARKER);
                     case LITERAL:
-                        return SecurityUtils.matchWildcardSuffixedString(stored.name() + WILDCARD_MARKER, input.name());
+                        return input.name() == null
+                                || SecurityUtils.matchWildcardSuffixedString(stored.name() + WILDCARD_MARKER, input.name());
                     case WILDCARD_SUFFIXED:
-                        return SecurityUtils.matchWildcardSuffixedString(stored.name() + WILDCARD_MARKER, input.name() + WILDCARD_MARKER);
+                        return input.name() == null
+                                || SecurityUtils.matchWildcardSuffixedString(stored.name() + WILDCARD_MARKER, input.name() + WILDCARD_MARKER);
                     default:
                         return false;
                 }

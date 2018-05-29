@@ -437,7 +437,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
     assertFalse(simpleAclAuthorizer.authorize(session, Read, resource))
 
     // add wildcard-suffixed acl and verify authorize succeeds
-    simpleAclAuthorizer.addAcls(Set[Acl](acl), new Resource(Topic, resource.name.charAt(0) + Acl.WildCardString))
+    simpleAclAuthorizer.addAcls(Set[Acl](acl), new Resource(Topic, resource.name.charAt(0).toString, WildcardSuffixed))
     assertTrue(simpleAclAuthorizer.authorize(session, Read, resource))
   }
 
@@ -485,7 +485,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testMatchingGetAclsResource(): Unit = {
+  def testGetAcls(): Unit = {
     assertEquals(0, simpleAclAuthorizer.getAcls(resource).size)
     assertEquals(0, simpleAclAuthorizer.getAcls(new Resource(Topic, Acl.WildCardString)).size)
     assertEquals(0, simpleAclAuthorizer.getAcls(new Resource(Topic, resource.name.charAt(0) + Acl.WildCardString)).size)
@@ -494,29 +494,29 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
     val acl1 = new Acl(principal, Allow, WildCardHost, Read)
     simpleAclAuthorizer.addAcls(Set[Acl](acl1), resource)
     assertEquals(1, simpleAclAuthorizer.getAcls(resource).size)
-    assertEquals(1, simpleAclAuthorizer.getAcls(new Resource(Topic, Acl.WildCardString)).size)
-    assertEquals(1, simpleAclAuthorizer.getAcls(new Resource(Topic, resource.name.charAt(0) + Acl.WildCardString)).size)
+    assertEquals(0, simpleAclAuthorizer.getAcls(new Resource(Topic, Acl.WildCardString)).size)
+    assertEquals(0, simpleAclAuthorizer.getAcls(new Resource(Topic, resource.name.charAt(0).toString, WildcardSuffixed)).size)
     assertEquals(0, simpleAclAuthorizer.getAcls(new Resource(Topic, resource.name + "t")).size)
 
     // add same acl on wildcard resource
     simpleAclAuthorizer.addAcls(Set[Acl](acl1), new Resource(Topic, Acl.WildCardString))
     assertEquals(1, simpleAclAuthorizer.getAcls(resource).size)
     assertEquals(1, simpleAclAuthorizer.getAcls(new Resource(Topic, Acl.WildCardString)).size)
-    assertEquals(1, simpleAclAuthorizer.getAcls(new Resource(Topic, resource.name.charAt(0) + Acl.WildCardString)).size)
-    assertEquals(1, simpleAclAuthorizer.getAcls(new Resource(Topic, resource.name + "t")).size)
+    assertEquals(0, simpleAclAuthorizer.getAcls(new Resource(Topic, resource.name.charAt(0).toString, WildcardSuffixed)).size)
+    assertEquals(0, simpleAclAuthorizer.getAcls(new Resource(Topic, resource.name + "t")).size)
 
     // add different acl on resource
     val acl2 = new Acl(principal, Allow, WildCardHost, Write)
     simpleAclAuthorizer.addAcls(Set[Acl](acl2), resource)
     assertEquals(2, simpleAclAuthorizer.getAcls(resource).size)
-    assertEquals(2, simpleAclAuthorizer.getAcls(new Resource(Topic, Acl.WildCardString)).size)
-    assertEquals(2, simpleAclAuthorizer.getAcls(new Resource(Topic, resource.name.charAt(0) + Acl.WildCardString)).size)
-    assertEquals(1, simpleAclAuthorizer.getAcls(new Resource(Topic, resource.name + "t")).size)
+    assertEquals(1, simpleAclAuthorizer.getAcls(new Resource(Topic, Acl.WildCardString)).size)
+    assertEquals(0, simpleAclAuthorizer.getAcls(new Resource(Topic, resource.name.charAt(0) + Acl.WildCardString)).size)
+    assertEquals(0, simpleAclAuthorizer.getAcls(new Resource(Topic, resource.name + "t")).size)
 
   }
 
   @Test
-  def testMatchingGetAclsPrincipal(): Unit = {
+  def testGetAclsPrincipal(): Unit = {
     assertEquals(0, simpleAclAuthorizer.getAcls(principal).size)
 
     val acl1 = new Acl(principal, Allow, WildCardHost, Write)

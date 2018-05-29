@@ -25,7 +25,6 @@ import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, LeaderAndIsr}
 import kafka.cluster.{Broker, EndPoint}
 import kafka.common.KafkaException
 import kafka.controller.{IsrChangeNotificationHandler, LeaderIsrAndControllerEpoch}
-import kafka.security.auth.storage.AclStore
 import kafka.server.{ConfigType, DelegationTokenManager}
 import kafka.utils.Json
 import org.apache.kafka.common.TopicPartition
@@ -495,6 +494,14 @@ object DelegationTokenInfoZNode {
   def decode(bytes: Array[Byte]): Option[TokenInformation] = DelegationTokenManager.fromBytes(bytes)
 }
 
+// need to be duplicated
+object AclZNodesInfo {
+  val KafkaAclPath = "/kafka-acl"
+  val KafkaAclChangesPath = "/kafka-acl-changes"
+  val KafkaWildcardSuffixedAclPath = "/kafka-wildcard-acl"
+  val KafkaWildcardSuffixedAclChangesPath = "/kafka-wildcard-acl-changes"
+}
+
 object ZkData {
 
   // Important: it is necessary to add any new top level Zookeeper path to the Seq
@@ -505,10 +512,10 @@ object ZkData {
     ControllerZNode.path,
     ControllerEpochZNode.path,
     IsrChangeNotificationZNode.path,
-    AclStore.literalAclStore.aclZNode.path, // TODO add these paths programmatically by looping over AclStore.AclStores
-    AclStore.wildcardSuffixedAclStore.aclZNode.path,
-    AclStore.literalAclStore.aclChangesZNode.path,
-    AclStore.wildcardSuffixedAclStore.aclChangesZNode.path,
+    AclZNodesInfo.KafkaAclPath,
+    AclZNodesInfo.KafkaAclChangesPath,
+    AclZNodesInfo.KafkaWildcardSuffixedAclPath,
+    AclZNodesInfo.KafkaWildcardSuffixedAclChangesPath,
     ProducerIdBlockZNode.path,
     LogDirEventNotificationZNode.path,
     DelegationTokenAuthZNode.path)
