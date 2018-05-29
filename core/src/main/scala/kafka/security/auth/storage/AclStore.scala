@@ -20,62 +20,83 @@ package kafka.security.auth.storage
 import java.nio.charset.StandardCharsets.UTF_8
 
 import kafka.security.auth.SimpleAclAuthorizer.VersionedAcls
-import kafka.security.auth.{Acl, Resource, ResourceNameType, ResourceType}
-import kafka.utils.Json
+import kafka.security.auth._
+import kafka.utils.{Json, ZkUtils}
 import org.apache.zookeeper.data.Stat
 
 import scala.collection.JavaConverters._
+import scala.collection.Seq
 
 /**
-  *
+  * Acl Store.
   */
-trait AclStore {
+case class AclStore(aclZNode: AclZNode, aclChangesZNode: AclChangesZNode, resourceNameType: ResourceNameType) {
+  def resourceTypeZNode = ResourceTypeZNode(aclZNode)
+  def resourceZNode = ResourceZNode(aclZNode)
+  def aclChangeNotificationSequenceZNode = AclChangeNotificationSequenceZNode(aclChangesZNode)
+}
 
-  def aclZNode: AclZNode
+trait AclZNode {
+  def path: String
+}
 
-  def aclChangesZNode: AclChangesZNode
+trait AclChangesZNode {
+  def path: String
+}
 
-  def resourceNameType: ResourceNameType
+case class ResourceTypeZNode(aclZNode: AclZNode) {
+  def path(resourceType: ResourceType) = s"${aclZNode.path}/${resourceType.name}"
+}
 
-  def resourceTypeZNode: ResourceTypeZNode = new ResourceTypeZNode {
-    override def aclZNode: AclZNode = aclZNode
+case class ResourceZNode(aclZNode: AclZNode) {
+  def path(resource: Resource) = s"${aclZNode.path}/${resource.resourceType.name}/${resource.name}"
+  def encode(acls: Set[Acl]): Array[Byte] = Json.encodeAsBytes(Acl.toJsonCompatibleMap(acls).asJava)
+  def decode(bytes: Array[Byte], stat: Stat): VersionedAcls = VersionedAcls(Acl.fromBytes(bytes), stat.getVersion)
+}
+
+case class AclChangeNotificationSequenceZNode(aclChangesZNode: AclChangesZNode) {
+  def SequenceNumberPrefix = "acl_changes_"
+  def createPath = s"${aclChangesZNode.path}/$SequenceNumberPrefix"
+  def deletePath(sequenceNode: String) = s"${aclChangesZNode.path}/$sequenceNode"
+  def encode(resourceName: String): Array[Byte] = resourceName.getBytes(UTF_8)
+  def decode(bytes: Array[Byte]): String = new String(bytes, UTF_8)
+}
+
+object AclStore {
+  val literalAclStore = AclStore(
+    new AclZNode {
+      /**
+        * The root acl storage node. Under this node there will be one child node per resource type (Topic, Cluster, Group).
+        * under each resourceType there will be a unique child for each resource instance and the data for that child will contain
+        * list of its acls as a json object. Following gives an example:
+        *
+        * <pre>
+        * /kafka-acl/Topic/topic-1 => {"version": 1, "acls": [ { "host":"host1", "permissionType": "Allow","operation": "Read","principal": "User:alice"}]}
+        * /kafka-acl/Cluster/kafka-cluster => {"version": 1, "acls": [ { "host":"host1", "permissionType": "Allow","operation": "Read","principal": "User:alice"}]}
+        * /kafka-acl/Group/group-1 => {"version": 1, "acls": [ { "host":"host1", "permissionType": "Allow","operation": "Read","principal": "User:alice"}]}
+        * </pre>
+        */
+      override def path: String = ZkUtils.KafkaAclPath},
+    new AclChangesZNode {
+      /**
+        * Notification node which gets updated with the resource name when acl on a resource is changed.
+        */
+      override def path: String = ZkUtils.KafkaAclChangesPath
+    },
+    Literal
+  )
+
+  val wildcardSuffixedAclStore = AclStore(
+    new AclZNode {override def path: String = ZkUtils.KafkaWildcardSuffixedAclPath},
+    new AclChangesZNode {override def path: String = ZkUtils.KafkaWildcardSuffixedAclChangesPath},
+    WildcardSuffixed
+  )
+
+  val AclStores = Seq(literalAclStore, wildcardSuffixedAclStore)
+
+  def fromResource(resource: Resource): AclStore = {
+    AclStores.find(_.resourceNameType.equals(resource.resourceNameType)).getOrElse(
+      throw new IllegalArgumentException("Unsupported resource name type: " + resource.resourceNameType)
+    )
   }
-
-  def resourceZNode: ResourceZNode = new ResourceZNode {
-    override def aclZNode: AclZNode = aclZNode
-  }
-
-  def aclChangeNotificationSequenceZNode: AclChangeNotificationSequenceZNode = new AclChangeNotificationSequenceZNode {
-    override def aclChangesZNode: AclChangesZNode = aclChangesZNode
-  }
-
-  trait AclZNode {
-    def path: String
-  }
-
-  trait AclChangesZNode {
-    def path: String
-  }
-
-  trait ResourceTypeZNode {
-    def aclZNode: AclZNode
-    def path(resourceType: ResourceType) = s"${aclZNode.path}/${resourceType.name}"
-  }
-
-  trait ResourceZNode {
-    def aclZNode: AclZNode
-    def path(resource: Resource) = s"${aclZNode.path}/${resource.resourceType.name}/${resource.name}"
-    def encode(acls: Set[Acl]): Array[Byte] = Json.encodeAsBytes(Acl.toJsonCompatibleMap(acls).asJava)
-    def decode(bytes: Array[Byte], stat: Stat): VersionedAcls = VersionedAcls(Acl.fromBytes(bytes), stat.getVersion)
-  }
-
-  trait AclChangeNotificationSequenceZNode {
-    def aclChangesZNode: AclChangesZNode
-    def SequenceNumberPrefix = "acl_changes_"
-    def createPath = s"${aclChangesZNode.path}/$SequenceNumberPrefix"
-    def deletePath(sequenceNode: String) = s"${aclChangesZNode.path}/$sequenceNode"
-    def encode(resourceName : String): Array[Byte] = resourceName.getBytes(UTF_8)
-    def decode(bytes: Array[Byte]): String = new String(bytes, UTF_8)
-  }
-
 }

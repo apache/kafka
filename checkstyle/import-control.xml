@@ -146,7 +146,7 @@
     </subpackage>
 
     <subpackage name="utils">
-      <allow pkg="org.apache.kafka.common.metrics" />
+      <allow pkg="org.apache.kafka.common" />
     </subpackage>
   </subpackage>
 

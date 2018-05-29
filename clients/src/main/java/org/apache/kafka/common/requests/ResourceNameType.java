@@ -17,10 +17,13 @@
 
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
+
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
+@InterfaceStability.Evolving
 public enum ResourceNameType {
     /**
      * Represents any ResourceNameType which this client cannot understand,

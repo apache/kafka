@@ -23,10 +23,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-// TODO cleanup
-
 /**
- *
+ * Resource name type.
  */
 @InterfaceStability.Evolving
 public enum ResourceNameType {

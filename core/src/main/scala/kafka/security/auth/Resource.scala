@@ -47,5 +47,7 @@ case class Resource(resourceType: ResourceType, name: String, resourceNameType: 
   override def toString: String = {
     resourceType.name + Resource.Separator + resourceNameType.name + Resource.Separator + name
   }
+
+  // TODO why does this class not hae equals() and hashCode()?
 }
 

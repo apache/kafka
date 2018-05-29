@@ -17,6 +17,7 @@
 package org.apache.kafka.common.utils;
 
 import org.apache.kafka.common.resource.Resource;
+import org.apache.kafka.common.resource.ResourceNameType;
 import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.junit.Test;
@@ -114,13 +115,13 @@ public class SecurityUtilsTest {
         // wildcard-suffix resource should match
         assertTrue(
                 SecurityUtils.matchResource(
-                        new Resource(ResourceType.TOPIC, "ResourceType.TOPIC" + SecurityUtils.WILDCARD_MARKER),
+                        new Resource(ResourceType.TOPIC, "ResourceType.TOPIC", ResourceNameType.WILDCARD_SUFFIXED),
                         new Resource(ResourceType.TOPIC, "ResourceType.TOPICA")
                 )
         );
         assertFalse(
                 SecurityUtils.matchResource(
-                        new Resource(ResourceType.TOPIC, "ResourceType.TOPIC" + SecurityUtils.WILDCARD_MARKER),
+                        new Resource(ResourceType.TOPIC, "ResourceType.TOPIC", ResourceNameType.WILDCARD_SUFFIXED),
                         new Resource(ResourceType.TOPIC, "topiA")
                 )
         );

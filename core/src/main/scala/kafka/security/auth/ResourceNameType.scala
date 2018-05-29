@@ -21,7 +21,6 @@ import kafka.common.{BaseEnum, KafkaException}
 import org.apache.kafka.common.resource.{ResourceNameType => JResourceNameType}
 
 sealed trait ResourceNameType extends BaseEnum {
-  def name: String
   def toJava: JResourceNameType
 }
 

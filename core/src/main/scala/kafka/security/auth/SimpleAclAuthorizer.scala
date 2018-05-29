@@ -24,10 +24,11 @@ import com.typesafe.scalalogging.Logger
 import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
 import kafka.network.RequestChannel.Session
 import kafka.security.auth.SimpleAclAuthorizer.VersionedAcls
+import kafka.security.auth.storage.AclStore
 import kafka.server.KafkaConfig
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
-import kafka.zk.{KafkaZkClient, ZkData}
+import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{SecurityUtils, Time}
 
@@ -98,9 +99,9 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
     loadCache()
 
-    aclChangeListener = new ZkNodeChangeNotificationListener(zkClient, ZkData.literalAclStore.aclChangesZNode.path, ZkData.literalAclStore.aclChangeNotificationSequenceZNode.SequenceNumberPrefix, AclChangedNotificationHandler)
+    aclChangeListener = new ZkNodeChangeNotificationListener(zkClient, AclStore.literalAclStore.aclChangesZNode.path, AclStore.literalAclStore.aclChangeNotificationSequenceZNode.SequenceNumberPrefix, AclChangedNotificationHandler)
     aclChangeListener.init()
-    wildcardSuffixedAclChangeListener = new ZkNodeChangeNotificationListener(zkClient, ZkData.wildcardSuffixedAclStore.aclChangesZNode.path, ZkData.wildcardSuffixedAclStore.aclChangeNotificationSequenceZNode.SequenceNumberPrefix, AclChangedNotificationHandler)
+    wildcardSuffixedAclChangeListener = new ZkNodeChangeNotificationListener(zkClient, AclStore.wildcardSuffixedAclStore.aclChangesZNode.path, AclStore.wildcardSuffixedAclStore.aclChangeNotificationSequenceZNode.SequenceNumberPrefix, AclChangedNotificationHandler)
     wildcardSuffixedAclChangeListener.init()
   }
 
@@ -204,30 +205,21 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   override def getAcls(principal: KafkaPrincipal): Map[Resource, Set[Acl]] = {
     inReadLock(lock) {
       aclCache.mapValues { versionedAcls =>
-        versionedAcls.acls.filter(matchPrincipal(_, principal))
+        versionedAcls.acls.filter(acl => matchPrincipal(acl.principal, principal))
       }.filter { case (_, acls) =>
         acls.nonEmpty
       }.toMap
     }
   }
 
-  private def getMatchingAcls(resource: Resource): Set[Acl] = inReadLock(lock) {
-    aclCache.filterKeys(stored => SecurityUtils.matchResource(
-      new org.apache.kafka.common.resource.Resource(stored.resourceType.toJava, stored.name, stored.resourceNameType.toJava),
-      new org.apache.kafka.common.resource.Resource(resource.resourceType.toJava, resource.name, resource.resourceNameType.toJava)
-    )).flatMap(_._2.acls).toSet
+  private def getMatchingAcls(resource: Resource): Set[Acl] = {
+    inReadLock(lock) {
+      aclCache.filterKeys(stored => SecurityUtils.matchResource(
+        new org.apache.kafka.common.resource.Resource(stored.resourceType.toJava, stored.name, stored.resourceNameType.toJava),
+        new org.apache.kafka.common.resource.Resource(resource.resourceType.toJava, resource.name, resource.resourceNameType.toJava)
+      )).flatMap(_._2.acls).toSet
+    }
   }
-
-//
-//  override def getMatchingAcls(principal: KafkaPrincipal): Map[Resource, Set[Acl]] = {
-//    inReadLock(lock) {
-//      aclCache.mapValues { versionedAcls =>
-//        versionedAcls.acls.filter(acl => matchPrincipal(acl.principal, principal))
-//      }.filter { case (_, acls) =>
-//        acls.nonEmpty
-//      }.toMap
-//    }
-//  }
 
   override def getAcls(): Map[Resource, Set[Acl]] = {
     inReadLock(lock) {
@@ -243,7 +235,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
   private def loadCache() {
     inWriteLock(lock) {
-      ZkData.AclStores.foreach(aclStore => {
+      AclStore.AclStores.foreach(aclStore => {
         val resourceTypes = zkClient.getResourceTypes(aclStore)
         for (rType <- resourceTypes) {
           val resourceType = ResourceType.fromString(rType)
@@ -339,7 +331,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   }
 
   private def updateAclChangedFlag(resource: Resource) {
-    zkClient.createAclChangeNotification(ZkData.getAclStoreByResource(resource), resource.name)
+    zkClient.createAclChangeNotification(AclStore.fromResource(resource), resource.name)
   }
 
   private def backoffTime = {
