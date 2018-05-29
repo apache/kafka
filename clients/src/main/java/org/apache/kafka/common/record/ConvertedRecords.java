@@ -30,7 +30,7 @@ public class ConvertedRecords<T extends Records> {
         return records;
     }
 
-    public RecordConversionStats recordsProcessingStats() {
+    public RecordConversionStats recordConversionStats() {
         return recordConversionStats;
     }
 }

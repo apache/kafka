@@ -704,16 +704,7 @@ private[kafka] class Processor(val id: Int,
         val response = inflightResponses.remove(send.destination).getOrElse {
           throw new IllegalStateException(s"Send for ${send.destination} completed, but not in `inflightResponses`")
         }
-
-        // If we have a callback for updating record processing statistics, invoke that now. This is used for cases
-        // where network threads process records, for example when we lazily down-convert records.
-        (response, send) match {
-          case (response: RequestChannel.SendResponse, send: MultiRecordsSend) if (send.processingStats().size() > 0) =>
-            response.processingStatsCallback.foreach(callback => callback(send.processingStats().asScala.toMap))
-          case _ =>
-        }
-
-        updateRequestMetrics(response)
+        updateRequestMetrics(response, send)
         selector.unmute(send.destination)
       } catch {
         case e: Throwable => processChannelException(send.destination,
@@ -722,7 +713,19 @@ private[kafka] class Processor(val id: Int,
     }
   }
 
-  private def updateRequestMetrics(response: RequestChannel.Response) {
+  private def updateRequestMetrics(response: RequestChannel.Response, send: Send): Unit = {
+    // If we have a callback for updating record processing statistics, invoke that now. This is used for cases
+    // where network threads process records, for example when we lazily down-convert records.
+    (response, send) match {
+      case (response: RequestChannel.SendResponse, send: MultiRecordsSend) if (send.recordConversionStats().size() > 0) =>
+        response.processingStatsCallback.foreach(callback => callback(send.recordConversionStats().asScala.toMap))
+      case _ =>
+    }
+    updateRequestMetrics(response)
+  }
+
+  private def updateRequestMetrics(response: RequestChannel.Response): Unit = {
+    // Record the amount of time this request spent on the network thread
     val request = response.request
     val networkThreadTimeNanos = openOrClosingChannel(request.context.connectionId).fold(0L)(_.getAndResetNetworkThreadTimeNanos())
     request.updateRequestMetrics(networkThreadTimeNanos, response)
@@ -832,7 +835,7 @@ private[kafka] class Processor(val id: Int,
   // Visible for testing
   // Only methods that are safe to call on a disconnected channel should be invoked on 'openOrClosingChannel'.
   private[network] def openOrClosingChannel(connectionId: String): Option[KafkaChannel] =
-     Option(selector.channel(connectionId)).orElse(Option(selector.closingChannel(connectionId)))
+    Option(selector.channel(connectionId)).orElse(Option(selector.closingChannel(connectionId)))
 
   /* For test usage */
   private[network] def channel(connectionId: String): Option[KafkaChannel] =

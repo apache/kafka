@@ -37,7 +37,7 @@ public class MultiRecordsSend implements Send {
     private final String dest;
     private final Queue<Send> sendQueue;
     private final long size;
-    private Map<TopicPartition, RecordConversionStats> processingStats;
+    private Map<TopicPartition, RecordConversionStats> recordConversionStats;
 
     private long totalWritten = 0;
     private Send current;
@@ -94,7 +94,7 @@ public class MultiRecordsSend implements Send {
             totalWrittenPerCall += written;
             sendComplete = current.completed();
             if (sendComplete) {
-                onComplete(current);
+                updateRecordConversionStats(current);
                 current = sendQueue.poll();
             }
         } while (!completed() && sendComplete);
@@ -114,24 +114,20 @@ public class MultiRecordsSend implements Send {
      * Get any statistics that were recorded as part of executing this {@link MultiRecordsSend}.
      * @return Records processing statistics (could be null if no statistics were collected)
      */
-    public Map<TopicPartition, RecordConversionStats> processingStats() {
-        return processingStats;
+    public Map<TopicPartition, RecordConversionStats> recordConversionStats() {
+        return recordConversionStats;
     }
 
-    private void addToProcessingStats(TopicPartitionRecordConversionStats stats) {
-        if (stats != null) {
-            if (processingStats == null)
-                processingStats = new HashMap<>();
-            processingStats.put(stats.topicPartition(), stats.recordsProcessingStats());
-        }
-    }
-
-    private void onComplete(Send completedSend) {
+    private void updateRecordConversionStats(Send completedSend) {
         // The underlying send might have accumulated statistics that need to be recorded. For example,
         // LazyDownConversionRecordsSend accumulates statistics related to the number of bytes down-converted, the amount
         // of temporary memory used for down-conversion, etc. Pull out any such statistics from the underlying send
         // and fold it up appropriately.
-        if (completedSend instanceof LazyDownConversionRecordsSend)
-            addToProcessingStats(((LazyDownConversionRecordsSend) completedSend).recordsProcessingStats());
+        if (completedSend instanceof LazyDownConversionRecordsSend) {
+            if (recordConversionStats == null)
+                recordConversionStats = new HashMap<>();
+            LazyDownConversionRecordsSend lazyRecordsSend = (LazyDownConversionRecordsSend) completedSend;
+            recordConversionStats.put(lazyRecordsSend.topicPartition(), lazyRecordsSend.recordConversionStats());
+        }
     }
 }

@@ -19,6 +19,7 @@ package org.apache.kafka.common.record;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.junit.Test;
 
@@ -100,7 +101,7 @@ public class LazyDownConversionRecordsTest {
             inputRecords.flush();
 
             LazyDownConversionRecords lazyRecords = new LazyDownConversionRecords(new TopicPartition("test", 1),
-                    inputRecords, toMagic, 0L);
+                    inputRecords, toMagic, 0L, Time.SYSTEM);
             LazyDownConversionRecordsSend lazySend = lazyRecords.toSend("foo");
             File outputFile = tempFile();
             FileChannel channel = new RandomAccessFile(outputFile, "rw").getChannel();

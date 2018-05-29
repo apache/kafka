@@ -321,7 +321,10 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
                 if (partitionResponseHeader.hasField(LOG_START_OFFSET_KEY_NAME))
                     logStartOffset = partitionResponseHeader.getLong(LOG_START_OFFSET_KEY_NAME);
 
-                MemoryRecords records = (MemoryRecords) partitionResponse.getRecords(RECORD_SET_KEY_NAME);
+                BaseRecords baseRecords = partitionResponse.getRecords(RECORD_SET_KEY_NAME);
+                if (!(baseRecords instanceof MemoryRecords))
+                    throw new IllegalStateException("Unknown records type found: " + baseRecords.getClass());
+                MemoryRecords records = (MemoryRecords) baseRecords;
 
                 List<AbortedTransaction> abortedTransactions = null;
                 if (partitionResponseHeader.hasField(ABORTED_TRANSACTIONS_KEY_NAME)) {
@@ -439,9 +442,9 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
             addPartitionData(dest, sends, (Struct) partitionData);
     }
 
-    private static <T extends BaseRecords> void addPartitionData(String dest, Queue<Send> sends, Struct partitionData) {
+    private static void addPartitionData(String dest, Queue<Send> sends, Struct partitionData) {
         Struct header = partitionData.getStruct(PARTITION_HEADER_KEY_NAME);
-        T records = (T) partitionData.getRecords(RECORD_SET_KEY_NAME);
+        BaseRecords records = partitionData.getRecords(RECORD_SET_KEY_NAME);
 
         // include the partition header and the size of the record set
         ByteBuffer buffer = ByteBuffer.allocate(header.sizeOf() + 4);

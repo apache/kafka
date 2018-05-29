@@ -45,7 +45,7 @@ import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANS
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record._
+import org.apache.kafka.common.record.{BaseRecords, ControlRecordType, EndTransactionMarker, LazyDownConversionRecords, MemoryRecords, RecordBatch, RecordConversionStats, Records}
 import org.apache.kafka.common.requests.CreateAclsResponse.AclCreationResponse
 import org.apache.kafka.common.requests.DeleteAclsResponse.{AclDeletionResult, AclFilterResponse}
 import org.apache.kafka.common.requests.DescribeLogDirsResponse.LogDirInfo
@@ -528,7 +528,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           erroneous += topicPartition -> new FetchResponse.PartitionData(Errors.UNKNOWN_TOPIC_OR_PARTITION,
             FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LAST_STABLE_OFFSET,
             FetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY)
-       else
+        else
           interesting += (topicPartition -> data)
       })
     }
@@ -559,11 +559,10 @@ class KafkaApis(val requestChannel: RequestChannel,
           // as possible. With KIP-283, we have the ability to lazily down-convert in a chunked manner. The lazy, chunked
           // down-conversion always guarantees that at least one batch of messages is down-converted and sent out to the
           // client.
-          val converted = new LazyDownConversionRecords(tp, data.records, magic, fetchContext.getFetchOffset(tp).get)
+          val converted = new LazyDownConversionRecords(tp, data.records, magic, fetchContext.getFetchOffset(tp).get, Time.SYSTEM)
           new FetchResponse.PartitionData[BaseRecords](data.error, data.highWatermark, FetchResponse.INVALID_LAST_STABLE_OFFSET,
             data.logStartOffset, data.abortedTransactions, converted)
         }
-
       }.getOrElse(new FetchResponse.PartitionData[BaseRecords](data.error, data.highWatermark, data.lastStableOffset,
         data.logStartOffset, data.abortedTransactions, data.records))
     }
@@ -602,8 +601,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         trace(s"Sending Fetch response with partitions.size=${unconvertedFetchResponse.responseData().size()}, " +
           s"metadata=${unconvertedFetchResponse.sessionId()}")
 
-        def processingStatsCallback(processingStats: FetchResponseStats): Unit = {
-          processingStats.foreach { case (tp, info) =>
+        def processingStatsCallback(recordConversionStats: FetchResponseStats): Unit = {
+          recordConversionStats.foreach { case (tp, info) =>
             updateRecordsProcessingStats(request, tp, info)
           }
         }

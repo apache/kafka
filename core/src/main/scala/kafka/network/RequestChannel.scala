@@ -229,11 +229,16 @@ object RequestChannel extends Logging {
   }
 
   abstract class Response(val request: Request) {
-    request.responseCompleteTimeNanos = Time.SYSTEM.nanoseconds
+    val nowNs = Time.SYSTEM.nanoseconds
+    request.responseCompleteTimeNanos = nowNs
     if (request.apiLocalCompleteTimeNanos == -1L)
-      request.apiLocalCompleteTimeNanos = Time.SYSTEM.nanoseconds
+      request.apiLocalCompleteTimeNanos = nowNs
 
     def processor: Int = request.processor
+
+    def toString(responseSend: Option[Send], responseAsString: Option[String]): String = {
+      s"Response(responseType=${this.getClass} request=$request, responseSend=$responseSend), responseAsString=$responseAsString"
+    }
 
     override def toString: String
   }
@@ -243,18 +248,15 @@ object RequestChannel extends Logging {
                      val responseSend: Send,
                      val responseAsString: Option[String],
                      val processingStatsCallback: Option[Map[TopicPartition, RecordConversionStats] => Unit]) extends Response(request) {
-    override def toString: String =
-      s"Response(request=$request, responseSend=$responseSend, responseAction=SendAction), responseAsString=$responseAsString"
+    override def toString: String = toString(Some(responseSend), responseAsString)
   }
 
   class NoOpResponse(request: Request) extends Response(request) {
-    override def toString: String =
-      s"Response(request=$request, responseSend=None, responseAction=NoOpAction), responseAsString=None"
+    override def toString: String = toString(None, None)
   }
 
   class CloseConnectionResponse(request: Request) extends Response(request) {
-    override def toString: String =
-      s"Response(request=$request, responseSend=None, responseAction=CloseConnectionAction), responseAsString=None"
+    override def toString: String = toString(None, None)
   }
 }
 

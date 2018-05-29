@@ -241,7 +241,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
     @Override
     public ConvertedRecords<? extends Records> downConvert(byte toMagic, long firstOffset, Time time) {
         ConvertedRecords<MemoryRecords> convertedRecords = RecordsUtil.downConvert(batches, toMagic, firstOffset, time);
-        if (convertedRecords.recordsProcessingStats().numRecordsConverted() == 0) {
+        if (convertedRecords.recordConversionStats().numRecordsConverted() == 0) {
             // This indicates that the message is too large, which means that the buffer is not large
             // enough to hold a full record batch. We just return all the bytes in this instance.
             // Even though the record batch does not have the right format version, we expect old clients

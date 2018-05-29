@@ -34,25 +34,19 @@ public final class LazyDownConversionRecordsSend extends RecordsSend<LazyDownCon
     private static final Logger log = LoggerFactory.getLogger(LazyDownConversionRecordsSend.class);
     private static final int MAX_READ_SIZE = 128 * 1024;
 
-    private RecordConversionStats stats;
+    private RecordConversionStats recordConversionStats;
     private RecordsSend convertedRecordsWriter;
     private Iterator<ConvertedRecords> convertedRecordsIterator;
 
     public LazyDownConversionRecordsSend(String destination, LazyDownConversionRecords records) {
         super(destination, records, records.sizeInBytes());
-    }
-
-    private void resetState() {
         convertedRecordsWriter = null;
-        stats = new RecordConversionStats(0, 0, 0);
+        recordConversionStats = new RecordConversionStats(0, 0, 0);
         convertedRecordsIterator = records().iterator(MAX_READ_SIZE);
     }
 
     @Override
     public long writeTo(GatheringByteChannel channel, long previouslyWritten, int remaining) throws IOException {
-        if (previouslyWritten == 0)
-            resetState();
-
         if (convertedRecordsWriter == null || convertedRecordsWriter.completed()) {
             MemoryRecords convertedRecords;
 
@@ -68,7 +62,7 @@ public final class LazyDownConversionRecordsSend extends RecordsSend<LazyDownCon
                             " maximum_size: " + size() +
                             " converted_records_size: " + sizeOfFirstConvertedBatch);
 
-                stats.add(recordsAndStats.recordsProcessingStats());
+                recordConversionStats.add(recordsAndStats.recordConversionStats());
                 log.debug("Got lazy converted records for {" + topicPartition() + "} with length=" + convertedRecords.sizeInBytes());
             } else {
                 if (previouslyWritten == 0)
@@ -95,11 +89,11 @@ public final class LazyDownConversionRecordsSend extends RecordsSend<LazyDownCon
         return convertedRecordsWriter.writeTo(channel);
     }
 
-    public TopicPartitionRecordConversionStats recordsProcessingStats() {
-        return new TopicPartitionRecordConversionStats(topicPartition(), stats);
+    public RecordConversionStats recordConversionStats() {
+        return recordConversionStats;
     }
 
-    private TopicPartition topicPartition() {
+    public TopicPartition topicPartition() {
         return records().topicPartition();
     }
 }

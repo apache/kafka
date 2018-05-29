@@ -23,6 +23,7 @@ import org.apache.kafka.common.utils.Time;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Encapsulation for holding records that require down-conversion in a lazy, chunked manner (KIP-283). See
@@ -35,18 +36,22 @@ public class LazyDownConversionRecords implements BaseRecords {
     private final long firstOffset;
     private ConvertedRecords firstConvertedBatch;
     private final int sizeInBytes;
+    private final Time time;
 
     /**
+     * @param topicPartition The topic-partition to which records belong
      * @param records Records to lazily down-convert
      * @param toMagic Magic version to down-convert to
      * @param firstOffset The starting offset for down-converted records. This only impacts some cases. See
      *                    {@link RecordsUtil#downConvert(Iterable, byte, long, Time)} for an explanation.
+     * @param time The time instance to use
      */
-    public LazyDownConversionRecords(TopicPartition topicPartition, Records records, byte toMagic, long firstOffset) {
-        this.topicPartition = topicPartition;
-        this.records = records;
+    public LazyDownConversionRecords(TopicPartition topicPartition, Records records, byte toMagic, long firstOffset, Time time) {
+        this.topicPartition = Objects.requireNonNull(topicPartition);
+        this.records = Objects.requireNonNull(records);
         this.toMagic = toMagic;
         this.firstOffset = firstOffset;
+        this.time = Objects.requireNonNull(time);
 
         // Kafka consumers expect at least one full batch of messages for every topic-partition. To guarantee this, we
         // need to make sure that we are able to accommodate one full batch of down-converted messages. The way we achieve
@@ -54,7 +59,7 @@ public class LazyDownConversionRecords implements BaseRecords {
         // its size.
         AbstractIterator<? extends RecordBatch> it = records.batchIterator();
         if (it.hasNext()) {
-            firstConvertedBatch = RecordsUtil.downConvert(Collections.singletonList(it.peek()), toMagic, firstOffset, Time.SYSTEM);
+            firstConvertedBatch = RecordsUtil.downConvert(Collections.singletonList(it.peek()), toMagic, firstOffset, time);
             sizeInBytes = Math.max(records.sizeInBytes(), firstConvertedBatch.records().sizeInBytes());
         } else {
             firstConvertedBatch = null;
@@ -163,7 +168,7 @@ public class LazyDownConversionRecords implements BaseRecords {
                 sizeSoFar += currentBatch.sizeInBytes();
                 isFirstBatch = false;
             }
-            return RecordsUtil.downConvert(batches, toMagic, firstOffset, Time.SYSTEM);
+            return RecordsUtil.downConvert(batches, toMagic, firstOffset, time);
         }
     }
 }

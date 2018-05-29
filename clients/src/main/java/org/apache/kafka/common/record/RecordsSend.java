@@ -51,7 +51,7 @@ public abstract class RecordsSend<T extends BaseRecords> implements Send {
     }
 
     @Override
-    public long writeTo(GatheringByteChannel channel) throws IOException {
+    public final long writeTo(GatheringByteChannel channel) throws IOException {
         long written = 0;
 
         if (remaining > 0) {
@@ -81,15 +81,7 @@ public abstract class RecordsSend<T extends BaseRecords> implements Send {
      * Write records up to `remaining` bytes to `channel`. The implementation is allowed to be stateful. The contract
      * from the caller is that the first invocation will be with `previouslyWritten` equal to 0, and `remaining` equal to
      * the to maximum bytes we want to write the to `channel`. `previouslyWritten` and `remaining` will be adjusted
-     * appropriately for every subsequent invocation. For example, one way to this contract is enforced could be:
-     * <pre>
-     *     int length = ...;
-     *     int remaining = length;
-     *
-     *     while (remaining > 0)
-     *         remaining -= writeTo(channel, length - remaining, remaining);
-     * </pre>
-     * Also see {@link #writeTo} for example expected usage.
+     * appropriately for every subsequent invocation. See {@link #writeTo} for example expected usage.
      * @param channel The channel to write to
      * @param previouslyWritten Bytes written in previous calls to {@link #writeTo(GatheringByteChannel, long, int)}; 0 if being called for the first time
      * @param remaining Number of bytes remaining to be written
