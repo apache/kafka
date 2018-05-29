@@ -20,7 +20,6 @@ package org.apache.kafka.common.resource;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.utils.SecurityUtils;
 
-
 import java.util.Objects;
 
 /**
@@ -37,10 +36,11 @@ public class ResourceFilter {
     /**
      * Matches any resource.
      */
-    public static final ResourceFilter ANY = new ResourceFilter(ResourceType.ANY, null);
+    public static final ResourceFilter ANY = new ResourceFilter(ResourceType.ANY, null, ResourceNameType.ANY);
 
     /**
      * Create an instance of this class with the provided parameters.
+     * Resource name type defaults to ResourceNameType.LITERAL
      *
      * @param resourceType non-null resource type
      * @param name resource name or null
@@ -87,14 +87,14 @@ public class ResourceFilter {
 
     @Override
     public String toString() {
-        return "(resourceType=" + resourceType + ", name=" + ((name == null) ? "<any>" : name) + ")";
+        return "(resourceType=" + resourceType + ", name=" + ((name == null) ? "<any>" : name) + ", resourceNameType=" + resourceNameType + ")";
     }
 
     /**
      * Return true if this ResourceFilter has any UNKNOWN components.
      */
     public boolean isUnknown() {
-        return resourceType.isUnknown();
+        return resourceType.isUnknown() || resourceNameType.isUnknown();
     }
 
     @Override
@@ -102,23 +102,21 @@ public class ResourceFilter {
         if (!(o instanceof ResourceFilter))
             return false;
         ResourceFilter other = (ResourceFilter) o;
-        return resourceType.equals(other.resourceType) && Objects.equals(name, other.name);
+        return resourceType.equals(other.resourceType)
+                && Objects.equals(name, other.name)
+                && Objects.equals(resourceNameType, other.resourceNameType);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(resourceType, name);
+        return Objects.hash(resourceType, name, resourceNameType);
     }
 
     /**
      * Return true if this filter matches the given Resource.
      */
     public boolean matches(Resource other) {
-        if ((name != null) && (!SecurityUtils.matchWildcardSuffixedString(other.name(), name)))
-            return false;
-        if ((resourceType != ResourceType.ANY) && (!resourceType.equals(other.resourceType())))
-            return false;
-        return true;
+        return SecurityUtils.matchResource(other, this);
     }
 
     /**

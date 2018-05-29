@@ -19,7 +19,9 @@ package org.apache.kafka.common.resource;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
 
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.Map;
 
 // TODO cleanup
 
@@ -49,12 +51,14 @@ public enum ResourceNameType {
      */
     WILDCARD_SUFFIXED((byte) 3);
 
-    private final static HashMap<Byte, ResourceNameType> CODE_TO_VALUE = new HashMap<>();
+    private final static Map<Byte, ResourceNameType> CODE_TO_VALUE;
 
     static {
+        final Map<Byte, ResourceNameType> codeToValues = new HashMap<>();
         for (ResourceNameType resourceType : ResourceNameType.values()) {
-            CODE_TO_VALUE.put(resourceType.code, resourceType);
+            codeToValues.put(resourceType.code, resourceType);
         }
+        CODE_TO_VALUE = Collections.unmodifiableMap(codeToValues);
     }
 
     private final byte code;
@@ -79,6 +83,13 @@ public enum ResourceNameType {
             return UNKNOWN;
         }
         return resourceNameType;
+    }
+
+    /**
+     * Return whether this resource name type is UNKNOWN.
+     */
+    public boolean isUnknown() {
+        return this == UNKNOWN;
     }
 
 }

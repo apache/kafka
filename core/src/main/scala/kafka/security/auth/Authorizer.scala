@@ -37,7 +37,7 @@ trait Authorizer extends Configurable {
   /**
    * @param session The session being authenticated.
    * @param operation Type of operation client is trying to perform on resource.
-   * @param resource Resource the client is trying to access.
+   * @param resource Resource the client is trying to access. Resource name type is always literal in input resource.
    * @return true if the operation should be permitted, false otherwise
    */
   def authorize(session: Session, operation: Operation, resource: Resource): Boolean

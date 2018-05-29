@@ -103,8 +103,6 @@ public class DescribeAclsRequest extends AbstractRequest {
         short versionId = version();
         switch (versionId) {
             case 0:
-                return new DescribeAclsResponse(throttleTimeMs, ApiError.fromThrowable(throwable),
-                        Collections.<AclBinding>emptySet());
             case 1:
                 return new DescribeAclsResponse(throttleTimeMs, ApiError.fromThrowable(throwable),
                         Collections.<AclBinding>emptySet());

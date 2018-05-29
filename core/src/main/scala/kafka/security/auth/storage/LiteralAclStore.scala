@@ -17,7 +17,7 @@
 
 package kafka.security.auth.storage
 
-import kafka.security.auth.ResourceNameType
+import kafka.security.auth.{Literal, ResourceNameType}
 import kafka.utils.ZkUtils
 
 class LiteralAclStore extends AclStore {
@@ -44,6 +44,6 @@ class LiteralAclStore extends AclStore {
     override val path: String = ZkUtils.KafkaAclChangesPath
   }
 
-  override val resourceNameType: ResourceNameType = ResourceNameType.fromString("Literal")
+  override val resourceNameType: ResourceNameType = Literal
 
 }

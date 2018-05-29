@@ -107,7 +107,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   override def authorize(session: Session, operation: Operation, resource: Resource): Boolean = {
     val principal = session.principal
     val host = session.clientAddress.getHostAddress
-    val acls = getAcls(resource)
+    val acls = getMatchingAcls(resource)
 
     // Check if there is any Deny acl match that would disallow this operation.
     val denyMatch = aclMatch(operation, resource, principal, host, Deny, acls)
@@ -165,16 +165,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     */
   def matchPrincipal(valueInAcl: KafkaPrincipal, input: KafkaPrincipal): Boolean = {
     (valueInAcl.getPrincipalType == input.getPrincipalType || valueInAcl.getPrincipalType == Acl.WildCardString) &&
-      (valueInAcl.getName.equals(input.getName) || valueInAcl.getName.equals(Acl.WildCardString)) // TODO
-  }
-
-  /**
-    * @param valueInZk Resource value stored on ZK.
-    * @param input Resource present in the request.
-    * @return true if there is a match (including wildcard-suffix matching).
-    */
-  def matchResource(valueInZk: Resource, input: Resource): Boolean = {
-    valueInZk.resourceType == input.resourceType && SecurityUtils.matchWildcardSuffixedString(valueInZk.name, input.name)
+      (valueInAcl.getName.equals(input.getName) || valueInAcl.getName.equals(Acl.WildCardString))
   }
 
   override def addAcls(acls: Set[Acl], resource: Resource) {
@@ -213,18 +204,20 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   override def getAcls(principal: KafkaPrincipal): Map[Resource, Set[Acl]] = {
     inReadLock(lock) {
       aclCache.mapValues { versionedAcls =>
-        versionedAcls.acls.filter(_.principal == principal)
+        versionedAcls.acls.filter(matchPrincipal(_, principal))
       }.filter { case (_, acls) =>
         acls.nonEmpty
       }.toMap
     }
   }
 
-//  override def getMatchingAcls(resource: Resource): Set[Acl] = {
-//    inReadLock(lock) {
-//      aclCache.filterKeys(matchResource(_, resource)).flatMap(_._2.acls).toSet
-//    }
-//  }
+  private def getMatchingAcls(resource: Resource): Set[Acl] = inReadLock(lock) {
+    aclCache.filterKeys(stored => SecurityUtils.matchResource(
+      new org.apache.kafka.common.resource.Resource(stored.resourceType.toJava, stored.name, stored.resourceNameType.toJava),
+      new org.apache.kafka.common.resource.Resource(resource.resourceType.toJava, resource.name, resource.resourceNameType.toJava)
+    )).flatMap(_._2.acls).toSet
+  }
+
 //
 //  override def getMatchingAcls(principal: KafkaPrincipal): Map[Resource, Set[Acl]] = {
 //    inReadLock(lock) {

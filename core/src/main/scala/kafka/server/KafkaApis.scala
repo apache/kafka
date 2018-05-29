@@ -1941,7 +1941,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           val filtersWithIndex = filters.zipWithIndex
           for ((resource, acls) <- aclMap; acl <- acls) {
             val binding = new AclBinding(
-              new AdminResource(resource.resourceType.toJava, resource.name),
+              new AdminResource(resource.resourceType.toJava, resource.name, resource.resourceNameType.toJava),
               new AccessControlEntry(acl.principal.toString, acl.host.toString, acl.operation.toJava,
                 acl.permissionType.toJava))
 

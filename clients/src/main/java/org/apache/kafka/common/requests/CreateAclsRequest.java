@@ -148,13 +148,10 @@ public class CreateAclsRequest extends AbstractRequest {
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable throwable) {
         short versionId = version();
-        List<CreateAclsResponse.AclCreationResponse> responses = new ArrayList<>();
         switch (versionId) {
             case 0:
-                for (int i = 0; i < aclCreations.size(); i++)
-                    responses.add(new CreateAclsResponse.AclCreationResponse(ApiError.fromThrowable(throwable)));
-                return new CreateAclsResponse(throttleTimeMs, responses);
             case 1:
+                List<CreateAclsResponse.AclCreationResponse> responses = new ArrayList<>();
                 for (int i = 0; i < aclCreations.size(); i++)
                     responses.add(new CreateAclsResponse.AclCreationResponse(ApiError.fromThrowable(throwable)));
                 return new CreateAclsResponse(throttleTimeMs, responses);

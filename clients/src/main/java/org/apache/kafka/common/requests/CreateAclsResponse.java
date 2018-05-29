@@ -42,6 +42,7 @@ public class CreateAclsResponse extends AbstractResponse {
                     ERROR_CODE,
                     ERROR_MESSAGE))));
 
+    // v1 is same as v0, request has additional resource_name_type
     private static final Schema CREATE_ACLS_RESPONSE_V1 = CREATE_ACLS_RESPONSE_V0;
 
     public static Schema[] schemaVersions() {

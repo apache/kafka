@@ -124,15 +124,10 @@ public class DeleteAclsRequest extends AbstractRequest {
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable throwable) {
         short versionId = version();
-        List<DeleteAclsResponse.AclFilterResponse> responses = new ArrayList<>();
         switch (versionId) {
             case 0:
-                for (int i = 0; i < filters.size(); i++) {
-                    responses.add(new DeleteAclsResponse.AclFilterResponse(
-                        ApiError.fromThrowable(throwable), Collections.<DeleteAclsResponse.AclDeletionResult>emptySet()));
-                }
-                return new DeleteAclsResponse(throttleTimeMs, responses);
             case 1:
+                List<DeleteAclsResponse.AclFilterResponse> responses = new ArrayList<>();
                 for (int i = 0; i < filters.size(); i++) {
                     responses.add(new DeleteAclsResponse.AclFilterResponse(
                             ApiError.fromThrowable(throwable), Collections.<DeleteAclsResponse.AclDeletionResult>emptySet()));

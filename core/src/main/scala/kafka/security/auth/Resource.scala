@@ -24,7 +24,7 @@ object Resource {
   val WildCardResource = "*"
 
   def fromString(str: String): Resource = {
-    str.split(Separator, 2) match {
+    str.split(Separator, 3) match {
       case Array(resourceType, resourceNameType, name, _*) => new Resource(ResourceType.fromString(resourceType), name, ResourceNameType.fromString(resourceNameType))
       case _ => throw new IllegalArgumentException("expected a string in format ResourceType:ResourceNameType:ResourceName but got " + str)
     }
@@ -41,7 +41,7 @@ object Resource {
 case class Resource(resourceType: ResourceType, name: String, resourceNameType: ResourceNameType) {
 
   def this(resourceType: ResourceType, name: String) {
-    this(resourceType, name, ResourceNameType.fromString("Literal"))
+    this(resourceType, name, Literal)
   }
 
   override def toString: String = {

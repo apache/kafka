@@ -17,7 +17,7 @@
 
 package kafka.security.auth.storage
 
-import kafka.security.auth.ResourceNameType
+import kafka.security.auth.{ResourceNameType, WildcardSuffixed}
 import kafka.utils.ZkUtils
 
 class WildcardSuffixedAclStore extends AclStore {
@@ -30,7 +30,7 @@ class WildcardSuffixedAclStore extends AclStore {
     override val path: String = ZkUtils.KafkaWildcardSuffixedAclChangesPath
   }
 
-  override val resourceNameType: ResourceNameType = ResourceNameType.fromString("WildcardSuffixed")
+  override val resourceNameType: ResourceNameType = WildcardSuffixed
 
 
 //

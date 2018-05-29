@@ -60,6 +60,7 @@ public class Resource {
 
     /**
      * Create an instance of this class with the provided parameters.
+     * Resource name type would default to ResourceNameType.LITERAL.
      *
      * @param resourceType non-null resource type
      * @param name non-null resource name
@@ -98,14 +99,14 @@ public class Resource {
 
     @Override
     public String toString() {
-        return "(resourceType=" + resourceType + ", name=" + ((name == null) ? "<any>" : name) + ")";
+        return "(resourceType=" + resourceType + ", name=" + ((name == null) ? "<any>" : name) + ", resourceNameType=" + resourceNameType + ")";
     }
 
     /**
      * Return true if this Resource has any UNKNOWN components.
      */
     public boolean isUnknown() {
-        return resourceType.isUnknown();
+        return resourceType.isUnknown() || resourceNameType.isUnknown();
     }
 
     @Override
@@ -113,7 +114,9 @@ public class Resource {
         if (!(o instanceof Resource))
             return false;
         Resource other = (Resource) o;
-        return resourceType.equals(other.resourceType) && Objects.equals(name, other.name) && resourceNameType.equals(other.resourceNameType);
+        return resourceType.equals(other.resourceType)
+                && Objects.equals(name, other.name)
+                && resourceNameType.equals(other.resourceNameType);
     }
 
     @Override

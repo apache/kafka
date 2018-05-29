@@ -25,7 +25,6 @@ import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.kafka.common.utils.SecurityUtils
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
@@ -443,41 +442,6 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testmatchWildcardSuffixedString(): Unit = {
-    // everything should match wildcard string
-    assertTrue(SecurityUtils.matchWildcardSuffixedString(Acl.WildCardString, Acl.WildCardString))
-    assertTrue(SecurityUtils.matchWildcardSuffixedString(Acl.WildCardString, "f"))
-    assertTrue(SecurityUtils.matchWildcardSuffixedString(Acl.WildCardString, "foo"))
-    assertTrue(SecurityUtils.matchWildcardSuffixedString(Acl.WildCardString, "fo" + Acl.WildCardString))
-    assertTrue(SecurityUtils.matchWildcardSuffixedString(Acl.WildCardString, "f" + Acl.WildCardString))
-
-    assertTrue(SecurityUtils.matchWildcardSuffixedString("f", Acl.WildCardString))
-    assertTrue(SecurityUtils.matchWildcardSuffixedString("f", "f"))
-    assertTrue(SecurityUtils.matchWildcardSuffixedString("f", "f" + Acl.WildCardString))
-    assertFalse(SecurityUtils.matchWildcardSuffixedString("f", "foo"))
-    assertFalse(SecurityUtils.matchWildcardSuffixedString("f", "fo" + Acl.WildCardString))
-
-    assertTrue(SecurityUtils.matchWildcardSuffixedString("foo", Acl.WildCardString))
-    assertTrue(SecurityUtils.matchWildcardSuffixedString("foo", "foo"))
-    assertTrue(SecurityUtils.matchWildcardSuffixedString("foo", "fo" + Acl.WildCardString))
-    assertTrue(SecurityUtils.matchWildcardSuffixedString("foo", "f" + Acl.WildCardString))
-    assertTrue(SecurityUtils.matchWildcardSuffixedString("foo", "foo" + Acl.WildCardString))
-    assertFalse(SecurityUtils.matchWildcardSuffixedString("foo", "f"))
-    assertFalse(SecurityUtils.matchWildcardSuffixedString("foo", "foot" + Acl.WildCardString))
-
-    assertTrue(SecurityUtils.matchWildcardSuffixedString("fo" + Acl.WildCardString, Acl.WildCardString))
-    assertTrue(SecurityUtils.matchWildcardSuffixedString("fo" + Acl.WildCardString, "fo"))
-    assertTrue(SecurityUtils.matchWildcardSuffixedString("fo" + Acl.WildCardString, "foo"))
-    assertTrue(SecurityUtils.matchWildcardSuffixedString("fo" + Acl.WildCardString, "foot"))
-    assertTrue(SecurityUtils.matchWildcardSuffixedString("fo" + Acl.WildCardString, "fo" + Acl.WildCardString))
-
-    assertTrue(SecurityUtils.matchWildcardSuffixedString("fo" + Acl.WildCardString, "foo" + Acl.WildCardString))
-    assertTrue(SecurityUtils.matchWildcardSuffixedString("fo" + Acl.WildCardString, "foot" + Acl.WildCardString))
-    assertFalse(SecurityUtils.matchWildcardSuffixedString("fo" + Acl.WildCardString, "f"))
-    assertFalse(SecurityUtils.matchWildcardSuffixedString("fo" + Acl.WildCardString, "f" + Acl.WildCardString))
-  }
-
-  @Test
   def testMatchPrincipal(): Unit = {
     // same username should match
     assertTrue(
@@ -516,53 +480,6 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
       simpleAclAuthorizer.matchPrincipal(
         new KafkaPrincipal("userType1", "rob"),
         new KafkaPrincipal("userType2", "rob")
-      )
-    )
-  }
-
-  @Test
-  def testMatchResource(): Unit = {
-    // same resource should match
-    assertTrue(
-      simpleAclAuthorizer.matchResource(
-        new Resource(Topic, "topicA"),
-        new Resource(Topic, "topicA")
-      )
-    )
-
-    // different resource shouldn't match
-    assertFalse(
-      simpleAclAuthorizer.matchResource(
-        new Resource(Topic, "topicA"),
-        new Resource(Topic, "topicB")
-      )
-    )
-    assertFalse(
-      simpleAclAuthorizer.matchResource(
-        new Resource(Topic, "topicA"),
-        new Resource(Group, "topicA")
-      )
-    )
-
-    // wildcard resource should match
-    assertTrue(
-      simpleAclAuthorizer.matchResource(
-        new Resource(Topic, Acl.WildCardString),
-        new Resource(Topic, "topicA")
-      )
-    )
-
-    // wildcard-suffix resource should match
-    assertTrue(
-      simpleAclAuthorizer.matchResource(
-        new Resource(Topic, "topic" + Acl.WildCardString),
-        new Resource(Topic, "topicA")
-      )
-    )
-    assertFalse(
-      simpleAclAuthorizer.matchResource(
-        new Resource(Topic, "topic" + Acl.WildCardString),
-        new Resource(Topic, "topiA")
       )
     )
   }

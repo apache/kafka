@@ -74,7 +74,7 @@ class ZkNodeChangeNotificationListener(private val zkClient: KafkaZkClient,
   /**
    * Process notifications
    */
-  private def processNotifications() {
+  private def processNotifications() { // TODO notification message format
     try {
       val notifications = zkClient.getChildren(seqNodeRoot).sorted
       if (notifications.nonEmpty) {
