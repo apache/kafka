@@ -144,7 +144,8 @@ public class RetryWithToleranceExecutor {
     }
 
     /**
-     * attempt to execute an operation. Retry if a {@link RetriableException} is raised. Re-throw everything else.
+     * Attempt to execute an operation. Retry if a {@link RetriableException} is raised. Re-throw everything else.
+     *
      * @param operation the operation to be executed.
      * @param <V> the return type of the result of the operation.
      * @return the result of the operation.
@@ -185,7 +186,7 @@ public class RetryWithToleranceExecutor {
      *
      * @param operation the operation to be executed.
      * @param tolerated the class of exceptions which can be tolerated.
-     * @param <V> the return type of the result of the operation.
+     * @param <V> The return type of the result of the operation.
      * @return the result of the operation
      */
     // Visible for testing
@@ -294,18 +295,36 @@ public class RetryWithToleranceExecutor {
                 '}';
     }
 
+    /**
+     * Set the error reporters for this connector.
+     *
+     * @param reporters the error reporters (should not be null).
+     */
     public void setReporters(List<ErrorReporter> reporters) {
         this.context.setReporters(reporters);
     }
 
+    /**
+     * Set the source record being processed in the connect pipeline.
+     *
+     * @param preTransformRecord the source record
+     */
     public void sourceRecord(SourceRecord preTransformRecord) {
         this.context.sourceRecord(preTransformRecord);
     }
 
+    /**
+     * Set the record consumed from Kafka in a sink connector.
+     *
+     * @param consumedMessage the record
+     */
     public void consumerRecord(ConsumerRecord<byte[], byte[]> consumedMessage) {
         this.context.consumerRecord(consumedMessage);
     }
 
+    /**
+     * @return true, if the last operation encountered an error; false otherwise
+     */
     public boolean failed() {
         return this.context.failed();
     }
