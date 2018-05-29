@@ -296,6 +296,13 @@ class Log(@volatile var dir: File,
       new LeaderEpochCheckpointFile(LeaderEpochFile.newFile(dir), logDirFailureChannel))
   }
 
+  /**
+   * Removes any temporary files found in log directory, and creates a list of all .swap files which could be swapped
+   * in place of existing segment(s). For log splitting, we know that any .swap file whose base offset is higher than
+   * the smallest offset .clean file could be part of an incomplete split operation. Such .swap files are also deleted
+   * by this method.
+   * @return
+   */
   private def removeTempFilesAndCollectSwapFiles(): Set[File] = {
 
     def deleteIndicesIfExist(baseFile: File, suffix: String = ""): Unit = {
@@ -307,19 +314,19 @@ class Log(@volatile var dir: File,
     }
 
     var swapFiles = Set[File]()
+    var cleanFiles = Set[File]()
     var minCleanedFileOffset = Long.MaxValue
 
     for (file <- dir.listFiles if file.isFile) {
       if (!file.canRead)
         throw new IOException(s"Could not read file $file")
       val filename = file.getName
-      if (filename.endsWith(DeletedFileSuffix) || filename.endsWith(CleanedFileSuffix)) {
+      if (filename.endsWith(DeletedFileSuffix)) {
         debug(s"Deleting stray temporary file ${file.getAbsolutePath}")
-
-        if (filename.endsWith(CleanedFileSuffix))
-          minCleanedFileOffset = Math.min(offsetFromFileName(filename), minCleanedFileOffset)
-
         Files.deleteIfExists(file.toPath)
+      } else if (filename.endsWith(CleanedFileSuffix)) {
+        minCleanedFileOffset = Math.min(offsetFromFileName(filename), minCleanedFileOffset)
+        cleanFiles += file
       } else if (filename.endsWith(SwapFileSuffix)) {
         // we crashed in the middle of a swap operation, to recover:
         // if a log, delete the index files, complete the swap operation later
@@ -335,19 +342,30 @@ class Log(@volatile var dir: File,
       }
     }
 
-    // KAFKA-6264: Delete all .swap files whose base offset is greater than the minimum .cleaned segment offset. See
-    // Log#splitSegmentOnOffsetOverflow for an explanation describing why we need to do this.
+    // KAFKA-6264: Delete all .swap files whose base offset is greater than the minimum .cleaned segment offset. Such .swap
+    // files could be part of an incomplete split operation that could not complete. See Log#splitSegmentOnOffsetOverflow
+    // for more details about the split operation.
     val (invalidSwapFiles, validSwapFiles) = swapFiles.partition(file => offsetFromFile(file) >= minCleanedFileOffset)
-    invalidSwapFiles.foreach(f => {
-      debug(s"Deleting invalid swap file ${f.getAbsoluteFile} minCleanedFileOffset: $minCleanedFileOffset")
-      val baseFile = new File(CoreUtils.replaceSuffix(f.getPath, SwapFileSuffix, ""))
+    invalidSwapFiles.foreach(file => {
+      debug(s"Deleting invalid swap file ${file.getAbsoluteFile} minCleanedFileOffset: $minCleanedFileOffset")
+      val baseFile = new File(CoreUtils.replaceSuffix(file.getPath, SwapFileSuffix, ""))
       deleteIndicesIfExist(baseFile, SwapFileSuffix)
+      Files.deleteIfExists(file.toPath)
+    })
+
+    // Now that we have deleted all .swap files that constitute an incomplete split operation, let's delete all .clean files
+    cleanFiles.foreach(file => {
+      debug(s"Deleting stray .clean file ${file.getAbsolutePath}")
+      Files.deleteIfExists(file.toPath)
     })
 
     validSwapFiles
   }
 
   // This method does not need to convert IOException to KafkaStorageException because it is only called before all logs are loaded
+  // It is possible that we encounter a segment with index offset overflow. In that case, the segment will be split appropriately
+  // but loadSegmentFiles itself would fail and must be retried.
+  @throws(classOf[IndexOffsetOverflowException])
   private def loadSegmentFiles(): Unit = {
     // load segments in ascending order because transactional data from one segment may depend on the
     // segments that come before it
@@ -1994,7 +2012,7 @@ object Log extends Logging {
     if (dirName == null || dirName.isEmpty || !dirName.contains('-'))
       throw exception(dir)
     if (dirName.endsWith(DeleteDirSuffix) && !DeleteDirPattern.matcher(dirName).matches ||
-      dirName.endsWith(FutureDirSuffix) && !FutureDirPattern.matcher(dirName).matches)
+        dirName.endsWith(FutureDirSuffix) && !FutureDirPattern.matcher(dirName).matches)
       throw exception(dir)
 
     val name: String =
@@ -2045,8 +2063,9 @@ object Log extends Logging {
    * Split the given log segment into multiple such that there is no offset overflow in the resulting segments. The
    * resulting segments will contain the exact same messages that are present in the input segment. On successful
    * completion of this method, the input segment will be deleted and will be replaced by the resulting new segments.
-   * Note that if no overflow is found in the input segment, the given segment will still be replaced by a new one.
    * See replaceSegments for recovery logic, in case the broker dies in the middle of this operation.
+   * Note that this method assumes we have already determined that the segment passed in contains records that cause
+   * offset overflow.
    * @param log The log containing segment to split
    * @param segment Segment to split
    * @return List of new segments that replace the input segment

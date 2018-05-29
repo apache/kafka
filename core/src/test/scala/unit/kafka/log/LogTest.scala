@@ -2058,11 +2058,17 @@ class LogTest {
     // create a log such that one log segment has offsets that overflow, and call the split API on that segment
     val logConfig = LogTest.createLogConfig(indexIntervalBytes = 1, fileDeleteDelayMs = 1000)
     val (log, segmentWithOverflow, inputRecords) = createLogWithOffsetOverflow(Some(logConfig))
+    assertTrue("At least one segment must have offset overflow", LogTest.hasOffsetOverflow(log))
+
+    // split the segment with overflow
     Log.splitSegmentOnOffsetOverflow(log, segmentWithOverflow)
 
     // assert we were successfully able to split the segment
     assertEquals(log.numberOfSegments, 4)
     assertTrue(LogTest.verifyRecordsInLog(log, inputRecords))
+
+    // verify we do not have offset overflow anymore
+    assertFalse(LogTest.hasOffsetOverflow(log))
   }
 
   @Test
@@ -3381,6 +3387,36 @@ object LogTest {
       logDirFailureChannel = new LogDirFailureChannel(10))
   }
 
+  /**
+   * Check if the given log contains any segment with records that cause offset overflow.
+   * @param log Log to check
+   * @return true if log contains at least one segment with offset overflow; false otherwise
+   */
+  def hasOffsetOverflow(log: Log): Boolean = {
+    for (logSegment <- log.logSegments) {
+      val baseOffset = logSegment.baseOffset
+      for (batch <- logSegment.log.batches.asScala) {
+        val it = batch.iterator()
+        while (it.hasNext()) {
+          val record = it.next()
+          if (record.offset > baseOffset + Int.MaxValue || record.offset < baseOffset)
+            return true
+        }
+      }
+    }
+    false
+  }
+
+  /**
+   * Create a log such that one of the log segments has messages with offsets that cause index offset overflow.
+   * @param logDir Directory in which log should be created
+   * @param brokerTopicStats Container for Broker Topic Yammer Metrics
+   * @param logConfigOpt Optional log configuration to use
+   * @param scheduler The thread pool scheduler used for background actions
+   * @param time The time instance to use
+   * @return (1) Created log containing segment with offset overflow, (2) Log segment within log containing messages with
+   *         offset overflow, and (3) List of messages in the log
+   */
   def createLogWithOffsetOverflow(logDir: File, brokerTopicStats: BrokerTopicStats, logConfigOpt: Option[LogConfig] = None,
                                   scheduler: Scheduler, time: Time): (Log, LogSegment, List[Record]) = {
     val logConfig =
@@ -3425,16 +3461,16 @@ object LogTest {
     assertEquals(log.numberOfSegments, 4)
 
     // assert number of batches
-    for (log <- log.logSegments) {
+    for (logSegment <- log.logSegments) {
       var numBatches = 0
-      for (_ <- log.log.batches.asScala)
+      for (_ <- logSegment.log.batches.asScala)
         numBatches += 1
       assertEquals(numBatches, 3)
     }
 
     // create a list of appended records
-    for (log <- log.logSegments) {
-      for (batch <- log.log.batches.asScala) {
+    for (logSegment <- log.logSegments) {
+      for (batch <- logSegment.log.batches.asScala) {
         val it = batch.iterator()
         while (it.hasNext())
           inputRecords += it.next()
@@ -3445,6 +3481,10 @@ object LogTest {
     log.close()
 
     // We want to "merge" log segments 1 and 2. This is where the offset overflow will be.
+    // Current: segment #1 | segment #2 | segment #3 | segment# 4
+    // Final: segment #1 | segment #2' | segment #4
+    // where 2' corresponds to segment #2 and segment #3 combined together.
+    // Append segment #3 at the end of segment #2 to create 2'
     var dest: FileOutputStream = null
     var source: FileInputStream = null
     try {
@@ -3458,7 +3498,7 @@ object LogTest {
       source.close()
     }
 
-    // Delete segment 2 including any index, etc.
+    // Delete segment #3 including any index, etc.
     toMerge(1).delete()
     log = createLog(logDir, logConfig, brokerTopicStats, scheduler, time, recoveryPoint = Long.MaxValue)
 
@@ -3471,8 +3511,8 @@ object LogTest {
 
   def verifyRecordsInLog(log: Log, expectedRecords: List[Record]): Boolean = {
     val recordsFound = ListBuffer[Record]()
-    for (log <- log.logSegments) {
-      for (batch <- log.log.batches.asScala) {
+    for (logSegment <- log.logSegments) {
+      for (batch <- logSegment.log.batches.asScala) {
         val it = batch.iterator()
         while (it.hasNext())
           recordsFound += it.next()
@@ -3483,8 +3523,8 @@ object LogTest {
 
   /* extract all the keys from a log */
   def keysInLog(log: Log): Iterable[Long] = {
-    for (segment <- log.logSegments;
-         batch <- segment.log.batches.asScala if !batch.isControlBatch;
+    for (logSegment <- log.logSegments;
+         batch <- logSegment.log.batches.asScala if !batch.isControlBatch;
          record <- batch.asScala if record.hasValue && record.hasKey)
       yield TestUtils.readString(record.key).toLong
   }
@@ -3503,6 +3543,7 @@ object LogTest {
       assertFalse("Unexpected .swap file after recovery", file.getName.endsWith(Log.SwapFileSuffix))
     }
     assertEquals(expectedKeys, LogTest.keysInLog(recoveredLog))
+    assertFalse(LogTest.hasOffsetOverflow(recoveredLog))
     recoveredLog
   }
 }

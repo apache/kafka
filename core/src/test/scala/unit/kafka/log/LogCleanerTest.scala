@@ -1084,11 +1084,13 @@ class LogCleanerTest extends JUnitSuite {
     }
     assertEquals(numSegmentsInitial + 1, log.logSegments.size)
     assertEquals(allKeys, LogTest.keysInLog(log))
+    assertFalse(LogTest.hasOffsetOverflow(log))
 
     // Clean each segment now that split is complete.
     for (segmentToClean <- log.logSegments)
       cleaner.cleanSegments(log, List(segmentToClean), offsetMap, 0L, new CleanerStats())
     assertEquals(expectedKeysAfterCleaning, LogTest.keysInLog(log))
+    assertFalse(LogTest.hasOffsetOverflow(log))
     log.close()
   }
 

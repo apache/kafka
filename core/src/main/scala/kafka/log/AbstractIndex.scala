@@ -235,7 +235,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
   def relativeOffset(offset: Long): Int = {
     val relativeOffset = offset - baseOffset
     if (relativeOffset < 0 || relativeOffset > Int.MaxValue)
-      throw new IndexOffsetOverflowException(s"Integer overflow for offset: $offset baseOffset: $baseOffset")
+      throw new IndexOffsetOverflowException(s"Integer overflow for offset: $offset (${file.getAbsoluteFile})")
     relativeOffset.toInt
   }
 
