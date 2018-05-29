@@ -20,7 +20,6 @@ package kafka.api
 import java.lang.{Long => JLong}
 import java.util.Properties
 import java.util.concurrent.TimeUnit
-import java.time.Duration
 
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
@@ -169,7 +168,7 @@ class TransactionsTest extends KafkaServerTestHarness {
     assertEquals(2, readCommittedConsumer.assignment.size)
     readCommittedConsumer.seekToEnd(readCommittedConsumer.assignment)
     readCommittedConsumer.assignment.asScala.foreach { tp =>
-      assertEquals(1L, readCommittedConsumer.position(tp, Duration.ofMillis(2000L)))
+      assertEquals(1L, readCommittedConsumer.position(tp))
     }
 
     // undecided timestamps should not be searchable either

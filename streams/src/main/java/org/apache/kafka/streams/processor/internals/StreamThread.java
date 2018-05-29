@@ -573,12 +573,6 @@ public class StreamThread extends Thread {
     final Consumer<byte[], byte[]> consumer;
     final InternalTopologyBuilder builder;
 
-    /**
-     * @TODO Currently, the parameter commitTime is used as a mechanism by 
-     * which the user can input a set time to StoreChangeLogReader to block
-     * for position(). We might need to change the way by which timeout is passed
-     * to StoreChangeLogReader.
-     */
     public static StreamThread create(final InternalTopologyBuilder builder,
                                       final StreamsConfig config,
                                       final KafkaClientSupplier clientSupplier,
@@ -587,7 +581,6 @@ public class StreamThread extends Thread {
                                       final String clientId,
                                       final Metrics metrics,
                                       final Time time,
-                                      final long commitTime,
                                       final StreamsMetadataState streamsMetadataState,
                                       final long cacheSizeBytes,
                                       final StateDirectory stateDirectory,
@@ -601,7 +594,7 @@ public class StreamThread extends Thread {
         log.info("Creating restore consumer client");
         final Map<String, Object> restoreConsumerConfigs = config.getRestoreConsumerConfigs(threadClientId);
         final Consumer<byte[], byte[]> restoreConsumer = clientSupplier.getRestoreConsumer(restoreConsumerConfigs);
-        final StoreChangelogReader changelogReader = new StoreChangelogReader(restoreConsumer, userStateRestoreListener, logContext, commitTime);
+        final StoreChangelogReader changelogReader = new StoreChangelogReader(restoreConsumer, userStateRestoreListener, logContext);
 
         Producer<byte[], byte[]> threadProducer = null;
         final boolean eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));

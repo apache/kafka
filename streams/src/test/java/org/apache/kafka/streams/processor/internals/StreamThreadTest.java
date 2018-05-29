@@ -237,7 +237,6 @@ public class StreamThreadTest {
             clientId,
             metrics,
             mockTime,
-            2000,
             streamsMetadataState,
             0,
             stateDirectory,
