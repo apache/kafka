@@ -21,7 +21,8 @@ import org.apache.kafka.common.config.ConfigDef;
 import java.util.Map;
 
 /**
- * Configuration options for {@link StringConverter} instances.
+ * Configuration options for instances of {@link LongConverter}, {@link IntegerConverter}, {@link ShortConverter}, {@link DoubleConverter},
+ * and {@link FloatConverter} instances.
  */
 public class NumberConverterConfig extends ConverterConfig {
 

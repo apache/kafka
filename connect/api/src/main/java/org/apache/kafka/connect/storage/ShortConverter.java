@@ -32,9 +32,4 @@ public class ShortConverter extends NumberConverter<Short> {
     public ShortConverter() {
         super("short", Schema.OPTIONAL_INT16_SCHEMA, new ShortSerializer(), new ShortDeserializer());
     }
-
-    @Override
-    protected Short cast(Object value) {
-        return (Short) value;
-    }
 }

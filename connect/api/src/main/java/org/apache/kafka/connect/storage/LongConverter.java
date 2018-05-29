@@ -33,8 +33,4 @@ public class LongConverter extends NumberConverter<Long> {
         super("long", Schema.OPTIONAL_INT64_SCHEMA, new LongSerializer(), new LongDeserializer());
     }
 
-    @Override
-    protected Long cast(Object value) {
-        return (Long) value;
-    }
 }

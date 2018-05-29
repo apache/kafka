@@ -32,9 +32,4 @@ public class IntegerConverter extends NumberConverter<Integer> {
     public IntegerConverter() {
         super("integer", Schema.OPTIONAL_INT32_SCHEMA, new IntegerSerializer(), new IntegerDeserializer());
     }
-
-    @Override
-    protected Integer cast(Object value) {
-        return (Integer) value;
-    }
 }

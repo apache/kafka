@@ -32,9 +32,4 @@ public class DoubleConverter extends NumberConverter<Double> {
     public DoubleConverter() {
         super("double", Schema.OPTIONAL_FLOAT64_SCHEMA, new DoubleSerializer(), new DoubleDeserializer());
     }
-
-    @Override
-    protected Double cast(Object value) {
-        return (Double) value;
-    }
 }

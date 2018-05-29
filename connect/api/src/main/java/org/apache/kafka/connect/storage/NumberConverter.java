@@ -31,11 +31,11 @@ import java.util.Map;
 /**
  * {@link Converter} and {@link HeaderConverter} implementation that only supports serializing to and deserializing from number values.
  * It does support handling nulls. When converting from bytes to Kafka Connect format, the converter will always return the specified
- * optional schema.
+ * schema.
  * <p>
  * This implementation currently does nothing with the topic names or header names.
  */
-public abstract class NumberConverter<T extends Number> implements Converter, HeaderConverter {
+abstract class NumberConverter<T extends Number> implements Converter, HeaderConverter {
 
     private final Serializer<T> serializer;
     private final Deserializer<T> deserializer;
@@ -59,7 +59,6 @@ public abstract class NumberConverter<T extends Number> implements Converter, He
         assert this.deserializer != null;
         assert this.typeName != null;
         assert this.schema != null;
-        assert this.schema.isOptional();
     }
 
     @Override
@@ -83,7 +82,9 @@ public abstract class NumberConverter<T extends Number> implements Converter, He
         configure(conf);
     }
 
-    protected abstract T cast(Object value);
+    protected T cast(Object value) {
+        return (T) value;
+    }
 
     @Override
     public byte[] fromConnectData(String topic, Schema schema, Object value) {

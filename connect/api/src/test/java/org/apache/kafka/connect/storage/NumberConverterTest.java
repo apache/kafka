@@ -24,6 +24,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 
 public abstract class NumberConverterTest<T extends Number> {
     private static final String TOPIC = "topic";
@@ -78,6 +79,6 @@ public abstract class NumberConverterTest<T extends Number> {
     public void testBytesNullToNumber() {
         SchemaAndValue data = converter.toConnectData(TOPIC, null);
         assertEquals(schema(), data.schema());
-        assertEquals(null, data.value());
+        assertNull(data.value());
     }
 }

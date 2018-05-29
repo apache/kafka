@@ -32,9 +32,4 @@ public class FloatConverter extends NumberConverter<Float> {
     public FloatConverter() {
         super("float", Schema.OPTIONAL_FLOAT32_SCHEMA, new FloatSerializer(), new FloatDeserializer());
     }
-
-    @Override
-    protected Float cast(Object value) {
-        return (Float) value;
-    }
 }
