@@ -110,14 +110,6 @@ public class ConfigTransformerTest {
             return new ConfigData(data, ttl);
         }
 
-        public void subscribe(String path, Set<String> keys, ConfigChangeCallback callback) {
-            throw new UnsupportedOperationException();
-        }
-
-        public void unsubscribe(String path, Set<String> keys) {
-            throw new UnsupportedOperationException();
-        }
-
         public void close() {
         }
     }

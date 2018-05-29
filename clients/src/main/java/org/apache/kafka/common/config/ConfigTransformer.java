@@ -44,6 +44,10 @@ import java.util.regex.Pattern;
  * resides at the path "/tmp/properties.txt", then when a configuration Map which has an entry with a key "someKey" and
  * a value "${file:/tmp/properties.txt:fileKey}" is passed to the {@link #transform(Map)} method, then the transformed
  * Map will have an entry with key "someKey" and a value "someValue".
+ *
+ * <p>This class only depends on {@link ConfigProvider#get(String, Set)} and does not depend on subscription support
+ * in a {@link ConfigProvider}, such as the {@link ConfigProvider#subscribe(String, Set, ConfigChangeCallback)} and
+ * {@link ConfigProvider#unsubscribe(String, Set, ConfigChangeCallback)} methods.
  */
 public class ConfigTransformer {
     private static final Pattern DEFAULT_PATTERN = Pattern.compile("\\$\\{(.*?):((.*?):)?(.*?)\\}");

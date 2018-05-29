@@ -42,6 +42,7 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.Executors;
@@ -254,7 +255,8 @@ public class StandaloneHerder extends AbstractHerder {
     @Override
     public ConfigReloadAction getConnectorConfigReloadAction(final String connName) {
         return ConfigReloadAction.valueOf(
-                configState.connectorConfig(connName).get(ConnectorConfig.CONFIG_RELOAD_ACTION_CONFIG));
+                configState.connectorConfig(connName).get(ConnectorConfig.CONFIG_RELOAD_ACTION_CONFIG)
+                        .toUpperCase(Locale.ROOT));
     }
 
     @Override

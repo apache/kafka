@@ -107,9 +107,10 @@ public class ClusterConfigState {
     }
 
     /**
-     * Get the configuration for a connector.
-     * @param connector name of the connector
-     * @return a map containing configuration parameters
+     * Get the configuration for a connector.  The configuration will have been transformed by
+     * {@link org.apache.kafka.common.config.ConfigTransformer} by having all variable
+     * references replaced with the current values from external instances of
+     * {@link org.apache.kafka.common.config.ConfigProvider}, and may include secrets.
      */
     public Map<String, String> connectorConfig(String connector) {
         Map<String, String> configs = connectorConfigs.get(connector);
@@ -129,7 +130,10 @@ public class ClusterConfigState {
     }
 
     /**
-     * Get the configuration for a task.
+     * Get the configuration for a task.  The configuration will have been transformed by
+     * {@link org.apache.kafka.common.config.ConfigTransformer} by having all variable
+     * references replaced with the current values from external instances of
+     * {@link org.apache.kafka.common.config.ConfigProvider}, and may include secrets.
      * @param task id of the task
      * @return a map containing configuration parameters
      */

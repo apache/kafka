@@ -61,6 +61,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.NavigableSet;
 import java.util.NoSuchElementException;
@@ -644,9 +645,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     @Override
     public ConfigReloadAction getConnectorConfigReloadAction(final String connName) {
         return ConfigReloadAction.valueOf(
-                configState.connectorConfig(connName).get(ConnectorConfig.CONFIG_RELOAD_ACTION_CONFIG));
+                configState.connectorConfig(connName).get(ConnectorConfig.CONFIG_RELOAD_ACTION_CONFIG)
+                        .toUpperCase(Locale.ROOT));
     }
-
 
     @Override
     public void restartConnector(final String connName, final Callback<Void> callback) {

@@ -41,6 +41,9 @@ public class ConfigTransformerResult {
      * Returns the transformed data, with variables replaced with corresponding values from the
      * ConfigProvider instances if found.
      *
+     * <p>Modifying the transformed data that is returned does not affect the {@link ConfigProvider} nor the
+     * original data that was used as the source of the transformation.
+     *
      * @return data a Map of key-value pairs
      */
     public Map<String, String> data() {

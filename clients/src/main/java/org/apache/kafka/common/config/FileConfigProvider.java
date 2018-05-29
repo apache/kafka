@@ -29,6 +29,7 @@ import java.util.Set;
 
 /**
  * An implementation of {@link ConfigProvider} that represents a Properties file.
+ * All property keys and values are stored as cleartext.
  */
 public class FileConfigProvider implements ConfigProvider {
 
