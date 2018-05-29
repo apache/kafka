@@ -96,7 +96,7 @@ public class ConnectorConfig extends AbstractConfig {
     private static final String CONFIG_RELOAD_ACTION_DOC =
             "The action that Connect should take on the connector when changes in external " +
             "configuration providers result in a change in the connector's configuration properties. " +
-            "A value of `none` indicates that Connect will do nothing. " +
+            "A value of 'none' indicates that Connect will do nothing. " +
             "A value of 'restart' indicates that Connect should restart/reload the connector with the " +
             "updated configuration properties." +
             "The restart may actually be scheduled in the future if the external configuration provider " +
