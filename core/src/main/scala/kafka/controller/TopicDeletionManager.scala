@@ -92,7 +92,7 @@ class TopicDeletionManager(controller: KafkaController,
     } else {
       // if delete topic is disabled clean the topic entries under /admin/delete_topics
       info(s"Removing $initialTopicsToBeDeleted since delete topic is disabled")
-      zkClient.deleteTopicDeletions(initialTopicsToBeDeleted.toSeq)
+      zkClient.deleteTopicDeletions(initialTopicsToBeDeleted.toSeq, controllerContext.epochZkVersion)
     }
   }
 
@@ -251,9 +251,9 @@ class TopicDeletionManager(controller: KafkaController,
     controller.replicaStateMachine.handleStateChanges(replicasForDeletedTopic.toSeq, NonExistentReplica)
     topicsToBeDeleted -= topic
     topicsWithDeletionStarted -= topic
-    zkClient.deleteTopicZNode(topic)
-    zkClient.deleteTopicConfigs(Seq(topic))
-    zkClient.deleteTopicDeletions(Seq(topic))
+    zkClient.deleteTopicZNode(topic, controllerContext.epochZkVersion)
+    zkClient.deleteTopicConfigs(Seq(topic), controllerContext.epochZkVersion)
+    zkClient.deleteTopicDeletions(Seq(topic), controllerContext.epochZkVersion)
     controllerContext.removeTopic(topic)
   }
 

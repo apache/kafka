@@ -36,7 +36,7 @@ import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpointFile
 import Implicits._
 import kafka.controller.LeaderIsrAndControllerEpoch
-import kafka.zk.{AdminZkClient, BrokerIdsZNode, BrokerInfo, KafkaZkClient}
+import kafka.zk._
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.{AdminClient, AlterConfigsResult, Config, ConfigEntry}
 import org.apache.kafka.clients.consumer._
@@ -635,7 +635,7 @@ object TestUtils extends Logging {
         .getOrElse(LeaderAndIsr(leader, List(leader)))
       topicPartition -> LeaderIsrAndControllerEpoch(newLeaderAndIsr, controllerEpoch)
     }
-    zkClient.setTopicPartitionStatesRaw(newLeaderIsrAndControllerEpochs)
+    zkClient.setTopicPartitionStatesRaw(newLeaderIsrAndControllerEpochs, ZkVersion.MatchAnyVersion)
   }
 
   /**

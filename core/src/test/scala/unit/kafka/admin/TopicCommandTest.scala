@@ -17,10 +17,10 @@
 package kafka.admin
 
 import org.junit.Assert._
-import org.junit.Test
+import org.junit.{After, Before, Test}
 import kafka.utils.Logging
 import kafka.utils.TestUtils
-import kafka.zk.{ConfigEntityChangeNotificationZNode, ZooKeeperTestHarness}
+import kafka.zk.{ConfigEntityChangeNotificationZNode, ControllerEpochZNode, ZooKeeperTestHarness}
 import kafka.server.ConfigType
 import kafka.admin.TopicCommand.TopicCommandOptions
 import kafka.utils.ZkUtils.getDeleteTopicPath
@@ -28,6 +28,18 @@ import org.apache.kafka.common.errors.TopicExistsException
 import org.apache.kafka.common.internals.Topic
 
 class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
+
+  @Before
+  override def setUp() {
+    super.setUp()
+    zkClient.createControllerEpochRaw(1)
+  }
+
+  @After
+  override def tearDown(): Unit = {
+    zkClient.deletePath(ControllerEpochZNode.path)
+    super.tearDown()
+  }
 
   @Test
   def testConfigPreservationAcrossPartitionAlteration() {

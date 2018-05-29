@@ -109,7 +109,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     val assignment = Map(tp0.partition -> Seq(0))
     val expandedAssignment = Map(tp0 -> Seq(0), tp1 -> Seq(0))
     TestUtils.createTopic(zkClient, tp0.topic, partitionReplicaAssignment = assignment, servers = servers)
-    zkClient.setTopicAssignment(tp0.topic, expandedAssignment)
+    zkClient.setTopicAssignment(tp0.topic, expandedAssignment, KafkaController.InitialControllerEpochZkVersion)
     waitForPartitionState(tp1, KafkaController.InitialControllerEpoch, 0, LeaderAndIsr.initialLeaderEpoch,
       "failed to get expected partition state upon topic partition expansion")
     TestUtils.waitUntilMetadataIsPropagated(servers, tp1.topic, tp1.partition)
@@ -127,7 +127,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     TestUtils.createTopic(zkClient, tp0.topic, partitionReplicaAssignment = assignment, servers = servers)
     servers(otherBrokerId).shutdown()
     servers(otherBrokerId).awaitShutdown()
-    zkClient.setTopicAssignment(tp0.topic, expandedAssignment)
+    zkClient.setTopicAssignment(tp0.topic, expandedAssignment, KafkaController.InitialControllerEpochZkVersion)
     waitForPartitionState(tp1, KafkaController.InitialControllerEpoch, controllerId, LeaderAndIsr.initialLeaderEpoch,
       "failed to get expected partition state upon topic partition expansion")
     TestUtils.waitUntilMetadataIsPropagated(Seq(servers(controllerId)), tp1.topic, tp1.partition)
@@ -169,7 +169,8 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
     servers(otherBrokerId).shutdown()
     servers(otherBrokerId).awaitShutdown()
-    zkClient.setOrCreatePartitionReassignment(reassignment)
+    val controller = getController()
+    zkClient.setOrCreatePartitionReassignment(reassignment, controller.kafkaController.controllerContext.epochZkVersion)
     waitForPartitionState(tp, KafkaController.InitialControllerEpoch, controllerId, LeaderAndIsr.initialLeaderEpoch + 1,
       "failed to get expected partition state during partition reassignment with offline replica")
     TestUtils.waitUntilTrue(() => zkClient.reassignPartitionsInProgress(),
@@ -393,6 +394,11 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
   private def timer(metricName: String): Timer = {
     Metrics.defaultRegistry.allMetrics.asScala.filterKeys(_.getMBeanName == metricName).values.headOption
       .getOrElse(fail(s"Unable to find metric $metricName")).asInstanceOf[Timer]
+  }
+
+  private def getController(): KafkaServer = {
+    val controllerId = TestUtils.waitUntilControllerElected(zkClient)
+    servers.filter(s => s.config.brokerId == controllerId).head
   }
 
 }
