@@ -630,7 +630,7 @@ class GroupMetadataManager(brokerId: Int,
         // load groups which store offsets in kafka, but which have no active members and thus no group
         // metadata stored in the log
         (emptyGroupOffsets.keySet ++ pendingEmptyGroupOffsets.keySet).foreach { groupId =>
-          val group = new GroupMetadata(groupId, Empty, Time.SYSTEM)
+          val group = new GroupMetadata(groupId, Empty, time)
           val offsets = emptyGroupOffsets.getOrElse(groupId, Map.empty[TopicPartition, CommitRecordMetadataAndOffset])
           val pendingOffsets = pendingEmptyGroupOffsets.getOrElse(groupId, Map.empty[Long, mutable.Map[TopicPartition, CommitRecordMetadataAndOffset]])
           debug(s"Loaded group metadata $group with offsets $offsets and pending offsets $pendingOffsets")
@@ -714,10 +714,10 @@ class GroupMetadataManager(brokerId: Int,
   // visible for testing
   private[group] def cleanupGroupMetadata(): Unit = {
     val currentTimestamp = time.milliseconds()
-    val offsetsRemoved = cleanupGroupMetadata(groupMetadataCache.values, group => {
+    val numOffsetsRemoved = cleanupGroupMetadata(groupMetadataCache.values, group => {
       group.removeExpiredOffsets(currentTimestamp, config.offsetsRetentionMs)
     })
-    info(s"Removed $offsetsRemoved expired offsets in ${time.milliseconds() - currentTimestamp} milliseconds.")
+    info(s"Removed $numOffsetsRemoved expired offsets in ${time.milliseconds() - currentTimestamp} milliseconds.")
   }
 
   /**
@@ -1111,12 +1111,12 @@ object GroupMetadataManager {
     val offsetValueSchemaVersion: Short =
       // if expire timestamp is explicitly provided use the old schema
       if (offsetAndMetadata.expireTimestamp.nonEmpty) 1
-      //  otherwise, use the current schema
-      else CURRENT_OFFSET_VALUE_SCHEMA_VERSION
+      //  otherwise, use the current v2 schema
+      else 2
 
     val value = new Struct(schemaForOffset(offsetValueSchemaVersion))
 
-    if (offsetValueSchemaVersion == CURRENT_OFFSET_VALUE_SCHEMA_VERSION) {
+    if (offsetValueSchemaVersion == 2) {
       value.set(OFFSET_VALUE_OFFSET_FIELD_V2, offsetAndMetadata.offset)
       value.set(OFFSET_VALUE_METADATA_FIELD_V2, offsetAndMetadata.metadata)
       value.set(OFFSET_VALUE_COMMIT_TIMESTAMP_FIELD_V2, offsetAndMetadata.commitTimestamp)
@@ -1157,7 +1157,7 @@ object GroupMetadataManager {
     value.set(LEADER_KEY, groupMetadata.leaderOrNull)
 
     if (version >= 2)
-      value.set(CURRENT_STATE_TIMESTAMP_KEY, groupMetadata.currentStateTimestamp)
+      value.set(CURRENT_STATE_TIMESTAMP_KEY, groupMetadata.currentStateTimestampOrDefault)
 
     val memberArray = groupMetadata.allMemberMetadata.map { memberMetadata =>
       val memberStruct = value.instance(MEMBERS_KEY)
@@ -1218,7 +1218,7 @@ object GroupMetadataManager {
 
       GroupMetadataKey(version, group)
     } else {
-      throw new IllegalStateException("Unknown version " + version + " for group metadata message")
+      throw new IllegalStateException(s"Unknown group metadata message version: $version")
     }
   }
 
@@ -1256,7 +1256,7 @@ object GroupMetadataManager {
 
         OffsetAndMetadata(offset, metadata, commitTimestamp)
       } else {
-        throw new IllegalStateException("Unknown offset message version")
+        throw new IllegalStateException(s"Unknown offset message version: $version")
       }
     }
   }
@@ -1282,9 +1282,9 @@ object GroupMetadataManager {
         val leaderId = value.get(LEADER_KEY).asInstanceOf[String]
         val memberMetadataArray = value.getArray(MEMBERS_KEY)
         val initialState = if (memberMetadataArray.isEmpty) Empty else Stable
-        val currentStateTimestamp: Long =
-          if (version > 1) value.getLong(CURRENT_STATE_TIMESTAMP_KEY)
-          else GroupMetadata.DefaultCurrentStateTimestamp
+        val currentStateTimestamp: Option[Long] =
+          if (version > 1) Some(value.getLong(CURRENT_STATE_TIMESTAMP_KEY))
+          else None
 
         val members = memberMetadataArray.map { memberMetadataObj =>
           val memberMetadata = memberMetadataObj.asInstanceOf[Struct]
@@ -1302,7 +1302,7 @@ object GroupMetadataManager {
         }
         GroupMetadata.loadGroup(groupId, initialState, generationId, protocolType, protocol, leaderId, currentStateTimestamp, members)
       } else {
-        throw new IllegalStateException("Unknown group metadata message version")
+        throw new IllegalStateException(s"Unknown group metadata message version: $version")
       }
     }
   }
