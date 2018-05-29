@@ -534,7 +534,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     def convertedPartitionData(tp: TopicPartition,
-                               data: FetchResponse.PartitionData[Records]): FetchResponse.PartitionData[BaseRecords] = {
+                               unconvertedFetchResponse: FetchResponse.PartitionData[Records]): FetchResponse.PartitionData[BaseRecords] = {
       // Down-conversion of the fetched records is needed when the stored magic version is
       // greater than that supported by the client (as indicated by the fetch request version). If the
       // configured magic version for the topic is less than or equal to that supported by the version of the
@@ -544,9 +544,9 @@ class KafkaApis(val requestChannel: RequestChannel,
       // which were written in the new format prior to the version downgrade.
       replicaManager.getMagic(tp).flatMap { magic =>
         val downConvertMagic = {
-          if (magic > RecordBatch.MAGIC_VALUE_V0 && versionId <= 1 && !data.records.hasCompatibleMagic(RecordBatch.MAGIC_VALUE_V0))
+          if (magic > RecordBatch.MAGIC_VALUE_V0 && versionId <= 1 && !unconvertedFetchResponse.records.hasCompatibleMagic(RecordBatch.MAGIC_VALUE_V0))
             Some(RecordBatch.MAGIC_VALUE_V0)
-          else if (magic > RecordBatch.MAGIC_VALUE_V1 && versionId <= 3 && !data.records.hasCompatibleMagic(RecordBatch.MAGIC_VALUE_V1))
+          else if (magic > RecordBatch.MAGIC_VALUE_V1 && versionId <= 3 && !unconvertedFetchResponse.records.hasCompatibleMagic(RecordBatch.MAGIC_VALUE_V1))
             Some(RecordBatch.MAGIC_VALUE_V1)
           else
             None
@@ -559,12 +559,14 @@ class KafkaApis(val requestChannel: RequestChannel,
           // as possible. With KIP-283, we have the ability to lazily down-convert in a chunked manner. The lazy, chunked
           // down-conversion always guarantees that at least one batch of messages is down-converted and sent out to the
           // client.
-          val converted = new LazyDownConversionRecords(tp, data.records, magic, fetchContext.getFetchOffset(tp).get, Time.SYSTEM)
-          new FetchResponse.PartitionData[BaseRecords](data.error, data.highWatermark, FetchResponse.INVALID_LAST_STABLE_OFFSET,
-            data.logStartOffset, data.abortedTransactions, converted)
+          val converted = new LazyDownConversionRecords(tp, unconvertedFetchResponse.records, magic, fetchContext.getFetchOffset(tp).get, Time.SYSTEM)
+          new FetchResponse.PartitionData[BaseRecords](unconvertedFetchResponse.error, unconvertedFetchResponse.highWatermark,
+            FetchResponse.INVALID_LAST_STABLE_OFFSET, unconvertedFetchResponse.logStartOffset, unconvertedFetchResponse.abortedTransactions,
+            converted)
         }
-      }.getOrElse(new FetchResponse.PartitionData[BaseRecords](data.error, data.highWatermark, data.lastStableOffset,
-        data.logStartOffset, data.abortedTransactions, data.records))
+      }.getOrElse(new FetchResponse.PartitionData[BaseRecords](unconvertedFetchResponse.error, unconvertedFetchResponse.highWatermark,
+        unconvertedFetchResponse.lastStableOffset, unconvertedFetchResponse.logStartOffset, unconvertedFetchResponse.abortedTransactions,
+        unconvertedFetchResponse.records))
     }
 
     // the callback for process a fetch response, invoked before throttling
