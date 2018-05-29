@@ -225,7 +225,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         try {
             return this.db.get(rawKey);
         } catch (final RocksDBException e) {
-            throw new ProcessorStateException("Error while getting value for key from store " + this.name, e);
+            throw new ProcessorStateException("Error while getting value for key" + wrapToBytes(rawKey) + "from store " + this.name, e);
         }
     }
 
@@ -301,13 +301,15 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
             try {
                 db.delete(wOptions, rawKey);
             } catch (final RocksDBException e) {
-                throw new ProcessorStateException("Error while removing key from store " + this.name, e);
+                throw new ProcessorStateException("Error while removing key" + wrapToBytes(rawValue) + "from store " + this.name, e);
             }
         } else {
             try {
                 db.put(wOptions, rawKey, rawValue);
             } catch (final RocksDBException e) {
-                throw new ProcessorStateException("Error while executing putting key/value into store " + this.name, e);
+                String str = String.format("Error while executing putting key %s value %s into store %s", wrapToBytes(rawKey),
+                        wrapToBytes(rawValue), this.name);
+                throw new ProcessorStateException(str, e);
             }
         }
     }
@@ -463,6 +465,10 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         for (final KeyValueIterator iterator : iterators) {
             iterator.close();
         }
+    }
+
+    private Bytes wrapToBytes(byte... rawValue) {
+        return Bytes.wrap(rawValue);
     }
 
     private class RocksDbIterator implements KeyValueIterator<Bytes, byte[]> {
