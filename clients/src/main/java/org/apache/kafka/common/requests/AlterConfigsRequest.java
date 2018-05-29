@@ -51,9 +51,9 @@ public class AlterConfigsRequest extends AbstractRequest {
             new Field(CONFIG_VALUE, NULLABLE_STRING, "Configuration value"));
 
     private static final Schema ALTER_CONFIGS_REQUEST_RESOURCE_V0 = new Schema(
-            new Field(RESOURCE_TYPE_KEY_NAME, INT8),
-            new Field(RESOURCE_NAME_KEY_NAME, STRING),
-            new Field(CONFIG_ENTRIES_KEY_NAME, new ArrayOf(CONFIG_ENTRY)));
+            new Field(RESOURCE_TYPE_KEY_NAME, INT8, String.format("The resource type, which is one of %s", ResourceType.ID_NAME_LIST)),
+            new Field(RESOURCE_NAME_KEY_NAME, STRING, "The resource name to alter."),
+            new Field(CONFIG_ENTRIES_KEY_NAME, new ArrayOf(CONFIG_ENTRY), "An array of config entries to add or modify."));
 
     private static final Schema ALTER_CONFIGS_REQUEST_V0 = new Schema(
             new Field(RESOURCES_KEY_NAME, new ArrayOf(ALTER_CONFIGS_REQUEST_RESOURCE_V0),
