@@ -20,6 +20,7 @@ import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.Task;
@@ -351,6 +352,12 @@ public class Plugins {
         plugin = newPlugin(klass);
         if (plugin == null) {
             throw new ConnectException("Unable to instantiate '" + klassName + "'");
+        }
+        if (plugin instanceof Versioned) {
+            Versioned versionedPlugin = (Versioned) plugin;
+            if (versionedPlugin.version() == null || versionedPlugin.version().trim().isEmpty()) {
+                throw new ConnectException("Version not defined for '" + klassName + "'");
+            }
         }
         if (plugin instanceof Configurable) {
             ((Configurable) plugin).configure(config.originals());

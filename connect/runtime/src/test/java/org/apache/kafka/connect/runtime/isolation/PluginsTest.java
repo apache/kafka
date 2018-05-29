@@ -286,7 +286,7 @@ public class PluginsTest {
 
         @Override
         public String version() {
-            return null;
+            return "test";
         }
     }
 
