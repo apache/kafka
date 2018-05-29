@@ -65,7 +65,7 @@ object ConsumerPerformance extends LazyLogging {
       val consumer = new KafkaConsumer[Array[Byte], Array[Byte]](config.props)
       consumer.subscribe(Collections.singletonList(config.topic))
       startMs = System.currentTimeMillis
-      consume(consumer, List(config.topic), config.numMessages, 1000, config, totalMessagesRead, totalBytesRead, joinGroupTimeInMs, startMs)
+      consume(consumer, List(config.topic), config.numMessages, 1000, config, totalMessagesRead, totalBytesRead, joinGroupTimeInMs, startMs, config.showUnits)
       endMs = System.currentTimeMillis
 
       if (config.printMetrics) {
@@ -99,7 +99,11 @@ object ConsumerPerformance extends LazyLogging {
     val fetchTimeInMs = (endMs - startMs) - joinGroupTimeInMs.get
     if (!config.showDetailedStats) {
       val totalMBRead = (totalBytesRead.get * 1.0) / (1024 * 1024)
-      print("%s, %s, %.4f, %.4f, %d, %.4f".format(
+      val display = if(config.showUnits)
+        "%s, %s, %.4f MB, %.4f MB/sec, %d records, %.4f records/sec"
+      else
+        "%s, %s, %.4f, %.4f, %d, %.4f"
+      print(display.format(
         config.dateFormat.format(startMs),
         config.dateFormat.format(endMs),
         totalMBRead,
@@ -108,7 +112,10 @@ object ConsumerPerformance extends LazyLogging {
         totalMessagesRead.get / elapsedSecs
       ))
       if (!config.useOldConsumer) {
-        print(", %d, %d, %.4f, %.4f".format(
+        val display = if (config.showUnits) ", %d, %d ms, %.4f MB, %.4f records/sec"
+        else
+          ", %d, %d, %.4f, %.4f"
+        print(display.format(
           joinGroupTimeInMs.get,
           fetchTimeInMs,
           totalMBRead / (fetchTimeInMs / 1000.0),
@@ -141,7 +148,8 @@ object ConsumerPerformance extends LazyLogging {
               totalMessagesRead: AtomicLong,
               totalBytesRead: AtomicLong,
               joinTime: AtomicLong,
-              testStartTime: Long) {
+              testStartTime: Long,
+              showUnits: Boolean) {
     var bytesRead = 0L
     var messagesRead = 0L
     var lastBytesRead = 0L
@@ -179,7 +187,7 @@ object ConsumerPerformance extends LazyLogging {
         if (currentTimeMillis - lastReportTime >= config.reportingInterval) {
           if (config.showDetailedStats)
             printNewConsumerProgress(0, bytesRead, lastBytesRead, messagesRead, lastMessagesRead,
-              lastReportTime, currentTimeMillis, config.dateFormat, joinTimeMsInSingleRound)
+              lastReportTime, currentTimeMillis, config.dateFormat, joinTimeMsInSingleRound, showUnits)
           joinTimeMsInSingleRound = 0L
           lastReportTime = currentTimeMillis
           lastMessagesRead = messagesRead
@@ -199,8 +207,9 @@ object ConsumerPerformance extends LazyLogging {
                                lastMessagesRead: Long,
                                startMs: Long,
                                endMs: Long,
-                               dateFormat: SimpleDateFormat): Unit = {
-    printBasicProgress(id, bytesRead, lastBytesRead, messagesRead, lastMessagesRead, startMs, endMs, dateFormat)
+                               dateFormat: SimpleDateFormat,
+                               showUnits: Boolean): Unit = {
+    printBasicProgress(id, bytesRead, lastBytesRead, messagesRead, lastMessagesRead, startMs, endMs, dateFormat, showUnits)
     println()
   }
 
@@ -212,9 +221,10 @@ object ConsumerPerformance extends LazyLogging {
                                startMs: Long,
                                endMs: Long,
                                dateFormat: SimpleDateFormat,
-                               periodicJoinTimeInMs: Long): Unit = {
-    printBasicProgress(id, bytesRead, lastBytesRead, messagesRead, lastMessagesRead, startMs, endMs, dateFormat)
-    printExtendedProgress(bytesRead, lastBytesRead, messagesRead, lastMessagesRead, startMs, endMs, periodicJoinTimeInMs)
+                               periodicJoinTimeInMs: Long,
+                               showUnits: Boolean): Unit = {
+    printBasicProgress(id, bytesRead, lastBytesRead, messagesRead, lastMessagesRead, startMs, endMs, dateFormat, showUnits)
+    printExtendedProgress(bytesRead, lastBytesRead, messagesRead, lastMessagesRead, startMs, endMs, periodicJoinTimeInMs, showUnits)
     println()
   }
 
@@ -225,13 +235,18 @@ object ConsumerPerformance extends LazyLogging {
                                  lastMessagesRead: Long,
                                  startMs: Long,
                                  endMs: Long,
-                                 dateFormat: SimpleDateFormat): Unit = {
+                                 dateFormat: SimpleDateFormat,
+                                 showUnits: Boolean): Unit = {
     val elapsedMs: Double = endMs - startMs
     val totalMbRead = (bytesRead * 1.0) / (1024 * 1024)
     val intervalMbRead = ((bytesRead - lastBytesRead) * 1.0) / (1024 * 1024)
     val intervalMbPerSec = 1000.0 * intervalMbRead / elapsedMs
     val intervalMessagesPerSec = ((messagesRead - lastMessagesRead) / elapsedMs) * 1000.0
-    print("%s, %d, %.4f, %.4f, %d, %.4f".format(dateFormat.format(endMs), id, totalMbRead,
+    var display = if(showUnits)
+      "%s, %d, %.4f MB, %.4f MB/sec, %d records, %.4f records/sec"
+    else
+      "%s, %d, %.4f, %.4f, %d, %.4f"
+    print(display.format(dateFormat.format(endMs), id, totalMbRead,
       intervalMbPerSec, messagesRead, intervalMessagesPerSec))
   }
 
@@ -241,7 +256,8 @@ object ConsumerPerformance extends LazyLogging {
                                     lastMessagesRead: Long,
                                     startMs: Long,
                                     endMs: Long,
-                                    periodicJoinTimeInMs: Long): Unit = {
+                                    periodicJoinTimeInMs: Long,
+                                    showUnits: Boolean): Unit = {
     val fetchTimeMs = endMs - startMs - periodicJoinTimeInMs
     val intervalMbRead = ((bytesRead - lastBytesRead) * 1.0) / (1024 * 1024)
     val intervalMessagesRead = messagesRead - lastMessagesRead
@@ -249,7 +265,11 @@ object ConsumerPerformance extends LazyLogging {
       (0.0, 0.0)
     else
       (1000.0 * intervalMbRead / fetchTimeMs, 1000.0 * intervalMessagesRead / fetchTimeMs)
-    print(", %d, %d, %.4f, %.4f".format(periodicJoinTimeInMs, fetchTimeMs, intervalMbPerSec, intervalMessagesPerSec))
+    var display = if(showUnits)
+      ", %d ms, %d ms, %.4f MB/sec, %.4f records/sec"
+    else
+      ", %d, %d, %.4f, %.4f"
+    print(display.format(periodicJoinTimeInMs, fetchTimeMs, intervalMbPerSec, intervalMessagesPerSec))
   }
 
   class ConsumerPerfConfig(args: Array[String]) extends PerfConfig(args) {
@@ -301,7 +321,8 @@ object ConsumerPerformance extends LazyLogging {
       .ofType(classOf[String])
     val printMetricsOpt = parser.accepts("print-metrics", "Print out the metrics. This only applies to new consumer.")
     val showDetailedStatsOpt = parser.accepts("show-detailed-stats", "If set, stats are reported for each reporting " +
-      "interval as configured by reporting-interval")
+      "interval as configured by reporting-interval.")
+    val showUnitsOpt = parser.accepts("show-units", "If set, units are printed out along with the statistics.")
 
     val options = parser.parse(args: _*)
 
@@ -354,6 +375,7 @@ object ConsumerPerformance extends LazyLogging {
     val showDetailedStats = options.has(showDetailedStatsOpt)
     val dateFormat = new SimpleDateFormat(options.valueOf(dateFormatOpt))
     val hideHeader = options.has(hideHeaderOpt)
+    val showUnits = options.has(showUnitsOpt)
   }
 
   class ConsumerPerfThread(threadId: Int,
@@ -383,7 +405,7 @@ object ConsumerPerformance extends LazyLogging {
 
           if (currentTimeMillis - lastReportTime >= config.reportingInterval) {
             if (config.showDetailedStats)
-              printOldConsumerProgress(threadId, bytesRead, lastBytesRead, messagesRead, lastMessagesRead, lastReportTime, currentTimeMillis, config.dateFormat)
+              printOldConsumerProgress(threadId, bytesRead, lastBytesRead, messagesRead, lastMessagesRead, lastReportTime, currentTimeMillis, config.dateFormat, config.showUnits)
             lastReportTime = currentTimeMillis
             lastMessagesRead = messagesRead
             lastBytesRead = bytesRead
@@ -399,7 +421,7 @@ object ConsumerPerformance extends LazyLogging {
       totalMessagesRead.addAndGet(messagesRead)
       totalBytesRead.addAndGet(bytesRead)
       if (config.showDetailedStats)
-        printOldConsumerProgress(threadId, bytesRead, lastBytesRead, messagesRead, lastMessagesRead, startMs, System.currentTimeMillis, config.dateFormat)
+        printOldConsumerProgress(threadId, bytesRead, lastBytesRead, messagesRead, lastMessagesRead, startMs, System.currentTimeMillis, config.dateFormat, config.showUnits)
 
     }
 
