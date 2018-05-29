@@ -1318,12 +1318,14 @@ project(':connect:runtime') {
   archivesBaseName = "connect-runtime"
 
   dependencies {
+
     compile project(':connect:api')
-    compile project(":connect:transforms")
     compile project(':clients')
     compile project(':tools')
-    compile libs.slf4jApi
+    compile project(':connect:json')
+    compile project(':connect:transforms')
 
+    compile libs.slf4jApi
     compile libs.jacksonJaxrsJsonProvider
     compile libs.jerseyContainerServlet
     compile libs.jerseyHk2
@@ -1342,7 +1344,6 @@ project(':connect:runtime') {
     testCompile libs.powermockJunit4
     testCompile libs.powermockEasymock
 
-    testCompile project(":connect:json")
     testCompile project(':clients').sourceSets.test.output
 
     testRuntime libs.slf4jlog4j

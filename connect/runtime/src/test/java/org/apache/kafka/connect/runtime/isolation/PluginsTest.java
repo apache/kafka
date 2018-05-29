@@ -22,6 +22,7 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
+import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.json.JsonConverterConfig;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.isolation.Plugins.ClassLoaderUsage;
@@ -51,6 +52,7 @@ public class PluginsTest {
     private AbstractConfig config;
     private TestConverter converter;
     private TestHeaderConverter headerConverter;
+    private TestInternalConverter internalConverter;
 
     @BeforeClass
     public static void beforeAll() {
@@ -71,10 +73,8 @@ public class PluginsTest {
         props.put("value.converter." + JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, "true");
         props.put("key.converter.extra.config", "foo1");
         props.put("value.converter.extra.config", "foo2");
-        props.put(WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG, TestConverter.class.getName());
-        props.put(WorkerConfig.INTERNAL_VALUE_CONVERTER_CLASS_CONFIG, TestConverter.class.getName());
-        props.put("internal.key.converter." + JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, "false");
-        props.put("internal.value.converter." + JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, "false");
+        props.put(WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG, TestInternalConverter.class.getName());
+        props.put(WorkerConfig.INTERNAL_VALUE_CONVERTER_CLASS_CONFIG, TestInternalConverter.class.getName());
         props.put("internal.key.converter.extra.config", "bar1");
         props.put("internal.value.converter.extra.config", "bar2");
         props.put(WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG, TestHeaderConverter.class.getName());
@@ -102,15 +102,17 @@ public class PluginsTest {
 
     @Test
     public void shouldInstantiateAndConfigureInternalConverters() {
-        instantiateAndConfigureConverter(WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG, ClassLoaderUsage.CURRENT_CLASSLOADER);
-        // Validate extra configs got passed through to overridden converters
-        assertEquals("false", converter.configs.get(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG));
-        assertEquals("bar1", converter.configs.get("extra.config"));
+        instantiateAndConfigureInternalConverter(WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG, ClassLoaderUsage.CURRENT_CLASSLOADER);
+        // Validate schemas.enable is defaulted to false for internal converter
+        assertEquals(false, internalConverter.configs.get(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG));
+        // Validate internal converter properties can still be set
+        assertEquals("bar1", internalConverter.configs.get("extra.config"));
 
-        instantiateAndConfigureConverter(WorkerConfig.INTERNAL_VALUE_CONVERTER_CLASS_CONFIG, ClassLoaderUsage.PLUGINS);
-        // Validate extra configs got passed through to overridden converters
-        assertEquals("false", converter.configs.get(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG));
-        assertEquals("bar2", converter.configs.get("extra.config"));
+        instantiateAndConfigureInternalConverter(WorkerConfig.INTERNAL_VALUE_CONVERTER_CLASS_CONFIG, ClassLoaderUsage.PLUGINS);
+        // Validate schemas.enable is defaulted to false for internal converter
+        assertEquals(false, internalConverter.configs.get(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG));
+        // Validate internal converter properties can still be set
+        assertEquals("bar2", internalConverter.configs.get("extra.config"));
     }
 
     @Test
@@ -161,6 +163,16 @@ public class PluginsTest {
     protected void instantiateAndConfigureConverter(String configPropName, ClassLoaderUsage classLoaderUsage) {
         converter = (TestConverter) plugins.newConverter(config, configPropName, classLoaderUsage);
         assertNotNull(converter);
+    }
+
+    protected void instantiateAndConfigureHeaderConverter(String configPropName) {
+        headerConverter = (TestHeaderConverter) plugins.newHeaderConverter(config, configPropName, ClassLoaderUsage.CURRENT_CLASSLOADER);
+        assertNotNull(headerConverter);
+    }
+
+    protected void instantiateAndConfigureInternalConverter(String configPropName, ClassLoaderUsage classLoaderUsage) {
+        internalConverter = (TestInternalConverter) plugins.newConverter(config, configPropName, classLoaderUsage);
+        assertNotNull(internalConverter);
     }
 
     protected void assertConverterType(ConverterType type, Map<String, ?> props) {
@@ -228,6 +240,15 @@ public class PluginsTest {
 
         @Override
         public void close() throws IOException {
+        }
+    }
+
+    public static class TestInternalConverter extends JsonConverter {
+        public Map<String, ?> configs;
+
+        public void configure(Map<String, ?> configs) {
+            this.configs = configs;
+            super.configure(configs);
         }
     }
 }

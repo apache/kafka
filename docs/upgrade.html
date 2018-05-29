@@ -82,6 +82,15 @@
     <li>New Kafka Streams configuration parameter <code>upgrade.from</code> added that allows rolling bounce upgrade from older version. </li>
     <li><a href="https://cwiki.apache.org/confluence/x/DVyHB">KIP-284</a> changed the retention time for Kafka Streams repartition topics by setting its default value to <code>Long.MAX_VALUE</code>.</li>
     <li>Updated <code>ProcessorStateManager</code> APIs in Kafka Streams for registering state stores to the processor topology. For more details please read the Streams <a href="/{{version}}/documentation/streams/upgrade-guide#streams_api_changes_200">Upgrade Guide</a>.</li>
+    <li>
+        In earlier releases, Connect's worker configuration required the <code>internal.key.converter</code> and <code>internal.value.converter</code> properties.
+        In 2.0, these are <a href="https://cwiki.apache.org/confluence/x/AZQ7B">no longer required</a> and default to the JSON converter.
+        You may safely remove these properties from your Connect standalone and distributed worker configurations:<br />
+        <code>internal.key.converter=org.apache.kafka.connect.json.JsonConverter</code>
+        <code>internal.key.converter.schemas.enable=false</code>
+        <code>internal.value.converter=org.apache.kafka.connect.json.JsonConverter</code>
+        <code>internal.value.converter.schemas.enable=false</code>
+    </li>
 </ul>
 
 <h5><a id="upgrade_200_new_protocols" href="#upgrade_200_new_protocols">New Protocol Versions</a></h5>
