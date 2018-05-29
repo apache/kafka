@@ -24,9 +24,9 @@ object Resource {
   val WildCardResource = "*"
 
   def fromString(str: String): Resource = {
-    str.split(Separator, 3) match {
-      case Array(resourceType, resourceNameType, name, _*) => new Resource(ResourceType.fromString(resourceType), name, ResourceNameType.fromString(resourceNameType))
-      case _ => throw new IllegalArgumentException("expected a string in format ResourceType:ResourceNameType:ResourceName but got " + str)
+    str.split(Separator, 2) match {
+      case Array(resourceType, name, _*) => new Resource(ResourceType.fromString(resourceType), name)
+      case _ => throw new IllegalArgumentException("expected a string in format ResourceType:ResourceName but got " + str)
     }
   }
 }
@@ -45,9 +45,10 @@ case class Resource(resourceType: ResourceType, name: String, resourceNameType: 
   }
 
   override def toString: String = {
-    resourceType.name + Resource.Separator + resourceNameType.name + Resource.Separator + name
+    // can't be changed because it will break backward compatibility with acl change notification
+    resourceType.name + Resource.Separator + name
   }
 
-  // TODO why does this class not hae equals() and hashCode()?
+  // TODO why does this class not have equals() and hashCode()?
 }
 

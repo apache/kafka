@@ -43,7 +43,7 @@ public class SecurityUtils {
         return matchResource(stored, input.toFilter());
     }
 
-    public static boolean matchResource(Resource stored, ResourceFilter input) { // TODO for delete
+    public static boolean matchResource(Resource stored, ResourceFilter input) { // TODO matching criteria should be different for delete call?
         if (!input.resourceType().equals(ResourceType.ANY) && !input.resourceType().equals(stored.resourceType())) {
             return false;
         }
@@ -102,7 +102,7 @@ public class SecurityUtils {
      * @param resourceName Value present in the request.
      * @return true if there is a match (including wildcard-suffix matching).
      */
-    static boolean matchWildcardSuffixedString(String wildcardSuffixedPattern, String resourceName) { // TODO
+    static boolean matchWildcardSuffixedString(String wildcardSuffixedPattern, String resourceName) { // TODO review this method again after design changes
 
         if (wildcardSuffixedPattern.equals(resourceName) || wildcardSuffixedPattern.equals(WILDCARD_MARKER) || resourceName.equals(WILDCARD_MARKER)) {
             // if strings are equal or either of acl or resourceName is a wildcard

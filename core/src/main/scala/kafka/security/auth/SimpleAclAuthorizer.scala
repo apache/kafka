@@ -331,7 +331,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   }
 
   private def updateAclChangedFlag(resource: Resource) {
-    zkClient.createAclChangeNotification(AclStore.fromResource(resource), resource.name)
+    zkClient.createAclChangeNotification(AclStore.fromResource(resource), resource.toString)
   }
 
   private def backoffTime = {

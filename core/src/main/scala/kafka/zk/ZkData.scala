@@ -505,7 +505,7 @@ object ZkData {
     ControllerZNode.path,
     ControllerEpochZNode.path,
     IsrChangeNotificationZNode.path,
-    AclStore.literalAclStore.aclZNode.path, // TODO
+    AclStore.literalAclStore.aclZNode.path, // TODO add these paths programmatically by looping over AclStore.AclStores
     AclStore.wildcardSuffixedAclStore.aclZNode.path,
     AclStore.literalAclStore.aclChangesZNode.path,
     AclStore.wildcardSuffixedAclStore.aclChangesZNode.path,
