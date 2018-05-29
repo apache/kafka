@@ -24,7 +24,8 @@ import java.util.Collections;
 import java.util.Objects;
 
 /**
- * Contains all the metadata related to the currently evaluating operation.
+ * Contains all the metadata related to the currently evaluating operation. Only one instance of this class is meant
+ * to exist per task in a JVM. The {@link #reset} should be called before starting operations on a new record.
  */
 class ProcessingContext {
 
@@ -34,7 +35,7 @@ class ProcessingContext {
     private SourceRecord sourceRecord;
 
     /**
-     * the following fields need to be reset every time a new record is seen.
+     * The following fields need to be reset every time a new record is seen.
      */
 
     private Stage position;
@@ -43,8 +44,7 @@ class ProcessingContext {
     private Throwable error;
 
     /**
-     * Only one instance of this class is meant to exist per task in a JVM. This method resets the internal fields
-     * for every new record that is about to be processed.
+     * Reset the internal fields before executing operations on a new record.
      */
     private void reset() {
         attempt = 0;
@@ -54,7 +54,8 @@ class ProcessingContext {
     }
 
     /**
-     * set the record consumed from Kafka in a sink connector.
+     * Set the record consumed from Kafka in a sink connector.
+     *
      * @param consumedMessage the record
      */
     public void consumerRecord(ConsumerRecord<byte[], byte[]> consumedMessage) {
@@ -78,6 +79,7 @@ class ProcessingContext {
 
     /**
      * Set the source record being processed in the connect pipeline.
+     *
      * @param record the source record
      */
     public void sourceRecord(SourceRecord record) {
@@ -86,7 +88,8 @@ class ProcessingContext {
     }
 
     /**
-     * set the stage in the connector pipeline which is currently executing.
+     * Set the stage in the connector pipeline which is currently executing.
+     *
      * @param position the stage
      */
     public void position(Stage position) {
@@ -115,7 +118,8 @@ class ProcessingContext {
     }
 
     /**
-     * a helper method to set both the stage and the class which
+     * A helper method to set both the stage and the class.
+     *
      * @param stage the stage
      * @param klass the class which will execute the operation in this stage.
      */
@@ -167,7 +171,8 @@ class ProcessingContext {
     }
 
     /**
-     * the error (if any) which was encountered while processing the current stage.
+     * The error (if any) which was encountered while processing the current stage.
+     *
      * @param error the error
      */
     public void error(Throwable error) {
@@ -181,6 +186,11 @@ class ProcessingContext {
         return error() != null;
     }
 
+    /**
+     * Set the error reporters for this connector.
+     *
+     * @param reporters the error reporters (should not be null).
+     */
     public void setReporters(Collection<ErrorReporter> reporters) {
         Objects.requireNonNull(reporters);
         this.reporters = reporters;

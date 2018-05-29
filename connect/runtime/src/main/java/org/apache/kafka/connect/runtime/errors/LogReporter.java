@@ -51,17 +51,16 @@ public class LogReporter implements ErrorReporter {
         this.id = id;
     }
 
-    static ConfigDef getConfigDef() {
-        return new ConfigDef()
+    static ConfigDef CONFIG_DEF = new ConfigDef()
                 .define(LOG_ENABLE, ConfigDef.Type.BOOLEAN, LOG_ENABLE_DEFAULT, ConfigDef.Importance.MEDIUM, LOG_ENABLE_DOC)
                 .define(LOG_INCLUDE_MESSAGES, ConfigDef.Type.BOOLEAN, LOG_INCLUDE_MESSAGES_DEFAULT, ConfigDef.Importance.MEDIUM, LOG_INCLUDE_MESSAGES_DOC);
-    }
 
     /**
      * Log error context.
      *
      * @param context the processing context.
      */
+    @Override
     public void report(ProcessingContext context) {
         if (!config.isEnabled()) {
             return;
@@ -111,7 +110,7 @@ public class LogReporter implements ErrorReporter {
 
     private static class LogReporterConfig extends AbstractConfig {
         public LogReporterConfig(Map<?, ?> originals) {
-            super(getConfigDef(), originals, true);
+            super(CONFIG_DEF, originals, true);
         }
 
         /**

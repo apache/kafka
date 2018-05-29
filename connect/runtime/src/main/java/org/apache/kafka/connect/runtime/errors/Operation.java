@@ -24,7 +24,8 @@ package org.apache.kafka.connect.runtime.errors;
 public interface Operation<V> {
 
     /**
-     * evaluate the operation
+     * Evaluate an operation in the current thread.
+     *
      * @return the result of the operation.
      * @throws Exception if underlying operation fails.
      */

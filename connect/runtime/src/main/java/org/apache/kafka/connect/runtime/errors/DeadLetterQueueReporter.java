@@ -32,8 +32,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 import static java.util.Collections.singleton;
 
@@ -47,11 +45,10 @@ public class DeadLetterQueueReporter implements ErrorReporter {
 
     private static final Logger log = LoggerFactory.getLogger(DeadLetterQueueReporter.class);
 
-    private static final int ADMIN_OPERATIONS_TIMEOUT_MILLIS = 10000;
     private static final short DLQ_MAX_DESIRED_REPLICATION_FACTOR = 3;
     private static final int DLQ_NUM_DESIRED_PARTITIONS = 1;
 
-    public static final String PREFIX = "errors.deadletterqueue.";
+    public static final String PREFIX = "errors.deadletterqueue";
 
     public static final String DLQ_TOPIC_NAME = "topic.name";
     public static final String DLQ_TOPIC_NAME_DOC = "The name of the topic where these messages are written to.";
@@ -61,22 +58,20 @@ public class DeadLetterQueueReporter implements ErrorReporter {
     private KafkaProducer<byte[], byte[]> kafkaProducer;
     private ErrorHandlingMetrics errorHandlingMetrics;
 
-    static ConfigDef getConfigDef() {
-        return new ConfigDef()
-                .define(DLQ_TOPIC_NAME, ConfigDef.Type.STRING, DLQ_TOPIC_DEFAULT, ConfigDef.Importance.HIGH, DLQ_TOPIC_NAME_DOC);
-    }
+    static ConfigDef CONFIG_DEF = new ConfigDef()
+            .define(DLQ_TOPIC_NAME, ConfigDef.Type.STRING, DLQ_TOPIC_DEFAULT, ConfigDef.Importance.HIGH, DLQ_TOPIC_NAME_DOC);
 
     public static DeadLetterQueueReporter createAndSetup(WorkerConfig workerConfig,
                                                          ConnectorConfig connConfig, Map<String, Object> producerProps) {
         String topic = connConfig.getString(PREFIX + "." + DLQ_TOPIC_NAME);
 
         try (AdminClient admin = AdminClient.create(workerConfig.originals())) {
-            if (!admin.listTopics().names().get(ADMIN_OPERATIONS_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS).contains(topic)) {
+            if (!admin.listTopics().names().get().contains(topic)) {
                 log.error("Topic {} doesn't exist. Will attempt to create topic.", topic);
                 NewTopic schemaTopicRequest = new NewTopic(topic, DLQ_NUM_DESIRED_PARTITIONS, DLQ_MAX_DESIRED_REPLICATION_FACTOR);
-                admin.createTopics(singleton(schemaTopicRequest)).all().get(ADMIN_OPERATIONS_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
+                admin.createTopics(singleton(schemaTopicRequest)).all().get();
             }
-        } catch (TimeoutException | InterruptedException e) {
+        } catch (InterruptedException e) {
             throw new ConnectException("Could not initialize dead letter queue with topic=" + topic, e);
         } catch (ExecutionException e) {
             if (!(e.getCause() instanceof TopicExistsException)) {
@@ -145,7 +140,7 @@ public class DeadLetterQueueReporter implements ErrorReporter {
 
     static class DeadLetterQueueReporterConfig extends AbstractConfig {
         public DeadLetterQueueReporterConfig(Map<?, ?> originals) {
-            super(getConfigDef(), originals, true);
+            super(CONFIG_DEF, originals, true);
         }
 
         /**
