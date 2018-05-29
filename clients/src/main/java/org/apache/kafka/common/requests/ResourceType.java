@@ -17,10 +17,18 @@
 
 package org.apache.kafka.common.requests;
 
+import java.util.Arrays;
+
 public enum ResourceType {
     UNKNOWN((byte) 0), ANY((byte) 1), TOPIC((byte) 2), GROUP((byte) 3), BROKER((byte) 4);
 
     private static final ResourceType[] VALUES = values();
+
+    public static final String ID_NAME_LIST =
+            Arrays.stream(values())
+                    .map(resourceType -> String.format("%d (%s)", resourceType.id(), resourceType.name()))
+                    .reduce((a, b) -> a.concat(", ").concat(b))
+                    .get();
 
     private final byte id;
 
