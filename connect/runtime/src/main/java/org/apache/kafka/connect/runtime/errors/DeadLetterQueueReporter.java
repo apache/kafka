@@ -48,7 +48,7 @@ public class DeadLetterQueueReporter implements ErrorReporter {
     private static final Logger log = LoggerFactory.getLogger(DeadLetterQueueReporter.class);
 
     private static final int ADMIN_OPERATIONS_TIMEOUT_MILLIS = 10000;
-    private static final int DLQ_MAX_DESIRED_REPLICATION_FACTOR = 3;
+    private static final short DLQ_MAX_DESIRED_REPLICATION_FACTOR = 3;
     private static final int DLQ_NUM_DESIRED_PARTITIONS = 1;
 
     public static final String PREFIX = "errors.deadletterqueue.";
@@ -73,9 +73,7 @@ public class DeadLetterQueueReporter implements ErrorReporter {
         try (AdminClient admin = AdminClient.create(workerConfig.originals())) {
             if (!admin.listTopics().names().get(ADMIN_OPERATIONS_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS).contains(topic)) {
                 log.error("Topic {} doesn't exist. Will attempt to create topic.", topic);
-                int maxReplicationFactor = admin.describeCluster().nodes().get(ADMIN_OPERATIONS_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS).size();
-                int replicationFactor = Math.min(maxReplicationFactor, DLQ_MAX_DESIRED_REPLICATION_FACTOR);
-                NewTopic schemaTopicRequest = new NewTopic(topic, DLQ_NUM_DESIRED_PARTITIONS, (short) replicationFactor);
+                NewTopic schemaTopicRequest = new NewTopic(topic, DLQ_NUM_DESIRED_PARTITIONS, DLQ_MAX_DESIRED_REPLICATION_FACTOR);
                 admin.createTopics(singleton(schemaTopicRequest)).all().get(ADMIN_OPERATIONS_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
             }
         } catch (TimeoutException | InterruptedException e) {
