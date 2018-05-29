@@ -22,7 +22,7 @@ import java.util.Objects;
 /**
  * Describes the state, IDs, and any errors of a connector task.
  */
-public class TaskState extends AbstractState implements Comparable<TaskState> {
+public class TaskState extends AbstractState {
 
     private final int taskId;
 
@@ -49,20 +49,17 @@ public class TaskState extends AbstractState implements Comparable<TaskState> {
     }
 
     @Override
-    public int compareTo(TaskState that) {
-        return Integer.compare(this.taskId, that.taskId);
-    }
-
-    @Override
     public boolean equals(Object o) {
-        if (o == this) {
+        if (this == o) {
             return true;
         }
-        if (!(o instanceof TaskState)) {
+        if (o == null || getClass() != o.getClass()) {
             return false;
         }
-        TaskState other = (TaskState) o;
-        return compareTo(other) == 0;
+
+        TaskState taskState = (TaskState) o;
+
+        return taskId == taskState.taskId;
     }
 
     @Override

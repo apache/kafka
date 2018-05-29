@@ -29,14 +29,14 @@ import javax.ws.rs.core.Configuration;
 
 /**
  * The implementation delegates to {@link ResourceConfig} so that we can handle duplicate
- * registrations deterministically by no re-registering them again.
+ * registrations deterministically by not re-registering them again.
  */
 public class ConnectRestConfigurable implements Configurable<ResourceConfig> {
 
     private static final Logger log = LoggerFactory.getLogger(ConnectRestConfigurable.class);
 
-    private static final Boolean ALLOWED_TO_REGISTER = Boolean.TRUE;
-    private static final Boolean NOT_ALLOWED_TO_REGISTER = Boolean.FALSE;
+    private static final Boolean ALLOWED_TO_REGISTER = true;
+    private static final Boolean NOT_ALLOWED_TO_REGISTER = false;
 
     private ResourceConfig resourceConfig;
 

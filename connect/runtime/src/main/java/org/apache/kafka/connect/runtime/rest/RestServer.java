@@ -49,6 +49,7 @@ import org.glassfish.jersey.servlet.ServletContainer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -223,7 +224,11 @@ public class RestServer {
 
         try {
             for (ConnectRestExtension connectRestExtension : connectRestExtensions) {
-                connectRestExtension.close();
+                try {
+                    connectRestExtension.close();
+                } catch (IOException e) {
+                    log.warn("Error while invoking close on " + connectRestExtension.getClass(), e);
+                }
             }
             jettyServer.stop();
             jettyServer.join();

@@ -19,6 +19,7 @@ package org.apache.kafka.connect.rest.basic.auth.extenstion;
 
 import org.apache.kafka.common.security.JaasUtils;
 import org.easymock.EasyMock;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -48,6 +49,8 @@ public class JaasBasicAuthFilterTest {
     private ContainerRequestContext requestContext;
 
     private JaasBasicAuthFilter jaasBasicAuthFilter = new JaasBasicAuthFilter();
+    private String previousJaasConfig;
+    private Configuration previousConfiguration;
 
     @Before
     public void setup() throws IOException {
@@ -61,13 +64,22 @@ public class JaasBasicAuthFilterTest {
 
         File jaasConfigFile = File.createTempFile("ks-jaas-", ".conf");
         jaasConfigFile.deleteOnExit();
-        System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, jaasConfigFile.getPath());
+        previousJaasConfig = System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, jaasConfigFile.getPath());
         lines = new ArrayList<>();
         lines.add("KafkaConnect { org.apache.kafka.connect.rest.basic.auth.extenstion.PropertyFileLoginModule required ");
         lines.add("file=\"" + credentialFile.getPath() + "\"");
         lines.add(";};");
         Files.write(jaasConfigFile.toPath(), lines, StandardCharsets.UTF_8);
+        previousConfiguration = Configuration.getConfiguration();
         Configuration.setConfiguration(null);
+    }
+
+    @After
+    public void tearDown() {
+        if (previousJaasConfig != null) {
+            System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, previousJaasConfig);
+        }
+        Configuration.setConfiguration(previousConfiguration);
     }
 
     @Test

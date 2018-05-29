@@ -17,6 +17,7 @@
 
 package org.apache.kafka.connect.rest.basic.auth.extenstion;
 
+import org.apache.kafka.common.config.ConfigException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,7 +38,7 @@ import javax.security.auth.spi.LoginModule;
 
 /**
  * {@link PropertyFileLoginModule} authenticates against a properties file.
- * The credentials should be stored in the format {username}={password} in teh properties file.
+ * The credentials should be stored in the format {username}={password} in the properties file.
  * The absolute path of the file needs to specified using the option <b>file</b>
  *
  * <p><b>NOTE: This implementation is NOT intended to be used in production since the credentials are stored in PLAINTEXT in the
@@ -54,17 +55,17 @@ public class PropertyFileLoginModule implements LoginModule {
     private static Map<String, Properties> credentialPropertiesMap = new ConcurrentHashMap<>();
 
     @Override
-    public void initialize(Subject subject, CallbackHandler callbackHandler,
-                           Map<String, ?> sharedState, Map<String, ?> options) {
+    public void initialize(Subject subject, CallbackHandler callbackHandler, Map<String, ?> sharedState, Map<String, ?> options) {
         this.callbackHandler = callbackHandler;
         fileName = (String) options.get(FILE_OPTIONS);
-        if (fileName != null && !fileName.isEmpty()) {
+        if (fileName != null && !fileName.isEmpty() && !credentialPropertiesMap.containsKey(fileName)) {
             Properties credentialProperties = new Properties();
             try {
                 credentialProperties.load(Files.newInputStream(Paths.get(fileName)));
                 credentialPropertiesMap.putIfAbsent(fileName, credentialProperties);
             } catch (IOException e) {
                 log.error("Error loading credentials file ", e);
+                throw new ConfigException("Error loading Property Credentials file");
             }
         }
     }
@@ -79,9 +80,8 @@ public class PropertyFileLoginModule implements LoginModule {
         }
 
         String username = ((NameCallback) callbacks[0]).getName();
-        String password = ((PasswordCallback) callbacks[1]).getPassword() != null
-                          ? new String(((PasswordCallback) callbacks[1]).getPassword())
-                          : null;
+        char[] passwordChars = ((PasswordCallback) callbacks[1]).getPassword();
+        String password = passwordChars != null ? new String(passwordChars) : null;
         Properties credentialProperties = credentialPropertiesMap.get(fileName);
         authenticated = credentialProperties.isEmpty() ||
                         (password != null && password.equals(credentialProperties.get(username)));

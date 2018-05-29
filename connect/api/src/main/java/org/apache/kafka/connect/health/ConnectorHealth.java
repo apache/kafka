@@ -21,7 +21,7 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * Provides basic health information about the connectorState and its tasks.
+ * Provides basic health information about the connector and its tasks.
  */
 public class ConnectorHealth {
 
@@ -35,7 +35,9 @@ public class ConnectorHealth {
                            ConnectorState connectorState,
                            Map<Integer, TaskState> tasks,
                            ConnectorType type) {
-        assert name != null && !name.trim().isEmpty();
+        if (name != null && !name.trim().isEmpty()) {
+            throw new IllegalArgumentException("Connector name is required");
+        }
         Objects.requireNonNull(connectorState, "connectorState can't be null");
         Objects.requireNonNull(tasks, "tasks can't be null");
         Objects.requireNonNull(type, "type can't be null");
@@ -57,7 +59,7 @@ public class ConnectorHealth {
     /**
      * Provides the current state of the connector.
      *
-     * @return connectorState, never {@code null}
+     * @return the connector state, never {@code null}
      */
     public ConnectorState connectorState() {
         return connectorState;

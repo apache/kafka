@@ -290,9 +290,9 @@
     <allow pkg="org.apache.kafka.connect.data" />
     <allow pkg="org.apache.kafka.connect.errors" />
     <allow pkg="org.apache.kafka.connect.header" />
+    <allow pkg="org.apache.kafka.connect.components"/>
     <allow pkg="org.apache.kafka.clients" />
     <allow pkg="org.apache.kafka.test"/>
-    <allow pkg="org.apache.kafka.connect.components"/>
 
     <subpackage name="source">
       <allow pkg="org.apache.kafka.connect.connector" />
@@ -313,11 +313,9 @@
       <allow pkg="org.apache.kafka.connect.health" />
       <allow pkg="javax.ws.rs" />
       <allow pkg= "javax.security.auth"/>
-      <allow pkg="org.apache.kafka.connect.rest" />
-    </subpackage>
-
-    <subpackage name="health">
-      <allow pkg="org.apache.kafka.connect.rest" />
+      <subpackage name="basic">
+        <allow pkg="org.apache.kafka.connect.rest"/>
+      </subpackage>
     </subpackage>
 
     <subpackage name="runtime">
@@ -338,6 +336,8 @@
         <allow pkg="org.apache.maven.artifact.versioning" />
       </subpackage>
     </subpackage>
+
+
 
     <subpackage name="cli">
       <allow pkg="org.apache.kafka.connect.runtime" />
