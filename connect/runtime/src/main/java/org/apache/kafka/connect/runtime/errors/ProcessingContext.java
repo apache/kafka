@@ -66,14 +66,14 @@ class ProcessingContext {
      * @return the record consumed from Kafka. could be null
      */
     public ConsumerRecord<byte[], byte[]> consumerRecord() {
-        return this.consumedMessage;
+        return consumedMessage;
     }
 
     /**
      * @return the source record being processed.
      */
     public SourceRecord sourceRecord() {
-        return this.sourceRecord;
+        return sourceRecord;
     }
 
     /**
@@ -104,7 +104,7 @@ class ProcessingContext {
      * @return the class which is going to execute the current operation.
      */
     public Class<?> executingClass() {
-        return this.klass;
+        return klass;
     }
 
     /**
@@ -156,7 +156,7 @@ class ProcessingContext {
      * @return the number of attempts made to execute the current operation.
      */
     public int attempt() {
-        return this.attempt;
+        return attempt;
     }
 
     /**
@@ -178,7 +178,7 @@ class ProcessingContext {
      * @return true, if the last operation encountered an error; false otherwise
      */
     public boolean failed() {
-        return this.error() != null;
+        return error() != null;
     }
 
     public void setReporters(Collection<ErrorReporter> reporters) {

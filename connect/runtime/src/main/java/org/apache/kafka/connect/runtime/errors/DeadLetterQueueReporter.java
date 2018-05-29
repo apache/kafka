@@ -43,9 +43,9 @@ import static java.util.Collections.singleton;
  * queue topic. By default, the topic name is not set, and if the connector config doesn't specify one, this
  * feature is disabled.
  */
-public class DLQReporter implements ErrorReporter {
+public class DeadLetterQueueReporter implements ErrorReporter {
 
-    private static final Logger log = LoggerFactory.getLogger(DLQReporter.class);
+    private static final Logger log = LoggerFactory.getLogger(DeadLetterQueueReporter.class);
 
     private static final int ADMIN_OPERATIONS_TIMEOUT_MILLIS = 10000;
     private static final int DLQ_MAX_DESIRED_REPLICATION_FACTOR = 3;
@@ -57,7 +57,7 @@ public class DLQReporter implements ErrorReporter {
     public static final String DLQ_TOPIC_NAME_DOC = "The name of the topic where these messages are written to.";
     public static final String DLQ_TOPIC_DEFAULT = "";
 
-    private DLQReporterConfig config;
+    private DeadLetterQueueReporterConfig config;
     private KafkaProducer<byte[], byte[]> kafkaProducer;
     private ErrorHandlingMetrics errorHandlingMetrics;
 
@@ -66,7 +66,8 @@ public class DLQReporter implements ErrorReporter {
                 .define(DLQ_TOPIC_NAME, ConfigDef.Type.STRING, DLQ_TOPIC_DEFAULT, ConfigDef.Importance.HIGH, DLQ_TOPIC_NAME_DOC);
     }
 
-    public static DLQReporter createAndSetup(WorkerConfig workerConfig, ConnectorConfig connConfig, Map<String, Object> producerProps) {
+    public static DeadLetterQueueReporter createAndSetup(WorkerConfig workerConfig,
+                                                         ConnectorConfig connConfig, Map<String, Object> producerProps) {
         String topic = connConfig.getString(PREFIX + "." + DLQ_TOPIC_NAME);
 
         try (AdminClient admin = AdminClient.create(workerConfig.originals())) {
@@ -86,21 +87,22 @@ public class DLQReporter implements ErrorReporter {
         }
 
         KafkaProducer<byte[], byte[]> dlqProducer = new KafkaProducer<>(producerProps);
-        return new DLQReporter(dlqProducer);
+        return new DeadLetterQueueReporter(dlqProducer);
     }
 
     /**
-     * Initialize the dead letter queue reporter.
+     * Initialize the dead letter queue reporter with a {@link KafkaProducer}.
      *
      * @param kafkaProducer a Kafka Producer to produce the original consumed records.
      */
-    DLQReporter(KafkaProducer<byte[], byte[]> kafkaProducer) {
+    // Visible for testing
+    DeadLetterQueueReporter(KafkaProducer<byte[], byte[]> kafkaProducer) {
         this.kafkaProducer = kafkaProducer;
     }
 
     @Override
     public void configure(Map<String, ?> configs) {
-        config = new DLQReporterConfig(configs);
+        config = new DeadLetterQueueReporterConfig(configs);
     }
 
     @Override
@@ -109,7 +111,9 @@ public class DLQReporter implements ErrorReporter {
     }
 
     /**
-     * @param context write the record from {@link ProcessingContext#consumerRecord()} into the dead letter queue.
+     * Write the raw records into a Kafka topic.
+     *
+     * @param context processing context containing the raw record at {@link ProcessingContext#consumerRecord()}.
      */
     public void report(ProcessingContext context) {
         if (config.topic().isEmpty()) {
@@ -141,8 +145,8 @@ public class DLQReporter implements ErrorReporter {
         });
     }
 
-    static class DLQReporterConfig extends AbstractConfig {
-        public DLQReporterConfig(Map<?, ?> originals) {
+    static class DeadLetterQueueReporterConfig extends AbstractConfig {
+        public DeadLetterQueueReporterConfig(Map<?, ?> originals) {
             super(getConfigDef(), originals, true);
         }
 

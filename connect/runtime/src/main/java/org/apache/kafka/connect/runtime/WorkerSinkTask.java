@@ -516,13 +516,13 @@ class WorkerSinkTask extends WorkerTask {
     }
 
     private SinkRecord convertAndTransformRecord(final ConsumerRecord<byte[], byte[]> msg) {
-        SchemaAndValue keyAndSchema = executeOperation(() -> keyConverter.toConnectData(msg.topic(), msg.key()),
+        SchemaAndValue keyAndSchema = operationExecutor.execute(() -> keyConverter.toConnectData(msg.topic(), msg.key()),
                 Stage.KEY_CONVERTER, keyConverter.getClass());
 
-        SchemaAndValue valueAndSchema = executeOperation(() -> valueConverter.toConnectData(msg.topic(), msg.value()),
+        SchemaAndValue valueAndSchema = operationExecutor.execute(() -> valueConverter.toConnectData(msg.topic(), msg.value()),
                 Stage.VALUE_CONVERTER, valueConverter.getClass());
 
-        Headers headers = executeOperation(() -> convertHeadersFor(msg), Stage.HEADER_CONVERTER, headerConverter.getClass());
+        Headers headers = operationExecutor.execute(() -> convertHeadersFor(msg), Stage.HEADER_CONVERTER, headerConverter.getClass());
 
         if (operationExecutor.failed()) {
             return null;

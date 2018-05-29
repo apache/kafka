@@ -57,6 +57,11 @@ public class LogReporter implements ErrorReporter {
                 .define(LOG_INCLUDE_MESSAGES, ConfigDef.Type.BOOLEAN, LOG_INCLUDE_MESSAGES_DEFAULT, ConfigDef.Importance.MEDIUM, LOG_INCLUDE_MESSAGES_DOC);
     }
 
+    /**
+     * Log error context.
+     *
+     * @param context the processing context.
+     */
     public void report(ProcessingContext context) {
         if (!config.isEnabled()) {
             return;

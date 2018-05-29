@@ -28,9 +28,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.runtime.AbstractStatus.State;
 import org.apache.kafka.connect.runtime.ConnectMetrics.LiteralSupplier;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
-import org.apache.kafka.connect.runtime.errors.Operation;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceExecutor;
-import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.slf4j.Logger;
@@ -288,10 +286,6 @@ abstract class WorkerTask implements Runnable {
      */
     protected void recordCommitFailure(long duration, Throwable error) {
         taskMetricsGroup.recordCommit(duration, false, error);
-    }
-
-    protected <V> V executeOperation(Operation<V> operation, Stage stage, Class<?> klass) {
-        return operationExecutor.execute(operation, stage, klass);
     }
 
     /**

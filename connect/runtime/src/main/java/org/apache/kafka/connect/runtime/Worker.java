@@ -30,7 +30,7 @@ import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.ConnectMetrics.LiteralSupplier;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
-import org.apache.kafka.connect.runtime.errors.DLQReporter;
+import org.apache.kafka.connect.runtime.errors.DeadLetterQueueReporter;
 import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
 import org.apache.kafka.connect.runtime.errors.ErrorReporter;
 import org.apache.kafka.connect.runtime.errors.LogReporter;
@@ -497,9 +497,9 @@ public class Worker {
         reporters.add(logReporter);
 
         // check if topic for dead letter queue exists
-        String topic = connConfig.getString(DLQReporter.PREFIX + "." + DLQReporter.DLQ_TOPIC_NAME);
+        String topic = connConfig.getString(DeadLetterQueueReporter.PREFIX + "." + DeadLetterQueueReporter.DLQ_TOPIC_NAME);
         if (topic != null && !topic.isEmpty()) {
-            DLQReporter reporter = DLQReporter.createAndSetup(config, connConfig, producerProps);
+            DeadLetterQueueReporter reporter = DeadLetterQueueReporter.createAndSetup(config, connConfig, producerProps);
             reporters.add(reporter);
         }
 

@@ -85,56 +85,56 @@ public class ErrorHandlingMetrics {
     }
 
     /**
-     * increment the number of failed operations (retriable and non-retriable).
+     * Increment the number of failed operations (retriable and non-retriable).
      */
     public void recordFailure() {
         recordProcessingFailures.record();
     }
 
     /**
-     * increment the number of operations which could not successfully executed.
+     * Increment the number of operations which could not be successfully executed.
      */
     public void recordError() {
         recordProcessingErrors.record();
     }
 
     /**
-     * increment the number of records skipped.
+     * Increment the number of records skipped.
      */
     public void recordSkipped() {
         recordsSkipped.record();
     }
 
     /**
-     * number of retries made while executing operations.
+     * The number of retries made while executing operations.
      */
     public void recordRetry() {
         retries.record();
     }
 
     /**
-     * number of errors logged by the {@link LogReporter}.
+     * The number of errors logged by the {@link LogReporter}.
      */
     public void recordErrorLogged() {
         errorsLogged.record();
     }
 
     /**
-     * number of produce requests to the {@link DLQReporter}.
+     * The number of produce requests to the {@link DeadLetterQueueReporter}.
      */
     public void recordDeadLetterQueueProduceRequest() {
         dlqProduceRequests.record();
     }
 
     /**
-     * number of produce requests to the {@link DLQReporter} which failed to be successfully produced into Kafka.
+     * The number of produce requests to the {@link DeadLetterQueueReporter} which failed to be successfully produced into Kafka.
      */
     public void recordDeadLetterQueueProduceFailed() {
         dlqProduceFailures.record();
     }
 
     /**
-     * record the timestamp of the failure. the time of failure is when this method was called.
+     * Record the time of error.
      */
     public void recordErrorTimestamp() {
         this.lastErrorTime = time.milliseconds();

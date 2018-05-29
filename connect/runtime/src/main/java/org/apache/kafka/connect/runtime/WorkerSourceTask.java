@@ -259,7 +259,7 @@ class WorkerSourceTask extends WorkerTask {
         try {
             return task.poll();
         } catch (RetriableException e) {
-            log.error("Encountered retriable error on polling task", e);
+            log.warn("{} failed to poll records from SourceTask. Will retry operation.", this, e);
             // Do nothing. Let the framework poll whenever it's ready.
             return null;
         }
@@ -276,12 +276,12 @@ class WorkerSourceTask extends WorkerTask {
             return null;
         }
 
-        RecordHeaders headers = executeOperation(() -> convertHeaderFor(record), Stage.HEADER_CONVERTER, headerConverter.getClass());
+        RecordHeaders headers = operationExecutor.execute(() -> convertHeaderFor(record), Stage.HEADER_CONVERTER, headerConverter.getClass());
 
-        byte[] key = executeOperation(() -> keyConverter.fromConnectData(record.topic(), record.keySchema(), record.key()),
+        byte[] key = operationExecutor.execute(() -> keyConverter.fromConnectData(record.topic(), record.keySchema(), record.key()),
                 Stage.KEY_CONVERTER, keyConverter.getClass());
 
-        byte[] value = executeOperation(() -> valueConverter.fromConnectData(record.topic(), record.valueSchema(), record.value()),
+        byte[] value = operationExecutor.execute(() -> valueConverter.fromConnectData(record.topic(), record.valueSchema(), record.value()),
                 Stage.VALUE_CONVERTER, valueConverter.getClass());
 
         if (operationExecutor.failed()) {

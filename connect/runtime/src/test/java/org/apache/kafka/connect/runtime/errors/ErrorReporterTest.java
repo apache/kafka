@@ -74,9 +74,9 @@ public class ErrorReporterTest {
 
     @Test
     public void testDLQConfigWithEmptyTopicName() {
-        DLQReporter dlqReporter = new DLQReporter(producer);
-        dlqReporter.configure(config);
-        dlqReporter.setMetrics(errorHandlingMetrics);
+        DeadLetterQueueReporter deadLetterQueueReporter = new DeadLetterQueueReporter(producer);
+        deadLetterQueueReporter.configure(config);
+        deadLetterQueueReporter.setMetrics(errorHandlingMetrics);
 
         ProcessingContext context = processingContext();
 
@@ -85,38 +85,38 @@ public class ErrorReporterTest {
 
         // since topic name is empty, this method should be a NOOP.
         // if it attempts to log to the DLQ via the producer, the send mock will throw a RuntimeException.
-        dlqReporter.report(context);
+        deadLetterQueueReporter.report(context);
     }
 
     @Test
     public void testDLQConfigWithValidTopicName() {
-        DLQReporter dlqReporter = new DLQReporter(producer);
-        dlqReporter.configure(config(DLQReporter.DLQ_TOPIC_NAME, DLQ_TOPIC));
-        dlqReporter.setMetrics(errorHandlingMetrics);
+        DeadLetterQueueReporter deadLetterQueueReporter = new DeadLetterQueueReporter(producer);
+        deadLetterQueueReporter.configure(config(DeadLetterQueueReporter.DLQ_TOPIC_NAME, DLQ_TOPIC));
+        deadLetterQueueReporter.setMetrics(errorHandlingMetrics);
 
         ProcessingContext context = processingContext();
 
         EasyMock.expect(producer.send(EasyMock.anyObject(), EasyMock.anyObject())).andReturn(metadata);
         replay(producer);
 
-        dlqReporter.report(context);
+        deadLetterQueueReporter.report(context);
 
         PowerMock.verifyAll();
     }
 
     @Test
     public void testReportDLQTwice() {
-        DLQReporter dlqReporter = new DLQReporter(producer);
-        dlqReporter.configure(config(DLQReporter.DLQ_TOPIC_NAME, DLQ_TOPIC));
-        dlqReporter.setMetrics(errorHandlingMetrics);
+        DeadLetterQueueReporter deadLetterQueueReporter = new DeadLetterQueueReporter(producer);
+        deadLetterQueueReporter.configure(config(DeadLetterQueueReporter.DLQ_TOPIC_NAME, DLQ_TOPIC));
+        deadLetterQueueReporter.setMetrics(errorHandlingMetrics);
 
         ProcessingContext context = processingContext();
 
         EasyMock.expect(producer.send(EasyMock.anyObject(), EasyMock.anyObject())).andReturn(metadata).times(2);
         replay(producer);
 
-        dlqReporter.report(context);
-        dlqReporter.report(context);
+        deadLetterQueueReporter.report(context);
+        deadLetterQueueReporter.report(context);
 
         PowerMock.verifyAll();
     }
