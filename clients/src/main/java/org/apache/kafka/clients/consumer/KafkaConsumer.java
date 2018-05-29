@@ -1103,7 +1103,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *             partitions to consume from
      *
      *
-     * @deprecated Since 2.0. Use {@link #poll(Duration)} to poll for records.
+     * @deprecated Since 2.0. Use {@link #poll(Duration)}, which does not block beyond the timeout awaiting partition
+     *             assignment. See <a href="https://cwiki.apache.org/confluence/x/5kiHB">KIP-266</a> for more information.
      */
     @Deprecated
     @Override
@@ -1118,6 +1119,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * On each poll, consumer will try to use the last consumed offset as the starting offset and fetch sequentially. The last
      * consumed offset can be manually set through {@link #seek(TopicPartition, long)} or automatically set as the last committed
      * offset for the subscribed list of partitions
+     *
+     * <p>
+     * This method returns immediately if there are records available. Otherwise, it will await the passed timeout.
+     * If the timeout expires, an empty record set will be returned. Note that this method may block beyond the
+     * timeout in order to execute custom {@link ConsumerRebalanceListener} callbacks.
      *
      *
      * @param timeout The maximum time to block (must not be greater than {@link Long#MAX_VALUE} milliseconds)
