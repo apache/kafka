@@ -76,14 +76,13 @@ public class StoreChangelogReader implements ChangelogReader {
             return completed();
         }
 
-        final Set<TopicPartition> restoringPartitions = new HashSet<>(needsRestoring.keySet());
         try {
             final Set<TopicPartition> remainingPartitions = new HashSet<>(needsRestoring.keySet());
             remainingPartitions.removeAll(updatedEndOffsets.keySet());
             updatedEndOffsets.putAll(restoreConsumer.endOffsets(remainingPartitions));
             final ConsumerRecords<byte[], byte[]> records = restoreConsumer.poll(10);
-            final Iterator<TopicPartition> iterator = restoringPartitions.iterator();
-            final Set<TopicPartition> completedPartitions = new HashSet<>();
+            final Iterator<TopicPartition> iterator = needsRestoring.keySet().iterator();
+            final HashSet<TopicPartition> completedPartitions = new HashSet<>();
             while (iterator.hasNext()) {
                 final TopicPartition partition = iterator.next();
                 final StateRestorer restorer = stateRestorers.get(partition);
@@ -91,12 +90,13 @@ public class StoreChangelogReader implements ChangelogReader {
                 restorer.setRestoredOffset(pos);
                 if (restorer.hasCompleted(pos, updatedEndOffsets.get(partition))) {
                     restorer.restoreDone();
-                    needsRestoring.remove(partition);
                     updatedEndOffsets.remove(partition);
                     completedPartitions.add(partition);
                 }
             }
-            restoringPartitions.removeAll(completedPartitions);
+            for (TopicPartition partition : completedPartitions) {
+                needsRestoring.remove(partition);
+            }
         } catch (final InvalidOffsetException recoverableException) {
             log.warn("Restoring StreamTasks failed. Deleting StreamTasks stores to recreate from scratch.", recoverableException);
             final Set<TopicPartition> partitions = recoverableException.partitions();
