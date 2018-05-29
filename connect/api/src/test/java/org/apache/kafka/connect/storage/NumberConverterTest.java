@@ -19,6 +19,7 @@ package org.apache.kafka.connect.storage;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
+import org.apache.kafka.connect.errors.DataException;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -68,6 +69,26 @@ public abstract class NumberConverterTest<T extends Number> {
             assertEquals(schema, data.schema());
             assertEquals(sample, data.value());
         }
+    }
+
+    @Test(expected = DataException.class)
+    public void testDeserializingDataWithTooManyBytes() {
+        converter.toConnectData(TOPIC, new byte[10]);
+    }
+
+    @Test(expected = DataException.class)
+    public void testDeserializingHeaderWithTooManyBytes() {
+        converter.toConnectHeader(TOPIC, HEADER_NAME, new byte[10]);
+    }
+
+    @Test(expected = DataException.class)
+    public void testSerializingIncorrectType() {
+        converter.fromConnectData(TOPIC, schema, "not a valid number");
+    }
+
+    @Test(expected = DataException.class)
+    public void testSerializingIncorrectHeader() {
+        converter.fromConnectHeader(TOPIC, HEADER_NAME, schema, "not a valid number");
     }
 
     @Test
