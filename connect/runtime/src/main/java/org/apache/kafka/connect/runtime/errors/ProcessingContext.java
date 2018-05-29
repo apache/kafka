@@ -64,14 +64,14 @@ class ProcessingContext {
     }
 
     /**
-     * @return The record consumed from Kafka. could be null
+     * @return the record consumed from Kafka. could be null
      */
     public ConsumerRecord<byte[], byte[]> consumerRecord() {
         return consumedMessage;
     }
 
     /**
-     * @return The source record being processed.
+     * @return the source record being processed.
      */
     public SourceRecord sourceRecord() {
         return sourceRecord;
@@ -97,14 +97,14 @@ class ProcessingContext {
     }
 
     /**
-     * @return The stage in the connector pipeline which is currently executing.
+     * @return the stage in the connector pipeline which is currently executing.
      */
     public Stage stage() {
         return position;
     }
 
     /**
-     * @return The class which is going to execute the current operation.
+     * @return the class which is going to execute the current operation.
      */
     public Class<?> executingClass() {
         return klass;

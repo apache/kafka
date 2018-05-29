@@ -17,47 +17,47 @@
 package org.apache.kafka.connect.runtime.errors;
 
 /**
- * A logical stage in a Connect pipeline
+ * A logical stage in a Connect pipeline.
  */
 public enum Stage {
 
     /**
-     * when calling the poll() method on a SourceConnector
+     * When calling the poll() method on a SourceConnector
      */
     TASK_POLL,
 
     /**
-     * when calling the put() method on a SinkConnector
+     * When calling the put() method on a SinkConnector
      */
     TASK_PUT,
 
     /**
-     * when running any transform operation on a record
+     * When running any transform operation on a record
      */
     TRANSFORMATION,
 
     /**
-     * when using the key converter to serialize/deserialize keys in ConnectRecords
+     * When using the key converter to serialize/deserialize keys in ConnectRecords
      */
     KEY_CONVERTER,
 
     /**
-     * when using the value converter to serialize/deserialize values in ConnectRecords
+     * When using the value converter to serialize/deserialize values in ConnectRecords
      */
     VALUE_CONVERTER,
 
     /**
-     * when using the header converter to serialize/deserialize headers in ConnectRecords
+     * When using the header converter to serialize/deserialize headers in ConnectRecords
      */
     HEADER_CONVERTER,
 
     /**
-     * Producing to Kafka topic
+     * When producing to Kafka topic
      */
     KAFKA_PRODUCE,
 
     /**
-     * Consuming from a Kafka topic
+     * When consuming from a Kafka topic
      */
     KAFKA_CONSUME
 }

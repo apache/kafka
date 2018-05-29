@@ -269,7 +269,8 @@ class WorkerSourceTask extends WorkerTask {
      * Convert the source record into a producer record.
      *
      * @param record the transformed record
-     * @return null, if the input is null, or an error was encountered during any of the converter stages.
+     * @return the producer record which can sent over to Kafka. A null is returned if the input is null or
+     * if an error was encountered during any of the converter stages.
      */
     private ProducerRecord<byte[], byte[]> convertTransformedRecord(SourceRecord record) {
         if (record == null) {

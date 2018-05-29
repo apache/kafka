@@ -25,6 +25,7 @@ public interface ErrorReporter extends Configurable {
 
     /**
      * Report an error.
+     *
      * @param context the processing context.
      */
     void report(ProcessingContext context);

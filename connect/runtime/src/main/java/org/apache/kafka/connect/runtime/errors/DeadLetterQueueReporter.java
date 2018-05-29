@@ -58,7 +58,7 @@ public class DeadLetterQueueReporter implements ErrorReporter {
     private KafkaProducer<byte[], byte[]> kafkaProducer;
     private ErrorHandlingMetrics errorHandlingMetrics;
 
-    static ConfigDef CONFIG_DEF = new ConfigDef()
+    private static final ConfigDef CONFIG_DEF = new ConfigDef()
             .define(DLQ_TOPIC_NAME, ConfigDef.Type.STRING, DLQ_TOPIC_DEFAULT, ConfigDef.Importance.HIGH, DLQ_TOPIC_NAME_DOC);
 
     public static DeadLetterQueueReporter createAndSetup(WorkerConfig workerConfig,
