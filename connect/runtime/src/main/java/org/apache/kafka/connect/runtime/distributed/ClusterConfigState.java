@@ -111,6 +111,8 @@ public class ClusterConfigState {
      * {@link org.apache.kafka.common.config.ConfigTransformer} by having all variable
      * references replaced with the current values from external instances of
      * {@link org.apache.kafka.common.config.ConfigProvider}, and may include secrets.
+     * @param connector name of the connector
+     * @return a map containing configuration parameters
      */
     public Map<String, String> connectorConfig(String connector) {
         Map<String, String> configs = connectorConfigs.get(connector);
