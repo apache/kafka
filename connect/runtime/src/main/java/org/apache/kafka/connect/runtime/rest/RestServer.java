@@ -17,10 +17,14 @@
 package org.apache.kafka.connect.runtime.rest;
 
 import com.fasterxml.jackson.jaxrs.json.JacksonJsonProvider;
+
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.rest.ConnectRestExtension;
+import org.apache.kafka.connect.rest.ConnectRestExtensionContext;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.WorkerConfig;
+import org.apache.kafka.connect.runtime.health.ConnectClusterStateImpl;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectExceptionMapper;
 import org.apache.kafka.connect.runtime.rest.resources.ConnectorPluginsResource;
 import org.apache.kafka.connect.runtime.rest.resources.ConnectorsResource;
@@ -45,8 +49,7 @@ import org.glassfish.jersey.servlet.ServletContainer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.servlet.DispatcherType;
-import javax.ws.rs.core.UriBuilder;
+import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -55,6 +58,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import javax.servlet.DispatcherType;
+import javax.ws.rs.core.UriBuilder;
 
 /**
  * Embedded server for the REST API that provides the control plane for Kafka Connect workers.
@@ -70,6 +76,8 @@ public class RestServer {
 
     private final WorkerConfig config;
     private Server jettyServer;
+
+    private List<ConnectRestExtension> connectRestExtensions = Collections.EMPTY_LIST;
 
     /**
      * Create a REST server for this herder using the specified configs.
@@ -163,6 +171,8 @@ public class RestServer {
 
         resourceConfig.register(ConnectExceptionMapper.class);
 
+        registerRestExtensions(herder, resourceConfig);
+
         ServletContainer servletContainer = new ServletContainer(resourceConfig);
         ServletHolder servletHolder = new ServletHolder(servletContainer);
 
@@ -207,10 +217,19 @@ public class RestServer {
         log.info("REST server listening at " + jettyServer.getURI() + ", advertising URL " + advertisedUrl());
     }
 
+
+
     public void stop() {
         log.info("Stopping REST server");
 
         try {
+            for (ConnectRestExtension connectRestExtension : connectRestExtensions) {
+                try {
+                    connectRestExtension.close();
+                } catch (IOException e) {
+                    log.warn("Error while invoking close on " + connectRestExtension.getClass(), e);
+                }
+            }
             jettyServer.stop();
             jettyServer.join();
         } catch (Exception e) {
@@ -278,6 +297,22 @@ public class RestServer {
         }
 
         return null;
+    }
+
+    void registerRestExtensions(Herder herder, ResourceConfig resourceConfig) {
+        connectRestExtensions = herder.plugins().newPlugins(
+            config.getList(WorkerConfig.REST_EXTENSION_CLASSES_CONFIG),
+            config, ConnectRestExtension.class);
+
+        ConnectRestExtensionContext connectRestExtensionContext =
+            new ConnectRestExtensionContextImpl(
+                new ConnectRestConfigurable(resourceConfig),
+                new ConnectClusterStateImpl(herder)
+            );
+        for (ConnectRestExtension connectRestExtension : connectRestExtensions) {
+            connectRestExtension.register(connectRestExtensionContext);
+        }
+
     }
 
     public static String urlJoin(String base, String path) {

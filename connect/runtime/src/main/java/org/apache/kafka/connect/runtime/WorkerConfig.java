@@ -190,6 +190,13 @@ public class WorkerConfig extends AbstractConfig {
             + "Examples: plugin.path=/usr/local/share/java,/usr/local/share/kafka/plugins,"
             + "/opt/connectors";
 
+    public static final String REST_EXTENSION_CLASSES_CONFIG = "rest.extension.classes";
+    protected static final String REST_EXTENSION_CLASSES_DOC =
+            "Comma-separated names of <code>ConnectRestExtension</code> classes, loaded and called "
+            + "in the order specified. Implementing the interface  "
+            + "<code>ConnectRestExtension</code> allows you to inject into Connect's REST API user defined resources  like filters. "
+            + "Typically used to add custom capability like logging, security, etc.";
+
     public static final String METRICS_SAMPLE_WINDOW_MS_CONFIG = CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG;
     public static final String METRICS_NUM_SAMPLES_CONFIG = CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG;
     public static final String METRICS_RECORDING_LEVEL_CONFIG = CommonClientConfigs.METRICS_RECORDING_LEVEL_CONFIG;
@@ -254,7 +261,9 @@ public class WorkerConfig extends AbstractConfig {
                         ConfigDef.Type.STRING, "none", ConfigDef.Importance.LOW, BrokerSecurityConfigs.SSL_CLIENT_AUTH_DOC)
                 .define(HEADER_CONVERTER_CLASS_CONFIG, Type.CLASS,
                         HEADER_CONVERTER_CLASS_DEFAULT,
-                        Importance.LOW, HEADER_CONVERTER_CLASS_DOC);
+                        Importance.LOW, HEADER_CONVERTER_CLASS_DOC)
+                .define(REST_EXTENSION_CLASSES_CONFIG, Type.LIST, "",
+                        Importance.LOW, REST_EXTENSION_CLASSES_DOC);
     }
 
     private void logInternalConverterDeprecationWarnings(Map<String, String> props) {
