@@ -66,7 +66,7 @@ public class ConnectorHealth {
     }
 
     /**
-     * provides the current state of the connector tasks.
+     * Provides the current state of the connector tasks.
      *
      * @return the state for each task ID; never {@code null}
      */
@@ -75,7 +75,7 @@ public class ConnectorHealth {
     }
 
     /**
-     * provides the type of the connector.
+     * Provides the type of the connector.
      *
      * @return type, never {@code null}
      */

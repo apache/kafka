@@ -28,7 +28,7 @@ import java.util.Map;
  * A plugin interface to allow registration of new JAX-RS resources like Filters, REST endpoints, providers, etc. The implementations will
  * be discovered using the standard Java {@link java.util.ServiceLoader} mechanism by  Connect's plugin class loading mechanism.
  *
- * <p>The extension must be packaged as a plugin, with one JAR containing the implementation classes and a {@code
+ * <p>The extension class(es) must be packaged as a plugin, with one JAR containing the implementation classes and a {@code
  * META-INF/services/org.apache.kafka.connect.rest.extension.ConnectRestExtension} file that contains the fully qualified name of the
  * class(es) that implement the ConnectRestExtension interface. The plugin should also include the JARs of all dependencies except those
  * already provided by the Connect framework.
@@ -46,8 +46,8 @@ import java.util.Map;
 public interface ConnectRestExtension extends Configurable, Versioned, Closeable {
 
     /**
-     * ConnectRestExtension implementation can register custom JAX-RS resources via the {@link #register(ConnectRestExtensionContext)}
-     * method. The Connect Framework will invoke this method after registering the default Connect resources. If the implementations attempt
+     * ConnectRestExtension implementations can register custom JAX-RS resources via the {@link #register(ConnectRestExtensionContext)}
+     * method. The Connect framework will invoke this method after registering the default Connect resources. If the implementations attempt
      * to re-register any of the Connect resources, it will be be ignored and will be logged.
      *
      * @param restPluginContext The context provides access to JAX-RS {@link javax.ws.rs.core.Configurable} and {@link

@@ -31,15 +31,18 @@ import java.util.Map;
  * LoginModule} implementation should configure the {@link javax.security.auth.callback.CallbackHandler} with only {@link
  * javax.security.auth.callback.NameCallback} and {@link javax.security.auth.callback.PasswordCallback}
  *
- * <p>To use this extension, one needs to add the following config in the {@code worker.properties} <br>
- *     {@code rest.extension.classes = org.apache.kafka.connect.rest.basic.auth.extenstion.BasicAuthSecurityRestExtension}
+ * <p>
+ * <pre>To use this extension, one needs to add the following config in the {@code worker.properties}
  *
- * <p> An example JAAS config would look as below <br>
- *     <code>
+ *     {@code rest.extension.classes = org.apache.kafka.connect.rest.basic.auth.extenstion.BasicAuthSecurityRestExtension}</pre>
+ *
+ * <p> An example JAAS config would look as below
+ * <Pre><code>
  *         KafkaConnect {
- *        <br>  org.apache.kafka.connect.rest.basic.auth.extenstion.PropertyFileLoginModule required
- *        <br>  file="/mnt/secret/credentials.properties"; };
- *     </code>
+ *              org.apache.kafka.connect.rest.basic.auth.extenstion.PropertyFileLoginModule required
+ *              file="/mnt/secret/credentials.properties";
+ *         };
+ *</code></Pre>
  *
  * <p>This is a reference implementation of the {@link ConnectRestExtension} interface. It registers an implementation of {@link
  * javax.ws.rs.container.ContainerRequestFilter} that does JAAS based authentication of incoming Basic Auth credentials. {@link
@@ -48,7 +51,7 @@ import java.util.Map;
  * {@code org.apache.kafka.connect.extension.auth.jaas.BasicAuthSecurityRestExtension}
  *
  * <p><b>NOTE: The implementation ships with a default {@link PropertyFileLoginModule} that helps authenticate the request against a
- * property file. This implementation is NOT intended to be used in production since the credentials are stored in PLAINTEXT. One can use
+ * property file. {@link PropertyFileLoginModule} is NOT intended to be used in production since the credentials are stored in PLAINTEXT. One can use
  * this extension in production by using their own implementation of {@link javax.security.auth.spi.LoginModule} that authenticates against
  * stores like LDAP, DB, etc.</b>
  */

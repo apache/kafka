@@ -58,7 +58,10 @@ public class PropertyFileLoginModule implements LoginModule {
     public void initialize(Subject subject, CallbackHandler callbackHandler, Map<String, ?> sharedState, Map<String, ?> options) {
         this.callbackHandler = callbackHandler;
         fileName = (String) options.get(FILE_OPTIONS);
-        if (fileName != null && !fileName.isEmpty() && !credentialPropertiesMap.containsKey(fileName)) {
+        if (fileName == null || fileName.trim().isEmpty()) {
+            throw new ConfigException("Property Credentials file must be specified");
+        }
+        if (!credentialPropertiesMap.containsKey(fileName)) {
             Properties credentialProperties = new Properties();
             try {
                 credentialProperties.load(Files.newInputStream(Paths.get(fileName)));

@@ -27,9 +27,9 @@ public class ConnectorState extends AbstractState {
      *
      * @param state - the status of connector, may not be {@code null} or empty
      * @param workerId - the workerId associated with the connector, may not be {@code null} or empty
-     * @param trace - any error traceMessage associated with the connector, may be {@code null} or empty
+     * @param traceMessage - any error message associated with the connector, may be {@code null} or empty
      */
-    public ConnectorState(String state, String workerId, String trace) {
-        super(state, workerId, trace);
+    public ConnectorState(String state, String workerId, String traceMessage) {
+        super(state, workerId, traceMessage);
     }
 }

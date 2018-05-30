@@ -17,6 +17,8 @@
 
 package org.apache.kafka.connect.rest.basic.auth.extenstion;
 
+import org.apache.kafka.common.config.ConfigException;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
@@ -45,7 +47,7 @@ public class JaasBasicAuthFilter implements ContainerRequestFilter {
                 new LoginContext(CONNECT_LOGIN_MODULE, new BasicAuthCallBackHandler(
                     requestContext.getHeaderString(AUTHORIZATION)));
             loginContext.login();
-        } catch (LoginException e) {
+        } catch (LoginException | ConfigException e) {
             requestContext.abortWith(
                 Response.status(Response.Status.UNAUTHORIZED)
                     .entity("User cannot access the resource.")

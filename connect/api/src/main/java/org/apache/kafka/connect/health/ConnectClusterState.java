@@ -21,13 +21,13 @@ import java.util.Collection;
 
 /**
  * Provides the ability to lookup connector metadata and its health. This is made available to the {@link org.apache.kafka.connect.rest.ConnectRestExtension}
- * implementations. Connect Framework provides the implementation for this interface.
+ * implementations. The Connect framework provides the implementation for this interface.
  */
 public interface ConnectClusterState {
 
     /**
      * Get the names of the connectors currently deployed in this cluster. This is a full list of connectors in the cluster gathered from
-     * the current configuration.
+     * the current configuration, which may change over time.
      *
      * @return collection of connector names, never {@code null}
      */
@@ -35,11 +35,12 @@ public interface ConnectClusterState {
 
     /**
      * Lookup the current health of a connector and its tasks. This provides the current snapshot of health by querying the underlying
-     * herder. A connector returned by previous invocation of {@link #connectors()} may no longer be available and could result in
-     * {@link org.apache.kafka.connect.errors.NotFoundException}
+     * herder. A connector returned by previous invocation of {@link #connectors()} may no longer be available and could result in {@link
+     * org.apache.kafka.connect.errors.NotFoundException}.
      *
      * @param connName name of the connector
-     * @return the health of the connector for the connector name, may be {@code null}
+     * @return the health of the connector for the connector name
+     * @throws org.apache.kafka.connect.errors.NotFoundException if the requested connector can't be found
      */
     ConnectorHealth connectorHealth(String connName);
 }

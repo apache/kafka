@@ -35,8 +35,8 @@ public class ConnectRestConfigurable implements Configurable<ResourceConfig> {
 
     private static final Logger log = LoggerFactory.getLogger(ConnectRestConfigurable.class);
 
-    private static final Boolean ALLOWED_TO_REGISTER = true;
-    private static final Boolean NOT_ALLOWED_TO_REGISTER = false;
+    private static final boolean ALLOWED_TO_REGISTER = true;
+    private static final boolean NOT_ALLOWED_TO_REGISTER = false;
 
     private ResourceConfig resourceConfig;
 

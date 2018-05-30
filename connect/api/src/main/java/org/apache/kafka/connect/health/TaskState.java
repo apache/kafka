@@ -40,7 +40,7 @@ public class TaskState extends AbstractState {
     }
 
     /**
-     * Provides the ID of the task
+     * Provides the ID of the task.
      *
      * @return the task ID
      */

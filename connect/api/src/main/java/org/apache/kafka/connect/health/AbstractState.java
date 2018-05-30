@@ -18,7 +18,7 @@
 package org.apache.kafka.connect.health;
 
 /**
- * {@link AbstractState} provides the current status along with identifier for Connect worker and tasks.
+ * Provides the current status along with identifier for Connect worker and tasks.
  */
 public abstract class AbstractState {
 
