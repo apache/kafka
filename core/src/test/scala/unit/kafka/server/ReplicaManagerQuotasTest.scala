@@ -148,6 +148,38 @@ class ReplicaManagerQuotasTest {
       fetch.find(_._1 == topicPartition2).get._2.info.records.batches.asScala.size)
   }
 
+  @Test
+  def testCompleteInDelayedFetchWithReplicaThrottling(): Unit = {
+    // Set up DelayedFetch where there is data to return to a follower replica, either in-sync or out of sync
+    def setupDelayedFetch(isReplicaInSync: Boolean): DelayedFetch = {
+      val logOffsetMetadata = new LogOffsetMetadata(messageOffset = 100L, segmentBaseOffset = 0L, relativePositionInSegment = 500)
+      val replica = EasyMock.createMock(classOf[Replica])
+      EasyMock.expect(replica.logEndOffset).andReturn(logOffsetMetadata).anyTimes()
+      EasyMock.replay(replica)
+
+      val replicaManager = EasyMock.createMock(classOf[ReplicaManager])
+      EasyMock.expect(replicaManager.getLeaderReplicaIfLocal(EasyMock.anyObject[TopicPartition])).andReturn(replica).anyTimes()
+      EasyMock.expect(replicaManager.shouldLeaderThrottle(EasyMock.anyObject[ReplicaQuota], EasyMock.anyObject[TopicPartition], EasyMock.anyObject[Int]))
+        .andReturn(!isReplicaInSync).anyTimes()
+      EasyMock.replay(replicaManager)
+
+      val tp = new TopicPartition("t1", 0)
+      val fetchParititonStatus = new FetchPartitionStatus(new LogOffsetMetadata(messageOffset = 50L, segmentBaseOffset = 0L,
+        relativePositionInSegment = 250), new PartitionData(50, 0, 1))
+      val fetchMetadata = new FetchMetadata(fetchMinBytes = 1, fetchMaxBytes = 1000, hardMaxBytesLimit = true, fetchOnlyLeader = true,
+        fetchOnlyCommitted = false, isFromFollower = true, replicaId = 1, fetchPartitionStatus = List((tp, fetchParititonStatus)))
+      new DelayedFetch(delayMs = 600, fetchMetadata = fetchMetadata, replicaManager = replicaManager,
+        quota = null, isolationLevel = IsolationLevel.READ_UNCOMMITTED, responseCallback = null) {
+        override def forceComplete(): Boolean = {
+          true
+        }
+      }
+    }
+
+    assertTrue("In sync replica should complete", setupDelayedFetch(isReplicaInSync = true).tryComplete())
+    assertFalse("Out of sync replica should not complete", setupDelayedFetch(isReplicaInSync = false).tryComplete())
+  }
+
   def setUpMocks(fetchInfo: Seq[(TopicPartition, PartitionData)], record: SimpleRecord = this.record, bothReplicasInSync: Boolean = false) {
     val zkClient = EasyMock.createMock(classOf[KafkaZkClient])
     val scheduler = createNiceMock(classOf[KafkaScheduler])
@@ -208,7 +240,8 @@ class ReplicaManagerQuotasTest {
 
   @After
   def tearDown() {
-    replicaManager.shutdown(false)
+    if (replicaManager != null)
+      replicaManager.shutdown(false)
     metrics.close()
   }
 

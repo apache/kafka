@@ -85,6 +85,7 @@ public class MockRestoreConsumer extends MockConsumer<byte[], byte[]> {
         super.assign(partitions);
     }
 
+    @Deprecated
     @Override
     public ConsumerRecords<byte[], byte[]> poll(long timeout) {
         // add buffered records to MockConsumer

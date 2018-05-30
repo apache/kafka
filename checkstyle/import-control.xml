@@ -101,6 +101,9 @@
       <subpackage name="scram">
         <allow pkg="javax.crypto" />
       </subpackage>
+      <subpackage name="oauthbearer">
+        <allow pkg="com.fasterxml.jackson.databind" />
+      </subpackage>
     </subpackage>
 
     <subpackage name="protocol">

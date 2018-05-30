@@ -22,7 +22,6 @@ import java.util.concurrent.TimeUnit
 import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.{Gauge, MetricName}
 import kafka.consumer.{ConsumerTopicStatsRegistry, FetchRequestAndResponseStatsRegistry}
-import kafka.producer.{ProducerRequestStatsRegistry, ProducerStatsRegistry, ProducerTopicStatsRegistry}
 import kafka.utils.Logging
 import org.apache.kafka.common.utils.Sanitizer
 
@@ -179,16 +178,7 @@ object KafkaMetricsGroup extends KafkaMetricsGroup with Logging {
   def removeAllConsumerMetrics(clientId: String) {
     FetchRequestAndResponseStatsRegistry.removeConsumerFetchRequestAndResponseStats(clientId)
     ConsumerTopicStatsRegistry.removeConsumerTopicStat(clientId)
-    ProducerRequestStatsRegistry.removeProducerRequestStats(clientId)
     removeAllMetricsInList(KafkaMetricsGroup.consumerMetricNameList, clientId)
-  }
-
-  @deprecated("This method has been deprecated and will be removed in a future release.", "0.10.0.0")
-  def removeAllProducerMetrics(clientId: String) {
-    ProducerRequestStatsRegistry.removeProducerRequestStats(clientId)
-    ProducerTopicStatsRegistry.removeProducerTopicStats(clientId)
-    ProducerStatsRegistry.removeProducerStats(clientId)
-    removeAllMetricsInList(KafkaMetricsGroup.producerMetricNameList, clientId)
   }
 
   private def removeAllMetricsInList(metricNameList: immutable.List[MetricName], clientId: String) {
