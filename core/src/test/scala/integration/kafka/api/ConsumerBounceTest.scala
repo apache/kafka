@@ -27,6 +27,7 @@ import org.junit.{After, Before, Ignore, Test}
 
 import scala.collection.JavaConverters._
 
+
 /**
  * Integration tests for the new consumer that cover basic usage as well as server failures
  */
