@@ -88,26 +88,25 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private MetadataSnapshot assignmentSnapshot;
     private long nextAutoCommitDeadline;
 
-    // hold onto request&future for commited offset requests to enable async calls.
+    // hold onto request&future for committed offset requests to enable async calls.
     private PendingCommittedOffsetRequest pendingCommittedOffsetRequest = null;
 
     private static class PendingCommittedOffsetRequest {
-        private final Set<TopicPartition> request;
-        private final Generation generation;
+        private final Set<TopicPartition> requestedPartitions;
+        private final Generation requestedGeneration;
         private final RequestFuture<Map<TopicPartition, OffsetAndMetadata>> response;
 
-        private PendingCommittedOffsetRequest(final Set<TopicPartition> request,
+        private PendingCommittedOffsetRequest(final Set<TopicPartition> requestedPartitions,
                                               final Generation generationAtRequestTime,
-                                              final RequestFuture<Map<TopicPartition, OffsetAndMetadata>> response
-        ) {
-            this.request = Objects.requireNonNull(request);
+                                              final RequestFuture<Map<TopicPartition, OffsetAndMetadata>> response) {
+            this.requestedPartitions = Objects.requireNonNull(requestedPartitions);
             this.response = Objects.requireNonNull(response);
-            this.generation = generationAtRequestTime;
+            this.requestedGeneration = generationAtRequestTime;
         }
 
         private boolean sameRequest(final Set<TopicPartition> currentRequest, final Generation currentGeneration) {
-            return (generation == null ? currentGeneration == null : generation.equals(currentGeneration))
-                && request.equals(currentRequest);
+            return (requestedGeneration == null ? currentGeneration == null : requestedGeneration.equals(currentGeneration))
+                && requestedPartitions.equals(currentRequest);
         }
     }
 
