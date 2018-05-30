@@ -252,7 +252,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
-    public void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets, final Duration duration) {
+    public void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets, final Duration timeout) {
         commitSync(offsets);
     }
 
@@ -272,7 +272,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
-    public OffsetAndMetadata committed(TopicPartition partition, final Duration duration) {
+    public OffsetAndMetadata committed(TopicPartition partition, final Duration timeout) {
         return committed(partition);
     }
 
@@ -290,7 +290,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
-    public synchronized long position(TopicPartition partition, final Duration duration) {
+    public synchronized long position(TopicPartition partition, final Duration timeout) {
         return position(partition);
     }
 
@@ -513,7 +513,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
-    public void close(Duration duration) {
+    public void close(Duration timeout) {
         close();
     }
 }

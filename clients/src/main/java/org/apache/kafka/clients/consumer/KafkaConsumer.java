@@ -154,7 +154,7 @@ import java.util.regex.Pattern;
  * invoked. The poll API is designed to ensure consumer liveness. As long as you continue to call poll, the consumer
  * will stay in the group and continue to receive messages from the partitions it was assigned. Underneath the covers,
  * the consumer sends periodic heartbeats to the server. If the consumer crashes or is unable to send heartbeats for
- * a timeoutMs of {@code session.timeout.ms}, then the consumer will be considered dead and its partitions will
+ * a duration of {@code session.timeout.ms}, then the consumer will be considered dead and its partitions will
  * be reassigned.
  * <p>
  * It is also possible that the consumer could encounter a "livelock" situation where it is continuing
@@ -1333,14 +1333,14 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     * should not be used. The committed offset should be the next message your application will consume,
     * i.e. lastProcessedMessageOffset + 1.
     * <p>
-    * This is a synchronous commits and will block until either the commit succeeds or an unrecoverable error is
-    * encountered (in which case it is thrown to the caller).
+    * This is a synchronous commits and will block until either the commit succeeds, an unrecoverable error is
+    * encountered (in which case it is thrown to the caller), or the timeout expires.
     * <p>
     * Note that asynchronous offset commits sent previously with the {@link #commitAsync(OffsetCommitCallback)}
     * (or similar) are guaranteed to have their callbacks invoked prior to completion of this method.
     *
     * @param offsets A map of offsets by partition with associated metadata
-    * @param timeoutMs The amount of time the user would like to block
+    * @param timeout The maximum amount of time to await completion of the offset commit
     * @throws org.apache.kafka.clients.consumer.CommitFailedException if the commit failed and cannot be retried.
     *             This can only occur if you are using automatic group management with {@link #subscribe(Collection)},
     *             or if there is an active group with the same groupId which is using group management.
@@ -1354,15 +1354,15 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     * @throws java.lang.IllegalArgumentException if the committed offset is negative
     * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors (e.g. if offset metadata
     *             is too large or if the topic does not exist).
-    * @throws TimeoutException if method timeoutMs exceeds maximum given time
+    * @throws org.apache.kafka.common.errors.TimeoutException if the timeout expires before successful completion
+     *            of the offset commit
     */
     @Override
-    public void commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets, final Duration timeoutMs) {
+    public void commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets, final Duration timeout) {
         acquireAndEnsureOpen();
-        final long totalWaitTime = timeoutMs.toMillis();
         try {
-            if (!coordinator.commitOffsetsSync(new HashMap<>(offsets), totalWaitTime)) {
-                throw new TimeoutException("Commiting offsets synchronously took too long.");
+            if (!coordinator.commitOffsetsSync(new HashMap<>(offsets), timeout.toMillis())) {
+                throw new TimeoutException("Committing offsets synchronously took too long.");
             }
         } finally {
             release();
@@ -1465,6 +1465,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *
      * @throws IllegalArgumentException if {@code partitions} is {@code null} or the provided TopicPartition is not assigned to this consumer
      */
+    @Override
     public void seekToBeginning(Collection<TopicPartition> partitions) {
         if (partitions == null)
             throw new IllegalArgumentException("Partitions collection cannot be null");
@@ -1491,6 +1492,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *
      * @throws IllegalArgumentException if {@code partitions} is {@code null} or the provided TopicPartition is not assigned to this consumer
      */
+    @Override
     public void seekToEnd(Collection<TopicPartition> partitions) {
         if (partitions == null)
             throw new IllegalArgumentException("Partitions collection cannot be null");
@@ -1528,6 +1530,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *             configured groupId. See the exception for more details
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors
      */
+    @Override
     public long position(TopicPartition partition) {
         return position(partition, Duration.ofMillis(Long.MAX_VALUE));
     }
@@ -1537,12 +1540,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * This method may issue a remote call to the server if there is no current position 
      * for the given partition.
      * <p>
-     * This call will block until either the position could be determined or an unrecoverable error is
-     * encountered (in which case it is thrown to the caller). However, if offset position is not retrieved
-     * within a given amount of time, the process will be terminated.
+     * This call will block until the position can be determined, an unrecoverable error is
+     * encountered (in which case it is thrown to the caller), or the timeout expires.
      *
      * @param partition The partition to get the position for
-     * @param timeoutMs  The maximum timeoutMs in which the method can block
+     * @param timeout The maximum amount of time to await determination of the current position
      * @return The current position of the consumer (that is, the offset of the next record to be fetched)
      * @throws IllegalArgumentException if the provided TopicPartition is not assigned to this consumer
      * @throws org.apache.kafka.clients.consumer.InvalidOffsetException if no offset is currently defined for
@@ -1551,29 +1553,33 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *             function is called
      * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
      *             this function is called
-     * @throws org.apache.kafka.common.errors.TimeoutException if the method blocks for longer than timeoutMs
+     * @throws org.apache.kafka.common.errors.TimeoutException if the position cannot be determined before the
+     *             passed timeout expires
      * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic or to the
      *             configured groupId. See the exception for more details
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors
      */
-    public long position(TopicPartition partition, final Duration timeoutMs) {
-        final long timeout = timeoutMs.toMillis();
+    @Override
+    public long position(TopicPartition partition, final Duration timeout) {
+        final long timeoutMs = timeout.toMillis();
         acquireAndEnsureOpen();
         try {
             if (!this.subscriptions.isAssigned(partition))
                 throw new IllegalArgumentException("You can only check the position for partitions assigned to this consumer.");
+
             Long offset = this.subscriptions.position(partition);
             final long startMs = time.milliseconds();
             long finishMs = startMs;
-            while (offset == null && finishMs - startMs < timeout) {
+
+            while (offset == null && finishMs - startMs < timeoutMs) {
                 // batch update fetch positions for any partitions without a valid position
-                if (!updateFetchPositions(remainingTimeAtLeastZero(timeout, time.milliseconds() - startMs))) {
+                if (!updateFetchPositions(remainingTimeAtLeastZero(timeoutMs, time.milliseconds() - startMs))) {
                     break;
                 }
                 finishMs = time.milliseconds();
-                
-                client.poll(remainingTimeAtLeastZero(timeout, finishMs - startMs));
+
+                client.poll(remainingTimeAtLeastZero(timeoutMs, finishMs - startMs));
                 offset = this.subscriptions.position(partition);
                 finishMs = time.milliseconds();
             }
@@ -1613,7 +1619,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * This call will block to do a remote call to get the latest committed offsets from the server.
      *
      * @param partition The partition to check
-     * @param timeoutMs  The timeoutMs we would want to block
+     * @param timeout  The maximum amount of time to await the current committed offset
      * @return The last committed offset and metadata or null if there was no prior commit
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
      *             function is called
@@ -1623,13 +1629,15 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic or to the
      *             configured groupId. See the exception for more details
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors
+     * @throws org.apache.kafka.common.errors.TimeoutException if the committed offset cannot be found before
+     *             expiration of the timeout
      */
     @Override
-    public OffsetAndMetadata committed(TopicPartition partition, final Duration timeoutMs) {
+    public OffsetAndMetadata committed(TopicPartition partition, final Duration timeout) {
         acquireAndEnsureOpen();
         try {
-            Map<TopicPartition, OffsetAndMetadata> offsets = coordinator.fetchCommittedOffsets(Collections.singleton(partition), 
-                                                                                               timeoutMs.toMillis());
+            Map<TopicPartition, OffsetAndMetadata> offsets = coordinator.fetchCommittedOffsets(
+                    Collections.singleton(partition), timeout.toMillis());
             if (offsets == null) {
                 throw new TimeoutException("Unable to find committed offsets for partition within set duration.");
             }
@@ -1662,7 +1670,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the specified topic. See the exception for more details
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors
      * @throws org.apache.kafka.common.errors.TimeoutException if the offset metadata could not be fetched before
-     *         the amount of time allocated by requestTimeoutMs expires.
+     *         the amount of time allocated by {@code request.timeout.ms} expires.
      */
     @Override
     public List<PartitionInfo> partitionsFor(String topic) {
@@ -1674,20 +1682,21 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * does not already have any metadata about the given topic.
      *
      * @param topic The topic to get partition metadata for
-     * @param timeout The maximum time this operation will block
+     * @param timeout The maximum of time to await topic metadata
      *
      * @return The list of partitions
-     * @throws org.apache.kafka.common.errors.TimeoutException if time spent blocking exceeds the {@code timeout}
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
      *             function is called
      * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
      *             this function is called
      * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
-     * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the specified topic. See the exception for more details
-     * @throws org.apache.kafka.common.errors.TimeoutException if the topic metadata could not be fetched before
-     *             expiration of the configured request timeout
+     * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the specified topic. See
+     *             the exception for more details
+     * @throws org.apache.kafka.common.errors.TimeoutException if topic metadata cannot be fetched before expiration
+     *             of the passed timeout
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors
      */
+    @Override
     public List<PartitionInfo> partitionsFor(String topic, Duration timeout) {
         acquireAndEnsureOpen();
         long timeoutMs = timeout.toMillis();
@@ -1717,7 +1726,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *             this function is called
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors
      * @throws org.apache.kafka.common.errors.TimeoutException if the offset metadata could not be fetched before
-     *         the amount of time allocated by requestTimeoutMs expires.
+     *         the amount of time allocated by {@code request.timeout.ms} expires.
      */
     @Override
     public Map<String, List<PartitionInfo>> listTopics() {
@@ -1728,18 +1737,18 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * Get metadata about partitions for all topics that the user is authorized to view. This method will issue a
      * remote call to the server.
      *
-     * @param timeout The maximum time this operation will block
+     * @param timeout The maximum time this operation will block to fetch topic metadata
      *
      * @return The map of topics and its partitions
-     * @throws org.apache.kafka.common.errors.TimeoutException if time spent blocking exceeds the {@code timeout}
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
      *             function is called
      * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
      *             this function is called
      * @throws org.apache.kafka.common.errors.TimeoutException if the topic metadata could not be fetched before
-     *             expiration of the configured request timeout
+     *             expiration of the passed timeout
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors
      */
+    @Override
     public Map<String, List<PartitionInfo>> listTopics(Duration timeout) {
         acquireAndEnsureOpen();
         try {
@@ -1822,7 +1831,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic(s). See the exception for more details
      * @throws IllegalArgumentException if the target timestamp is negative
      * @throws org.apache.kafka.common.errors.TimeoutException if the offset metadata could not be fetched before
-     *         the amount of time allocated by requestTimeoutMs expires.
+     *         the amount of time allocated by {@code request.timeout.ms} expires.
      * @throws org.apache.kafka.common.errors.UnsupportedVersionException if the broker does not support looking up
      *         the offsets by timestamp
      */
@@ -1840,20 +1849,20 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * will be returned for that partition.
      *
      * @param timestampsToSearch the mapping from partition to the timestamp to look up.
-     * @param timeout The maximum time this operation will block
+     * @param timeout The maximum amount of time to await retrieval of the offsets
      *
      * @return a mapping from partition to the timestamp and offset of the first message with timestamp greater
      *         than or equal to the target timestamp. {@code null} will be returned for the partition if there is no
      *         such message.
-     * @throws org.apache.kafka.common.errors.TimeoutException if time spent blocking exceeds the {@code timeout}
      * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic(s). See the exception for more details
      * @throws IllegalArgumentException if the target timestamp is negative
      * @throws org.apache.kafka.common.errors.TimeoutException if the offset metadata could not be fetched before
-     *         expiration of the configured {@code request.timeout.ms}
+     *         expiration of the passed timeout
      * @throws org.apache.kafka.common.errors.UnsupportedVersionException if the broker does not support looking up
      *         the offsets by timestamp
      */
+    @Override
     public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch, Duration timeout) {
         acquireAndEnsureOpen();
         try {
@@ -1882,7 +1891,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic(s). See the exception for more details
      * @throws org.apache.kafka.common.errors.TimeoutException if the offset metadata could not be fetched before
-     *         the amount of time allocated by requestTimeoutMs expires.
+     *         expiration of the configured {@code request.timeout.ms}
      */
     @Override
     public Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions) {
@@ -1896,15 +1905,14 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *
      * @see #seekToBeginning(Collection)
      *
-     * @param partitions the partitions to get the earliest offsets.
-     * @param timeout The maximum time this operation will block
+     * @param partitions the partitions to get the earliest offsets
+     * @param timeout The maximum amount of time to await retrieval of the beginning offsets
      *
      * @return The earliest available offsets for the given partitions
-     * @throws org.apache.kafka.common.errors.TimeoutException if time spent blocking exceeds the {@code timeout}
      * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic(s). See the exception for more details
-     * @throws org.apache.kafka.common.errors.TimeoutException if the offsets could not be fetched before
-     *         expiration of the configured {@code request.timeout.ms}
+     * @throws org.apache.kafka.common.errors.TimeoutException if the offset metadata could not be fetched before
+     *         expiration of the passed timeout
      */
     @Override
     public Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions, Duration timeout) {
@@ -1933,7 +1941,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic(s). See the exception for more details
      * @throws org.apache.kafka.common.errors.TimeoutException if the offset metadata could not be fetched before
-     *         the amount of time allocated by requestTimeoutMs expires.
+     *         the amount of time allocated by {@code request.timeout.ms} expires
      */
     @Override
     public Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions) {
@@ -1953,15 +1961,15 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @see #seekToEnd(Collection)
      *
      * @param partitions the partitions to get the end offsets.
-     * @param timeout The maximum time this operation will block
+     * @param timeout The maximum amount of time to await retrieval of the end offsets
      *
      * @return The end offsets for the given partitions.
-     * @throws org.apache.kafka.common.errors.TimeoutException if time spent blocking exceeds the {@code timeout}
      * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic(s). See the exception for more details
      * @throws org.apache.kafka.common.errors.TimeoutException if the offsets could not be fetched before
-     *         expiration of the configured {@code request.timeout.ms}
+     *         expiration of the passed timeout
      */
+    @Override
     public Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions, Duration timeout) {
         acquireAndEnsureOpen();
         try {
@@ -1974,7 +1982,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     /**
      * Close the consumer, waiting for up to the default timeout of 30 seconds for any needed cleanup.
      * If auto-commit is enabled, this will commit the current offsets if possible within the default
-     * timeout. See {@link #close(long, TimeUnit)} for details. Note that {@link #wakeup()}
+     * timeout. See {@link #close(Duration)} for details. Note that {@link #wakeup()}
      * cannot be used to interrupt close.
      *
      * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted
@@ -1983,7 +1991,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void close() {
-        close(DEFAULT_CLOSE_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+        close(Duration.ofMillis(DEFAULT_CLOSE_TIMEOUT_MS));
     }
 
     /**
@@ -2000,8 +2008,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws IllegalArgumentException If the {@code timeout} is negative.
      * @throws InterruptException If the thread is interrupted before or while this function is called
      * @throws org.apache.kafka.common.KafkaException for any other error during close
+     *
+     * @deprecated Since 2.0. Use {@link #close(Duration)} or {@link #close()}.
      */
     @Deprecated
+    @Override
     public void close(long timeout, TimeUnit timeUnit) {
         close(Duration.ofMillis(TimeUnit.MILLISECONDS.toMillis(timeout)));
     }
@@ -2021,6 +2032,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws InterruptException If the thread is interrupted before or while this function is called
      * @throws org.apache.kafka.common.KafkaException for any other error during close
      */
+    @Override
     public void close(Duration timeout) {
         if (timeout.toMillis() < 0)
             throw new IllegalArgumentException("The timeout cannot be negative.");

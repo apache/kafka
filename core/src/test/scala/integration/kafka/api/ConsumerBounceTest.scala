@@ -15,7 +15,6 @@ package kafka.api
 
 import java.util.concurrent._
 import java.util.{Collection, Collections}
-import java.time.Duration
 
 import kafka.admin.AdminClient
 import kafka.server.KafkaConfig
@@ -27,7 +26,6 @@ import org.junit.Assert._
 import org.junit.{After, Before, Ignore, Test}
 
 import scala.collection.JavaConverters._
-
 
 /**
  * Integration tests for the new consumer that cover basic usage as well as server failures

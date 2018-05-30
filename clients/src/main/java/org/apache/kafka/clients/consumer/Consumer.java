@@ -100,8 +100,7 @@ public interface Consumer<K, V> extends Closeable {
     /**
      * @see KafkaConsumer#commitSync(Map, Duration)
      */
-    void commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets, 
-                    final Duration timeoutMs);
+    void commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets, final Duration timeout);
     /**
      * @see KafkaConsumer#commitAsync()
      */
@@ -140,7 +139,7 @@ public interface Consumer<K, V> extends Closeable {
     /**
      * @see KafkaConsumer#position(TopicPartition, Duration)
      */
-    long position(TopicPartition partition, final Duration timeoutMs);
+    long position(TopicPartition partition, final Duration timeout);
 
     /**
      * @see KafkaConsumer#committed(TopicPartition)
@@ -150,7 +149,7 @@ public interface Consumer<K, V> extends Closeable {
     /**
      * @see KafkaConsumer#committed(TopicPartition, Duration)
      */
-    OffsetAndMetadata committed(TopicPartition partition, final Duration timeoutMs);
+    OffsetAndMetadata committed(TopicPartition partition, final Duration timeout);
 
     /**
      * @see KafkaConsumer#metrics()
@@ -236,7 +235,7 @@ public interface Consumer<K, V> extends Closeable {
     /**
      * @see KafkaConsumer#close(Duration)
      */
-    void close(Duration timeoutMs);
+    void close(Duration timeout);
 
     /**
      * @see KafkaConsumer#wakeup()

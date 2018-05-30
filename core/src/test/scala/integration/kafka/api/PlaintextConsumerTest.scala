@@ -15,8 +15,6 @@ package kafka.api
 import java.util
 import java.util.regex.Pattern
 import java.util.{Collections, Locale, Properties}
-import java.util.concurrent.TimeUnit
-import java.time.Duration
 
 import kafka.log.LogConfig
 import kafka.server.KafkaConfig
