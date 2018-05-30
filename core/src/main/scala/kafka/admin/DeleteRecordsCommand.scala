@@ -64,8 +64,7 @@ object DeleteRecordsCommand {
     if (duplicatePartitions.nonEmpty)
       throw new AdminCommandFailedException("Offset json file contains duplicate topic partitions: %s".format(duplicatePartitions.mkString(",")))
 
-    val recordsToDelete: util.Map[TopicPartition, RecordsToDelete] = new util.HashMap[TopicPartition, RecordsToDelete]
-    offsetSeq.foreach { offset => recordsToDelete.put(offset._1, RecordsToDelete.beforeOffset(offset._2)) }
+    val recordsToDelete = offsetSeq.map(offset => (offset._1, RecordsToDelete.beforeOffset(offset._2))).toMap.asJava
 
     out.println("Executing records delete operation")
     val deleteRecordsResult = adminClient.deleteRecords(recordsToDelete)
