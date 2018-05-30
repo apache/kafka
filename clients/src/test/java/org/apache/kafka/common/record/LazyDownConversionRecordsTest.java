@@ -75,8 +75,8 @@ public class LazyDownConversionRecordsTest {
         List<Long> offsets = asList(0L, 2L, 3L, 9L, 11L, 15L, 16L, 17L, 22L, 24L);
 
         Header[] headers = {new RecordHeader("headerKey1", "headerValue1".getBytes()),
-                new RecordHeader("headerKey2", "headerValue2".getBytes()),
-                new RecordHeader("headerKey3", "headerValue3".getBytes())};
+                            new RecordHeader("headerKey2", "headerValue2".getBytes()),
+                            new RecordHeader("headerKey3", "headerValue3".getBytes())};
 
         List<SimpleRecord> records = asList(
                 new SimpleRecord(1L, "k1".getBytes(), "hello".getBytes()),
