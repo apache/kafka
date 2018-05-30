@@ -199,7 +199,7 @@ public class KGroupedTableImplTest {
         final Map<String, Integer> results = getReducedResults(reduced);
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             assertReduced(results, topic, driver);
-            final KeyValueStore<String, Integer> reduce = (KeyValueStore<String, Integer>) driver.getStateStore("reduce");
+            final KeyValueStore<String, Integer> reduce = driver.getKeyValueStore("reduce");
             assertThat(reduce.get("A"), equalTo(5));
             assertThat(reduce.get("B"), equalTo(6));
         }
@@ -240,7 +240,7 @@ public class KGroupedTableImplTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(topic, driver);
-            final KeyValueStore<String, String> aggregate = (KeyValueStore<String, String>) driver.getStateStore("aggregate");
+            final KeyValueStore<String, String> aggregate = driver.getKeyValueStore("aggregate");
             assertThat(aggregate.get("1"), equalTo("0+1+1+1"));
             assertThat(aggregate.get("2"), equalTo("0+2+2"));
         }
