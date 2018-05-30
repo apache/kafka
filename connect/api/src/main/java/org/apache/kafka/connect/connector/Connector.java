@@ -20,6 +20,7 @@ import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.components.Versioned;
 
 import java.util.List;
 import java.util.Map;
@@ -41,16 +42,10 @@ import java.util.Map;
  * Tasks.
  * </p>
  */
-public abstract class Connector {
+public abstract class Connector implements Versioned {
 
     protected ConnectorContext context;
 
-    /**
-     * Get the version of this connector.
-     *
-     * @return the version, formatted as a String
-     */
-    public abstract String version();
 
     /**
      * Initialize this connector, using the provided ConnectorContext to notify the runtime of

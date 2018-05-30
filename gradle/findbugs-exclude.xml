@@ -89,12 +89,6 @@ For a detailed description of findbugs bug categories, see http://findbugs.sourc
     </Match>
 
     <Match>
-        <!-- Add a suppression for having the thread start in the constructor of the old, deprecated consumer. -->
-        <Class name="kafka.producer.Producer"/>
-        <Bug pattern="SC_START_IN_CTOR"/>
-    </Match>
-
-    <Match>
         <!-- Add a suppression for the equals() method of NetworkClientBlockingOps. -->
         <Class name="kafka.utils.NetworkClientBlockingOps"/>
         <Bug pattern="EQ_UNUSUAL"/>

@@ -16,13 +16,17 @@
  */
 package org.apache.kafka.connect.runtime.isolation;
 
+import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.json.JsonConverter;
+import org.apache.kafka.connect.json.JsonConverterConfig;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.ConverterConfig;
@@ -95,6 +99,11 @@ public class Plugins {
                         + classOrAlias
                         + " does not extend " + pluginClass.getSimpleName()
         );
+    }
+
+    protected static boolean isInternalConverter(String classPropertyName) {
+        return classPropertyName.equals(WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG)
+            || classPropertyName.equals(WorkerConfig.INTERNAL_VALUE_CONVERTER_CLASS_CONFIG);
     }
 
     public static ClassLoader compareAndSwapLoaders(ClassLoader loader) {
@@ -195,8 +204,9 @@ public class Plugins {
      * @throws ConnectException if the {@link Converter} implementation class could not be found
      */
     public Converter newConverter(AbstractConfig config, String classPropertyName, ClassLoaderUsage classLoaderUsage) {
-        if (!config.originals().containsKey(classPropertyName)) {
-            // This configuration does not define the converter via the specified property name
+        if (!config.originals().containsKey(classPropertyName) && !isInternalConverter(classPropertyName)) {
+            // This configuration does not define the converter via the specified property name, and
+            // it does not represent an internal converter (which has a default available)
             return null;
         }
         Converter plugin = null;
@@ -236,6 +246,18 @@ public class Plugins {
         Map<String, Object> converterConfig = config.originalsWithPrefix(configPrefix);
         log.debug("Configuring the {} converter with configuration:{}{}",
                   isKeyConverter ? "key" : "value", System.lineSeparator(), converterConfig);
+
+        // Have to override schemas.enable from true to false for internal JSON converters
+        // Don't have to warn the user about anything since all deprecation warnings take place in the
+        // WorkerConfig class
+        if (plugin instanceof JsonConverter && isInternalConverter(classPropertyName)) {
+            // If they haven't explicitly specified values for internal.key.converter.schemas.enable
+            // or internal.value.converter.schemas.enable, we can safely default them to false
+            if (!converterConfig.containsKey(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG)) {
+                converterConfig.put(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, false);
+            }
+        }
+
         plugin.configure(converterConfig, isKeyConverter);
         return plugin;
     }
@@ -293,6 +315,53 @@ public class Plugins {
         converterConfig.put(ConverterConfig.TYPE_CONFIG, ConverterType.HEADER.getName());
         log.debug("Configuring the header converter with configuration:{}{}", System.lineSeparator(), converterConfig);
         plugin.configure(converterConfig);
+        return plugin;
+    }
+
+
+    /**
+     * If the given class names are available in the classloader, return a list of new configured
+     * instances. If the instances implement {@link Configurable}, they are configured with provided {@param config}
+     *
+     * @param klassNames         the list of class names of plugins that needs to instantiated and configured
+     * @param config             the configuration containing the {@link org.apache.kafka.connect.runtime.Worker}'s configuration; may not be {@code null}
+     * @param pluginKlass        the type of the plugin class that is being instantiated
+     * @return the instantiated and configured list of plugins of type <T>; empty list if the {@param klassNames} is {@code null} or empty
+     * @throws ConnectException if the implementation class could not be found
+     */
+    public <T> List<T> newPlugins(List<String> klassNames, AbstractConfig config, Class<T> pluginKlass) {
+        List<T> plugins = new ArrayList<>();
+        if (klassNames != null) {
+            for (String klassName : klassNames) {
+                plugins.add(newPlugin(klassName, config, pluginKlass));
+            }
+        }
+        return plugins;
+    }
+
+    public <T> T newPlugin(String klassName, AbstractConfig config, Class<T> pluginKlass) {
+        T plugin;
+        Class<? extends T> klass;
+        try {
+            klass = pluginClass(delegatingLoader, klassName, pluginKlass);
+        } catch (ClassNotFoundException e) {
+            String msg = String.format("Failed to find any class that implements %s and which "
+                                       + "name matches %s", pluginKlass, klassName);
+            throw new ConnectException(msg);
+        }
+        plugin = newPlugin(klass);
+        if (plugin == null) {
+            throw new ConnectException("Unable to instantiate '" + klassName + "'");
+        }
+        if (plugin instanceof Versioned) {
+            Versioned versionedPlugin = (Versioned) plugin;
+            if (versionedPlugin.version() == null || versionedPlugin.version().trim().isEmpty()) {
+                throw new ConnectException("Version not defined for '" + klassName + "'");
+            }
+        }
+        if (plugin instanceof Configurable) {
+            ((Configurable) plugin).configure(config.originals());
+        }
         return plugin;
     }
 
