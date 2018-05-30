@@ -87,7 +87,7 @@ class WordCountTest extends JUnitSuite with WordCountTestData {
     // generate word counts
     val wordCounts: KTable[String, Long] =
       textLines.flatMapValues(v => pattern.split(v.toLowerCase))
-        .groupBy((k, v) => v)
+        .groupBy((_, v) => v)
         .count()
 
     // write to output topic
@@ -119,7 +119,7 @@ class WordCountTest extends JUnitSuite with WordCountTestData {
     val wordCounts: KTable[String, Long] =
       textLines.flatMapValues(v => pattern.split(v.toLowerCase))
         .groupBy((k, v) => v)
-        .count(Materialized.as("word-count"))
+        .count()(Materialized.as("word-count"))
 
     // write to output topic
     wordCounts.toStream.to(outputTopic)

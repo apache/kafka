@@ -19,18 +19,21 @@
  */
 package org.apache.kafka.streams.scala
 
-import org.apache.kafka.streams.kstream.{KStream => KStreamJ,
-  KTable => KTableJ,
+import org.apache.kafka.streams.kstream.{
   KGroupedStream => KGroupedStreamJ,
+  KGroupedTable => KGroupedTableJ,
+  KStream => KStreamJ,
+  KTable => KTableJ,
   SessionWindowedKStream => SessionWindowedKStreamJ,
   TimeWindowedKStream => TimeWindowedKStreamJ,
-  KGroupedTable => KGroupedTableJ, _}
-
+  _
+}
 import org.apache.kafka.streams.scala.kstream._
 import org.apache.kafka.streams.KeyValue
 import org.apache.kafka.common.serialization.Serde
-
 import scala.language.implicitConversions
+
+import org.apache.kafka.streams.processor.StateStore
 
 /**
  * Implicit conversions between the Scala wrapper objects and the underlying Java
@@ -69,6 +72,10 @@ object ImplicitConversions {
 
   implicit def producedFromSerde[K, V](implicit keySerde: Serde[K], valueSerde: Serde[V]): Produced[K, V] =
     Produced.`with`(keySerde, valueSerde)
+
+  implicit def materializedFromSerde[K, V, S <: StateStore](implicit keySerde: Serde[K],
+                                                            valueSerde: Serde[V]): Materialized[K, V, S] =
+    Materialized.`with`[K, V, S](keySerde, valueSerde)
 
   implicit def joinedFromKeyValueOtherSerde[K, V, VO]
     (implicit keySerde: Serde[K], valueSerde: Serde[V], otherValueSerde: Serde[VO]): Joined[K, V, VO] =
