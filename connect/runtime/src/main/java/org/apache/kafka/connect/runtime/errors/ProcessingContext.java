@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.runtime.errors;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.connect.source.SourceRecord;
 
 import java.util.Collection;
@@ -25,7 +26,7 @@ import java.util.Objects;
 
 /**
  * Contains all the metadata related to the currently evaluating operation. Only one instance of this class is meant
- * to exist per task in a JVM. The {@link #reset} should be called before starting operations on a new record.
+ * to exist per task in a JVM.
  */
 class ProcessingContext {
 
@@ -139,14 +140,33 @@ class ProcessingContext {
 
     @Override
     public String toString() {
-        return "ProcessingContext{" +
-                "position=" + position +
-                ", class=" + klass +
-                ", consumedMessage=" + consumedMessage +
-                ", sourceRecord=" + sourceRecord +
-                ", attempt=" + attempt +
-                ", reporters=" + reporters +
-                '}';
+        return toString(false);
+    }
+
+    public String toString(boolean includeMessage) {
+        StringBuilder builder = new StringBuilder();
+        builder.append("Executing stage '");
+        builder.append(stage().name());
+        builder.append("' with class '");
+        builder.append(executingClass() == null ? "null" : executingClass().getName());
+        builder.append('\'');
+        if (includeMessage && sourceRecord() != null) {
+            builder.append(", where source record is = ");
+            builder.append(sourceRecord());
+        } else if (includeMessage && consumerRecord() != null) {
+            ConsumerRecord<byte[], byte[]> msg = consumerRecord();
+            builder.append(", where consumed record is ");
+            builder.append("{topic='").append(msg.topic()).append('\'');
+            builder.append(", partition=").append(msg.partition());
+            builder.append(", offset=").append(msg.offset());
+            if (msg.timestampType() == TimestampType.CREATE_TIME || msg.timestampType() == TimestampType.LOG_APPEND_TIME) {
+                builder.append(", timestamp=").append(msg.timestamp());
+                builder.append(", timestampType=").append(msg.timestampType());
+            }
+            builder.append("}");
+        }
+        builder.append('.');
+        return builder.toString();
     }
 
     /**

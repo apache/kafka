@@ -157,9 +157,9 @@ public class ErrorReporterTest {
 
         ProcessingContext context = processingContext();
 
-        String msg = logReporter.message(context).toString();
-        assertEquals("Error encountered in task job-0 while performing KEY_CONVERTER operation with class " +
-                "'class org.apache.kafka.connect.json.JsonConverter'.", msg);
+        String msg = logReporter.message(context);
+        assertEquals("Error encountered in task job-0. Executing stage 'KEY_CONVERTER' with class " +
+                "'org.apache.kafka.connect.json.JsonConverter'.", msg);
     }
 
     @Test
@@ -171,10 +171,10 @@ public class ErrorReporterTest {
 
         ProcessingContext context = processingContext();
 
-        String msg = logReporter.message(context).toString();
-        assertEquals("Error encountered in task job-0 while performing KEY_CONVERTER operation with class " +
-                "'class org.apache.kafka.connect.json.JsonConverter', msg.topic='test-topic', " +
-                "msg.partition=5, msg.offset=100, msg.timestamp=-1, msg.timestampType=NoTimestampType.", msg);
+        String msg = logReporter.message(context);
+        assertEquals("Error encountered in task job-0. Executing stage 'KEY_CONVERTER' with class " +
+                "'org.apache.kafka.connect.json.JsonConverter', where consumed record is {topic='test-topic', " +
+                "partition=5, offset=100}.", msg);
     }
 
     private ProcessingContext processingContext() {

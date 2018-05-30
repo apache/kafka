@@ -144,8 +144,8 @@ public class RetryWithToleranceOperatorTest {
         retryWithToleranceOperator.configure(props);
         retryWithToleranceOperator.metrics(errorHandlingMetrics);
 
-        EasyMock.expect(mockOperation.apply()).andThrow(e).times(numRetriableExceptionsThrown);
-        EasyMock.expect(mockOperation.apply()).andReturn("Success");
+        EasyMock.expect(mockOperation.call()).andThrow(e).times(numRetriableExceptionsThrown);
+        EasyMock.expect(mockOperation.call()).andReturn("Success");
 
         replay(mockOperation);
 
@@ -165,8 +165,8 @@ public class RetryWithToleranceOperatorTest {
         retryWithToleranceOperator.configure(props);
         retryWithToleranceOperator.metrics(errorHandlingMetrics);
 
-        EasyMock.expect(mockOperation.apply()).andThrow(e).times(numRetriableExceptionsThrown);
-        EasyMock.expect(mockOperation.apply()).andReturn("Success");
+        EasyMock.expect(mockOperation.call()).andThrow(e).times(numRetriableExceptionsThrown);
+        EasyMock.expect(mockOperation.call()).andReturn("Success");
 
         replay(mockOperation);
 
@@ -301,7 +301,7 @@ public class RetryWithToleranceOperatorTest {
         }
 
         @Override
-        public Object apply() throws Exception {
+        public Object call() throws Exception {
             throw e;
         }
     }

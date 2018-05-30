@@ -38,35 +38,31 @@ import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 
 /**
- * <p>
  * Attempt to recover a failed operation with retries and tolerance limits.
- * </p>
- *
  * <p>
+ *
  * A retry is attempted if the operation throws a {@link RetriableException}. Retries are accompanied by exponential backoffs, starting with
  * {@link #RETRIES_DELAY_MIN_MS}, up to what is specified with {@link RetryWithToleranceOperatorConfig#retryDelayMax()}.
  * Including the first attempt and future retries, the total time taken to evaluate the operation should be within
  * {@link RetryWithToleranceOperatorConfig#retryDelayMax()} millis.
- * </p>
- *
  * <p>
+ *
  * This executor will tolerate failures, as specified by {@link RetryWithToleranceOperatorConfig#toleranceLimit()}.
  * For transformations and converters, all exceptions are tolerated. For others operations, only {@link RetriableException} are tolerated.
- * </p>
- *
  * <p>
+ *
  * There are three outcomes to executing an operation. It might succeed, in which case the result is returned to the caller.
  * If it fails, this class does one of these two things: (1) if the failure occurred due to a tolerable exception, then
  * set appropriate error reason in the {@link ProcessingContext} and return null, or (2) if the exception is not tolerated,
  * then it is wrapped into a ConnectException and rethrown to the caller.
- * </p>
+ * <p>
  */
 public class RetryWithToleranceOperator {
 
     private static final Logger log = LoggerFactory.getLogger(RetryWithToleranceOperator.class);
 
     public static final String RETRY_TIMEOUT = "retry.timeout";
-    public static final String RETRY_TIMEOUT_DOC = "The maximum number of retries before failing an operation";
+    public static final String RETRY_TIMEOUT_DOC = "The total duration in milliseconds a failed operation will be retried for.";
     public static final long RETRY_TIMEOUT_DEFAULT = 0;
 
     public static final String RETRY_DELAY_MAX_MS = "retry.delay.max.ms";
@@ -159,7 +155,7 @@ public class RetryWithToleranceOperator {
         do {
             try {
                 attempt++;
-                return operation.apply();
+                return operation.call();
             } catch (RetriableException e) {
                 log.trace("Caught a retriable exception while executing {} operation with {}", context.stage(), context.executingClass());
                 errorHandlingMetrics.recordFailure();

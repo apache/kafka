@@ -24,6 +24,7 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.errors.TopicExistsException;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.WorkerConfig;
@@ -37,9 +38,9 @@ import static java.util.Collections.singleton;
 
 /**
  * Write the original consumed record into a dead letter queue. The dead letter queue is a Kafka topic located
- * on the same cluster used by the worker to maintain internal topics. Each connector gets their own dead letter
- * queue topic. By default, the topic name is not set, and if the connector config doesn't specify one, this
- * feature is disabled.
+ * on the same cluster used by the worker to maintain internal topics. Each connector is typically configured
+ * with its own Kafka topic dead letter queue. By default, the topic name is not set, and if the
+ * connector config doesn't specify one, this feature is disabled.
  */
 public class DeadLetterQueueReporter implements ErrorReporter {
 
@@ -122,11 +123,11 @@ public class DeadLetterQueueReporter implements ErrorReporter {
         }
 
         ProducerRecord<byte[], byte[]> producerRecord;
-        if (originalMessage.timestamp() > 0) {
-            producerRecord = new ProducerRecord<>(config.topic(), null, originalMessage.timestamp(),
+        if (originalMessage.timestamp() == RecordBatch.NO_TIMESTAMP) {
+            producerRecord = new ProducerRecord<>(config.topic(), null,
                     originalMessage.key(), originalMessage.value(), originalMessage.headers());
         } else {
-            producerRecord = new ProducerRecord<>(config.topic(), null,
+            producerRecord = new ProducerRecord<>(config.topic(), null, originalMessage.timestamp(),
                     originalMessage.key(), originalMessage.value(), originalMessage.headers());
         }
 

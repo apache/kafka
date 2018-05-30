@@ -16,19 +16,13 @@
  */
 package org.apache.kafka.connect.runtime.errors;
 
+import java.util.concurrent.Callable;
+
 /**
  * A recoverable operation evaluated in the connector pipeline.
  *
  * @param <V> return type of the result of the operation.
  */
-public interface Operation<V> {
-
-    /**
-     * Execute an operation in the current thread.
-     *
-     * @return the result of the operation.
-     * @throws Exception if underlying operation fails.
-     */
-    V apply() throws Exception;
+public interface Operation<V> extends Callable<V> {
 
 }

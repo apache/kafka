@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.runtime.errors;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.util.ConnectorTaskId;
@@ -26,7 +25,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Map;
 
 /**
- * Log error context with application logs.
+ * Writes errors and their context to application logs.
  */
 public class LogReporter implements ErrorReporter {
 
@@ -35,11 +34,11 @@ public class LogReporter implements ErrorReporter {
     public static final String PREFIX = "errors.log";
 
     public static final String LOG_ENABLE = "enable";
-    public static final String LOG_ENABLE_DOC = "Log the error context along with the other application logs.";
+    public static final String LOG_ENABLE_DOC = "If true, log to application logs the errors and the information describing where they occurred.";
     public static final boolean LOG_ENABLE_DEFAULT = false;
 
     public static final String LOG_INCLUDE_MESSAGES = "include.messages";
-    public static final String LOG_INCLUDE_MESSAGES_DOC = "Include the Connect Record which failed to process in the log.";
+    public static final String LOG_INCLUDE_MESSAGES_DOC = "If true, include in the application log the Connect key, value, and other details of records that resulted in errors and failures.";
     public static final boolean LOG_INCLUDE_MESSAGES_DEFAULT = false;
 
     private final ConnectorTaskId id;
@@ -70,8 +69,7 @@ public class LogReporter implements ErrorReporter {
             return;
         }
 
-        StringBuilder builder = message(context);
-        log.error(builder.toString(), context.error());
+        log.error(message(context), context.error());
         errorHandlingMetrics.recordErrorLogged();
     }
 
@@ -81,26 +79,8 @@ public class LogReporter implements ErrorReporter {
     }
 
     // Visible for testing
-    StringBuilder message(ProcessingContext context) {
-        StringBuilder builder = new StringBuilder("Error encountered in task ");
-        builder.append(id).append(" while performing ");
-        builder.append(context.stage().name());
-        builder.append(" operation with class '");
-        builder.append(context.executingClass());
-        builder.append('\'');
-        if (config.canLogMessages() && context.sourceRecord() != null) {
-            builder.append(", with record = ");
-            builder.append(context.sourceRecord());
-        } else if (config.canLogMessages() && context.consumerRecord() != null) {
-            ConsumerRecord<byte[], byte[]> msg = context.consumerRecord();
-            builder.append(", msg.topic='").append(msg.topic()).append('\'');
-            builder.append(", msg.partition=").append(msg.partition());
-            builder.append(", msg.offset=").append(msg.offset());
-            builder.append(", msg.timestamp=").append(msg.timestamp());
-            builder.append(", msg.timestampType=").append(msg.timestampType());
-        }
-        builder.append('.');
-        return builder;
+    String message(ProcessingContext context) {
+        return String.format("Error encountered in task %s. %s", String.valueOf(id), context.toString(config.canLogMessages()));
     }
 
     @Override
