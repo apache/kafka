@@ -36,11 +36,19 @@ object Resource {
  * @param resourceType type of resource.
  * @param name name of the resource, for topic this will be topic name , for group it will be group name. For cluster type
  *             it will be a constant string kafka-cluster.
+ * @param resourceNameType type of resource name: literal, wildcard-suffixed, etc.
  */
-case class Resource(resourceType: ResourceType, name: String) {
+case class Resource(resourceType: ResourceType, name: String, resourceNameType: ResourceNameType) {
+
+  def this(resourceType: ResourceType, name: String) {
+    this(resourceType, name, Literal)
+  }
 
   override def toString: String = {
+    // can't be changed because it will break backward compatibility with acl change notification
     resourceType.name + Resource.Separator + name
   }
+
+  // TODO why does this class not have equals() and hashCode()?
 }
 

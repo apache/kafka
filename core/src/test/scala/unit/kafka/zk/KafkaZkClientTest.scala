@@ -16,34 +16,35 @@
 */
 package kafka.zk
 
-import java.util.{Collections, Properties, UUID}
 import java.nio.charset.StandardCharsets.UTF_8
 import java.util.concurrent.{CountDownLatch, TimeUnit}
+import java.util.{Collections, Properties, UUID}
 
 import kafka.api.{ApiVersion, LeaderAndIsr}
 import kafka.cluster.{Broker, EndPoint}
+import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.log.LogConfig
 import kafka.security.auth._
+import kafka.security.auth.storage.AclStore
 import kafka.server.ConfigType
 import kafka.utils.CoreUtils
+import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
+import kafka.zookeeper._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.token.delegation.TokenInformation
 import org.apache.kafka.common.utils.{SecurityUtils, Time}
 import org.apache.zookeeper.KeeperException.{Code, NoNodeException, NodeExistsException}
+import org.apache.zookeeper.data.Stat
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
+
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Seq, mutable}
 import scala.util.Random
-
-import kafka.controller.LeaderIsrAndControllerEpoch
-import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
-import kafka.zookeeper._
-import org.apache.kafka.common.security.JaasUtils
-import org.apache.zookeeper.data.Stat
 
 class KafkaZkClientTest extends ZooKeeperTestHarness {
 
@@ -427,16 +428,16 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
   @Test
   def testAclManagementMethods() {
 
-    assertFalse(zkClient.pathExists(AclZNode.path))
-    assertFalse(zkClient.pathExists(AclChangeNotificationZNode.path))
-    ResourceType.values.foreach(resource => assertFalse(zkClient.pathExists(ResourceTypeZNode.path(resource.name))))
+    assertFalse(zkClient.pathExists(AclStore.literalAclStore.aclZNode.path))
+    assertFalse(zkClient.pathExists(AclStore.literalAclStore.aclChangesZNode.path))
+    ResourceType.values.foreach(resource => assertFalse(zkClient.pathExists(AclStore.literalAclStore.resourceTypeZNode.path(resource))))
 
     // create acl paths
     zkClient.createAclPaths
 
-    assertTrue(zkClient.pathExists(AclZNode.path))
-    assertTrue(zkClient.pathExists(AclChangeNotificationZNode.path))
-    ResourceType.values.foreach(resource => assertTrue(zkClient.pathExists(ResourceTypeZNode.path(resource.name))))
+    assertTrue(zkClient.pathExists(AclStore.literalAclStore.aclZNode.path))
+    assertTrue(zkClient.pathExists(AclStore.literalAclStore.aclChangesZNode.path))
+    ResourceType.values.foreach(resource => assertTrue(zkClient.pathExists(AclStore.literalAclStore.resourceTypeZNode.path(resource))))
 
     val resource1 = new Resource(Topic, UUID.randomUUID().toString)
     val resource2 = new Resource(Topic, UUID.randomUUID().toString)
@@ -469,10 +470,10 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     assertEquals(1, versionedAcls.zkVersion)
 
     //get resource Types
-    assertTrue(ResourceType.values.map( rt => rt.name).toSet == zkClient.getResourceTypes().toSet)
+    assertTrue(ResourceType.values.map( rt => rt.name).toSet == zkClient.getResourceTypes(AclStore.literalAclStore).toSet)
 
     //get resource name
-    val resourceNames = zkClient.getResourceNames(Topic.name)
+    val resourceNames = zkClient.getResourceNames(AclStore.literalAclStore, Topic)
     assertEquals(2, resourceNames.size)
     assertTrue(Set(resource1.name,resource2.name) == resourceNames.toSet)
 
@@ -486,13 +487,13 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     assertTrue(zkClient.conditionalDelete(resource2, 0))
 
 
-    zkClient.createAclChangeNotification("resource1")
-    zkClient.createAclChangeNotification("resource2")
+    zkClient.createAclChangeNotification(AclStore.literalAclStore, "resource1")
+    zkClient.createAclChangeNotification(AclStore.literalAclStore, "resource2")
 
-    assertEquals(2, zkClient.getChildren(AclChangeNotificationZNode.path).size)
+    assertEquals(2, zkClient.getChildren(AclStore.literalAclStore.aclChangesZNode.path).size)
 
     zkClient.deleteAclChangeNotifications()
-    assertTrue(zkClient.getChildren(AclChangeNotificationZNode.path).isEmpty)
+    assertTrue(zkClient.getChildren(AclStore.literalAclStore.aclChangesZNode.path).isEmpty)
   }
 
   @Test
