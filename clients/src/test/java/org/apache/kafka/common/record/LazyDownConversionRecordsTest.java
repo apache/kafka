@@ -22,12 +22,16 @@ import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 
 import static java.util.Arrays.asList;
@@ -37,29 +41,42 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+@RunWith(value = Parameterized.class)
 public class LazyDownConversionRecordsTest {
+    private final CompressionType compressionType;
+    private final byte toMagic;
+    private final DownConversionTest test;
+
+    public LazyDownConversionRecordsTest(CompressionType compressionType, byte toMagic, DownConversionTest test) {
+        this.compressionType = compressionType;
+        this.toMagic = toMagic;
+        this.test = test;
+    }
+
     enum DownConversionTest {
         DEFAULT,
         OVERFLOW,
     }
 
-    @Test
-    public void testConversion() throws IOException {
+    @Parameterized.Parameters(name = "compressionType={0}, toMagic={1}, test={2}")
+    public static Collection<Object[]> data() {
+        List<Object[]> values = new ArrayList<>();
         for (byte toMagic = RecordBatch.MAGIC_VALUE_V0; toMagic <= RecordBatch.CURRENT_MAGIC_VALUE; toMagic++) {
             for (DownConversionTest test : DownConversionTest.values()) {
-                doTestConversion(CompressionType.NONE, toMagic, test);
-                doTestConversion(CompressionType.GZIP, toMagic, test);
+                values.add(new Object[]{CompressionType.NONE, toMagic, test});
+                values.add(new Object[]{CompressionType.GZIP, toMagic, test});
             }
         }
+        return values;
     }
 
-    private void doTestConversion(CompressionType compressionType, byte toMagic, DownConversionTest test) throws IOException {
-        System.out.println("{" + compressionType + ", " + toMagic + ", " + test + "}");
+    @Test
+    public void doTestConversion() throws IOException {
         List<Long> offsets = asList(0L, 2L, 3L, 9L, 11L, 15L, 16L, 17L, 22L, 24L);
 
         Header[] headers = {new RecordHeader("headerKey1", "headerValue1".getBytes()),
-                            new RecordHeader("headerKey2", "headerValue2".getBytes()),
-                            new RecordHeader("headerKey3", "headerValue3".getBytes())};
+                new RecordHeader("headerKey2", "headerValue2".getBytes()),
+                new RecordHeader("headerKey3", "headerValue3".getBytes())};
 
         List<SimpleRecord> records = asList(
                 new SimpleRecord(1L, "k1".getBytes(), "hello".getBytes()),

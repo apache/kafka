@@ -705,14 +705,8 @@ private[kafka] class Processor(val id: Int,
           throw new IllegalStateException(s"Send for ${send.destination} completed, but not in `inflightResponses`")
         }
         updateRequestMetrics(response)
-
         // Invoke send completion callback
-        response match {
-          case response: RequestChannel.SendResponse => response.onComplete.foreach {
-            onComplete => onComplete(send)
-          }
-          case _ =>
-        }
+        response.onComplete.foreach(onComplete => onComplete(send))
         selector.unmute(send.destination)
       } catch {
         case e: Throwable => processChannelException(send.destination,

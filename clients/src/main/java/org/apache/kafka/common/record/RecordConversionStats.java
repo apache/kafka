@@ -18,7 +18,7 @@ package org.apache.kafka.common.record;
 
 public class RecordConversionStats {
 
-    public static final RecordConversionStats EMPTY = new RecordConversionStats(0L, 0, -1);
+    public static final RecordConversionStats EMPTY = new RecordConversionStats();
 
     private long temporaryMemoryBytes;
     private int numRecordsConverted;
@@ -28,6 +28,10 @@ public class RecordConversionStats {
         this.temporaryMemoryBytes = temporaryMemoryBytes;
         this.numRecordsConverted = numRecordsConverted;
         this.conversionTimeNanos = conversionTimeNanos;
+    }
+
+    public RecordConversionStats() {
+        this(0, 0, 0);
     }
 
     public void add(RecordConversionStats stats) {

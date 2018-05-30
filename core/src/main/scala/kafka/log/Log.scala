@@ -65,7 +65,7 @@ object LogAppendInfo {
  * @param offsetOfMaxTimestamp The offset of the message with the maximum timestamp.
  * @param logAppendTime The log append time (if used) of the message set, otherwise Message.NoTimestamp
  * @param logStartOffset The start offset of the log at the time of this append.
- * @param recordsProcessingStats Statistics collected during record processing, `null` if `assignOffsets` is `false`
+ * @param recordConversionStats Statistics collected during record processing, `null` if `assignOffsets` is `false`
  * @param sourceCodec The source codec used in the message set (send by the producer)
  * @param targetCodec The target codec of the message set(after applying the broker compression configuration if any)
  * @param shallowCount The number of shallow messages
@@ -78,7 +78,7 @@ case class LogAppendInfo(var firstOffset: Option[Long],
                          var offsetOfMaxTimestamp: Long,
                          var logAppendTime: Long,
                          var logStartOffset: Long,
-                         var recordsProcessingStats: RecordConversionStats,
+                         var recordConversionStats: RecordConversionStats,
                          sourceCodec: CompressionCodec,
                          targetCodec: CompressionCodec,
                          shallowCount: Int,
@@ -693,7 +693,7 @@ class Log(@volatile var dir: File,
           appendInfo.maxTimestamp = validateAndOffsetAssignResult.maxTimestamp
           appendInfo.offsetOfMaxTimestamp = validateAndOffsetAssignResult.shallowOffsetOfMaxTimestamp
           appendInfo.lastOffset = offset.value - 1
-          appendInfo.recordsProcessingStats = validateAndOffsetAssignResult.recordsProcessingStats
+          appendInfo.recordConversionStats = validateAndOffsetAssignResult.recordConversionStats
           if (config.messageTimestampType == TimestampType.LOG_APPEND_TIME)
             appendInfo.logAppendTime = now
 

@@ -41,7 +41,7 @@ public final class LazyDownConversionRecordsSend extends RecordsSend<LazyDownCon
     public LazyDownConversionRecordsSend(String destination, LazyDownConversionRecords records) {
         super(destination, records, records.sizeInBytes());
         convertedRecordsWriter = null;
-        recordConversionStats = new RecordConversionStats(0, 0, 0);
+        recordConversionStats = new RecordConversionStats();
         convertedRecordsIterator = records().iterator(MAX_READ_SIZE);
     }
 

@@ -183,13 +183,7 @@ object RequestChannel extends Logging {
 
       if (isRequestLoggingEnabled) {
         val detailsEnabled = requestLogger.underlying.isTraceEnabled
-        val responseString = response match {
-          case sendResponse: SendResponse =>
-            sendResponse.responseAsString.getOrElse(
-              throw new IllegalStateException("responseAsString should always be defined if request logging is enabled"))
-          case _ => ""
-        }
-
+        val responseString = response.responseString.getOrElse("responseAsString should always be defined if request logging is enabled")
         val builder = new StringBuilder(256)
         builder.append("Completed request:").append(requestDesc(detailsEnabled))
           .append(",response:").append(responseString)
@@ -229,16 +223,18 @@ object RequestChannel extends Logging {
   }
 
   abstract class Response(val request: Request) {
-    val nowNs = Time.SYSTEM.nanoseconds
-    request.responseCompleteTimeNanos = nowNs
-    if (request.apiLocalCompleteTimeNanos == -1L)
-      request.apiLocalCompleteTimeNanos = nowNs
+    locally {
+      val nowNs = Time.SYSTEM.nanoseconds
+      request.responseCompleteTimeNanos = nowNs
+      if (request.apiLocalCompleteTimeNanos == -1L)
+        request.apiLocalCompleteTimeNanos = nowNs
+    }
 
     def processor: Int = request.processor
 
-    def toString(responseSend: Option[Send], responseAsString: Option[String]): String = {
-      s"Response(responseType=${this.getClass} request=$request, responseSend=$responseSend), responseAsString=$responseAsString"
-    }
+    def responseString: Option[String] = Some("")
+
+    def onComplete: Option[Send => Unit] = None
 
     override def toString: String
   }
@@ -247,16 +243,23 @@ object RequestChannel extends Logging {
   class SendResponse(request: Request,
                      val responseSend: Send,
                      val responseAsString: Option[String],
-                     val onComplete: Option[Send => Unit]) extends Response(request) {
-    override def toString: String = toString(Some(responseSend), responseAsString)
+                     val onCompleteCallback: Option[Send => Unit]) extends Response(request) {
+    override def responseString: Option[String] = responseAsString
+
+    override def onComplete: Option[Send => Unit] = onCompleteCallback
+
+    override def toString: String =
+      s"Response(responseType=SendResponse, request=$request, responseSend=$responseSend), responseAsString=$responseAsString"
   }
 
   class NoOpResponse(request: Request) extends Response(request) {
-    override def toString: String = toString(None, None)
+    override def toString: String =
+      s"Response(responseType=NoOpResponse, request=$request)"
   }
 
   class CloseConnectionResponse(request: Request) extends Response(request) {
-    override def toString: String = toString(None, None)
+    override def toString: String =
+      s"Response(responseType=CloseConnectionResponse, request=$request)"
   }
 }
 

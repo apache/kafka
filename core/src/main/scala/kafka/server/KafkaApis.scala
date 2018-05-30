@@ -50,7 +50,7 @@ import org.apache.kafka.common.requests.CreateAclsResponse.AclCreationResponse
 import org.apache.kafka.common.requests.DeleteAclsResponse.{AclDeletionResult, AclFilterResponse}
 import org.apache.kafka.common.requests.DescribeLogDirsResponse.LogDirInfo
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
-import org.apache.kafka.common.requests.{SaslAuthenticateResponse, SaslHandshakeResponse, Resource => RResource, ResourceType => RResourceType, _}
+import org.apache.kafka.common.requests.{Resource => RResource, ResourceType => RResourceType, _}
 import org.apache.kafka.common.resource.{Resource => AdminResource}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
@@ -476,7 +476,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         isFromClient = true,
         entriesPerPartition = authorizedRequestInfo,
         responseCallback = sendResponseCallback,
-        processingStatsCallback = processingStatsCallback)
+        recordConversionStatsCallback = processingStatsCallback)
 
       // if the request is put into the purgatory, it will have a held reference and hence cannot be garbage collected;
       // hence we clear its data here in order to let GC reclaim its memory since it is already appended to log
@@ -604,7 +604,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         trace(s"Sending Fetch response with partitions.size=${unconvertedFetchResponse.responseData().size()}, " +
           s"metadata=${unconvertedFetchResponse.sessionId()}")
 
-        def onComplete(send: Send): Unit = {
+        def updateConversionStats(send: Send): Unit = {
           send match {
             case send: MultiRecordsSend if send.recordConversionStats != null =>
               send.recordConversionStats.asScala.toMap.foreach {
@@ -615,9 +615,9 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
 
         if (fetchRequest.isFromFollower)
-          sendResponseExemptThrottle(request, createResponse(0), Some(onComplete))
+          sendResponseExemptThrottle(request, createResponse(0), Some(updateConversionStats))
         else
-          sendResponseMaybeThrottle(request, requestThrottleMs => createResponse(requestThrottleMs), Some(onComplete))
+          sendResponseMaybeThrottle(request, requestThrottleMs => createResponse(requestThrottleMs), Some(updateConversionStats))
       }
 
       // When this callback is triggered, the remote API call has completed.

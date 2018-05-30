@@ -67,12 +67,6 @@ public class LazyDownConversionRecords implements BaseRecords {
         }
     }
 
-    /**
-     * {@inheritDoc}
-     * Note that we do not have a way to return the exact size of down-converted messages, so we return the size of the
-     * pre-down-converted messages. The consumer however expects at least one full batch of messages to be sent out so
-     * we also factor in the down-converted size of the first batch.
-     */
     @Override
     public int sizeInBytes() {
         return sizeInBytes;
