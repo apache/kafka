@@ -43,9 +43,9 @@ import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME, isInternal}
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.network.{ListenerName, Send}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.{BaseRecords, ControlRecordType, EndTransactionMarker, LazyDownConversionRecords, MemoryRecords, RecordBatch, RecordConversionStats, Records}
+import org.apache.kafka.common.record.{BaseRecords, ControlRecordType, EndTransactionMarker, LazyDownConversionRecords, MemoryRecords, MultiRecordsSend, RecordBatch, RecordConversionStats, Records}
 import org.apache.kafka.common.requests.CreateAclsResponse.AclCreationResponse
 import org.apache.kafka.common.requests.DeleteAclsResponse.{AclDeletionResult, AclFilterResponse}
 import org.apache.kafka.common.requests.DescribeLogDirsResponse.LogDirInfo
@@ -459,7 +459,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     def processingStatsCallback(processingStats: FetchResponseStats): Unit = {
       processingStats.foreach { case (tp, info) =>
-        updateRecordsProcessingStats(request, tp, info)
+        updateRecordConversionStats(request, tp, info)
       }
     }
 
@@ -533,8 +533,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       })
     }
 
-    def convertedPartitionData(tp: TopicPartition,
-                               unconvertedFetchResponse: FetchResponse.PartitionData[Records]): FetchResponse.PartitionData[BaseRecords] = {
+    def convertRecords(tp: TopicPartition, unconvertedRecords: Records): BaseRecords = {
       // Down-conversion of the fetched records is needed when the stored magic version is
       // greater than that supported by the client (as indicated by the fetch request version). If the
       // configured magic version for the topic is less than or equal to that supported by the version of the
@@ -544,9 +543,9 @@ class KafkaApis(val requestChannel: RequestChannel,
       // which were written in the new format prior to the version downgrade.
       replicaManager.getMagic(tp).flatMap { magic =>
         val downConvertMagic = {
-          if (magic > RecordBatch.MAGIC_VALUE_V0 && versionId <= 1 && !unconvertedFetchResponse.records.hasCompatibleMagic(RecordBatch.MAGIC_VALUE_V0))
+          if (magic > RecordBatch.MAGIC_VALUE_V0 && versionId <= 1 && !unconvertedRecords.hasCompatibleMagic(RecordBatch.MAGIC_VALUE_V0))
             Some(RecordBatch.MAGIC_VALUE_V0)
-          else if (magic > RecordBatch.MAGIC_VALUE_V1 && versionId <= 3 && !unconvertedFetchResponse.records.hasCompatibleMagic(RecordBatch.MAGIC_VALUE_V1))
+          else if (magic > RecordBatch.MAGIC_VALUE_V1 && versionId <= 3 && !unconvertedRecords.hasCompatibleMagic(RecordBatch.MAGIC_VALUE_V1))
             Some(RecordBatch.MAGIC_VALUE_V1)
           else
             None
@@ -559,14 +558,9 @@ class KafkaApis(val requestChannel: RequestChannel,
           // as possible. With KIP-283, we have the ability to lazily down-convert in a chunked manner. The lazy, chunked
           // down-conversion always guarantees that at least one batch of messages is down-converted and sent out to the
           // client.
-          val converted = new LazyDownConversionRecords(tp, unconvertedFetchResponse.records, magic, fetchContext.getFetchOffset(tp).get, Time.SYSTEM)
-          new FetchResponse.PartitionData[BaseRecords](unconvertedFetchResponse.error, unconvertedFetchResponse.highWatermark,
-            FetchResponse.INVALID_LAST_STABLE_OFFSET, unconvertedFetchResponse.logStartOffset, unconvertedFetchResponse.abortedTransactions,
-            converted)
+          new LazyDownConversionRecords(tp, unconvertedRecords, magic, fetchContext.getFetchOffset(tp).get, time)
         }
-      }.getOrElse(new FetchResponse.PartitionData[BaseRecords](unconvertedFetchResponse.error, unconvertedFetchResponse.highWatermark,
-        unconvertedFetchResponse.lastStableOffset, unconvertedFetchResponse.logStartOffset, unconvertedFetchResponse.abortedTransactions,
-        unconvertedFetchResponse.records))
+      }.getOrElse(unconvertedRecords)
     }
 
     // the callback for process a fetch response, invoked before throttling
@@ -584,13 +578,20 @@ class KafkaApis(val requestChannel: RequestChannel,
       // fetch response callback invoked after any throttling
       def fetchResponseCallback(bandwidthThrottleTimeMs: Int) {
         def createResponse(requestThrottleTimeMs: Int): FetchResponse[BaseRecords] = {
+          // Down-convert messages for each partition, if needed
           val convertedData = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[BaseRecords]]
-          unconvertedFetchResponse.responseData().asScala.foreach { case (tp, partitionData) =>
-            if (partitionData.error != Errors.NONE)
+          unconvertedFetchResponse.responseData().asScala.foreach { case (tp, unconvertedPartitionData) =>
+            if (unconvertedPartitionData.error != Errors.NONE)
               debug(s"Fetch request with correlation id ${request.header.correlationId} from client $clientId " +
-                s"on partition $tp failed due to ${partitionData.error.exceptionName}")
-            convertedData.put(tp, convertedPartitionData(tp, partitionData))
+                s"on partition $tp failed due to ${unconvertedPartitionData.error.exceptionName}")
+            val convertedRecords = convertRecords(tp, unconvertedPartitionData.records)
+            val convertedPartitionData = new FetchResponse.PartitionData[BaseRecords](unconvertedPartitionData.error,
+              unconvertedPartitionData.highWatermark, FetchResponse.INVALID_LAST_STABLE_OFFSET, unconvertedPartitionData.logStartOffset,
+              unconvertedPartitionData.abortedTransactions, convertedRecords)
+            convertedData.put(tp, convertedPartitionData)
           }
+
+          // Prepare fetch response from converted data
           val response = new FetchResponse(unconvertedFetchResponse.error(), convertedData,
             bandwidthThrottleTimeMs + requestThrottleTimeMs, unconvertedFetchResponse.sessionId())
           response.responseData.asScala.foreach { case (topicPartition, data) =>
@@ -603,16 +604,20 @@ class KafkaApis(val requestChannel: RequestChannel,
         trace(s"Sending Fetch response with partitions.size=${unconvertedFetchResponse.responseData().size()}, " +
           s"metadata=${unconvertedFetchResponse.sessionId()}")
 
-        def processingStatsCallback(recordConversionStats: FetchResponseStats): Unit = {
-          recordConversionStats.foreach { case (tp, info) =>
-            updateRecordsProcessingStats(request, tp, info)
+        def onComplete(send: Send): Unit = {
+          send match {
+            case send: MultiRecordsSend if send.recordConversionStats != null =>
+              send.recordConversionStats.asScala.toMap.foreach {
+                case (tp, stats) => updateRecordConversionStats(request, tp, stats)
+              }
+            case _ =>
           }
         }
 
         if (fetchRequest.isFromFollower)
-          sendResponseExemptThrottle(request, createResponse(0), Some(processingStatsCallback))
+          sendResponseExemptThrottle(request, createResponse(0), Some(onComplete))
         else
-          sendResponseMaybeThrottle(request, requestThrottleMs => createResponse(requestThrottleMs), Some(processingStatsCallback))
+          sendResponseMaybeThrottle(request, requestThrottleMs => createResponse(requestThrottleMs), Some(onComplete))
       }
 
       // When this callback is triggered, the remote API call has completed.
@@ -2207,9 +2212,10 @@ class KafkaApis(val requestChannel: RequestChannel,
       throw new ClusterAuthorizationException(s"Request $request is not authorized.")
   }
 
-  private def updateRecordsProcessingStats(request: RequestChannel.Request, tp: TopicPartition,
-                                           processingStats: RecordConversionStats): Unit = {
-    val conversionCount = processingStats.numRecordsConverted
+  private def updateRecordConversionStats(request: RequestChannel.Request,
+                                          tp: TopicPartition,
+                                          conversionStats: RecordConversionStats): Unit = {
+    val conversionCount = conversionStats.numRecordsConverted
     if (conversionCount > 0) {
       request.header.apiKey match {
         case ApiKeys.PRODUCE =>
@@ -2221,9 +2227,9 @@ class KafkaApis(val requestChannel: RequestChannel,
         case _ =>
           throw new IllegalStateException("Message conversion info is recorded only for Produce/Fetch requests")
       }
-      request.messageConversionsTimeNanos = processingStats.conversionTimeNanos
+      request.messageConversionsTimeNanos = conversionStats.conversionTimeNanos
     }
-    request.temporaryMemoryBytes = processingStats.temporaryMemoryBytes
+    request.temporaryMemoryBytes = conversionStats.temporaryMemoryBytes
   }
 
   private def handleError(request: RequestChannel.Request, e: Throwable) {
@@ -2237,9 +2243,9 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   private def sendResponseMaybeThrottle(request: RequestChannel.Request,
                                         createResponse: Int => AbstractResponse,
-                                        processingStatsCallback: Option[FetchResponseStats => Unit] = None): Unit = {
+                                        onComplete: Option[Send => Unit] = None): Unit = {
     quotas.request.maybeRecordAndThrottle(request,
-      throttleTimeMs => sendResponse(request, Some(createResponse(throttleTimeMs)), processingStatsCallback))
+      throttleTimeMs => sendResponse(request, Some(createResponse(throttleTimeMs)), onComplete))
   }
 
   private def sendErrorResponseMaybeThrottle(request: RequestChannel.Request, error: Throwable) {
@@ -2248,9 +2254,9 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   private def sendResponseExemptThrottle(request: RequestChannel.Request,
                                          response: AbstractResponse,
-                                         processingStatsCallback: Option[FetchResponseStats => Unit] = None): Unit = {
+                                         onComplete: Option[Send => Unit] = None): Unit = {
     quotas.request.maybeRecordExempt(request)
-    sendResponse(request, Some(response), processingStatsCallback)
+    sendResponse(request, Some(response), onComplete)
   }
 
   private def sendErrorResponseExemptThrottle(request: RequestChannel.Request, error: Throwable): Unit = {
@@ -2281,7 +2287,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   private def sendResponse(request: RequestChannel.Request,
                            responseOpt: Option[AbstractResponse],
-                           processingStatsCallback: Option[FetchResponseStats => Unit]): Unit = {
+                           onComplete: Option[Send => Unit]): Unit = {
     // Update error metrics for each error code in the response including Errors.NONE
     responseOpt.foreach(response => requestChannel.updateErrorMetrics(request.header.apiKey, response.errorCounts.asScala))
 
@@ -2291,7 +2297,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         val responseString =
           if (RequestChannel.isRequestLoggingEnabled) Some(response.toString(request.context.apiVersion))
           else None
-        new RequestChannel.SendResponse(request, responseSend, responseString, processingStatsCallback)
+        new RequestChannel.SendResponse(request, responseSend, responseString, onComplete)
       case None =>
         new RequestChannel.NoOpResponse(request)
     }

@@ -704,24 +704,21 @@ private[kafka] class Processor(val id: Int,
         val response = inflightResponses.remove(send.destination).getOrElse {
           throw new IllegalStateException(s"Send for ${send.destination} completed, but not in `inflightResponses`")
         }
-        updateRequestMetrics(response, send)
+        updateRequestMetrics(response)
+
+        // Invoke send completion callback
+        response match {
+          case response: RequestChannel.SendResponse => response.onComplete.foreach {
+            onComplete => onComplete(send)
+          }
+          case _ =>
+        }
         selector.unmute(send.destination)
       } catch {
         case e: Throwable => processChannelException(send.destination,
           s"Exception while processing completed send to ${send.destination}", e)
       }
     }
-  }
-
-  private def updateRequestMetrics(response: RequestChannel.Response, send: Send): Unit = {
-    // If we have a callback for updating record processing statistics, invoke that now. This is used for cases
-    // where network threads process records, for example when we lazily down-convert records.
-    (response, send) match {
-      case (response: RequestChannel.SendResponse, send: MultiRecordsSend) if (send.recordConversionStats().size() > 0) =>
-        response.processingStatsCallback.foreach(callback => callback(send.recordConversionStats().asScala.toMap))
-      case _ =>
-    }
-    updateRequestMetrics(response)
   }
 
   private def updateRequestMetrics(response: RequestChannel.Response): Unit = {

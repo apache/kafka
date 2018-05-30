@@ -247,7 +247,7 @@ object RequestChannel extends Logging {
   class SendResponse(request: Request,
                      val responseSend: Send,
                      val responseAsString: Option[String],
-                     val processingStatsCallback: Option[Map[TopicPartition, RecordConversionStats] => Unit]) extends Response(request) {
+                     val onComplete: Option[Send => Unit]) extends Response(request) {
     override def toString: String = toString(Some(responseSend), responseAsString)
   }
 

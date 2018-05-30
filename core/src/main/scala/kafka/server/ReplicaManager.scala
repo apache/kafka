@@ -16,7 +16,6 @@
  */
 package kafka.server
 
-
 import java.io.File
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}

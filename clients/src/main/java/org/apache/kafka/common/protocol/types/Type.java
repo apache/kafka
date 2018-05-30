@@ -17,7 +17,6 @@
 package org.apache.kafka.common.protocol.types;
 
 import org.apache.kafka.common.record.BaseRecords;
-import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.utils.ByteUtils;
@@ -550,8 +549,8 @@ public abstract class Type {
 
         @Override
         public void write(ByteBuffer buffer, Object o) {
-            if (o instanceof FileRecords)
-                throw new IllegalArgumentException("FileRecords must be written to the channel directly");
+            if (!(o instanceof MemoryRecords))
+                throw new IllegalArgumentException("Unexpected record type: " + o.getClass());
             MemoryRecords records = (MemoryRecords) o;
             NULLABLE_BYTES.write(buffer, records.buffer().duplicate());
         }
