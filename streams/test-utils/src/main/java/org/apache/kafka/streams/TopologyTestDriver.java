@@ -37,6 +37,10 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.TopologyException;
+import org.apache.kafka.streams.internal.KeyValueStoreFacade;
+import org.apache.kafka.streams.internal.SessionStoreFacade;
+import org.apache.kafka.streams.internal.StoreFacade;
+import org.apache.kafka.streams.internal.WindowStoreFacade;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
@@ -50,7 +54,6 @@ import org.apache.kafka.streams.processor.internals.GlobalStateUpdateTask;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
-import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StoreChangelogReader;
@@ -170,7 +173,7 @@ import java.util.regex.Pattern;
 @InterfaceStability.Evolving
 public class TopologyTestDriver implements Closeable {
 
-    private final Time mockTime;
+    private final Time mockWallClockTime;
     private final InternalTopologyBuilder internalTopologyBuilder;
 
     private final static int PARTITION_ID = 0;
@@ -178,6 +181,9 @@ public class TopologyTestDriver implements Closeable {
     private final StreamTask task;
     private final GlobalStateUpdateTask globalStateTask;
     private final GlobalStateManager globalStateManager;
+
+    private final InternalProcessorContext context;
+    private final InternalProcessorContext globalContext;
 
     private final StateDirectory stateDirectory;
     private final Metrics metrics;
@@ -216,20 +222,7 @@ public class TopologyTestDriver implements Closeable {
     public TopologyTestDriver(final Topology topology,
                               final Properties config,
                               final long initialWallClockTimeMs) {
-
         this(topology.internalTopologyBuilder, config, initialWallClockTimeMs);
-    }
-
-    /**
-     * Create a new test diver instance.
-     *
-     * @param builder builder for the topology to be tested
-     * @param config the configuration for the topology
-     */
-    TopologyTestDriver(final InternalTopologyBuilder builder,
-                       final Properties config) {
-        this(builder, config,  System.currentTimeMillis());
-
     }
 
     /**
@@ -240,10 +233,10 @@ public class TopologyTestDriver implements Closeable {
      * @param initialWallClockTimeMs the initial value of internally mocked wall-clock time
      */
     private TopologyTestDriver(final InternalTopologyBuilder builder,
-                              final Properties config,
-                              final long initialWallClockTimeMs) {
+                               final Properties config,
+                               final long initialWallClockTimeMs) {
         final StreamsConfig streamsConfig = new StreamsConfig(config);
-        mockTime = new MockTime(initialWallClockTimeMs);
+        mockWallClockTime = new MockTime(initialWallClockTimeMs);
 
         internalTopologyBuilder = builder;
         internalTopologyBuilder.setApplicationId(streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG));
@@ -260,7 +253,7 @@ public class TopologyTestDriver implements Closeable {
         };
 
         final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
-        stateDirectory = new StateDirectory(streamsConfig, mockTime);
+        stateDirectory = new StateDirectory(streamsConfig, mockWallClockTime);
         metrics = new Metrics();
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(
             metrics,
@@ -311,13 +304,12 @@ public class TopologyTestDriver implements Closeable {
                 stateRestoreListener,
                 streamsConfig);
 
-            final GlobalProcessorContextImpl globalProcessorContext
-                = new GlobalProcessorContextImpl(streamsConfig, globalStateManager, streamsMetrics, cache);
-            globalStateManager.setGlobalProcessorContext(globalProcessorContext);
+            globalContext = new GlobalProcessorContextImpl(streamsConfig, globalStateManager, streamsMetrics, cache);
+            globalStateManager.setGlobalProcessorContext(globalContext);
 
             globalStateTask = new GlobalStateUpdateTask(
                 globalTopology,
-                globalProcessorContext,
+                globalContext,
                 globalStateManager,
                 new LogAndContinueExceptionHandler(),
                 new LogContext()
@@ -326,6 +318,7 @@ public class TopologyTestDriver implements Closeable {
         } else {
             globalStateManager = null;
             globalStateTask = null;
+            globalContext = null;
         }
 
         if (!partitionsByTopic.isEmpty()) {
@@ -342,12 +335,14 @@ public class TopologyTestDriver implements Closeable {
                 streamsMetrics,
                 stateDirectory,
                 cache,
-                mockTime,
+                mockWallClockTime,
                 producer);
+            context = (InternalProcessorContext) task.context();
             task.initializeStateStores();
             task.initializeTopology();
         } else {
             task = null;
+            context = null;
         }
     }
 
@@ -390,8 +385,6 @@ public class TopologyTestDriver implements Closeable {
                 consumerRecord.headers())));
 
             // Process the record ...
-            ((InternalProcessorContext) task.context()).setRecordContext(
-                    new ProcessorRecordContext(consumerRecord.timestamp(), offset, topicPartition.partition(), topicName, consumerRecord.headers()));
             task.process();
             task.maybePunctuateStreamTime();
             task.commit();
@@ -446,12 +439,7 @@ public class TopologyTestDriver implements Closeable {
         final List<ProducerRecord<byte[], byte[]>> output = producer.history();
         producer.clear();
         for (final ProducerRecord<byte[], byte[]> record : output) {
-            Queue<ProducerRecord<byte[], byte[]>> outputRecords = outputRecordsByTopic.get(record.topic());
-            if (outputRecords == null) {
-                outputRecords = new LinkedList<>();
-                outputRecordsByTopic.put(record.topic(), outputRecords);
-            }
-            outputRecords.add(record);
+            outputRecordsByTopic.computeIfAbsent(record.topic(), k -> new LinkedList<>()).add(record);
 
             // Forward back into the topology if the produced record is to an internal or a source topic ...
             final String outputTopicName = record.topic();
@@ -497,7 +485,7 @@ public class TopologyTestDriver implements Closeable {
      */
     @SuppressWarnings("WeakerAccess")
     public void advanceWallClockTime(final long advanceMs) {
-        mockTime.sleep(advanceMs);
+        mockWallClockTime.sleep(advanceMs);
         if (task != null) {
             task.maybePunctuateSystemTime();
             task.commit();
@@ -580,12 +568,7 @@ public class TopologyTestDriver implements Closeable {
      * @see #getSessionStore(String)
      */
     public StateStore getStateStore(final String name) {
-        StateStore stateStore = task == null ? null :
-            ((ProcessorContextImpl) task.context()).getStateMgr().getStore(name);
-        if (stateStore == null && globalStateManager != null) {
-            stateStore = globalStateManager.getGlobalStore(name);
-        }
-        return stateStore;
+        return new StoreFacade(getStateStoreInternal(name).key);
     }
 
     /**
@@ -604,8 +587,9 @@ public class TopologyTestDriver implements Closeable {
      */
     @SuppressWarnings({"unchecked", "WeakerAccess"})
     public <K, V> KeyValueStore<K, V> getKeyValueStore(final String name) {
-        final StateStore store = getStateStore(name);
-        return store instanceof KeyValueStore ? (KeyValueStore<K, V>) store : null;
+        final KeyValue<StateStore, InternalProcessorContext> storeAndContext = getStateStoreInternal(name);
+        final StateStore store = storeAndContext.key;
+        return store instanceof KeyValueStore ? new KeyValueStoreFacade((KeyValueStore<K, V>) store, storeAndContext.value) : null;
     }
 
     /**
@@ -624,8 +608,9 @@ public class TopologyTestDriver implements Closeable {
      */
     @SuppressWarnings({"unchecked", "WeakerAccess", "unused"})
     public <K, V> WindowStore<K, V> getWindowStore(final String name) {
-        final StateStore store = getStateStore(name);
-        return store instanceof WindowStore ? (WindowStore<K, V>) store : null;
+        final KeyValue<StateStore, InternalProcessorContext> storeAndContext = getStateStoreInternal(name);
+        final StateStore store = storeAndContext.key;
+        return store instanceof WindowStore ? new WindowStoreFacade((WindowStore<K, V>) store, storeAndContext.value) : null;
     }
 
     /**
@@ -644,8 +629,28 @@ public class TopologyTestDriver implements Closeable {
      */
     @SuppressWarnings({"unchecked", "WeakerAccess", "unused"})
     public <K, V> SessionStore<K, V> getSessionStore(final String name) {
-        final StateStore store = getStateStore(name);
-        return store instanceof SessionStore ? (SessionStore<K, V>) store : null;
+        final KeyValue<StateStore, InternalProcessorContext> storeAndContext = getStateStoreInternal(name);
+        final StateStore store = storeAndContext.key;
+        return store instanceof SessionStore ? new SessionStoreFacade((SessionStore<K, V>) store, storeAndContext.value) : null;
+    }
+
+    private KeyValue<StateStore, InternalProcessorContext> getStateStoreInternal(final String name) {
+        if (task != null) {
+            final StateStore stateStore = ((ProcessorContextImpl) task.context()).getStateMgr().getStore(name);
+            if (stateStore != null) {
+                return new KeyValue<>(stateStore, context);
+            }
+        }
+
+        if (globalStateManager != null) {
+            final StateStore stateStore = globalStateManager.getGlobalStore(name);
+            if (stateStore != null) {
+                return new KeyValue<>(stateStore, globalContext);
+            }
+
+        }
+
+        return new KeyValue<>(null, null);
     }
 
     /**
