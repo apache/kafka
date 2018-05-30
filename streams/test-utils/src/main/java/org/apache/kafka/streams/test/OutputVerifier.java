@@ -39,6 +39,7 @@ public class OutputVerifier {
      * @param <V> the value type
      * @throws AssertionError if {@code ProducerRecord}'s value is not equal to {@code expectedValue}
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public static <K, V> void compareValue(final ProducerRecord<K, V> record,
                                            final V expectedValue) throws AssertionError {
         Objects.requireNonNull(record);
@@ -65,6 +66,7 @@ public class OutputVerifier {
      * @param <V> the value type
      * @throws AssertionError if {@code ProducerRecord}'s value is not equal to {@code expectedRecord}'s value
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public static <K, V> void compareValue(final ProducerRecord<K, V> record,
                                            final ProducerRecord<K, V> expectedRecord) throws AssertionError {
         Objects.requireNonNull(expectedRecord);
@@ -82,6 +84,7 @@ public class OutputVerifier {
      * @param <V> the value type
      * @throws AssertionError if {@code ProducerRecord}'s key or value is not equal to {@code expectedKey} or {@code expectedValue}
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public static <K, V> void compareKeyValue(final ProducerRecord<K, V> record,
                                               final K expectedKey,
                                               final V expectedValue) throws AssertionError {
@@ -119,6 +122,7 @@ public class OutputVerifier {
      * @param <V> the value type
      * @throws AssertionError if {@code ProducerRecord}'s key or value is not equal to {@code expectedRecord}'s key or value
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public static <K, V> void compareKeyValue(final ProducerRecord<K, V> record,
                                               final ProducerRecord<K, V> expectedRecord) throws AssertionError {
         Objects.requireNonNull(expectedRecord);
@@ -136,6 +140,7 @@ public class OutputVerifier {
      * @param <V> the value type
      * @throws AssertionError if {@code ProducerRecord}'s value or timestamp is not equal to {@code expectedValue} or {@code expectedTimestamp}
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public static <K, V> void compareValueTimestamp(final ProducerRecord<K, V> record,
                                                     final V expectedValue,
                                                     final long expectedTimestamp) throws AssertionError {
@@ -169,6 +174,7 @@ public class OutputVerifier {
      * @param <V> the value type
      * @throws AssertionError if {@code ProducerRecord}'s value or timestamp is not equal to {@code expectedRecord}'s value or timestamp
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public static <K, V> void compareValueTimestamp(final ProducerRecord<K, V> record,
                                                     final ProducerRecord<K, V> expectedRecord) throws AssertionError {
         Objects.requireNonNull(expectedRecord);
@@ -189,6 +195,7 @@ public class OutputVerifier {
      * @throws AssertionError if {@code ProducerRecord}'s key, value, timestamp is not equal to {@code expectedKey},
      * {@code expectedValue}, or {@code expectedTimestamps}
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public static <K, V> void compareKeyValueTimestamp(final ProducerRecord<K, V> record,
                                                        final K expectedKey,
                                                        final V expectedValue,
@@ -233,6 +240,7 @@ public class OutputVerifier {
      * @throws AssertionError if {@code ProducerRecord}'s key, value, or timestamp is not equal to
      * {@code expectedRecord}'s key, value, or timestamp
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public static <K, V> void compareKeyValueTimestamp(final ProducerRecord<K, V> record,
                                                        final ProducerRecord<K, V> expectedRecord) throws AssertionError {
         Objects.requireNonNull(expectedRecord);
@@ -250,6 +258,7 @@ public class OutputVerifier {
      * @param <V> the value type
      * @throws AssertionError if {@code ProducerRecord}'s value or headers is not equal to {@code expectedValue} or {@code expectedHeaders}
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public static <K, V> void compareValueHeaders(final ProducerRecord<K, V> record,
                                                   final V expectedValue,
                                                   final Headers expectedHeaders) throws AssertionError {
@@ -287,6 +296,7 @@ public class OutputVerifier {
      * @param <V> the value type
      * @throws AssertionError if {@code ProducerRecord}'s value or headers is not equal to {@code expectedRecord}'s value or headers
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public static <K, V> void compareValueHeaders(final ProducerRecord<K, V> record,
                                                   final ProducerRecord<K, V> expectedRecord) throws AssertionError {
         Objects.requireNonNull(expectedRecord);
@@ -307,6 +317,7 @@ public class OutputVerifier {
      * @throws AssertionError if {@code ProducerRecord}'s key, value, headers is not equal to {@code expectedKey},
      *                        {@code expectedValue}, or {@code expectedHeaders}
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public static <K, V> void compareKeyValueHeaders(final ProducerRecord<K, V> record,
                                                      final K expectedKey,
                                                      final V expectedValue,
@@ -355,6 +366,7 @@ public class OutputVerifier {
      * @throws AssertionError if {@code ProducerRecord}'s key, value, or headers is not equal to
      *                        {@code expectedRecord}'s key, value, or headers
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public static <K, V> void compareKeyValueHeaders(final ProducerRecord<K, V> record,
                                                      final ProducerRecord<K, V> expectedRecord) throws AssertionError {
         Objects.requireNonNull(expectedRecord);
@@ -376,6 +388,7 @@ public class OutputVerifier {
      * @throws AssertionError if {@code ProducerRecord}'s key, value, headers is not equal to {@code expectedKey},
      *                        {@code expectedValue}, or {@code expectedHeaders}
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public static <K, V> void compareKeyValueHeadersTimestamp(final ProducerRecord<K, V> record,
                                                               final K expectedKey,
                                                               final V expectedValue,
@@ -432,6 +445,7 @@ public class OutputVerifier {
      * @throws AssertionError if {@code ProducerRecord}'s key, value, headers, or timestamp is not equal to
      *                        {@code expectedRecord}'s key, value, headers, or timestamp
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public static <K, V> void compareKeyValueHeadersTimestamp(final ProducerRecord<K, V> record,
                                                               final ProducerRecord<K, V> expectedRecord) throws AssertionError {
         Objects.requireNonNull(expectedRecord);
