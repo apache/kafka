@@ -60,8 +60,13 @@ public class AlterConfigsRequest extends AbstractRequest {
                     "An array of resources to update with the provided configs."),
             new Field(VALIDATE_ONLY_KEY_NAME, BOOLEAN));
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema ALTER_CONFIGS_REQUEST_V1 = ALTER_CONFIGS_REQUEST_V0;
+
     public static Schema[] schemaVersions() {
-        return new Schema[] {ALTER_CONFIGS_REQUEST_V0};
+        return new Schema[] {ALTER_CONFIGS_REQUEST_V0, ALTER_CONFIGS_REQUEST_V1};
     }
 
     public static class Config {
@@ -187,6 +192,7 @@ public class AlterConfigsRequest extends AbstractRequest {
         short version = version();
         switch (version) {
             case 0:
+            case 1:
                 ApiError error = ApiError.fromThrowable(e);
                 Map<Resource, ApiError> errors = new HashMap<>(configs.size());
                 for (Resource resource : configs.keySet())

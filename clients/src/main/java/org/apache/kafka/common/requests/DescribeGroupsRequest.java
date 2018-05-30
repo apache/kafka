@@ -41,8 +41,13 @@ public class DescribeGroupsRequest extends AbstractRequest {
     /* v1 request is the same as v0. Throttle time has been added to response */
     private static final Schema DESCRIBE_GROUPS_REQUEST_V1 = DESCRIBE_GROUPS_REQUEST_V0;
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema DESCRIBE_GROUPS_REQUEST_V2 = DESCRIBE_GROUPS_REQUEST_V1;
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{DESCRIBE_GROUPS_REQUEST_V0, DESCRIBE_GROUPS_REQUEST_V1};
+        return new Schema[]{DESCRIBE_GROUPS_REQUEST_V0, DESCRIBE_GROUPS_REQUEST_V1, DESCRIBE_GROUPS_REQUEST_V2};
     }
 
     public static class Builder extends AbstractRequest.Builder<DescribeGroupsRequest> {
@@ -96,6 +101,7 @@ public class DescribeGroupsRequest extends AbstractRequest {
             case 0:
                 return DescribeGroupsResponse.fromError(Errors.forException(e), groupIds);
             case 1:
+            case 2:
                 return DescribeGroupsResponse.fromError(throttleTimeMs, Errors.forException(e), groupIds);
 
             default:

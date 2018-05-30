@@ -36,8 +36,13 @@ public class InitProducerIdRequest extends AbstractRequest {
             NULLABLE_TRANSACTIONAL_ID,
             new Field(TRANSACTION_TIMEOUT_KEY_NAME, INT32, "The time in ms to wait for before aborting idle transactions sent by this producer."));
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema INIT_PRODUCER_ID_REQUEST_V1 = INIT_PRODUCER_ID_REQUEST_V0;
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{INIT_PRODUCER_ID_REQUEST_V0};
+        return new Schema[]{INIT_PRODUCER_ID_REQUEST_V0, INIT_PRODUCER_ID_REQUEST_V1};
     }
 
     private final String transactionalId;

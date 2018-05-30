@@ -91,8 +91,14 @@ public class CreateTopicsRequest extends AbstractRequest {
     /* v2 request is the same as v1. Throttle time has been added to the response */
     private static final Schema CREATE_TOPICS_REQUEST_V2 = CREATE_TOPICS_REQUEST_V1;
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema CREATE_TOPICS_REQUEST_V3 = CREATE_TOPICS_REQUEST_V2;
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{CREATE_TOPICS_REQUEST_V0, CREATE_TOPICS_REQUEST_V1, CREATE_TOPICS_REQUEST_V2};
+        return new Schema[]{CREATE_TOPICS_REQUEST_V0, CREATE_TOPICS_REQUEST_V1, CREATE_TOPICS_REQUEST_V2,
+            CREATE_TOPICS_REQUEST_V3};
     }
 
     public static final class TopicDetails {
@@ -270,6 +276,7 @@ public class CreateTopicsRequest extends AbstractRequest {
             case 1:
                 return new CreateTopicsResponse(topicErrors);
             case 2:
+            case 3:
                 return new CreateTopicsResponse(throttleTimeMs, topicErrors);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",

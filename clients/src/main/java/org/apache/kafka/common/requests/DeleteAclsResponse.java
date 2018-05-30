@@ -69,8 +69,13 @@ public class DeleteAclsResponse extends AbstractResponse {
                             ERROR_MESSAGE,
                             new Field(MATCHING_ACLS_KEY_NAME, new ArrayOf(MATCHING_ACL), "The matching ACLs")))));
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema DELETE_ACLS_RESPONSE_V1 = DELETE_ACLS_RESPONSE_V0;
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{DELETE_ACLS_RESPONSE_V0};
+        return new Schema[]{DELETE_ACLS_RESPONSE_V0, DELETE_ACLS_RESPONSE_V1};
     }
 
     public static class AclDeletionResult {
@@ -177,6 +182,7 @@ public class DeleteAclsResponse extends AbstractResponse {
         return struct;
     }
 
+    @Override
     public int throttleTimeMs() {
         return throttleTimeMs;
     }
@@ -201,4 +207,8 @@ public class DeleteAclsResponse extends AbstractResponse {
         return "(responses=" + Utils.join(responses, ",") + ")";
     }
 
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 1;
+    }
 }

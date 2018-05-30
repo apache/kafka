@@ -75,9 +75,11 @@ public class OffsetFetchRequest extends AbstractRequest {
     /* v3 request is the same as v2. Throttle time has been added to v3 response */
     private static final Schema OFFSET_FETCH_REQUEST_V3 = OFFSET_FETCH_REQUEST_V2;
 
+    private static final Schema OFFSET_FETCH_REQUEST_V4 = OFFSET_FETCH_REQUEST_V3;
+
     public static Schema[] schemaVersions() {
         return new Schema[] {OFFSET_FETCH_REQUEST_V0, OFFSET_FETCH_REQUEST_V1, OFFSET_FETCH_REQUEST_V2,
-            OFFSET_FETCH_REQUEST_V3};
+            OFFSET_FETCH_REQUEST_V3, OFFSET_FETCH_REQUEST_V4};
     }
 
     public static class Builder extends AbstractRequest.Builder<OffsetFetchRequest> {
@@ -178,6 +180,7 @@ public class OffsetFetchRequest extends AbstractRequest {
             case 2:
                 return new OffsetFetchResponse(error, responsePartitions);
             case 3:
+            case 4:
                 return new OffsetFetchResponse(throttleTimeMs, error, responsePartitions);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",

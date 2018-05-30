@@ -755,7 +755,7 @@ class Log(@volatile var dir: File,
           records = validRecords)
 
         // update the producer state
-        for ((producerId, producerAppendInfo) <- updatedProducers) {
+        for ((_, producerAppendInfo) <- updatedProducers) {
           producerAppendInfo.maybeCacheTxnFirstOffsetMetadata(logOffsetMetadata)
           producerStateManager.update(producerAppendInfo)
         }

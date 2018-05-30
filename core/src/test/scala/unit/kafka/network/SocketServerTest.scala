@@ -20,19 +20,19 @@ package kafka.network
 import java.io._
 import java.net._
 import java.nio.ByteBuffer
-import java.util.{HashMap, Random}
 import java.nio.channels.SocketChannel
+import java.util.{HashMap, Random}
 
-import javax.net.ssl._
 import com.yammer.metrics.core.{Gauge, Meter}
 import com.yammer.metrics.{Metrics => YammerMetrics}
-import kafka.network
+import javax.net.ssl._
 import kafka.security.CredentialProvider
-import kafka.server.KafkaConfig
+import kafka.server.{KafkaConfig, ThrottledChannel}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.network.KafkaChannel.ChannelMuteState
 import org.apache.kafka.common.network.{ChannelBuilder, ChannelState, KafkaChannel, ListenerName, NetworkReceive, NetworkSend, Selector, Send}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.MemoryRecords
@@ -131,7 +131,7 @@ class SocketServerTest extends JUnitSuite {
     byteBuffer.rewind()
 
     val send = new NetworkSend(request.context.connectionId, byteBuffer)
-    channel.sendResponse(new network.RequestChannel.SendResponse(request, send, Some(request.header.toString), None))
+    channel.sendResponse(new RequestChannel.SendResponse(request, send, Some(request.header.toString), None))
   }
 
   def connect(s: SocketServer = server, protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT, localAddr: InetAddress = null) = {
@@ -392,6 +392,93 @@ class SocketServerTest extends JUnitSuite {
     }
     assertTrue(s"Receives not staged for ${org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS} ms", hasStagedReceives)
     request
+  }
+
+  // Prepares test setup for throttled channel tests. throttlingDone controls whether or not throttling has completed
+  // in quota manager.
+  def throttledChannelTestSetUp(socket: Socket, serializedBytes: Array[Byte], noOpResponse: Boolean,
+                                throttlingInProgress: Boolean): RequestChannel.Request = {
+    sendRequest(socket, serializedBytes)
+
+    // Mimic a primitive request handler that fetches the request from RequestChannel and place a response with a
+    // throttled channel.
+    val request = receiveRequest(server.requestChannel)
+    val byteBuffer = request.body[AbstractRequest].serialize(request.header)
+    val send = new NetworkSend(request.context.connectionId, byteBuffer)
+    def channelThrottlingCallback(response: RequestChannel.Response): Unit = {
+      server.requestChannel.sendResponse(response)
+    }
+    val throttledChannel = new ThrottledChannel(request, new MockTime(), 100, channelThrottlingCallback)
+    val response =
+      if (!noOpResponse)
+        new RequestChannel.SendResponse(request, send, Some(request.header.toString), None)
+      else
+        new RequestChannel.NoOpResponse(request)
+    server.requestChannel.sendResponse(response)
+
+    // Quota manager would call notifyThrottlingDone() on throttling completion. Simulate it if throttleingInProgress is
+    // false.
+    if (!throttlingInProgress)
+      throttledChannel.notifyThrottlingDone()
+
+    request
+  }
+
+  def openOrClosingChannel(request: RequestChannel.Request): Option[KafkaChannel] =
+    server.processor(0).openOrClosingChannel(request.context.connectionId)
+
+  @Test
+  def testSendActionResponseWithThrottledChannelWhereThrottlingInProgress() {
+    val socket = connect(protocol = SecurityProtocol.PLAINTEXT)
+    val serializedBytes = producerRequestBytes()
+    // SendAction with throttling in progress
+    val request = throttledChannelTestSetUp(socket, serializedBytes, false, true)
+
+    // receive response
+    assertEquals(serializedBytes.toSeq, receiveResponse(socket).toSeq)
+    TestUtils.waitUntilTrue(() => openOrClosingChannel(request).exists(c => c.muteState() == ChannelMuteState.MUTED_AND_THROTTLED), "fail")
+    // Channel should still be muted.
+    assertTrue(openOrClosingChannel(request).exists(c => c.isMute()))
+  }
+
+  @Test
+  def testSendActionResponseWithThrottledChannelWhereThrottlingAlreadyDone() {
+    val socket = connect(protocol = SecurityProtocol.PLAINTEXT)
+    val serializedBytes = producerRequestBytes()
+    // SendAction with throttling in progress
+    val request = throttledChannelTestSetUp(socket, serializedBytes, false, false)
+
+    // receive response
+    assertEquals(serializedBytes.toSeq, receiveResponse(socket).toSeq)
+    // Since throttling is already done, the channel can be unmuted after sending out the response.
+    TestUtils.waitUntilTrue(() => openOrClosingChannel(request).exists(c => c.muteState() == ChannelMuteState.NOT_MUTED), "fail")
+    // Channel is now unmuted.
+    assertFalse(openOrClosingChannel(request).exists(c => c.isMute()))
+  }
+
+  @Test
+  def testNoOpActionResponseWithThrottledChannelWhereThrottlingInProgress() {
+    val socket = connect(protocol = SecurityProtocol.PLAINTEXT)
+    val serializedBytes = producerRequestBytes()
+    // SendAction with throttling in progress
+    val request = throttledChannelTestSetUp(socket, serializedBytes, true, true)
+
+    TestUtils.waitUntilTrue(() => openOrClosingChannel(request).exists(c => c.muteState() == ChannelMuteState.MUTED_AND_THROTTLED), "fail")
+    // Channel should still be muted.
+    assertTrue(openOrClosingChannel(request).exists(c => c.isMute()))
+  }
+
+  @Test
+  def testNoOpActionResponseWithThrottledChannelWhereThrottlingAlreadyDone() {
+    val socket = connect(protocol = SecurityProtocol.PLAINTEXT)
+    val serializedBytes = producerRequestBytes()
+    // SendAction with throttling in progress
+    val request = throttledChannelTestSetUp(socket, serializedBytes, true, false)
+
+    // Since throttling is already done, the channel can be unmuted.
+    TestUtils.waitUntilTrue(() => openOrClosingChannel(request).exists(c => c.muteState() == ChannelMuteState.NOT_MUTED), "fail")
+    // Channel is now unmuted.
+    assertFalse(openOrClosingChannel(request).exists(c => c.isMute()))
   }
 
   @Test

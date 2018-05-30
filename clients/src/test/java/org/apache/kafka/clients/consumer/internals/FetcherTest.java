@@ -1404,8 +1404,11 @@ public class FetcherTest {
         short apiVersionsResponseVersion = ApiKeys.API_VERSIONS.latestVersion();
         ByteBuffer buffer = ApiVersionsResponse.createApiVersionsResponse(400, RecordBatch.CURRENT_MAGIC_VALUE).serialize(apiVersionsResponseVersion, new ResponseHeader(0));
         selector.delayedReceive(new DelayedReceive(node.idString(), new NetworkReceive(node.idString(), buffer)));
-        while (!client.ready(node, time.milliseconds()))
+        while (!client.ready(node, time.milliseconds())) {
             client.poll(1, time.milliseconds());
+            // If a throttled response is received, advance the time to ensure progress.
+            time.sleep(client.throttleDelayMs(node, time.milliseconds()));
+        }
         selector.clear();
 
         for (int i = 1; i <= 3; i++) {
@@ -1418,6 +1421,8 @@ public class FetcherTest {
             buffer = response.serialize(ApiKeys.FETCH.latestVersion(), new ResponseHeader(request.correlationId()));
             selector.completeReceive(new NetworkReceive(node.idString(), buffer));
             client.poll(1, time.milliseconds());
+            // If a throttled response is received, advance the time to ensure progress.
+            time.sleep(client.throttleDelayMs(node, time.milliseconds()));
             selector.clear();
         }
         Map<MetricName, KafkaMetric> allMetrics = metrics.metrics();

@@ -38,6 +38,11 @@ public class ExpireDelegationTokenRequest extends AbstractRequest {
         new Field(HMAC_KEY_NAME, BYTES, "HMAC of the delegation token to be expired."),
         new Field(EXPIRY_TIME_PERIOD_KEY_NAME, INT64, "expiry time period in milli seconds."));
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema TOKEN_EXPIRE_REQUEST_V1 = TOKEN_EXPIRE_REQUEST_V0;
+
     private ExpireDelegationTokenRequest(short version, ByteBuffer hmac, long renewTimePeriod) {
         super(version);
 
@@ -57,7 +62,7 @@ public class ExpireDelegationTokenRequest extends AbstractRequest {
     }
 
     public static Schema[] schemaVersions() {
-        return new Schema[] {TOKEN_EXPIRE_REQUEST_V0};
+        return new Schema[] {TOKEN_EXPIRE_REQUEST_V0, TOKEN_EXPIRE_REQUEST_V1};
     }
 
     @Override

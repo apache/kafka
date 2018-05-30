@@ -162,10 +162,15 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
             SESSION_ID,
             new Field(RESPONSES_KEY_NAME, new ArrayOf(FETCH_RESPONSE_TOPIC_V5)));
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema FETCH_RESPONSE_V8 = FETCH_RESPONSE_V7;
+
     public static Schema[] schemaVersions() {
         return new Schema[] {FETCH_RESPONSE_V0, FETCH_RESPONSE_V1, FETCH_RESPONSE_V2,
-                             FETCH_RESPONSE_V3, FETCH_RESPONSE_V4, FETCH_RESPONSE_V5,
-                             FETCH_RESPONSE_V6, FETCH_RESPONSE_V7};
+            FETCH_RESPONSE_V3, FETCH_RESPONSE_V4, FETCH_RESPONSE_V5, FETCH_RESPONSE_V6,
+            FETCH_RESPONSE_V7, FETCH_RESPONSE_V8};
     }
 
 
@@ -379,6 +384,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
         return responseData;
     }
 
+    @Override
     public int throttleTimeMs() {
         return this.throttleTimeMs;
     }
@@ -528,5 +534,10 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
         // Since the throttleTimeMs and metadata field sizes are constant and fixed, we can
         // use arbitrary values here without affecting the result.
         return 4 + toStruct(version, 0, Errors.NONE, partIterator, INVALID_SESSION_ID).sizeOf();
+    }
+
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 8;
     }
 }

@@ -122,6 +122,11 @@ public class MockClient implements KafkaClient {
         return 0;
     }
 
+    @Override
+    public long pollDelayMs(Node node, long now) {
+        return connectionDelay(node, now);
+    }
+
     public void blackout(Node node, long duration) {
         blackedOut.put(node, time.milliseconds() + duration);
     }
@@ -426,6 +431,10 @@ public class MockClient implements KafkaClient {
         return !metadataUpdates.isEmpty();
     }
 
+    public int numAwaitingResponses() {
+        return futureResponses.size();
+    }
+
     public void prepareMetadataUpdate(Cluster cluster, Set<String> unavailableTopics) {
         metadataUpdates.add(new MetadataUpdate(cluster, unavailableTopics, false));
     }
@@ -474,7 +483,7 @@ public class MockClient implements KafkaClient {
     }
 
     @Override
-    public boolean hasReadyNodes() {
+    public boolean hasReadyNodes(long now) {
         return !ready.isEmpty();
     }
 
