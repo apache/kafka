@@ -95,6 +95,8 @@ class LogSegment private[log] (val log: FileRecords,
 
   private var created = time.milliseconds
 
+  def createdMs: Long = created
+
   /* the number of bytes since we last added an entry in the offset index */
   private var bytesSinceLastIndexEntry = 0
 
@@ -122,6 +124,9 @@ class LogSegment private[log] (val log: FileRecords,
 
   /* Return the size in bytes of this log segment */
   def size: Int = log.sizeInBytes()
+
+  /* Return the index size in bytes of this log segment */
+  def indexSize: Int = offsetIndex.sizeInBytes + timeIndex.sizeInBytes
 
   /**
    * checks that the argument offset can be represented as an integer offset relative to the baseOffset.
