@@ -40,7 +40,14 @@ case class OffsetAndMetadata(offsetMetadata: OffsetMetadata,
 
   def metadata = offsetMetadata.metadata
 
-  override def toString = "[%s,CommitTime %d,ExpirationTime %d]".format(offsetMetadata, commitTimestamp, expireTimestamp)
+  override def toString = {
+    "[%s,CommitTime %d".format(offsetMetadata, commitTimestamp) + {
+      expireTimestamp match {
+        case Some(timestamp) => ",ExpirationTime %d]".format(timestamp)
+        case None => "]"
+      }
+    }
+  }
 }
 
 object OffsetAndMetadata {

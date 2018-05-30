@@ -25,8 +25,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
 
 import com.yammer.metrics.core.Gauge
-import kafka.api.{ApiVersion, KAFKA_0_10_1_IV0}
-import kafka.common.{MessageFormatter, OffsetAndMetadata, OffsetMetadata}
+import kafka.api.{ApiVersion, KAFKA_0_10_1_IV0, KAFKA_2_0_IV2}
+import kafka.common.{MessageFormatter, OffsetAndMetadata}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.ReplicaManager
 import kafka.utils.CoreUtils.inLock
@@ -200,6 +200,8 @@ class GroupMetadataManager(brokerId: Int,
         val groupMetadataValueVersion = {
           if (interBrokerProtocolVersion < KAFKA_0_10_1_IV0)
             0.toShort
+          else if (interBrokerProtocolVersion < KAFKA_2_0_IV2)
+            1.toShort
           else
             GroupMetadataManager.CURRENT_GROUP_VALUE_SCHEMA_VERSION
         }
@@ -1144,7 +1146,7 @@ object GroupMetadataManager {
    */
   private[group] def groupMetadataValue(groupMetadata: GroupMetadata,
                                         assignment: Map[String, Array[Byte]],
-                                        version: Short = 0): Array[Byte] = {
+                                        version: Short): Array[Byte] = {
     val value = version match {
       case 0 => new Struct(GROUP_METADATA_VALUE_SCHEMA_V0)
       case 1 => new Struct(GROUP_METADATA_VALUE_SCHEMA_V1)
