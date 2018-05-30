@@ -31,14 +31,15 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.SystemTime;
+import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
@@ -64,6 +65,7 @@ import java.util.regex.Pattern;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -681,6 +683,42 @@ public class TopologyTestDriverTest {
 
     @Test
     public void shouldReturnAllStores() {
+        final Topology topology = setupSourceSinkTopology();
+        topology.addProcessor("processor", () -> null);
+        topology.addStateStore(
+            new KeyValueStoreBuilder<>(
+                Stores.inMemoryKeyValueStore("store"),
+                Serdes.ByteArray(),
+                Serdes.ByteArray(),
+                new SystemTime()),
+            "processor");
+        topology.addGlobalStore(
+            new KeyValueStoreBuilder<>(
+                Stores.inMemoryKeyValueStore("globalStore"),
+                Serdes.ByteArray(),
+                Serdes.ByteArray(),
+                new SystemTime()).withLoggingDisabled(),
+            "sourceProcessorName",
+            Serdes.ByteArray().deserializer(),
+            Serdes.ByteArray().deserializer(),
+            "globalTopicName",
+            "globalProcessorName",
+            () -> null);
+
+        testDriver = new TopologyTestDriver(topology, config);
+
+        final Set<String> expectedStoreNames = new HashSet<>();
+        expectedStoreNames.add("store");
+        expectedStoreNames.add("globalStore");
+        final Map<String, StateStore> allStores = testDriver.getAllStateStores();
+        assertThat(allStores.keySet(), equalTo(expectedStoreNames));
+        for (final StateStore store : allStores.values()) {
+            assertNotNull(store);
+        }
+    }
+
+    @Test
+    public void shouldReturnAllStoresNames() {
         final Topology topology = setupSourceSinkTopology();
         topology.addStateStore(
             new KeyValueStoreBuilder<>(

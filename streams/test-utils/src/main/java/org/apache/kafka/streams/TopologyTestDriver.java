@@ -537,6 +537,8 @@ public class TopologyTestDriver implements Closeable {
      * <p>
      * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
      * {@link #pipeInput(ConsumerRecord) process an input message}, and/or to check the store afterward.
+     * <p>
+     * Note, that {@code StateStore} might be {@code null} if a store is add but not connected to any processor.
      *
      * @return all stores my name
      * @see #getStateStore(String)
@@ -568,7 +570,8 @@ public class TopologyTestDriver implements Closeable {
      * @see #getSessionStore(String)
      */
     public StateStore getStateStore(final String name) {
-        return new StoreFacade(getStateStoreInternal(name).key);
+        final StateStore store = getStateStoreInternal(name).key;
+        return store != null ? new StoreFacade(store) : null;
     }
 
     /**
