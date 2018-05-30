@@ -73,7 +73,7 @@ public class RecordCollectorTest {
 
     private final StreamPartitioner<String, Object> streamPartitioner = new StreamPartitioner<String, Object>() {
         @Override
-        public Integer partition(final String key, final Object value, final int numPartitions) {
+        public Integer partition(final String topic, final String key, final Object value, final int numPartitions) {
             return Integer.parseInt(key) % numPartitions;
         }
     };

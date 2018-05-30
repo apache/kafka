@@ -38,10 +38,12 @@ import org.apache.kafka.streams.kstream.ValueMapperWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
+import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.SourceNode;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockMapper;
+import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
@@ -50,6 +52,7 @@ import org.junit.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
@@ -221,6 +224,26 @@ public class KStreamImplTest {
     }
 
     @Test
+    public void shouldSendDataToDynamicTopics() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final String input = "topic";
+        final KStream<String, String> stream = builder.stream(input, stringConsumed);
+        stream.to((key, value, context) -> context.topic() + "-" + key + "-" + value.substring(0, 1),
+                  Produced.with(Serdes.String(), Serdes.String()));
+        builder.stream(input + "-a-v", stringConsumed).process(processorSupplier);
+        builder.stream(input + "-b-v", stringConsumed).process(processorSupplier);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            driver.pipeInput(recordFactory.create(input, "a", "v1"));
+            driver.pipeInput(recordFactory.create(input, "a", "v2"));
+            driver.pipeInput(recordFactory.create(input, "b", "v1"));
+        }
+        List<MockProcessor<String, String>> mockProcessors = processorSupplier.capturedProcessors(2);
+        assertThat(mockProcessors.get(0).processed, equalTo(Utils.mkList("a:v1", "a:v2")));
+        assertThat(mockProcessors.get(1).processed, equalTo(Collections.singletonList("b:v1")));
+    }
+
+    @Test
     public void shouldUseRecordMetadataTimestampExtractorWhenInternalRepartitioningTopicCreated() {
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, String> kStream = builder.stream("topic-1", stringConsumed);
@@ -300,12 +323,12 @@ public class KStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullMapperOnFlatMapValues() {
-        testStream.flatMapValues((ValueMapper) null);
+        testStream.flatMapValues((ValueMapper<? super String, ? extends Iterable<? extends String>>) null);
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullMapperOnFlatMapValuesWithKey() {
-        testStream.flatMapValues((ValueMapperWithKey) null);
+        testStream.flatMapValues((ValueMapperWithKey<? super String, ? super String, ? extends Iterable<? extends String>>) null);
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -325,7 +348,12 @@ public class KStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullTopicOnTo() {
-        testStream.to(null);
+        testStream.to((String) null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullTopicChooserOnTo() {
+        testStream.to((TopicNameExtractor<String, String>) null);
     }
 
     @Test(expected = NullPointerException.class)

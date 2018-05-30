@@ -22,7 +22,7 @@ package kstream
 
 import org.apache.kafka.streams.KeyValue
 import org.apache.kafka.streams.kstream.{KStream => KStreamJ, _}
-import org.apache.kafka.streams.processor.{Processor, ProcessorContext, ProcessorSupplier}
+import org.apache.kafka.streams.processor.{Processor, ProcessorContext, ProcessorSupplier, TopicNameExtractor}
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.FunctionConversions._
 
@@ -248,6 +248,38 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    */
   def to(topic: String)(implicit produced: Produced[K, V]): Unit =
     inner.to(topic, produced)
+
+  /**
+    * Dynamically materialize this stream to topics using the `Produced` instance for
+    * configuration of the `Serde key serde`, `Serde value serde`, and `StreamPartitioner`.
+    * The topic names for each record to send to is dynamically determined based on the given mapper.
+    * <p>
+    * The user can either supply the `Produced` instance as an implicit in scope or she can also provide implicit
+    * key and value serdes that will be converted to a `Produced` instance implicitly.
+    * <p>
+    * {{{
+    * Example:
+    *
+    * // brings implicit serdes in scope
+    * import Serdes._
+    *
+    * //..
+    * val clicksPerRegion: KTable[String, Long] = //..
+    *
+    * // Implicit serdes in scope will generate an implicit Produced instance, which
+    * // will be passed automatically to the call of through below
+    * clicksPerRegion.to(topicChooser)
+    *
+    * // Similarly you can create an implicit Produced and it will be passed implicitly
+    * // to the through call
+    * }}}
+    *
+    * @param extractor the extractor to determine the name of the Kafka topic to write to for reach record
+    * @param (implicit) produced the instance of Produced that gives the serdes and `StreamPartitioner`
+    * @see `org.apache.kafka.streams.kstream.KStream#to`
+    */
+  def to(extractor: TopicNameExtractor[K, V])(implicit produced: Produced[K, V]): Unit =
+    inner.to(extractor, produced)
 
   /**
    * Transform each record of the input stream into zero or more records in the output stream (both key and value type

@@ -49,7 +49,7 @@ abstract class AbstractMergedSortedCacheStoreIterator<K, KS, V, VS> implements K
     abstract V deserializeCacheValue(final LRUCacheEntry cacheEntry);
 
     private boolean isDeletedCacheEntry(final KeyValue<Bytes, LRUCacheEntry> nextFromCache) {
-        return nextFromCache.value.value == null;
+        return nextFromCache.value.value() == null;
     }
 
     @Override

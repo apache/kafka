@@ -420,7 +420,7 @@ public class ProcessorTopologyTest {
     private StreamPartitioner<Object, Object> constantPartitioner(final Integer partition) {
         return new StreamPartitioner<Object, Object>() {
             @Override
-            public Integer partition(final Object key, final Object value, final int numPartitions) {
+            public Integer partition(final String topic, final Object key, final Object value, final int numPartitions) {
                 return partition;
             }
         };

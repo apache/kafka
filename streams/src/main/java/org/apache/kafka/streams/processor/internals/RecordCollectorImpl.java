@@ -49,11 +49,11 @@ import java.util.Map;
 
 public class RecordCollectorImpl implements RecordCollector {
     private final Logger log;
+    private final String logPrefix;
+    private final Sensor skippedRecordsSensor;
     private final Producer<byte[], byte[]> producer;
     private final Map<TopicPartition, Long> offsets;
-    private final String logPrefix;
     private final ProductionExceptionHandler productionExceptionHandler;
-    private final Sensor skippedRecordsSensor;
 
     private final static String LOG_MESSAGE = "Error sending record (key {} value {} timestamp {}) to topic {} due to {}; " +
         "No more records will be sent and no more offsets will be recorded for this task.";
@@ -88,7 +88,7 @@ public class RecordCollectorImpl implements RecordCollector {
         if (partitioner != null) {
             final List<PartitionInfo> partitions = producer.partitionsFor(topic);
             if (partitions.size() > 0) {
-                partition = partitioner.partition(key, value, partitions.size());
+                partition = partitioner.partition(topic, key, value, partitions.size());
             } else {
                 throw new StreamsException("Could not get partition information for topic '" + topic + "'." +
                     " This can happen if the topic does not exist.");

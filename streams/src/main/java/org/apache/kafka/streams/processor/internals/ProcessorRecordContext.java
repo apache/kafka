@@ -17,16 +17,17 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.streams.processor.RecordContext;
 
 import java.util.Objects;
 
 public class ProcessorRecordContext implements RecordContext {
 
-    private long timestamp;
-    private final long offset;
-    private final String topic;
-    private final int partition;
-    private final Headers headers;
+    long timestamp;
+    final long offset;
+    final String topic;
+    final int partition;
+    final Headers headers;
 
     public ProcessorRecordContext(final long timestamp,
                                   final long offset,
@@ -41,16 +42,25 @@ public class ProcessorRecordContext implements RecordContext {
         this.headers = headers;
     }
 
-    public long offset() {
-        return offset;
-    }
-
-    public long timestamp() {
-        return timestamp;
+    public ProcessorRecordContext(final long timestamp,
+                                  final long offset,
+                                  final int partition,
+                                  final String topic) {
+        this(timestamp, offset, partition, topic, null);
     }
 
     public void setTimestamp(final long timestamp) {
         this.timestamp = timestamp;
+    }
+
+    @Override
+    public long offset() {
+        return offset;
+    }
+
+    @Override
+    public long timestamp() {
+        return timestamp;
     }
 
     @Override

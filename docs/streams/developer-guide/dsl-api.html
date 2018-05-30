@@ -3023,7 +3023,7 @@ t=5 (blue), which lead to a merge of sessions and an extension of a session, res
                         <li>KStream -&gt; void</li>
                     </ul>
                 </td>
-                    <td><p class="first"><strong>Terminal operation.</strong>  Write the records to a Kafka topic.
+                    <td><p class="first"><strong>Terminal operation.</strong>  Write the records to Kafka topic(s).
                         (<a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#to(java.lang.String)">KStream details</a>)</p>
                         <p>When to provide serdes explicitly:</p>
                         <ul class="simple">
@@ -3037,6 +3037,8 @@ t=5 (blue), which lead to a merge of sessions and an extension of a session, res
                         <p>A variant of <code class="docutils literal"><span class="pre">to</span></code> exists that enables you to specify how the data is produced by using a <code class="docutils literal"><span class="pre">Produced</span></code>
                             instance to specify, for example, a <code class="docutils literal"><span class="pre">StreamPartitioner</span></code> that gives you control over
                             how output records are distributed across the partitions of the output topic.</p>
+                        <p>Another variant of <code class="docutils literal"><span class="pre">to</span></code> exists that enables you to dynamically choose which topic to send to for each record via a <code class="docutils literal"><span class="pre">TopicNameExtractor</span></code>
+                            instance.</p>
                         <div class="highlight-java"><div class="highlight"><pre><span></span><span class="n">KStream</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">stream</span> <span class="o">=</span> <span class="o">...;</span>
 <span class="n">KTable</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">table</span> <span class="o">=</span> <span class="o">...;</span>
 

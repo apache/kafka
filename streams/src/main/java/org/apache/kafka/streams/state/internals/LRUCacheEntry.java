@@ -17,21 +17,18 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.streams.processor.internals.RecordContext;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
+
+import java.util.Arrays;
+import java.util.Objects;
 
 /**
  * A cache entry
  */
-class LRUCacheEntry implements RecordContext {
+class LRUCacheEntry extends ProcessorRecordContext {
 
-    public final byte[] value;
-    private final Headers headers;
-    private final long offset;
-    private final String topic;
-    private final int partition;
-    private long timestamp;
-
-    private long sizeBytes;
+    private final byte[] value;
+    private final long sizeBytes;
     private boolean isDirty;
 
     LRUCacheEntry(final byte[] value) {
@@ -45,49 +42,15 @@ class LRUCacheEntry implements RecordContext {
                   final long timestamp,
                   final int partition,
                   final String topic) {
+        super(timestamp, offset, partition, topic, headers);
         this.value = value;
-        this.headers = headers;
-        this.partition = partition;
-        this.topic = topic;
-        this.offset = offset;
         this.isDirty = isDirty;
-        this.timestamp = timestamp;
         this.sizeBytes = (value == null ? 0 : value.length) +
                 1 + // isDirty
                 8 + // timestamp
                 8 + // offset
                 4 + // partition
                 (topic == null ? 0 : topic.length());
-    }
-
-    @Override
-    public long offset() {
-        return offset;
-    }
-
-    @Override
-    public long timestamp() {
-        return timestamp;
-    }
-
-    @Override
-    public void setTimestamp(final long timestamp) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public String topic() {
-        return topic;
-    }
-
-    @Override
-    public int partition() {
-        return partition;
-    }
-
-    @Override
-    public Headers headers() {
-        return headers;
     }
 
     void markClean() {
@@ -98,9 +61,30 @@ class LRUCacheEntry implements RecordContext {
         return isDirty;
     }
 
-    public long size() {
+    long size() {
         return sizeBytes;
     }
 
+    byte[] value() {
+        return value;
+    }
 
+    @Override
+    public boolean equals(final Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        final LRUCacheEntry that = (LRUCacheEntry) o;
+        return timestamp() == that.timestamp() &&
+                offset() == that.offset() &&
+                partition() == that.partition() &&
+                Objects.equals(topic(), that.topic()) &&
+                Objects.equals(headers(), that.headers()) &&
+                Arrays.equals(this.value, that.value()) &&
+                this.isDirty == that.isDirty();
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(timestamp(), offset(), topic(), partition(), headers(), value, isDirty);
+    }
 }

@@ -384,7 +384,8 @@
                 <li>A predefined persistent key-value state store is created and associated with the <code class="docutils literal"><span class="pre">&quot;Process&quot;</span></code> node, using
                     <code class="docutils literal"><span class="pre">countStoreBuilder</span></code>.</li>
                 <li>A sink processor node is then added to complete the topology using the <code class="docutils literal"><span class="pre">addSink</span></code> method, taking the <code class="docutils literal"><span class="pre">&quot;Process&quot;</span></code> node
-                    as its upstream processor and writing to a separate <code class="docutils literal"><span class="pre">&quot;sink-topic&quot;</span></code> Kafka topic.</li>
+                    as its upstream processor and writing to a separate <code class="docutils literal"><span class="pre">&quot;sink-topic&quot;</span></code> Kafka topic (note that users can also use another overloaded variant of <code class="docutils literal"><span class="pre">addSink</span></code>
+                    to dynamically determine the Kafka topic to write to for each received record from the upstream processor).</li>
             </ul>
             <p>In this topology, the <code class="docutils literal"><span class="pre">&quot;Process&quot;</span></code> stream processor node is considered a downstream processor of the <code class="docutils literal"><span class="pre">&quot;Source&quot;</span></code> node, and an
                 upstream processor of the <code class="docutils literal"><span class="pre">&quot;Sink&quot;</span></code> node.  As a result, whenever the <code class="docutils literal"><span class="pre">&quot;Source&quot;</span></code> node forwards a newly fetched record from

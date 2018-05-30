@@ -14,10 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor.internals;
+package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.streams.processor.Processor;
 
 /**
  * The context associated with the current record being processed by
@@ -25,32 +24,32 @@ import org.apache.kafka.streams.processor.Processor;
  */
 public interface RecordContext {
     /**
-     * @return The offset of the original record received from Kafka
+     * @return  The offset of the original record received from Kafka;
+     *          could be -1 if it is not available
      */
     long offset();
 
     /**
-     * @return The timestamp extracted from the record received from Kafka
+     * @return  The timestamp extracted from the record received from Kafka;
+     *          could be -1 if it is not available
      */
     long timestamp();
 
     /**
-     * Sets a new timestamp for the output record.
-     */
-    void setTimestamp(final long timestamp);
-
-    /**
-     * @return The topic the record was received on
+     * @return  The topic the record was received on;
+     *          could be null if it is not available
      */
     String topic();
 
     /**
-     * @return The partition the record was received on
+     * @return  The partition the record was received on;
+     *          could be -1 if it is not available
      */
     int partition();
 
     /**
-     * @return The headers from the record received from Kafka
+     * @return  The headers from the record received from Kafka;
+     *          could be null if it is not available
      */
     Headers headers();
 
