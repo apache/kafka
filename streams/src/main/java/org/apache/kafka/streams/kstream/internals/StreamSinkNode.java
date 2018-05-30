@@ -20,26 +20,32 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
+import org.apache.kafka.streams.processor.internals.StaticTopicNameExtractor;
 
 class StreamSinkNode<K, V> extends StreamsGraphNode {
 
-    private final String topic;
+    private final TopicNameExtractor<K, V> topicNameExtractor;
     private final ProducedInternal<K, V> producedInternal;
 
     StreamSinkNode(final String nodeName,
-                   final String topic,
+                   final TopicNameExtractor<K, V> topicNameExtractor,
                    final ProducedInternal<K, V> producedInternal) {
 
         super(nodeName,
               false);
 
-        this.topic = topic;
+        this.topicNameExtractor = topicNameExtractor;
         this.producedInternal = producedInternal;
     }
 
     String topic() {
-        return topic;
+        return topicNameExtractor instanceof StaticTopicNameExtractor ? ((StaticTopicNameExtractor) topicNameExtractor).topicName : null;
+    }
+
+    TopicNameExtractor<K, V> topicNameExtractor() {
+        return topicNameExtractor;
     }
 
     Serde<K> keySerde() {

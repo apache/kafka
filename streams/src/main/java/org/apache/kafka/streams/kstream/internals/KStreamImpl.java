@@ -439,9 +439,10 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         } else {
             builder.internalTopologyBuilder.addSink(name, topicExtractor, keySerializer, valSerializer, partitioner, this.name);
         }
+
         StreamSinkNode<K, V> sinkNode = new StreamSinkNode<>(
             name,
-            topic,
+            topicExtractor,
             produced);
         addGraphNode(sinkNode);
     }
