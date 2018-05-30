@@ -2271,6 +2271,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       sendErrorResponseExemptThrottle(request, e)
   }
 
+  // Throttle the channel if the request quota is enabled but has been violated. Regardless of throttling, send the
+  // response immediately.
   private def sendResponseMaybeThrottle(request: RequestChannel.Request,
                                         createResponse: Int => AbstractResponse,
                                         onComplete: Option[Send => Unit] = None): Unit = {

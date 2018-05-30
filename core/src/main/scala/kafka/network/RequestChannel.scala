@@ -183,7 +183,8 @@ object RequestChannel extends Logging {
 
       if (isRequestLoggingEnabled) {
         val detailsEnabled = requestLogger.underlying.isTraceEnabled
-        val responseString = response.responseString.getOrElse("responseAsString should always be defined if request logging is enabled")
+        val responseString = response.responseString.getOrElse(
+          throw new IllegalStateException("responseAsString should always be defined if request logging is enabled"))
         val builder = new StringBuilder(256)
         builder.append("Completed request:").append(requestDesc(detailsEnabled))
           .append(",response:").append(responseString)
@@ -249,27 +250,27 @@ object RequestChannel extends Logging {
     override def onComplete: Option[Send => Unit] = onCompleteCallback
 
     override def toString: String =
-      s"Response(responseType=SendResponse, request=$request, responseSend=$responseSend), responseAsString=$responseAsString"
+      s"Response(type=Send, request=$request, send=$responseSend, asString=$responseAsString)"
   }
 
   class NoOpResponse(request: Request) extends Response(request) {
     override def toString: String =
-      s"Response(responseType=NoOpResponse, request=$request)"
+      s"Response(type=NoOp, request=$request)"
   }
 
   class CloseConnectionResponse(request: Request) extends Response(request) {
     override def toString: String =
-      s"Response(responseType=CloseConnectionResponse, request=$request)"
+      s"Response(type=CloseConnection, request=$request)"
   }
 
   class StartThrottlingResponse(request: Request) extends Response(request) {
     override def toString: String =
-      s"Response(responseType=StartThrottlingResponse, request=$request)"
+      s"Response(type=StartThrottling, request=$request)"
   }
 
   class EndThrottlingResponse(request: Request) extends Response(request) {
     override def toString: String =
-      s"Response(responseType=EndThrottlingResponse, request=$request)"
+      s"Response(type=EndThrottling, request=$request)"
   }
 }
 

@@ -33,7 +33,7 @@ import org.apache.kafka.common.utils.Time
   * @param throttleTimeMs Delay associated with this request
   * @param channelThrottlingCallback Callback for channel throttling
   */
-class ThrottledChannel(val request: RequestChannel.Request, val time: Time, val throttleTimeMs: Int, channelThrottlingCallback: (Response) => Unit)
+class ThrottledChannel(val request: RequestChannel.Request, val time: Time, val throttleTimeMs: Int, channelThrottlingCallback: Response => Unit)
   extends Delayed with Logging {
   var endTime = time.milliseconds + throttleTimeMs
 

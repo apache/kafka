@@ -269,7 +269,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
     * @param channelThrottlingCallback Callback for channel throttling
     * @return ThrottledChannel object
     */
-  def throttle(request: RequestChannel.Request, throttleTimeMs: Int, channelThrottlingCallback: (Response) => Unit): Unit = {
+  def throttle(request: RequestChannel.Request, throttleTimeMs: Int, channelThrottlingCallback: Response => Unit): Unit = {
     if (throttleTimeMs > 0) {
       val clientSensors = getOrCreateQuotaSensors(request.session, request.header.clientId)
       clientSensors.throttleTimeSensor.record(throttleTimeMs)

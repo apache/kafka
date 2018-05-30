@@ -737,7 +737,6 @@ private[kafka] class Processor(val id: Int,
   }
 
   private def updateRequestMetrics(response: RequestChannel.Response): Unit = {
-    // Record the amount of time this request spent on the network thread
     val request = response.request
     val networkThreadTimeNanos = openOrClosingChannel(request.context.connectionId).fold(0L)(_.getAndResetNetworkThreadTimeNanos())
     request.updateRequestMetrics(networkThreadTimeNanos, response)
