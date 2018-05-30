@@ -252,6 +252,11 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
+    public void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets, final Duration timeout) {
+        commitSync(offsets);
+    }
+
+    @Override
     public synchronized void seek(TopicPartition partition, long offset) {
         ensureNotClosed();
         subscriptions.seek(partition, offset);
@@ -267,6 +272,11 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
+    public OffsetAndMetadata committed(TopicPartition partition, final Duration timeout) {
+        return committed(partition);
+    }
+
+    @Override
     public synchronized long position(TopicPartition partition) {
         ensureNotClosed();
         if (!this.subscriptions.isAssigned(partition))
@@ -277,6 +287,11 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
             offset = this.subscriptions.position(partition);
         }
         return offset;
+    }
+
+    @Override
+    public synchronized long position(TopicPartition partition, final Duration timeout) {
+        return position(partition);
     }
 
     @Override
@@ -469,5 +484,36 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
             return null;
         }
         return offsets.size() > 1 ? offsets.remove(0) : offsets.get(0);
+    }
+
+    @Override
+    public List<PartitionInfo> partitionsFor(String topic, Duration timeout) {
+        return partitionsFor(topic);
+    }
+
+    @Override
+    public Map<String, List<PartitionInfo>> listTopics(Duration timeout) {
+        return listTopics();
+    }
+
+    @Override
+    public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch,
+            Duration timeout) {
+        return offsetsForTimes(timestampsToSearch);
+    }
+
+    @Override
+    public Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions, Duration timeout) {
+        return beginningOffsets(partitions);
+    }
+
+    @Override
+    public Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions, Duration duration) {
+        return endOffsets(partitions);
+    }
+
+    @Override
+    public void close(Duration timeout) {
+        close();
     }
 }
