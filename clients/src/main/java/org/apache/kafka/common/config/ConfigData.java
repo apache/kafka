@@ -24,7 +24,7 @@ import java.util.Map;
 public class ConfigData {
 
     private final Map<String, String> data;
-    private final long ttl;
+    private final Long ttl;
 
     /**
      * Creates a new ConfigData with the given data and TTL (in milliseconds).
@@ -32,7 +32,7 @@ public class ConfigData {
      * @param data a Map of key-value pairs
      * @param ttl the time-to-live of the data in milliseconds
      */
-    public ConfigData(Map<String, String> data, long ttl) {
+    public ConfigData(Map<String, String> data, Long ttl) {
         this.data = data;
         this.ttl = ttl;
     }
@@ -43,7 +43,7 @@ public class ConfigData {
      * @param data a Map of key-value pairs
      */
     public ConfigData(Map<String, String> data) {
-        this(data, Long.MAX_VALUE);
+        this(data, null);
     }
 
     /**
@@ -60,7 +60,7 @@ public class ConfigData {
      *
      * @return ttl the time-to-live (in milliseconds) of the data.
      */
-    public long ttl() {
+    public Long ttl() {
         return ttl;
     }
 }

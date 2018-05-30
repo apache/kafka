@@ -52,7 +52,7 @@ public class WorkerConfigTransformer {
 
     private void scheduleReload(String connectorName, String path, long ttl) {
         Herder herder = worker.herder();
-        if (herder.getConnectorConfigReloadAction(connectorName) == Herder.ConfigReloadAction.RESTART) {
+        if (herder.connectorConfigReloadAction(connectorName) == Herder.ConfigReloadAction.RESTART) {
             Map<String, HerderRequest> connectorRequests = requests.get(connectorName);
             if (connectorRequests == null) {
                 connectorRequests = new ConcurrentHashMap<>();

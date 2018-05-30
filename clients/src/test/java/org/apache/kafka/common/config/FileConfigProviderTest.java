@@ -45,7 +45,7 @@ public class FileConfigProviderTest {
         result.put("testKey", "testResult");
         result.put("testKey2", "testResult2");
         assertEquals(result, configData.data());
-        assertEquals(Long.MAX_VALUE, configData.ttl());
+        assertEquals(null, configData.ttl());
     }
 
     @Test
@@ -54,35 +54,35 @@ public class FileConfigProviderTest {
         Map<String, String> result = new HashMap<>();
         result.put("testKey", "testResult");
         assertEquals(result, configData.data());
-        assertEquals(Long.MAX_VALUE, configData.ttl());
+        assertEquals(null, configData.ttl());
     }
 
     @Test
     public void testEmptyPath() throws Exception {
         ConfigData configData = configProvider.get("", Collections.singleton("testKey"));
         assertTrue(configData.data().isEmpty());
-        assertEquals(Long.MAX_VALUE, configData.ttl());
+        assertEquals(null, configData.ttl());
     }
 
     @Test
     public void testEmptyPathWithKey() throws Exception {
         ConfigData configData = configProvider.get("");
         assertTrue(configData.data().isEmpty());
-        assertEquals(Long.MAX_VALUE, configData.ttl());
+        assertEquals(null, configData.ttl());
     }
 
     @Test
     public void testNullPath() throws Exception {
         ConfigData configData = configProvider.get(null);
         assertTrue(configData.data().isEmpty());
-        assertEquals(Long.MAX_VALUE, configData.ttl());
+        assertEquals(null, configData.ttl());
     }
 
     @Test
     public void testNullPathWithKey() throws Exception {
         ConfigData configData = configProvider.get(null, Collections.singleton("testKey"));
         assertTrue(configData.data().isEmpty());
-        assertEquals(Long.MAX_VALUE, configData.ttl());
+        assertEquals(null, configData.ttl());
     }
 
     public static class TestFileConfigProvider extends FileConfigProvider {

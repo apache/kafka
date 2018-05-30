@@ -152,7 +152,7 @@ public interface Herder {
      * Get the configuration reload action.
      * @param connName name of the connector
      */
-    ConfigReloadAction getConnectorConfigReloadAction(final String connName);
+    ConfigReloadAction connectorConfigReloadAction(final String connName);
 
     /**
      * Restart the connector.

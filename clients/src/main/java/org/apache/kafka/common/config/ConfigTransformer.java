@@ -97,8 +97,8 @@ public class ConfigTransformer {
                     Set<String> keys = new HashSet<>(pathWithKeys.getValue());
                     ConfigData configData = provider.get(path, keys);
                     Map<String, String> data = configData.data();
-                    long ttl = configData.ttl();
-                    if (ttl >= 0 && ttl < Long.MAX_VALUE) {
+                    Long ttl = configData.ttl();
+                    if (ttl != null && ttl >= 0) {
                         ttls.put(path, ttl);
                     }
                     Map<String, Map<String, String>> keyValuesByPath =

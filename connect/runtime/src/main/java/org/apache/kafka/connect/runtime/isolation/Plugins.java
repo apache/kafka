@@ -336,8 +336,8 @@ public class Plugins {
 
         // Configure the ConfigProvider
         String configPrefix = providerPrefix + ".param.";
-        Map<String, Object> converterConfig = config.originalsWithPrefix(configPrefix);
-        plugin.configure(converterConfig);
+        Map<String, Object> configProviderConfig = config.originalsWithPrefix(configPrefix);
+        plugin.configure(configProviderConfig);
         return plugin;
     }
 

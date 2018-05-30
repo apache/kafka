@@ -94,6 +94,12 @@ public class StandaloneHerder extends AbstractHerder {
     public synchronized void stop() {
         log.info("Herder stopping");
         requestExecutorService.shutdown();
+        try {
+            if (!requestExecutorService.awaitTermination(30, TimeUnit.SECONDS))
+                requestExecutorService.shutdownNow();
+        } catch (InterruptedException e) {
+            // ignore
+        }
 
         // There's no coordination/hand-off to do here since this is all standalone. Instead, we
         // should just clean up the stuff we normally would, i.e. cleanly checkpoint and shutdown all
@@ -253,7 +259,7 @@ public class StandaloneHerder extends AbstractHerder {
     }
 
     @Override
-    public ConfigReloadAction getConnectorConfigReloadAction(final String connName) {
+    public ConfigReloadAction connectorConfigReloadAction(final String connName) {
         return ConfigReloadAction.valueOf(
                 configState.connectorConfig(connName).get(ConnectorConfig.CONFIG_RELOAD_ACTION_CONFIG)
                         .toUpperCase(Locale.ROOT));

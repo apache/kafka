@@ -68,7 +68,7 @@ public class WorkerConfigTransformerTest {
     @Test
     public void testReplaceVariableWithTTL() throws Exception {
         EasyMock.expect(worker.herder()).andReturn(herder);
-        EasyMock.expect(herder.getConnectorConfigReloadAction(MY_CONNECTOR)).andReturn(Herder.ConfigReloadAction.NONE);
+        EasyMock.expect(herder.connectorConfigReloadAction(MY_CONNECTOR)).andReturn(Herder.ConfigReloadAction.NONE);
 
         replayAll();
 
@@ -79,7 +79,7 @@ public class WorkerConfigTransformerTest {
     @Test
     public void testReplaceVariableWithTTLAndScheduleRestart() throws Exception {
         EasyMock.expect(worker.herder()).andReturn(herder);
-        EasyMock.expect(herder.getConnectorConfigReloadAction(MY_CONNECTOR)).andReturn(Herder.ConfigReloadAction.RESTART);
+        EasyMock.expect(herder.connectorConfigReloadAction(MY_CONNECTOR)).andReturn(Herder.ConfigReloadAction.RESTART);
         EasyMock.expect(herder.restartConnector(1L, MY_CONNECTOR, null)).andReturn(requestId);
 
         replayAll();
@@ -91,11 +91,11 @@ public class WorkerConfigTransformerTest {
     @Test
     public void testReplaceVariableWithTTLFirstCancelThenScheduleRestart() throws Exception {
         EasyMock.expect(worker.herder()).andReturn(herder);
-        EasyMock.expect(herder.getConnectorConfigReloadAction(MY_CONNECTOR)).andReturn(Herder.ConfigReloadAction.RESTART);
+        EasyMock.expect(herder.connectorConfigReloadAction(MY_CONNECTOR)).andReturn(Herder.ConfigReloadAction.RESTART);
         EasyMock.expect(herder.restartConnector(1L, MY_CONNECTOR, null)).andReturn(requestId);
 
         EasyMock.expect(worker.herder()).andReturn(herder);
-        EasyMock.expect(herder.getConnectorConfigReloadAction(MY_CONNECTOR)).andReturn(Herder.ConfigReloadAction.RESTART);
+        EasyMock.expect(herder.connectorConfigReloadAction(MY_CONNECTOR)).andReturn(Herder.ConfigReloadAction.RESTART);
         EasyMock.expectLastCall();
         requestId.cancel();
         EasyMock.expectLastCall();

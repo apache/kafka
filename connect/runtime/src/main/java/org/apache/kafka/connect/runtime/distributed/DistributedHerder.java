@@ -643,7 +643,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     @Override
-    public ConfigReloadAction getConnectorConfigReloadAction(final String connName) {
+    public ConfigReloadAction connectorConfigReloadAction(final String connName) {
         return ConfigReloadAction.valueOf(
                 configState.connectorConfig(connName).get(ConnectorConfig.CONFIG_RELOAD_ACTION_CONFIG)
                         .toUpperCase(Locale.ROOT));
