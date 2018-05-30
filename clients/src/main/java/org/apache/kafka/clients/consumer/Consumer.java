@@ -93,6 +93,11 @@ public interface Consumer<K, V> extends Closeable {
     void commitSync();
 
     /**
+     * @see KafkaConsumer#commitSync(Duration)
+     */
+    void commitSync(Duration timeout);
+
+    /**
      * @see KafkaConsumer#commitSync(Map)
      */
     void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets);

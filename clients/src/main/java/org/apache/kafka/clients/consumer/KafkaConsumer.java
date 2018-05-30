@@ -1289,9 +1289,44 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void commitSync() {
+        commitSync(Duration.ofMillis(Long.MAX_VALUE));
+    }
+
+    /**
+     * Commit offsets returned on the last {@link #poll(Duration) poll()} for all the subscribed list of topics and
+     * partitions.
+     * <p>
+     * This commits offsets only to Kafka. The offsets committed using this API will be used on the first fetch after
+     * every rebalance and also on startup. As such, if you need to store offsets in anything other than Kafka, this API
+     * should not be used.
+     * <p>
+     * This is a synchronous commits and will block until either the commit succeeds, an unrecoverable error is
+     * encountered (in which case it is thrown to the caller), or the passed timeout expires.
+     * <p>
+     * Note that asynchronous offset commits sent previously with the {@link #commitAsync(OffsetCommitCallback)}
+     * (or similar) are guaranteed to have their callbacks invoked prior to completion of this method.
+     *
+     * @throws org.apache.kafka.clients.consumer.CommitFailedException if the commit failed and cannot be retried.
+     *             This can only occur if you are using automatic group management with {@link #subscribe(Collection)},
+     *             or if there is an active group with the same groupId which is using group management.
+     * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
+     *             function is called
+     * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
+     *             this function is called
+     * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
+     * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic or to the
+     *             configured groupId. See the exception for more details
+     * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors (e.g. if offset metadata
+     *             is too large or if the topic does not exist).
+     */
+    @Override
+    public void commitSync(Duration timeout) {
         acquireAndEnsureOpen();
         try {
-            coordinator.commitOffsetsSync(subscriptions.allConsumed(), Long.MAX_VALUE);
+            if (!coordinator.commitOffsetsSync(subscriptions.allConsumed(), timeout.toMillis())) {
+                throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before successfully " +
+                        "committing the current consumed offsets");
+            }
         } finally {
             release();
         }
@@ -1368,7 +1403,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         acquireAndEnsureOpen();
         try {
             if (!coordinator.commitOffsetsSync(new HashMap<>(offsets), timeout.toMillis())) {
-                throw new TimeoutException("Committing offsets synchronously took too long.");
+                throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before successfully " +
+                        "committing offsets " + offsets);
             }
         } finally {
             release();
@@ -1590,7 +1626,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 offset = this.subscriptions.position(partition);
                 finishMs = time.milliseconds();
             }
-            if (offset == null) throw new TimeoutException("request timed out, position is unable to be acquired.");
+            if (offset == null)
+                throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before the position " +
+                        "for partition " + partition + " could be determined");
             return offset;
         } finally {
             release();
@@ -1646,7 +1684,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             Map<TopicPartition, OffsetAndMetadata> offsets = coordinator.fetchCommittedOffsets(
                     Collections.singleton(partition), timeout.toMillis());
             if (offsets == null) {
-                throw new TimeoutException("Unable to find committed offsets for partition within set duration.");
+                throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before the last " +
+                        "committed offset for partition " + partition + " could be determined");
             }
             return offsets.get(partition);
         } finally {
