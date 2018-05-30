@@ -40,6 +40,7 @@ import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
+import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.sink.SinkRecord;
@@ -70,6 +71,7 @@ class WorkerSinkTask extends WorkerTask {
 
     private final WorkerConfig workerConfig;
     private final SinkTask task;
+    private final ClusterConfigState configState;
     private Map<String, String> taskConfig;
     private final Time time;
     private final Converter keyConverter;
@@ -96,6 +98,7 @@ class WorkerSinkTask extends WorkerTask {
                           TaskStatus.Listener statusListener,
                           TargetState initialState,
                           WorkerConfig workerConfig,
+                          ClusterConfigState configState,
                           ConnectMetrics connectMetrics,
                           Converter keyConverter,
                           Converter valueConverter,
@@ -108,6 +111,7 @@ class WorkerSinkTask extends WorkerTask {
 
         this.workerConfig = workerConfig;
         this.task = task;
+        this.configState = configState;
         this.keyConverter = keyConverter;
         this.valueConverter = valueConverter;
         this.headerConverter = headerConverter;
@@ -133,7 +137,7 @@ class WorkerSinkTask extends WorkerTask {
         try {
             this.taskConfig = taskConfig.originalsStrings();
             this.consumer = createConsumer();
-            this.context = new WorkerSinkTaskContext(consumer, this);
+            this.context = new WorkerSinkTaskContext(consumer, this, configState);
         } catch (Throwable t) {
             log.error("{} Task failed initialization and will not be started.", this, t);
             onFailure(t);

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime.isolation;
 
+import org.apache.kafka.common.config.ConfigProvider;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.rest.ConnectRestExtension;
 import org.apache.kafka.connect.sink.SinkConnector;
@@ -31,6 +32,7 @@ public enum PluginType {
     CONNECTOR(Connector.class),
     CONVERTER(Converter.class),
     TRANSFORMATION(Transformation.class),
+    CONFIGPROVIDER(ConfigProvider.class),
     REST_EXTENSION(ConnectRestExtension.class),
     UNKNOWN(Object.class);
 

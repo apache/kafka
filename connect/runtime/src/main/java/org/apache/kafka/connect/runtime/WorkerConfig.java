@@ -32,6 +32,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -190,6 +191,11 @@ public class WorkerConfig extends AbstractConfig {
             + "Examples: plugin.path=/usr/local/share/java,/usr/local/share/kafka/plugins,"
             + "/opt/connectors";
 
+    public static final String CONFIG_PROVIDERS_CONFIG = "config.providers";
+    protected static final String CONFIG_PROVIDERS_DOC = "List of configuration providers. "
+            + "This is a comma-separated list of the fully-qualified names of the ConfigProvider implementations, "
+            + "in the order they will be created, configured, and used.";
+
     public static final String REST_EXTENSION_CLASSES_CONFIG = "rest.extension.classes";
     protected static final String REST_EXTENSION_CLASSES_DOC =
             "Comma-separated names of <code>ConnectRestExtension</code> classes, loaded and called "
@@ -262,6 +268,9 @@ public class WorkerConfig extends AbstractConfig {
                 .define(HEADER_CONVERTER_CLASS_CONFIG, Type.CLASS,
                         HEADER_CONVERTER_CLASS_DEFAULT,
                         Importance.LOW, HEADER_CONVERTER_CLASS_DOC)
+                .define(CONFIG_PROVIDERS_CONFIG, Type.LIST,
+                        Collections.emptyList(),
+                        Importance.LOW, CONFIG_PROVIDERS_DOC)
                 .define(REST_EXTENSION_CLASSES_CONFIG, Type.LIST, "",
                         Importance.LOW, REST_EXTENSION_CLASSES_DOC);
     }
@@ -334,4 +343,5 @@ public class WorkerConfig extends AbstractConfig {
         super(definition, props);
         logInternalConverterDeprecationWarnings(props);
     }
+
 }

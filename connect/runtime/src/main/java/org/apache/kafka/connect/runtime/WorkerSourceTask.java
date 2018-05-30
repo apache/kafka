@@ -34,6 +34,7 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.header.Header;
 import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
+import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.source.SourceRecord;
@@ -66,6 +67,7 @@ class WorkerSourceTask extends WorkerTask {
 
     private final WorkerConfig workerConfig;
     private final SourceTask task;
+    private final ClusterConfigState configState;
     private final Converter keyConverter;
     private final Converter valueConverter;
     private final HeaderConverter headerConverter;
@@ -103,6 +105,7 @@ class WorkerSourceTask extends WorkerTask {
                             OffsetStorageReader offsetReader,
                             OffsetStorageWriter offsetWriter,
                             WorkerConfig workerConfig,
+                            ClusterConfigState configState,
                             ConnectMetrics connectMetrics,
                             ClassLoader loader,
                             Time time,
@@ -112,6 +115,7 @@ class WorkerSourceTask extends WorkerTask {
 
         this.workerConfig = workerConfig;
         this.task = task;
+        this.configState = configState;
         this.keyConverter = keyConverter;
         this.valueConverter = valueConverter;
         this.headerConverter = headerConverter;
@@ -190,7 +194,7 @@ class WorkerSourceTask extends WorkerTask {
     @Override
     public void execute() {
         try {
-            task.initialize(new WorkerSourceTaskContext(offsetReader));
+            task.initialize(new WorkerSourceTaskContext(offsetReader, this, configState));
             task.start(taskConfig);
             log.info("{} Source task finished initialization and start", this);
             synchronized (this) {

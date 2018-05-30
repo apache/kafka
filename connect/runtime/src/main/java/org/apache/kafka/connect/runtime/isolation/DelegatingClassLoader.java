@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime.isolation;
 
+import org.apache.kafka.common.config.ConfigProvider;
 import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.rest.ConnectRestExtension;
@@ -66,6 +67,7 @@ public class DelegatingClassLoader extends URLClassLoader {
     private final SortedSet<PluginDesc<Converter>> converters;
     private final SortedSet<PluginDesc<HeaderConverter>> headerConverters;
     private final SortedSet<PluginDesc<Transformation>> transformations;
+    private final SortedSet<PluginDesc<ConfigProvider>> configProviders;
     private final SortedSet<PluginDesc<ConnectRestExtension>> restExtensions;
     private final List<String> pluginPaths;
     private final Map<Path, PluginClassLoader> activePaths;
@@ -80,6 +82,7 @@ public class DelegatingClassLoader extends URLClassLoader {
         this.converters = new TreeSet<>();
         this.headerConverters = new TreeSet<>();
         this.transformations = new TreeSet<>();
+        this.configProviders = new TreeSet<>();
         this.restExtensions = new TreeSet<>();
     }
 
@@ -101,6 +104,10 @@ public class DelegatingClassLoader extends URLClassLoader {
 
     public Set<PluginDesc<Transformation>> transformations() {
         return transformations;
+    }
+
+    public Set<PluginDesc<ConfigProvider>> configProviders() {
+        return configProviders;
     }
 
     public Set<PluginDesc<ConnectRestExtension>> restExtensions() {
@@ -236,6 +243,8 @@ public class DelegatingClassLoader extends URLClassLoader {
             headerConverters.addAll(plugins.headerConverters());
             addPlugins(plugins.transformations(), loader);
             transformations.addAll(plugins.transformations());
+            addPlugins(plugins.configProviders(), loader);
+            configProviders.addAll(plugins.configProviders());
             addPlugins(plugins.restExtensions(), loader);
             restExtensions.addAll(plugins.restExtensions());
         }
@@ -292,6 +301,7 @@ public class DelegatingClassLoader extends URLClassLoader {
                 getPluginDesc(reflections, Converter.class, loader),
                 getPluginDesc(reflections, HeaderConverter.class, loader),
                 getPluginDesc(reflections, Transformation.class, loader),
+                getPluginDesc(reflections, ConfigProvider.class, loader),
                 getServiceLoaderPluginDesc(ConnectRestExtension.class, loader)
         );
     }

@@ -31,6 +31,7 @@ import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.json.JsonConverter;
+import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
 import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
 import org.apache.kafka.connect.runtime.errors.LogReporter;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
@@ -369,7 +370,8 @@ public class ErrorHandlingTaskTest {
 
         workerSinkTask = PowerMock.createPartialMock(
                 WorkerSinkTask.class, new String[]{"createConsumer"},
-                taskId, sinkTask, statusListener, initialState, workerConfig, metrics, converter, converter,
+                taskId, sinkTask, statusListener, initialState, workerConfig,
+                ClusterConfigState.EMPTY, metrics, converter, converter,
                 headerConverter, sinkTransforms, pluginLoader, time, retryWithToleranceOperator);
     }
 
@@ -398,7 +400,8 @@ public class ErrorHandlingTaskTest {
         workerSourceTask = PowerMock.createPartialMock(
                 WorkerSourceTask.class, new String[]{"commitOffsets", "isStopping"},
                 taskId, sourceTask, statusListener, initialState, converter, converter, headerConverter, sourceTransforms,
-                producer, offsetReader, offsetWriter, workerConfig, metrics, pluginLoader, time, retryWithToleranceOperator);
+                producer, offsetReader, offsetWriter, workerConfig,
+                ClusterConfigState.EMPTY, metrics, pluginLoader, time, retryWithToleranceOperator);
     }
 
     private ConsumerRecords<byte[], byte[]> records(ConsumerRecord<byte[], byte[]> record) {
