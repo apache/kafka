@@ -35,6 +35,7 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.WorkerConfig;
+import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.util.Callback;
@@ -221,7 +222,9 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
 
     private final Map<String, TargetState> connectorTargetStates = new HashMap<>();
 
-    public KafkaConfigBackingStore(Converter converter, WorkerConfig config) {
+    private final WorkerConfigTransformer configTransformer;
+
+    public KafkaConfigBackingStore(Converter converter, WorkerConfig config, WorkerConfigTransformer configTransformer) {
         this.lock = new Object();
         this.started = false;
         this.converter = converter;
@@ -232,6 +235,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
             throw new ConfigException("Must specify topic for connector configuration.");
 
         configLog = setupAndCreateKafkaBasedLog(this.topic, config);
+        this.configTransformer = configTransformer;
     }
 
     @Override
@@ -270,7 +274,8 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
                     new HashMap<>(connectorConfigs),
                     new HashMap<>(connectorTargetStates),
                     new HashMap<>(taskConfigs),
-                    new HashSet<>(inconsistent)
+                    new HashSet<>(inconsistent),
+                    configTransformer
             );
         }
     }

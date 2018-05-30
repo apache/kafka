@@ -214,7 +214,7 @@ public class DistributedHerderTest {
         EasyMock.expect(worker.isRunning(CONN1)).andReturn(true);
 
         EasyMock.expect(worker.connectorTaskConfigs(CONN1, conn1SinkConfig)).andReturn(TASK_CONFIGS);
-        worker.startTask(EasyMock.eq(TASK1), EasyMock.<Map<String, String>>anyObject(), EasyMock.<Map<String, String>>anyObject(),
+        worker.startTask(EasyMock.eq(TASK1), EasyMock.<ClusterConfigState>anyObject(), EasyMock.<Map<String, String>>anyObject(), EasyMock.<Map<String, String>>anyObject(),
                 EasyMock.eq(herder), EasyMock.eq(TargetState.STARTED));
         PowerMock.expectLastCall().andReturn(true);
         member.poll(EasyMock.anyInt());
@@ -241,7 +241,7 @@ public class DistributedHerderTest {
         PowerMock.expectLastCall().andReturn(true);
         EasyMock.expect(worker.isRunning(CONN1)).andReturn(true);
         EasyMock.expect(worker.connectorTaskConfigs(CONN1, conn1SinkConfig)).andReturn(TASK_CONFIGS);
-        worker.startTask(EasyMock.eq(TASK1), EasyMock.<Map<String, String>>anyObject(), EasyMock.<Map<String, String>>anyObject(),
+        worker.startTask(EasyMock.eq(TASK1), EasyMock.<ClusterConfigState>anyObject(), EasyMock.<Map<String, String>>anyObject(), EasyMock.<Map<String, String>>anyObject(),
                 EasyMock.eq(herder), EasyMock.eq(TargetState.STARTED));
         PowerMock.expectLastCall().andReturn(true);
         member.poll(EasyMock.anyInt());
@@ -288,7 +288,7 @@ public class DistributedHerderTest {
         PowerMock.expectLastCall().andReturn(true);
         EasyMock.expect(worker.isRunning(CONN1)).andReturn(true);
         EasyMock.expect(worker.connectorTaskConfigs(CONN1, conn1SinkConfig)).andReturn(TASK_CONFIGS);
-        worker.startTask(EasyMock.eq(TASK1), EasyMock.<Map<String, String>>anyObject(), EasyMock.<Map<String, String>>anyObject(),
+        worker.startTask(EasyMock.eq(TASK1), EasyMock.<ClusterConfigState>anyObject(), EasyMock.<Map<String, String>>anyObject(), EasyMock.<Map<String, String>>anyObject(),
                 EasyMock.eq(herder), EasyMock.eq(TargetState.STARTED));
         PowerMock.expectLastCall().andReturn(true);
         member.poll(EasyMock.anyInt());
@@ -756,7 +756,7 @@ public class DistributedHerderTest {
         expectPostRebalanceCatchup(SNAPSHOT);
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
-        worker.startTask(EasyMock.eq(TASK0), EasyMock.<Map<String, String>>anyObject(), EasyMock.<Map<String, String>>anyObject(),
+        worker.startTask(EasyMock.eq(TASK0), EasyMock.<ClusterConfigState>anyObject(), EasyMock.<Map<String, String>>anyObject(), EasyMock.<Map<String, String>>anyObject(),
                 EasyMock.eq(herder), EasyMock.eq(TargetState.STARTED));
         PowerMock.expectLastCall().andReturn(true);
 
@@ -770,7 +770,7 @@ public class DistributedHerderTest {
 
         worker.stopAndAwaitTask(TASK0);
         PowerMock.expectLastCall();
-        worker.startTask(EasyMock.eq(TASK0), EasyMock.<Map<String, String>>anyObject(), EasyMock.<Map<String, String>>anyObject(),
+        worker.startTask(EasyMock.eq(TASK0), EasyMock.<ClusterConfigState>anyObject(), EasyMock.<Map<String, String>>anyObject(), EasyMock.<Map<String, String>>anyObject(),
                 EasyMock.eq(herder), EasyMock.eq(TargetState.STARTED));
         PowerMock.expectLastCall().andReturn(true);
 
@@ -820,10 +820,10 @@ public class DistributedHerderTest {
 
     @Test
     public void testRequestProcessingOrder() throws Exception {
-        final DistributedHerder.HerderRequest req1 = herder.addRequest(100, null, null);
-        final DistributedHerder.HerderRequest req2 = herder.addRequest(10, null, null);
-        final DistributedHerder.HerderRequest req3 = herder.addRequest(200, null, null);
-        final DistributedHerder.HerderRequest req4 = herder.addRequest(200, null, null);
+        final DistributedHerder.DistributedHerderRequest req1 = herder.addRequest(100, null, null);
+        final DistributedHerder.DistributedHerderRequest req2 = herder.addRequest(10, null, null);
+        final DistributedHerder.DistributedHerderRequest req3 = herder.addRequest(200, null, null);
+        final DistributedHerder.DistributedHerderRequest req4 = herder.addRequest(200, null, null);
 
         assertEquals(req2, herder.requests.pollFirst()); // lowest delay
         assertEquals(req1, herder.requests.pollFirst()); // next lowest delay
@@ -1080,7 +1080,7 @@ public class DistributedHerderTest {
         // join
         expectRebalance(1, Collections.<String>emptyList(), singletonList(TASK0));
         expectPostRebalanceCatchup(SNAPSHOT);
-        worker.startTask(EasyMock.eq(TASK0), EasyMock.<Map<String, String>>anyObject(), EasyMock.<Map<String, String>>anyObject(),
+        worker.startTask(EasyMock.eq(TASK0), EasyMock.<ClusterConfigState>anyObject(), EasyMock.<Map<String, String>>anyObject(), EasyMock.<Map<String, String>>anyObject(),
                 EasyMock.eq(herder), EasyMock.eq(TargetState.STARTED));
         PowerMock.expectLastCall().andReturn(true);
         member.poll(EasyMock.anyInt());
@@ -1117,7 +1117,7 @@ public class DistributedHerderTest {
         // join
         expectRebalance(1, Collections.<String>emptyList(), singletonList(TASK0));
         expectPostRebalanceCatchup(SNAPSHOT);
-        worker.startTask(EasyMock.eq(TASK0), EasyMock.<Map<String, String>>anyObject(), EasyMock.<Map<String, String>>anyObject(),
+        worker.startTask(EasyMock.eq(TASK0), EasyMock.<ClusterConfigState>anyObject(), EasyMock.<Map<String, String>>anyObject(), EasyMock.<Map<String, String>>anyObject(),
                 EasyMock.eq(herder), EasyMock.eq(TargetState.STARTED));
         PowerMock.expectLastCall().andReturn(true);
         member.poll(EasyMock.anyInt());
@@ -1157,7 +1157,7 @@ public class DistributedHerderTest {
         // join
         expectRebalance(1, Collections.<String>emptyList(), singletonList(TASK0));
         expectPostRebalanceCatchup(SNAPSHOT_PAUSED_CONN1);
-        worker.startTask(EasyMock.eq(TASK0), EasyMock.<Map<String, String>>anyObject(), EasyMock.<Map<String, String>>anyObject(),
+        worker.startTask(EasyMock.eq(TASK0), EasyMock.<ClusterConfigState>anyObject(), EasyMock.<Map<String, String>>anyObject(), EasyMock.<Map<String, String>>anyObject(),
                 EasyMock.eq(herder), EasyMock.eq(TargetState.PAUSED));
         PowerMock.expectLastCall().andReturn(true);
         member.poll(EasyMock.anyInt());
@@ -1210,7 +1210,7 @@ public class DistributedHerderTest {
         expectRebalance(Collections.<String>emptyList(), Collections.<ConnectorTaskId>emptyList(),
                 ConnectProtocol.Assignment.NO_ERROR, 1, Collections.<String>emptyList(),
                 Arrays.asList(TASK0));
-        worker.startTask(EasyMock.eq(TASK0), EasyMock.<Map<String, String>>anyObject(), EasyMock.<Map<String, String>>anyObject(),
+        worker.startTask(EasyMock.eq(TASK0), EasyMock.<ClusterConfigState>anyObject(), EasyMock.<Map<String, String>>anyObject(), EasyMock.<Map<String, String>>anyObject(),
                 EasyMock.eq(herder), EasyMock.eq(TargetState.STARTED));
         PowerMock.expectLastCall().andReturn(true);
         member.poll(EasyMock.anyInt());
@@ -1250,7 +1250,7 @@ public class DistributedHerderTest {
         PowerMock.expectLastCall().andReturn(true);
         EasyMock.expect(worker.getPlugins()).andReturn(plugins);
         EasyMock.expect(worker.connectorTaskConfigs(CONN1, conn1SinkConfig)).andReturn(TASK_CONFIGS);
-        worker.startTask(EasyMock.eq(TASK1), EasyMock.<Map<String, String>>anyObject(), EasyMock.<Map<String, String>>anyObject(),
+        worker.startTask(EasyMock.eq(TASK1), EasyMock.<ClusterConfigState>anyObject(), EasyMock.<Map<String, String>>anyObject(), EasyMock.<Map<String, String>>anyObject(),
                 EasyMock.eq(herder), EasyMock.eq(TargetState.STARTED));
         PowerMock.expectLastCall().andReturn(true);
         EasyMock.expect(worker.isRunning(CONN1)).andReturn(true);

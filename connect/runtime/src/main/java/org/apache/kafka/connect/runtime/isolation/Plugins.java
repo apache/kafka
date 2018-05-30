@@ -19,6 +19,7 @@ package org.apache.kafka.connect.runtime.isolation;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.AbstractConfig;
+import org.apache.kafka.common.config.ConfigProvider;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
@@ -145,6 +146,10 @@ public class Plugins {
 
     public Set<PluginDesc<Transformation>> transformations() {
         return delegatingLoader.transformations();
+    }
+
+    public Set<PluginDesc<ConfigProvider>> configProviders() {
+        return delegatingLoader.configProviders();
     }
 
     public Connector newConnector(String connectorClassOrAlias) {
@@ -318,6 +323,45 @@ public class Plugins {
         return plugin;
     }
 
+    public ConfigProvider newConfigProvider(AbstractConfig config, String providerPrefix, ClassLoaderUsage classLoaderUsage) {
+        String classPropertyName = providerPrefix + ".class";
+        Map<String, String> originalConfig = config.originalsStrings();
+        if (!originalConfig.containsKey(classPropertyName)) {
+            // This configuration does not define the config provider via the specified property name
+            return null;
+        }
+        ConfigProvider plugin = null;
+        switch (classLoaderUsage) {
+            case CURRENT_CLASSLOADER:
+                // Attempt to load first with the current classloader, and plugins as a fallback.
+                plugin = getInstance(config, classPropertyName, ConfigProvider.class);
+                break;
+            case PLUGINS:
+                // Attempt to load with the plugin class loader, which uses the current classloader as a fallback
+                String configProviderClassOrAlias = originalConfig.get(classPropertyName);
+                Class<? extends ConfigProvider> klass;
+                try {
+                    klass = pluginClass(delegatingLoader, configProviderClassOrAlias, ConfigProvider.class);
+                } catch (ClassNotFoundException e) {
+                    throw new ConnectException(
+                            "Failed to find any class that implements ConfigProvider and which name matches "
+                                    + configProviderClassOrAlias + ", available ConfigProviders are: "
+                                    + pluginNames(delegatingLoader.configProviders())
+                    );
+                }
+                plugin = newPlugin(klass);
+                break;
+        }
+        if (plugin == null) {
+            throw new ConnectException("Unable to instantiate the ConfigProvider specified in '" + classPropertyName + "'");
+        }
+
+        // Configure the ConfigProvider
+        String configPrefix = providerPrefix + ".param.";
+        Map<String, Object> configProviderConfig = config.originalsWithPrefix(configPrefix);
+        plugin.configure(configProviderConfig);
+        return plugin;
+    }
 
     /**
      * If the given class names are available in the classloader, return a list of new configured
