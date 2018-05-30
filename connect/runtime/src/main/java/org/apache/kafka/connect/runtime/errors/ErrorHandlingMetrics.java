@@ -45,6 +45,7 @@ public class ErrorHandlingMetrics {
     private final Sensor dlqProduceFailures;
     private long lastErrorTime = 0;
 
+    // for testing only
     public ErrorHandlingMetrics() {
         this(new ConnectorTaskId("noop-connector", -1),
                 new ConnectMetrics("noop-worker", new SystemTime(), 2, 3000, Sensor.RecordingLevel.INFO.toString(),

@@ -102,22 +102,6 @@ class WorkerSinkTask extends WorkerTask {
                           HeaderConverter headerConverter,
                           TransformationChain<SinkRecord> transformationChain,
                           ClassLoader loader,
-                          Time time) {
-        this(id, task, statusListener, initialState, workerConfig, connectMetrics, keyConverter, valueConverter,
-                headerConverter, transformationChain, loader, time, RetryWithToleranceOperator.NOOP_OPERATOR);
-    }
-
-    public WorkerSinkTask(ConnectorTaskId id,
-                          SinkTask task,
-                          TaskStatus.Listener statusListener,
-                          TargetState initialState,
-                          WorkerConfig workerConfig,
-                          ConnectMetrics connectMetrics,
-                          Converter keyConverter,
-                          Converter valueConverter,
-                          HeaderConverter headerConverter,
-                          TransformationChain<SinkRecord> transformationChain,
-                          ClassLoader loader,
                           Time time,
                           RetryWithToleranceOperator retryWithToleranceOperator) {
         super(id, statusListener, initialState, loader, connectMetrics, retryWithToleranceOperator);
@@ -508,8 +492,11 @@ class WorkerSinkTask extends WorkerTask {
             if (transRecord != null) {
                 messageBatch.add(transRecord);
             } else {
-                log.trace("{} Converters and transformations returned null, so dropping record in topic '{}' partition {} at offset {}",
-                        this, msg.topic(), msg.partition(), msg.offset());
+                log.trace(
+                        "{} Converters and transformations returned null, possibly because of too many retries, so " +
+                                "dropping record in topic '{}' partition {} at offset {}",
+                        this, msg.topic(), msg.partition(), msg.offset()
+                );
             }
         }
         sinkTaskMetricsGroup.recordConsumedOffsets(origOffsets);

@@ -33,6 +33,6 @@ public interface ErrorReporter extends Configurable {
     /**
      * @param errorHandlingMetrics metrics for error handling
      */
-    void setMetrics(ErrorHandlingMetrics errorHandlingMetrics);
+    void metrics(ErrorHandlingMetrics errorHandlingMetrics);
 
 }

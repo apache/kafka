@@ -99,7 +99,7 @@ public class DeadLetterQueueReporter implements ErrorReporter {
     }
 
     @Override
-    public void setMetrics(ErrorHandlingMetrics errorHandlingMetrics) {
+    public void metrics(ErrorHandlingMetrics errorHandlingMetrics) {
         this.errorHandlingMetrics = errorHandlingMetrics;
     }
 

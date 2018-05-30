@@ -318,13 +318,13 @@ public class ConnectMetricsRegistry {
         retries = createTemplate("total-retries", TASK_ERROR_HANDLING_GROUP_NAME,
                 "The number of operations retried.", taskErrorHandlingTags);
         errorsLogged = createTemplate("total-errors-logged", TASK_ERROR_HANDLING_GROUP_NAME,
-                "The number of times, error context was logged due to an error.", taskErrorHandlingTags);
+                "The number of errors that were logged.", taskErrorHandlingTags);
         dlqProduceRequests = createTemplate("deadletterqueue-produce-requests", TASK_ERROR_HANDLING_GROUP_NAME,
-                "The number of times a report request was made to the dead letter queue reporter.", taskErrorHandlingTags);
+                "The number of attempted writes to the dead letter queue.", taskErrorHandlingTags);
         dlqProduceFailures = createTemplate("deadletterqueue-produce-failures", TASK_ERROR_HANDLING_GROUP_NAME,
-                "The number of times a report request to the dead letter queue reporter failed.", taskErrorHandlingTags);
+                "The number of failed writes to the dead letter queue.", taskErrorHandlingTags);
         lastErrorTimestamp = createTemplate("last-error-timestamp", TASK_ERROR_HANDLING_GROUP_NAME,
-                "The epoch timestamp when this task encountered an error.", taskErrorHandlingTags);
+                "The epoch timestamp when this task last encountered an error.", taskErrorHandlingTags);
     }
 
     private MetricNameTemplate createTemplate(String name, String group, String doc, Set<String> tags) {

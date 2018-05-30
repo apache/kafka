@@ -105,26 +105,6 @@ class WorkerSourceTask extends WorkerTask {
                             WorkerConfig workerConfig,
                             ConnectMetrics connectMetrics,
                             ClassLoader loader,
-                            Time time) {
-        this(id, task, statusListener, initialState, keyConverter, valueConverter, headerConverter,
-                transformationChain, producer, offsetReader, offsetWriter, workerConfig, connectMetrics,
-                loader, time, RetryWithToleranceOperator.NOOP_OPERATOR);
-    }
-
-    public WorkerSourceTask(ConnectorTaskId id,
-                            SourceTask task,
-                            TaskStatus.Listener statusListener,
-                            TargetState initialState,
-                            Converter keyConverter,
-                            Converter valueConverter,
-                            HeaderConverter headerConverter,
-                            TransformationChain<SourceRecord> transformationChain,
-                            KafkaProducer<byte[], byte[]> producer,
-                            OffsetStorageReader offsetReader,
-                            OffsetStorageWriter offsetWriter,
-                            WorkerConfig workerConfig,
-                            ConnectMetrics connectMetrics,
-                            ClassLoader loader,
                             Time time,
                             RetryWithToleranceOperator retryWithToleranceOperator) {
 

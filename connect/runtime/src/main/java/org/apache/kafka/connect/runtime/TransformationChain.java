@@ -21,7 +21,6 @@ import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.transforms.Transformation;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
@@ -29,10 +28,6 @@ public class TransformationChain<R extends ConnectRecord<R>> {
 
     private final List<Transformation<R>> transformations;
     private final RetryWithToleranceOperator retryWithToleranceOperator;
-
-    public TransformationChain(List<Transformation<R>> transformations) {
-        this(transformations, RetryWithToleranceOperator.NOOP_OPERATOR);
-    }
 
     public TransformationChain(List<Transformation<R>> transformations, RetryWithToleranceOperator retryWithToleranceOperator) {
         this.transformations = transformations;
@@ -71,10 +66,6 @@ public class TransformationChain<R extends ConnectRecord<R>> {
     @Override
     public int hashCode() {
         return Objects.hash(transformations);
-    }
-
-    public static <R extends ConnectRecord<R>> TransformationChain<R> noOp() {
-        return new TransformationChain<R>(Collections.<Transformation<R>>emptyList());
     }
 
 }

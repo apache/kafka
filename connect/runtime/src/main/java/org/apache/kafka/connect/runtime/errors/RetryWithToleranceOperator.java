@@ -79,10 +79,11 @@ public class RetryWithToleranceOperator {
     public static final String TOLERANCE_LIMIT_DOC = "Fail the task if we exceed specified number of errors overall.";
     public static final String TOLERANCE_LIMIT_DEFAULT = "none";
 
+    // for testing only
     public static final RetryWithToleranceOperator NOOP_OPERATOR = new RetryWithToleranceOperator();
     static {
         NOOP_OPERATOR.configure(Collections.emptyMap());
-        NOOP_OPERATOR.setMetrics(new ErrorHandlingMetrics());
+        NOOP_OPERATOR.metrics(new ErrorHandlingMetrics());
     }
 
     private static final Map<Stage, Class<? extends Exception>> TOLERABLE_EXCEPTIONS = new HashMap<>();
@@ -125,7 +126,7 @@ public class RetryWithToleranceOperator {
      * @return result of the operation
      */
     public <V> V execute(Operation<V> operation, Stage stage, Class<?> executingClass) {
-        context.setCurrentContext(stage, executingClass);
+        context.currentContext(stage, executingClass);
 
         if (context.failed()) {
             log.debug("ProcessingContext is already in failed state. Ignoring requested operation.");
@@ -257,7 +258,7 @@ public class RetryWithToleranceOperator {
         config = new RetryWithToleranceOperatorConfig(configs);
     }
 
-    public void setMetrics(ErrorHandlingMetrics errorHandlingMetrics) {
+    public void metrics(ErrorHandlingMetrics errorHandlingMetrics) {
         this.errorHandlingMetrics = errorHandlingMetrics;
     }
 
@@ -300,8 +301,8 @@ public class RetryWithToleranceOperator {
      *
      * @param reporters the error reporters (should not be null).
      */
-    public void setReporters(List<ErrorReporter> reporters) {
-        this.context.setReporters(reporters);
+    public void reporters(List<ErrorReporter> reporters) {
+        this.context.reporters(reporters);
     }
 
     /**

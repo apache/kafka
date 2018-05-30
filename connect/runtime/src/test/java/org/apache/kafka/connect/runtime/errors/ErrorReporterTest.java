@@ -76,7 +76,7 @@ public class ErrorReporterTest {
     public void testDLQConfigWithEmptyTopicName() {
         DeadLetterQueueReporter deadLetterQueueReporter = new DeadLetterQueueReporter(producer);
         deadLetterQueueReporter.configure(config);
-        deadLetterQueueReporter.setMetrics(errorHandlingMetrics);
+        deadLetterQueueReporter.metrics(errorHandlingMetrics);
 
         ProcessingContext context = processingContext();
 
@@ -92,7 +92,7 @@ public class ErrorReporterTest {
     public void testDLQConfigWithValidTopicName() {
         DeadLetterQueueReporter deadLetterQueueReporter = new DeadLetterQueueReporter(producer);
         deadLetterQueueReporter.configure(config(DeadLetterQueueReporter.DLQ_TOPIC_NAME, DLQ_TOPIC));
-        deadLetterQueueReporter.setMetrics(errorHandlingMetrics);
+        deadLetterQueueReporter.metrics(errorHandlingMetrics);
 
         ProcessingContext context = processingContext();
 
@@ -108,7 +108,7 @@ public class ErrorReporterTest {
     public void testReportDLQTwice() {
         DeadLetterQueueReporter deadLetterQueueReporter = new DeadLetterQueueReporter(producer);
         deadLetterQueueReporter.configure(config(DeadLetterQueueReporter.DLQ_TOPIC_NAME, DLQ_TOPIC));
-        deadLetterQueueReporter.setMetrics(errorHandlingMetrics);
+        deadLetterQueueReporter.metrics(errorHandlingMetrics);
 
         ProcessingContext context = processingContext();
 
@@ -125,7 +125,7 @@ public class ErrorReporterTest {
     public void testLogOnDisabledLogReporter() {
         LogReporter logReporter = new LogReporter(TASK_ID);
         logReporter.configure(config);
-        logReporter.setMetrics(errorHandlingMetrics);
+        logReporter.metrics(errorHandlingMetrics);
 
         ProcessingContext context = processingContext();
         context.error(new RuntimeException());
@@ -139,7 +139,7 @@ public class ErrorReporterTest {
     public void testLogOnEnabledLogReporter() {
         LogReporter logReporter = new LogReporter(TASK_ID);
         logReporter.configure(config(LogReporter.LOG_ENABLE, "true"));
-        logReporter.setMetrics(errorHandlingMetrics);
+        logReporter.metrics(errorHandlingMetrics);
 
         ProcessingContext context = processingContext();
         context.error(new RuntimeException());
@@ -153,7 +153,7 @@ public class ErrorReporterTest {
     public void testLogMessageWithNoRecords() {
         LogReporter logReporter = new LogReporter(TASK_ID);
         logReporter.configure(config(LogReporter.LOG_ENABLE, "true"));
-        logReporter.setMetrics(errorHandlingMetrics);
+        logReporter.metrics(errorHandlingMetrics);
 
         ProcessingContext context = processingContext();
 
@@ -167,7 +167,7 @@ public class ErrorReporterTest {
         LogReporter logReporter = new LogReporter(TASK_ID);
         logReporter.configure(config(LogReporter.LOG_ENABLE, "true"));
         logReporter.configure(config(LogReporter.LOG_INCLUDE_MESSAGES, "true"));
-        logReporter.setMetrics(errorHandlingMetrics);
+        logReporter.metrics(errorHandlingMetrics);
 
         ProcessingContext context = processingContext();
 
@@ -180,7 +180,7 @@ public class ErrorReporterTest {
     private ProcessingContext processingContext() {
         ProcessingContext context = new ProcessingContext();
         context.consumerRecord(new ConsumerRecord<>(TOPIC, 5, 100, new byte[]{'a', 'b'}, new byte[]{'x'}));
-        context.setCurrentContext(Stage.KEY_CONVERTER, JsonConverter.class);
+        context.currentContext(Stage.KEY_CONVERTER, JsonConverter.class);
         return context;
     }
 

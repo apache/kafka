@@ -168,12 +168,12 @@ public class ErrorHandlingTaskTest {
         reportProps.put(LogReporter.LOG_ENABLE, "true");
         reportProps.put(LogReporter.LOG_INCLUDE_MESSAGES, "true");
         reporter.configure(reportProps);
-        reporter.setMetrics(errorHandlingMetrics);
+        reporter.metrics(errorHandlingMetrics);
 
         RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(time);
         retryWithToleranceOperator.configure(OPERATION_EXECUTOR_PROPS);
-        retryWithToleranceOperator.setMetrics(errorHandlingMetrics);
-        retryWithToleranceOperator.setReporters(singletonList(reporter));
+        retryWithToleranceOperator.metrics(errorHandlingMetrics);
+        retryWithToleranceOperator.reporters(singletonList(reporter));
         createSinkTask(initialState, retryWithToleranceOperator);
 
         expectInitializeTask();
@@ -218,12 +218,12 @@ public class ErrorHandlingTaskTest {
         reportProps.put(LogReporter.LOG_ENABLE, "true");
         reportProps.put(LogReporter.LOG_INCLUDE_MESSAGES, "true");
         reporter.configure(reportProps);
-        reporter.setMetrics(errorHandlingMetrics);
+        reporter.metrics(errorHandlingMetrics);
 
         RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(time);
         retryWithToleranceOperator.configure(OPERATION_EXECUTOR_PROPS);
-        retryWithToleranceOperator.setMetrics(errorHandlingMetrics);
-        retryWithToleranceOperator.setReporters(singletonList(reporter));
+        retryWithToleranceOperator.metrics(errorHandlingMetrics);
+        retryWithToleranceOperator.reporters(singletonList(reporter));
         createSourceTask(initialState, retryWithToleranceOperator);
 
         // valid json
@@ -277,12 +277,12 @@ public class ErrorHandlingTaskTest {
         reportProps.put(LogReporter.LOG_ENABLE, "true");
         reportProps.put(LogReporter.LOG_INCLUDE_MESSAGES, "true");
         reporter.configure(reportProps);
-        reporter.setMetrics(errorHandlingMetrics);
+        reporter.metrics(errorHandlingMetrics);
 
         RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(time);
         retryWithToleranceOperator.configure(OPERATION_EXECUTOR_PROPS);
-        retryWithToleranceOperator.setMetrics(errorHandlingMetrics);
-        retryWithToleranceOperator.setReporters(singletonList(reporter));
+        retryWithToleranceOperator.metrics(errorHandlingMetrics);
+        retryWithToleranceOperator.reporters(singletonList(reporter));
         createSourceTask(initialState, retryWithToleranceOperator, badConverter());
 
         // valid json

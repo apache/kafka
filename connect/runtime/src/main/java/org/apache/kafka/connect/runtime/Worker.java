@@ -457,11 +457,11 @@ public class Worker {
 
         RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator();
         retryWithToleranceOperator.configure(connConfig.originalsWithPrefix("errors."));
-        retryWithToleranceOperator.setMetrics(errorHandlingMetrics);
+        retryWithToleranceOperator.metrics(errorHandlingMetrics);
 
         // Decide which type of worker task we need based on the type of task.
         if (task instanceof SourceTask) {
-            retryWithToleranceOperator.setReporters(sourceTaskReporters(id, connConfig, errorHandlingMetrics));
+            retryWithToleranceOperator.reporters(sourceTaskReporters(id, connConfig, errorHandlingMetrics));
             TransformationChain<SourceRecord> transformationChain = new TransformationChain<>(connConfig.<SourceRecord>transformations(), retryWithToleranceOperator);
             OffsetStorageReader offsetReader = new OffsetStorageReaderImpl(offsetBackingStore, id.connector(),
                     internalKeyConverter, internalValueConverter);
@@ -474,7 +474,7 @@ public class Worker {
                     time, retryWithToleranceOperator);
         } else if (task instanceof SinkTask) {
             TransformationChain<SinkRecord> transformationChain = new TransformationChain<>(connConfig.<SinkRecord>transformations(), retryWithToleranceOperator);
-            retryWithToleranceOperator.setReporters(sinkTaskReporters(id, connConfig, errorHandlingMetrics));
+            retryWithToleranceOperator.reporters(sinkTaskReporters(id, connConfig, errorHandlingMetrics));
             return new WorkerSinkTask(id, (SinkTask) task, statusListener, initialState, config, metrics, keyConverter,
                     valueConverter, headerConverter, transformationChain, loader, time,
                     retryWithToleranceOperator);
@@ -493,7 +493,7 @@ public class Worker {
         ArrayList<ErrorReporter> reporters = new ArrayList<>();
         LogReporter logReporter = new LogReporter(id);
         logReporter.configure(connConfig.originalsWithPrefix(LogReporter.PREFIX + "."));
-        logReporter.setMetrics(errorHandlingMetrics);
+        logReporter.metrics(errorHandlingMetrics);
         reporters.add(logReporter);
 
         // check if topic for dead letter queue exists
@@ -509,10 +509,10 @@ public class Worker {
 
     private List<ErrorReporter> sourceTaskReporters(ConnectorTaskId id, ConnectorConfig connConfig,
                                                       ErrorHandlingMetrics errorHandlingMetrics) {
-        ArrayList<ErrorReporter> reporters = new ArrayList<>();
+        List<ErrorReporter> reporters = new ArrayList<>();
         LogReporter logReporter = new LogReporter(id);
         logReporter.configure(connConfig.originalsWithPrefix(LogReporter.PREFIX + "."));
-        logReporter.setMetrics(errorHandlingMetrics);
+        logReporter.metrics(errorHandlingMetrics);
         reporters.add(logReporter);
 
         return reporters;

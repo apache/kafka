@@ -123,7 +123,7 @@ class ProcessingContext {
      * @param stage the stage
      * @param klass the class which will execute the operation in this stage.
      */
-    public void setCurrentContext(Stage stage, Class<?> klass) {
+    public void currentContext(Stage stage, Class<?> klass) {
         position(stage);
         executingClass(klass);
     }
@@ -191,7 +191,7 @@ class ProcessingContext {
      *
      * @param reporters the error reporters (should not be null).
      */
-    public void setReporters(Collection<ErrorReporter> reporters) {
+    public void reporters(Collection<ErrorReporter> reporters) {
         Objects.requireNonNull(reporters);
         this.reporters = reporters;
     }
