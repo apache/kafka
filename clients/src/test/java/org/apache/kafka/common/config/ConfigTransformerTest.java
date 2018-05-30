@@ -94,7 +94,7 @@ public class ConfigTransformerTest {
 
         public ConfigData get(String path, Set<String> keys) {
             Map<String, String> data = new HashMap<>();
-            long ttl = Long.MAX_VALUE;
+            Long ttl = null;
             if (path.equals(TEST_PATH)) {
                 if (keys.contains(TEST_KEY)) {
                     data.put(TEST_KEY, TEST_RESULT);
