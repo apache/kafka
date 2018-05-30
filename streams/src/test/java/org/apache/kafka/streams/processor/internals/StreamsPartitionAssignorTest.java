@@ -27,8 +27,8 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.StreamsBuilderTest;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
@@ -43,7 +43,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockInternalTopicManager;
 import org.apache.kafka.test.MockProcessorSupplier;
-import org.apache.kafka.test.MockStateStoreSupplier;
+import org.apache.kafka.test.MockStoreBuilder;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
 import org.junit.Test;
@@ -328,10 +328,10 @@ public class StreamsPartitionAssignorTest {
     public void testAssignWithPartialTopology() {
         builder.addSource(null, "source1", null, null, null, "topic1");
         builder.addProcessor("processor1", new MockProcessorSupplier(), "source1");
-        builder.addStateStore(new MockStateStoreSupplier("store1", false), "processor1");
+        builder.addStateStore(new MockStoreBuilder("store1", false), "processor1");
         builder.addSource(null, "source2", null, null, null, "topic2");
         builder.addProcessor("processor2", new MockProcessorSupplier(), "source2");
-        builder.addStateStore(new MockStateStoreSupplier("store2", false), "processor2");
+        builder.addStateStore(new MockStoreBuilder("store2", false), "processor2");
         List<String> topics = Utils.mkList("topic1", "topic2");
         Set<TaskId> allTasks = Utils.mkSet(task0, task1, task2);
 
@@ -469,11 +469,11 @@ public class StreamsPartitionAssignorTest {
         builder.addSource(null, "source2", null, null, null, "topic2");
 
         builder.addProcessor("processor-1", new MockProcessorSupplier(), "source1");
-        builder.addStateStore(new MockStateStoreSupplier("store1", false), "processor-1");
+        builder.addStateStore(new MockStoreBuilder("store1", false), "processor-1");
 
         builder.addProcessor("processor-2", new MockProcessorSupplier(), "source2");
-        builder.addStateStore(new MockStateStoreSupplier("store2", false), "processor-2");
-        builder.addStateStore(new MockStateStoreSupplier("store3", false), "processor-2");
+        builder.addStateStore(new MockStoreBuilder("store2", false), "processor-2");
+        builder.addStateStore(new MockStoreBuilder("store3", false), "processor-2");
 
         List<String> topics = Utils.mkList("topic1", "topic2");
 
@@ -727,7 +727,7 @@ public class StreamsPartitionAssignorTest {
     public void shouldGenerateTasksForAllCreatedPartitions() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final InternalTopologyBuilder internalTopologyBuilder = StreamsBuilderTest.internalTopologyBuilder(builder);
+        final InternalTopologyBuilder internalTopologyBuilder = TopologyWrapper.getInternalTopologyBuilder(builder.build());
         internalTopologyBuilder.setApplicationId(applicationId);
 
         // KStream with 3 partitions
@@ -796,7 +796,6 @@ public class StreamsPartitionAssignorTest {
         expectedCreatedInternalTopics.put(applicationId + "-KTABLE-AGGREGATE-STATE-STORE-0000000006-repartition", 4);
         expectedCreatedInternalTopics.put(applicationId + "-KTABLE-AGGREGATE-STATE-STORE-0000000006-changelog", 4);
         expectedCreatedInternalTopics.put(applicationId + "-KSTREAM-MAP-0000000001-repartition", 4);
-        expectedCreatedInternalTopics.put(applicationId + "-topic3-STATE-STORE-0000000002-changelog", 4);
 
         // check if all internal topics were created as expected
         assertThat(mockInternalTopicManager.readyTopics, equalTo(expectedCreatedInternalTopics));
@@ -906,7 +905,7 @@ public class StreamsPartitionAssignorTest {
     public void shouldNotLoopInfinitelyOnMissingMetadataAndShouldNotCreateRelatedTasks() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final InternalTopologyBuilder internalTopologyBuilder = StreamsBuilderTest.internalTopologyBuilder(builder);
+        final InternalTopologyBuilder internalTopologyBuilder = TopologyWrapper.getInternalTopologyBuilder(builder.build());
         internalTopologyBuilder.setApplicationId(applicationId);
 
         KStream<Object, Object> stream1 = builder
@@ -1026,7 +1025,7 @@ public class StreamsPartitionAssignorTest {
     public void shouldNotAddStandbyTaskPartitionsToPartitionsForHost() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final InternalTopologyBuilder internalTopologyBuilder = StreamsBuilderTest.internalTopologyBuilder(builder);
+        final InternalTopologyBuilder internalTopologyBuilder = TopologyWrapper.getInternalTopologyBuilder(builder.build());
         internalTopologyBuilder.setApplicationId(applicationId);
 
         builder.stream("topic1").groupByKey().count();

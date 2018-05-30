@@ -36,7 +36,8 @@ package org.apache.kafka.common;
  * {@link org.apache.kafka.common.serialization.Deserializer} : The {@link ClusterResourceListener#onUpdate(ClusterResource)} method will be invoked before {@link org.apache.kafka.common.serialization.Deserializer#deserialize(String, byte[])}
  * <p>
  * {@link org.apache.kafka.common.metrics.MetricsReporter} : The {@link ClusterResourceListener#onUpdate(ClusterResource)} method will be invoked after first {@link org.apache.kafka.clients.producer.KafkaProducer#send(ProducerRecord)} invocation for Producer metrics reporter
- * and after first {@link org.apache.kafka.clients.consumer.KafkaConsumer#poll(long)} invocation for Consumer metrics reporters. The reporter may receive metric events from the network layer before this method is invoked.
+ * and after first {@link org.apache.kafka.clients.consumer.KafkaConsumer#poll(java.time.Duration)} invocation for Consumer metrics
+ * reporters. The reporter may receive metric events from the network layer before this method is invoked.
  * <h4>Broker</h4>
  * There is a single invocation {@link ClusterResourceListener#onUpdate(ClusterResource)} on broker start-up and the cluster metadata will never change.
  * <p>

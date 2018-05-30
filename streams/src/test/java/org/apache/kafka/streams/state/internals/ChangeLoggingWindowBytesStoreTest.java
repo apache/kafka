@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -47,6 +48,7 @@ public class ChangeLoggingWindowBytesStoreTest {
         public <K, V> void send(final String topic,
                                 K key,
                                 V value,
+                                Headers headers,
                                 Integer partition,
                                 Long timestamp,
                                 Serializer<K> keySerializer,

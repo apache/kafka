@@ -59,7 +59,7 @@ public class ThreadCacheTest {
         for (KeyValue<String, String> kvToInsert : toInsert) {
             Bytes key = Bytes.wrap(kvToInsert.key.getBytes());
             byte[] value = kvToInsert.value.getBytes();
-            cache.put(namespace, key, new LRUCacheEntry(value, true, 1L, 1L, 1, ""));
+            cache.put(namespace, key, new LRUCacheEntry(value, null, true, 1L, 1L, 1, ""));
         }
 
         for (KeyValue<String, String> kvToInsert : toInsert) {
@@ -89,7 +89,7 @@ public class ThreadCacheTest {
             String keyStr = "K" + i;
             Bytes key = Bytes.wrap(keyStr.getBytes());
             byte[] value = new byte[valueSizeBytes];
-            cache.put(namespace, key, new LRUCacheEntry(value, true, 1L, 1L, 1, ""));
+            cache.put(namespace, key, new LRUCacheEntry(value, null, true, 1L, 1L, 1, ""));
         }
 
 
@@ -171,7 +171,7 @@ public class ThreadCacheTest {
         for (KeyValue<String, String> kvToInsert : toInsert) {
             final Bytes key = Bytes.wrap(kvToInsert.key.getBytes());
             final byte[] value = kvToInsert.value.getBytes();
-            cache.put(namespace, key, new LRUCacheEntry(value, true, 1, 1, 1, ""));
+            cache.put(namespace, key, new LRUCacheEntry(value, null, true, 1, 1, 1, ""));
         }
 
         for (int i = 0; i < expected.size(); i++) {
@@ -520,7 +520,7 @@ public class ThreadCacheTest {
     }
 
     private LRUCacheEntry dirtyEntry(final byte[] key) {
-        return new LRUCacheEntry(key, true, -1, -1, -1, "");
+        return new LRUCacheEntry(key, null, true, -1, -1, -1, "");
     }
 
     private LRUCacheEntry cleanEntry(final byte[] key) {

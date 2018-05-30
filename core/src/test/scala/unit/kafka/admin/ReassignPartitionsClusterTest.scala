@@ -34,6 +34,8 @@ import scala.collection.Seq
 import scala.util.Random
 import java.io.File
 
+import org.apache.kafka.clients.producer.ProducerRecord
+
 class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
   val partitionId = 0
   var servers: Seq[KafkaServer] = null
@@ -271,9 +273,9 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     //Given throttle set so replication will take a certain number of secs
     val initialThrottle = Throttle(10 * 1000 * 1000, -1, () => zkUpdateDelay)
     val expectedDurationSecs = 5
-    val numMessages: Int = 500
-    val msgSize: Int = 100 * 1000
-    produceMessages(servers, topicName, numMessages, acks = 0, msgSize)
+    val numMessages = 500
+    val msgSize = 100 * 1000
+    produceMessages(topicName, numMessages, acks = 0, msgSize)
     assertEquals(expectedDurationSecs, numMessages * msgSize / initialThrottle.interBrokerLimit)
 
     //Start rebalance which will move replica on 100 -> replica on 102
@@ -321,8 +323,8 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
 
     //Given throttle set so replication will take a while
     val throttle: Long = 1000 * 1000
-    produceMessages(servers, "topic1", 100, acks = 0, 100 * 1000)
-    produceMessages(servers, "topic2", 100, acks = 0, 100 * 1000)
+    produceMessages("topic1", 100, acks = 0, 100 * 1000)
+    produceMessages("topic2", 100, acks = 0, 100 * 1000)
 
     //Start rebalance
     val newAssignment = Map(
@@ -358,7 +360,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
 
     //Given throttle set so replication will take at least 20 sec (we won't wait this long)
     val initialThrottle: Long = 1000 * 1000
-    produceMessages(servers, topicName, numMessages = 200, acks = 0, valueBytes = 100 * 1000)
+    produceMessages(topicName, numMessages = 200, acks = 0, valueLength = 100 * 1000)
 
     //Start rebalance
     val newAssignment = generateAssignment(zkClient, Array(101, 102), json(topicName), true)._1
@@ -629,5 +631,11 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
   def json(topic: String*): String = {
     val topicStr = topic.map { t => "{\"topic\": \"" + t + "\"}" }.mkString(",")
     s"""{"topics": [$topicStr],"version":1}"""
+  }
+
+  private def produceMessages(topic: String, numMessages: Int, acks: Int, valueLength: Int): Unit = {
+    val records = (0 until numMessages).map(_ => new ProducerRecord[Array[Byte], Array[Byte]](topic,
+      new Array[Byte](valueLength)))
+    TestUtils.produceMessages(servers, records, acks)
   }
 }

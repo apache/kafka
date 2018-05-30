@@ -63,8 +63,8 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
 
     public void init(final ProcessorContext context, final StateStore root) {
         topic = ProcessorStateManager.storeChangelogTopic(context.applicationId(), root.name());
-        bytesStore.init(context, root);
         initInternal((InternalProcessorContext) context);
+        bytesStore.init(context, root);
     }
 
     @SuppressWarnings("unchecked")
@@ -141,8 +141,15 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
     public void put(final Windowed<Bytes> key, byte[] value) {
         validateStoreOpen();
         final Bytes binaryKey = Bytes.wrap(SessionKeySchema.toBinary(key));
-        final LRUCacheEntry entry = new LRUCacheEntry(value, true, context.offset(),
-                                                      key.window().end(), context.partition(), context.topic());
+        final LRUCacheEntry entry =
+            new LRUCacheEntry(
+                value,
+                context.headers(),
+                true,
+                context.offset(),
+                key.window().end(),
+                context.partition(),
+                context.topic());
         cache.put(cacheName, cacheFunction.cacheKey(binaryKey), entry);
     }
 

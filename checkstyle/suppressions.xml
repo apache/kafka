@@ -57,7 +57,7 @@
               files="AbstractRequest.java|KerberosLogin.java|WorkerSinkTaskTest.java|TransactionManagerTest.java"/>
 
     <suppress checks="NPathComplexity"
-              files="(BufferPool|MetricName|Node|ConfigDef|SslTransportLayer|MetadataResponse|KerberosLogin|Selector|Sender|Serdes|Agent|Values|PluginUtils|MiniTrogdorCluster).java"/>
+              files="(BufferPool|Fetcher|MetricName|Node|ConfigDef|RecordBatch|SslFactory|SslTransportLayer|MetadataResponse|KerberosLogin|Selector|Sender|Serdes|TokenInformation|Agent|Values|PluginUtils|MiniTrogdorCluster).java"/>
 
     <!-- clients tests -->
     <suppress checks="ClassDataAbstractionCoupling"
@@ -71,6 +71,9 @@
 
     <suppress checks="JavaNCSS"
               files="RequestResponseTest.java"/>
+
+    <suppress checks="NPathComplexity"
+              files="MemoryRecordsTest.java"/>
 
     <!-- Connect -->
     <suppress checks="ClassFanOutComplexity"
@@ -111,17 +114,8 @@
               files="Values.java"/>
 
     <suppress checks="NPathComplexity"
-              files="ConnectRecord.java"/>
-    <suppress checks="NPathComplexity"
-              files="ConnectSchema.java"/>
-    <suppress checks="NPathComplexity"
-              files="FileStreamSourceTask.java"/>
-    <suppress checks="NPathComplexity"
-              files="JsonConverter.java"/>
-    <suppress checks="NPathComplexity"
-              files="DistributedHerder.java"/>
-    <suppress checks="NPathComplexity"
-              files="ConnectHeaders.java"/>
+              files="(AbstractStatus|ConnectHeaders|ConnectRecord|ConnectSchema|DistributedHerder|FileStreamSourceTask|JsonConverter|KafkaConfigBackingStore).java"/>
+
     <suppress checks="MethodLength"
               files="Values.java"/>
 
@@ -155,11 +149,7 @@
               files="StreamsPartitionAssignor.java"/>
 
     <suppress checks="NPathComplexity"
-              files="ProcessorStateManager.java"/>
-    <suppress checks="NPathComplexity"
-              files="StreamsPartitionAssignor.java"/>
-    <suppress checks="NPathComplexity"
-              files="StreamThread.java"/>
+              files="(ProcessorStateManager|InternalTopologyBuilder|StreamsPartitionAssignor|StreamThread).java"/>
 
     <!-- Streams tests -->
     <suppress checks="ClassFanOutComplexity"
@@ -189,7 +179,7 @@
               files="SmokeTestDriver.java"/>
 
     <suppress checks="NPathComplexity"
-              files="KStreamKStreamJoinTest.java|SmokeTestDriver.java"/>
+              files="EosTestDriver|KStreamKStreamJoinTest.java|SmokeTestDriver.java"/>
     <suppress checks="NPathComplexity"
               files="KStreamKStreamLeftJoinTest.java"/>
 

@@ -99,11 +99,15 @@ class KafkaScheduler(val threads: Int,
     }
   }
 
-  def schedule(name: String, fun: ()=>Unit, delay: Long, period: Long, unit: TimeUnit) {
+  def scheduleOnce(name: String, fun: () => Unit): Unit = {
+    schedule(name, fun, delay = 0L, period = -1L, unit = TimeUnit.MILLISECONDS)
+  }
+
+  def schedule(name: String, fun: () => Unit, delay: Long, period: Long, unit: TimeUnit) {
     debug("Scheduling task %s with initial delay %d ms and period %d ms."
         .format(name, TimeUnit.MILLISECONDS.convert(delay, unit), TimeUnit.MILLISECONDS.convert(period, unit)))
     this synchronized {
-      ensureRunning
+      ensureRunning()
       val runnable = CoreUtils.runnable {
         try {
           trace("Beginning execution of scheduled task '%s'.".format(name))

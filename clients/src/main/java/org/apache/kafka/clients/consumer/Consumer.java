@@ -22,6 +22,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 
 import java.io.Closeable;
+import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -38,156 +39,162 @@ public interface Consumer<K, V> extends Closeable {
     /**
      * @see KafkaConsumer#assignment()
      */
-    public Set<TopicPartition> assignment();
+    Set<TopicPartition> assignment();
 
     /**
      * @see KafkaConsumer#subscription()
      */
-    public Set<String> subscription();
+    Set<String> subscription();
 
     /**
      * @see KafkaConsumer#subscribe(Collection)
      */
-    public void subscribe(Collection<String> topics);
+    void subscribe(Collection<String> topics);
 
     /**
      * @see KafkaConsumer#subscribe(Collection, ConsumerRebalanceListener)
      */
-    public void subscribe(Collection<String> topics, ConsumerRebalanceListener callback);
+    void subscribe(Collection<String> topics, ConsumerRebalanceListener callback);
 
     /**
      * @see KafkaConsumer#assign(Collection)
      */
-    public void assign(Collection<TopicPartition> partitions);
+    void assign(Collection<TopicPartition> partitions);
 
     /**
     * @see KafkaConsumer#subscribe(Pattern, ConsumerRebalanceListener)
     */
-    public void subscribe(Pattern pattern, ConsumerRebalanceListener callback);
+    void subscribe(Pattern pattern, ConsumerRebalanceListener callback);
 
     /**
     * @see KafkaConsumer#subscribe(Pattern)
     */
-    public void subscribe(Pattern pattern);
+    void subscribe(Pattern pattern);
 
     /**
      * @see KafkaConsumer#unsubscribe()
      */
-    public void unsubscribe();
+    void unsubscribe();
 
     /**
      * @see KafkaConsumer#poll(long)
      */
-    public ConsumerRecords<K, V> poll(long timeout);
+    @Deprecated
+    ConsumerRecords<K, V> poll(long timeout);
+
+    /**
+     * @see KafkaConsumer#poll(Duration)
+     */
+    ConsumerRecords<K, V> poll(Duration timeout);
 
     /**
      * @see KafkaConsumer#commitSync()
      */
-    public void commitSync();
+    void commitSync();
 
     /**
      * @see KafkaConsumer#commitSync(Map)
      */
-    public void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets);
+    void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets);
 
     /**
      * @see KafkaConsumer#commitAsync()
      */
-    public void commitAsync();
+    void commitAsync();
 
     /**
      * @see KafkaConsumer#commitAsync(OffsetCommitCallback)
      */
-    public void commitAsync(OffsetCommitCallback callback);
+    void commitAsync(OffsetCommitCallback callback);
 
     /**
      * @see KafkaConsumer#commitAsync(Map, OffsetCommitCallback)
      */
-    public void commitAsync(Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback);
+    void commitAsync(Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback);
 
     /**
      * @see KafkaConsumer#seek(TopicPartition, long)
      */
-    public void seek(TopicPartition partition, long offset);
+    void seek(TopicPartition partition, long offset);
 
     /**
      * @see KafkaConsumer#seekToBeginning(Collection)
      */
-    public void seekToBeginning(Collection<TopicPartition> partitions);
+    void seekToBeginning(Collection<TopicPartition> partitions);
 
     /**
      * @see KafkaConsumer#seekToEnd(Collection)
      */
-    public void seekToEnd(Collection<TopicPartition> partitions);
+    void seekToEnd(Collection<TopicPartition> partitions);
 
     /**
      * @see KafkaConsumer#position(TopicPartition)
      */
-    public long position(TopicPartition partition);
+    long position(TopicPartition partition);
 
     /**
      * @see KafkaConsumer#committed(TopicPartition)
      */
-    public OffsetAndMetadata committed(TopicPartition partition);
+    OffsetAndMetadata committed(TopicPartition partition);
 
     /**
      * @see KafkaConsumer#metrics()
      */
-    public Map<MetricName, ? extends Metric> metrics();
+    Map<MetricName, ? extends Metric> metrics();
 
     /**
      * @see KafkaConsumer#partitionsFor(String)
      */
-    public List<PartitionInfo> partitionsFor(String topic);
+    List<PartitionInfo> partitionsFor(String topic);
 
     /**
      * @see KafkaConsumer#listTopics()
      */
-    public Map<String, List<PartitionInfo>> listTopics();
+    Map<String, List<PartitionInfo>> listTopics();
 
     /**
      * @see KafkaConsumer#paused()
      */
-    public Set<TopicPartition> paused();
+    Set<TopicPartition> paused();
 
     /**
      * @see KafkaConsumer#pause(Collection)
      */
-    public void pause(Collection<TopicPartition> partitions);
+    void pause(Collection<TopicPartition> partitions);
 
     /**
      * @see KafkaConsumer#resume(Collection)
      */
-    public void resume(Collection<TopicPartition> partitions);
+    void resume(Collection<TopicPartition> partitions);
 
     /**
      * @see KafkaConsumer#offsetsForTimes(java.util.Map)
      */
-    public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch);
+    Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch);
 
     /**
      * @see KafkaConsumer#beginningOffsets(java.util.Collection)
      */
-    public Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions);
+    Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions);
 
     /**
      * @see KafkaConsumer#endOffsets(java.util.Collection)
      */
-    public Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions);
+    Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions);
 
     /**
      * @see KafkaConsumer#close()
      */
-    public void close();
+    void close();
 
     /**
      * @see KafkaConsumer#close(long, TimeUnit)
      */
-    public void close(long timeout, TimeUnit unit);
+    void close(long timeout, TimeUnit unit);
 
     /**
      * @see KafkaConsumer#wakeup()
      */
-    public void wakeup();
+    void wakeup();
 
 }

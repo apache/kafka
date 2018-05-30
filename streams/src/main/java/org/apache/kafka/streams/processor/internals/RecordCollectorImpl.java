@@ -33,6 +33,8 @@ import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownServerException;
+import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.ProductionExceptionHandler;
@@ -51,30 +53,32 @@ public class RecordCollectorImpl implements RecordCollector {
     private final Map<TopicPartition, Long> offsets;
     private final String logPrefix;
     private final ProductionExceptionHandler productionExceptionHandler;
+    private final Sensor skippedRecordsSensor;
 
     private final static String LOG_MESSAGE = "Error sending record (key {} value {} timestamp {}) to topic {} due to {}; " +
         "No more records will be sent and no more offsets will be recorded for this task.";
     private final static String EXCEPTION_MESSAGE = "%sAbort sending since %s with a previous record (key %s value %s timestamp %d) to topic %s due to %s";
     private final static String PARAMETER_HINT = "\nYou can increase producer parameter `retries` and `retry.backoff.ms` to avoid this error.";
-    private final static String HANDLER_CONTINUED_MESSAGE = "Error sending records (key {} value {} timestamp {}) to topic {} due to {}; " +
-        "The exception handler chose to CONTINUE processing in spite of this error.";
     private volatile KafkaException sendException;
 
     public RecordCollectorImpl(final Producer<byte[], byte[]> producer,
                                final String streamTaskId,
                                final LogContext logContext,
-                               final ProductionExceptionHandler productionExceptionHandler) {
+                               final ProductionExceptionHandler productionExceptionHandler,
+                               final Sensor skippedRecordsSensor) {
         this.producer = producer;
         this.offsets = new HashMap<>();
         this.logPrefix = String.format("task [%s] ", streamTaskId);
         this.log = logContext.logger(getClass());
         this.productionExceptionHandler = productionExceptionHandler;
+        this.skippedRecordsSensor = skippedRecordsSensor;
     }
 
     @Override
     public <K, V> void send(final String topic,
                             final K key,
                             final V value,
+                            final Headers headers,
                             final Long timestamp,
                             final Serializer<K> keySerializer,
                             final Serializer<V> valueSerializer,
@@ -91,7 +95,7 @@ public class RecordCollectorImpl implements RecordCollector {
             }
         }
 
-        send(topic, key, value, partition, timestamp, keySerializer, valueSerializer);
+        send(topic, key, value, headers, partition, timestamp, keySerializer, valueSerializer);
     }
 
     private boolean productionExceptionIsFatal(final Exception exception) {
@@ -140,6 +144,7 @@ public class RecordCollectorImpl implements RecordCollector {
     public <K, V> void send(final String topic,
                             final K key,
                             final V value,
+                            final Headers headers,
                             final Integer partition,
                             final Long timestamp,
                             final Serializer<K> keySerializer,
@@ -148,7 +153,7 @@ public class RecordCollectorImpl implements RecordCollector {
         final byte[] keyBytes = keySerializer.serialize(topic, key);
         final byte[] valBytes = valueSerializer.serialize(topic, value);
 
-        final ProducerRecord<byte[], byte[]> serializedRecord = new ProducerRecord<>(topic, partition, timestamp, keyBytes, valBytes);
+        final ProducerRecord<byte[], byte[]> serializedRecord = new ProducerRecord<>(topic, partition, timestamp, keyBytes, valBytes, headers);
 
         try {
             producer.send(serializedRecord, new Callback() {
@@ -183,7 +188,12 @@ public class RecordCollectorImpl implements RecordCollector {
                                 } else if (productionExceptionHandler.handle(serializedRecord, exception) == ProductionExceptionHandlerResponse.FAIL) {
                                     recordSendError(key, value, timestamp, topic, exception);
                                 } else {
-                                    log.debug(HANDLER_CONTINUED_MESSAGE, key, value, timestamp, topic, exception);
+                                    log.warn(
+                                        "Error sending records (key=[{}] value=[{}] timestamp=[{}]) to topic=[{}] and partition=[{}]; " +
+                                            "The exception handler chose to CONTINUE processing in spite of this error.",
+                                        key, value, timestamp, topic, partition, exception
+                                    );
+                                    skippedRecordsSensor.record();
                                 }
                             }
                         }

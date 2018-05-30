@@ -240,7 +240,7 @@ public class MockProcessorContextTest {
 
         final MockProcessorContext context = new MockProcessorContext();
         final KeyValueStore<String, Long> store = new InMemoryKeyValueStore<>("my-state", Serdes.String(), Serdes.Long());
-        context.register(store, false, null);
+        context.register(store, null);
 
         store.init(context, store);
         processor.init(context);
@@ -286,7 +286,7 @@ public class MockProcessorContextTest {
         }
 
         context.resetForwards();
-        context.setRecordMetadata("t1", 0, 0L, 0L);
+        context.setRecordMetadata("t1", 0, 0L, null, 0L);
 
         {
             processor.process("foo", 5L);
@@ -358,10 +358,6 @@ public class MockProcessorContextTest {
 
             @Override
             public void process(final String key, final Long value) {
-            }
-
-            @Override
-            public void punctuate(final long timestamp) {
             }
 
             @Override

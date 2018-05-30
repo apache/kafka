@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.streams.processor.internals.RecordContext;
 
 /**
@@ -24,6 +25,7 @@ import org.apache.kafka.streams.processor.internals.RecordContext;
 class LRUCacheEntry implements RecordContext {
 
     public final byte[] value;
+    private final Headers headers;
     private final long offset;
     private final String topic;
     private final int partition;
@@ -33,13 +35,18 @@ class LRUCacheEntry implements RecordContext {
     private boolean isDirty;
 
     LRUCacheEntry(final byte[] value) {
-        this(value, false, -1, -1, -1, "");
+        this(value, null, false, -1, -1, -1, "");
     }
 
-    LRUCacheEntry(final byte[] value, final boolean isDirty,
-                  final long offset, final long timestamp, final int partition,
+    LRUCacheEntry(final byte[] value,
+                  final Headers headers,
+                  final boolean isDirty,
+                  final long offset,
+                  final long timestamp,
+                  final int partition,
                   final String topic) {
         this.value = value;
+        this.headers = headers;
         this.partition = partition;
         this.topic = topic;
         this.offset = offset;
@@ -76,6 +83,11 @@ class LRUCacheEntry implements RecordContext {
     @Override
     public int partition() {
         return partition;
+    }
+
+    @Override
+    public Headers headers() {
+        return headers;
     }
 
     void markClean() {
