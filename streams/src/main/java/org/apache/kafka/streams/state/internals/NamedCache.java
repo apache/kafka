@@ -257,7 +257,6 @@ class NamedCache {
         }
 
         remove(node);
-        cache.remove(key);
         dirtyKeys.remove(key);
         currentSizeBytes -= node.size();
         return node.entry();
