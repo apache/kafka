@@ -30,6 +30,11 @@ import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.ConnectMetrics.LiteralSupplier;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
+import org.apache.kafka.connect.runtime.errors.DeadLetterQueueReporter;
+import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
+import org.apache.kafka.connect.runtime.errors.ErrorReporter;
+import org.apache.kafka.connect.runtime.errors.LogReporter;
+import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.isolation.Plugins.ClassLoaderUsage;
 import org.apache.kafka.connect.sink.SinkRecord;
@@ -448,24 +453,69 @@ public class Worker {
                                        Converter valueConverter,
                                        HeaderConverter headerConverter,
                                        ClassLoader loader) {
+        ErrorHandlingMetrics errorHandlingMetrics = errorHandlingMetrics(id);
+
+        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator();
+        retryWithToleranceOperator.configure(connConfig.originalsWithPrefix("errors."));
+        retryWithToleranceOperator.metrics(errorHandlingMetrics);
+
         // Decide which type of worker task we need based on the type of task.
         if (task instanceof SourceTask) {
-            TransformationChain<SourceRecord> transformationChain = new TransformationChain<>(connConfig.<SourceRecord>transformations());
+            retryWithToleranceOperator.reporters(sourceTaskReporters(id, connConfig, errorHandlingMetrics));
+            TransformationChain<SourceRecord> transformationChain = new TransformationChain<>(connConfig.<SourceRecord>transformations(), retryWithToleranceOperator);
             OffsetStorageReader offsetReader = new OffsetStorageReaderImpl(offsetBackingStore, id.connector(),
                     internalKeyConverter, internalValueConverter);
             OffsetStorageWriter offsetWriter = new OffsetStorageWriter(offsetBackingStore, id.connector(),
                     internalKeyConverter, internalValueConverter);
             KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps);
+
             return new WorkerSourceTask(id, (SourceTask) task, statusListener, initialState, keyConverter, valueConverter,
-                    headerConverter, transformationChain, producer, offsetReader, offsetWriter, config, metrics, loader, time);
+                    headerConverter, transformationChain, producer, offsetReader, offsetWriter, config, metrics, loader,
+                    time, retryWithToleranceOperator);
         } else if (task instanceof SinkTask) {
-            TransformationChain<SinkRecord> transformationChain = new TransformationChain<>(connConfig.<SinkRecord>transformations());
+            TransformationChain<SinkRecord> transformationChain = new TransformationChain<>(connConfig.<SinkRecord>transformations(), retryWithToleranceOperator);
+            retryWithToleranceOperator.reporters(sinkTaskReporters(id, connConfig, errorHandlingMetrics));
             return new WorkerSinkTask(id, (SinkTask) task, statusListener, initialState, config, metrics, keyConverter,
-                    valueConverter, headerConverter, transformationChain, loader, time);
+                    valueConverter, headerConverter, transformationChain, loader, time,
+                    retryWithToleranceOperator);
         } else {
             log.error("Tasks must be a subclass of either SourceTask or SinkTask", task);
             throw new ConnectException("Tasks must be a subclass of either SourceTask or SinkTask");
         }
+    }
+
+    ErrorHandlingMetrics errorHandlingMetrics(ConnectorTaskId id) {
+        return new ErrorHandlingMetrics(id, metrics);
+    }
+
+    private List<ErrorReporter> sinkTaskReporters(ConnectorTaskId id, ConnectorConfig connConfig,
+                                                    ErrorHandlingMetrics errorHandlingMetrics) {
+        ArrayList<ErrorReporter> reporters = new ArrayList<>();
+        LogReporter logReporter = new LogReporter(id);
+        logReporter.configure(connConfig.originalsWithPrefix(LogReporter.PREFIX + "."));
+        logReporter.metrics(errorHandlingMetrics);
+        reporters.add(logReporter);
+
+        // check if topic for dead letter queue exists
+        String topic = connConfig.getString(DeadLetterQueueReporter.PREFIX + "." + DeadLetterQueueReporter.DLQ_TOPIC_NAME);
+        if (topic != null && !topic.isEmpty()) {
+            DeadLetterQueueReporter reporter = DeadLetterQueueReporter.createAndSetup(config, connConfig, producerProps);
+            reporter.configure(connConfig.originalsWithPrefix(DeadLetterQueueReporter.PREFIX + "."));
+            reporters.add(reporter);
+        }
+
+        return reporters;
+    }
+
+    private List<ErrorReporter> sourceTaskReporters(ConnectorTaskId id, ConnectorConfig connConfig,
+                                                      ErrorHandlingMetrics errorHandlingMetrics) {
+        List<ErrorReporter> reporters = new ArrayList<>();
+        LogReporter logReporter = new LogReporter(id);
+        logReporter.configure(connConfig.originalsWithPrefix(LogReporter.PREFIX + "."));
+        logReporter.metrics(errorHandlingMetrics);
+        reporters.add(logReporter);
+
+        return reporters;
     }
 
     private void stopTask(ConnectorTaskId taskId) {

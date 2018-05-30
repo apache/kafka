@@ -28,6 +28,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.runtime.AbstractStatus.State;
 import org.apache.kafka.connect.runtime.ConnectMetrics.LiteralSupplier;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
+import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.slf4j.Logger;
@@ -60,11 +61,14 @@ abstract class WorkerTask implements Runnable {
     private volatile boolean stopping;   // indicates whether the Worker has asked the task to stop
     private volatile boolean cancelled;  // indicates whether the Worker has cancelled the task (e.g. because of slow shutdown)
 
+    protected final RetryWithToleranceOperator retryWithToleranceOperator;
+
     public WorkerTask(ConnectorTaskId id,
                       TaskStatus.Listener statusListener,
                       TargetState initialState,
                       ClassLoader loader,
-                      ConnectMetrics connectMetrics) {
+                      ConnectMetrics connectMetrics,
+                      RetryWithToleranceOperator retryWithToleranceOperator) {
         this.id = id;
         this.taskMetricsGroup = new TaskMetricsGroup(this.id, connectMetrics, statusListener);
         this.statusListener = taskMetricsGroup;
@@ -73,6 +77,7 @@ abstract class WorkerTask implements Runnable {
         this.stopping = false;
         this.cancelled = false;
         this.taskMetricsGroup.recordState(this.targetState);
+        this.retryWithToleranceOperator = retryWithToleranceOperator;
     }
 
     public ConnectorTaskId id() {

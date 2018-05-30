@@ -34,6 +34,8 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.header.Header;
 import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
+import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
+import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.storage.Converter;
@@ -103,8 +105,10 @@ class WorkerSourceTask extends WorkerTask {
                             WorkerConfig workerConfig,
                             ConnectMetrics connectMetrics,
                             ClassLoader loader,
-                            Time time) {
-        super(id, statusListener, initialState, loader, connectMetrics);
+                            Time time,
+                            RetryWithToleranceOperator retryWithToleranceOperator) {
+
+        super(id, statusListener, initialState, loader, connectMetrics, retryWithToleranceOperator);
 
         this.workerConfig = workerConfig;
         this.task = task;
@@ -209,7 +213,7 @@ class WorkerSourceTask extends WorkerTask {
                 if (toSend == null) {
                     log.trace("{} Nothing to send to Kafka. Polling source for additional records", this);
                     long start = time.milliseconds();
-                    toSend = task.poll();
+                    toSend = poll();
                     if (toSend != null) {
                         recordPollReturned(toSend.size(), time.milliseconds() - start);
                     }
@@ -231,6 +235,44 @@ class WorkerSourceTask extends WorkerTask {
         }
     }
 
+    protected List<SourceRecord> poll() throws InterruptedException {
+        try {
+            return task.poll();
+        } catch (RetriableException e) {
+            log.warn("{} failed to poll records from SourceTask. Will retry operation.", this, e);
+            // Do nothing. Let the framework poll whenever it's ready.
+            return null;
+        }
+    }
+
+    /**
+     * Convert the source record into a producer record.
+     *
+     * @param record the transformed record
+     * @return the producer record which can sent over to Kafka. A null is returned if the input is null or
+     * if an error was encountered during any of the converter stages.
+     */
+    private ProducerRecord<byte[], byte[]> convertTransformedRecord(SourceRecord record) {
+        if (record == null) {
+            return null;
+        }
+
+        RecordHeaders headers = retryWithToleranceOperator.execute(() -> convertHeaderFor(record), Stage.HEADER_CONVERTER, headerConverter.getClass());
+
+        byte[] key = retryWithToleranceOperator.execute(() -> keyConverter.fromConnectData(record.topic(), record.keySchema(), record.key()),
+                Stage.KEY_CONVERTER, keyConverter.getClass());
+
+        byte[] value = retryWithToleranceOperator.execute(() -> valueConverter.fromConnectData(record.topic(), record.valueSchema(), record.value()),
+                Stage.VALUE_CONVERTER, valueConverter.getClass());
+
+        if (retryWithToleranceOperator.failed()) {
+            return null;
+        }
+
+        return new ProducerRecord<>(record.topic(), record.kafkaPartition(),
+                ConnectUtils.checkAndConvertTimestamp(record.timestamp()), key, value, headers);
+    }
+
     /**
      * Try to send a batch of records. If a send fails and is retriable, this saves the remainder of the batch so it can
      * be retried after backing off. If a send fails and is not retriable, this will throw a ConnectException.
@@ -241,19 +283,16 @@ class WorkerSourceTask extends WorkerTask {
         recordBatch(toSend.size());
         final SourceRecordWriteCounter counter = new SourceRecordWriteCounter(toSend.size(), sourceTaskMetricsGroup);
         for (final SourceRecord preTransformRecord : toSend) {
-            final SourceRecord record = transformationChain.apply(preTransformRecord);
 
-            if (record == null) {
+            retryWithToleranceOperator.sourceRecord(preTransformRecord);
+            final SourceRecord record = transformationChain.apply(preTransformRecord);
+            final ProducerRecord<byte[], byte[]> producerRecord = convertTransformedRecord(record);
+            if (producerRecord == null || retryWithToleranceOperator.failed()) {
                 counter.skipRecord();
                 commitTaskRecord(preTransformRecord);
                 continue;
             }
 
-            RecordHeaders headers = convertHeaderFor(record);
-            byte[] key = keyConverter.fromConnectData(record.topic(), record.keySchema(), record.key());
-            byte[] value = valueConverter.fromConnectData(record.topic(), record.valueSchema(), record.value());
-            final ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(record.topic(), record.kafkaPartition(),
-                    ConnectUtils.checkAndConvertTimestamp(record.timestamp()), key, value, headers);
             log.trace("{} Appending record with key {}, value {}", this, record.key(), record.value());
             // We need this queued first since the callback could happen immediately (even synchronously in some cases).
             // Because of this we need to be careful about handling retries -- we always save the previously attempted

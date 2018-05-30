@@ -40,6 +40,8 @@ import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
+import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
+import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.storage.Converter;
@@ -100,8 +102,9 @@ class WorkerSinkTask extends WorkerTask {
                           HeaderConverter headerConverter,
                           TransformationChain<SinkRecord> transformationChain,
                           ClassLoader loader,
-                          Time time) {
-        super(id, statusListener, initialState, loader, connectMetrics);
+                          Time time,
+                          RetryWithToleranceOperator retryWithToleranceOperator) {
+        super(id, statusListener, initialState, loader, connectMetrics, retryWithToleranceOperator);
 
         this.workerConfig = workerConfig;
         this.task = task;
@@ -477,42 +480,52 @@ class WorkerSinkTask extends WorkerTask {
         for (ConsumerRecord<byte[], byte[]> msg : msgs) {
             log.trace("{} Consuming and converting message in topic '{}' partition {} at offset {} and timestamp {}",
                     this, msg.topic(), msg.partition(), msg.offset(), msg.timestamp());
-            SchemaAndValue keyAndSchema = toConnectData(keyConverter, "key", msg, msg.key());
-            SchemaAndValue valueAndSchema = toConnectData(valueConverter, "value", msg, msg.value());
-            Headers headers = convertHeadersFor(msg);
-            Long timestamp = ConnectUtils.checkAndConvertTimestamp(msg.timestamp());
-            SinkRecord origRecord = new SinkRecord(msg.topic(), msg.partition(),
-                    keyAndSchema.schema(), keyAndSchema.value(),
-                    valueAndSchema.schema(), valueAndSchema.value(),
-                    msg.offset(),
-                    timestamp,
-                    msg.timestampType(),
-                    headers);
-            log.trace("{} Applying transformations to record in topic '{}' partition {} at offset {} and timestamp {} with key {} and value {}",
-                    this, msg.topic(), msg.partition(), msg.offset(), timestamp, keyAndSchema.value(), valueAndSchema.value());
-            SinkRecord transRecord = transformationChain.apply(origRecord);
+
+            retryWithToleranceOperator.consumerRecord(msg);
+
+            SinkRecord transRecord = convertAndTransformRecord(msg);
+
             origOffsets.put(
-                    new TopicPartition(origRecord.topic(), origRecord.kafkaPartition()),
-                    new OffsetAndMetadata(origRecord.kafkaOffset() + 1)
+                    new TopicPartition(msg.topic(), msg.partition()),
+                    new OffsetAndMetadata(msg.offset() + 1)
             );
             if (transRecord != null) {
                 messageBatch.add(transRecord);
             } else {
-                log.trace("{} Transformations returned null, so dropping record in topic '{}' partition {} at offset {} and timestamp {} with key {} and value {}",
-                        this, msg.topic(), msg.partition(), msg.offset(), timestamp, keyAndSchema.value(), valueAndSchema.value());
+                log.trace(
+                        "{} Converters and transformations returned null, possibly because of too many retries, so " +
+                                "dropping record in topic '{}' partition {} at offset {}",
+                        this, msg.topic(), msg.partition(), msg.offset()
+                );
             }
         }
         sinkTaskMetricsGroup.recordConsumedOffsets(origOffsets);
     }
 
-    private SchemaAndValue toConnectData(Converter converter, String converterName, ConsumerRecord<byte[], byte[]> msg, byte[] data) {
-        try {
-            return converter.toConnectData(msg.topic(), data);
-        } catch (Throwable e) {
-            String str = String.format("Error converting message %s in topic '%s' partition %d at offset %d and timestamp %d",
-                    converterName, msg.topic(), msg.partition(), msg.offset(), msg.timestamp());
-            throw new ConnectException(str, e);
+    private SinkRecord convertAndTransformRecord(final ConsumerRecord<byte[], byte[]> msg) {
+        SchemaAndValue keyAndSchema = retryWithToleranceOperator.execute(() -> keyConverter.toConnectData(msg.topic(), msg.key()),
+                Stage.KEY_CONVERTER, keyConverter.getClass());
+
+        SchemaAndValue valueAndSchema = retryWithToleranceOperator.execute(() -> valueConverter.toConnectData(msg.topic(), msg.value()),
+                Stage.VALUE_CONVERTER, valueConverter.getClass());
+
+        Headers headers = retryWithToleranceOperator.execute(() -> convertHeadersFor(msg), Stage.HEADER_CONVERTER, headerConverter.getClass());
+
+        if (retryWithToleranceOperator.failed()) {
+            return null;
         }
+
+        Long timestamp = ConnectUtils.checkAndConvertTimestamp(msg.timestamp());
+        SinkRecord origRecord = new SinkRecord(msg.topic(), msg.partition(),
+                keyAndSchema.schema(), keyAndSchema.value(),
+                valueAndSchema.schema(), valueAndSchema.value(),
+                msg.offset(),
+                timestamp,
+                msg.timestampType(),
+                headers);
+        log.trace("{} Applying transformations to record in topic '{}' partition {} at offset {} and timestamp {} with key {} and value {}",
+                this, msg.topic(), msg.partition(), msg.offset(), timestamp, keyAndSchema.value(), valueAndSchema.value());
+        return transformationChain.apply(origRecord);
     }
 
     private Headers convertHeadersFor(ConsumerRecord<byte[], byte[]> record) {
