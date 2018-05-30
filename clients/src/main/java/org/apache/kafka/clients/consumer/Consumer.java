@@ -219,7 +219,7 @@ public interface Consumer<K, V> extends Closeable {
     /**
      * @see KafkaConsumer#endOffsets(Collection, Duration)
      */
-    Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions, Duration timeoutMs);
+    Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions, Duration timeout);
 
     /**
      * @see KafkaConsumer#close()
