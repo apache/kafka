@@ -3248,9 +3248,7 @@ val userRegionsTable: KTable[String, String] = builder.table(userRegionsTopic)
 // All of them are taken care of by the implicit SerDes imported by DefaultSerdes
 val clicksPerRegion: KTable[String, Long] =
   userClicksStream
-    .leftJoin(userRegionsTable,
-      (clicks: Long, region: String) =>
-        (if (region == null) "UNKNOWN" else region, clicks))
+    .leftJoin(userRegionsTable)((clicks, region) => (if (region == null) "UNKNOWN" else region, clicks))
     .map((_, regionWithClicks) => regionWithClicks)
     .groupByKey
     .reduce(_ + _)
@@ -3290,7 +3288,7 @@ val clicksPerRegion: KTable[String, Long] =
  userClicksStream
 
    // Join the stream against the table.
-   .leftJoin(userRegionsTable, (clicks: UserClicks, region: String) => (if (region == null) "UNKNOWN" else region, clicks.clicks))
+   .leftJoin(userRegionsTable)((clicks, region) => (if (region == null) "UNKNOWN" else region, clicks.clicks))
 
    // Change the stream from &lt;user&gt; -&gt; &lt;region, clicks&gt; to &lt;region&gt; -&gt; &lt;clicks&gt;
    .map((_, regionWithClicks) => regionWithClicks)
