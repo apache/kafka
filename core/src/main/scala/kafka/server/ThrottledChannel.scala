@@ -17,7 +17,6 @@
 
 package kafka.server
 
-import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{Delayed, TimeUnit}
 
 import kafka.network.RequestChannel.{EndThrottlingAction, ResponseAction, StartThrottlingAction}

@@ -695,13 +695,12 @@ public class NetworkClient implements KafkaClient {
      * the connection to the node, throttle the connection for the specified delay.
      *
      * @param response the response
-     * @param throttleTimeMs throttle time
      * @param apiVersion the API version of the response
      * @param nodeId the id of the node
      * @param now The current time
      */
-    private void maybeThrottle(AbstractResponse response, int throttleTimeMs, short apiVersion, String nodeId,
-                               long now) {
+    private void maybeThrottle(AbstractResponse response, short apiVersion, String nodeId, long now) {
+        int throttleTimeMs = response.throttleTimeMs();
         if (throttleTimeMs > 0 && response.shouldClientThrottle(apiVersion)) {
             connectionStates.throttle(nodeId, now + throttleTimeMs);
             log.trace("Connection to node {} is throttled for {} ms until timestamp {}", nodeId, throttleTimeMs,
@@ -727,8 +726,7 @@ public class NetworkClient implements KafkaClient {
             }
             // If the received response includes a throttle delay, throttle the connection.
             AbstractResponse body = AbstractResponse.parseResponse(req.header.apiKey(), responseStruct);
-            int throttleTimeMs = responseStruct.getOrElse(CommonFields.THROTTLE_TIME_MS, 0);
-            maybeThrottle(body, throttleTimeMs, req.header.apiVersion(), req.destination, now);
+            maybeThrottle(body, req.header.apiVersion(), req.destination, now);
             if (req.isInternalRequest && body instanceof MetadataResponse)
                 metadataUpdater.handleCompletedMetadataResponse(req.header, now, (MetadataResponse) body);
             else if (req.isInternalRequest && body instanceof ApiVersionsResponse)
