@@ -2334,7 +2334,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       case None =>
         new RequestChannel.NoOpResponse(request)
     }
-    requestChannel.sendResponse(response)
+    sendResponse(response)
   }
 
   private def sendResponse(response: RequestChannel.Response): Unit = {
