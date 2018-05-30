@@ -764,7 +764,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                         "Downgrading subscription metadata to received version and trigger new rebalance.",
                     usedSubscriptionMetadataVersion,
                     receivedAssignmentMetadataVersion);
-                    usedSubscriptionMetadataVersion = receivedAssignmentMetadataVersion;
+                usedSubscriptionMetadataVersion = receivedAssignmentMetadataVersion;
             } else {
                 log.info("Sent a version {} subscription and got version {} assignment back (successful version probing). " +
                     "Setting subscription metadata to leaders supported version {} and trigger new rebalance.",
