@@ -18,22 +18,19 @@ package org.apache.kafka.streams.scala
 
 import java.util.Properties
 
-import org.scalatest.junit.JUnitSuite
-import org.junit.Assert._
-import org.junit.rules.TemporaryFolder
-import org.junit._
-
-import org.apache.kafka.streams.integration.utils.{EmbeddedKafkaCluster, IntegrationTestUtils}
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.ProducerConfig
-
 import org.apache.kafka.common.serialization._
 import org.apache.kafka.common.utils.MockTime
-import org.apache.kafka.test.TestUtils
 import org.apache.kafka.streams._
+import org.apache.kafka.streams.integration.utils.{EmbeddedKafkaCluster, IntegrationTestUtils}
+import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.kstream._
-
-import ImplicitConversions._
+import org.apache.kafka.test.TestUtils
+import org.junit.Assert._
+import org.junit._
+import org.junit.rules.TemporaryFolder
+import org.scalatest.junit.JUnitSuite
 
 /**
  * Test suite that does an example to demonstrate stream-table joins in Kafka Streams
@@ -115,10 +112,12 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends JUnitSuite
 
   @Test def testShouldCountClicksPerRegionJava(): Unit = {
 
-    import org.apache.kafka.streams.{KafkaStreams => KafkaStreamsJ, StreamsBuilder => StreamsBuilderJ}
-    import org.apache.kafka.streams.kstream.{KTable => KTableJ, KStream => KStreamJ, KGroupedStream => KGroupedStreamJ, _}
-    import collection.JavaConverters._
     import java.lang.{Long => JLong}
+
+    import org.apache.kafka.streams.kstream.{KStream => KStreamJ, KTable => KTableJ, _}
+    import org.apache.kafka.streams.{KafkaStreams => KafkaStreamsJ, StreamsBuilder => StreamsBuilderJ}
+
+    import collection.JavaConverters._
 
     val streamsConfiguration: Properties = getStreamsConfiguration()
 
@@ -178,7 +177,7 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends JUnitSuite
 
     streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "stream-table-join-scala-integration-test")
     streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers())
-    streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, "10000")
+    streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, "1000")
     streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
     streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, testFolder.getRoot.getPath)
 

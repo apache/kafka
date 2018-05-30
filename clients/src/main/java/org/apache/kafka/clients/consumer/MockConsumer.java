@@ -25,6 +25,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -43,7 +44,7 @@ import java.util.regex.Pattern;
 /**
  * A mock of the {@link Consumer} interface you can use for testing code that uses Kafka. This class is <i> not
  * threadsafe </i>. However, you can use the {@link #schedulePollTask(Runnable)} method to write multithreaded tests
- * where a driver thread waits for {@link #poll(long)} to be called by a background thread and then can safely perform
+ * where a driver thread waits for {@link #poll(Duration)} to be called by a background thread and then can safely perform
  * operations during a callback.
  */
 public class MockConsumer<K, V> implements Consumer<K, V> {
@@ -146,8 +147,14 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         subscriptions.unsubscribe();
     }
 
+    @Deprecated
     @Override
     public synchronized ConsumerRecords<K, V> poll(long timeout) {
+        return poll(Duration.ZERO);
+    }
+
+    @Override
+    public synchronized ConsumerRecords<K, V> poll(final Duration timeout) {
         ensureNotClosed();
 
         // Synchronize around the entire execution so new tasks to be triggered on subsequent poll calls can be added in
@@ -401,7 +408,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Schedule a task to be executed during a poll(). One enqueued task will be executed per {@link #poll(long)}
+     * Schedule a task to be executed during a poll(). One enqueued task will be executed per {@link #poll(Duration)}
      * invocation. You can use this repeatedly to mock out multiple responses to poll invocations.
      * @param task the task to be executed
      */

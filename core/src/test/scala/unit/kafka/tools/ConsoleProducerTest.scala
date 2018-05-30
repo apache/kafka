@@ -17,7 +17,6 @@
 
 package kafka.tools
 
-import kafka.producer.ProducerConfig
 import ConsoleProducer.LineMessageReader
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.junit.{Assert, Test}
@@ -45,15 +44,8 @@ class ConsoleProducerTest {
     val config = new ConsoleProducer.ProducerConfig(validArgs)
     // New ProducerConfig constructor is package private, so we can't call it directly
     // Creating new Producer to validate instead
-    val producer = new KafkaProducer(ConsoleProducer.getNewProducerProps(config))
+    val producer = new KafkaProducer(ConsoleProducer.producerProps(config))
     producer.close()
-  }
-
-  @Test
-  @deprecated("This test has been deprecated and it will be removed in a future release.", "0.10.0.0")
-  def testValidConfigsOldProducer() {
-    val config = new ConsoleProducer.ProducerConfig(validArgs)
-    new ProducerConfig(ConsoleProducer.getOldProducerProps(config))
   }
 
   @Test

@@ -18,6 +18,10 @@ package org.apache.kafka.streams;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
@@ -74,10 +78,12 @@ public class TopologyTestDriverTest {
         new ByteArraySerializer(),
         new ByteArraySerializer());
 
+    private final Headers headers = new RecordHeaders(new Header[]{new RecordHeader("key", "value".getBytes())});
+
     private final byte[] key1 = new byte[0];
     private final byte[] value1 = new byte[0];
     private final long timestamp1 = 42L;
-    private final ConsumerRecord<byte[], byte[]> consumerRecord1 = consumerRecordFactory.create(SOURCE_TOPIC_1, key1, value1, timestamp1);
+    private final ConsumerRecord<byte[], byte[]> consumerRecord1 = consumerRecordFactory.create(SOURCE_TOPIC_1, key1, value1, headers, timestamp1);
 
     private final byte[] key2 = new byte[0];
     private final byte[] value2 = new byte[0];
@@ -107,6 +113,7 @@ public class TopologyTestDriverTest {
         private long timestamp;
         private long offset;
         private String topic;
+        private Headers headers;
 
         Record(final ConsumerRecord consumerRecord) {
             key = consumerRecord.key();
@@ -114,15 +121,18 @@ public class TopologyTestDriverTest {
             timestamp = consumerRecord.timestamp();
             offset = consumerRecord.offset();
             topic = consumerRecord.topic();
+            headers = consumerRecord.headers();
         }
 
         Record(final Object key,
                final Object value,
+               final Headers headers,
                final long timestamp,
                final long offset,
                final String topic) {
             this.key = key;
             this.value = value;
+            this.headers = headers;
             this.timestamp = timestamp;
             this.offset = offset;
             this.topic = topic;
@@ -146,12 +156,13 @@ public class TopologyTestDriverTest {
                 offset == record.offset &&
                 Objects.equals(key, record.key) &&
                 Objects.equals(value, record.value) &&
-                Objects.equals(topic, record.topic);
+                Objects.equals(topic, record.topic) &&
+                Objects.equals(headers, record.headers);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(key, value, timestamp, offset, topic);
+            return Objects.hash(key, value, headers, timestamp, offset, topic);
         }
     }
 
@@ -201,7 +212,7 @@ public class TopologyTestDriverTest {
 
         @Override
         public void process(Object key, Object value) {
-            processedRecords.add(new Record(key, value, context.timestamp(), context.offset(), context.topic()));
+            processedRecords.add(new Record(key, value, context.headers(), context.timestamp(), context.offset(), context.topic()));
             context.forward(key, value);
         }
 

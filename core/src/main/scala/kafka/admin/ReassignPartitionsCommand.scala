@@ -256,7 +256,7 @@ object ReassignPartitionsCommand extends Logging {
       val newReplicas = partitionFields("replicas").to[Seq[Int]]
       val newLogDirs = partitionFields.get("log_dirs") match {
         case Some(jsonValue) => jsonValue.to[Seq[String]]
-        case None => newReplicas.map(r => AnyLogDir)
+        case None => newReplicas.map(_ => AnyLogDir)
       }
       if (newReplicas.size != newLogDirs.size)
         throw new AdminCommandFailedException(s"Size of replicas list $newReplicas is different from " +
@@ -569,7 +569,7 @@ class ReassignPartitionsCommand(zkClient: KafkaZkClient,
       } catch {
         case t: ExecutionException =>
           t.getCause match {
-            case e: ReplicaNotAvailableException => None // It is OK if the replica is not available at this moment
+            case _: ReplicaNotAvailableException => None // It is OK if the replica is not available at this moment
             case e: Throwable => throw new AdminCommandFailedException(s"Failed to alter dir for $replica", e)
           }
       }

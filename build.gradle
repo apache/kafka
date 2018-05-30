@@ -787,6 +787,7 @@ project(':clients') {
     compile libs.lz4
     compile libs.snappy
     compile libs.slf4jApi
+    compile libs.jacksonDatabind // for SASL/OAUTHBEARER bearer token parsing
 
     testCompile libs.bcpkix
     testCompile libs.junit
@@ -858,6 +859,7 @@ project(':clients') {
     include "**/org/apache/kafka/common/security/auth/*"
     include "**/org/apache/kafka/server/policy/*"
     include "**/org/apache/kafka/common/security/token/delegation/*"
+    include "**/org/apache/kafka/common/security/oauthbearer/*"
   }
 }
 
@@ -1205,6 +1207,7 @@ project(':connect:api') {
   dependencies {
     compile project(':clients')
     compile libs.slf4jApi
+    compile libs.jerseyContainerServlet
 
     testCompile libs.junit
 
@@ -1316,12 +1319,14 @@ project(':connect:runtime') {
   archivesBaseName = "connect-runtime"
 
   dependencies {
+
     compile project(':connect:api')
-    compile project(":connect:transforms")
     compile project(':clients')
     compile project(':tools')
-    compile libs.slf4jApi
+    compile project(':connect:json')
+    compile project(':connect:transforms')
 
+    compile libs.slf4jApi
     compile libs.jacksonJaxrsJsonProvider
     compile libs.jerseyContainerServlet
     compile libs.jerseyHk2
@@ -1340,7 +1345,6 @@ project(':connect:runtime') {
     testCompile libs.powermockJunit4
     testCompile libs.powermockEasymock
 
-    testCompile project(":connect:json")
     testCompile project(':clients').sourceSets.test.output
 
     testRuntime libs.slf4jlog4j
@@ -1404,6 +1408,45 @@ project(':connect:file') {
 
     testRuntime libs.slf4jlog4j
     testCompile project(':clients').sourceSets.test.output
+  }
+
+  javadoc {
+    enabled = false
+  }
+
+  tasks.create(name: "copyDependantLibs", type: Copy) {
+    from (configurations.testRuntime) {
+      include('slf4j-log4j12*')
+      include('log4j*jar')
+    }
+    from (configurations.runtime) {
+      exclude('kafka-clients*')
+      exclude('connect-*')
+    }
+    into "$buildDir/dependant-libs"
+    duplicatesStrategy 'exclude'
+  }
+
+  jar {
+    dependsOn copyDependantLibs
+  }
+}
+
+project(':connect:basic-auth-extension') {
+  archivesBaseName = "connect-basic-auth-extension"
+
+  dependencies {
+    compile project(':connect:api')
+    compile libs.slf4jApi
+
+    testCompile libs.bcpkix
+    testCompile libs.easymock
+    testCompile libs.junit
+    testCompile libs.powermockJunit4
+    testCompile libs.powermockEasymock
+    testCompile project(':clients').sourceSets.test.output
+
+    testRuntime libs.slf4jlog4j
   }
 
   javadoc {

@@ -79,6 +79,7 @@ import org.apache.kafka.common.requests.SaslHandshakeResponse;
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.TestSecurityConfig;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.plain.PlainLoginModule;
 import org.apache.kafka.common.security.scram.ScramCredential;
 import org.apache.kafka.common.security.scram.internal.ScramCredentialUtils;
@@ -1190,6 +1191,37 @@ public class SaslAuthenticatorTest {
     @Test
     public void oldSaslScramSslClientWithoutSaslAuthenticateHeaderFailure() throws Exception {
         verifySaslAuthenticateHeaderInteropWithFailure(true, false, SecurityProtocol.SASL_SSL, "SCRAM-SHA-512");
+    }
+
+    /**
+     * Tests OAUTHBEARER client and server channels.
+     */
+    @Test
+    public void testValidSaslOauthBearerMechanism() throws Exception {
+        String node = "0";
+        SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
+        configureMechanisms("OAUTHBEARER", Arrays.asList("OAUTHBEARER"));
+        server = createEchoServer(securityProtocol);
+        createAndCheckClientConnection(securityProtocol, node);
+    }
+
+    /**
+     * Tests OAUTHBEARER fails the connection when the client presents a token with
+     * insufficient scope .
+     */
+    @Test
+    public void testInsufficientScopeSaslOauthBearerMechanism() throws Exception {
+        SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
+        TestJaasConfig jaasConfig = configureMechanisms("OAUTHBEARER", Arrays.asList("OAUTHBEARER"));
+        // now update the server side to require a scope the client does not provide
+        Map<String, Object> serverJaasConfigOptionsMap = TestJaasConfig.defaultServerOptions("OAUTHBEARER");
+        serverJaasConfigOptionsMap.put("unsecuredValidatorRequiredScope", "LOGIN_TO_KAFKA"); // causes the failure
+        jaasConfig.createOrUpdateEntry("KafkaServer",
+                "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule", serverJaasConfigOptionsMap);
+        server = createEchoServer(securityProtocol);
+        createAndCheckClientAuthenticationFailure(securityProtocol,
+                "node-" + OAuthBearerLoginModule.OAUTHBEARER_MECHANISM, OAuthBearerLoginModule.OAUTHBEARER_MECHANISM,
+                "{\"status\":\"insufficient_scope\", \"scope\":\"[LOGIN_TO_KAFKA]\"}");
     }
 
     private void verifySaslAuthenticateHeaderInterop(boolean enableHeaderOnServer, boolean enableHeaderOnClient,

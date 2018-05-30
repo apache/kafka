@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
@@ -90,6 +91,7 @@ public class RocksDBWindowStoreTest {
         public <K1, V1> void send(final String topic,
                                   final K1 key,
                                   final V1 value,
+                                  final Headers headers,
                                   final Integer partition,
                                   final Long timestamp,
                                   final Serializer<K1> keySerializer,
@@ -160,7 +162,7 @@ public class RocksDBWindowStoreTest {
     }
 
     private ProcessorRecordContext createRecordContext(final long time) {
-        return new ProcessorRecordContext(time, 0, 0, "topic");
+        return new ProcessorRecordContext(time, 0, 0, "topic", null);
     }
 
     @Test

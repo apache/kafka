@@ -219,6 +219,21 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     waitForTopics(client, List(), topics)
   }
 
+  @Test
+  def testMetadataRefresh(): Unit = {
+    client = AdminClient.create(createConfig())
+    val topics = Seq("mytopic")
+    val newTopics = Seq(new NewTopic("mytopic", 3, 3))
+    client.createTopics(newTopics.asJava).all.get()
+    waitForTopics(client, expectedPresent = topics, expectedMissing = List())
+
+    val controller = servers.find(_.config.brokerId == TestUtils.waitUntilControllerElected(zkClient)).get
+    controller.shutdown()
+    controller.awaitShutdown()
+    val topicDesc = client.describeTopics(topics.asJava).all.get()
+    assertEquals(topics.toSet, topicDesc.keySet.asScala)
+  }
+
   /**
     * describe should not auto create topics
     */
@@ -963,8 +978,8 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
   }
 
   /**
-    * Test the consumer group APIs.
-    */
+   * Test the consumer group APIs.
+   */
   @Test
   def testConsumerGroups(): Unit = {
     val config = createConfig()
@@ -979,6 +994,8 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       val testNumPartitions = 2
       client.createTopics(Collections.singleton(
         new NewTopic(testTopicName, testNumPartitions, 1))).all().get()
+      waitForTopics(client, List(testTopicName), List())
+
       val producer = createNewProducer
       try {
         producer.send(new ProducerRecord(testTopicName, 0, null, null)).get()
@@ -1044,7 +1061,6 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
           assertEquals(2, result.all().get().size())
 
           // Test listConsumerGroupOffsets
-          val parts = client.listConsumerGroupOffsets(testGroupId).partitionsToOffsetAndMetadata().get()
           TestUtils.waitUntilTrue(() => {
             val parts = client.listConsumerGroupOffsets(testGroupId).partitionsToOffsetAndMetadata().get()
             val part = new TopicPartition(testTopicName, 0)

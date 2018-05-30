@@ -372,8 +372,7 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
     */
   def changeBrokerConfig(broker: Option[Int], configs: Properties): Unit = {
     validateBrokerConfig(configs)
-    val entityName = broker.map(_.toString).getOrElse(ConfigEntityName.Default)
-    changeEntityConfig(ConfigType.Broker, broker.map(String.valueOf).getOrElse(ConfigEntityName.Default), configs)
+    changeEntityConfig(ConfigType.Broker, broker.map(_.toString).getOrElse(ConfigEntityName.Default), configs)
   }
 
   /**

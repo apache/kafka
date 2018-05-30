@@ -17,7 +17,9 @@
 package org.apache.kafka.connect.runtime.isolation;
 
 import org.apache.kafka.common.config.ConfigProvider;
+import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.Connector;
+import org.apache.kafka.connect.rest.ConnectRestExtension;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.transforms.Transformation;
@@ -66,6 +68,7 @@ public class DelegatingClassLoader extends URLClassLoader {
     private final SortedSet<PluginDesc<HeaderConverter>> headerConverters;
     private final SortedSet<PluginDesc<Transformation>> transformations;
     private final SortedSet<PluginDesc<ConfigProvider>> configProviders;
+    private final SortedSet<PluginDesc<ConnectRestExtension>> restExtensions;
     private final List<String> pluginPaths;
     private final Map<Path, PluginClassLoader> activePaths;
 
@@ -80,6 +83,7 @@ public class DelegatingClassLoader extends URLClassLoader {
         this.headerConverters = new TreeSet<>();
         this.transformations = new TreeSet<>();
         this.configProviders = new TreeSet<>();
+        this.restExtensions = new TreeSet<>();
     }
 
     public DelegatingClassLoader(List<String> pluginPaths) {
@@ -104,6 +108,10 @@ public class DelegatingClassLoader extends URLClassLoader {
 
     public Set<PluginDesc<ConfigProvider>> configProviders() {
         return configProviders;
+    }
+
+    public Set<PluginDesc<ConnectRestExtension>> restExtensions() {
+        return restExtensions;
     }
 
     public ClassLoader connectorLoader(Connector connector) {
@@ -237,6 +245,8 @@ public class DelegatingClassLoader extends URLClassLoader {
             transformations.addAll(plugins.transformations());
             addPlugins(plugins.configProviders(), loader);
             configProviders.addAll(plugins.configProviders());
+            addPlugins(plugins.restExtensions(), loader);
+            restExtensions.addAll(plugins.restExtensions());
         }
 
         loadJdbcDrivers(loader);
@@ -291,7 +301,8 @@ public class DelegatingClassLoader extends URLClassLoader {
                 getPluginDesc(reflections, Converter.class, loader),
                 getPluginDesc(reflections, HeaderConverter.class, loader),
                 getPluginDesc(reflections, Transformation.class, loader),
-                getPluginDesc(reflections, ConfigProvider.class, loader)
+                getPluginDesc(reflections, ConfigProvider.class, loader),
+                getServiceLoaderPluginDesc(ConnectRestExtension.class, loader)
         );
     }
 
@@ -305,21 +316,27 @@ public class DelegatingClassLoader extends URLClassLoader {
         Collection<PluginDesc<T>> result = new ArrayList<>();
         for (Class<? extends T> plugin : plugins) {
             if (PluginUtils.isConcrete(plugin)) {
-                // Temporary workaround until all the plugins are versioned.
-                if (Connector.class.isAssignableFrom(plugin)) {
-                    result.add(
-                            new PluginDesc<>(
-                                    plugin,
-                                    ((Connector) plugin.newInstance()).version(),
-                                    loader
-                            )
-                    );
-                } else {
-                    result.add(new PluginDesc<>(plugin, "undefined", loader));
-                }
+                result.add(new PluginDesc<>(plugin, versionFor(plugin.newInstance()), loader));
+            } else {
+                log.debug("Skipping {} as it is not concrete implementation", plugin);
             }
         }
         return result;
+    }
+
+    private <T> Collection<PluginDesc<T>> getServiceLoaderPluginDesc(Class<T> klass,
+                                                                     ClassLoader loader) {
+
+        ServiceLoader<T> serviceLoader = ServiceLoader.load(klass, loader);
+        Collection<PluginDesc<T>> result = new ArrayList<>();
+        for (T impl : serviceLoader) {
+            result.add(new PluginDesc<>(klass, versionFor(impl), loader));
+        }
+        return result;
+    }
+
+    private static <T>  String versionFor(T pluginImpl) {
+        return pluginImpl instanceof Versioned ? ((Versioned) pluginImpl).version() : "undefined";
     }
 
     @Override
@@ -347,6 +364,7 @@ public class DelegatingClassLoader extends URLClassLoader {
         addAliases(converters);
         addAliases(headerConverters);
         addAliases(transformations);
+        addAliases(restExtensions);
     }
 
     private <S> void addAliases(Collection<PluginDesc<S>> plugins) {

@@ -325,7 +325,7 @@ public class KTableTransformValuesTest {
 
         driver.pipeInput(recordFactory.create(INPUT_TOPIC, "A", "a", 0L));
         driver.pipeInput(recordFactory.create(INPUT_TOPIC, "B", "b", 0L));
-        driver.pipeInput(recordFactory.create(INPUT_TOPIC, "D", null, 0L));
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC, "D", (String) null, 0L));
 
         assertThat(output(), hasItems("A:A->a!", "B:B->b!", "D:D->null!"));
         assertThat("Store should not be materialized", driver.getKeyValueStore(QUERYABLE_NAME), is(nullValue()));
@@ -349,7 +349,7 @@ public class KTableTransformValuesTest {
 
         driver.pipeInput(recordFactory.create(INPUT_TOPIC, "A", "a", 0L));
         driver.pipeInput(recordFactory.create(INPUT_TOPIC, "B", "b", 0L));
-        driver.pipeInput(recordFactory.create(INPUT_TOPIC, "C", null, 0L));
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC, "C", (String) null, 0L));
 
         assertThat(output(), hasItems("A:A->a!", "B:B->b!", "C:C->null!"));
 

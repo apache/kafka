@@ -465,7 +465,7 @@ class GroupMetadataManager(brokerId: Int,
               }
 
             case Some(topicPartitions) =>
-              topicPartitionsOpt.getOrElse(Seq.empty[TopicPartition]).map { topicPartition =>
+              topicPartitions.map { topicPartition =>
                 val partitionData = group.offset(topicPartition) match {
                   case None =>
                     new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET, "", Errors.NONE)

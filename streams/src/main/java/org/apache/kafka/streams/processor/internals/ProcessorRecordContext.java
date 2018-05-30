@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.header.Headers;
+
 import java.util.Objects;
 
 public class ProcessorRecordContext implements RecordContext {
@@ -24,16 +26,19 @@ public class ProcessorRecordContext implements RecordContext {
     private final long offset;
     private final String topic;
     private final int partition;
+    private final Headers headers;
 
     public ProcessorRecordContext(final long timestamp,
                                   final long offset,
                                   final int partition,
-                                  final String topic) {
+                                  final String topic,
+                                  final Headers headers) {
 
         this.timestamp = timestamp;
         this.offset = offset;
         this.topic = topic;
         this.partition = partition;
+        this.headers = headers;
     }
 
     public long offset() {
@@ -59,6 +64,11 @@ public class ProcessorRecordContext implements RecordContext {
     }
 
     @Override
+    public Headers headers() {
+        return headers;
+    }
+
+    @Override
     public boolean equals(final Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
@@ -66,11 +76,12 @@ public class ProcessorRecordContext implements RecordContext {
         return timestamp == that.timestamp &&
                 offset == that.offset &&
                 partition == that.partition &&
-                Objects.equals(topic, that.topic);
+                Objects.equals(topic, that.topic) &&
+                Objects.equals(headers, that.headers);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(timestamp, offset, topic, partition);
+        return Objects.hash(timestamp, offset, topic, partition, headers);
     }
 }

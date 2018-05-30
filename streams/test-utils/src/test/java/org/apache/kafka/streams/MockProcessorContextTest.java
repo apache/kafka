@@ -286,7 +286,7 @@ public class MockProcessorContextTest {
         }
 
         context.resetForwards();
-        context.setRecordMetadata("t1", 0, 0L, 0L);
+        context.setRecordMetadata("t1", 0, 0L, null, 0L);
 
         {
             processor.process("foo", 5L);
