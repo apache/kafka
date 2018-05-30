@@ -174,7 +174,7 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
         if (entry == null) {
             return underlying.fetch(key, timestamp);
         } else {
-            return entry.value;
+            return entry.value();
         }
     }
 

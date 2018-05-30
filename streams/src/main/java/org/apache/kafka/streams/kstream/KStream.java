@@ -478,7 +478,7 @@ public interface KStream<K, V> {
     void to(final TopicNameExtractor<K, V> topicExtractor);
 
     /**
-     * Dynamically materialize this stream to topics using default serializers specified in the config.
+     * Dynamically materialize this stream to topics using the provided {@link Produced} instance.
      * The topic names for each record to send to is dynamically determined based on the {@link TopicNameExtractor}.
      *
      * @param topicExtractor    the extractor to determine the name of the Kafka topic to write to for each record

@@ -53,7 +53,7 @@ class MergedSortedCacheSessionStoreIterator extends AbstractMergedSortedCacheSto
 
     @Override
     byte[] deserializeCacheValue(final LRUCacheEntry cacheEntry) {
-        return cacheEntry.value;
+        return cacheEntry.value();
     }
 
     @Override

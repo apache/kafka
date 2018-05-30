@@ -179,7 +179,7 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
             }
             return rawValue;
         } else {
-            return entry.value;
+            return entry.value();
         }
     }
 

@@ -1530,7 +1530,7 @@ public class InternalTopologyBuilder {
             if (topicNameExtractor instanceof StaticTopicNameExtractor)
                 return ((StaticTopicNameExtractor) topicNameExtractor).topicName;
             else
-                return topicNameExtractor.getClass().getName();
+                return null;
         }
 
         @Override

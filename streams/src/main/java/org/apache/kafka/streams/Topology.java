@@ -522,7 +522,7 @@ public class Topology {
     }
 
     /**
-     * Add a new sink that forwards records from upstream parent processor and/or source nodes to Kafka topics dynamically.
+     * Add a new sink that forwards records from upstream parent processor and/or source nodes to Kafka topics based on {@code topicExtractor}.
      * The topics that it may ever send to should be pre-created.
      * The sink will use the {@link StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG default key serializer} and
      * {@link StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG default value serializer} specified in the
@@ -547,7 +547,7 @@ public class Topology {
     }
 
     /**
-     * Add a new sink that forwards records from upstream parent processor and/or source nodes to Kafka topics dynamically,
+     * Add a new sink that forwards records from upstream parent processor and/or source nodes to Kafka topics based on {@code topicExtractor},
      * using the supplied partitioner.
      * The topics that it may ever send to should be pre-created.
      * The sink will use the {@link StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG default key serializer} and
@@ -582,7 +582,7 @@ public class Topology {
     }
 
     /**
-     * Add a new sink that forwards records from upstream parent processor and/or source nodes to Kafka topics dynamically.
+     * Add a new sink that forwards records from upstream parent processor and/or source nodes to Kafka topics based on {@code topicExtractor}.
      * The topics that it may ever send to should be pre-created.
      * The sink will use the specified key and value serializers.
      *
@@ -613,7 +613,7 @@ public class Topology {
     }
 
     /**
-     * Add a new sink that forwards records from upstream parent processor and/or source nodes to Kafka topics dynamically.
+     * Add a new sink that forwards records from upstream parent processor and/or source nodes to Kafka topics based on {@code topicExtractor}.
      * The topics that it may ever send to should be pre-created.
      * The sink will use the specified key and value serializers, and the supplied partitioner.
      *

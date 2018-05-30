@@ -27,7 +27,7 @@ import java.util.Objects;
  */
 class LRUCacheEntry extends ProcessorRecordContext {
 
-    public final byte[] value;
+    private final byte[] value;
     private final long sizeBytes;
     private boolean isDirty;
 
@@ -61,8 +61,12 @@ class LRUCacheEntry extends ProcessorRecordContext {
         return isDirty;
     }
 
-    public long size() {
+    long size() {
         return sizeBytes;
+    }
+
+    byte[] value() {
+        return value;
     }
 
     @Override
@@ -70,17 +74,17 @@ class LRUCacheEntry extends ProcessorRecordContext {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         final LRUCacheEntry that = (LRUCacheEntry) o;
-        return timestamp == that.timestamp &&
-                offset == that.offset &&
-                partition == that.partition &&
-                Objects.equals(topic, that.topic) &&
-                Objects.equals(headers, that.headers) &&
-                Arrays.equals(this.value, that.value) &&
-                this.isDirty == that.isDirty;
+        return timestamp() == that.timestamp() &&
+                offset() == that.offset() &&
+                partition() == that.partition() &&
+                Objects.equals(topic(), that.topic()) &&
+                Objects.equals(headers(), that.headers()) &&
+                Arrays.equals(this.value, that.value()) &&
+                this.isDirty == that.isDirty();
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(timestamp, offset, topic, partition, headers, value, isDirty);
+        return Objects.hash(timestamp(), offset(), topic(), partition(), headers(), value, isDirty);
     }
 }

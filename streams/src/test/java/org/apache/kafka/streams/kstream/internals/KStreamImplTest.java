@@ -40,7 +40,6 @@ import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
-import org.apache.kafka.streams.processor.RecordContext;
 import org.apache.kafka.streams.processor.internals.SourceNode;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockMapper;
@@ -229,12 +228,8 @@ public class KStreamImplTest {
         final StreamsBuilder builder = new StreamsBuilder();
         final String input = "topic";
         final KStream<String, String> stream = builder.stream(input, stringConsumed);
-        stream.to(new TopicNameExtractor<String, String>() {
-            @Override
-            public String extract(String key, String value, RecordContext recordContext) {
-                return recordContext.topic() + "-" + key + "-" + value.substring(0, 1);
-            }
-        }, Produced.with(Serdes.String(), Serdes.String()));
+        stream.to((key, value, context) -> context.topic() + "-" + key + "-" + value.substring(0, 1),
+                  Produced.with(Serdes.String(), Serdes.String()));
         builder.stream(input + "-a-v", stringConsumed).process(processorSupplier);
         builder.stream(input + "-b-v", stringConsumed).process(processorSupplier);
 
