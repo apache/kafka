@@ -34,7 +34,7 @@ import kafka.coordinator.group.{GroupCoordinator, JoinGroupResult}
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
 import kafka.log.{Log, LogManager, TimestampOffset}
 import kafka.network.RequestChannel
-import kafka.network.RequestChannel.{CloseConnectionAction, NoOpAction, SendAction}
+import kafka.network.RequestChannel._
 import kafka.security.SecurityUtils
 import kafka.security.auth.{Resource, _}
 import kafka.utils.{CoreUtils, Logging}
@@ -45,7 +45,7 @@ import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANS
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.{ControlRecordType, EndTransactionMarker, MemoryRecords, RecordBatch, RecordsProcessingStats}
+import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.CreateAclsResponse.AclCreationResponse
 import org.apache.kafka.common.requests.DeleteAclsResponse.{AclDeletionResult, AclFilterResponse}
 import org.apache.kafka.common.requests.{Resource => RResource, ResourceType => RResourceType, _}
@@ -53,6 +53,7 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.requests.{SaslAuthenticateResponse, SaslHandshakeResponse}
+import org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID
 import org.apache.kafka.common.resource.{Resource => AdminResource}
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding}
 import DescribeLogDirsResponse.LogDirInfo
@@ -424,38 +425,46 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
       }
 
-      def produceResponseCallback(bandwidthThrottleTimeMs: Int) {
-        if (produceRequest.acks == 0) {
-          // no operation needed if producer request.required.acks = 0; however, if there is any error in handling
-          // the request, since no response is expected by the producer, the server will close socket server so that
-          // the producer client will know that some error has happened and will refresh its metadata
-          if (errorInResponse) {
-            val exceptionsSummary = mergedResponseStatus.map { case (topicPartition, status) =>
-              topicPartition -> status.error.exceptionName
-            }.mkString(", ")
-            info(
-              s"Closing connection due to error during produce request with correlation id ${request.header.correlationId} " +
-                s"from client id ${request.header.clientId} with ack=0\n" +
-                s"Topic and partition to exceptions: $exceptionsSummary"
-            )
-            closeConnection(request, new ProduceResponse(mergedResponseStatus.asJava).errorCounts)
-          } else {
-            sendNoOpResponseExemptThrottle(request)
-          }
-        } else {
-          sendResponseMaybeThrottle(request, requestThrottleMs =>
-            new ProduceResponse(mergedResponseStatus.asJava, bandwidthThrottleTimeMs + requestThrottleMs))
-        }
-      }
-
       // When this callback is triggered, the remote API call has completed
       request.apiRemoteCompleteTimeNanos = time.nanoseconds
 
-      quotas.produce.maybeRecordAndThrottle(
-        request.session,
-        request.header.clientId,
-        numBytesAppended,
-        produceResponseCallback)
+      // Record both bandwidth and request quota-specific values and throttle by muting the channel if any of the quotas
+      // have been violated. If both quotas have been violated, use the max throttle time between the two quotas. Note
+      // that the request quota is not enforced if acks == 0.
+      val bandwidthThrottleTimeMs = quotas.produce.maybeRecordAndGetThrottleTimeMs(request, numBytesAppended, time.milliseconds())
+      val requestThrottleTimeMs = if (produceRequest.acks == 0) 0 else quotas.request.maybeRecordAndGetThrottleTimeMs(request)
+      val maxThrottleTimeMs = Math.max(bandwidthThrottleTimeMs, requestThrottleTimeMs)
+      if (maxThrottleTimeMs > 0) {
+        if (bandwidthThrottleTimeMs > requestThrottleTimeMs) {
+          quotas.produce.throttle(request, bandwidthThrottleTimeMs, sendActionOnlyResponse(request))
+        } else {
+          quotas.request.throttle(request, requestThrottleTimeMs, sendActionOnlyResponse(request))
+        }
+      }
+
+      // Send the response immediately. In case of throttling, the channel has already been muted.
+      if (produceRequest.acks == 0) {
+        // no operation needed if producer request.required.acks = 0; however, if there is any error in handling
+        // the request, since no response is expected by the producer, the server will close socket server so that
+        // the producer client will know that some error has happened and will refresh its metadata
+        if (errorInResponse) {
+          val exceptionsSummary = mergedResponseStatus.map { case (topicPartition, status) =>
+            topicPartition -> status.error.exceptionName
+          }.mkString(", ")
+          info(
+            s"Closing connection due to error during produce request with correlation id ${request.header.correlationId} " +
+              s"from client id ${request.header.clientId} with ack=0\n" +
+              s"Topic and partition to exceptions: $exceptionsSummary"
+          )
+          closeConnection(request, new ProduceResponse(mergedResponseStatus.asJava).errorCounts)
+        } else {
+          // Note that although request throttling is exempt for acks == 0, the channel may be throttled due to
+          // bandwidth quota violation.
+          sendNoOpResponseExemptThrottle(request)
+        }
+      } else {
+        sendResponse(request, Some(new ProduceResponse(mergedResponseStatus.asJava, maxThrottleTimeMs)))
+      }
     }
 
     def processingStatsCallback(processingStats: Map[TopicPartition, RecordsProcessingStats]): Unit = {
@@ -573,52 +582,73 @@ class KafkaApis(val requestChannel: RequestChannel,
           data.logStartOffset, abortedTransactions, data.records))
       }
       erroneous.foreach{case (tp, data) => partitions.put(tp, data)}
-      val unconvertedFetchResponse = fetchContext.updateAndGenerateResponseData(partitions)
-
-      // fetch response callback invoked after any throttling
-      def fetchResponseCallback(bandwidthThrottleTimeMs: Int) {
-        def createResponse(requestThrottleTimeMs: Int): FetchResponse = {
-          val convertedData = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData]
-          unconvertedFetchResponse.responseData().asScala.foreach { case (tp, partitionData) =>
-            if (partitionData.error != Errors.NONE)
-              debug(s"Fetch request with correlation id ${request.header.correlationId} from client $clientId " +
-                s"on partition $tp failed due to ${partitionData.error.exceptionName}")
-            convertedData.put(tp, convertedPartitionData(tp, partitionData))
-          }
-          val response = new FetchResponse(unconvertedFetchResponse.error(), convertedData,
-            bandwidthThrottleTimeMs + requestThrottleTimeMs, unconvertedFetchResponse.sessionId())
-          response.responseData.asScala.foreach { case (topicPartition, data) =>
-            // record the bytes out metrics only when the response is being sent
-            brokerTopicStats.updateBytesOut(topicPartition.topic, fetchRequest.isFromFollower, data.records.sizeInBytes)
-          }
-          response
-        }
-
-        trace(s"Sending Fetch response with partitions.size=${unconvertedFetchResponse.responseData().size()}, " +
-          s"metadata=${unconvertedFetchResponse.sessionId()}")
-
-        if (fetchRequest.isFromFollower)
-          sendResponseExemptThrottle(request, createResponse(0))
-        else
-          sendResponseMaybeThrottle(request, requestThrottleMs => createResponse(requestThrottleMs))
-      }
 
       // When this callback is triggered, the remote API call has completed.
       // Record time before any byte-rate throttling.
       request.apiRemoteCompleteTimeNanos = time.nanoseconds
 
+      var unconvertedFetchResponse: FetchResponse = null
+
+      def createResponse(throttleTimeMs: Int): FetchResponse = {
+        val convertedData = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData]
+        unconvertedFetchResponse.responseData().asScala.foreach { case (tp, partitionData) =>
+          if (partitionData.error != Errors.NONE)
+            debug(s"Fetch request with correlation id ${request.header.correlationId} from client $clientId " +
+              s"on partition $tp failed due to ${partitionData.error.exceptionName}")
+          convertedData.put(tp, convertedPartitionData(tp, partitionData))
+        }
+        val response = new FetchResponse(unconvertedFetchResponse.error(), convertedData, throttleTimeMs,
+          unconvertedFetchResponse.sessionId())
+        response.responseData.asScala.foreach { case (topicPartition, data) =>
+          // record the bytes out metrics only when the response is being sent
+          brokerTopicStats.updateBytesOut(topicPartition.topic, fetchRequest.isFromFollower, data.records.sizeInBytes)
+        }
+        response
+      }
+
       if (fetchRequest.isFromFollower) {
         // We've already evaluated against the quota and are good to go. Just need to record it now.
+        unconvertedFetchResponse = fetchContext.updateAndGenerateResponseData(partitions)
         val responseSize = sizeOfThrottledPartitions(versionId, unconvertedFetchResponse, quotas.leader)
         quotas.leader.record(responseSize)
-        fetchResponseCallback(bandwidthThrottleTimeMs = 0)
+        trace(s"Sending Fetch response with partitions.size=${unconvertedFetchResponse.responseData().size()}, " +
+          s"metadata=${unconvertedFetchResponse.sessionId()}")
+        sendResponseExemptThrottle(request, createResponse(0))
       } else {
         // Fetch size used to determine throttle time is calculated before any down conversions.
         // This may be slightly different from the actual response size. But since down conversions
-        // result in data being loaded into memory, it is better to do this after throttling to avoid OOM.
-        val responseStruct = unconvertedFetchResponse.toStruct(versionId)
-        quotas.fetch.maybeRecordAndThrottle(request.session, clientId, responseStruct.sizeOf,
-          fetchResponseCallback)
+        // result in data being loaded into memory, we should do this only when we are not going to throttle.
+        //
+        // Record both bandwidth and request quota-specific values and throttle by muting the channel if any of the
+        // quotas have been violated. If both quotas have been violated, use the max throttle time between the two
+        // quotas. When throttled, we unrecord the recorded bandwidth quota value
+        val responseSize = fetchContext.getResponseSize(partitions, versionId)
+        val timeMs = time.milliseconds()
+        val requestThrottleTimeMs = quotas.request.maybeRecordAndGetThrottleTimeMs(request)
+        val bandwidthThrottleTimeMs = quotas.fetch.maybeRecordAndGetThrottleTimeMs(request, responseSize, timeMs)
+
+        val maxThrottleTimeMs = math.max(bandwidthThrottleTimeMs, requestThrottleTimeMs)
+        if (maxThrottleTimeMs > 0) {
+          // Even if we need to throttle for request quota violation, we should "unrecord" the already recorded value
+          // from the fetch quota because we are going to return an empty response.
+          quotas.fetch.unrecordQuotaSensor(request, responseSize, timeMs)
+          if (bandwidthThrottleTimeMs > requestThrottleTimeMs) {
+            quotas.fetch.throttle(request, bandwidthThrottleTimeMs, sendActionOnlyResponse(request))
+          } else {
+            quotas.request.throttle(request, requestThrottleTimeMs, sendActionOnlyResponse(request))
+          }
+          // If throttling is required, return an empty response.
+          unconvertedFetchResponse = new FetchResponse(Errors.NONE, new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData](),
+            maxThrottleTimeMs, INVALID_SESSION_ID)
+        } else {
+          // Get the actual response. This will update the fetch context.
+          unconvertedFetchResponse = fetchContext.updateAndGenerateResponseData(partitions)
+          trace(s"Sending Fetch response with partitions.size=${responseSize}, " +
+            s"metadata=${unconvertedFetchResponse.sessionId()}")
+        }
+
+        // Send the response immediately.
+        sendResponse(request, Some(createResponse(maxThrottleTimeMs)))
       }
     }
 
@@ -1341,7 +1371,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleSaslAuthenticateRequest(request: RequestChannel.Request) {
     sendResponseMaybeThrottle(request, _ => new SaslAuthenticateResponse(Errors.ILLEGAL_SASL_STATE,
-        "SaslAuthenticate request received after successful authentication"))
+      "SaslAuthenticate request received after successful authentication"))
   }
 
   def handleApiVersionsRequest(request: RequestChannel.Request) {
@@ -2225,13 +2255,18 @@ class KafkaApis(val requestChannel: RequestChannel,
       sendErrorResponseExemptThrottle(request, e)
   }
 
+  // Throttle the channel if the request quota is enabled but has been violated. Regardless of throttling, send the
+  // response immediately.
   private def sendResponseMaybeThrottle(request: RequestChannel.Request, createResponse: Int => AbstractResponse): Unit = {
-    quotas.request.maybeRecordAndThrottle(request,
-      throttleTimeMs => sendResponse(request, Some(createResponse(throttleTimeMs))))
+    val throttleTimeMs = quotas.request.maybeRecordAndGetThrottleTimeMs(request)
+    quotas.request.throttle(request, throttleTimeMs, sendActionOnlyResponse(request))
+    sendResponse(request, Some(createResponse(throttleTimeMs)))
   }
 
   private def sendErrorResponseMaybeThrottle(request: RequestChannel.Request, error: Throwable) {
-    quotas.request.maybeRecordAndThrottle(request, sendErrorOrCloseConnection(request, error))
+    val throttleTimeMs = quotas.request.maybeRecordAndGetThrottleTimeMs(request)
+    quotas.request.throttle(request, throttleTimeMs, sendActionOnlyResponse(request))
+    sendErrorOrCloseConnection(request, error, throttleTimeMs)
   }
 
   private def sendResponseExemptThrottle(request: RequestChannel.Request, response: AbstractResponse): Unit = {
@@ -2241,10 +2276,10 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   private def sendErrorResponseExemptThrottle(request: RequestChannel.Request, error: Throwable): Unit = {
     quotas.request.maybeRecordExempt(request)
-    sendErrorOrCloseConnection(request, error)(throttleMs = 0)
+    sendErrorOrCloseConnection(request, error, 0)
   }
 
-  private def sendErrorOrCloseConnection(request: RequestChannel.Request, error: Throwable)(throttleMs: Int): Unit = {
+  private def sendErrorOrCloseConnection(request: RequestChannel.Request, error: Throwable, throttleMs: Int): Unit = {
     val requestBody = request.body[AbstractRequest]
     val response = requestBody.getErrorResponse(throttleMs, error)
     if (response == null)
@@ -2262,7 +2297,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     // This case is used when the request handler has encountered an error, but the client
     // does not expect a response (e.g. when produce request has acks set to 0)
     requestChannel.updateErrorMetrics(request.header.apiKey, errorCounts.asScala)
-    requestChannel.sendResponse(new RequestChannel.Response(request, None, CloseConnectionAction, None))
+    sendActionOnlyResponse(request)(CloseConnectionAction)
   }
 
   private def sendResponse(request: RequestChannel.Request, responseOpt: Option[AbstractResponse]): Unit = {
@@ -2277,8 +2312,11 @@ class KafkaApis(val requestChannel: RequestChannel,
           else None
         requestChannel.sendResponse(new RequestChannel.Response(request, Some(responseSend), SendAction, responseString))
       case None =>
-        requestChannel.sendResponse(new RequestChannel.Response(request, None, NoOpAction, None))
+        sendActionOnlyResponse(request)(NoOpAction)
     }
   }
 
+  private def sendActionOnlyResponse(request: RequestChannel.Request)(responseAction: ResponseAction): Unit = {
+    requestChannel.sendResponse(new RequestChannel.Response(request, None, responseAction, None))
+  }
 }

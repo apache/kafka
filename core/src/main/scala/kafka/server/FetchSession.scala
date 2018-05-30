@@ -38,6 +38,7 @@ object FetchSession {
   type REQ_MAP = util.Map[TopicPartition, FetchRequest.PartitionData]
   type RESP_MAP = util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData]
   type CACHE_MAP = ImplicitLinkedHashSet[CachedPartition]
+  type RESP_MAP_ITER = util.Iterator[util.Map.Entry[TopicPartition, FetchResponse.PartitionData]]
 
   val NUM_INCREMENTAL_FETCH_SESSISONS = "NumIncrementalFetchSessions"
   val NUM_INCREMENTAL_FETCH_PARTITIONS_CACHED = "NumIncrementalFetchPartitionsCached"
@@ -116,15 +117,16 @@ class CachedPartition(val topic: String,
   }
 
   /**
-    * Update this CachedPartition with new request and response data.
+    * Determine whether or not the specified cached partition should be included in the FetchResponse we send back to
+    * the fetcher and update it if requested.
     *
-    * This function should be called while holding the appropriate session
-    * lock.
+    * This function should be called while holding the appropriate session lock.
     *
-    * @return True if this partition should be included in the FetchResponse
-    *         we send back to the fetcher; false if it can be omitted.
+    * @param respData partition data
+    * @param updateResponseData if set to true, update this CachedPartition with new request and response data.
+    * @return True if this partition should be included in the response; false if it can be omitted.
     */
-  def updateResponseData(respData: FetchResponse.PartitionData): Boolean = {
+  def maybeUpdateResponseData(respData: FetchResponse.PartitionData, updateResponseData: Boolean): Boolean = {
     // Check the response data.
     var mustRespond = false
     if ((respData.records != null) && (respData.records.sizeInBytes() > 0)) {
@@ -133,17 +135,20 @@ class CachedPartition(val topic: String,
     }
     if (highWatermark != respData.highWatermark) {
       mustRespond = true
-      highWatermark = respData.highWatermark
+      if (updateResponseData)
+        highWatermark = respData.highWatermark
     }
     if (localLogStartOffset != respData.logStartOffset) {
       mustRespond = true
-      localLogStartOffset = respData.logStartOffset
+      if (updateResponseData)
+        localLogStartOffset = respData.logStartOffset
     }
     if (respData.error.code() != 0) {
       // Partitions with errors are always included in the response.
       // We also set the cached highWatermark to an invalid offset, -1.
       // This ensures that when the error goes away, we re-send the partition.
-      highWatermark = -1
+      if (updateResponseData)
+        highWatermark = -1
       mustRespond = true
     }
     mustRespond
@@ -272,6 +277,12 @@ trait FetchContext extends Logging {
   def foreachPartition(fun: (TopicPartition, FetchRequest.PartitionData) => Unit): Unit
 
   /**
+    * Get the response size to be used for quota computation. Since we are returning an empty response in case of
+    * throttling, we are not supposed to update the context until we know that we are not going to throttle.
+    */
+  def getResponseSize(updates: FetchSession.RESP_MAP, versionId: Short): Int
+
+  /**
     * Updates the fetch context with new partition information.  Generates response data.
     * The response data may require subsequent down-conversion.
     */
@@ -289,6 +300,10 @@ class SessionErrorContext(val error: Errors,
   override def getFetchOffset(part: TopicPartition): Option[Long] = None
 
   override def foreachPartition(fun: (TopicPartition, FetchRequest.PartitionData) => Unit): Unit = {}
+
+  override def getResponseSize(updates: FetchSession.RESP_MAP, versionId: Short): Int = {
+    FetchResponse.sizeOf(versionId, (new FetchSession.RESP_MAP).entrySet().iterator())
+  }
 
   // Because of the fetch session error, we don't know what partitions were supposed to be in this request.
   override def updateAndGenerateResponseData(updates: FetchSession.RESP_MAP): FetchResponse = {
@@ -308,6 +323,10 @@ class SessionlessFetchContext(val fetchData: util.Map[TopicPartition, FetchReque
 
   override def foreachPartition(fun: (TopicPartition, FetchRequest.PartitionData) => Unit): Unit = {
     fetchData.entrySet().asScala.foreach(entry => fun(entry.getKey, entry.getValue))
+  }
+
+  override def getResponseSize(updates: FetchSession.RESP_MAP, versionId: Short): Int = {
+    FetchResponse.sizeOf(versionId, updates.entrySet().iterator())
   }
 
   override def updateAndGenerateResponseData(updates: FetchSession.RESP_MAP): FetchResponse = {
@@ -335,6 +354,10 @@ class FullFetchContext(private val time: Time,
 
   override def foreachPartition(fun: (TopicPartition, FetchRequest.PartitionData) => Unit): Unit = {
     fetchData.entrySet().asScala.foreach(entry => fun(entry.getKey, entry.getValue))
+  }
+
+  override def getResponseSize(updates: FetchSession.RESP_MAP, versionId: Short): Int = {
+    FetchResponse.sizeOf(versionId, updates.entrySet().iterator())
   }
 
   override def updateAndGenerateResponseData(updates: FetchSession.RESP_MAP): FetchResponse = {
@@ -378,6 +401,58 @@ class IncrementalFetchContext(private val time: Time,
     }
   }
 
+  // Iterator that goes over the given partition map and selects partitions that need to be included in the response.
+  // If updateFetchContextAndRemoveUnselected is set to true, the fetch context will be updated for the selected
+  // partitions and also remove unselected ones as they are encountered.
+  private class PartitionIterator(val iter: FetchSession.RESP_MAP_ITER,
+                                  val updateFetchContextAndRemoveUnselected: Boolean)
+    extends FetchSession.RESP_MAP_ITER {
+    var nextElement: util.Map.Entry[TopicPartition, FetchResponse.PartitionData] = null
+
+    override def hasNext: Boolean = {
+      while ((nextElement == null) && iter.hasNext()) {
+        val element = iter.next()
+        val topicPart = element.getKey
+        val respData = element.getValue
+        val cachedPart = session.partitionMap.find(new CachedPartition(topicPart))
+        val mustRespond = cachedPart.maybeUpdateResponseData(respData, updateFetchContextAndRemoveUnselected)
+        if (mustRespond) {
+          nextElement = element
+          if (updateFetchContextAndRemoveUnselected) {
+            session.partitionMap.remove(cachedPart)
+            session.partitionMap.mustAdd(cachedPart)
+          }
+        } else {
+          if (updateFetchContextAndRemoveUnselected) {
+            iter.remove()
+          }
+        }
+      }
+      nextElement != null
+    }
+
+    override def next(): util.Map.Entry[TopicPartition, FetchResponse.PartitionData] = {
+      if (!hasNext()) throw new NoSuchElementException()
+      val element = nextElement
+      nextElement = null
+      element
+    }
+
+    override def remove() = throw new UnsupportedOperationException()
+  }
+
+  override def getResponseSize(updates: FetchSession.RESP_MAP, versionId: Short): Int = {
+    session.synchronized {
+      val expectedEpoch = JFetchMetadata.nextEpoch(reqMetadata.epoch())
+      if (session.epoch != expectedEpoch) {
+        FetchResponse.sizeOf(versionId, (new FetchSession.RESP_MAP).entrySet().iterator())
+      } else {
+        // Pass the partition iterator which updates neither the fetch context nor the partition map.
+        FetchResponse.sizeOf(versionId, new PartitionIterator(updates.entrySet().iterator(), false))
+      }
+    }
+  }
+
   override def updateAndGenerateResponseData(updates: FetchSession.RESP_MAP): FetchResponse = {
     session.synchronized {
       // Check to make sure that the session epoch didn't change in between
@@ -388,24 +463,10 @@ class IncrementalFetchContext(private val time: Time,
           s"got ${session.epoch}.  Possible duplicate request.")
         new FetchResponse(Errors.INVALID_FETCH_SESSION_EPOCH, new FetchSession.RESP_MAP, 0, session.id)
       } else {
-        // Iterate over the update list.  Prune updates which don't need to be sent.
-        val iter = updates.entrySet().iterator()
-        while (iter.hasNext()) {
-          val entry = iter.next()
-          val topicPart = entry.getKey
-          val respData = entry.getValue
-          val cachedPart = session.partitionMap.find(new CachedPartition(topicPart))
-          val mustRespond = cachedPart.updateResponseData(respData)
-          if (mustRespond) {
-            // Move this to the end of the cached partition map.
-            // This is important for ensuring fairness when lots of partitions
-            // have data to return.
-            session.partitionMap.remove(cachedPart)
-            session.partitionMap.mustAdd(cachedPart)
-          } else {
-            // Do not include this partition in the FetchResponse.
-            iter.remove()
-          }
+        // Iterate over the update list using PartitionIterator. This will prune updates which don't need to be sent
+        val partitionIter = new PartitionIterator(updates.entrySet().iterator(), true)
+        while (partitionIter.hasNext()) {
+          partitionIter.next()
         }
         debug(s"Incremental fetch context with session id ${session.id} returning " +
           s"${partitionsToLogString(updates.keySet())}")

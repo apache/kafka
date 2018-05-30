@@ -872,7 +872,7 @@ public class KafkaAdminClient extends AdminClient {
                 }
                 Node node = entry.getKey();
                 if (!client.ready(node, now)) {
-                    long nodeTimeout = client.connectionDelay(node, now);
+                    long nodeTimeout = client.pollDelayMs(node, now);
                     pollTimeout = Math.min(pollTimeout, nodeTimeout);
                     log.trace("Client is not ready to send to {}. Must delay {} ms", node, nodeTimeout);
                     continue;

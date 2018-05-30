@@ -49,8 +49,13 @@ public class TxnOffsetCommitResponse extends AbstractResponse {
                     new Field(PARTITIONS_KEY_NAME, new ArrayOf(TXN_OFFSET_COMMIT_PARTITION_ERROR_RESPONSE_V0)))),
                     "Errors per partition from writing markers."));
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema TXN_OFFSET_COMMIT_RESPONSE_V1 = TXN_OFFSET_COMMIT_RESPONSE_V0;
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{TXN_OFFSET_COMMIT_RESPONSE_V0};
+        return new Schema[]{TXN_OFFSET_COMMIT_RESPONSE_V0, TXN_OFFSET_COMMIT_RESPONSE_V1};
     }
 
     // Possible error codes:
@@ -117,6 +122,7 @@ public class TxnOffsetCommitResponse extends AbstractResponse {
         return struct;
     }
 
+    @Override
     public int throttleTimeMs() {
         return throttleTimeMs;
     }
@@ -142,4 +148,8 @@ public class TxnOffsetCommitResponse extends AbstractResponse {
                 ')';
     }
 
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 1;
+    }
 }

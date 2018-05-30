@@ -55,8 +55,13 @@ public class AlterReplicaLogDirsRequest extends AbstractRequest {
                             TOPIC_NAME,
                             new Field("partitions", new ArrayOf(INT32), "List of partition ids of the topic."))))))));
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema ALTER_REPLICA_LOG_DIRS_REQUEST_V1 = ALTER_REPLICA_LOG_DIRS_REQUEST_V0;
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{ALTER_REPLICA_LOG_DIRS_REQUEST_V0};
+        return new Schema[]{ALTER_REPLICA_LOG_DIRS_REQUEST_V0, ALTER_REPLICA_LOG_DIRS_REQUEST_V1};
     }
 
     private final Map<TopicPartition, String> partitionDirs;
@@ -147,6 +152,7 @@ public class AlterReplicaLogDirsRequest extends AbstractRequest {
         short versionId = version();
         switch (versionId) {
             case 0:
+            case 1:
                 return new AlterReplicaLogDirsResponse(throttleTimeMs, responseMap);
             default:
                 throw new IllegalArgumentException(

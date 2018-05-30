@@ -29,6 +29,7 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
+import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.sink.SinkConnector;
@@ -138,7 +139,9 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         workerTask = PowerMock.createPartialMock(
                 WorkerSinkTask.class, new String[]{"createConsumer"},
                 taskId, sinkTask, statusListener, initialState, workerConfig, ClusterConfigState.EMPTY, metrics, keyConverter,
-                valueConverter, headerConverter, TransformationChain.noOp(), pluginLoader, time);
+                valueConverter, headerConverter,
+                new TransformationChain(Collections.emptyList(), RetryWithToleranceOperator.NOOP_OPERATOR),
+                pluginLoader, time, RetryWithToleranceOperator.NOOP_OPERATOR);
 
         recordsReturned = 0;
     }

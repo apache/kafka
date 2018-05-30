@@ -34,6 +34,7 @@ public class ConnectMetricsRegistry {
     public static final String SINK_TASK_GROUP_NAME = "sink-task-metrics";
     public static final String WORKER_GROUP_NAME = "connect-worker-metrics";
     public static final String WORKER_REBALANCE_GROUP_NAME = "connect-worker-rebalance-metrics";
+    public static final String TASK_ERROR_HANDLING_GROUP_NAME = "task-error-metrics";
 
     private final List<MetricNameTemplate> allTemplates = new ArrayList<>();
     public final MetricNameTemplate connectorStatus;
@@ -93,6 +94,14 @@ public class ConnectMetricsRegistry {
     public final MetricNameTemplate rebalanceTimeMax;
     public final MetricNameTemplate rebalanceTimeAvg;
     public final MetricNameTemplate rebalanceTimeSinceLast;
+    public final MetricNameTemplate recordProcessingFailures;
+    public final MetricNameTemplate recordProcessingErrors;
+    public final MetricNameTemplate recordsSkipped;
+    public final MetricNameTemplate retries;
+    public final MetricNameTemplate errorsLogged;
+    public final MetricNameTemplate dlqProduceRequests;
+    public final MetricNameTemplate dlqProduceFailures;
+    public final MetricNameTemplate lastErrorTimestamp;
 
     public ConnectMetricsRegistry() {
         this(new LinkedHashSet<String>());
@@ -294,6 +303,28 @@ public class ConnectMetricsRegistry {
                                           "The average time in milliseconds spent by this worker to rebalance.", rebalanceTags);
         rebalanceTimeSinceLast = createTemplate("time-since-last-rebalance-ms", WORKER_REBALANCE_GROUP_NAME,
                                                 "The time in milliseconds since this worker completed the most recent rebalance.", rebalanceTags);
+
+        /***** Task Error Handling Metrics *****/
+        Set<String> taskErrorHandlingTags = new LinkedHashSet<>(tags);
+        taskErrorHandlingTags.add(CONNECTOR_TAG_NAME);
+        taskErrorHandlingTags.add(TASK_TAG_NAME);
+
+        recordProcessingFailures = createTemplate("total-record-failures", TASK_ERROR_HANDLING_GROUP_NAME,
+                "The number of record processing failures in this task.", taskErrorHandlingTags);
+        recordProcessingErrors = createTemplate("total-record-errors", TASK_ERROR_HANDLING_GROUP_NAME,
+                "The number of record processing errors in this task. ", taskErrorHandlingTags);
+        recordsSkipped = createTemplate("total-records-skipped", TASK_ERROR_HANDLING_GROUP_NAME,
+                "The number of records skipped due to errors.", taskErrorHandlingTags);
+        retries = createTemplate("total-retries", TASK_ERROR_HANDLING_GROUP_NAME,
+                "The number of operations retried.", taskErrorHandlingTags);
+        errorsLogged = createTemplate("total-errors-logged", TASK_ERROR_HANDLING_GROUP_NAME,
+                "The number of errors that were logged.", taskErrorHandlingTags);
+        dlqProduceRequests = createTemplate("deadletterqueue-produce-requests", TASK_ERROR_HANDLING_GROUP_NAME,
+                "The number of attempted writes to the dead letter queue.", taskErrorHandlingTags);
+        dlqProduceFailures = createTemplate("deadletterqueue-produce-failures", TASK_ERROR_HANDLING_GROUP_NAME,
+                "The number of failed writes to the dead letter queue.", taskErrorHandlingTags);
+        lastErrorTimestamp = createTemplate("last-error-timestamp", TASK_ERROR_HANDLING_GROUP_NAME,
+                "The epoch timestamp when this task last encountered an error.", taskErrorHandlingTags);
     }
 
     private MetricNameTemplate createTemplate(String name, String group, String doc, Set<String> tags) {
@@ -336,5 +367,9 @@ public class ConnectMetricsRegistry {
 
     public String workerRebalanceGroupName() {
         return WORKER_REBALANCE_GROUP_NAME;
+    }
+
+    public String taskErrorHandlingGroupName() {
+        return TASK_ERROR_HANDLING_GROUP_NAME;
     }
 }

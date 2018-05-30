@@ -52,8 +52,13 @@ public class AlterConfigsResponse extends AbstractResponse {
             THROTTLE_TIME_MS,
             new Field(RESOURCES_KEY_NAME, new ArrayOf(ALTER_CONFIGS_RESPONSE_ENTITY_V0)));
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema ALTER_CONFIGS_RESPONSE_V1 = ALTER_CONFIGS_RESPONSE_V0;
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{ALTER_CONFIGS_RESPONSE_V0};
+        return new Schema[]{ALTER_CONFIGS_RESPONSE_V0, ALTER_CONFIGS_RESPONSE_V1};
     }
 
     private final int throttleTimeMs;
@@ -87,6 +92,7 @@ public class AlterConfigsResponse extends AbstractResponse {
         return apiErrorCounts(errors);
     }
 
+    @Override
     public int throttleTimeMs() {
         return throttleTimeMs;
     }
@@ -112,4 +118,8 @@ public class AlterConfigsResponse extends AbstractResponse {
         return new AlterConfigsResponse(ApiKeys.ALTER_CONFIGS.parseResponse(version, buffer));
     }
 
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 1;
+    }
 }

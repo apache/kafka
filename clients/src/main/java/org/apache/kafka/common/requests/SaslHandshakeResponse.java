@@ -97,4 +97,3 @@ public class SaslHandshakeResponse extends AbstractResponse {
         return new SaslHandshakeResponse(ApiKeys.SASL_HANDSHAKE.parseResponse(version, buffer));
     }
 }
-
