@@ -62,6 +62,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.util.Collections.singleton;
@@ -69,7 +70,7 @@ import static java.util.Collections.singleton;
 public class StreamThread extends Thread {
 
     private final static int UNLIMITED_RECORDS = -1;
-    private static final AtomicInteger STREAM_THREAD_ID_SEQUENCE = new AtomicInteger(1);
+    private final static AtomicInteger STREAM_THREAD_ID_SEQUENCE = new AtomicInteger(1);
 
     /**
      * Stream thread states are the possible states that a stream thread can be in.
@@ -264,7 +265,9 @@ public class StreamThread extends Thread {
                 if (streamThread.setState(State.PARTITIONS_ASSIGNED) == null) {
                     return;
                 }
-                taskManager.createTasks(assignment);
+                if (!streamThread.versionProbingFlag.get()) {
+                    taskManager.createTasks(assignment);
+                }
             } catch (final Throwable t) {
                 log.error(
                     "Error caught during partition assignment, " +
@@ -298,7 +301,11 @@ public class StreamThread extends Thread {
                 final long start = time.milliseconds();
                 try {
                     // suspend active tasks
-                    taskManager.suspendTasksAndState();
+                    if (streamThread.versionProbingFlag.get()) {
+                        streamThread.versionProbingFlag.set(false);
+                    } else {
+                        taskManager.suspendTasksAndState();
+                    }
                 } catch (final Throwable t) {
                     log.error(
                         "Error caught during partition revocation, " +
@@ -555,6 +562,7 @@ public class StreamThread extends Thread {
     private final String logPrefix;
     private final TaskManager taskManager;
     private final StreamsMetricsThreadImpl streamsMetrics;
+    private final AtomicBoolean versionProbingFlag;
 
     private long lastCommitMs;
     private long timerStartedMs;
@@ -647,6 +655,8 @@ public class StreamThread extends Thread {
         final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         final Map<String, Object> consumerConfigs = config.getMainConsumerConfigs(applicationId, threadClientId);
         consumerConfigs.put(StreamsConfig.InternalConfig.TASK_MANAGER_FOR_PARTITION_ASSIGNOR, taskManager);
+        final AtomicBoolean versionProbingFlag = new AtomicBoolean();
+        consumerConfigs.put(StreamsConfig.InternalConfig.VERSION_PROBING_FLAG, versionProbingFlag);
         String originalReset = null;
         if (!builder.latestResetTopicsPattern().pattern().equals("") || !builder.earliestResetTopicsPattern().pattern().equals("")) {
             originalReset = (String) consumerConfigs.get(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG);
@@ -666,7 +676,8 @@ public class StreamThread extends Thread {
             streamsMetrics,
             builder,
             threadClientId,
-            logContext);
+            logContext,
+            versionProbingFlag);
     }
 
     public StreamThread(final Time time,
@@ -679,7 +690,8 @@ public class StreamThread extends Thread {
                         final StreamsMetricsThreadImpl streamsMetrics,
                         final InternalTopologyBuilder builder,
                         final String threadClientId,
-                        final LogContext logContext) {
+                        final LogContext logContext,
+                        final AtomicBoolean versionProbingFlag) {
         super(threadClientId);
 
         this.stateLock = new Object();
@@ -696,6 +708,7 @@ public class StreamThread extends Thread {
         this.restoreConsumer = restoreConsumer;
         this.consumer = consumer;
         this.originalReset = originalReset;
+        this.versionProbingFlag = versionProbingFlag;
 
         this.pollTimeMs = config.getLong(StreamsConfig.POLL_MS_CONFIG);
         this.commitTimeMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
@@ -750,17 +763,24 @@ public class StreamThread extends Thread {
         while (isRunning()) {
             try {
                 recordsProcessedBeforeCommit = runOnce(recordsProcessedBeforeCommit);
+                if (versionProbingFlag.get()) {
+                    log.info("Version probing detected. Triggering new rebalance.");
+                    enforceRebalance();
+                }
             } catch (final TaskMigratedException ignoreAndRejoinGroup) {
                 log.warn("Detected task {} that got migrated to another thread. " +
                         "This implies that this thread missed a rebalance and dropped out of the consumer group. " +
                         "Will try to rejoin the consumer group. Below is the detailed description of the task:\n{}",
                     ignoreAndRejoinGroup.migratedTask().id(), ignoreAndRejoinGroup.migratedTask().toString(">"));
 
-                // re-subscribe to enforce a rebalance in the next poll call
-                consumer.unsubscribe();
-                consumer.subscribe(builder.sourceTopicPattern(), rebalanceListener);
+                enforceRebalance();
             }
         }
+    }
+
+    private void enforceRebalance() {
+        consumer.unsubscribe();
+        consumer.subscribe(builder.sourceTopicPattern(), rebalanceListener);
     }
 
     /**

@@ -145,6 +145,7 @@ public class StreamsConfig extends AbstractConfig {
      */
     // TODO: currently we cannot get the full topic configurations and hence cannot allow topic configs without the prefix,
     //       this can be lifted once kafka.log.LogConfig is completely deprecated by org.apache.kafka.common.config.TopicConfig
+    @SuppressWarnings("WeakerAccess")
     public static final String TOPIC_PREFIX = "topic.";
 
     /**
@@ -152,6 +153,7 @@ public class StreamsConfig extends AbstractConfig {
      * It is recommended to use {@link #consumerPrefix(String)} to add this prefix to {@link ConsumerConfig consumer
      * properties}.
      */
+    @SuppressWarnings("WeakerAccess")
     public static final String CONSUMER_PREFIX = "consumer.";
 
     /**
@@ -161,6 +163,7 @@ public class StreamsConfig extends AbstractConfig {
      * 2. consumer.[config-name]
      * 3. [config-name]
      */
+    @SuppressWarnings("WeakerAccess")
     public static final String MAIN_CONSUMER_PREFIX = "main.consumer.";
 
     /**
@@ -170,6 +173,7 @@ public class StreamsConfig extends AbstractConfig {
      * 2. consumer.[config-name]
      * 3. [config-name]
      */
+    @SuppressWarnings("WeakerAccess")
     public static final String RESTORE_CONSUMER_PREFIX = "restore.consumer.";
 
     /**
@@ -179,6 +183,7 @@ public class StreamsConfig extends AbstractConfig {
      * 2. consumer.[config-name]
      * 3. [config-name]
      */
+    @SuppressWarnings("WeakerAccess")
     public static final String GLOBAL_CONSUMER_PREFIX = "global.consumer.";
 
     /**
@@ -186,6 +191,7 @@ public class StreamsConfig extends AbstractConfig {
      * It is recommended to use {@link #producerPrefix(String)} to add this prefix to {@link ProducerConfig producer
      * properties}.
      */
+    @SuppressWarnings("WeakerAccess")
     public static final String PRODUCER_PREFIX = "producer.";
 
     /**
@@ -193,202 +199,250 @@ public class StreamsConfig extends AbstractConfig {
      * It is recommended to use {@link #adminClientPrefix(String)} to add this prefix to {@link ProducerConfig producer
      * properties}.
      */
+    @SuppressWarnings("WeakerAccess")
     public static final String ADMIN_CLIENT_PREFIX = "admin.";
 
     /**
      * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 0.10.0.x}.
      */
+    @SuppressWarnings("WeakerAccess")
     public static final String UPGRADE_FROM_0100 = "0.10.0";
 
     /**
      * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 0.10.1.x}.
      */
+    @SuppressWarnings("WeakerAccess")
     public static final String UPGRADE_FROM_0101 = "0.10.1";
 
     /**
      * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 0.10.2.x}.
      */
+    @SuppressWarnings("WeakerAccess")
     public static final String UPGRADE_FROM_0102 = "0.10.2";
 
     /**
      * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 0.11.0.x}.
      */
+    @SuppressWarnings("WeakerAccess")
     public static final String UPGRADE_FROM_0110 = "0.11.0";
 
     /**
      * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 1.0.x}.
      */
+    @SuppressWarnings("WeakerAccess")
     public static final String UPGRADE_FROM_10 = "1.0";
 
     /**
      * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 1.1.x}.
      */
+    @SuppressWarnings("WeakerAccess")
     public static final String UPGRADE_FROM_11 = "1.1";
 
     /**
      * Config value for parameter {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"} for at-least-once processing guarantees.
      */
+    @SuppressWarnings("WeakerAccess")
     public static final String AT_LEAST_ONCE = "at_least_once";
 
     /**
      * Config value for parameter {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"} for exactly-once processing guarantees.
      */
+    @SuppressWarnings("WeakerAccess")
     public static final String EXACTLY_ONCE = "exactly_once";
 
     /** {@code application.id} */
+    @SuppressWarnings("WeakerAccess")
     public static final String APPLICATION_ID_CONFIG = "application.id";
     private static final String APPLICATION_ID_DOC = "An identifier for the stream processing application. Must be unique within the Kafka cluster. It is used as 1) the default client-id prefix, 2) the group-id for membership management, 3) the changelog topic prefix.";
 
     /**{@code user.endpoint} */
+    @SuppressWarnings("WeakerAccess")
     public static final String APPLICATION_SERVER_CONFIG = "application.server";
     private static final String APPLICATION_SERVER_DOC = "A host:port pair pointing to an embedded user defined endpoint that can be used for discovering the locations of state stores within a single KafkaStreams application";
 
     /** {@code bootstrap.servers} */
+    @SuppressWarnings("WeakerAccess")
     public static final String BOOTSTRAP_SERVERS_CONFIG = CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
 
     /** {@code buffered.records.per.partition} */
+    @SuppressWarnings("WeakerAccess")
     public static final String BUFFERED_RECORDS_PER_PARTITION_CONFIG = "buffered.records.per.partition";
     private static final String BUFFERED_RECORDS_PER_PARTITION_DOC = "The maximum number of records to buffer per partition.";
 
     /** {@code cache.max.bytes.buffering} */
+    @SuppressWarnings("WeakerAccess")
     public static final String CACHE_MAX_BYTES_BUFFERING_CONFIG = "cache.max.bytes.buffering";
     private static final String CACHE_MAX_BYTES_BUFFERING_DOC = "Maximum number of memory bytes to be used for buffering across all threads";
 
     /** {@code client.id} */
+    @SuppressWarnings("WeakerAccess")
     public static final String CLIENT_ID_CONFIG = CommonClientConfigs.CLIENT_ID_CONFIG;
     private static final String CLIENT_ID_DOC = "An ID prefix string used for the client IDs of internal consumer, producer and restore-consumer," +
         " with pattern '<client.id>-StreamThread-<threadSequenceNumber>-<consumer|producer|restore-consumer>'.";
 
     /** {@code commit.interval.ms} */
+    @SuppressWarnings("WeakerAccess")
     public static final String COMMIT_INTERVAL_MS_CONFIG = "commit.interval.ms";
     private static final String COMMIT_INTERVAL_MS_DOC = "The frequency with which to save the position of the processor." +
         " (Note, if 'processing.guarantee' is set to '" + EXACTLY_ONCE + "', the default value is " + EOS_DEFAULT_COMMIT_INTERVAL_MS + "," +
         " otherwise the default value is " + DEFAULT_COMMIT_INTERVAL_MS + ".";
 
     /** {@code connections.max.idle.ms} */
+    @SuppressWarnings("WeakerAccess")
     public static final String CONNECTIONS_MAX_IDLE_MS_CONFIG = CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG;
 
     /**
      * {@code default.deserialization.exception.handler}
      */
+    @SuppressWarnings("WeakerAccess")
     public static final String DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG = "default.deserialization.exception.handler";
     private static final String DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC = "Exception handling class that implements the <code>org.apache.kafka.streams.errors.DeserializationExceptionHandler</code> interface.";
 
     /**
      * {@code default.production.exception.handler}
      */
+    @SuppressWarnings("WeakerAccess")
     public static final String DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG = "default.production.exception.handler";
     private static final String DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_DOC = "Exception handling class that implements the <code>org.apache.kafka.streams.errors.ProductionExceptionHandler</code> interface.";
 
     /**
      * {@code default.windowed.key.serde.inner}
      */
+    @SuppressWarnings("WeakerAccess")
     public static final String DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS = "default.windowed.key.serde.inner";
 
     /**
      * {@code default.windowed.value.serde.inner}
      */
+    @SuppressWarnings("WeakerAccess")
     public static final String DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS = "default.windowed.value.serde.inner";
 
     /** {@code default key.serde} */
+    @SuppressWarnings("WeakerAccess")
     public static final String DEFAULT_KEY_SERDE_CLASS_CONFIG = "default.key.serde";
     private static final String DEFAULT_KEY_SERDE_CLASS_DOC = " Default serializer / deserializer class for key that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface. "
             + "Note when windowed serde class is used, one needs to set the inner serde class that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface via '"
             + DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS + "' or '" + DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS + "' as well";
 
     /** {@code default value.serde} */
+    @SuppressWarnings("WeakerAccess")
     public static final String DEFAULT_VALUE_SERDE_CLASS_CONFIG = "default.value.serde";
     private static final String DEFAULT_VALUE_SERDE_CLASS_DOC = "Default serializer / deserializer class for value that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface. "
             + "Note when windowed serde class is used, one needs to set the inner serde class that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface via '"
             + DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS + "' or '" + DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS + "' as well";
 
     /** {@code default.timestamp.extractor} */
+    @SuppressWarnings("WeakerAccess")
     public static final String DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG = "default.timestamp.extractor";
     private static final String DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_DOC = "Default timestamp extractor class that implements the <code>org.apache.kafka.streams.processor.TimestampExtractor</code> interface.";
 
     /** {@code metadata.max.age.ms} */
+    @SuppressWarnings("WeakerAccess")
     public static final String METADATA_MAX_AGE_CONFIG = CommonClientConfigs.METADATA_MAX_AGE_CONFIG;
 
     /** {@code metrics.num.samples} */
+    @SuppressWarnings("WeakerAccess")
     public static final String METRICS_NUM_SAMPLES_CONFIG = CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG;
 
     /** {@code metrics.record.level} */
+    @SuppressWarnings("WeakerAccess")
     public static final String METRICS_RECORDING_LEVEL_CONFIG = CommonClientConfigs.METRICS_RECORDING_LEVEL_CONFIG;
 
     /** {@code metric.reporters} */
+    @SuppressWarnings("WeakerAccess")
     public static final String METRIC_REPORTER_CLASSES_CONFIG = CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG;
 
     /** {@code metrics.sample.window.ms} */
+    @SuppressWarnings("WeakerAccess")
     public static final String METRICS_SAMPLE_WINDOW_MS_CONFIG = CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG;
 
     /** {@code num.standby.replicas} */
+    @SuppressWarnings("WeakerAccess")
     public static final String NUM_STANDBY_REPLICAS_CONFIG = "num.standby.replicas";
     private static final String NUM_STANDBY_REPLICAS_DOC = "The number of standby replicas for each task.";
 
     /** {@code num.stream.threads} */
+    @SuppressWarnings("WeakerAccess")
     public static final String NUM_STREAM_THREADS_CONFIG = "num.stream.threads";
     private static final String NUM_STREAM_THREADS_DOC = "The number of threads to execute stream processing.";
 
     /** {@code partition.grouper} */
+    @SuppressWarnings("WeakerAccess")
     public static final String PARTITION_GROUPER_CLASS_CONFIG = "partition.grouper";
     private static final String PARTITION_GROUPER_CLASS_DOC = "Partition grouper class that implements the <code>org.apache.kafka.streams.processor.PartitionGrouper</code> interface.";
 
     /** {@code poll.ms} */
+    @SuppressWarnings("WeakerAccess")
     public static final String POLL_MS_CONFIG = "poll.ms";
     private static final String POLL_MS_DOC = "The amount of time in milliseconds to block waiting for input.";
 
     /** {@code processing.guarantee} */
+    @SuppressWarnings("WeakerAccess")
     public static final String PROCESSING_GUARANTEE_CONFIG = "processing.guarantee";
     private static final String PROCESSING_GUARANTEE_DOC = "The processing guarantee that should be used. Possible values are <code>" + AT_LEAST_ONCE + "</code> (default) and <code>" + EXACTLY_ONCE + "</code>. " +
         "Note that exactly-once processing requires a cluster of at least three brokers by default what is the recommended setting for production; for development you can change this, by adjusting broker setting `transaction.state.log.replication.factor`.";
 
     /** {@code receive.buffer.bytes} */
+    @SuppressWarnings("WeakerAccess")
     public static final String RECEIVE_BUFFER_CONFIG = CommonClientConfigs.RECEIVE_BUFFER_CONFIG;
 
     /** {@code reconnect.backoff.ms} */
+    @SuppressWarnings("WeakerAccess")
     public static final String RECONNECT_BACKOFF_MS_CONFIG = CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG;
 
     /** {@code reconnect.backoff.max} */
+    @SuppressWarnings("WeakerAccess")
     public static final String RECONNECT_BACKOFF_MAX_MS_CONFIG = CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_CONFIG;
 
     /** {@code replication.factor} */
+    @SuppressWarnings("WeakerAccess")
     public static final String REPLICATION_FACTOR_CONFIG = "replication.factor";
     private static final String REPLICATION_FACTOR_DOC = "The replication factor for change log topics and repartition topics created by the stream processing application.";
 
     /** {@code request.timeout.ms} */
+    @SuppressWarnings("WeakerAccess")
     public static final String REQUEST_TIMEOUT_MS_CONFIG = CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG;
 
     /** {@code retries} */
+    @SuppressWarnings("WeakerAccess")
     public static final String RETRIES_CONFIG = CommonClientConfigs.RETRIES_CONFIG;
 
     /** {@code retry.backoff.ms} */
+    @SuppressWarnings("WeakerAccess")
     public static final String RETRY_BACKOFF_MS_CONFIG = CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG;
 
     /** {@code rocksdb.config.setter} */
+    @SuppressWarnings("WeakerAccess")
     public static final String ROCKSDB_CONFIG_SETTER_CLASS_CONFIG = "rocksdb.config.setter";
     private static final String ROCKSDB_CONFIG_SETTER_CLASS_DOC = "A Rocks DB config setter class or class name that implements the <code>org.apache.kafka.streams.state.RocksDBConfigSetter</code> interface";
 
     /** {@code security.protocol} */
+    @SuppressWarnings("WeakerAccess")
     public static final String SECURITY_PROTOCOL_CONFIG = CommonClientConfigs.SECURITY_PROTOCOL_CONFIG;
 
     /** {@code send.buffer.bytes} */
+    @SuppressWarnings("WeakerAccess")
     public static final String SEND_BUFFER_CONFIG = CommonClientConfigs.SEND_BUFFER_CONFIG;
 
     /** {@code state.cleanup.delay} */
+    @SuppressWarnings("WeakerAccess")
     public static final String STATE_CLEANUP_DELAY_MS_CONFIG = "state.cleanup.delay.ms";
     private static final String STATE_CLEANUP_DELAY_MS_DOC = "The amount of time in milliseconds to wait before deleting state when a partition has migrated. Only state directories that have not been modified for at least state.cleanup.delay.ms will be removed";
 
     /** {@code state.dir} */
+    @SuppressWarnings("WeakerAccess")
     public static final String STATE_DIR_CONFIG = "state.dir";
     private static final String STATE_DIR_DOC = "Directory location for state store.";
 
     /** {@code upgrade.from} */
+    @SuppressWarnings("WeakerAccess")
     public static final String UPGRADE_FROM_CONFIG = "upgrade.from";
-    public static final String UPGRADE_FROM_DOC = "Allows upgrading from versions 0.10.0/0.10.1/0.10.2/0.11.0/1.0/1.1 to version 1.2 (or newer) in a backward compatible way. " +
+    private static final String UPGRADE_FROM_DOC = "Allows upgrading from versions 0.10.0/0.10.1/0.10.2/0.11.0/1.0/1.1 to version 1.2 (or newer) in a backward compatible way. " +
         "When upgrading from 1.2 to a newer version it is not required to specify this config." +
         "Default is null. Accepted values are \"" + UPGRADE_FROM_0100 + "\", \"" + UPGRADE_FROM_0101 + "\", \"" + UPGRADE_FROM_0102 + "\", \"" + UPGRADE_FROM_0110 + "\", \"" + UPGRADE_FROM_10 + "\", \"" + UPGRADE_FROM_11 + "\" (for upgrading from the corresponding old version).";
 
     /** {@code windowstore.changelog.additional.retention.ms} */
+    @SuppressWarnings("WeakerAccess")
     public static final String WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG = "windowstore.changelog.additional.retention.ms";
     private static final String WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_DOC = "Added to a windows maintainMs to ensure data is not deleted from the log prematurely. Allows for clock drift. Default is 1 day";
 
@@ -653,6 +707,7 @@ public class StreamsConfig extends AbstractConfig {
 
     public static class InternalConfig {
         public static final String TASK_MANAGER_FOR_PARTITION_ASSIGNOR = "__task.manager.instance__";
+        public static final String VERSION_PROBING_FLAG = "__version.probing.flag__";
     }
 
     /**
@@ -662,6 +717,7 @@ public class StreamsConfig extends AbstractConfig {
      * @param consumerProp the consumer property to be masked
      * @return {@link #CONSUMER_PREFIX} + {@code consumerProp}
      */
+    @SuppressWarnings("WeakerAccess")
     public static String consumerPrefix(final String consumerProp) {
         return CONSUMER_PREFIX + consumerProp;
     }
@@ -673,6 +729,7 @@ public class StreamsConfig extends AbstractConfig {
      * @param consumerProp the consumer property to be masked
      * @return {@link #MAIN_CONSUMER_PREFIX} + {@code consumerProp}
      */
+    @SuppressWarnings("WeakerAccess")
     public static String mainConsumerPrefix(final String consumerProp) {
         return MAIN_CONSUMER_PREFIX + consumerProp;
     }
@@ -684,6 +741,7 @@ public class StreamsConfig extends AbstractConfig {
      * @param consumerProp the consumer property to be masked
      * @return {@link #RESTORE_CONSUMER_PREFIX} + {@code consumerProp}
      */
+    @SuppressWarnings("WeakerAccess")
     public static String restoreConsumerPrefix(final String consumerProp) {
         return RESTORE_CONSUMER_PREFIX + consumerProp;
     }
@@ -695,6 +753,7 @@ public class StreamsConfig extends AbstractConfig {
      * @param consumerProp the consumer property to be masked
      * @return {@link #GLOBAL_CONSUMER_PREFIX} + {@code consumerProp}
      */
+    @SuppressWarnings("WeakerAccess")
     public static String globalConsumerPrefix(final String consumerProp) {
         return GLOBAL_CONSUMER_PREFIX + consumerProp;
     }
@@ -706,6 +765,7 @@ public class StreamsConfig extends AbstractConfig {
      * @param producerProp the producer property to be masked
      * @return PRODUCER_PREFIX + {@code producerProp}
      */
+    @SuppressWarnings("WeakerAccess")
     public static String producerPrefix(final String producerProp) {
         return PRODUCER_PREFIX + producerProp;
     }
@@ -717,6 +777,7 @@ public class StreamsConfig extends AbstractConfig {
      * @param adminClientProp the admin client property to be masked
      * @return ADMIN_CLIENT_PREFIX + {@code adminClientProp}
      */
+    @SuppressWarnings("WeakerAccess")
     public static String adminClientPrefix(final String adminClientProp) {
         return ADMIN_CLIENT_PREFIX + adminClientProp;
     }
@@ -728,6 +789,7 @@ public class StreamsConfig extends AbstractConfig {
      * @param topicProp the topic property to be masked
      * @return TOPIC_PREFIX + {@code topicProp}
      */
+    @SuppressWarnings("WeakerAccess")
     public static String topicPrefix(final String topicProp) {
         return TOPIC_PREFIX + topicProp;
     }
@@ -737,6 +799,7 @@ public class StreamsConfig extends AbstractConfig {
      *
      * @return a copy of the config definition
      */
+    @SuppressWarnings("unused")
     public static ConfigDef configDef() {
         return new ConfigDef(CONFIG);
     }
@@ -788,8 +851,8 @@ public class StreamsConfig extends AbstractConfig {
         // consumer/producer configurations, log a warning and remove the user defined value from the Map.
         // Thus the default values for these consumer/producer configurations that are suitable for
         // Streams will be used instead.
-        final Object maxInflightRequests = clientProvidedProps.get(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION);
-        if (eosEnabled && maxInflightRequests != null && 5 < (int) maxInflightRequests) {
+        final Object maxInFlightRequests = clientProvidedProps.get(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION);
+        if (eosEnabled && maxInFlightRequests != null && 5 < (int) maxInFlightRequests) {
             throw new ConfigException(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + " can't exceed 5 when using the idempotent producer");
         }
         for (final String config: nonConfigurableConfigs) {
@@ -831,8 +894,9 @@ public class StreamsConfig extends AbstractConfig {
      * @param groupId      consumer groupId
      * @param clientId     clientId
      * @return Map of the consumer configuration.
-     * @Deprecated use {@link StreamsConfig#getMainConsumerConfigs(String, String)}
+     * @deprecated use {@link StreamsConfig#getMainConsumerConfigs(String, String)}
      */
+    @SuppressWarnings("WeakerAccess")
     @Deprecated
     public Map<String, Object> getConsumerConfigs(final String groupId,
                                                   final String clientId) {
@@ -853,13 +917,14 @@ public class StreamsConfig extends AbstractConfig {
      * @param clientId     clientId
      * @return Map of the consumer configuration.
      */
+    @SuppressWarnings("WeakerAccess")
     public Map<String, Object> getMainConsumerConfigs(final String groupId,
                                                       final String clientId) {
-        Map<String, Object> consumerProps = getCommonConsumerConfigs();
+        final Map<String, Object> consumerProps = getCommonConsumerConfigs();
 
         // Get main consumer override configs
-        Map<String, Object> mainConsumerProps = originalsWithPrefix(MAIN_CONSUMER_PREFIX);
-        for (Map.Entry<String, Object> entry: mainConsumerProps.entrySet()) {
+        final Map<String, Object> mainConsumerProps = originalsWithPrefix(MAIN_CONSUMER_PREFIX);
+        for (final Map.Entry<String, Object> entry: mainConsumerProps.entrySet()) {
             consumerProps.put(entry.getKey(), entry.getValue());
         }
 
@@ -919,12 +984,13 @@ public class StreamsConfig extends AbstractConfig {
      * @param clientId clientId
      * @return Map of the restore consumer configuration.
      */
+    @SuppressWarnings("WeakerAccess")
     public Map<String, Object> getRestoreConsumerConfigs(final String clientId) {
-        Map<String, Object> baseConsumerProps = getCommonConsumerConfigs();
+        final Map<String, Object> baseConsumerProps = getCommonConsumerConfigs();
 
         // Get restore consumer override configs
-        Map<String, Object> restoreConsumerProps = originalsWithPrefix(RESTORE_CONSUMER_PREFIX);
-        for (Map.Entry<String, Object> entry: restoreConsumerProps.entrySet()) {
+        final Map<String, Object> restoreConsumerProps = originalsWithPrefix(RESTORE_CONSUMER_PREFIX);
+        for (final Map.Entry<String, Object> entry: restoreConsumerProps.entrySet()) {
             baseConsumerProps.put(entry.getKey(), entry.getValue());
         }
 
@@ -950,12 +1016,13 @@ public class StreamsConfig extends AbstractConfig {
      * @param clientId clientId
      * @return Map of the global consumer configuration.
      */
+    @SuppressWarnings("WeakerAccess")
     public Map<String, Object> getGlobalConsumerConfigs(final String clientId) {
-        Map<String, Object> baseConsumerProps = getCommonConsumerConfigs();
+        final Map<String, Object> baseConsumerProps = getCommonConsumerConfigs();
 
         // Get global consumer override configs
-        Map<String, Object> globalConsumerProps = originalsWithPrefix(GLOBAL_CONSUMER_PREFIX);
-        for (Map.Entry<String, Object> entry: globalConsumerProps.entrySet()) {
+        final Map<String, Object> globalConsumerProps = originalsWithPrefix(GLOBAL_CONSUMER_PREFIX);
+        for (final Map.Entry<String, Object> entry: globalConsumerProps.entrySet()) {
             baseConsumerProps.put(entry.getKey(), entry.getValue());
         }
 
@@ -977,6 +1044,7 @@ public class StreamsConfig extends AbstractConfig {
      * @param clientId clientId
      * @return Map of the producer configuration.
      */
+    @SuppressWarnings("WeakerAccess")
     public Map<String, Object> getProducerConfigs(final String clientId) {
         final Map<String, Object> clientProvidedProps = getClientPropsWithPrefix(PRODUCER_PREFIX, ProducerConfig.configNames());
 
@@ -999,6 +1067,7 @@ public class StreamsConfig extends AbstractConfig {
      * @param clientId clientId
      * @return Map of the admin client configuration.
      */
+    @SuppressWarnings("WeakerAccess")
     public Map<String, Object> getAdminConfigs(final String clientId) {
         final Map<String, Object> clientProvidedProps = getClientPropsWithPrefix(ADMIN_CLIENT_PREFIX, AdminClientConfig.configNames());
 
@@ -1045,10 +1114,11 @@ public class StreamsConfig extends AbstractConfig {
      *
      * @return an configured instance of key Serde class
      */
+    @SuppressWarnings("WeakerAccess")
     public Serde defaultKeySerde() {
-        Object keySerdeConfigSetting = get(DEFAULT_KEY_SERDE_CLASS_CONFIG);
+        final Object keySerdeConfigSetting = get(DEFAULT_KEY_SERDE_CLASS_CONFIG);
         try {
-            Serde<?> serde = getConfiguredInstance(DEFAULT_KEY_SERDE_CLASS_CONFIG, Serde.class);
+            final Serde<?> serde = getConfiguredInstance(DEFAULT_KEY_SERDE_CLASS_CONFIG, Serde.class);
             serde.configure(originals(), true);
             return serde;
         } catch (final Exception e) {
@@ -1063,10 +1133,11 @@ public class StreamsConfig extends AbstractConfig {
      *
      * @return an configured instance of value Serde class
      */
+    @SuppressWarnings("WeakerAccess")
     public Serde defaultValueSerde() {
-        Object valueSerdeConfigSetting = get(DEFAULT_VALUE_SERDE_CLASS_CONFIG);
+        final Object valueSerdeConfigSetting = get(DEFAULT_VALUE_SERDE_CLASS_CONFIG);
         try {
-            Serde<?> serde = getConfiguredInstance(DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serde.class);
+            final Serde<?> serde = getConfiguredInstance(DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serde.class);
             serde.configure(originals(), false);
             return serde;
         } catch (final Exception e) {
@@ -1075,14 +1146,17 @@ public class StreamsConfig extends AbstractConfig {
         }
     }
 
+    @SuppressWarnings("WeakerAccess")
     public TimestampExtractor defaultTimestampExtractor() {
         return getConfiguredInstance(DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, TimestampExtractor.class);
     }
 
+    @SuppressWarnings("WeakerAccess")
     public DeserializationExceptionHandler defaultDeserializationExceptionHandler() {
         return getConfiguredInstance(DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, DeserializationExceptionHandler.class);
     }
 
+    @SuppressWarnings("WeakerAccess")
     public ProductionExceptionHandler defaultProductionExceptionHandler() {
         return getConfiguredInstance(DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG, ProductionExceptionHandler.class);
     }

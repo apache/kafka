@@ -78,6 +78,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -298,7 +299,8 @@ public class StreamThreadTest {
             streamsMetrics,
             internalTopologyBuilder,
             clientId,
-            new LogContext("")
+            new LogContext(""),
+            new AtomicBoolean()
         );
         thread.maybeCommit(mockTime.milliseconds());
         mockTime.sleep(commitInterval - 10L);
@@ -331,7 +333,9 @@ public class StreamThreadTest {
             streamsMetrics,
             internalTopologyBuilder,
             clientId,
-            new LogContext(""));
+            new LogContext(""),
+            new AtomicBoolean()
+        );
         thread.maybeCommit(mockTime.milliseconds());
         mockTime.sleep(commitInterval - 10L);
         thread.maybeCommit(mockTime.milliseconds());
@@ -364,7 +368,9 @@ public class StreamThreadTest {
             streamsMetrics,
             internalTopologyBuilder,
             clientId,
-            new LogContext(""));
+            new LogContext(""),
+            new AtomicBoolean()
+        );
         thread.maybeCommit(mockTime.milliseconds());
         mockTime.sleep(commitInterval + 1);
         thread.maybeCommit(mockTime.milliseconds());
@@ -511,7 +517,8 @@ public class StreamThreadTest {
             streamsMetrics,
             internalTopologyBuilder,
             clientId,
-            new LogContext("")
+            new LogContext(""),
+            new AtomicBoolean()
         );
         thread.setStateListener(
             new StreamThread.StateListener() {
@@ -547,7 +554,8 @@ public class StreamThreadTest {
             streamsMetrics,
             internalTopologyBuilder,
             clientId,
-            new LogContext("")
+            new LogContext(""),
+            new AtomicBoolean()
         );
         thread.shutdown();
         EasyMock.verify(taskManager);
@@ -574,7 +582,9 @@ public class StreamThreadTest {
             streamsMetrics,
             internalTopologyBuilder,
             clientId,
-            new LogContext(""));
+            new LogContext(""),
+            new AtomicBoolean()
+        );
         thread.shutdown();
         // Execute the run method. Verification of the mock will check that shutdown was only done once
         thread.run();
@@ -1255,7 +1265,7 @@ public class StreamThreadTest {
     @Test
     // TODO: Need to add a test case covering EOS when we create a mock taskManager class
     public void producerMetricsVerificationWithoutEOS() {
-        final MockProducer<byte[], byte[]> producer = new MockProducer();
+        final MockProducer<byte[], byte[]> producer = new MockProducer<>();
         final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
         final TaskManager taskManager = mockTaskManagerCommit(consumer, 1, 0);
 
@@ -1271,7 +1281,8 @@ public class StreamThreadTest {
                 streamsMetrics,
                 internalTopologyBuilder,
                 clientId,
-                new LogContext(""));
+                new LogContext(""),
+                new AtomicBoolean());
         final MetricName testMetricName = new MetricName("test_metric", "", "", new HashMap<String, String>());
         final Metric testMetric = new KafkaMetric(
                 new Object(),
