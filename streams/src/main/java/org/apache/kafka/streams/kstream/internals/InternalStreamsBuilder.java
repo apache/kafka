@@ -50,7 +50,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
     protected final StreamsGraphNode root = new StreamsGraphNode(TOPOLOGY_ROOT, false) {
         @Override
-        void writeToTopology(InternalTopologyBuilder topologyBuilder) {
+        void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
             // no-op for root node
         }
     };
@@ -68,7 +68,6 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                                                          consumed);
 
         root.addChildNode(streamSourceNode);
-        addNode(streamSourceNode);
 
         internalTopologyBuilder.addSource(consumed.offsetResetPolicy(),
                                           name,
@@ -88,7 +87,6 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                                                                 topicPattern,
                                                                                 consumed);
         root.addChildNode(streamPatternSourceNode);
-        addNode(streamPatternSourceNode);
 
         internalTopologyBuilder.addSource(consumed.offsetResetPolicy(),
                                           name,
@@ -128,7 +126,6 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                                                                .build();
 
         root.addChildNode(statefulSourceNode);
-        addNode(statefulSourceNode);
 
         
         internalTopologyBuilder.addStateStore(storeBuilder, name);
@@ -177,7 +174,6 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                                                                                     .build();
 
         root.addChildNode(statefulSourceNode);
-        addNode(statefulSourceNode);
 
         internalTopologyBuilder.addGlobalStore(storeBuilder,
                                                sourceName,
@@ -239,10 +235,6 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                        stateUpdateSupplier);
     }
 
-
-    void addNode(final StreamsGraphNode node) {
-
-    }
 
     public StreamsGraphNode root() {
         return root;

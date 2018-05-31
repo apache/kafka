@@ -35,7 +35,7 @@ public abstract class AbstractStream<K> {
     protected final InternalStreamsBuilder builder;
     protected final String name;
     protected final Set<String> sourceNodes;
-    protected StreamsGraphNode parentGraphNode;
+    protected final StreamsGraphNode parentGraphNode;
 
     // This copy-constructor will allow to extend KStream
     // and KTable APIs with new methods without impacting the public interface.
@@ -47,7 +47,7 @@ public abstract class AbstractStream<K> {
     }
 
     AbstractStream(final InternalStreamsBuilder builder,
-                   String name,
+                   final String name,
                    final Set<String> sourceNodes,
                    final StreamsGraphNode parentGraphNode) {
         if (sourceNodes == null || sourceNodes.isEmpty()) {
@@ -64,7 +64,6 @@ public abstract class AbstractStream<K> {
         //TODO remove this once actually building the topology with Graph
         if (parentGraphNode != null) {
             parentGraphNode.addChildNode(newNode);
-            builder.addNode(newNode);
         }
     }
 

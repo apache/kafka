@@ -20,8 +20,6 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
-import java.util.Arrays;
-
 /**
  * Too much specific information to generalize so the
  * KTable-KTable join requires a specific node.
@@ -54,18 +52,6 @@ class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K, V1, V
         this.joinThisStoreNames = joinThisStoreNames;
         this.joinOtherStoreNames = joinOtherStoreNames;
         this.materializedInternal = materializedInternal;
-    }
-
-    String[] joinThisStoreNames() {
-        return Arrays.copyOf(joinThisStoreNames, joinThisStoreNames.length);
-    }
-
-    String[] joinOtherStoreNames() {
-        return Arrays.copyOf(joinOtherStoreNames, joinOtherStoreNames.length);
-    }
-
-    MaterializedInternal materializedInternal() {
-        return materializedInternal;
     }
 
     @Override

@@ -29,38 +29,38 @@ abstract class BaseJoinProcessorNode<K, V1, V2, VR> extends StreamsGraphNode {
     private final ProcessorParameters<K, V2> joinOtherProcessorParameters;
     private final ProcessorParameters<K, VR> joinMergeProcessorParameters;
     private final ValueJoiner<? super V1, ? super V2, ? extends VR> valueJoiner;
-    private final String thisJoinSide;
-    private final String otherJoinSide;
+    private final String thisJoinSideNodeName;
+    private final String otherJoinSideNodeName;
 
 
     BaseJoinProcessorNode(final String nodeName,
                           final ValueJoiner<? super V1, ? super V2, ? extends VR> valueJoiner,
-                          final ProcessorParameters<K, V1> joinThisProcessorDetails,
-                          final ProcessorParameters<K, V2> joinOtherProcessDetails,
-                          final ProcessorParameters<K, VR> joinMergeProcessorDetails,
-                          final String thisJoinSide,
-                          final String otherJoinSide) {
+                          final ProcessorParameters<K, V1> joinThisProcessorParameters,
+                          final ProcessorParameters<K, V2> joinOtherProcessorParameters,
+                          final ProcessorParameters<K, VR> joinMergeProcessorParameters,
+                          final String thisJoinSideNodeName,
+                          final String otherJoinSideNodeName) {
 
         super(nodeName,
               false);
 
         this.valueJoiner = valueJoiner;
-        this.joinThisProcessorParameters = joinThisProcessorDetails;
-        this.joinOtherProcessorParameters = joinOtherProcessDetails;
-        this.joinMergeProcessorParameters = joinMergeProcessorDetails;
-        this.thisJoinSide = thisJoinSide;
-        this.otherJoinSide = otherJoinSide;
+        this.joinThisProcessorParameters = joinThisProcessorParameters;
+        this.joinOtherProcessorParameters = joinOtherProcessorParameters;
+        this.joinMergeProcessorParameters = joinMergeProcessorParameters;
+        this.thisJoinSideNodeName = thisJoinSideNodeName;
+        this.otherJoinSideNodeName = otherJoinSideNodeName;
     }
 
-    ProcessorParameters<K, V1> joinThisProcessorParameters() {
+    ProcessorParameters<K, V1> thisProcessorParameters() {
         return joinThisProcessorParameters;
     }
 
-    ProcessorParameters<K, V2> joinOtherProcessorParameters() {
+    ProcessorParameters<K, V2> otherProcessorParameters() {
         return joinOtherProcessorParameters;
     }
 
-    ProcessorParameters<K, VR> joinMergeProcessorParameters() {
+    ProcessorParameters<K, VR> mergeProcessorParameters() {
         return joinMergeProcessorParameters;
     }
 
@@ -68,11 +68,11 @@ abstract class BaseJoinProcessorNode<K, V1, V2, VR> extends StreamsGraphNode {
         return valueJoiner;
     }
 
-    String thisJoinSide() {
-        return thisJoinSide;
+    String thisJoinSideNodeName() {
+        return thisJoinSideNodeName;
     }
 
-    String otherJoinSide() {
-        return otherJoinSide;
+    String otherJoinSideNodeName() {
+        return otherJoinSideNodeName;
     }
 }

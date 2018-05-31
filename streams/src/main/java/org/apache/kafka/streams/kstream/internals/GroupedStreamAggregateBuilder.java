@@ -88,7 +88,6 @@ class GroupedStreamAggregateBuilder<K, V> {
         if (!sourceName.equals(this.name)) {
             RepartitionNode<K, T> repartitionNode = repartitionNodeBuilder.build();
             streamsGraphNode.addChildNode(repartitionNode);
-            builder.addNode(repartitionNode);
         }
 
         StatefulProcessorNode.StatefulProcessorNodeBuilder<K, T> statefulProcessorNodeBuilder = StatefulProcessorNode.statefulProcessorNodeBuilder();
@@ -104,8 +103,6 @@ class GroupedStreamAggregateBuilder<K, V> {
         StatefulProcessorNode<K, T> statefulProcessorNode = statefulProcessorNodeBuilder.build();
 
         streamsGraphNode.addChildNode(statefulProcessorNode);
-        statefulProcessorNode.setParentNode(streamsGraphNode);
-        builder.addNode(statefulProcessorNode);
 
 
         return new KTableImpl<>(builder,

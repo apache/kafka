@@ -26,7 +26,7 @@ abstract class StreamsGraphNode {
 
     private StreamsGraphNode parentNode;
     private final Collection<StreamsGraphNode> childNodes = new LinkedHashSet<>();
-    private String nodeName;
+    private final String nodeName;
     private boolean repartitionRequired;
     private boolean triggersRepartitioning;
     private Integer id;
@@ -57,10 +57,6 @@ abstract class StreamsGraphNode {
 
     String nodeName() {
         return nodeName;
-    }
-
-    void setNodeName(String nodeName) {
-        this.nodeName = nodeName;
     }
 
     boolean repartitionRequired() {

@@ -50,13 +50,6 @@ class StatefulProcessorNode<K, V> extends StatelessProcessorNode<K, V> {
         return Arrays.copyOf(storeNames, storeNames.length);
     }
 
-    StoreBuilder<KeyValueStore<K, V>> storeBuilder() {
-        return storeBuilder;
-    }
-
-    String maybeRepartitionedSourceName() {
-        return this.maybeRepartitionedSourceName;
-    }
 
     @Override
     void writeToTopology(final InternalTopologyBuilder topologyBuilder) {

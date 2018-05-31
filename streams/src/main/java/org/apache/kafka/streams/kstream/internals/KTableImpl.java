@@ -148,7 +148,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                                 this.keySerde,
                                 this.valSerde,
                                 sourceNodes,
-                shouldMaterialize ? materializedInternal.storeName() : this.queryableStoreName,
+                                shouldMaterialize ? materializedInternal.storeName() : this.queryableStoreName,
                                 shouldMaterialize,
                                 graphNode);
     }

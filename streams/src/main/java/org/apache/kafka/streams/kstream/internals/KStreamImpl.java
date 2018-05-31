@@ -162,26 +162,14 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     private <K1> StatelessProcessorNode<K, V> internalSelectKey(final KeyValueMapper<? super K, ? super V, ? extends K1> mapper) {
         String name = builder.newProcessorName(KEY_SELECT_NAME);
 
-        ProcessorParameters processorParameters = new ProcessorParameters<>(new KStreamMap<>(
-            new KeyValueMapper<K, V, KeyValue<K1, V>>() {
-                @Override
-                public KeyValue<K1, V> apply(K key, V value) {
-                    return new KeyValue<>(mapper.apply(key, value), value);
-                }
-            }), name);
 
-        builder.internalTopologyBuilder.addProcessor(
-            name,
-            new KStreamMap<>(
-                new KeyValueMapper<K, V, KeyValue<K1, V>>() {
-                    @Override
-                    public KeyValue<K1, V> apply(K key, V value) {
-                        return new KeyValue<>(mapper.apply(key, value), value);
-                    }
-                }
-            ),
-            this.name
-        );
+        KStreamMap kStreamMap = new KStreamMap<>(
+            (KeyValueMapper<K, V, KeyValue<K1, V>>) (key, value) -> new KeyValue<>(mapper.apply(key, value), value));
+
+
+        ProcessorParameters<K1, V> processorParameters = new ProcessorParameters<>(kStreamMap, name);
+
+        builder.internalTopologyBuilder.addProcessor(name, kStreamMap, this.name);
 
         return  new StatelessProcessorNode<>(name,
                                              processorParameters,
@@ -815,7 +803,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         final SerializedInternal<KR, V> serializedInternal = new SerializedInternal<>(serialized);
         final StatelessProcessorNode<K, V> graphNode = internalSelectKey(selector);
         graphNode.setTriggersRepartitioning(true);
-        graphNode.setRepartitionRequired(true);
 
         addGraphNode(graphNode);
         return new KGroupedStreamImpl<>(builder,
