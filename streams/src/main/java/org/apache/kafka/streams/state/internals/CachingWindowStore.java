@@ -19,6 +19,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -96,7 +97,13 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
                     final Windowed<K> windowedKey = WindowKeySchema.fromStoreKey(binaryWindowKey, windowSize, serdes);
                     final Bytes key = Bytes.wrap(WindowKeySchema.extractStoreKeyBytes(binaryWindowKey));
                     maybeForward(entry, key, windowedKey, (InternalProcessorContext) context);
-                    underlying.put(key, entry.newValue(), timestamp);
+                    try {
+                        underlying.put(key, entry.newValue(), timestamp);
+                    } catch (final ProcessorStateException e) {
+                        final String message = String.format(e.getMessage(), serdes.keyFrom(entry.key().get()),
+                                serdes.valueFrom(entry.newValue()));
+                        throw new ProcessorStateException(message, e);
+                    }
                 }
             }
         });

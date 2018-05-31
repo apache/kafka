@@ -19,6 +19,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
@@ -104,6 +105,10 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
             } else {
                 underlying.put(entry.key(), entry.newValue());
             }
+        } catch (final ProcessorStateException e) {
+            final String message = String.format(e.getMessage(), serdes.keyFrom(entry.key().get()),
+                    serdes.valueFrom(entry.newValue()));
+            throw new ProcessorStateException(message, e);
         } finally {
             context.setRecordContext(current);
         }
