@@ -25,6 +25,7 @@ import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -85,9 +86,8 @@ public class MockRestoreConsumer extends MockConsumer<byte[], byte[]> {
         super.assign(partitions);
     }
 
-    @Deprecated
     @Override
-    public ConsumerRecords<byte[], byte[]> poll(long timeout) {
+    public ConsumerRecords<byte[], byte[]> poll(final Duration timeout) {
         // add buffered records to MockConsumer
         for (ConsumerRecord<byte[], byte[]> record : recordBuffer) {
             super.addRecord(record);

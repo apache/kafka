@@ -36,6 +36,7 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.slf4j.Logger;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -200,7 +201,7 @@ public class GlobalStreamThread extends Thread {
         private final Consumer<byte[], byte[]> globalConsumer;
         private final GlobalStateMaintainer stateMaintainer;
         private final Time time;
-        private final long pollMs;
+        private final Duration pollTime;
         private final long flushInterval;
         private final Logger log;
 
@@ -210,13 +211,13 @@ public class GlobalStreamThread extends Thread {
                       final Consumer<byte[], byte[]> globalConsumer,
                       final GlobalStateMaintainer stateMaintainer,
                       final Time time,
-                      final long pollMs,
+                      final Duration pollTime,
                       final long flushInterval) {
             this.log = logContext.logger(getClass());
             this.globalConsumer = globalConsumer;
             this.stateMaintainer = stateMaintainer;
             this.time = time;
-            this.pollMs = pollMs;
+            this.pollTime = pollTime;
             this.flushInterval = flushInterval;
         }
 
@@ -235,7 +236,7 @@ public class GlobalStreamThread extends Thread {
 
         void pollAndUpdate() {
             try {
-                final ConsumerRecords<byte[], byte[]> received = globalConsumer.poll(pollMs);
+                final ConsumerRecords<byte[], byte[]> received = globalConsumer.poll(pollTime);
                 for (final ConsumerRecord<byte[], byte[]> record : received) {
                     stateMaintainer.update(record);
                 }
@@ -338,8 +339,9 @@ public class GlobalStreamThread extends Thread {
                     logContext
                 ),
                 time,
-                config.getLong(StreamsConfig.POLL_MS_CONFIG),
-                config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG));
+                Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG)),
+                config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG)
+            );
             stateConsumer.initialize();
 
             return stateConsumer;

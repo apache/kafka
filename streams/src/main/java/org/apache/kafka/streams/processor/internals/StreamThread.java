@@ -50,6 +50,7 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.slf4j.Logger;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -212,7 +213,7 @@ public class StreamThread extends Thread {
             if (newState == State.RUNNING) {
                 updateThreadMetadata(taskManager.activeTasks(), taskManager.standbyTasks());
             } else {
-                updateThreadMetadata(Collections.<TaskId, StreamTask>emptyMap(), Collections.<TaskId, StandbyTask>emptyMap());
+                updateThreadMetadata(Collections.emptyMap(), Collections.emptyMap());
             }
         }
 
@@ -555,7 +556,7 @@ public class StreamThread extends Thread {
     }
 
     private final Time time;
-    private final long pollTimeMs;
+    private final Duration pollTime;
     private final long commitTimeMs;
     private final Object stateLock;
     private final Logger log;
@@ -602,7 +603,8 @@ public class StreamThread extends Thread {
         log.info("Creating restore consumer client");
         final Map<String, Object> restoreConsumerConfigs = config.getRestoreConsumerConfigs(threadClientId);
         final Consumer<byte[], byte[]> restoreConsumer = clientSupplier.getRestoreConsumer(restoreConsumerConfigs);
-        final StoreChangelogReader changelogReader = new StoreChangelogReader(restoreConsumer, userStateRestoreListener, logContext);
+        final Duration pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
+        final StoreChangelogReader changelogReader = new StoreChangelogReader(restoreConsumer, pollTime, userStateRestoreListener, logContext);
 
         Producer<byte[], byte[]> threadProducer = null;
         final boolean eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
@@ -710,10 +712,10 @@ public class StreamThread extends Thread {
         this.originalReset = originalReset;
         this.versionProbingFlag = versionProbingFlag;
 
-        this.pollTimeMs = config.getLong(StreamsConfig.POLL_MS_CONFIG);
+        this.pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
         this.commitTimeMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
 
-        updateThreadMetadata(Collections.<TaskId, StreamTask>emptyMap(), Collections.<TaskId, StandbyTask>emptyMap());
+        updateThreadMetadata(Collections.emptyMap(), Collections.emptyMap());
     }
 
     /**
@@ -801,14 +803,14 @@ public class StreamThread extends Thread {
         if (state == State.PARTITIONS_ASSIGNED) {
             // try to fetch some records with zero poll millis
             // to unblock the restoration as soon as possible
-            records = pollRequests(0L);
+            records = pollRequests(Duration.ZERO);
 
             if (taskManager.updateNewAndRestoringTasks()) {
                 setState(State.RUNNING);
             }
         } else {
             // try to fetch some records if necessary
-            records = pollRequests(pollTimeMs);
+            records = pollRequests(pollTime);
 
             // if state changed after the poll call,
             // try to initialize the assigned tasks again
@@ -843,15 +845,15 @@ public class StreamThread extends Thread {
     /**
      * Get the next batch of records by polling.
      *
-     * @param pollTimeMs poll time millis parameter for the consumer poll
+     * @param pollTime how long to block in Consumer#poll
      * @return Next batch of records or null if no records available.
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
-    private ConsumerRecords<byte[], byte[]> pollRequests(final long pollTimeMs) {
+    private ConsumerRecords<byte[], byte[]> pollRequests(final Duration pollTime) {
         ConsumerRecords<byte[], byte[]> records = null;
 
         try {
-            records = consumer.poll(pollTimeMs);
+            records = consumer.poll(pollTime);
         } catch (final InvalidOffsetException e) {
             resetInvalidOffsets(e);
         }
@@ -1078,7 +1080,11 @@ public class StreamThread extends Thread {
             }
 
             try {
-                final ConsumerRecords<byte[], byte[]> records = restoreConsumer.poll(0);
+                // poll(0): Since this is during the normal processing, not during restoration.
+                // We can afford to have slower restore (because we don't wait inside poll for results).
+                // Instead, we want to proceed to the next iteration to call the main consumer#poll()
+                // as soon as possible so as to not be kicked out of the group.
+                final ConsumerRecords<byte[], byte[]> records = restoreConsumer.poll(Duration.ZERO);
 
                 if (!records.isEmpty()) {
                     for (final TopicPartition partition : records.partitions()) {

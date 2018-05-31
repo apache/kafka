@@ -66,6 +66,7 @@ import org.apache.kafka.streams.test.OutputVerifier;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -327,6 +328,7 @@ public class TopologyTestDriver implements Closeable {
                 consumer,
                 new StoreChangelogReader(
                     createRestoreConsumer(processorTopology.storeToChangelogTopic()),
+                    Duration.ZERO,
                     stateRestoreListener,
                     new LogContext("topology-test-driver ")),
                 streamsConfig,
