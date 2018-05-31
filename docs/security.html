@@ -715,6 +715,9 @@
                 <pre>
     security.protocol=SASL_SSL (or SASL_PLAINTEXT if non-production)
     sasl.mechanism=OAUTHBEARER</pre></li>
+             <li>The default implementation of SASL/OAUTHBEARER depends on com.fasterxml.jackson.core:jackson-databind library.
+                This is added as provided scope dependency in Kafka clients maven artifact. Users must provide jackson-databind library
+                 to Kafka client runtime.</li>
             </ol>
         </li>
         <li><h5><a id="security_sasl_oauthbearer_unsecured_retrieval" href="#security_sasl_oauthbearer_unsecured_retrieval">Unsecured Token Creation Options for SASL/OAUTHBEARER</a></h5>
