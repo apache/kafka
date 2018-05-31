@@ -225,4 +225,24 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     assertTrue(output.contains(topic) && output.contains(markedForDeletionList))
   }
 
+  @Test
+  def testInvalidTopicLevelConfig(): Unit = {
+    val brokers = List(0)
+    TestUtils.createBrokersInZk(zkClient, brokers)
+
+    val topic = "test"
+    val numPartitions = 1
+
+    // create the topic
+    try {
+      val createOpts = new TopicCommandOptions(
+        Array("--partitions", numPartitions.toString, "--replication-factor", "1", "--topic", topic,
+          "--config", "message.timestamp.type=boom"))
+      TopicCommand.createTopic(zkClient, createOpts)
+      fail("Expected exception on invalid topic-level config.")
+    } catch {
+      case e: Exception => // topic create should fail due to the invalid config
+    }
+  }
+
 }
