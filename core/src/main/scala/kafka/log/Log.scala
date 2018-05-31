@@ -718,7 +718,7 @@ class Log(@volatile var dir: File,
               records.records.asScala.map(_.offset))
           if (appendInfo.firstOrLastOffset < nextOffsetMetadata.messageOffset) {
             val firstOrLast = if (appendInfo.firstOffset.isDefined) "First" else "Last"
-            throw new IllegalArgumentException(s"Out of order offsets found in append to $topicPartition. $firstOrLast " +
+            throw new IllegalArgumentException(s"Unexpected offset in append to $topicPartition. $firstOrLast " +
               s"offset ${appendInfo.firstOrLastOffset} is less than the next offset ${nextOffsetMetadata.messageOffset}. " +
               s"Offsets in append: ${records.records.asScala.map(_.offset)}")
           }
