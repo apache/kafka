@@ -78,17 +78,11 @@ class GroupedStreamAggregateBuilder<K, V> {
                            final boolean isQueryable) {
         final String aggFunctionName = builder.newProcessorName(functionName);
 
-        final RepartitionNode.RepartitionNodeBuilder<K, T> repartitionNodeBuilder = RepartitionNode.repartitionNodeBuilder();
-        final String sourceName = repartitionIfRequired(storeBuilder.name(), repartitionNodeBuilder);
+
+        final String sourceName = repartitionIfRequired(storeBuilder.name());
         builder.internalTopologyBuilder.addProcessor(aggFunctionName, aggregateSupplier, sourceName);
         builder.internalTopologyBuilder.addStateStore(storeBuilder, aggFunctionName);
 
-        // if the returned source name is different a repartition occurred and the operation
-        // captured needs to be set in the graph
-        if (!sourceName.equals(this.name)) {
-            RepartitionNode<K, T> repartitionNode = repartitionNodeBuilder.build();
-            streamsGraphNode.addChildNode(repartitionNode);
-        }
 
         StatefulProcessorNode.StatefulProcessorNodeBuilder<K, T> statefulProcessorNodeBuilder = StatefulProcessorNode.statefulProcessorNodeBuilder();
 
@@ -117,11 +111,19 @@ class GroupedStreamAggregateBuilder<K, V> {
     /**
      * @return the new sourceName if repartitioned. Otherwise the name of this stream
      */
-    private String repartitionIfRequired(final String queryableStoreName,
-                                         final RepartitionNode.RepartitionNodeBuilder repartitionNodeBuilder) {
+    private  String repartitionIfRequired(final String queryableStoreName) {
         if (!repartitionRequired) {
             return this.name;
         }
-        return KStreamImpl.createRepartitionedSource(builder, keySerde, valueSerde, queryableStoreName, name, repartitionNodeBuilder);
+
+        // if repartition required the operation
+        // captured needs to be set in the graph
+        final RepartitionNode.RepartitionNodeBuilder<K, V> repartitionNodeBuilder = RepartitionNode.repartitionNodeBuilder();
+        final String repartitionSourceName = KStreamImpl.createRepartitionedSource(builder, keySerde, valueSerde, queryableStoreName, name, repartitionNodeBuilder);
+
+        final RepartitionNode<K, V> repartitionNode = repartitionNodeBuilder.build();
+        streamsGraphNode.addChildNode(repartitionNode);
+
+        return repartitionSourceName;
     }
 }

@@ -626,12 +626,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         String nullKeyFilterProcessorName = builder.newProcessorName(FILTER_NAME);
         String sourceName = builder.newProcessorName(SOURCE_NAME);
 
-        ProcessorParameters processorParameters = new ProcessorParameters<>(new KStreamFilter<>(new Predicate<K1, V1>() {
-            @Override
-            public boolean test(final K1 key, final V1 value) {
-                return key != null;
-            }
-        }, false), nullKeyFilterProcessorName);
+        Predicate<K1, V1> nullKeyPredicate = (k, v) -> k != null;
+
+        ProcessorParameters processorParameters = new ProcessorParameters<>(new KStreamFilter<>(nullKeyPredicate, false), nullKeyFilterProcessorName);
 
         repartitionNodeBuilder.withKeySerde(keySerde)
             .withValueSerde(valSerde)
@@ -644,12 +641,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
             .withNodeName(sourceName);
 
         builder.internalTopologyBuilder.addInternalTopic(repartitionTopic);
-        builder.internalTopologyBuilder.addProcessor(nullKeyFilterProcessorName, new KStreamFilter<>(new Predicate<K1, V1>() {
-            @Override
-            public boolean test(final K1 key, final V1 value) {
-                return key != null;
-            }
-        }, false), name);
+        builder.internalTopologyBuilder.addProcessor(nullKeyFilterProcessorName, new KStreamFilter<>(nullKeyPredicate, false), name);
 
         builder.internalTopologyBuilder.addSink(sinkName, repartitionTopic, keySerializer, valSerializer,
                                                 null, nullKeyFilterProcessorName);
