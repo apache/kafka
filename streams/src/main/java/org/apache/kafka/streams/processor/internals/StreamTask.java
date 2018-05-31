@@ -65,12 +65,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     private final PunctuationQueue systemTimePunctuationQueue;
 
     private final Map<TopicPartition, Long> consumedOffsets;
+    private final Map<TopicPartition, Long> lastCommitConsumedOffsets;
     private final RecordCollector recordCollector;
     private final Producer<byte[], byte[]> producer;
     private final int maxBufferedSize;
 
     private boolean commitRequested = false;
-    private boolean commitOffsetNeeded = false;
     private boolean transactionInFlight = false;
     private final Time time;
     private final TaskMetrics taskMetrics;
@@ -183,6 +183,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
         // initialize the consumed and committed offset cache
         consumedOffsets = new HashMap<>();
+        lastCommitConsumedOffsets = new HashMap<>();
 
         // create queues for each assigned partition and associate them
         // to corresponding source nodes in the processor topology
@@ -291,7 +292,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
             // update the consumed offset map after processing is done
             consumedOffsets.put(partition, record.offset());
-            commitOffsetNeeded = true;
 
             // after processing this record, if its partition queue's buffered size has been
             // decreased to the threshold, we can then resume the consumption on this partition
@@ -412,31 +412,34 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      */
     private void commitOffsets(final boolean startNewTransaction) {
         try {
-            if (commitOffsetNeeded) {
-                log.trace("Committing offsets");
-                final Map<TopicPartition, OffsetAndMetadata> consumedOffsetsAndMetadata = new HashMap<>(consumedOffsets.size());
-                for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
-                    final TopicPartition partition = entry.getKey();
-                    final long offset = entry.getValue() + 1;
+            log.trace("Committing offsets");
+            final Map<TopicPartition, OffsetAndMetadata> consumedOffsetsAndMetadata = new HashMap<>(consumedOffsets.size());
+            final Map<TopicPartition, OffsetAndMetadata> changesFromLastCommitConsumeOffsetsAndMetadata = new HashMap<>();
+            for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
+                final TopicPartition partition = entry.getKey();
+                final boolean noChangeFromLastCommitOffsets = lastCommitConsumedOffsets.containsKey(partition);
+                final long offset = entry.getValue() + 1;
+                if (noChangeFromLastCommitOffsets) {
                     consumedOffsetsAndMetadata.put(partition, new OffsetAndMetadata(offset));
-                    stateMgr.putOffsetLimit(partition, offset);
-                }
-
-                if (eosEnabled) {
-                    producer.sendOffsetsToTransaction(consumedOffsetsAndMetadata, applicationId);
-                    producer.commitTransaction();
-                    transactionInFlight = false;
-                    if (startNewTransaction) {
-                        producer.beginTransaction();
-                        transactionInFlight = true;
-                    }
                 } else {
-                    consumer.commitSync(consumedOffsetsAndMetadata);
+                    changesFromLastCommitConsumeOffsetsAndMetadata.put(partition, new OffsetAndMetadata(offset));
+                    lastCommitConsumedOffsets.put(partition, offset);
                 }
-                commitOffsetNeeded = false;
-            } else if (eosEnabled && !startNewTransaction && transactionInFlight) { // need to make sure to commit txn for suspend case
+                stateMgr.putOffsetLimit(partition, offset);
+            }
+            if (eosEnabled) {
+                if (!startNewTransaction) {
+                    producer.beginTransaction();
+                }
+                producer.sendOffsetsToTransaction(changesFromLastCommitConsumeOffsetsAndMetadata, applicationId);
                 producer.commitTransaction();
                 transactionInFlight = false;
+                if (startNewTransaction) {
+                    producer.beginTransaction();
+                    transactionInFlight = true;
+                }
+            } else {
+                consumer.commitSync(consumedOffsetsAndMetadata);
             }
         } catch (final CommitFailedException | ProducerFencedException fatal) {
             throw new TaskMigratedException(this, fatal);
