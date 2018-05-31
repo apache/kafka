@@ -752,12 +752,8 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                 + " subscription but got an assignment with higher version " + receivedAssignmentMetadataVersion + ".");
         }
 
-        if (receivedAssignmentMetadataVersion < usedSubscriptionMetadataVersion) {
-            if (receivedAssignmentMetadataVersion < EARLIEST_PROBEABLE_VERSION) {
-                throw new IllegalStateException("Sent a version " + usedSubscriptionMetadataVersion
-                    + " subscription but gat a downgraded version " + usedSubscriptionMetadataVersion
-                    + " that does not support version probing yet (require version " + EARLIEST_PROBEABLE_VERSION);
-            }
+        if (receivedAssignmentMetadataVersion < usedSubscriptionMetadataVersion
+            && receivedAssignmentMetadataVersion >= EARLIEST_PROBEABLE_VERSION) {
 
             if (receivedAssignmentMetadataVersion == leaderSupportedVersion) {
                 log.info("Sent a version {} subscription and got version {} assignment back (successful version probing). " +
