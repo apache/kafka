@@ -142,10 +142,11 @@ public class IntegrationTestUtils {
     }
     
     public static <K, V> void produceAbortedKeyValuesSynchronouslyWithTimestamp(final String topic,
-            final Collection<KeyValue<K, V>> records,
-            final Properties producerConfig,
-            final Long timestamp) throws ExecutionException, InterruptedException {
-        try (Producer<K, V> producer = new KafkaProducer<>(producerConfig)) {
+                                                                                final Collection<KeyValue<K, V>> records,
+                                                                                final Properties producerConfig,
+                                                                                final Long timestamp)
+        throws ExecutionException, InterruptedException {
+        try (final Producer<K, V> producer = new KafkaProducer<>(producerConfig)) {
             producer.initTransactions();
             for (final KeyValue<K, V> record : records) {
                 producer.beginTransaction();
