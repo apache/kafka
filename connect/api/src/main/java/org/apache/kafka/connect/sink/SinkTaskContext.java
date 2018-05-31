@@ -32,8 +32,14 @@ public interface SinkTaskContext {
      * For example, this method can be used to obtain the latest configuration if an external secret has changed,
      * and the configuration is using variable references such as those compatible with
      * {@link org.apache.kafka.common.config.ConfigTransformer}.
+     *
+     * @since 2.0
      */
-    public Map<String, String> configs();
+    default Map<String, String> configs() {
+        // This method added in 2.0, but this default implementation used to prevent compilation failures
+        // on non-Connect implementations. Always implement this method properly.
+        throw new UnsupportedOperationException();
+    }
 
     /**
      * Reset the consumer offsets for the given topic partitions. SinkTasks should use this if they manage offsets
