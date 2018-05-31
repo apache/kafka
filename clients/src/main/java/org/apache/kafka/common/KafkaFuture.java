@@ -116,6 +116,15 @@ public abstract class KafkaFuture<T> implements Future<T> {
     public abstract <R> KafkaFuture<R> thenApply(BaseFunction<T, R> function);
 
     /**
+     * Returns a new KafkaFuture that, when this future completes normally, is executed with this
+     * futures's result as the argument to the supplied function.
+     *
+     * The function may be invoked by the thread that calls {@code thenApply} or it may be invoked by the thread that
+     * completes the future.
+     */
+    public abstract <R> KafkaFuture<R> thenCompose(BaseFunction<T, KafkaFuture<R>> function);
+
+    /**
      * @see KafkaFuture#thenApply(BaseFunction)
      *
      * Prefer {@link KafkaFuture#thenApply(BaseFunction)} as this function is here for backwards compatibility reasons

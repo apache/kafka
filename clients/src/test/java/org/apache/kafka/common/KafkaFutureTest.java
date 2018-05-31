@@ -27,10 +27,12 @@ import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 /**
  * A unit test for KafkaFuture.
@@ -124,6 +126,88 @@ public class KafkaFutureTest {
         assertTrue(futureAppliedFail.isCompletedExceptionally());
     }
 
+    @Test
+    public void shouldComposeFuture() throws ExecutionException, InterruptedException {
+        final KafkaFuture<Integer> one = KafkaFuture.completedFuture(1);
+        final KafkaFuture<Integer> two = one.thenCompose(new KafkaFuture.BaseFunction<Integer, KafkaFuture<Integer>>() {
+            @Override
+            public KafkaFuture<Integer> apply(Integer integer) {
+                return KafkaFuture.completedFuture(integer + 1);
+            }
+        });
+        final int result = two.get();
+        assertEquals("The future's value should be two", 2, result);
+    }
+
+    @Test
+    public void shouldComposeMultipleFutures() throws ExecutionException, InterruptedException {
+        final KafkaFuture<Integer> root = KafkaFuture.completedFuture(1);
+        final KafkaFuture<Integer> left = root.thenCompose(new KafkaFuture.BaseFunction<Integer, KafkaFuture<Integer>>() {
+            @Override
+            public KafkaFuture<Integer> apply(Integer integer) {
+                return KafkaFuture.completedFuture(integer + 1);
+            }
+        });
+        final KafkaFuture<Integer> right = root.thenCompose(new KafkaFuture.BaseFunction<Integer, KafkaFuture<Integer>>() {
+            @Override
+            public KafkaFuture<Integer> apply(Integer integer) {
+                return KafkaFuture.completedFuture(integer + 2);
+            }
+        });
+
+        assertEquals(1, (int) root.get());
+        assertEquals(2, (int) left.get());
+        assertEquals(3, (int) right.get());
+    }
+
+    @Test
+    public void shouldNotCallComposedFutureOnFailure() {
+        final AtomicBoolean didRun = new AtomicBoolean(false);
+
+        KafkaFutureImpl<Integer> failingFuture = new KafkaFutureImpl<>();
+        final KafkaFuture<Integer> result = failingFuture.thenCompose(new KafkaFuture.BaseFunction<Integer, KafkaFuture<Integer>>() {
+            @Override
+            public KafkaFuture<Integer> apply(Integer integer) {
+                didRun.set(true);
+                return KafkaFuture.completedFuture(1);
+            }
+        });
+
+        failingFuture.completeExceptionally(new Exception());
+        assertTrue("A future composed from a failing future should fail", result.isCompletedExceptionally());
+        assertFalse("A future composed from a failing future should not run", didRun.get());
+    }
+
+    @Test
+    public void shouldNotCompleteUntilAllComposedFuturesInChainAreComplete() {
+        KafkaFutureImpl<Integer> firstFuture = new KafkaFutureImpl<>();
+        final KafkaFutureImpl<Integer> secondFuture = new KafkaFutureImpl<>();
+
+        KafkaFuture<Integer> result = firstFuture.thenCompose(new KafkaFuture.BaseFunction<Integer, KafkaFuture<Integer>>() {
+            @Override
+            public KafkaFuture<Integer> apply(Integer integer) {
+                return secondFuture;
+            }
+        });
+
+        assertFalse(firstFuture.isDone());
+        assertFalse(secondFuture.isDone());
+        assertFalse(result.isDone());
+
+        firstFuture.complete(1);
+
+        assertTrue(firstFuture.isDone());
+        assertFalse(secondFuture.isDone());
+        assertFalse(result.isDone());
+
+        secondFuture.complete(1);
+
+        assertTrue(firstFuture.isDone());
+        assertTrue(secondFuture.isDone());
+        assertTrue(result.isDone());
+    }
+
+
     private static class CompleterThread<T> extends Thread {
 
         private final KafkaFutureImpl<T> future;
@@ -202,8 +286,8 @@ public class KafkaFutureTest {
         for (int i = 0; i < numThreads; i++) {
             completerThreads.get(i).join();
             waiterThreads.get(i).join();
-            assertEquals(null, completerThreads.get(i).testException);
-            assertEquals(null, waiterThreads.get(i).testException);
+            assertNull(completerThreads.get(i).testException);
+            assertNull(waiterThreads.get(i).testException);
         }
     }
 
