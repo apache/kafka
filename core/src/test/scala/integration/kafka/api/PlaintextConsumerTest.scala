@@ -633,7 +633,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertNull(this.consumers.head.committed(new TopicPartition(topic, 15)))
 
     // position() on a partition that we aren't subscribed to throws an exception
-    intercept[IllegalArgumentException] {
+    intercept[IllegalStateException] {
       this.consumers.head.position(new TopicPartition(topic, 15))
     }
 

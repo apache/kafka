@@ -42,8 +42,13 @@ public class CreateAclsResponse extends AbstractResponse {
                     ERROR_CODE,
                     ERROR_MESSAGE))));
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema CREATE_ACLS_RESPONSE_V1 = CREATE_ACLS_RESPONSE_V0;
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{CREATE_ACLS_RESPONSE_V0};
+        return new Schema[]{CREATE_ACLS_RESPONSE_V0, CREATE_ACLS_RESPONSE_V1};
     }
 
     public static class AclCreationResponse {
@@ -96,6 +101,7 @@ public class CreateAclsResponse extends AbstractResponse {
         return struct;
     }
 
+    @Override
     public int throttleTimeMs() {
         return throttleTimeMs;
     }
@@ -114,5 +120,10 @@ public class CreateAclsResponse extends AbstractResponse {
 
     public static CreateAclsResponse parse(ByteBuffer buffer, short version) {
         return new CreateAclsResponse(ApiKeys.CREATE_ACLS.responseSchema(version).read(buffer));
+    }
+
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 1;
     }
 }

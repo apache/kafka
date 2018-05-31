@@ -19,6 +19,7 @@ import java.util.{Calendar, Date, Properties}
 import kafka.admin.ConsumerGroupCommand.ConsumerGroupService
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
+import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import org.junit.Assert._
 import org.junit.Test
@@ -93,7 +94,7 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
   def testResetOffsetsNewConsumerExistingTopic(): Unit = {
     val args = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", "new.group", "--topic", topic,
       "--to-offset", "50")
-    TestUtils.produceMessages(servers, topic, 100, acks = 1, 100 * 1000)
+    produceMessages(topic, 100)
     resetAndAssertOffsets(args, expectedOffset = 50, dryRun = true)
     resetAndAssertOffsets(args ++ Array("--dry-run"), expectedOffset = 50, dryRun = true)
     resetAndAssertOffsets(args ++ Array("--execute"), expectedOffset = 50, group = "new.group")
@@ -105,7 +106,7 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
     val calendar = Calendar.getInstance()
     calendar.add(Calendar.DATE, -1)
 
-    TestUtils.produceMessages(servers, topic, 100, acks = 1, 100 * 1000)
+    produceMessages(topic, 100)
 
     val executor = addConsumerGroupExecutor(numConsumers = 1, topic)
     awaitConsumerProgress(count = 100L)
@@ -120,9 +121,9 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
   def testResetOffsetsToZonedDateTime() {
     val format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX")
 
-    TestUtils.produceMessages(servers, topic, 50, acks = 1, 100 * 1000)
+    produceMessages(topic, 50)
     val checkpoint = new Date()
-    TestUtils.produceMessages(servers, topic, 50, acks = 1, 100 * 1000)
+    produceMessages(topic, 50)
 
     val executor = addConsumerGroupExecutor(numConsumers = 1, topic)
     awaitConsumerProgress(count = 100L)
@@ -137,7 +138,7 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
   def testResetOffsetsByDuration() {
     val args = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics",
       "--by-duration", "PT1M", "--execute")
-    produceConsumeAndShutdown(totalMessages = 100)
+    produceConsumeAndShutdown(topic, totalMessages = 100)
     resetAndAssertOffsets(args, expectedOffset = 0)
   }
 
@@ -145,7 +146,7 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
   def testResetOffsetsByDurationToEarliest() {
     val args = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics",
       "--by-duration", "PT0.1S", "--execute")
-    produceConsumeAndShutdown(totalMessages = 100)
+    produceConsumeAndShutdown(topic, totalMessages = 100)
     resetAndAssertOffsets(args, expectedOffset = 100)
   }
 
@@ -153,7 +154,7 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
   def testResetOffsetsToEarliest() {
     val args = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics",
       "--to-earliest", "--execute")
-    produceConsumeAndShutdown(totalMessages = 100)
+    produceConsumeAndShutdown(topic, totalMessages = 100)
     resetAndAssertOffsets(args, expectedOffset = 0)
   }
 
@@ -161,8 +162,8 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
   def testResetOffsetsToLatest() {
     val args = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics",
       "--to-latest", "--execute")
-    produceConsumeAndShutdown(totalMessages = 100)
-    TestUtils.produceMessages(servers, topic, 100, acks = 1, 100 * 1000)
+    produceConsumeAndShutdown(topic, totalMessages = 100)
+    produceMessages(topic, 100)
     resetAndAssertOffsets(args, expectedOffset = 200)
   }
 
@@ -170,8 +171,8 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
   def testResetOffsetsToCurrentOffset() {
     val args = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics",
       "--to-current", "--execute")
-    produceConsumeAndShutdown(totalMessages = 100)
-    TestUtils.produceMessages(servers, topic, 100, acks = 1, 100 * 1000)
+    produceConsumeAndShutdown(topic, totalMessages = 100)
+    produceMessages(topic, 100)
     resetAndAssertOffsets(args, expectedOffset = 100)
   }
 
@@ -179,7 +180,7 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
   def testResetOffsetsToSpecificOffset() {
     val args = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics",
       "--to-offset", "1", "--execute")
-    produceConsumeAndShutdown(totalMessages = 100)
+    produceConsumeAndShutdown(topic, totalMessages = 100)
     resetAndAssertOffsets(args, expectedOffset = 1)
   }
 
@@ -187,8 +188,8 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
   def testResetOffsetsShiftPlus() {
     val args = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics",
       "--shift-by", "50", "--execute")
-    produceConsumeAndShutdown(totalMessages = 100)
-    TestUtils.produceMessages(servers, topic, 100, acks = 1, 100 * 1000)
+    produceConsumeAndShutdown(topic, totalMessages = 100)
+    produceMessages(topic, 100)
     resetAndAssertOffsets(args, expectedOffset = 150)
   }
 
@@ -196,8 +197,8 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
   def testResetOffsetsShiftMinus() {
     val args = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics",
       "--shift-by", "-50", "--execute")
-    produceConsumeAndShutdown(totalMessages = 100)
-    TestUtils.produceMessages(servers, topic, 100, acks = 1, 100 * 1000)
+    produceConsumeAndShutdown(topic, totalMessages = 100)
+    produceMessages(topic, 100)
     resetAndAssertOffsets(args, expectedOffset = 50)
   }
 
@@ -205,8 +206,8 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
   def testResetOffsetsShiftByLowerThanEarliest() {
     val args = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics",
       "--shift-by", "-150", "--execute")
-    produceConsumeAndShutdown(totalMessages = 100)
-    TestUtils.produceMessages(servers, topic, 100, acks = 1, 100 * 1000)
+    produceConsumeAndShutdown(topic, totalMessages = 100)
+    produceMessages(topic, 100)
     resetAndAssertOffsets(args, expectedOffset = 0)
   }
 
@@ -214,8 +215,8 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
   def testResetOffsetsShiftByHigherThanLatest() {
     val args = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics",
       "--shift-by", "150", "--execute")
-    produceConsumeAndShutdown(totalMessages = 100)
-    TestUtils.produceMessages(servers, topic, 100, acks = 1, 100 * 1000)
+    produceConsumeAndShutdown(topic, totalMessages = 100)
+    produceMessages(topic, 100)
     resetAndAssertOffsets(args, expectedOffset = 200)
   }
 
@@ -223,7 +224,7 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
   def testResetOffsetsToEarliestOnOneTopic() {
     val args = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--topic", topic,
       "--to-earliest", "--execute")
-    produceConsumeAndShutdown(totalMessages = 100)
+    produceConsumeAndShutdown(topic, totalMessages = 100)
     resetAndAssertOffsets(args, expectedOffset = 0)
   }
 
@@ -236,7 +237,7 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
       s"$topic:1", "--to-earliest", "--execute")
     val consumerGroupCommand = getConsumerGroupService(args)
 
-    produceConsumeAndShutdown(totalMessages = 100, numConsumers = 2, topic)
+    produceConsumeAndShutdown(topic, totalMessages = 100, numConsumers = 2)
     val priorCommittedOffsets = committedOffsets(topic = topic)
 
     val tp0 = new TopicPartition(topic, 0)
@@ -258,8 +259,8 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
       "--topic", topic2, "--to-earliest", "--execute")
     val consumerGroupCommand = getConsumerGroupService(args)
 
-    produceConsumeAndShutdown(100, 1, topic1)
-    produceConsumeAndShutdown(100, 1, topic2)
+    produceConsumeAndShutdown(topic1, 100, 1)
+    produceConsumeAndShutdown(topic2, 100, 1)
 
     val tp1 = new TopicPartition(topic1, 0)
     val tp2 = new TopicPartition(topic2, 0)
@@ -285,8 +286,8 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
       s"$topic1:1", "--topic", s"$topic2:1", "--to-earliest", "--execute")
     val consumerGroupCommand = getConsumerGroupService(args)
 
-    produceConsumeAndShutdown(100, 2, topic1)
-    produceConsumeAndShutdown(100, 2, topic2)
+    produceConsumeAndShutdown(topic1, 100, 2)
+    produceConsumeAndShutdown(topic2, 100, 2)
 
     val priorCommittedOffsets1 = committedOffsets(topic1)
     val priorCommittedOffsets2 = committedOffsets(topic2)
@@ -314,7 +315,7 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
       "--to-offset", "2", "--export")
     val consumerGroupCommand = getConsumerGroupService(cgcArgs)
 
-    produceConsumeAndShutdown(100, 2, topic)
+    produceConsumeAndShutdown(topic, 100, 2)
 
     val file = File.createTempFile("reset", ".csv")
     file.deleteOnExit()
@@ -334,8 +335,14 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
     adminZkClient.deleteTopic(topic)
   }
 
-  private def produceConsumeAndShutdown(totalMessages: Int, numConsumers: Int = 1, topic: String = topic) {
-    TestUtils.produceMessages(servers, topic, totalMessages, acks = 1, 100 * 1000)
+  private def produceMessages(topic: String, numMessages: Int): Unit = {
+    val records = (0 until numMessages).map(_ => new ProducerRecord[Array[Byte], Array[Byte]](topic,
+      new Array[Byte](100 * 1000)))
+    TestUtils.produceMessages(servers, records, acks = 1)
+  }
+
+  private def produceConsumeAndShutdown(topic: String, totalMessages: Int, numConsumers: Int = 1) {
+    produceMessages(topic, totalMessages)
     val executor =  addConsumerGroupExecutor(numConsumers, topic)
     awaitConsumerProgress(topic, totalMessages)
     executor.shutdown()

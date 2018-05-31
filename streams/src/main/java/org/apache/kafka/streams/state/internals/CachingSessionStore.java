@@ -24,8 +24,8 @@ import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
-import org.apache.kafka.streams.processor.internals.RecordContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StateSerdes;
@@ -63,8 +63,8 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
 
     public void init(final ProcessorContext context, final StateStore root) {
         topic = ProcessorStateManager.storeChangelogTopic(context.applicationId(), root.name());
-        bytesStore.init(context, root);
         initInternal((InternalProcessorContext) context);
+        bytesStore.init(context, root);
     }
 
     @SuppressWarnings("unchecked")
@@ -141,8 +141,15 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
     public void put(final Windowed<Bytes> key, byte[] value) {
         validateStoreOpen();
         final Bytes binaryKey = Bytes.wrap(SessionKeySchema.toBinary(key));
-        final LRUCacheEntry entry = new LRUCacheEntry(value, true, context.offset(),
-                                                      key.window().end(), context.partition(), context.topic());
+        final LRUCacheEntry entry =
+            new LRUCacheEntry(
+                value,
+                context.headers(),
+                true,
+                context.offset(),
+                key.window().end(),
+                context.partition(),
+                context.topic());
         cache.put(cacheName, cacheFunction.cacheKey(binaryKey), entry);
     }
 
@@ -161,7 +168,7 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
 
     private void putAndMaybeForward(final ThreadCache.DirtyEntry entry, final InternalProcessorContext context) {
         final Bytes binaryKey = cacheFunction.key(entry.key());
-        final RecordContext current = context.recordContext();
+        final ProcessorRecordContext current = context.recordContext();
         context.setRecordContext(entry.recordContext());
         try {
             final Windowed<K> key = SessionKeySchema.from(binaryKey.get(), serdes.keyDeserializer(), topic);

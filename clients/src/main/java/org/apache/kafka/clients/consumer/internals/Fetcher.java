@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.FetchSessionHandler;
 import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.clients.StaleMetadataException;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
@@ -51,6 +52,7 @@ import org.apache.kafka.common.record.ControlRecordType;
 import org.apache.kafka.common.record.InvalidRecordException;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
@@ -203,7 +205,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                     .addListener(new RequestFutureListener<ClientResponse>() {
                         @Override
                         public void onSuccess(ClientResponse resp) {
-                            FetchResponse response = (FetchResponse) resp.responseBody();
+                            FetchResponse<Records> response = (FetchResponse<Records>) resp.responseBody();
                             FetchSessionHandler handler = sessionHandlers.get(fetchTarget.id());
                             if (handler == null) {
                                 log.error("Unable to find FetchSessionHandler for node {}. Ignoring fetch response.",
@@ -217,7 +219,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                             Set<TopicPartition> partitions = new HashSet<>(response.responseData().keySet());
                             FetchResponseMetricAggregator metricAggregator = new FetchResponseMetricAggregator(sensors, partitions);
 
-                            for (Map.Entry<TopicPartition, FetchResponse.PartitionData> entry : response.responseData().entrySet()) {
+                            for (Map.Entry<TopicPartition, FetchResponse.PartitionData<Records>> entry : response.responseData().entrySet()) {
                                 TopicPartition partition = entry.getKey();
                                 long fetchOffset = data.sessionPartitions().get(partition).fetchOffset;
                                 FetchResponse.PartitionData fetchData = entry.getValue();
@@ -472,6 +474,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
      * @return The fetched records per partition
      * @throws OffsetOutOfRangeException If there is OffsetOutOfRange error in fetchResponse and
      *         the defaultResetPolicy is NONE
+     * @throws TopicAuthorizationException If there is TopicAuthorization error in fetchResponse.
      */
     public Map<TopicPartition, List<ConsumerRecord<K, V>>> fetchedRecords() {
         Map<TopicPartition, List<ConsumerRecord<K, V>>> fetched = new HashMap<>();
@@ -483,7 +486,20 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                     CompletedFetch completedFetch = completedFetches.peek();
                     if (completedFetch == null) break;
 
-                    nextInLineRecords = parseCompletedFetch(completedFetch);
+                    try {
+                        nextInLineRecords = parseCompletedFetch(completedFetch);
+                    } catch (Exception e) {
+                        // Remove a completedFetch upon a parse with exception if (1) it contains no records, and
+                        // (2) there are no fetched records with actual content preceding this exception.
+                        // The first condition ensures that the completedFetches is not stuck with the same completedFetch
+                        // in cases such as the TopicAuthorizationException, and the second condition ensures that no
+                        // potential data loss due to an exception in a following record.
+                        FetchResponse.PartitionData partition = completedFetch.partitionData;
+                        if (fetched.isEmpty() && (partition.records == null || partition.records.sizeInBytes() == 0)) {
+                            completedFetches.poll();
+                        }
+                        throw e;
+                    }
                     completedFetches.poll();
                 } else {
                     List<ConsumerRecord<K, V>> records = fetchRecords(nextInLineRecords, recordsRemaining);
@@ -879,7 +895,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
      */
     private PartitionRecords parseCompletedFetch(CompletedFetch completedFetch) {
         TopicPartition tp = completedFetch.partition;
-        FetchResponse.PartitionData partition = completedFetch.partitionData;
+        FetchResponse.PartitionData<Records> partition = completedFetch.partitionData;
         long fetchOffset = completedFetch.fetchedOffset;
         PartitionRecords partitionRecords = null;
         Errors error = partition.error;
@@ -945,7 +961,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 this.metadata.requestUpdate();
             } else if (error == Errors.OFFSET_OUT_OF_RANGE) {
                 if (fetchOffset != subscriptions.position(tp)) {
-                    log.debug("Discarding stale fetch response for partition {} since the fetched offset {}" +
+                    log.debug("Discarding stale fetch response for partition {} since the fetched offset {} " +
                             "does not match the current offset {}", tp, fetchOffset, subscriptions.position(tp));
                 } else if (subscriptions.hasDefaultOffsetResetPolicy()) {
                     log.info("Fetch offset {} is out of range for partition {}, resetting offset", fetchOffset, tp);
@@ -1237,13 +1253,13 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     private static class CompletedFetch {
         private final TopicPartition partition;
         private final long fetchedOffset;
-        private final FetchResponse.PartitionData partitionData;
+        private final FetchResponse.PartitionData<Records> partitionData;
         private final FetchResponseMetricAggregator metricAggregator;
         private final short responseVersion;
 
         private CompletedFetch(TopicPartition partition,
                                long fetchedOffset,
-                               FetchResponse.PartitionData partitionData,
+                               FetchResponse.PartitionData<Records> partitionData,
                                FetchResponseMetricAggregator metricAggregator,
                                short responseVersion) {
             this.partition = partition;

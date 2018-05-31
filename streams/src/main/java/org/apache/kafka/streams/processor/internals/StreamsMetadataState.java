@@ -56,6 +56,21 @@ public class StreamsMetadataState {
         this.thisHost = thisHost;
     }
 
+    @Override
+    public String toString() {
+        return toString("");
+    }
+
+    public String toString(final String indent) {
+        final StringBuilder builder = new StringBuilder();
+        builder.append(indent).append("GlobalMetadata: ").append(allMetadata).append("\n");
+        builder.append(indent).append("GlobalStores: ").append(globalStores).append("\n");
+        builder.append(indent).append("My HostInfo: ").append(thisHost).append("\n");
+        builder.append(indent).append(clusterMetadata).append("\n");
+
+        return builder.toString();
+    }
+
     /**
      * Find all of the {@link StreamsMetadata}s in a
      * {@link KafkaStreams application}
@@ -139,9 +154,7 @@ public class StreamsMetadataState {
 
         return getStreamsMetadataForKey(storeName,
                                         key,
-                                        new DefaultStreamPartitioner<>(keySerializer,
-                                                                       clusterMetadata,
-                                                                       sourceTopicsInfo.topicWithMostPartitions),
+                                        new DefaultStreamPartitioner<>(keySerializer, clusterMetadata),
                                         sourceTopicsInfo);
     }
 
@@ -239,7 +252,7 @@ public class StreamsMetadataState {
                                                          final StreamPartitioner<? super K, ?> partitioner,
                                                          final SourceTopicsInfo sourceTopicsInfo) {
 
-        final Integer partition = partitioner.partition(key, null, sourceTopicsInfo.maxPartitions);
+        final Integer partition = partitioner.partition(sourceTopicsInfo.topicWithMostPartitions, key, null, sourceTopicsInfo.maxPartitions);
         final Set<TopicPartition> matchingPartitions = new HashSet<>();
         for (String sourceTopic : sourceTopicsInfo.sourceTopics) {
             matchingPartitions.add(new TopicPartition(sourceTopic, partition));

@@ -64,8 +64,8 @@ public class GlobalStateTaskTest {
         new String[]{topic2},
         new IntegerDeserializer(),
         new IntegerDeserializer());
-    private final MockProcessorNode processorOne = new MockProcessorNode<>(-1);
-    private final MockProcessorNode processorTwo = new MockProcessorNode<>(-1);
+    private final MockProcessorNode processorOne = new MockProcessorNode<>();
+    private final MockProcessorNode processorTwo = new MockProcessorNode<>();
 
     private final Map<TopicPartition, Long> offsets = new HashMap<>();
     private final NoOpProcessorContext context = new NoOpProcessorContext();
@@ -178,7 +178,8 @@ public class GlobalStateTaskTest {
             context,
             stateMgr,
             new LogAndContinueExceptionHandler(),
-            logContext);
+            logContext
+        );
         final byte[] key = new LongSerializer().serialize(topic2, 1L);
         final byte[] recordValue = new IntegerSerializer().serialize(topic2, 10);
 
@@ -192,7 +193,8 @@ public class GlobalStateTaskTest {
             context,
             stateMgr,
             new LogAndContinueExceptionHandler(),
-            logContext);
+            logContext
+        );
         final byte[] key = new IntegerSerializer().serialize(topic2, 1);
         final byte[] recordValue = new LongSerializer().serialize(topic2, 10L);
 

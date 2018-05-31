@@ -35,8 +35,14 @@ public class LeaveGroupResponse extends AbstractResponse {
             THROTTLE_TIME_MS,
             ERROR_CODE);
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema LEAVE_GROUP_RESPONSE_V2 = LEAVE_GROUP_RESPONSE_V1;
+
     public static Schema[] schemaVersions() {
-        return new Schema[] {LEAVE_GROUP_RESPONSE_V0, LEAVE_GROUP_RESPONSE_V1};
+        return new Schema[] {LEAVE_GROUP_RESPONSE_V0, LEAVE_GROUP_RESPONSE_V1,
+            LEAVE_GROUP_RESPONSE_V2};
     }
 
     /**
@@ -65,6 +71,7 @@ public class LeaveGroupResponse extends AbstractResponse {
         this.error = Errors.forCode(struct.get(ERROR_CODE));
     }
 
+    @Override
     public int throttleTimeMs() {
         return throttleTimeMs;
     }
@@ -90,4 +97,8 @@ public class LeaveGroupResponse extends AbstractResponse {
         return new LeaveGroupResponse(ApiKeys.LEAVE_GROUP.parseResponse(versionId, buffer));
     }
 
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 2;
+    }
 }

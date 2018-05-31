@@ -100,8 +100,13 @@ public class DescribeConfigsResponse extends AbstractResponse {
             THROTTLE_TIME_MS,
             new Field(RESOURCES_KEY_NAME, new ArrayOf(DESCRIBE_CONFIGS_RESPONSE_ENTITY_V1)));
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema DESCRIBE_CONFIGS_RESPONSE_V2 = DESCRIBE_CONFIGS_RESPONSE_V1;
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{DESCRIBE_CONFIGS_RESPONSE_V0, DESCRIBE_CONFIGS_RESPONSE_V1};
+        return new Schema[]{DESCRIBE_CONFIGS_RESPONSE_V0, DESCRIBE_CONFIGS_RESPONSE_V1, DESCRIBE_CONFIGS_RESPONSE_V2};
     }
 
     public static class Config {
@@ -290,6 +295,7 @@ public class DescribeConfigsResponse extends AbstractResponse {
         return configs.get(resource);
     }
 
+    @Override
     public int throttleTimeMs() {
         return throttleTimeMs;
     }
@@ -340,7 +346,7 @@ public class DescribeConfigsResponse extends AbstractResponse {
                 }
             }
             resourceStruct.set(CONFIG_ENTRIES_KEY_NAME, configEntryStructs.toArray(new Struct[0]));
-            
+
             resourceStructs.add(resourceStruct);
         }
         struct.set(RESOURCES_KEY_NAME, resourceStructs.toArray(new Struct[0]));
@@ -351,4 +357,8 @@ public class DescribeConfigsResponse extends AbstractResponse {
         return new DescribeConfigsResponse(ApiKeys.DESCRIBE_CONFIGS.parseResponse(version, buffer));
     }
 
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 2;
+    }
 }

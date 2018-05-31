@@ -125,6 +125,12 @@ class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
         public V1 get(final K key) {
             return computeValue(key, parentGetter.get(key));
         }
+
+
+        @Override
+        public void close() {
+            parentGetter.close();
+        }
     }
 
 }

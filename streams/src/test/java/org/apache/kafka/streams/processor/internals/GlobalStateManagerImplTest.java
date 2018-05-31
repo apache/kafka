@@ -496,12 +496,19 @@ public class GlobalStateManagerImplTest {
 
     @Test
     public void shouldThrowLockExceptionIfIOExceptionCaughtWhenTryingToLockStateDir() {
-        stateManager = new GlobalStateManagerImpl(new LogContext("mock"), topology, consumer, new StateDirectory(streamsConfig, time) {
-            @Override
-            public boolean lockGlobalState() throws IOException {
-                throw new IOException("KABOOM!");
-            }
-        }, stateRestoreListener, streamsConfig);
+        stateManager = new GlobalStateManagerImpl(
+            new LogContext("mock"),
+            topology,
+            consumer,
+            new StateDirectory(streamsConfig, time) {
+                @Override
+                public boolean lockGlobalState() throws IOException {
+                    throw new IOException("KABOOM!");
+                }
+            },
+            stateRestoreListener,
+            streamsConfig
+        );
 
         try {
             stateManager.initialize();

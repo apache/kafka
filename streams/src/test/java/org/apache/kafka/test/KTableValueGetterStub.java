@@ -43,4 +43,8 @@ public class KTableValueGetterStub<K, V> implements KTableValueGetter<K, V> {
     public void remove(final K key) {
         data.remove(key);
     }
+
+    @Override
+    public void close() {
+    }
 }

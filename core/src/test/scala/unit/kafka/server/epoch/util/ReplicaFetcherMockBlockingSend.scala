@@ -19,24 +19,35 @@ package kafka.server.epoch.util
 import kafka.cluster.BrokerEndPoint
 import kafka.server.BlockingSend
 import org.apache.kafka.clients.{ClientRequest, ClientResponse, MockClient}
-import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.record.Records
 import org.apache.kafka.common.requests.AbstractRequest.Builder
-import org.apache.kafka.common.requests.FetchResponse.PartitionData
 import org.apache.kafka.common.requests.{AbstractRequest, EpochEndOffset, FetchResponse, OffsetsForLeaderEpochResponse, FetchMetadata => JFetchMetadata}
 import org.apache.kafka.common.utils.{SystemTime, Time}
+import org.apache.kafka.common.{Node, TopicPartition}
 
 /**
   * Stub network client used for testing the ReplicaFetcher, wraps the MockClient used for consumer testing
+  *
+  * The common case is that there is only one OFFSET_FOR_LEADER_EPOCH request/response. So, the
+  * response to OFFSET_FOR_LEADER_EPOCH is 'offsets' map. If the test needs to set another round of
+  * OFFSET_FOR_LEADER_EPOCH with different offsets in response, it should update offsets using
+  * setOffsetsForNextResponse
   */
 class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, EpochEndOffset], destination: BrokerEndPoint, time: Time) extends BlockingSend {
   private val client = new MockClient(new SystemTime)
   var fetchCount = 0
   var epochFetchCount = 0
+  var lastUsedOffsetForLeaderEpochVersion = -1
   var callback: Option[() => Unit] = None
+  var currentOffsets: java.util.Map[TopicPartition, EpochEndOffset] = offsets
 
   def setEpochRequestCallback(postEpochFunction: () => Unit){
     callback = Some(postEpochFunction)
+  }
+
+  def setOffsetsForNextResponse(newOffsets: java.util.Map[TopicPartition, EpochEndOffset]): Unit = {
+    currentOffsets = newOffsets
   }
 
   override def sendRequest(requestBuilder: Builder[_ <: AbstractRequest]): ClientResponse = {
@@ -50,11 +61,12 @@ class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, Epoc
       case ApiKeys.OFFSET_FOR_LEADER_EPOCH =>
         callback.foreach(_.apply())
         epochFetchCount += 1
-        new OffsetsForLeaderEpochResponse(offsets)
+        lastUsedOffsetForLeaderEpochVersion = requestBuilder.latestAllowedVersion()
+        new OffsetsForLeaderEpochResponse(currentOffsets)
 
       case ApiKeys.FETCH =>
         fetchCount += 1
-        new FetchResponse(Errors.NONE, new java.util.LinkedHashMap[TopicPartition, PartitionData], 0,
+        new FetchResponse(Errors.NONE, new java.util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]], 0,
           JFetchMetadata.INVALID_SESSION_ID)
 
       case _ =>

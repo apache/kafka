@@ -90,9 +90,14 @@ public class ListOffsetRequest extends AbstractRequest {
                     "result, which allows consumers to discard ABORTED transactional records"),
             new Field(TOPICS_KEY_NAME, new ArrayOf(LIST_OFFSET_REQUEST_TOPIC_V1), "Topics to list offsets."));;
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema LIST_OFFSET_REQUEST_V3 = LIST_OFFSET_REQUEST_V2;
 
     public static Schema[] schemaVersions() {
-        return new Schema[] {LIST_OFFSET_REQUEST_V0, LIST_OFFSET_REQUEST_V1, LIST_OFFSET_REQUEST_V2};
+        return new Schema[] {LIST_OFFSET_REQUEST_V0, LIST_OFFSET_REQUEST_V1, LIST_OFFSET_REQUEST_V2,
+            LIST_OFFSET_REQUEST_V3};
     }
 
     private final int replicaId;
@@ -272,6 +277,7 @@ public class ListOffsetRequest extends AbstractRequest {
             case 0:
             case 1:
             case 2:
+            case 3:
                 return new ListOffsetResponse(throttleTimeMs, responseData);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",

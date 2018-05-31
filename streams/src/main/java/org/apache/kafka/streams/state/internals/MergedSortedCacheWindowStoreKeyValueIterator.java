@@ -61,7 +61,7 @@ class MergedSortedCacheWindowStoreKeyValueIterator
 
     @Override
     byte[] deserializeCacheValue(final LRUCacheEntry cacheEntry) {
-        return cacheEntry.value;
+        return cacheEntry.value();
     }
 
     @Override

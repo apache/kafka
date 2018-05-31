@@ -18,12 +18,16 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.streams.Consumed;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.StreamsBuilderTest;
+import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.processor.MockProcessorContext;
+import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.test.KStreamTestDriver;
+import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.TestUtils;
@@ -37,6 +41,9 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
 
+import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
+import static org.hamcrest.CoreMatchers.hasItem;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -68,15 +75,15 @@ public class KTableKTableOuterJoinTest {
         final KTable<Integer, String> table1;
         final KTable<Integer, String> table2;
         final KTable<Integer, String> joined;
-        final MockProcessorSupplier<Integer, String> processor;
+        final MockProcessorSupplier<Integer, String> supplier;
 
-        processor = new MockProcessorSupplier<>();
+        supplier = new MockProcessorSupplier<>();
         table1 = builder.table(topic1, consumed);
         table2 = builder.table(topic2, consumed);
         joined = table1.outerJoin(table2, MockValueJoiner.TOSTRING_JOINER);
-        joined.toStream().process(processor);
+        joined.toStream().process(supplier);
 
-        final Collection<Set<String>> copartitionGroups = StreamsBuilderTest.getCopartitionedGroups(builder);
+        final Collection<Set<String>> copartitionGroups = TopologyWrapper.getInternalTopologyBuilder(builder.build()).copartitionGroups();
 
         assertEquals(1, copartitionGroups.size());
         assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
@@ -84,6 +91,8 @@ public class KTableKTableOuterJoinTest {
         final KTableValueGetterSupplier<Integer, String> getterSupplier = ((KTableImpl<Integer, String, String>) joined).valueGetterSupplier();
 
         driver.setUp(builder, stateDir);
+
+        final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
 
         final KTableValueGetter<Integer, String> getter = getterSupplier.get();
         getter.init(driver.context());
@@ -173,16 +182,18 @@ public class KTableKTableOuterJoinTest {
         final KTable<Integer, String> table1;
         final KTable<Integer, String> table2;
         final KTable<Integer, String> joined;
-        final MockProcessorSupplier<Integer, String> proc;
+        final MockProcessorSupplier<Integer, String> supplier;
 
         table1 = builder.table(topic1, consumed);
         table2 = builder.table(topic2, consumed);
         joined = table1.outerJoin(table2, MockValueJoiner.TOSTRING_JOINER);
 
-        proc = new MockProcessorSupplier<>();
-        builder.build().addProcessor("proc", proc, ((KTableImpl<?, ?, ?>) joined).name);
+        supplier = new MockProcessorSupplier<>();
+        builder.build().addProcessor("proc", supplier, ((KTableImpl<?, ?, ?>) joined).name);
 
         driver.setUp(builder, stateDir);
+
+        final MockProcessor<Integer, String> proc = supplier.theCapturedProcessor();
 
         assertTrue(((KTableImpl<?, ?, ?>) table1).sendingOldValueEnabled());
         assertTrue(((KTableImpl<?, ?, ?>) table2).sendingOldValueEnabled());
@@ -261,7 +272,7 @@ public class KTableKTableOuterJoinTest {
         final KTable<Integer, String> table1;
         final KTable<Integer, String> table2;
         final KTable<Integer, String> joined;
-        final MockProcessorSupplier<Integer, String> proc;
+        final MockProcessorSupplier<Integer, String> supplier;
 
         table1 = builder.table(topic1, consumed);
         table2 = builder.table(topic2, consumed);
@@ -269,10 +280,12 @@ public class KTableKTableOuterJoinTest {
 
         ((KTableImpl<?, ?, ?>) joined).enableSendingOldValues();
 
-        proc = new MockProcessorSupplier<>();
-        builder.build().addProcessor("proc", proc, ((KTableImpl<?, ?, ?>) joined).name);
+        supplier = new MockProcessorSupplier<>();
+        builder.build().addProcessor("proc", supplier, ((KTableImpl<?, ?, ?>) joined).name);
 
         driver.setUp(builder, stateDir);
+
+        final MockProcessor<Integer, String> proc = supplier.theCapturedProcessor();
 
         assertTrue(((KTableImpl<?, ?, ?>) table1).sendingOldValueEnabled());
         assertTrue(((KTableImpl<?, ?, ?>) table2).sendingOldValueEnabled());
@@ -340,6 +353,27 @@ public class KTableKTableOuterJoinTest {
         }
         driver.flushState();
         proc.checkAndClearProcessResult("1:(null<-XX1+null)", "2:(null+YY2<-XX2+YY2)");
+    }
+
+    @Test
+    public void shouldLogAndMeterSkippedRecordsDueToNullLeftKey() {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final Processor<String, Change<String>> join = new KTableKTableOuterJoin<>(
+            (KTableImpl<String, String, String>) builder.table("left", Consumed.with(stringSerde, stringSerde)),
+            (KTableImpl<String, String, String>) builder.table("right", Consumed.with(stringSerde, stringSerde)),
+            null
+        ).get();
+
+        final MockProcessorContext context = new MockProcessorContext();
+        context.setRecordMetadata("left", -1, -2, null, -3);
+        join.init(context);
+        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
+        join.process(null, new Change<>("new", "old"));
+        LogCaptureAppender.unregister(appender);
+
+        assertEquals(1.0, getMetricByName(context.metrics().metrics(), "skipped-records-total", "stream-metrics").metricValue());
+        assertThat(appender.getMessages(), hasItem("Skipping record due to null key. change=[(new<-old)] topic=[left] partition=[-1] offset=[-2]"));
     }
 
     private KeyValue<Integer, String> kv(final Integer key, final String value) {

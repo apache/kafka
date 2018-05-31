@@ -18,6 +18,10 @@ package org.apache.kafka.streams;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
@@ -27,7 +31,9 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.SystemTime;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
@@ -54,6 +60,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.junit.Assert.assertEquals;
@@ -71,10 +78,12 @@ public class TopologyTestDriverTest {
         new ByteArraySerializer(),
         new ByteArraySerializer());
 
+    private final Headers headers = new RecordHeaders(new Header[]{new RecordHeader("key", "value".getBytes())});
+
     private final byte[] key1 = new byte[0];
     private final byte[] value1 = new byte[0];
     private final long timestamp1 = 42L;
-    private final ConsumerRecord<byte[], byte[]> consumerRecord1 = consumerRecordFactory.create(SOURCE_TOPIC_1, key1, value1, timestamp1);
+    private final ConsumerRecord<byte[], byte[]> consumerRecord1 = consumerRecordFactory.create(SOURCE_TOPIC_1, key1, value1, headers, timestamp1);
 
     private final byte[] key2 = new byte[0];
     private final byte[] value2 = new byte[0];
@@ -104,6 +113,7 @@ public class TopologyTestDriverTest {
         private long timestamp;
         private long offset;
         private String topic;
+        private Headers headers;
 
         Record(final ConsumerRecord consumerRecord) {
             key = consumerRecord.key();
@@ -111,15 +121,18 @@ public class TopologyTestDriverTest {
             timestamp = consumerRecord.timestamp();
             offset = consumerRecord.offset();
             topic = consumerRecord.topic();
+            headers = consumerRecord.headers();
         }
 
         Record(final Object key,
                final Object value,
+               final Headers headers,
                final long timestamp,
                final long offset,
                final String topic) {
             this.key = key;
             this.value = value;
+            this.headers = headers;
             this.timestamp = timestamp;
             this.offset = offset;
             this.topic = topic;
@@ -143,12 +156,13 @@ public class TopologyTestDriverTest {
                 offset == record.offset &&
                 Objects.equals(key, record.key) &&
                 Objects.equals(value, record.value) &&
-                Objects.equals(topic, record.topic);
+                Objects.equals(topic, record.topic) &&
+                Objects.equals(headers, record.headers);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(key, value, timestamp, offset, topic);
+            return Objects.hash(key, value, headers, timestamp, offset, topic);
         }
     }
 
@@ -183,10 +197,6 @@ public class TopologyTestDriverTest {
         private boolean closed = false;
         private final List<Record> processedRecords = new ArrayList<>();
 
-        MockProcessor() {
-            this(Collections.<Punctuation>emptySet());
-        }
-
         MockProcessor(final Collection<Punctuation> punctuations) {
             this.punctuations = punctuations;
         }
@@ -202,13 +212,9 @@ public class TopologyTestDriverTest {
 
         @Override
         public void process(Object key, Object value) {
-            processedRecords.add(new Record(key, value, context.timestamp(), context.offset(), context.topic()));
+            processedRecords.add(new Record(key, value, context.headers(), context.timestamp(), context.offset(), context.topic()));
             context.forward(key, value);
         }
-
-        @SuppressWarnings("deprecation")
-        @Override
-        public void punctuate(long timestamp) {} // deprecated
 
         @Override
         public void close() {
@@ -838,9 +844,6 @@ public class TopologyTestDriverTest {
         }
 
         @Override
-        public void punctuate(final long timestamp) {}
-
-        @Override
         public void close() {}
     }
 
@@ -866,9 +869,6 @@ public class TopologyTestDriverTest {
                         public void process(final String key, final Long value) {
                             store.put(key, value);
                         }
-
-                        @Override
-                        public void punctuate(final long timestamp) {}
 
                         @Override
                         public void close() {}
@@ -902,11 +902,11 @@ public class TopologyTestDriverTest {
             );
         }
     }
-    
+
     @Test
     public void shouldFeedStoreFromGlobalKTable() {
         final StreamsBuilder builder = new StreamsBuilder();
-        builder.globalTable("topic",  
+        builder.globalTable("topic",
             Consumed.with(Serdes.String(), Serdes.String()),
             Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("globalStore"));
         try (final TopologyTestDriver testDriver = new TopologyTestDriver(builder.build(), config)) {
@@ -917,6 +917,100 @@ public class TopologyTestDriverTest {
             testDriver.pipeInput(recordFactory.create("topic", "k1", "value1"));
             // we expect to have both in the global store, the one from pipeInput and the one from the producer
             Assert.assertEquals("value1", globalStore.get("k1"));
+        }
+    }
+
+    private Topology setupMultipleSourcesPatternTopology(final Pattern... sourceTopicPatternNames) {
+        final Topology topology = new Topology();
+
+        final String[] processorNames = new String[sourceTopicPatternNames.length];
+        int i = 0;
+        for (final Pattern sourceTopicPatternName : sourceTopicPatternNames) {
+            final String sourceName = sourceTopicPatternName + "-source";
+            final String processorName = sourceTopicPatternName + "-processor";
+            topology.addSource(sourceName, sourceTopicPatternName);
+            processorNames[i++] = processorName;
+            topology.addProcessor(processorName, new MockProcessorSupplier(), sourceName);
+        }
+        topology.addSink("sink-topic", SINK_TOPIC_1, processorNames);
+        return topology;
+    }
+
+    @Test
+    public void shouldProcessFromSourcesThatMatchMultiplePattern() {
+
+        final  Pattern pattern2Source1 = Pattern.compile("source-topic-\\d");
+        final  Pattern pattern2Source2 = Pattern.compile("source-topic-[A-Z]");
+        final  String consumerTopic2 = "source-topic-Z";
+
+        final ConsumerRecord<byte[], byte[]> consumerRecord2 = consumerRecordFactory.create(consumerTopic2, key2, value2, timestamp2);
+
+        testDriver = new TopologyTestDriver(setupMultipleSourcesPatternTopology(pattern2Source1, pattern2Source2), config);
+
+        final List<Record> processedRecords1 = mockProcessors.get(0).processedRecords;
+        final List<Record> processedRecords2 = mockProcessors.get(1).processedRecords;
+
+        testDriver.pipeInput(consumerRecord1);
+
+        assertEquals(1, processedRecords1.size());
+        assertEquals(0, processedRecords2.size());
+
+        final Record record1 = processedRecords1.get(0);
+        final Record expectedResult1 = new Record(consumerRecord1);
+        expectedResult1.offset = 0L;
+        assertThat(record1, equalTo(expectedResult1));
+
+        testDriver.pipeInput(consumerRecord2);
+
+        assertEquals(1, processedRecords1.size());
+        assertEquals(1, processedRecords2.size());
+
+        final Record record2 = processedRecords2.get(0);
+        final Record expectedResult2 = new Record(consumerRecord2);
+        expectedResult2.offset = 0L;
+        assertThat(record2, equalTo(expectedResult2));
+    }
+
+    @Test
+    public void shouldProcessFromSourceThatMatchPattern() {
+        final String sourceName = "source";
+        final Pattern pattern2Source1 = Pattern.compile("source-topic-\\d");
+
+        final Topology topology = new Topology();
+
+        topology.addSource(sourceName, pattern2Source1);
+        topology.addSink("sink", SINK_TOPIC_1, sourceName);
+
+        testDriver = new TopologyTestDriver(topology, config);
+        testDriver.pipeInput(consumerRecord1);
+
+        final ProducerRecord outputRecord = testDriver.readOutput(SINK_TOPIC_1);
+        assertEquals(key1, outputRecord.key());
+        assertEquals(value1, outputRecord.value());
+        assertEquals(SINK_TOPIC_1, outputRecord.topic());
+    }
+
+    @Test
+    public void shouldThrowPatternNotValidForTopicNameException() {
+        final String sourceName = "source";
+        final String pattern2Source1 = "source-topic-\\d";
+
+        final Topology topology = new Topology();
+
+        topology.addSource(sourceName, pattern2Source1);
+        topology.addSink("sink", SINK_TOPIC_1, sourceName);
+
+        testDriver = new TopologyTestDriver(topology, config);
+        try {
+            testDriver.pipeInput(consumerRecord1);
+        } catch (final TopologyException exception) {
+            String str =
+                    String.format(
+                            "Invalid topology: Topology add source of type String for topic: %s cannot contain regex pattern for " +
+                                    "input record topic: %s and hence cannot process the message.",
+                            pattern2Source1,
+                            SOURCE_TOPIC_1);
+            assertEquals(str, exception.getMessage());
         }
     }
 }

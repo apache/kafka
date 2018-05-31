@@ -21,12 +21,12 @@ import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockStateStore;
-import org.apache.kafka.test.ProcessorTopologyTestDriver;
 import org.apache.kafka.test.TestUtils;
 import org.easymock.EasyMock;
 import org.junit.Test;
@@ -96,7 +96,12 @@ public class TopologyTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullTopicWhenAddingSink() {
-        topology.addSink("name", null);
+        topology.addSink("name", (String) null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullTopicChooserWhenAddingSink() {
+        topology.addSink("name", (TopicNameExtractor) null);
     }
 
     @Test(expected = NullPointerException.class)
@@ -261,7 +266,6 @@ public class TopologyTest {
         config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "host:1");
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
         config.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
-        final StreamsConfig streamsConfig = new StreamsConfig(config);
         mockStoreBuilder();
         EasyMock.expect(storeBuilder.build()).andReturn(new MockStateStore("store", false));
         EasyMock.replay(storeBuilder);
@@ -274,7 +278,7 @@ public class TopologyTest {
             .addProcessor(badNodeName, new LocalMockProcessorSupplier(), sourceNodeName);
 
         try {
-            new ProcessorTopologyTestDriver(streamsConfig, topology.internalTopologyBuilder);
+            new TopologyTestDriver(topology, config);
             fail("Should have thrown StreamsException");
         } catch (final StreamsException e) {
             final String error = e.toString();
@@ -297,10 +301,6 @@ public class TopologyTest {
 
                 @Override
                 public void process(Object key, Object value) { }
-
-                @SuppressWarnings("deprecation")
-                @Override
-                public void punctuate(long timestamp) { }
 
                 @Override
                 public void close() { }
