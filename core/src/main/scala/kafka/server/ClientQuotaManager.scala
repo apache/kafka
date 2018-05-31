@@ -269,18 +269,11 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
     * @param channelThrottlingCallback Callback for channel throttling
     * @return ThrottledChannel object
     */
-  def throttle(request: RequestChannel.Request, throttleTimeMs: Int,
-               channelThrottlingCallback: (ResponseAction) => Unit) {
-    throttle(request.session, request.header.clientId, throttleTimeMs, channelThrottlingCallback)
-  }
-
-  def throttle(session: Session, clientId: String, throttleTimeMs: Int,
-               channelThrottlingCallback: (ResponseAction) => Unit) {
+  def throttle(request: RequestChannel.Request, throttleTimeMs: Int, channelThrottlingCallback: Response => Unit): Unit = {
     if (throttleTimeMs > 0) {
-      val clientSensors = getOrCreateQuotaSensors(session, clientId)
-
+      val clientSensors = getOrCreateQuotaSensors(request.session, request.header.clientId)
       clientSensors.throttleTimeSensor.record(throttleTimeMs)
-      val throttledChannel = new ThrottledChannel(time, throttleTimeMs, channelThrottlingCallback)
+      val throttledChannel = new ThrottledChannel(request, time, throttleTimeMs, channelThrottlingCallback)
       delayQueue.add(throttledChannel)
       delayQueueSensor.record()
       debug("Channel throttled for sensor (%s). Delay time: (%d)".format(clientSensors.quotaSensor.name(), throttleTimeMs))

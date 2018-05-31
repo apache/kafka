@@ -14,34 +14,39 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.network;
+package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.network.Send;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.channels.GatheringByteChannel;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Queue;
 
 /**
- * A set of composite sends, sent one after another
+ * A set of composite sends with nested {@link RecordsSend}, sent one after another
  */
-public class MultiSend implements Send {
-    private static final Logger log = LoggerFactory.getLogger(MultiSend.class);
+public class MultiRecordsSend implements Send {
+    private static final Logger log = LoggerFactory.getLogger(MultiRecordsSend.class);
 
     private final String dest;
     private final Queue<Send> sendQueue;
     private final long size;
+    private Map<TopicPartition, RecordConversionStats> recordConversionStats;
 
     private long totalWritten = 0;
     private Send current;
 
     /**
-     * Construct a MultiSend for the given destination from a queue of Send objects. The queue will be
-     * consumed as the MultiSend progresses (on completion, it will be empty).
+     * Construct a MultiRecordsSend for the given destination from a queue of Send objects. The queue will be
+     * consumed as the MultiRecordsSend progresses (on completion, it will be empty).
      */
-    public MultiSend(String dest, Queue<Send> sends) {
+    public MultiRecordsSend(String dest, Queue<Send> sends) {
         this.dest = dest;
         this.sendQueue = sends;
 
@@ -88,8 +93,10 @@ public class MultiSend implements Send {
             long written = current.writeTo(channel);
             totalWrittenPerCall += written;
             sendComplete = current.completed();
-            if (sendComplete)
+            if (sendComplete) {
+                updateRecordConversionStats(current);
                 current = sendQueue.poll();
+            }
         } while (!completed() && sendComplete);
 
         totalWritten += totalWrittenPerCall;
@@ -103,4 +110,24 @@ public class MultiSend implements Send {
         return totalWrittenPerCall;
     }
 
+    /**
+     * Get any statistics that were recorded as part of executing this {@link MultiRecordsSend}.
+     * @return Records processing statistics (could be null if no statistics were collected)
+     */
+    public Map<TopicPartition, RecordConversionStats> recordConversionStats() {
+        return recordConversionStats;
+    }
+
+    private void updateRecordConversionStats(Send completedSend) {
+        // The underlying send might have accumulated statistics that need to be recorded. For example,
+        // LazyDownConversionRecordsSend accumulates statistics related to the number of bytes down-converted, the amount
+        // of temporary memory used for down-conversion, etc. Pull out any such statistics from the underlying send
+        // and fold it up appropriately.
+        if (completedSend instanceof LazyDownConversionRecordsSend) {
+            if (recordConversionStats == null)
+                recordConversionStats = new HashMap<>();
+            LazyDownConversionRecordsSend lazyRecordsSend = (LazyDownConversionRecordsSend) completedSend;
+            recordConversionStats.put(lazyRecordsSend.topicPartition(), lazyRecordsSend.recordConversionStats());
+        }
+    }
 }

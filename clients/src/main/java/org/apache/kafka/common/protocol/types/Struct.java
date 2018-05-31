@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.protocol.types;
 
-import org.apache.kafka.common.record.Records;
+import org.apache.kafka.common.record.BaseRecords;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -172,8 +172,8 @@ public class Struct {
         return (Byte) get(name);
     }
 
-    public Records getRecords(String name) {
-        return (Records) get(name);
+    public BaseRecords getRecords(String name) {
+        return (BaseRecords) get(name);
     }
 
     public Short getShort(BoundField field) {

@@ -16,18 +16,28 @@
  */
 package org.apache.kafka.common.record;
 
-public class RecordsProcessingStats {
+public class RecordConversionStats {
 
-    public static final RecordsProcessingStats EMPTY = new RecordsProcessingStats(0L, 0, -1);
+    public static final RecordConversionStats EMPTY = new RecordConversionStats();
 
-    private final long temporaryMemoryBytes;
-    private final int numRecordsConverted;
-    private final long conversionTimeNanos;
+    private long temporaryMemoryBytes;
+    private int numRecordsConverted;
+    private long conversionTimeNanos;
 
-    public RecordsProcessingStats(long temporaryMemoryBytes, int numRecordsConverted, long conversionTimeNanos) {
+    public RecordConversionStats(long temporaryMemoryBytes, int numRecordsConverted, long conversionTimeNanos) {
         this.temporaryMemoryBytes = temporaryMemoryBytes;
         this.numRecordsConverted = numRecordsConverted;
         this.conversionTimeNanos = conversionTimeNanos;
+    }
+
+    public RecordConversionStats() {
+        this(0, 0, 0);
+    }
+
+    public void add(RecordConversionStats stats) {
+        temporaryMemoryBytes += stats.temporaryMemoryBytes;
+        numRecordsConverted += stats.numRecordsConverted;
+        conversionTimeNanos += stats.conversionTimeNanos;
     }
 
     /**
@@ -54,7 +64,7 @@ public class RecordsProcessingStats {
 
     @Override
     public String toString() {
-        return String.format("RecordsProcessingStats(temporaryMemoryBytes=%d, numRecordsConverted=%d, conversionTimeNanos=%d)",
+        return String.format("RecordConversionStats(temporaryMemoryBytes=%d, numRecordsConverted=%d, conversionTimeNanos=%d)",
                 temporaryMemoryBytes, numRecordsConverted, conversionTimeNanos);
     }
 }

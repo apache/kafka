@@ -16,21 +16,19 @@
  */
 package org.apache.kafka.common.record;
 
-public class ConvertedRecords<T extends Records> {
+/**
+ * Base interface for accessing records which could be contained in the log, or an in-memory materialization of log records.
+ */
+public interface BaseRecords {
+    /**
+     * The size of these records in bytes.
+     * @return The size in bytes of the records
+     */
+    int sizeInBytes();
 
-    private final T records;
-    private final RecordConversionStats recordConversionStats;
-
-    public ConvertedRecords(T records, RecordConversionStats recordConversionStats) {
-        this.records = records;
-        this.recordConversionStats = recordConversionStats;
-    }
-
-    public T records() {
-        return records;
-    }
-
-    public RecordConversionStats recordConversionStats() {
-        return recordConversionStats;
-    }
+    /**
+     * Encapsulate this {@link BaseRecords} object into {@link RecordsSend}
+     * @return Initialized {@link RecordsSend} object
+     */
+    RecordsSend toSend(String destination);
 }

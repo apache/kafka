@@ -16,21 +16,20 @@
  */
 package org.apache.kafka.common.record;
 
-public class ConvertedRecords<T extends Records> {
+import java.io.IOException;
+import java.nio.channels.GatheringByteChannel;
 
-    private final T records;
-    private final RecordConversionStats recordConversionStats;
-
-    public ConvertedRecords(T records, RecordConversionStats recordConversionStats) {
-        this.records = records;
-        this.recordConversionStats = recordConversionStats;
+public class DefaultRecordsSend extends RecordsSend<Records> {
+    public DefaultRecordsSend(String destination, Records records) {
+        this(destination, records, records.sizeInBytes());
     }
 
-    public T records() {
-        return records;
+    public DefaultRecordsSend(String destination, Records records, int maxBytesToWrite) {
+        super(destination, records, maxBytesToWrite);
     }
 
-    public RecordConversionStats recordConversionStats() {
-        return recordConversionStats;
+    @Override
+    protected long writeTo(GatheringByteChannel channel, long previouslyWritten, int remaining) throws IOException {
+        return records().writeTo(channel, previouslyWritten, remaining);
     }
 }

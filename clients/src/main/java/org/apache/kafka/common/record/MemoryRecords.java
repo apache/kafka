@@ -20,6 +20,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention;
+import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.Time;
@@ -49,7 +50,7 @@ public class MemoryRecords extends AbstractRecords {
     private final Iterable<MutableRecordBatch> batches = new Iterable<MutableRecordBatch>() {
         @Override
         public Iterator<MutableRecordBatch> iterator() {
-            return new RecordBatchIterator<>(new ByteBufferLogInputStream(buffer.duplicate(), Integer.MAX_VALUE));
+            return batchIterator();
         }
     };
 
@@ -115,7 +116,12 @@ public class MemoryRecords extends AbstractRecords {
 
     @Override
     public ConvertedRecords<MemoryRecords> downConvert(byte toMagic, long firstOffset, Time time) {
-        return downConvert(batches(), toMagic, firstOffset, time);
+        return RecordsUtil.downConvert(batches(), toMagic, firstOffset, time);
+    }
+
+    @Override
+    public AbstractIterator<MutableRecordBatch> batchIterator() {
+        return new RecordBatchIterator<>(new ByteBufferLogInputStream(buffer.duplicate(), Integer.MAX_VALUE));
     }
 
     /**

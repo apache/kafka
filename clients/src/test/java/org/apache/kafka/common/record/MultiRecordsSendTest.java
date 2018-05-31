@@ -14,8 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.network;
+package org.apache.kafka.common.record;
 
+import org.apache.kafka.common.network.ByteBufferSend;
+import org.apache.kafka.common.network.Send;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
@@ -27,7 +29,7 @@ import java.util.Queue;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-public class MultiSendTest {
+public class MultiRecordsSendTest {
 
     @Test
     public void testSendsFreedAfterWriting() throws IOException {
@@ -45,7 +47,7 @@ public class MultiSendTest {
             sends.add(new ByteBufferSend(dest, buffer));
         }
 
-        MultiSend send = new MultiSend(dest, sends);
+        MultiRecordsSend send = new MultiRecordsSend(dest, sends);
         assertEquals(totalSize, send.size());
 
         for (int i = 0; i < numChunks; i++) {
@@ -69,7 +71,7 @@ public class MultiSendTest {
         @Override
         public long write(ByteBuffer[] srcs) throws IOException {
             // Instead of overflowing, this channel refuses additional writes once the buffer is full,
-            // which allows us to test the MultiSend behavior on a per-send basis.
+            // which allows us to test the MultiRecordsSend behavior on a per-send basis.
             if (!buffer().hasRemaining())
                 return 0;
             return super.write(srcs);

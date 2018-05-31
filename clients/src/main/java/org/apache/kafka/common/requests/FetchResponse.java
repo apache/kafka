@@ -18,7 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.network.ByteBufferSend;
-import org.apache.kafka.common.network.MultiSend;
+import org.apache.kafka.common.record.MultiRecordsSend;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -26,7 +26,8 @@ import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.record.Records;
+import org.apache.kafka.common.record.BaseRecords;
+import org.apache.kafka.common.record.MemoryRecords;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
@@ -50,7 +51,7 @@ import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 /**
  * This wrapper supports all versions of the Fetch API
  */
-public class FetchResponse extends AbstractResponse {
+public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
 
     private static final String RESPONSES_KEY_NAME = "responses";
 
@@ -156,10 +157,10 @@ public class FetchResponse extends AbstractResponse {
     public static final Field.Int32 SESSION_ID = new Field.Int32("session_id", "The fetch session ID");
 
     private static final Schema FETCH_RESPONSE_V7 = new Schema(
-        THROTTLE_TIME_MS,
-        ERROR_CODE,
-        SESSION_ID,
-        new Field(RESPONSES_KEY_NAME, new ArrayOf(FETCH_RESPONSE_TOPIC_V5)));
+            THROTTLE_TIME_MS,
+            ERROR_CODE,
+            SESSION_ID,
+            new Field(RESPONSES_KEY_NAME, new ArrayOf(FETCH_RESPONSE_TOPIC_V5)));
 
     /**
      * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
@@ -190,7 +191,7 @@ public class FetchResponse extends AbstractResponse {
     private final int throttleTimeMs;
     private final Errors error;
     private final int sessionId;
-    private final LinkedHashMap<TopicPartition, PartitionData> responseData;
+    private final LinkedHashMap<TopicPartition, PartitionData<T>> responseData;
 
     public static final class AbortedTransaction {
         public final long producerId;
@@ -226,20 +227,20 @@ public class FetchResponse extends AbstractResponse {
         }
     }
 
-    public static final class PartitionData {
+    public static final class PartitionData<T extends BaseRecords> {
         public final Errors error;
         public final long highWatermark;
         public final long lastStableOffset;
         public final long logStartOffset;
         public final List<AbortedTransaction> abortedTransactions;
-        public final Records records;
+        public final T records;
 
         public PartitionData(Errors error,
                              long highWatermark,
                              long lastStableOffset,
                              long logStartOffset,
                              List<AbortedTransaction> abortedTransactions,
-                             Records records) {
+                             T records) {
             this.error = error;
             this.highWatermark = highWatermark;
             this.lastStableOffset = lastStableOffset;
@@ -297,16 +298,18 @@ public class FetchResponse extends AbstractResponse {
      * @param throttleTimeMs    The time in milliseconds that the response was throttled
      * @param sessionId         The fetch session id.
      */
-    public FetchResponse(Errors error, LinkedHashMap<TopicPartition, PartitionData> responseData,
-                         int throttleTimeMs, int sessionId) {
+    public FetchResponse(Errors error,
+                         LinkedHashMap<TopicPartition, PartitionData<T>> responseData,
+                         int throttleTimeMs,
+                         int sessionId) {
         this.error = error;
         this.responseData = responseData;
         this.throttleTimeMs = throttleTimeMs;
         this.sessionId = sessionId;
     }
 
-    public FetchResponse(Struct struct) {
-        LinkedHashMap<TopicPartition, PartitionData> responseData = new LinkedHashMap<>();
+    public static FetchResponse<MemoryRecords> parse(Struct struct) {
+        LinkedHashMap<TopicPartition, PartitionData<MemoryRecords>> responseData = new LinkedHashMap<>();
         for (Object topicResponseObj : struct.getArray(RESPONSES_KEY_NAME)) {
             Struct topicResponse = (Struct) topicResponseObj;
             String topic = topicResponse.get(TOPIC_NAME);
@@ -323,7 +326,10 @@ public class FetchResponse extends AbstractResponse {
                 if (partitionResponseHeader.hasField(LOG_START_OFFSET_KEY_NAME))
                     logStartOffset = partitionResponseHeader.getLong(LOG_START_OFFSET_KEY_NAME);
 
-                Records records = partitionResponse.getRecords(RECORD_SET_KEY_NAME);
+                BaseRecords baseRecords = partitionResponse.getRecords(RECORD_SET_KEY_NAME);
+                if (!(baseRecords instanceof MemoryRecords))
+                    throw new IllegalStateException("Unknown records type found: " + baseRecords.getClass());
+                MemoryRecords records = (MemoryRecords) baseRecords;
 
                 List<AbortedTransaction> abortedTransactions = null;
                 if (partitionResponseHeader.hasField(ABORTED_TRANSACTIONS_KEY_NAME)) {
@@ -339,15 +345,13 @@ public class FetchResponse extends AbstractResponse {
                     }
                 }
 
-                PartitionData partitionData = new PartitionData(error, highWatermark, lastStableOffset, logStartOffset,
-                    abortedTransactions, records);
+                PartitionData<MemoryRecords> partitionData = new PartitionData<>(error, highWatermark, lastStableOffset,
+                        logStartOffset, abortedTransactions, records);
                 responseData.put(new TopicPartition(topic, partition), partitionData);
             }
         }
-        this.responseData = responseData;
-        this.throttleTimeMs = struct.getOrElse(THROTTLE_TIME_MS, DEFAULT_THROTTLE_TIME);
-        this.error = Errors.forCode(struct.getOrElse(ERROR_CODE, (short) 0));
-        this.sessionId = struct.getOrElse(SESSION_ID, INVALID_SESSION_ID);
+        return new FetchResponse<>(Errors.forCode(struct.getOrElse(ERROR_CODE, (short) 0)), responseData,
+                struct.getOrElse(THROTTLE_TIME_MS, DEFAULT_THROTTLE_TIME), struct.getOrElse(SESSION_ID, INVALID_SESSION_ID));
     }
 
     @Override
@@ -369,14 +373,14 @@ public class FetchResponse extends AbstractResponse {
         Queue<Send> sends = new ArrayDeque<>();
         sends.add(new ByteBufferSend(dest, buffer));
         addResponseData(responseBodyStruct, throttleTimeMs, dest, sends);
-        return new MultiSend(dest, sends);
+        return new MultiRecordsSend(dest, sends);
     }
 
     public Errors error() {
         return error;
     }
 
-    public LinkedHashMap<TopicPartition, PartitionData> responseData() {
+    public LinkedHashMap<TopicPartition, PartitionData<T>> responseData() {
         return responseData;
     }
 
@@ -397,8 +401,8 @@ public class FetchResponse extends AbstractResponse {
         return errorCounts;
     }
 
-    public static FetchResponse parse(ByteBuffer buffer, short version) {
-        return new FetchResponse(ApiKeys.FETCH.responseSchema(version).read(buffer));
+    public static FetchResponse<MemoryRecords> parse(ByteBuffer buffer, short version) {
+        return parse(ApiKeys.FETCH.responseSchema(version).read(buffer));
     }
 
     private static void addResponseData(Struct struct, int throttleTimeMs, String dest, Queue<Send> sends) {
@@ -446,7 +450,7 @@ public class FetchResponse extends AbstractResponse {
 
     private static void addPartitionData(String dest, Queue<Send> sends, Struct partitionData) {
         Struct header = partitionData.getStruct(PARTITION_HEADER_KEY_NAME);
-        Records records = partitionData.getRecords(RECORD_SET_KEY_NAME);
+        BaseRecords records = partitionData.getRecords(RECORD_SET_KEY_NAME);
 
         // include the partition header and the size of the record set
         ByteBuffer buffer = ByteBuffer.allocate(header.sizeOf() + 4);
@@ -456,24 +460,25 @@ public class FetchResponse extends AbstractResponse {
         sends.add(new ByteBufferSend(dest, buffer));
 
         // finally the send for the record set itself
-        sends.add(new RecordsSend(dest, records));
+        sends.add(records.toSend(dest));
     }
 
-    private static Struct toStruct(short version, int throttleTimeMs, Errors error,
-            Iterator<Map.Entry<TopicPartition, PartitionData>> partIterator, int sessionId) {
+    private static <T extends BaseRecords> Struct toStruct(short version, int throttleTimeMs, Errors error,
+                                                       Iterator<Map.Entry<TopicPartition, PartitionData<T>>> partIterator,
+                                                       int sessionId) {
         Struct struct = new Struct(ApiKeys.FETCH.responseSchema(version));
         struct.setIfExists(THROTTLE_TIME_MS, throttleTimeMs);
         struct.setIfExists(ERROR_CODE, error.code());
         struct.setIfExists(SESSION_ID, sessionId);
-        List<FetchRequest.TopicAndPartitionData<PartitionData>> topicsData =
-            FetchRequest.TopicAndPartitionData.batchByTopic(partIterator);
+        List<FetchRequest.TopicAndPartitionData<PartitionData<T>>> topicsData =
+                FetchRequest.TopicAndPartitionData.batchByTopic(partIterator);
         List<Struct> topicArray = new ArrayList<>();
-        for (FetchRequest.TopicAndPartitionData<PartitionData> topicEntry: topicsData) {
+        for (FetchRequest.TopicAndPartitionData<PartitionData<T>> topicEntry: topicsData) {
             Struct topicData = struct.instance(RESPONSES_KEY_NAME);
             topicData.set(TOPIC_NAME, topicEntry.topic);
             List<Struct> partitionArray = new ArrayList<>();
-            for (Map.Entry<Integer, PartitionData> partitionEntry : topicEntry.partitions.entrySet()) {
-                PartitionData fetchPartitionData = partitionEntry.getValue();
+            for (Map.Entry<Integer, PartitionData<T>> partitionEntry : topicEntry.partitions.entrySet()) {
+                PartitionData<T> fetchPartitionData = partitionEntry.getValue();
                 short errorCode = fetchPartitionData.error.code();
                 // If consumer sends FetchRequest V5 or earlier, the client library is not guaranteed to recognize the error code
                 // for KafkaStorageException. In this case the client library will translate KafkaStorageException to
@@ -524,7 +529,8 @@ public class FetchResponse extends AbstractResponse {
      * @param partIterator  The partition iterator.
      * @return              The response size in bytes.
      */
-    public static int sizeOf(short version, Iterator<Map.Entry<TopicPartition, PartitionData>> partIterator) {
+    public static <T extends BaseRecords> int sizeOf(short version,
+                                                     Iterator<Map.Entry<TopicPartition, PartitionData<T>>> partIterator) {
         // Since the throttleTimeMs and metadata field sizes are constant and fixed, we can
         // use arbitrary values here without affecting the result.
         return 4 + toStruct(version, 0, Errors.NONE, partIterator, INVALID_SESSION_ID).sizeOf();

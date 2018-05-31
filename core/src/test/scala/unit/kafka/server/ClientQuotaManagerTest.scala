@@ -16,13 +16,22 @@
  */
 package kafka.server
 
+import java.net.InetAddress
+import java.util
 import java.util.Collections
 
-import kafka.network.RequestChannel.{EndThrottlingAction, ResponseAction, Session, StartThrottlingAction}
+import kafka.network.RequestChannel
+import kafka.network.RequestChannel.{EndThrottlingResponse, Session, StartThrottlingResponse}
 import kafka.server.QuotaType._
+import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.metrics.{MetricConfig, Metrics, Quota}
-import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.requests.FetchRequest.PartitionData
+import org.apache.kafka.common.requests.{AbstractRequest, FetchRequest, RequestContext, RequestHeader}
+import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.{MockTime, Sanitizer}
+import org.easymock.EasyMock
 import org.junit.Assert.{assertEquals, assertTrue}
 import org.junit.{Before, Test}
 
@@ -32,11 +41,11 @@ class ClientQuotaManagerTest {
   private val config = ClientQuotaManagerConfig(quotaBytesPerSecondDefault = 500)
 
   var numCallbacks: Int = 0
-  def callback (responseAction: ResponseAction) {
+  def callback (response: RequestChannel.Response) {
     // Count how many times this callback is called for notifyThrottlingDone().
-    responseAction match {
-      case StartThrottlingAction =>
-      case EndThrottlingAction => numCallbacks += 1
+    response match {
+      case _: StartThrottlingResponse =>
+      case _: EndThrottlingResponse => numCallbacks += 1
     }
   }
 
@@ -45,15 +54,30 @@ class ClientQuotaManagerTest {
     numCallbacks = 0
   }
 
+  private def buildRequest[T <: AbstractRequest](builder: AbstractRequest.Builder[T],
+                                                 listenerName: ListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)): (T, RequestChannel.Request) = {
+
+    val request = builder.build()
+    val buffer = request.serialize(new RequestHeader(builder.apiKey, request.version, "", 0))
+    val requestChannelMetrics = EasyMock.createNiceMock(classOf[RequestChannel.Metrics])
+
+    // read the header from the buffer first so that the body can be read next from the Request constructor
+    val header = RequestHeader.parse(buffer)
+    val context = new RequestContext(header, "1", InetAddress.getLocalHost, KafkaPrincipal.ANONYMOUS,
+      listenerName, SecurityProtocol.PLAINTEXT)
+    (request, new RequestChannel.Request(processor = 1, context = context, startTimeNanos =  0, MemoryPool.NONE, buffer,
+      requestChannelMetrics))
+  }
+
   private def maybeRecord(quotaManager: ClientQuotaManager, user: String, clientId: String, value: Double): Int = {
     val principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, user)
-    quotaManager.maybeRecordAndGetThrottleTimeMs(Session(principal, null),clientId, value, time.milliseconds())
+    quotaManager.maybeRecordAndGetThrottleTimeMs(Session(principal, null), clientId, value, time.milliseconds())
   }
 
   private def throttle(quotaManager: ClientQuotaManager, user: String, clientId: String, throttleTimeMs: Int,
-                       channelThrottlingCallback: (ResponseAction) => Unit) {
-    val principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, user)
-    quotaManager.throttle(Session(principal, null),clientId, throttleTimeMs, channelThrottlingCallback)
+                       channelThrottlingCallback: (RequestChannel.Response) => Unit) {
+    val (_, request) = buildRequest(FetchRequest.Builder.forConsumer(0, 1000, new util.HashMap[TopicPartition, PartitionData]))
+    quotaManager.throttle(request, throttleTimeMs, channelThrottlingCallback)
   }
 
   private def testQuotaParsing(config: ClientQuotaManagerConfig, client1: UserClient, client2: UserClient, randomClient: UserClient, defaultConfigClient: UserClient) {
@@ -363,6 +387,7 @@ class ClientQuotaManagerTest {
       assertTrue("Should be throttled", throttleTime > 0)
       // the sensor should get recreated
       val throttleTimeSensor = metrics.getSensor("ProduceThrottleTime-:client1")
+      assertTrue("Throttle time sensor should exist", throttleTimeSensor != null)
       assertTrue("Throttle time sensor should exist", throttleTimeSensor != null)
     } finally {
       clientMetrics.shutdown()
