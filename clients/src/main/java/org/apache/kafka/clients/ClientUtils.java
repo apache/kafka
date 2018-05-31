@@ -43,8 +43,18 @@ public final class ClientUtils {
     private ClientUtils() {
     }
 
-    public static List<InetSocketAddress> parseAndValidateAddresses(List<String> urls, boolean reverseLookup) {
+    public static List<InetSocketAddress> parseAndValidateAddresses(List<String> urls,String clientDnsLookup) {
         List<InetSocketAddress> addresses = new ArrayList<>();
+        ClientDnsLookup clientDnsLookupBehaviour = null;
+        try
+        {
+            clientDnsLookupBehaviour = ClientDnsLookup.fromString(clientDnsLookup);
+        }
+        catch(IllegalArgumentException e)
+        {
+            log.error("{} isn't a valid value for {}",clientDnsLookup,CommonClientConfigs.CLIENT_DNS_LOOKUP);
+            throw new ConfigException("Invalid value in " + CommonClientConfigs.CLIENT_DNS_LOOKUP);
+        }
         for (String url : urls) {
             if (url != null && !url.isEmpty()) {
                 try {
@@ -53,7 +63,7 @@ public final class ClientUtils {
                     if (host == null || port == null)
                         throw new ConfigException("Invalid url in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
 
-                    if(reverseLookup)
+                    if(clientDnsLookupBehaviour == ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY)
                     {
                         InetAddress[] inetAddresses = InetAddress.getAllByName(host);
                         for (InetAddress inetAddress : inetAddresses) {
@@ -109,4 +119,5 @@ public final class ClientUtils {
         return ChannelBuilders.clientChannelBuilder(securityProtocol, JaasContext.Type.CLIENT, config, null,
                 clientSaslMechanism, true);
     }
+
 }

@@ -89,8 +89,8 @@ public class ConsumerConfig extends AbstractConfig {
      */
     public static final String BOOTSTRAP_SERVERS_CONFIG = CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
 
-    /** <code>bootstrap.reverse.dns.lookup</code> */
-    public static final String BOOTSTRAP_REVERSE_DNS_LOOKUP = CommonClientConfigs.BOOTSTRAP_REVERSE_DNS_LOOKUP;
+    /** <code>client.dns.lookup</code> */
+    public static final String CLIENT_DNS_LOOKUP = CommonClientConfigs.CLIENT_DNS_LOOKUP;
 
     /**
      * <code>enable.auto.commit</code>
@@ -264,7 +264,12 @@ public class ConsumerConfig extends AbstractConfig {
                                         new ConfigDef.NonNullValidator(),
                                         Importance.HIGH,
                                         CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
-                                .define(BOOTSTRAP_REVERSE_DNS_LOOKUP, Type.BOOLEAN, false, Importance.MEDIUM, CommonClientConfigs.BOOTSTRAP_REVERSE_DNS_LOOKUP_DOC)
+                                .define(CLIENT_DNS_LOOKUP,
+                                        Type.STRING,
+                                        "disabled",
+                                        in("bootstrap.hostnames.only","bootstrap.canonical.hostnames.only"),
+                                        Importance.MEDIUM,
+                                        CommonClientConfigs.CLIENT_DNS_LOOKUP_DOC)
                                 .define(GROUP_ID_CONFIG, Type.STRING, "", Importance.HIGH, GROUP_ID_DOC)
                                 .define(SESSION_TIMEOUT_MS_CONFIG,
                                         Type.INT,

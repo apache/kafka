@@ -51,8 +51,8 @@ public class ProducerConfig extends AbstractConfig {
     /** <code>bootstrap.servers</code> */
     public static final String BOOTSTRAP_SERVERS_CONFIG = CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
 
-    /** <code>bootstrap.reverse.dns.lookup</code> */
-    public static final String BOOTSTRAP_REVERSE_DNS_LOOKUP = CommonClientConfigs.BOOTSTRAP_REVERSE_DNS_LOOKUP;
+    /** <code>client.dns.lookup</code> */
+    public static final String CLIENT_DNS_LOOKUP = CommonClientConfigs.CLIENT_DNS_LOOKUP;
 
     /** <code>metadata.max.age.ms</code> */
     public static final String METADATA_MAX_AGE_CONFIG = CommonClientConfigs.METADATA_MAX_AGE_CONFIG;
@@ -226,7 +226,12 @@ public class ProducerConfig extends AbstractConfig {
 
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG, Type.LIST, Collections.emptyList(), new ConfigDef.NonNullValidator(), Importance.HIGH, CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
-                                .define(BOOTSTRAP_REVERSE_DNS_LOOKUP, Type.BOOLEAN, false, Importance.MEDIUM, CommonClientConfigs.BOOTSTRAP_REVERSE_DNS_LOOKUP_DOC)
+                                .define(CLIENT_DNS_LOOKUP,
+                                        Type.STRING,
+                                        "disabled",
+                                        in("bootstrap.hostnames.only","bootstrap.canonical.hostnames.only"),
+                                        Importance.MEDIUM,
+                                        CommonClientConfigs.CLIENT_DNS_LOOKUP_DOC)
                                 .define(BUFFER_MEMORY_CONFIG, Type.LONG, 32 * 1024 * 1024L, atLeast(0L), Importance.HIGH, BUFFER_MEMORY_DOC)
                                 .define(RETRIES_CONFIG, Type.INT, 0, between(0, Integer.MAX_VALUE), Importance.HIGH, RETRIES_DOC)
                                 .define(ACKS_CONFIG,
