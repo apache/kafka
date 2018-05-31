@@ -229,7 +229,6 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
 
   /**
    * Get offset relative to base offset of this index
- *
    * @throws IndexOffsetOverflowException
    */
   def relativeOffset(offset: Long): Int = {
