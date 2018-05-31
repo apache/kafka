@@ -39,7 +39,7 @@ import org.apache.kafka.common.{KafkaException, Node, Reconfigurable, TopicParti
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.{HashMap, ListBuffer}
-import scala.collection.{Seq, Set, mutable}
+import scala.collection.{Seq, Map, Set, mutable}
 
 object ControllerChannelManager {
   val QueueSizeMetricName = "QueueSize"
@@ -57,7 +57,7 @@ class ControllerChannelManager(controllerContext: ControllerContext,
   protected val brokerStateInfo = new HashMap[Int, ControllerBrokerStateInfo]
   private val brokerLock = new Object
   this.logIdent = "[Channel manager on controller " + config.brokerId + "]: "
-
+  val brokerResponseSensors: mutable.Map[ApiKeys, BrokerResponseTimeStats] = mutable.HashMap.empty
   newGauge(
     "TotalQueueSize",
     new Gauge[Int] {
@@ -73,11 +73,26 @@ class ControllerChannelManager(controllerContext: ControllerContext,
     brokerLock synchronized {
       brokerStateInfo.foreach(brokerState => startRequestSendThread(brokerState._1))
     }
+    initBrokerResponseSensors()
   }
 
   def shutdown() = {
     brokerLock synchronized {
       brokerStateInfo.values.toList.foreach(removeExistingBroker)
+    }
+    removeBrokerResponseSensors()
+  }
+
+  def initBrokerResponseSensors(): Unit = {
+    Array(ApiKeys.STOP_REPLICA, ApiKeys.LEADER_AND_ISR, ApiKeys.UPDATE_METADATA).foreach { k: ApiKeys =>
+      brokerResponseSensors.put(k, new BrokerResponseTimeStats(k))
+    }
+  }
+
+  def removeBrokerResponseSensors(): Unit = {
+    brokerResponseSensors.keySet.foreach { k: ApiKeys =>
+      brokerResponseSensors(k).removeMetrics()
+      brokerResponseSensors.remove(k)
     }
   }
 
@@ -172,7 +187,7 @@ class ControllerChannelManager(controllerContext: ControllerContext,
     )
 
     val requestThread = new RequestSendThread(config.brokerId, controllerContext, messageQueue, networkClient,
-      brokerNode, config, time, requestRateAndQueueTimeMetrics, stateChangeLogger, threadName)
+      brokerNode, config, time, requestRateAndQueueTimeMetrics, stateChangeLogger, threadName, this)
     requestThread.setDaemon(false)
 
     val queueSizeGauge = newGauge(
@@ -226,7 +241,8 @@ class RequestSendThread(val controllerId: Int,
                         val time: Time,
                         val requestRateAndQueueTimeMetrics: Timer,
                         val stateChangeLogger: StateChangeLogger,
-                        name: String)
+                        name: String,
+                        val controllerChannelManager: ControllerChannelManager)
   extends ShutdownableThread(name = name) {
 
   logIdent = s"[RequestSendThread controllerId=$controllerId] "
@@ -238,7 +254,9 @@ class RequestSendThread(val controllerId: Int,
     def backoff(): Unit = pause(100, TimeUnit.MILLISECONDS)
 
     val QueueItem(apiKey, requestBuilder, callback, enqueueTimeMs) = queue.take()
-    requestRateAndQueueTimeMetrics.update(time.milliseconds() - enqueueTimeMs, TimeUnit.MILLISECONDS)
+    var queueTimeMs = time.milliseconds() - enqueueTimeMs
+    var remoteTimeMs: Long = 0
+    requestRateAndQueueTimeMetrics.update(queueTimeMs, TimeUnit.MILLISECONDS)
 
     var clientResponse: ClientResponse = null
     try {
@@ -256,6 +274,7 @@ class RequestSendThread(val controllerId: Int,
               time.milliseconds(), true)
             clientResponse = NetworkClientUtils.sendAndReceive(networkClient, clientRequest, time)
             isSendSuccessful = true
+            remoteTimeMs = time.milliseconds() - enqueueTimeMs - queueTimeMs
           }
         } catch {
           case e: Throwable => // if the send was not successful, reconnect to broker and resend the message
@@ -281,6 +300,7 @@ class RequestSendThread(val controllerId: Int,
         if (callback != null) {
           callback(response)
         }
+        controllerChannelManager.brokerResponseSensors(api).update(queueTimeMs, remoteTimeMs)
       }
     } catch {
       case e: Throwable =>
@@ -603,3 +623,22 @@ case class ControllerBrokerStateInfo(networkClient: NetworkClient,
                                      requestRateAndTimeMetrics: Timer,
                                      reconfigurableChannelBuilder: Option[Reconfigurable])
 
+
+class BrokerResponseTimeStats(val key: ApiKeys) extends KafkaMetricsGroup {
+  // Records time for request waits on local send thread queue
+  val brokerRequestQueueTime = newHistogram("brokerRequestQueueTimeMs", true, responseTimeTags)
+  // Records time for controller to send request and receive response
+  val brokerRequestRemoteTime = newHistogram("brokerRequestRemoteTimeMs", true, responseTimeTags)
+
+  def responseTimeTags = Map("request" -> key.toString)
+
+  def update(queueTime: Long, remoteTime: Long): Unit = {
+    brokerRequestQueueTime.update(queueTime)
+    brokerRequestRemoteTime.update(remoteTime)
+  }
+
+  def removeMetrics(): Unit = {
+    removeMetric("brokerRequestQueueTimeMs", responseTimeTags)
+    removeMetric("brokerRequestRemoteTimeMs", responseTimeTags)
+  }
+}
