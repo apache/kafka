@@ -43,6 +43,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     private final Map<Sensor, Sensor> parentSensors;
     private final Sensor skippedRecordsSensor;
     private final String threadName;
+    private String taskName;
 
     private final Deque<String> threadLevelSensors = new LinkedList<>();
     private final Map<String, Deque<String>> taskLevelSensors = new HashMap<>();
@@ -233,12 +234,12 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         final Map<String, String> allTagMap = constructTags(scopeName, "all", tags);
 
         // first add the global operation metrics if not yet, with the global tags only
-        final Sensor parent = metrics.sensor(sensorName(operationName, null), recordingLevel);
+        final Sensor parent = metrics.sensor(sensorName(buildUniqueSensorName(operationName), null), recordingLevel);
         addLatencyMetrics(scopeName, parent, operationName, allTagMap);
         addThroughputMetrics(scopeName, parent, operationName, allTagMap);
 
         // add the operation metrics with additional tags
-        final Sensor sensor = metrics.sensor(sensorName(operationName, entityName), recordingLevel, parent);
+        final Sensor sensor = metrics.sensor(sensorName(buildUniqueSensorName(operationName), entityName), recordingLevel, parent);
         addLatencyMetrics(scopeName, sensor, operationName, tagMap);
         addThroughputMetrics(scopeName, sensor, operationName, tagMap);
 
@@ -253,10 +254,12 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                                 final String operationName,
                                                 final Sensor.RecordingLevel recordingLevel,
                                                 final String... tags) {
+        this.taskName = taskName;
+
         return addLatencyAndThroughputSensor(
             scopeName,
             entityName,
-            threadName + "." + taskName + "." + operationName,
+            operationName,
             recordingLevel,
             tags);
     }
@@ -274,11 +277,11 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         final Map<String, String> allTagMap = constructTags(scopeName, "all", tags);
 
         // first add the global operation metrics if not yet, with the global tags only
-        final Sensor parent = metrics.sensor(sensorName(operationName, null), recordingLevel);
+        final Sensor parent = metrics.sensor(sensorName(buildUniqueSensorName(operationName), null), recordingLevel);
         addThroughputMetrics(scopeName, parent, operationName, allTagMap);
 
         // add the operation metrics with additional tags
-        final Sensor sensor = metrics.sensor(sensorName(operationName, entityName), recordingLevel, parent);
+        final Sensor sensor = metrics.sensor(sensorName(buildUniqueSensorName(operationName), entityName), recordingLevel, parent);
         addThroughputMetrics(scopeName, sensor, operationName, tagMap);
 
         parentSensors.put(sensor, parent);
@@ -292,13 +295,19 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                       final String operationName,
                                       final Sensor.RecordingLevel recordingLevel,
                                       final String... tags) {
+        this.taskName = taskName;
         return addThroughputSensor(
             scopeName,
             entityName,
-            threadName + "." + taskName + "." + operationName,
+            operationName,
             recordingLevel,
             tags
         );
+    }
+
+
+    private String buildUniqueSensorName(String operationName) {
+        return threadName + "." + taskName + "." + operationName;
     }
 
     private void addLatencyMetrics(final String scopeName, final Sensor sensor, final String opName, final Map<String, String> tags) {
