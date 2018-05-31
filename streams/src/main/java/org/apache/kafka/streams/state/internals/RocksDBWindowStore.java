@@ -76,7 +76,7 @@ public class RocksDBWindowStore<K, V> extends WrappedStateStore.AbstractStateSto
         try {
             bytesStore.put(WindowKeySchema.toStoreKeyBinary(key, timestamp, seqnum, serdes), serdes.rawValue(value));
         } catch (final ProcessorStateException e) {
-            final String message = String.format(e.getMessage(), key , value);
+            final String message = String.format(e.getMessage(), key, value);
             throw new ProcessorStateException(message, e);
         }
     }
