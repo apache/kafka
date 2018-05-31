@@ -78,7 +78,10 @@ public class MockClient implements KafkaClient {
     private Cluster cluster;
     private Node node = null;
     private final Set<String> ready = new HashSet<>();
-    private final Map<Node, Long> blackedOut = new HashMap<>();
+
+    private final TransientSet<Node> blackedOut;
+    private final TransientSet<Node> unreachable;
+
     private final Map<Node, Long> pendingAuthenticationErrors = new HashMap<>();
     private final Map<Node, AuthenticationException> authenticationErrors = new HashMap<>();
     // Use concurrent queue for requests so that requests may be queried from a different thread
@@ -98,6 +101,8 @@ public class MockClient implements KafkaClient {
         this.time = time;
         this.metadata = metadata;
         this.unavailableTopics = Collections.emptySet();
+        this.blackedOut = new TransientSet<>(time);
+        this.unreachable = new TransientSet<>(time);
     }
 
     @Override
@@ -107,19 +112,27 @@ public class MockClient implements KafkaClient {
 
     @Override
     public boolean ready(Node node, long now) {
-        if (isBlackedOut(node))
+        if (blackedOut.contains(node, now))
             return false;
+
+        if (unreachable.contains(node, now)) {
+            blackout(node, 50);
+            return false;
+        }
+
         authenticationErrors.remove(node);
         ready.add(node.idString());
         return true;
     }
 
+    public void setUnreachable(Node node, long durationMs) {
+        unreachable.add(node, durationMs);
+        disconnect(node.idString());
+    }
+
     @Override
     public long connectionDelay(Node node, long now) {
-        Long blackoutExpiration = blackedOut.get(node);
-        if (blackoutExpiration != null)
-            return Math.max(0, blackoutExpiration - now);
-        return 0;
+        return blackedOut.expirationDelayMs(node, now);
     }
 
     @Override
@@ -128,7 +141,7 @@ public class MockClient implements KafkaClient {
     }
 
     public void blackout(Node node, long duration) {
-        blackedOut.put(node, time.milliseconds() + duration);
+        blackedOut.add(node, duration);
     }
 
     public void authenticationFailed(Node node, long duration) {
@@ -142,22 +155,10 @@ public class MockClient implements KafkaClient {
         pendingAuthenticationErrors.put(node, blackoutMs);
     }
 
-    private boolean isBlackedOut(Node node) {
-        if (blackedOut.containsKey(node)) {
-            long expiration = blackedOut.get(node);
-            if (time.milliseconds() > expiration) {
-                blackedOut.remove(node);
-                return false;
-            } else {
-                return true;
-            }
-        }
-        return false;
-    }
 
     @Override
     public boolean connectionFailed(Node node) {
-        return isBlackedOut(node);
+        return blackedOut.contains(node);
     }
 
     @Override
@@ -420,6 +421,7 @@ public class MockClient implements KafkaClient {
     public void reset() {
         ready.clear();
         blackedOut.clear();
+        unreachable.clear();
         requests.clear();
         responses.clear();
         futureResponses.clear();
@@ -537,6 +539,45 @@ public class MockClient implements KafkaClient {
             this.unavailableTopics = unavailableTopics;
             this.expectMatchRefreshTopics = expectMatchRefreshTopics;
         }
+    }
+
+    private static class TransientSet<T> {
+        // The elements in the set mapped to their expiration timestamps
+        private final Map<T, Long> elements = new HashMap<>();
+        private final Time time;
+
+        private TransientSet(Time time) {
+            this.time = time;
+        }
+
+        boolean contains(T element) {
+            return contains(element, time.milliseconds());
+        }
+
+        boolean contains(T element, long now) {
+            return expirationDelayMs(element, now) > 0;
+        }
+
+        void add(T element, long durationMs) {
+            elements.put(element, time.milliseconds() + durationMs);
+        }
+
+        long expirationDelayMs(T element, long now) {
+            Long expirationTimeMs = elements.get(element);
+            if (expirationTimeMs == null) {
+                return 0;
+            } else if (now > expirationTimeMs) {
+                elements.remove(element);
+                return 0;
+            } else {
+                return expirationTimeMs - now;
+            }
+        }
+
+        void clear() {
+            elements.clear();
+        }
+
     }
 
 }
