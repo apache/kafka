@@ -60,7 +60,7 @@
     <li>Bumping the protocol version and restarting can be done any time after the brokers are upgraded. It does not have to be immediately after.
         Similarly for the message format version.</li>
     <li>If you are using Java8 method references in your Kafka Streams code you might need to update your code to resolve method ambiguties.
-        Hot-swaping the jar-file only might not work.</li>
+        Hot-swapping the jar-file only might not work.</li>
 </ol>
 
 <h5><a id="upgrade_200_notable" href="#upgrade_200_notable">Notable changes in 2.0.0</a></h5>
@@ -91,6 +91,10 @@
         <code>internal.value.converter=org.apache.kafka.connect.json.JsonConverter</code>
         <code>internal.value.converter.schemas.enable=false</code>
     </li>
+    <li><a href="https://cwiki.apache.org/confluence/x/5kiHB">KIP-266</a> adds overloads to the consumer to support
+        timeout behavior for blocking APIs. In particular, a new <code>poll(Duration)</code> API has been added which
+        does not block for dynamic partition assignment. The old <code>poll(long)</code> API has been deprecated and
+        will be removed in a future version.</li>
 </ul>
 
 <h5><a id="upgrade_200_new_protocols" href="#upgrade_200_new_protocols">New Protocol Versions</a></h5>

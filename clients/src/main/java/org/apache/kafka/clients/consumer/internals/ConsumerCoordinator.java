@@ -57,6 +57,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -87,29 +88,25 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private MetadataSnapshot assignmentSnapshot;
     private long nextAutoCommitDeadline;
 
-    // hold onto request&future for commited offset requests to enable async calls.
+    // hold onto request&future for committed offset requests to enable async calls.
     private PendingCommittedOffsetRequest pendingCommittedOffsetRequest = null;
 
     private static class PendingCommittedOffsetRequest {
-        private final Set<TopicPartition> request;
-        private final Generation generation;
+        private final Set<TopicPartition> requestedPartitions;
+        private final Generation requestedGeneration;
         private final RequestFuture<Map<TopicPartition, OffsetAndMetadata>> response;
 
-        private PendingCommittedOffsetRequest(final Set<TopicPartition> request,
+        private PendingCommittedOffsetRequest(final Set<TopicPartition> requestedPartitions,
                                               final Generation generationAtRequestTime,
-                                              final RequestFuture<Map<TopicPartition, OffsetAndMetadata>> response
-        ) {
-            if (request == null) throw new NullPointerException();
-            if (response == null) throw new NullPointerException();
-
-            this.request = request;
-            this.generation = generationAtRequestTime;
-            this.response = response;
+                                              final RequestFuture<Map<TopicPartition, OffsetAndMetadata>> response) {
+            this.requestedPartitions = Objects.requireNonNull(requestedPartitions);
+            this.response = Objects.requireNonNull(response);
+            this.requestedGeneration = generationAtRequestTime;
         }
 
         private boolean sameRequest(final Set<TopicPartition> currentRequest, final Generation currentGeneration) {
-            return (generation == null ? currentGeneration == null : generation.equals(currentGeneration))
-                && request.equals(currentRequest);
+            return (requestedGeneration == null ? currentGeneration == null : requestedGeneration.equals(currentGeneration))
+                && requestedPartitions.equals(currentRequest);
         }
     }
 
@@ -303,6 +300,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
      */
     public boolean poll(final long timeoutMs) {
         final long startTime = time.milliseconds();
+        long currentTime = startTime;
         long elapsed = 0L;
 
         invokeCompletedOffsetCommitCallbacks();
@@ -312,7 +310,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 if (!ensureCoordinatorReady(remainingTimeAtLeastZero(timeoutMs, elapsed))) {
                     return false;
                 }
-                elapsed = time.milliseconds() - startTime;
+                currentTime = time.milliseconds();
+                elapsed = currentTime - startTime;
+
             }
 
             if (rejoinNeededOrPending()) {
@@ -323,15 +323,18 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     if (!client.ensureFreshMetadata(remainingTimeAtLeastZero(timeoutMs, elapsed))) {
                         return false;
                     }
-                    elapsed = time.milliseconds() - startTime;
+                    currentTime = time.milliseconds();
+                    elapsed = currentTime - startTime;
                 }
 
                 if (!ensureActiveGroup(remainingTimeAtLeastZero(timeoutMs, elapsed))) {
                     return false;
                 }
+
+                currentTime = time.milliseconds();
             }
 
-            pollHeartbeat(startTime);
+            pollHeartbeat(currentTime);
         } else {
             // For manually assigned partitions, if there are no ready nodes, await metadata.
             // If connections to all nodes fail, wakeups triggered while attempting to send fetch
@@ -345,10 +348,12 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 if (!metadataUpdated && !client.hasReadyNodes(time.milliseconds())) {
                     return false;
                 }
+
+                currentTime = time.milliseconds();
             }
         }
 
-        maybeAutoCommitOffsetsAsync(startTime);
+        maybeAutoCommitOffsetsAsync(currentTime);
         return true;
     }
 
