@@ -99,8 +99,7 @@ public class RocksDBSessionStore<K, AGG> extends WrappedStateStore.AbstractState
         try {
             bytesStore.put(Bytes.wrap(SessionKeySchema.toBinary(sessionKey, serdes.keySerializer(), topic)), serdes.rawValue(aggregate));
         } catch (final ProcessorStateException e) {
-            final String message = String.format(e.getMessage(), sessionKey,
-                    aggregate);
+            final String message = String.format(e.getMessage(), sessionKey, aggregate);
             throw new ProcessorStateException(message, e);
         }
     }
