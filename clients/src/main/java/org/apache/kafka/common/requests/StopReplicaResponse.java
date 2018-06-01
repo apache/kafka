@@ -115,4 +115,13 @@ public class StopReplicaResponse extends AbstractResponse {
         struct.set(ERROR_CODE, error.code());
         return struct;
     }
+
+    @Override
+    public String toString() {
+        return "StopReplicaResponse(" +
+                "responses=" + responses +
+                ", error=" + error +
+                ")";
+    }
+
 }
