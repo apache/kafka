@@ -230,12 +230,12 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                                 final Sensor.RecordingLevel recordingLevel,
                                                 final String... tags) {
 
-        return addThroughputSensor(null,
-                                   scopeName,
-                                   entityName,
-                                   operationName,
-                                   recordingLevel,
-                                   tags);
+        return addLatencyAndThroughputSensor(null,
+                                             scopeName,
+                                             entityName,
+                                             operationName,
+                                             recordingLevel,
+                                             tags);
 
     }
 
