@@ -831,7 +831,6 @@ public class KafkaAdminClient extends AdminClient {
             Iterator<Call> pendingIter = pendingCalls.iterator();
             while (pendingIter.hasNext()) {
                 Call call = pendingIter.next();
-                log.trace("Attempting to choose node for call " + call.callName);
 
                 // If the call is being retried, await the proper backoff before finding the node
                 if (now < call.nextAllowedTryMs) {
@@ -1106,7 +1105,7 @@ public class KafkaAdminClient extends AdminClient {
 
                 // Ensure that we use a small poll timeout if there is nothing in flight and we have
                 // pending calls which need to be sent
-                if (client.inFlightRequestCount() == 0 && !pendingCalls.isEmpty())
+                if (client.hasInFlightRequests() && !pendingCalls.isEmpty())
                     pollTimeout = Math.min(pollTimeout, retryBackoffMs);
 
                 // Wait for network responses.

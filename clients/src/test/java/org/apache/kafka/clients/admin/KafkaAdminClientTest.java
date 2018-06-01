@@ -114,7 +114,7 @@ public class KafkaAdminClientTest {
     private static final Logger log = LoggerFactory.getLogger(KafkaAdminClientTest.class);
 
     @Rule
-    final public Timeout globalTimeout = Timeout.millis(120000000);
+    final public Timeout globalTimeout = Timeout.millis(120000);
 
     @Test
     public void testGetOrCreateListValue() {
