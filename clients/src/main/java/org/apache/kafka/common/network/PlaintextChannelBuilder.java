@@ -34,7 +34,7 @@ import java.util.Map;
 public class PlaintextChannelBuilder implements ChannelBuilder {
     private static final Logger log = LoggerFactory.getLogger(PlaintextChannelBuilder.class);
     private Map<String, ?> configs;
-    private ListenerName listenerName;
+    private final ListenerName listenerName;
 
     /**
      * Constructs a plaintext channel builder. ListenerName is provided only

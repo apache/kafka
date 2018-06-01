@@ -19,13 +19,18 @@ package kafka.api
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth._
-import org.junit.Before
+import org.junit.{Before, Test}
+import org.junit.Assert._
+import org.apache.kafka.common.errors.TopicAuthorizationException
 
 // This test case uses a separate listener for client and inter-broker communication, from
 // which we derive corresponding principals
 object PlaintextEndToEndAuthorizationTest {
+  var clientListenerName: String = ""
+  var serverListenerName: String = ""
   class TestClientPrincipalBuilder extends KafkaPrincipalBuilder {
     override def build(context: AuthenticationContext): KafkaPrincipal = {
+      clientListenerName = context.listenerName
       context match {
         case ctx: PlaintextAuthenticationContext if ctx.clientAddress != null =>
           new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "client")
@@ -37,6 +42,7 @@ object PlaintextEndToEndAuthorizationTest {
 
   class TestServerPrincipalBuilder extends KafkaPrincipalBuilder {
     override def build(context: AuthenticationContext): KafkaPrincipal = {
+      serverListenerName = context.listenerName
       context match {
         case ctx: PlaintextAuthenticationContext =>
           new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "server")
@@ -65,6 +71,18 @@ class PlaintextEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
   override def setUp() {
     startSasl(jaasSections(List.empty, None, ZkSasl))
     super.setUp()
+  }
+
+  @Test
+  def testListenerName() {
+    try {
+      sendRecords(1, tp)
+      fail("Should have thrown a TopicAuthorizationException")
+    } catch {
+      case tae: TopicAuthorizationException => //expected
+    }
+    assertEquals("CLIENT", PlaintextEndToEndAuthorizationTest.clientListenerName)
+    assertEquals("SERVER", PlaintextEndToEndAuthorizationTest.serverListenerName)
   }
 
 }
