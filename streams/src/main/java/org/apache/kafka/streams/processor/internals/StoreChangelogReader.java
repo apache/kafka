@@ -68,9 +68,6 @@ public class StoreChangelogReader implements ChangelogReader {
 
     public Collection<TopicPartition> restore(final RestoringTasks active) {
         if (!needsInitializing.isEmpty()) {
-            final Set<TopicPartition> remainingPartitions = new HashSet<>(needsRestoring.keySet());
-            remainingPartitions.removeAll(updatedEndOffsets.keySet());
-            updatedEndOffsets.putAll(restoreConsumer.endOffsets(remainingPartitions));
             initialize();
         }
 
@@ -80,9 +77,11 @@ public class StoreChangelogReader implements ChangelogReader {
         }
 
         try {
+            final Set<TopicPartition> remainingPartitions = new HashSet<>(needsRestoring.keySet());
+            remainingPartitions.removeAll(updatedEndOffsets.keySet());
+            updatedEndOffsets.putAll(restoreConsumer.endOffsets(remainingPartitions));
             final ConsumerRecords<byte[], byte[]> records = restoreConsumer.poll(10);
             final Iterator<TopicPartition> iterator = needsRestoring.keySet().iterator();
-            final HashSet<TopicPartition> completedPartitions = new HashSet<>();
             while (iterator.hasNext()) {
                 final TopicPartition partition = iterator.next();
                 final StateRestorer restorer = stateRestorers.get(partition);
@@ -91,11 +90,8 @@ public class StoreChangelogReader implements ChangelogReader {
                 if (restorer.hasCompleted(pos, updatedEndOffsets.get(partition))) {
                     restorer.restoreDone();
                     updatedEndOffsets.remove(partition);
-                    completedPartitions.add(partition);
+                    iterator.remove();
                 }
-            }
-            for (TopicPartition partition : completedPartitions) {
-                needsRestoring.remove(partition);
             }
         } catch (final InvalidOffsetException recoverableException) {
             log.warn("Restoring StreamTasks failed. Deleting StreamTasks stores to recreate from scratch.", recoverableException);
