@@ -86,4 +86,10 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
     }, s"Expected --list to show groups $expectedGroups, but found $foundGroups.")
   }
 
+  @Test(expected = classOf[joptsimple.OptionException])
+  def testListWithUnrecognizedNewConsumerOption() {
+    val cgcArgs = Array("--new-consumer", "--bootstrap-server", brokerList, "--list")
+    getConsumerGroupService(cgcArgs)
+    fail("Expected an error due to presence of unrecognized --new-consumer option")
+  }
 }

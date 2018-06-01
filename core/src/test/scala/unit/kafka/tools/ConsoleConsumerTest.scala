@@ -183,6 +183,30 @@ class ConsoleConsumerTest {
 
   }
 
+  @Test(expected = classOf[IllegalArgumentException])
+  def shouldExitOnUnrecognizedNewConsumerOption(): Unit = {
+
+    // Override exit procedure to throw an exception instead of exiting, so we can catch the exit
+    // properly for this test case
+    Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
+
+    //Given
+    val args: Array[String] = Array(
+      "--new-consumer",
+      "--bootstrap-server", "localhost:9092",
+      "--topic", "test",
+      "--from-beginning")
+
+    //When
+    try {
+      new ConsoleConsumer.ConsumerConfig(args)
+    } finally {
+      Exit.resetExitProcedure()
+    }
+
+    fail("Expected consumer config construction to fail due to unrecognized --new-consumer option")
+  }
+
   @Test
   def testDefaultConsumer() {
     //Given

@@ -222,4 +222,11 @@ class DeleteConsumerGroupTest extends ConsumerGroupCommandTest {
       result.size == 1 &&
         result.keySet.contains(group) && result.get(group).contains(Errors.COORDINATOR_NOT_AVAILABLE))
   }
+
+  @Test(expected = classOf[joptsimple.OptionException])
+  def testDeleteWithUnrecognizedNewConsumerOption() {
+    val cgcArgs = Array("--new-consumer", "--bootstrap-server", brokerList, "--delete", "--group", group)
+    getConsumerGroupService(cgcArgs)
+    fail("Expected an error due to presence of unrecognized --new-consumer option")
+  }
 }
