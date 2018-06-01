@@ -472,7 +472,7 @@ public class KTableImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerOnOuterJoinWhenMaterializedIsNull() {
-        table.leftJoin(table, MockValueJoiner.TOSTRING_JOINER, (Materialized) null);
+        table.outerJoin(table, MockValueJoiner.TOSTRING_JOINER, (Materialized) null);
     }
 
     @Test(expected = NullPointerException.class)
