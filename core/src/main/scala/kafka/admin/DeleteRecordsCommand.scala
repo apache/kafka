@@ -24,7 +24,8 @@ import kafka.common.AdminCommandFailedException
 import kafka.utils.{CommandLineUtils, CoreUtils, Json}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.clients.admin.{RecordsToDelete, AdminClient => JAdminClient}
+import org.apache.kafka.clients.admin
+import org.apache.kafka.clients.admin.RecordsToDelete
 import org.apache.kafka.clients.CommonClientConfigs
 import joptsimple._
 
@@ -83,13 +84,13 @@ object DeleteRecordsCommand {
     adminClient.close()
   }
 
-  private def createAdminClient(opts: DeleteRecordsCommandOptions): JAdminClient = {
+  private def createAdminClient(opts: DeleteRecordsCommandOptions): admin.AdminClient = {
     val props = if (opts.options.has(opts.commandConfigOpt))
       Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt))
     else
       new Properties()
     props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt))
-    JAdminClient.create(props)
+    admin.AdminClient.create(props)
   }
 
   class DeleteRecordsCommandOptions(args: Array[String]) {
