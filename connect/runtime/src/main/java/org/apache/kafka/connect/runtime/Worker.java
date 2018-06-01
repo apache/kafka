@@ -527,11 +527,11 @@ public class Worker {
         logReporter.metrics(errorHandlingMetrics);
         reporters.add(logReporter);
 
-        // check if topic for dead letter queue exists
-        String topic = connConfig.getString(DeadLetterQueueReporter.PREFIX + "." + DeadLetterQueueReporter.DLQ_TOPIC_NAME);
-        if (topic != null && !topic.isEmpty()) {
+        // check if properties for dead letter queue exist
+        Map<String, Object> dlqProps = connConfig.originalsWithPrefix(DeadLetterQueueReporter.PREFIX + ".");
+        if (!dlqProps.isEmpty()) {
             DeadLetterQueueReporter reporter = DeadLetterQueueReporter.createAndSetup(config, connConfig, producerProps);
-            reporter.configure(connConfig.originalsWithPrefix(DeadLetterQueueReporter.PREFIX + "."));
+            reporter.configure(dlqProps);
             reporters.add(reporter);
         }
 
