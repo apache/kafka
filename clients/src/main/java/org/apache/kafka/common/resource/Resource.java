@@ -22,7 +22,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import java.util.Objects;
 
 /**
- * Represents a cluster resource with a tuple of (type, name).
+ * Represents a cluster resource with a tuple of (type, name, nameType).
  *
  * The API for this class is still evolving and we may break compatibility in minor releases, if necessary.
  */
@@ -30,7 +30,7 @@ import java.util.Objects;
 public class Resource {
     private final ResourceType resourceType;
     private final String name;
-    private final ResourceNameType resourceNameType;
+    private final ResourceNameType nameType;
 
     /**
      * The name of the CLUSTER resource.
@@ -47,15 +47,12 @@ public class Resource {
      *
      * @param resourceType non-null resource type
      * @param name non-null resource name
-     * @param resourceNameType non-null resource name type
+     * @param nameType non-null resource name type
      */
-    public Resource(ResourceType resourceType, String name, ResourceNameType resourceNameType) {
-        Objects.requireNonNull(resourceType);
-        this.resourceType = resourceType;
-        Objects.requireNonNull(name);
-        this.name = name;
-        Objects.requireNonNull(resourceNameType);
-        this.resourceNameType = resourceNameType;
+    public Resource(ResourceType resourceType, String name, ResourceNameType nameType) {
+        this.resourceType = Objects.requireNonNull(resourceType, "resourceType");
+        this.name = Objects.requireNonNull(name, "name");
+        this.nameType = Objects.requireNonNull(nameType, "nameType");
     }
 
     /**
@@ -64,7 +61,9 @@ public class Resource {
      *
      * @param resourceType non-null resource type
      * @param name non-null resource name
+     * @deprecated Since 2.0. Use {@link #Resource(ResourceType, String, ResourceNameType)}
      */
+    @Deprecated
     public Resource(ResourceType resourceType, String name) {
         this(resourceType, name, ResourceNameType.LITERAL);
     }
@@ -80,7 +79,7 @@ public class Resource {
      * Return the resource name type.
      */
     public ResourceNameType resourceNameType() {
-        return resourceNameType;
+        return nameType;
     }
 
     /**
@@ -94,33 +93,36 @@ public class Resource {
      * Create a filter which matches only this Resource.
      */
     public ResourceFilter toFilter() {
-        return new ResourceFilter(resourceType, name, resourceNameType);
+        return new ResourceFilter(resourceType, name, nameType);
     }
 
     @Override
     public String toString() {
-        return "(resourceType=" + resourceType + ", name=" + ((name == null) ? "<any>" : name) + ", resourceNameType=" + resourceNameType + ")";
+        return "(resourceType=" + resourceType + ", name=" + ((name == null) ? "<any>" : name) + ", nameType=" + nameType + ")";
     }
 
     /**
      * Return true if this Resource has any UNKNOWN components.
      */
     public boolean isUnknown() {
-        return resourceType.isUnknown() || resourceNameType.isUnknown();
+        return resourceType.isUnknown() || nameType.isUnknown();
     }
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof Resource))
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
             return false;
-        Resource other = (Resource) o;
-        return resourceType.equals(other.resourceType)
-                && Objects.equals(name, other.name)
-                && resourceNameType.equals(other.resourceNameType);
+
+        final Resource resource = (Resource) o;
+        return resourceType == resource.resourceType &&
+            Objects.equals(name, resource.name) &&
+            nameType == resource.nameType;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(resourceType, name, resourceNameType);
+        return Objects.hash(resourceType, name, nameType);
     }
 }

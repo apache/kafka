@@ -26,8 +26,7 @@ import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.log.LogConfig
 import kafka.metrics.KafkaMetricsGroup
 import kafka.security.auth.SimpleAclAuthorizer.VersionedAcls
-import kafka.security.auth.storage.AclStore
-import kafka.security.auth.{Acl, Resource, ResourceType}
+import kafka.security.auth.{Acl, Resource, ResourceNameType, ResourceType}
 import kafka.server.ConfigType
 import kafka.utils.Logging
 import kafka.zookeeper._
@@ -944,10 +943,10 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
    * Creates the required zk nodes for Acl storage
    */
   def createAclPaths(): Unit = {
-    AclStore.AclStores.foreach(aclStore => {
-      createRecursive(aclStore.aclZNode.path, throwIfPathExists = false)
-      createRecursive(aclStore.aclChangesZNode.path, throwIfPathExists = false)
-      ResourceType.values.foreach(resourceType => createRecursive(aclStore.resourceTypeZNode.path(resourceType), throwIfPathExists = false))
+    ZkAclStore.stores.foreach(store => {
+      createRecursive(store.aclPath, throwIfPathExists = false)
+      createRecursive(store.aclChangePath, throwIfPathExists = false)
+      ResourceType.values.foreach(resourceType => createRecursive(store.resourceTypeZNode.path(resourceType), throwIfPathExists = false))
     })
   }
 
@@ -957,11 +956,10 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
    * @return  VersionedAcls
    */
   def getVersionedAclsForResource(resource: Resource): VersionedAcls = {
-    val resourceZNode = AclStore.fromResource(resource).resourceZNode
-    val getDataRequest = GetDataRequest(resourceZNode.path(resource))
+    val getDataRequest = GetDataRequest(ResourceZNode.path(resource))
     val getDataResponse = retryRequestUntilConnected(getDataRequest)
     getDataResponse.resultCode match {
-      case Code.OK => resourceZNode.decode(getDataResponse.data, getDataResponse.stat)
+      case Code.OK => ResourceZNode.decode(getDataResponse.data, getDataResponse.stat)
       case Code.NONODE => VersionedAcls(Set(), -1)
       case _ => throw getDataResponse.resultException.get
     }
@@ -976,19 +974,18 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
    * @return true if the update was successful and the new version
    */
   def conditionalSetOrCreateAclsForResource(resource: Resource, aclsSet: Set[Acl], expectedVersion: Int): (Boolean, Int) = {
-    val resourceZNode = AclStore.fromResource(resource).resourceZNode
     def set(aclData: Array[Byte],  expectedVersion: Int): SetDataResponse = {
-      val setDataRequest = SetDataRequest(resourceZNode.path(resource), aclData, expectedVersion)
+      val setDataRequest = SetDataRequest(ResourceZNode.path(resource), aclData, expectedVersion)
       retryRequestUntilConnected(setDataRequest)
     }
 
     def create(aclData: Array[Byte]): CreateResponse = {
-      val path = resourceZNode.path(resource)
+      val path = ResourceZNode.path(resource)
       val createRequest = CreateRequest(path, aclData, acls(path), CreateMode.PERSISTENT)
       retryRequestUntilConnected(createRequest)
     }
 
-    val aclData = resourceZNode.encode(aclsSet)
+    val aclData = ResourceZNode.encode(aclsSet)
 
     val setDataResponse = set(aclData, expectedVersion)
     setDataResponse.resultCode match {
@@ -1008,13 +1005,12 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
 
   /**
    * Creates Acl change notification message
-   * @param aclStore acl store
-   * @param resourceName resource name
+   * @param resource resource name
    */
-  def createAclChangeNotification(aclStore: AclStore, resourceName: String): Unit = {
-    val aclChangeNotificationSequenceZNode = aclStore.aclChangeNotificationSequenceZNode
-    val path = aclChangeNotificationSequenceZNode.createPath
-    val createRequest = CreateRequest(path, aclChangeNotificationSequenceZNode.encode(resourceName), acls(path), CreateMode.PERSISTENT_SEQUENTIAL)
+  def createAclChangeNotification(resource: Resource): Unit = {
+    val store = ZkAclStore(resource.resourceNameType)
+    val path = store.changeSequenceZNode.createPath
+    val createRequest = CreateRequest(path, AclChangeNotificationSequenceZNode.encode(resource), acls(path), CreateMode.PERSISTENT_SEQUENTIAL)
     val createResponse = retryRequestUntilConnected(createRequest)
     createResponse.maybeThrow
   }
@@ -1037,10 +1033,10 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
    * @throws KeeperException if there is an error while deleting Acl change notifications
    */
   def deleteAclChangeNotifications(): Unit = {
-    AclStore.AclStores.foreach(aclStore => {
-      val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(aclStore.aclChangesZNode.path))
+    ZkAclStore.stores.foreach(store => {
+      val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(store.aclChangePath))
       if (getChildrenResponse.resultCode == Code.OK) {
-        deleteAclChangeNotifications(getChildrenResponse.children, aclStore)
+        deleteAclChangeNotifications(store, getChildrenResponse.children)
       } else if (getChildrenResponse.resultCode != Code.NONODE) {
         getChildrenResponse.maybeThrow
       }
@@ -1051,9 +1047,10 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
    * Deletes the Acl change notifications associated with the given sequence nodes
    * @param sequenceNodes
    */
-  private def deleteAclChangeNotifications(sequenceNodes: Seq[String], aclStore: AclStore): Unit = {
+  private def deleteAclChangeNotifications(store: ZkAclStore, sequenceNodes: Seq[String]): Unit = {
+    val aclChangeNotificationSequenceZNode = store.changeSequenceZNode
     val deleteRequests = sequenceNodes.map { sequenceNode =>
-      DeleteRequest(aclStore.aclChangeNotificationSequenceZNode.deletePath(sequenceNode), ZkVersion.NoVersion)
+      DeleteRequest(aclChangeNotificationSequenceZNode.deletePath(sequenceNode), ZkVersion.NoVersion)
     }
 
     val deleteResponses = retryRequestsUntilConnected(deleteRequests)
@@ -1065,21 +1062,22 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
   }
 
   /**
-   * Gets the resource types
+   * Gets the resource types, for which ACLs are stored, for the supplied resource name type.
+   * @param nameType The resource name type to retrieve the names for.
    * @return list of resource type names
    */
-  def getResourceTypes(aclStore: AclStore): Seq[String] = {
-    getChildren(aclStore.aclZNode.path)
+  def getResourceTypes(nameType: ResourceNameType): Seq[String] = {
+    getChildren(ZkAclStore(nameType).aclPath)
   }
 
   /**
-   * Gets the resource names for a give resource type
-   * @param aclStore Acl store.
-   * @param resourceType Resource type.
+   * Gets the resource names, for which ACLs are stored, for a give resource type and name type
+   * @param nameType The resource name type to retrieve the names for.
+   * @param resourceType Resource type to retrieve the names for.
    * @return list of resource names
    */
-  def getResourceNames(aclStore: AclStore, resourceType: ResourceType): Seq[String] = {
-    getChildren(aclStore.resourceTypeZNode.path(resourceType))
+  def getResourceNames(nameType: ResourceNameType, resourceType: ResourceType): Seq[String] = {
+    getChildren(ZkAclStore(nameType).resourceTypeZNode.path(resourceType))
   }
 
   /**
@@ -1088,7 +1086,7 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
    * @return delete status
    */
   def deleteResource(resource: Resource): Boolean = {
-    deleteRecursive(AclStore.fromResource(resource).resourceZNode.path(resource))
+    deleteRecursive(ResourceZNode.path(resource))
   }
 
   /**
@@ -1097,7 +1095,7 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
    * @return existence status
    */
   def resourceExists(resource: Resource): Boolean = {
-    pathExists(AclStore.fromResource(resource).resourceZNode.path(resource))
+    pathExists(ResourceZNode.path(resource))
   }
 
   /**
@@ -1107,7 +1105,7 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
    * @return return true if it succeeds, false otherwise (the current version is not the expected version)
    */
   def conditionalDelete(resource: Resource, expectedVersion: Int): Boolean = {
-    val deleteRequest = DeleteRequest(AclStore.fromResource(resource).resourceZNode.path(resource), expectedVersion)
+    val deleteRequest = DeleteRequest(ResourceZNode.path(resource), expectedVersion)
     val deleteResponse = retryRequestUntilConnected(deleteRequest)
     deleteResponse.resultCode match {
       case Code.OK | Code.NONODE => true

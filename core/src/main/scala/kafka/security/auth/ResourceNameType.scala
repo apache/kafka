@@ -18,6 +18,7 @@
 package kafka.security.auth
 
 import kafka.common.{BaseEnum, KafkaException}
+import kafka.utils.ZkUtils
 import org.apache.kafka.common.resource.{ResourceNameType => JResourceNameType}
 
 sealed trait ResourceNameType extends BaseEnum {
@@ -29,9 +30,9 @@ case object Literal extends ResourceNameType {
   val toJava = JResourceNameType.LITERAL
 }
 
-case object WildcardSuffixed extends ResourceNameType {
-  val name = "WildcardSuffixed"
-  val toJava = JResourceNameType.WILDCARD_SUFFIXED
+case object Prefixed extends ResourceNameType {
+  val name = "Prefixed"
+  val toJava = JResourceNameType.PREFIXED
 }
 
 object ResourceNameType {
@@ -41,7 +42,7 @@ object ResourceNameType {
     rType.getOrElse(throw new KafkaException(resourceNameType + " not a valid resourceNameType name. The valid names are " + values.mkString(",")))
   }
 
-  def values: Seq[ResourceNameType] = List(Literal, WildcardSuffixed)
+  def values: Seq[ResourceNameType] = List(Literal, Prefixed)
 
   def fromJava(operation: JResourceNameType): ResourceNameType = fromString(operation.toString.replaceAll("_", ""))
 }

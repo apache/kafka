@@ -45,29 +45,77 @@ trait Authorizer extends Configurable {
   /**
    * add the acls to resource, this is an additive operation so existing acls will not be overwritten, instead these new
    * acls will be added to existing acls.
+   *
+   * {code}
+   * // The following will add ACLs to the literal resource path 'foo', which will only affect the topic named 'foo':
+   * authorizer.addAcls(Set(acl1, acl2), Resource(Topic, "foo", Literal))
+   *
+   * // The following will add ACLs to the special literal topic resource path '*', which affects all topics:
+   * authorizer.addAcls(Set(acl1, acl2), Resource(Topic, "*", Literal))
+   *
+   * // The following will add ACLs to the prefixed resource path 'foo', which affects all topics whose name begins with 'foo':
+   * authorizer.addAcls(Set(acl1, acl2), Resource(Topic, "foo", Prefixed))
+   * {code}
+   *
    * @param acls set of acls to add to existing acls
-   * @param resource the resource to which these acls should be attached.
+   * @param resource the resource path to which these acls should be attached
    */
   def addAcls(acls: Set[Acl], resource: Resource): Unit
 
   /**
    * remove these acls from the resource.
+   *
+   * {code}
+   * // The following will remove ACLs from the literal resource path 'foo', which will only affect the topic named 'foo':
+   * authorizer.removeAcls(Set(acl1, acl2), Resource(Topic, "foo", Literal))
+   *
+   * // The following will remove ACLs from the special literal topic resource path '*', which affects all topics:
+   * authorizer.removeAcls(Set(acl1, acl2), Resource(Topic, "*", Literal))
+   *
+   * // The following will remove ACLs from the prefixed resource path 'foo', which affects all topics whose name begins with 'foo':
+   * authorizer.removeAcls(Set(acl1, acl2), Resource(Topic, "foo", Prefixed))
+   * {code}
+   *
    * @param acls set of acls to be removed.
-   * @param resource resource from which the acls should be removed.
+   * @param resource resource path from which the acls should be removed.
    * @return true if some acl got removed, false if no acl was removed.
    */
   def removeAcls(acls: Set[Acl], resource: Resource): Boolean
 
   /**
    * remove a resource along with all of its acls from acl store.
-   * @param resource the resource from which these acls should be removed.
+   *
+   * {code}
+   * // The following will remove all ACLs from the literal resource path 'foo', which will only affect the topic named 'foo':
+   * authorizer.removeAcls(Resource(Topic, "foo", Literal))
+   *
+   * // The following will remove all ACLs from the special literal topic resource path '*', which affects all topics:
+   * authorizer.removeAcls(Resource(Topic, "*", Literal))
+   *
+   * // The following will remove all ACLs from the prefixed resource path 'foo', which affects all topics whose name begins with 'foo':
+   * authorizer.removeAcls(Resource(Topic, "foo", Prefixed))
+   * {code}
+   *
+   * @param resource the resource path from which these acls should be removed.
    * @return
    */
   def removeAcls(resource: Resource): Boolean
 
   /**
-   * get set of acls for this resource
-   * @param resource the resource to which the acls belong.
+   * get set of acls for the supplied resource
+   *
+   * {code}
+   * // The following will get all ACLs from the literal resource path 'foo', which will only affect the topic named 'foo':
+   * authorizer.removeAcls(Resource(Topic, "foo", Literal))
+   *
+   * // The following will get all ACLs from the special literal topic resource path '*', which affects all topics:
+   * authorizer.removeAcls(Resource(Topic, "*", Literal))
+   *
+   * // The following will get all ACLs from the prefixed resource path 'foo', which affects all topics whose name begins with 'foo':
+   * authorizer.removeAcls(Resource(Topic, "foo", Prefixed))
+   * {code}
+   *
+   * @param resource the resource path to which the acls belong.
    * @return empty set if no acls are found, otherwise the acls for the resource.
    */
   def getAcls(resource: Resource): Set[Acl]
@@ -80,7 +128,7 @@ trait Authorizer extends Configurable {
   def getAcls(principal: KafkaPrincipal): Map[Resource, Set[Acl]]
 
   /**
-   * gets the map of resource to acls for all resources.
+   * gets the map of resource paths to acls for all resources.
    */
   def getAcls(): Map[Resource, Set[Acl]]
 

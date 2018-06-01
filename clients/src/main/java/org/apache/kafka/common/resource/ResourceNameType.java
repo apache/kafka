@@ -19,9 +19,11 @@ package org.apache.kafka.common.resource;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
 
+import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * Resource name type.
@@ -29,35 +31,36 @@ import java.util.Map;
 @InterfaceStability.Evolving
 public enum ResourceNameType {
     /**
-     * Represents any ResourceType which this client cannot understand,
-     * perhaps because this client is too old.
+     * Represents any ResourceNameType which this client cannot understand, perhaps because this client is too old.
      */
     UNKNOWN((byte) 0),
 
     /**
-     * In a filter, matches any ResourceType.
+     * In a filter, matches any resource name type.
      */
     ANY((byte) 1),
 
     /**
-     * A Kafka topic.
+     * A literal resource name.
+     *
+     * A literal name defines the full name of a resource, e.g. topic with name 'foo', or group with name 'bob'.
+     *
+     * The special wildcard character {@code *} can be used to represent a resource with any name.
      */
     LITERAL((byte) 2),
 
     /**
-     * A consumer group.
+     * A prefixed resource name.
+     *
+     * A prefixed name defines a prefix for a resource, e.g. topics with names that start with 'foo'.
      */
-    WILDCARD_SUFFIXED((byte) 3);
+    PREFIXED((byte) 3);
 
-    private final static Map<Byte, ResourceNameType> CODE_TO_VALUE;
-
-    static {
-        final Map<Byte, ResourceNameType> codeToValues = new HashMap<>();
-        for (ResourceNameType resourceType : ResourceNameType.values()) {
-            codeToValues.put(resourceType.code, resourceType);
-        }
-        CODE_TO_VALUE = Collections.unmodifiableMap(codeToValues);
-    }
+    private final static Map<Byte, ResourceNameType> CODE_TO_VALUE =
+        Collections.unmodifiableMap(
+            Arrays.stream(ResourceNameType.values())
+                .collect(Collectors.toMap(ResourceNameType::code, Function.identity()))
+        );
 
     private final byte code;
 
@@ -66,21 +69,10 @@ public enum ResourceNameType {
     }
 
     /**
-     * Return the code of this resource.
+     * @return the code of this resource.
      */
     public byte code() {
         return code;
-    }
-
-    /**
-     * Return the ResourceNameType with the provided code or `ResourceNameType.UNKNOWN` if one cannot be found.
-     */
-    public static ResourceNameType fromCode(byte code) {
-        ResourceNameType resourceNameType = CODE_TO_VALUE.get(code);
-        if (resourceNameType == null) {
-            return UNKNOWN;
-        }
-        return resourceNameType;
     }
 
     /**
@@ -90,4 +82,10 @@ public enum ResourceNameType {
         return this == UNKNOWN;
     }
 
+    /**
+     * Return the ResourceNameType with the provided code or {@link #UNKNOWN} if one cannot be found.
+     */
+    public static ResourceNameType fromCode(byte code) {
+        return CODE_TO_VALUE.getOrDefault(code, UNKNOWN);
+    }
 }

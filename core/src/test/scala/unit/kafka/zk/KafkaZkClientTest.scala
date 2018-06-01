@@ -16,35 +16,34 @@
 */
 package kafka.zk
 
+import java.util.{Collections, Properties, UUID}
 import java.nio.charset.StandardCharsets.UTF_8
 import java.util.concurrent.{CountDownLatch, TimeUnit}
-import java.util.{Collections, Properties, UUID}
 
 import kafka.api.{ApiVersion, LeaderAndIsr}
 import kafka.cluster.{Broker, EndPoint}
-import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.log.LogConfig
 import kafka.security.auth._
-import kafka.security.auth.storage.AclStore
 import kafka.server.ConfigType
 import kafka.utils.CoreUtils
-import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
-import kafka.zookeeper._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.token.delegation.TokenInformation
 import org.apache.kafka.common.utils.{SecurityUtils, Time}
 import org.apache.zookeeper.KeeperException.{Code, NoNodeException, NodeExistsException}
-import org.apache.zookeeper.data.Stat
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
-
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Seq, mutable}
 import scala.util.Random
+
+import kafka.controller.LeaderIsrAndControllerEpoch
+import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
+import kafka.zookeeper._
+import org.apache.kafka.common.security.JaasUtils
+import org.apache.zookeeper.data.Stat
 
 class KafkaZkClientTest extends ZooKeeperTestHarness {
 
@@ -428,72 +427,76 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
   @Test
   def testAclManagementMethods() {
 
-    assertFalse(zkClient.pathExists(AclStore.literalAclStore.aclZNode.path))
-    assertFalse(zkClient.pathExists(AclStore.literalAclStore.aclChangesZNode.path))
-    ResourceType.values.foreach(resource => assertFalse(zkClient.pathExists(AclStore.literalAclStore.resourceTypeZNode.path(resource))))
+    ZkAclStore.stores.foreach(store => {
+      assertFalse(zkClient.pathExists(store.aclPath))
+      assertFalse(zkClient.pathExists(store.aclChangePath))
+      ResourceType.values.foreach(resource => assertFalse(zkClient.pathExists(store.resourceTypeZNode.path(resource))))
+    })
 
     // create acl paths
     zkClient.createAclPaths
 
-    assertTrue(zkClient.pathExists(AclStore.literalAclStore.aclZNode.path))
-    assertTrue(zkClient.pathExists(AclStore.literalAclStore.aclChangesZNode.path))
-    ResourceType.values.foreach(resource => assertTrue(zkClient.pathExists(AclStore.literalAclStore.resourceTypeZNode.path(resource))))
+    ZkAclStore.stores.foreach(store => {
+      assertTrue(zkClient.pathExists(store.aclPath))
+      assertTrue(zkClient.pathExists(store.aclChangePath))
+      ResourceType.values.foreach(resource => assertTrue(zkClient.pathExists(store.resourceTypeZNode.path(resource))))
 
-    val resource1 = new Resource(Topic, UUID.randomUUID().toString)
-    val resource2 = new Resource(Topic, UUID.randomUUID().toString)
+      val resource1 = new Resource(Topic, UUID.randomUUID().toString, store.nameType)
+      val resource2 = new Resource(Topic, UUID.randomUUID().toString, store.nameType)
 
-    // try getting acls for non-existing resource
-    var versionedAcls = zkClient.getVersionedAclsForResource(resource1)
-    assertTrue(versionedAcls.acls.isEmpty)
-    assertEquals(-1, versionedAcls.zkVersion)
-    assertFalse(zkClient.resourceExists(resource1))
-
-
-    val acl1 = new Acl(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "alice"), Deny, "host1" , Read)
-    val acl2 = new Acl(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob"), Allow, "*", Read)
-    val acl3 = new Acl(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob"), Deny, "host1", Read)
-
-    //create acls for resources
-    zkClient.conditionalSetOrCreateAclsForResource(resource1, Set(acl1, acl2), 0)
-    zkClient.conditionalSetOrCreateAclsForResource(resource2, Set(acl1, acl3), 0)
-
-    versionedAcls = zkClient.getVersionedAclsForResource(resource1)
-    assertEquals(Set(acl1, acl2), versionedAcls.acls)
-    assertEquals(0, versionedAcls.zkVersion)
-    assertTrue(zkClient.resourceExists(resource1))
-
-    //update acls for resource
-    zkClient.conditionalSetOrCreateAclsForResource(resource1, Set(acl1, acl3), 0)
-
-    versionedAcls = zkClient.getVersionedAclsForResource(resource1)
-    assertEquals(Set(acl1, acl3), versionedAcls.acls)
-    assertEquals(1, versionedAcls.zkVersion)
-
-    //get resource Types
-    assertTrue(ResourceType.values.map( rt => rt.name).toSet == zkClient.getResourceTypes(AclStore.literalAclStore).toSet)
-
-    //get resource name
-    val resourceNames = zkClient.getResourceNames(AclStore.literalAclStore, Topic)
-    assertEquals(2, resourceNames.size)
-    assertTrue(Set(resource1.name,resource2.name) == resourceNames.toSet)
-
-    //delete resource
-    assertTrue(zkClient.deleteResource(resource1))
-    assertFalse(zkClient.resourceExists(resource1))
-
-    //delete with invalid expected zk version
-    assertFalse(zkClient.conditionalDelete(resource2, 10))
-    //delete with valid expected zk version
-    assertTrue(zkClient.conditionalDelete(resource2, 0))
+      // try getting acls for non-existing resource
+      var versionedAcls = zkClient.getVersionedAclsForResource(resource1)
+      assertTrue(versionedAcls.acls.isEmpty)
+      assertEquals(-1, versionedAcls.zkVersion)
+      assertFalse(zkClient.resourceExists(resource1))
 
 
-    zkClient.createAclChangeNotification(AclStore.literalAclStore, "resource1")
-    zkClient.createAclChangeNotification(AclStore.literalAclStore, "resource2")
+      val acl1 = new Acl(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "alice"), Deny, "host1" , Read)
+      val acl2 = new Acl(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob"), Allow, "*", Read)
+      val acl3 = new Acl(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob"), Deny, "host1", Read)
 
-    assertEquals(2, zkClient.getChildren(AclStore.literalAclStore.aclChangesZNode.path).size)
+      //create acls for resources
+      zkClient.conditionalSetOrCreateAclsForResource(resource1, Set(acl1, acl2), 0)
+      zkClient.conditionalSetOrCreateAclsForResource(resource2, Set(acl1, acl3), 0)
 
-    zkClient.deleteAclChangeNotifications()
-    assertTrue(zkClient.getChildren(AclStore.literalAclStore.aclChangesZNode.path).isEmpty)
+      versionedAcls = zkClient.getVersionedAclsForResource(resource1)
+      assertEquals(Set(acl1, acl2), versionedAcls.acls)
+      assertEquals(0, versionedAcls.zkVersion)
+      assertTrue(zkClient.resourceExists(resource1))
+
+      //update acls for resource
+      zkClient.conditionalSetOrCreateAclsForResource(resource1, Set(acl1, acl3), 0)
+
+      versionedAcls = zkClient.getVersionedAclsForResource(resource1)
+      assertEquals(Set(acl1, acl3), versionedAcls.acls)
+      assertEquals(1, versionedAcls.zkVersion)
+
+      //get resource Types
+      assertTrue(ResourceType.values.map( rt => rt.name).toSet == zkClient.getResourceTypes(store.nameType).toSet)
+
+      //get resource name
+      val resourceNames = zkClient.getResourceNames(store.nameType, Topic)
+      assertEquals(2, resourceNames.size)
+      assertTrue(Set(resource1.name,resource2.name) == resourceNames.toSet)
+
+      //delete resource
+      assertTrue(zkClient.deleteResource(resource1))
+      assertFalse(zkClient.resourceExists(resource1))
+
+      //delete with invalid expected zk version
+      assertFalse(zkClient.conditionalDelete(resource2, 10))
+      //delete with valid expected zk version
+      assertTrue(zkClient.conditionalDelete(resource2, 0))
+
+
+      zkClient.createAclChangeNotification(Resource(Group, "resource1", store.nameType))
+      zkClient.createAclChangeNotification(Resource(Topic, "resource2", store.nameType))
+
+      assertEquals(2, zkClient.getChildren(store.aclChangePath).size)
+
+      zkClient.deleteAclChangeNotifications()
+      assertTrue(zkClient.getChildren(store.aclChangePath).isEmpty)
+    })
   }
 
   @Test

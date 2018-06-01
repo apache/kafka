@@ -20,10 +20,10 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
-import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.resource.Resource;
 
@@ -58,6 +58,11 @@ public class DescribeAclsResponse extends AbstractResponse {
                     OPERATION,
                     PERMISSION_TYPE))));
 
+    /**
+     * V1 sees a new `RESOURCE_NAME_TYPE` that describes how the resource name is interpreted.
+     *
+     * For more info, see {@link org.apache.kafka.common.resource.ResourceNameType}.
+     */
     private static final Schema DESCRIBE_ACLS_RESOURCE_V1 = new Schema(
             RESOURCE_TYPE,
             RESOURCE_NAME,
@@ -74,6 +79,11 @@ public class DescribeAclsResponse extends AbstractResponse {
             ERROR_MESSAGE,
             new Field(RESOURCES_KEY_NAME, new ArrayOf(DESCRIBE_ACLS_RESOURCE_V0), "The resources and their associated ACLs."));
 
+    /**
+     * V1 sees a new `RESOURCE_NAME_TYPE` field added to DESCRIBE_ACLS_RESOURCE_V1, that describes how the resource name is interpreted.
+     *
+     * For more info, see {@link org.apache.kafka.common.resource.ResourceNameType}.
+     */
     private static final Schema DESCRIBE_ACLS_RESPONSE_V1 = new Schema(
             THROTTLE_TIME_MS,
             ERROR_CODE,

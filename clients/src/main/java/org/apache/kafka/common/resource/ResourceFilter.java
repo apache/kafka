@@ -18,7 +18,7 @@
 package org.apache.kafka.common.resource;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
-import org.apache.kafka.common.utils.SecurityUtils;
+import org.apache.kafka.common.utils.AclUtils;
 
 import java.util.Objects;
 
@@ -39,29 +39,32 @@ public class ResourceFilter {
     public static final ResourceFilter ANY = new ResourceFilter(ResourceType.ANY, null, ResourceNameType.ANY);
 
     /**
-     * Create an instance of this class with the provided parameters.
-     * Resource name type defaults to ResourceNameType.LITERAL
+     * Create a filter that matches {@link ResourceNameType#LITERAL literal} resources of the
+     * supplied {@code resourceType} and {@code name}.
      *
      * @param resourceType non-null resource type
-     * @param name resource name or null
+     * @param name resource name or {@code null}.
+     *             If {@code null}, the filter will ignore the name of resources.
+     * @deprecated Since 2.0. Use {@link #ResourceFilter(ResourceType, String, ResourceNameType)}
      */
+    @Deprecated
     public ResourceFilter(ResourceType resourceType, String name) {
         this(resourceType, name, ResourceNameType.LITERAL);
     }
 
     /**
-     * Create an instance of this class with the provided parameters.
+     * Create a filter that matches resources of the supplied {@code resourceType}, {@code name} and
+     * {@code resourceNameType}.
      *
-     * @param resourceType non-null resource type
-     * @param name resource name or null
+     * @param resourceType non-null resource type.
+     * @param name resource name or {@code null}.
+     *             If {@code null}, the filter will ignore the name of resources.
      * @param resourceNameType non-null resource name type
      */
     public ResourceFilter(ResourceType resourceType, String name, ResourceNameType resourceNameType) {
-        Objects.requireNonNull(resourceType);
-        this.resourceType = resourceType;
+        this.resourceType = Objects.requireNonNull(resourceType, "resourceType");
         this.name = name;
-        Objects.requireNonNull(resourceNameType);
-        this.resourceNameType = resourceNameType;
+        this.resourceNameType = Objects.requireNonNull(resourceNameType, "resourceNameType");
     }
 
     /**
@@ -99,12 +102,15 @@ public class ResourceFilter {
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof ResourceFilter))
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
             return false;
-        ResourceFilter other = (ResourceFilter) o;
-        return resourceType.equals(other.resourceType)
-                && Objects.equals(name, other.name)
-                && Objects.equals(resourceNameType, other.resourceNameType);
+
+        final ResourceFilter that = (ResourceFilter) o;
+        return resourceType == that.resourceType &&
+            Objects.equals(name, that.name) &&
+            resourceNameType == that.resourceNameType;
     }
 
     @Override
@@ -114,9 +120,10 @@ public class ResourceFilter {
 
     /**
      * Return true if this filter matches the given Resource.
+     * @param other the resource path under which ACLs are stored.
      */
     public boolean matches(Resource other) {
-        return SecurityUtils.matchResource(other, this);
+        return AclUtils.matchResource(other, this);
     }
 
     /**

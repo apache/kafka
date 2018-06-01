@@ -20,26 +20,10 @@ package org.apache.kafka.common.requests;
 public final class Resource {
     private final ResourceType type;
     private final String name;
-    private final ResourceNameType resourceNameType;
 
-    /**
-     * @param type resource type
-     * @param name resouce name
-     * @param resourceNameType resource name type
-     */
-    public Resource(ResourceType type, String name, ResourceNameType resourceNameType) {
+    public Resource(ResourceType type, String name) {
         this.type = type;
         this.name = name;
-        this.resourceNameType = resourceNameType;
-    }
-
-    /**
-     * Resource name type would default to ResourceNameType.LITERAL.
-     * @param type resource type
-     * @param name resource name type
-     */
-    public Resource(ResourceType type, String name) {
-        this(type, name, ResourceNameType.LITERAL);
     }
 
     public ResourceType type() {
@@ -48,10 +32,6 @@ public final class Resource {
 
     public String name() {
         return name;
-    }
-
-    public ResourceNameType resourceNameType() {
-        return resourceNameType;
     }
 
     @Override
@@ -63,19 +43,18 @@ public final class Resource {
 
         Resource resource = (Resource) o;
 
-        return type == resource.type && name.equals(resource.name) && resourceNameType.equals(resource.resourceNameType);
+        return type == resource.type && name.equals(resource.name);
     }
 
     @Override
     public int hashCode() {
         int result = type.hashCode();
         result = 31 * result + name.hashCode();
-        result = 31 * result + resourceNameType.hashCode();
         return result;
     }
 
     @Override
     public String toString() {
-        return "Resource(type=" + type + ", name='" + name + "', resourceNameType=" + resourceNameType + ")";
+        return "Resource(type=" + type + ", name='" + name + "')";
     }
 }

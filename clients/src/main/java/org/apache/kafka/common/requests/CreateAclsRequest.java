@@ -51,6 +51,11 @@ public class CreateAclsRequest extends AbstractRequest {
                     OPERATION,
                     PERMISSION_TYPE))));
 
+    /**
+     * V1 sees a new `RESOURCE_NAME_TYPE` that controls how the resource name is interpreted.
+     *
+     * For more info, see {@link org.apache.kafka.common.resource.ResourceNameType}.
+     */
     private static final Schema CREATE_ACLS_REQUEST_V1 = new Schema(
             new Field(CREATIONS_KEY_NAME, new ArrayOf(new Schema(
                     RESOURCE_TYPE,

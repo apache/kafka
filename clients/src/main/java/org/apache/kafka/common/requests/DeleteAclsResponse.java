@@ -19,10 +19,10 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
-import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.resource.Resource;
 import org.apache.kafka.common.utils.Utils;
@@ -62,6 +62,11 @@ public class DeleteAclsResponse extends AbstractResponse {
             OPERATION,
             PERMISSION_TYPE);
 
+    /**
+     * V1 sees a new `RESOURCE_NAME_TYPE` that describes how the resource name is interpreted.
+     *
+     * For more info, see {@link org.apache.kafka.common.resource.ResourceNameType}.
+     */
     private static final Schema MATCHING_ACL_V1 = new Schema(
             ERROR_CODE,
             ERROR_MESSAGE,
@@ -81,6 +86,11 @@ public class DeleteAclsResponse extends AbstractResponse {
                             ERROR_MESSAGE,
                             new Field(MATCHING_ACLS_KEY_NAME, new ArrayOf(MATCHING_ACL_V0), "The matching ACLs")))));
 
+    /**
+     * V1 sees a new `RESOURCE_NAME_TYPE` field added to MATCHING_ACL_V1, that describes how the resource name is interpreted.
+     *
+     * For more info, see {@link org.apache.kafka.common.resource.ResourceNameType}.
+     */
     private static final Schema DELETE_ACLS_RESPONSE_V1 = new Schema(
             THROTTLE_TIME_MS,
             new Field(FILTER_RESPONSES_KEY_NAME,

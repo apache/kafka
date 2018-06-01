@@ -32,7 +32,7 @@ import static org.apache.kafka.common.protocol.CommonFields.OPERATION;
 import static org.apache.kafka.common.protocol.CommonFields.PERMISSION_TYPE;
 import static org.apache.kafka.common.protocol.CommonFields.PRINCIPAL_FILTER;
 import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_NAME_FILTER;
-import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_NAME_TYPE;
+import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_NAME_TYPE_FILTER;
 import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_TYPE;
 
 public class DescribeAclsRequest extends AbstractRequest {
@@ -44,10 +44,15 @@ public class DescribeAclsRequest extends AbstractRequest {
             OPERATION,
             PERMISSION_TYPE);
 
+    /**
+     * V1 sees a new `RESOURCE_NAME_TYPE_FILTER` that controls how the filter handles different resource name types.
+     *
+     * For more info, see {@link org.apache.kafka.common.resource.ResourceNameType}.
+     */
     private static final Schema DESCRIBE_ACLS_REQUEST_V1 = new Schema(
             RESOURCE_TYPE,
             RESOURCE_NAME_FILTER,
-            RESOURCE_NAME_TYPE,
+            RESOURCE_NAME_TYPE_FILTER,
             PRINCIPAL_FILTER,
             HOST_FILTER,
             OPERATION,
