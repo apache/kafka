@@ -77,8 +77,7 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K> implemen
 
         // TODO: remove this when we do a topology-incompatible release
         // we used to burn a topology name here, so we have to keep doing it for compatibility
-        final String givenStoreName = new MaterializedPeek<>(materialized).givenStoreName();
-        if (givenStoreName == null) {
+        if (new MaterializedInternal<>(materialized).storeName() == null) {
             builder.newStoreName(AGGREGATE_NAME);
         }
 
@@ -87,8 +86,8 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K> implemen
 
     @SuppressWarnings("unchecked")
     private KTable<Windowed<K>, Long> doCount(final Materialized<K, Long, SessionStore<Bytes, byte[]>> materialized) {
-        final MaterializedInternal<K, Long, SessionStore<Bytes, byte[]>> materializedInternal
-            = new MaterializedInternal<>(materialized, builder, AGGREGATE_NAME);
+        final MaterializedInternal<K, Long, SessionStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
+        materializedInternal.generateStoreNameIfNeeded(builder, AGGREGATE_NAME);
         if (materializedInternal.keySerde() == null) {
             materializedInternal.withKeySerde(keySerde);
         }
@@ -115,8 +114,8 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K> implemen
         Objects.requireNonNull(reducer, "reducer can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
         final Aggregator<K, V, V> reduceAggregator = aggregatorForReducer(reducer);
-        final MaterializedInternal<K, V, SessionStore<Bytes, byte[]>> materializedInternal
-                = new MaterializedInternal<>(materialized, builder, REDUCE_NAME);
+        final MaterializedInternal<K, V, SessionStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
+        materializedInternal.generateStoreNameIfNeeded(builder, REDUCE_NAME);
         if (materializedInternal.keySerde() == null) {
             materializedInternal.withKeySerde(keySerde);
         }
@@ -148,8 +147,9 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K> implemen
         Objects.requireNonNull(aggregator, "aggregator can't be null");
         Objects.requireNonNull(sessionMerger, "sessionMerger can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
-        final MaterializedInternal<K, VR, SessionStore<Bytes, byte[]>> materializedInternal
-                = new MaterializedInternal<>(materialized, builder, AGGREGATE_NAME);
+        final MaterializedInternal<K, VR, SessionStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
+        materializedInternal.generateStoreNameIfNeeded(builder, AGGREGATE_NAME);
+
         if (materializedInternal.keySerde() == null) {
             materializedInternal.withKeySerde(keySerde);
         }

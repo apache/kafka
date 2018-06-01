@@ -72,8 +72,7 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
 
         // TODO: remove this when we do a topology-incompatible release
         // we used to burn a topology name here, so we have to keep doing it for compatibility
-        final String givenStoreName = new MaterializedPeek<>(materialized).givenStoreName();
-        if (givenStoreName == null) {
+        if (new MaterializedInternal<>(materialized).storeName() == null) {
             builder.newStoreName(AGGREGATE_NAME);
         }
 
@@ -82,8 +81,9 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
 
     @SuppressWarnings("unchecked")
     private KTable<Windowed<K>, Long> doCount(final Materialized<K, Long, WindowStore<Bytes, byte[]>> materialized) {
-        final MaterializedInternal<K, Long, WindowStore<Bytes, byte[]>> materializedInternal
-            = new MaterializedInternal<>(materialized, builder, AGGREGATE_NAME);
+        final MaterializedInternal<K, Long, WindowStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
+        materializedInternal.generateStoreNameIfNeeded(builder, AGGREGATE_NAME);
+
         if (materializedInternal.keySerde() == null) {
             materializedInternal.withKeySerde(keySerde);
         }
@@ -112,8 +112,8 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
         Objects.requireNonNull(initializer, "initializer can't be null");
         Objects.requireNonNull(aggregator, "aggregator can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
-        final MaterializedInternal<K, VR, WindowStore<Bytes, byte[]>> materializedInternal
-                = new MaterializedInternal<>(materialized, builder, AGGREGATE_NAME);
+        final MaterializedInternal<K, VR, WindowStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
+        materializedInternal.generateStoreNameIfNeeded(builder, AGGREGATE_NAME);
         if (materializedInternal.keySerde() == null) {
             materializedInternal.withKeySerde(keySerde);
         }
@@ -134,8 +134,9 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
         Objects.requireNonNull(reducer, "reducer can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
 
-        final MaterializedInternal<K, V, WindowStore<Bytes, byte[]>> materializedInternal
-                = new MaterializedInternal<>(materialized, builder, REDUCE_NAME);
+        final MaterializedInternal<K, V, WindowStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
+        materializedInternal.generateStoreNameIfNeeded(builder, REDUCE_NAME);
+
         if (materializedInternal.keySerde() == null) {
             materializedInternal.withKeySerde(keySerde);
         }
