@@ -567,6 +567,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private final Metadata metadata;
     private final long retryBackoffMs;
     private final long requestTimeoutMs;
+    private final int maxBlockMs;
     private volatile boolean closed = false;
     private List<PartitionAssignor> assignors;
 
@@ -666,6 +667,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
             log.debug("Initializing the Kafka consumer");
             this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
+            this.maxBlockMs = config.getInt(ConsumerConfig.MAX_BLOCK_MS_CONFIG);
             int sessionTimeOutMs = config.getInt(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG);
             int fetchMaxWaitMs = config.getInt(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG);
             if (this.requestTimeoutMs <= sessionTimeOutMs || this.requestTimeoutMs <= fetchMaxWaitMs)
@@ -814,6 +816,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                   Metadata metadata,
                   long retryBackoffMs,
                   long requestTimeoutMs,
+                  int maxBlockMs,
                   List<PartitionAssignor> assignors) {
         this.log = logContext.logger(getClass());
         this.clientId = clientId;
@@ -829,6 +832,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         this.metadata = metadata;
         this.retryBackoffMs = retryBackoffMs;
         this.requestTimeoutMs = requestTimeoutMs;
+        this.maxBlockMs = maxBlockMs;
         this.assignors = assignors;
     }
 
@@ -1289,7 +1293,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void commitSync() {
-        commitSync(Duration.ofMillis(Long.MAX_VALUE));
+        commitSync(Duration.ofMillis(maxBlockMs));
     }
 
     /**
@@ -1365,7 +1369,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets) {
-        commitSync(offsets, Duration.ofMillis(Long.MAX_VALUE));
+        commitSync(offsets, Duration.ofMillis(maxBlockMs));
     }
 
     /**
@@ -1578,7 +1582,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public long position(TopicPartition partition) {
-        return position(partition, Duration.ofMillis(Long.MAX_VALUE));
+        return position(partition, Duration.ofMillis(maxBlockMs));
     }
 
     /**
@@ -1656,7 +1660,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public OffsetAndMetadata committed(TopicPartition partition) {
-        return committed(partition, Duration.ofMillis(Long.MAX_VALUE));
+        return committed(partition, Duration.ofMillis(maxBlockMs));
     }
 
     /**
@@ -1722,7 +1726,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public List<PartitionInfo> partitionsFor(String topic) {
-        return partitionsFor(topic, Duration.ofMillis(requestTimeoutMs));
+        return partitionsFor(topic, Duration.ofMillis(maxBlockMs));
     }
 
     /**
@@ -1778,7 +1782,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public Map<String, List<PartitionInfo>> listTopics() {
-        return listTopics(Duration.ofMillis(requestTimeoutMs));
+        return listTopics(Duration.ofMillis(maxBlockMs));
     }
 
     /**
@@ -1885,7 +1889,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch) {
-        return offsetsForTimes(timestampsToSearch, Duration.ofMillis(requestTimeoutMs));
+        return offsetsForTimes(timestampsToSearch, Duration.ofMillis(maxBlockMs));
     }
 
     /**
@@ -1943,7 +1947,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions) {
-        return beginningOffsets(partitions, Duration.ofMillis(requestTimeoutMs));
+        return beginningOffsets(partitions, Duration.ofMillis(maxBlockMs));
     }
 
     /**
