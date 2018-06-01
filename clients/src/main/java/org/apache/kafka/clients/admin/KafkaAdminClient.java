@@ -1104,9 +1104,8 @@ public class KafkaAdminClient extends AdminClient {
                     pollTimeout = Math.min(pollTimeout, metadataFetchDelayMs);
                 }
 
-                // Ensure that we use a small poll timeout if there is nothing in flight and we have
-                // pending calls which need to be sent
-                if (client.hasInFlightRequests() && !pendingCalls.isEmpty())
+                // Ensure that we use a small poll timeout if there are pending calls which need to be sent
+                if (!pendingCalls.isEmpty())
                     pollTimeout = Math.min(pollTimeout, retryBackoffMs);
 
                 // Wait for network responses.
@@ -1114,9 +1113,11 @@ public class KafkaAdminClient extends AdminClient {
                 List<ClientResponse> responses = client.poll(pollTimeout, now);
                 log.trace("KafkaClient#poll retrieved {} response(s)", responses.size());
 
+                // unassign calls to disconnected nodes
+                unassignUnsentCalls(client::connectionFailed);
+
                 // Update the current time and handle the latest responses.
                 now = time.milliseconds();
-                unassignUnsentCalls(client::connectionFailed); // reassign calls to disconnected nodes
                 handleResponses(now, responses);
             }
             int numTimedOut = 0;
@@ -1203,7 +1204,8 @@ public class KafkaAdminClient extends AdminClient {
                     long now = time.milliseconds();
                     metadataManager.update(response.cluster(), now);
 
-                    // Reassign all requests after a metadata refresh
+                    // Unassign all unsent requests after a metadata refresh to allow for a new
+                    // destination to be selected from the new metadata
                     unassignUnsentCalls(node -> true);
                 }
 
