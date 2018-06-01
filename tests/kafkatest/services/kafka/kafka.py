@@ -70,8 +70,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
     def __init__(self, context, num_nodes, zk, security_protocol=SecurityConfig.PLAINTEXT, interbroker_security_protocol=SecurityConfig.PLAINTEXT,
                  client_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI, interbroker_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI,
-                 authorizer_class_name=None, topics=None, version=DEV_BRANCH, jmx_object_names=None,
-                 jmx_attributes=None, zk_connect_timeout=5000, zk_session_timeout=6000, server_prop_overides=None, zk_chroot=None):
+                 authorizer_class_name=None, topics=None, version=DEV_BRANCH, jmx_object_names=None, jmx_attributes=None,
+                 zk_connect_timeout=5000, zk_session_timeout=6000, server_prop_overides=None, zk_chroot=None, heap_opts=None,
+                 do_logging=True):
         """
         :type context
         :type zk: ZookeeperService
@@ -97,6 +98,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             self.server_prop_overides = server_prop_overides
         self.log_level = "DEBUG"
         self.zk_chroot = zk_chroot
+        self.heap_opts = heap_opts
+        self.do_logging = do_logging
 
         #
         # In a heavily loaded and not very fast machine, it is
@@ -226,10 +229,21 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                                  security_config=self.security_config, num_nodes=self.num_nodes)
         return prop_file
 
+    def file_exists(self, node, filename_regex):
+        """Helper used as a proxy to determine whether jmx is running by that jmx_tool_log contains output."""
+        try:
+            node.account.ssh("test -s %s" % filename_regex, allow_fail=False)
+            return True
+        except RemoteCommandError:
+            return False
+
     def start_cmd(self, node):
         cmd = "export JMX_PORT=%d; " % self.jmx_port
-        cmd += "export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % self.LOG4J_CONFIG
+        if self.do_logging:
+            cmd += "export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % self.LOG4J_CONFIG
         cmd += "export KAFKA_OPTS=%s; " % self.security_config.kafka_opts
+        if self.heap_opts is not None:
+            cmd += "export KAFKA_HEAP_OPTS=\"%s\"; " % self.heap_opts
         cmd += "%s %s 1>> %s 2>> %s &" % \
                (self.path.script("kafka-server-start.sh", node),
                 KafkaService.CONFIG_FILE,
