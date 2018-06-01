@@ -172,11 +172,11 @@
                    public class WordCountApplication {
 
                        public static void main(final String[] args) throws Exception {
-                           Properties config = new Properties();
-                           config.put(StreamsConfig.APPLICATION_ID_CONFIG, "wordcount-application");
-                           config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "kafka-broker1:9092");
-                           config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-                           config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+                           Properties props = new Properties();
+                           props.put(StreamsConfig.APPLICATION_ID_CONFIG, "wordcount-application");
+                           props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "kafka-broker1:9092");
+                           props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+                           props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
 
                            StreamsBuilder builder = new StreamsBuilder();
                            KStream&lt;String, String&gt; textLines = builder.stream("TextLinesTopic");
@@ -186,7 +186,7 @@
                                .count(Materialized.&lt;String, Long, KeyValueStore&lt;Bytes, byte[]&gt;&gt;as("counts-store"));
                            wordCounts.toStream().to("WordsWithCountsTopic", Produced.with(Serdes.String(), Serdes.Long()));
 
-                           KafkaStreams streams = new KafkaStreams(builder.build(), config);
+                           KafkaStreams streams = new KafkaStreams(builder.build(), props);
                            streams.start();
                        }
 
@@ -215,11 +215,11 @@
                    public class WordCountApplication {
 
                        public static void main(final String[] args) throws Exception {
-                           Properties config = new Properties();
-                           config.put(StreamsConfig.APPLICATION_ID_CONFIG, "wordcount-application");
-                           config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "kafka-broker1:9092");
-                           config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-                           config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+                           Properties props = new Properties();
+                           props.put(StreamsConfig.APPLICATION_ID_CONFIG, "wordcount-application");
+                           props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "kafka-broker1:9092");
+                           props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+                           props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
 
                            StreamsBuilder builder = new StreamsBuilder();
                            KStream&lt;String, String&gt; textLines = builder.stream("TextLinesTopic");
@@ -241,7 +241,7 @@
 
                            wordCounts.toStream().to("WordsWithCountsTopic", Produced.with(Serdes.String(), Serdes.Long()));
 
-                           KafkaStreams streams = new KafkaStreams(builder.build(), config);
+                           KafkaStreams streams = new KafkaStreams(builder.build(), props);
                            streams.start();
                        }
 
@@ -263,7 +263,7 @@ import org.apache.kafka.streams.{KafkaStreams, StreamsConfig}
 object WordCountApplication extends App {
   import Serdes._
 
-  val config: Properties = {
+  val props: Properties = {
     val p = new Properties()
     p.put(StreamsConfig.APPLICATION_ID_CONFIG, "wordcount-application")
     p.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "kafka-broker1:9092")
@@ -278,7 +278,7 @@ object WordCountApplication extends App {
     .count(Materialized.as("counts-store"))
   wordCounts.toStream.to("WordsWithCountsTopic")
 
-  val streams: KafkaStreams = new KafkaStreams(builder.build(), config)
+  val streams: KafkaStreams = new KafkaStreams(builder.build(), props)
   streams.start()
 
   sys.ShutdownHookThread {

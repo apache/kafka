@@ -3201,7 +3201,7 @@ import org.apache.kafka.streams.{KafkaStreams, StreamsConfig}
 object WordCountApplication extends App {
   import Serdes._
 
-  val config: Properties = {
+  val props: Properties = {
     val p = new Properties()
     p.put(StreamsConfig.APPLICATION_ID_CONFIG, "wordcount-application")
     p.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "kafka-broker1:9092")
@@ -3216,7 +3216,7 @@ object WordCountApplication extends App {
     .count(Materialized.as("counts-store"))
   wordCounts.toStream.to("WordsWithCountsTopic")
 
-  val streams: KafkaStreams = new KafkaStreams(builder.build(), config)
+  val streams: KafkaStreams = new KafkaStreams(builder.build(), props)
   streams.start()
 
   sys.ShutdownHookThread {
