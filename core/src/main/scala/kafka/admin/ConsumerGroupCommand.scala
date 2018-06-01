@@ -875,19 +875,19 @@ object ConsumerGroupCommand extends Logging {
       "Multiple URLS can be given to allow fail-over."
     val BootstrapServerDoc = "REQUIRED (for consumer groups based on the new consumer): The server to connect to."
     val GroupDoc = "The consumer group we wish to act on."
-    val TopicDoc = "The topic whose consumer group information should be deleted or topic whose should be included in the reset offset process. " +
-      "In `reset-offsets` case, partitions can be specified using this format: `topic1:0,1,2`, where 0,1,2 are the partition to be included in the process. " +
-      "Reset-offsets also supports multiple topic inputs."
-    val AllTopicsDoc = "Consider all topics assigned to a group in the `reset-offsets` process."
+    val TopicDoc = "The topic whose consumer group information should be deleted or the topic that should be included in the offset reset process. " +
+      "When resetting offsets, partitions can be specified using this format: 'topic:0,1,2', where 0,1,2 are the partitions whose offsets will be reset. " +
+      "Offsets of multiple topics can be reset at a time."
+    val AllTopicsDoc = "Consider all topics assigned to a group in the 'reset-offsets' process."
     val ListDoc = "List all consumer groups."
     val DescribeDoc = "Describe consumer group and list offset lag (number of messages not yet processed) related to given group."
     val nl = System.getProperty("line.separator")
     val DeleteDoc = "Pass in groups to delete topic partition offsets and ownership information " +
-      "over the entire consumer group. For instance --group g1 --group g2" + nl +
+      "over the entire consumer group. For instance '--group g1 --group g2'." + nl +
       "Pass in groups with a single topic to just delete the given topic's partition offsets and ownership " +
-      "information for the given consumer groups. For instance --group g1 --group g2 --topic t1" + nl +
+      "information for the given consumer groups. For instance '--group g1 --group g2 --topic t1'." + nl +
       "Pass in just a topic to delete the given topic's partition offsets and ownership information " +
-      "for every consumer group. For instance --topic t1" + nl +
+      "for every consumer group. For instance '--topic t1'." + nl +
       "WARNING: Group deletion only works for old ZK-based consumer groups, and one has to use it carefully to only delete groups that are not active."
     val NewConsumerDoc = "Use the new consumer implementation. This is the default, so this option is deprecated and " +
       "will be removed in a future release."
@@ -895,14 +895,14 @@ object ConsumerGroupCommand extends Logging {
       "to specify the maximum amount of time in milliseconds to wait before the group stabilizes (when the group is just created, " +
       "or is going through some changes)."
     val CommandConfigDoc = "Property file containing configs to be passed to Admin Client and Consumer."
-    val ResetOffsetsDoc = "Reset offsets of consumer group. Supports one consumer group at the time, and instances should be inactive" + nl +
-      "Has 2 execution options: --dry-run (the default) to plan which offsets to reset, and --execute to update the offsets. " +
-      "Additionally, the --export option is used to export the results to a CSV format." + nl +
-      "You must choose one of the following reset specifications: --to-datetime, --by-period, --to-earliest, " +
-      "--to-latest, --shift-by, --from-file, --to-current." + nl +
-      "To define the scope use --all-topics or --topic. One scope must be specified unless you use '--from-file'."
-    val DryRunDoc = "Only show results without executing changes on Consumer Groups. Supported operations: reset-offsets."
-    val ExecuteDoc = "Execute operation. Supported operations: reset-offsets."
+    val ResetOffsetsDoc = "Reset offsets of consumer group. Supports one consumer group at the time, and instances should be inactive." + nl +
+      "There are 2 execution options: '--dry-run' (default) to plan which offsets to reset, and '--execute' to update the offsets. " +
+      "Additionally, the '--export' option is used to export the results to a CSV format." + nl +
+      "One of the following reset specifications must be chosen: '--to-datetime', '--by-period', '--to-earliest', " +
+      "'--to-latest', '--shift-by', '--from-file', '--to-current'." + nl +
+      "To define the scope use '--all-topics' or '--topic'. One scope must be specified unless the '--from-file' option is used."
+    val DryRunDoc = "Only show results without executing changes on consumer groups. Supported operation: '--reset-offsets'."
+    val ExecuteDoc = "Execute operation. Supported operation: '--reset-offsets'."
     val ExportDoc = "Export operation execution to a CSV file. Supported operations: reset-offsets."
     val ResetToOffsetDoc = "Reset offsets to a specific offset."
     val ResetFromFileDoc = "Reset offsets to values defined in CSV file."
@@ -911,16 +911,17 @@ object ConsumerGroupCommand extends Logging {
     val ResetToEarliestDoc = "Reset offsets to earliest offset."
     val ResetToLatestDoc = "Reset offsets to latest offset."
     val ResetToCurrentDoc = "Reset offsets to current offset."
-    val ResetShiftByDoc = "Reset offsets shifting current offset by 'n', where 'n' can be positive or negative."
+    val ResetShiftByDoc = "Reset offsets by shifting current offset by 'n', where 'n' can be positive or negative."
     val MembersDoc = "Describe members of the group. This option may be used with '--describe' and '--bootstrap-server' options only." + nl +
-      "Example: --bootstrap-server localhost:9092 --describe --group group1 --members"
+      "Example: '--bootstrap-server localhost:9092 --describe --group group1 --members'"
     val VerboseDoc = "Provide additional information, if any, when describing the group. This option may be used " +
-      "with '--offsets'/'--members'/'--state' and '--bootstrap-server' options only." + nl + "Example: --bootstrap-server localhost:9092 --describe --group group1 --members --verbose"
+      "with '--offsets'/'--members'/'--state' and '--bootstrap-server' options only." + nl +
+      "Example: '--bootstrap-server localhost:9092 --describe --group group1 --members --verbose'"
     val OffsetsDoc = "Describe the group and list all topic partitions in the group along with their offset lag. " +
       "This is the default sub-action of and may be used with '--describe' and '--bootstrap-server' options only." + nl +
-      "Example: --bootstrap-server localhost:9092 --describe --group group1 --offsets"
+      "Example: '--bootstrap-server localhost:9092 --describe --group group1 --offsets'"
     val StateDoc = "Describe the group state. This option may be used with '--describe' and '--bootstrap-server' options only." + nl +
-      "Example: --bootstrap-server localhost:9092 --describe --group group1 --state"
+      "Example: '--bootstrap-server localhost:9092 --describe --group group1 --state'"
 
     val parser = new OptionParser(false)
     val zkConnectOpt = parser.accepts("zookeeper", ZkConnectDoc)
