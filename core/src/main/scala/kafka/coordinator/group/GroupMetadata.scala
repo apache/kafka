@@ -120,8 +120,9 @@ private object GroupMetadata {
                 protocol: String,
                 leaderId: String,
                 currentStateTimestamp: Option[Long],
-                members: Iterable[MemberMetadata]): GroupMetadata = {
-    val group = new GroupMetadata(groupId, initialState, Time.SYSTEM)
+                members: Iterable[MemberMetadata],
+                time: Time): GroupMetadata = {
+    val group = new GroupMetadata(groupId, initialState, time)
     group.generationId = generationId
     group.protocolType = if (protocolType == null || protocolType.isEmpty) None else Some(protocolType)
     group.protocol = Option(protocol)
@@ -464,8 +465,12 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     val expiredOffsets: Map[TopicPartition, OffsetAndMetadata] = protocolType match {
       case Some(_) if is(Empty) =>
         // no consumer exists in the group =>
-        // if retention period has passed since group became Empty, expire all offsets with no pending offset commit
-        getExpiredOffsets(_ => currentStateTimestampOrDefault)
+        // - if current state timestamp exists and retention period has passed since group became Empty,
+        //   expire all offsets with no pending offset commit;
+        // - if there is no current state timestamp (old group metadata schema) and retention period has passed
+        //   since the last commit timestamp, expire the offset
+        getExpiredOffsets(commitRecordMetadataAndOffset =>
+          currentStateTimestamp.getOrElse(commitRecordMetadataAndOffset.offsetAndMetadata.commitTimestamp))
 
       case None =>
         // protocolType is None => standalone (simple) consumer, that uses Kafka for offset storage only

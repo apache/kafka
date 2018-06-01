@@ -197,20 +197,11 @@ class GroupMetadataManager(brokerId: Int,
                  responseCallback: Errors => Unit): Unit = {
     getMagic(partitionFor(group.groupId)) match {
       case Some(magicValue) =>
-        val groupMetadataValueVersion = {
-          if (interBrokerProtocolVersion < KAFKA_0_10_1_IV0)
-            0.toShort
-          else if (interBrokerProtocolVersion < KAFKA_2_0_IV2)
-            1.toShort
-          else
-            GroupMetadataManager.CURRENT_GROUP_VALUE_SCHEMA_VERSION
-        }
-
         // We always use CREATE_TIME, like the producer. The conversion to LOG_APPEND_TIME (if necessary) happens automatically.
         val timestampType = TimestampType.CREATE_TIME
         val timestamp = time.milliseconds()
         val key = GroupMetadataManager.groupMetadataKey(group.groupId)
-        val value = GroupMetadataManager.groupMetadataValue(group, groupAssignment, version = groupMetadataValueVersion)
+        val value = GroupMetadataManager.groupMetadataValue(group, groupAssignment, interBrokerProtocolVersion)
 
         val records = {
           val buffer = ByteBuffer.allocate(AbstractRecords.estimateSizeInBytes(magicValue, compressionType,
@@ -332,7 +323,7 @@ class GroupMetadataManager(brokerId: Int,
 
           val records = filteredOffsetMetadata.map { case (topicPartition, offsetAndMetadata) =>
             val key = GroupMetadataManager.offsetCommitKey(group.groupId, topicPartition)
-            val value = GroupMetadataManager.offsetCommitValue(offsetAndMetadata)
+            val value = GroupMetadataManager.offsetCommitValue(offsetAndMetadata, interBrokerProtocolVersion)
             new SimpleRecord(timestamp, key, value)
           }
           val offsetTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, partitionFor(group.groupId))
@@ -582,7 +573,7 @@ class GroupMetadataManager(brokerId: Int,
                   case groupMetadataKey: GroupMetadataKey =>
                     // load group metadata
                     val groupId = groupMetadataKey.key
-                    val groupMetadata = GroupMetadataManager.readGroupMessageValue(groupId, record.value)
+                    val groupMetadata = GroupMetadataManager.readGroupMessageValue(groupId, record.value, time)
                     if (groupMetadata != null) {
                       removedGroups.remove(groupId)
                       loadedGroups.put(groupId, groupMetadata)
@@ -655,20 +646,8 @@ class GroupMetadataManager(brokerId: Int,
                         pendingTransactionalOffsets: Map[Long, mutable.Map[TopicPartition, CommitRecordMetadataAndOffset]]): Unit = {
     // offsets are initialized prior to loading the group into the cache to ensure that clients see a consistent
     // view of the group's offsets
-    val loadedOffsets = offsets.mapValues { case CommitRecordMetadataAndOffset(commitRecordOffset, offsetAndMetadata) =>
-      // special handling for version 0:
-      // set the expiration time stamp as commit time stamp + server default retention time
-      val updatedOffsetAndMetadata =
-        if (offsetAndMetadata.expireTimestamp.contains(OffsetCommitRequest.DEFAULT_TIMESTAMP))
-          new OffsetAndMetadata(offsetAndMetadata.offsetMetadata,
-            offsetAndMetadata.commitTimestamp,
-            Some(offsetAndMetadata.commitTimestamp + config.offsetsRetentionMs))
-        else
-          offsetAndMetadata
-      CommitRecordMetadataAndOffset(commitRecordOffset, updatedOffsetAndMetadata)
-    }
-    trace(s"Initialized offsets $loadedOffsets for group ${group.groupId}")
-    group.initializeOffsets(loadedOffsets, pendingTransactionalOffsets.toMap)
+    trace(s"Initialized offsets $offsets for group ${group.groupId}")
+    group.initializeOffsets(offsets, pendingTransactionalOffsets.toMap)
 
     val currentGroup = addGroup(group)
     if (group != currentGroup)
@@ -1105,20 +1084,20 @@ object GroupMetadataManager {
    * Generates the payload for offset commit message from given offset and metadata
    *
    * @param offsetAndMetadata consumer's current offset and metadata
+   * @param apiVersion the api version
    * @return payload for offset commit message
    */
-  private[group] def offsetCommitValue(offsetAndMetadata: OffsetAndMetadata): Array[Byte] = {
+  private[group] def offsetCommitValue(offsetAndMetadata: OffsetAndMetadata,
+                                       apiVersion: ApiVersion): Array[Byte] = {
     // generate commit value according to schema version
+    val (version, value) = {
+      if (apiVersion < KAFKA_2_0_IV2)
+        (1.toShort, new Struct(OFFSET_COMMIT_VALUE_SCHEMA_V1))
+      else
+        (CURRENT_OFFSET_VALUE_SCHEMA_VERSION, new Struct(OFFSET_COMMIT_VALUE_SCHEMA_V2))
+    }
 
-    val offsetValueSchemaVersion: Short =
-      // if expire timestamp is explicitly provided use the old schema
-      if (offsetAndMetadata.expireTimestamp.nonEmpty) 1
-      //  otherwise, use the current v2 schema
-      else 2
-
-    val value = new Struct(schemaForOffset(offsetValueSchemaVersion))
-
-    if (offsetValueSchemaVersion == 2) {
+    if (version == 2) {
       value.set(OFFSET_VALUE_OFFSET_FIELD_V2, offsetAndMetadata.offset)
       value.set(OFFSET_VALUE_METADATA_FIELD_V2, offsetAndMetadata.metadata)
       value.set(OFFSET_VALUE_COMMIT_TIMESTAMP_FIELD_V2, offsetAndMetadata.commitTimestamp)
@@ -1126,11 +1105,12 @@ object GroupMetadataManager {
       value.set(OFFSET_VALUE_OFFSET_FIELD_V1, offsetAndMetadata.offset)
       value.set(OFFSET_VALUE_METADATA_FIELD_V1, offsetAndMetadata.metadata)
       value.set(OFFSET_VALUE_COMMIT_TIMESTAMP_FIELD_V1, offsetAndMetadata.commitTimestamp)
+      // version 1 has a non empty expireTimestamp field
       value.set(OFFSET_VALUE_EXPIRE_TIMESTAMP_FIELD_V1, offsetAndMetadata.expireTimestamp.get)
     }
 
     val byteBuffer = ByteBuffer.allocate(2 /* version */ + value.sizeOf)
-    byteBuffer.putShort(offsetValueSchemaVersion)
+    byteBuffer.putShort(version)
     value.writeTo(byteBuffer)
     byteBuffer.array()
   }
@@ -1141,16 +1121,20 @@ object GroupMetadataManager {
    *
    * @param groupMetadata current group metadata
    * @param assignment the assignment for the rebalancing generation
-   * @param version the version of the value message to use
+   * @param apiVersion the api version
    * @return payload for offset commit message
    */
   private[group] def groupMetadataValue(groupMetadata: GroupMetadata,
                                         assignment: Map[String, Array[Byte]],
-                                        version: Short): Array[Byte] = {
-    val value = version match {
-      case 0 => new Struct(GROUP_METADATA_VALUE_SCHEMA_V0)
-      case 1 => new Struct(GROUP_METADATA_VALUE_SCHEMA_V1)
-      case _ => new Struct(CURRENT_GROUP_VALUE_SCHEMA)
+                                        apiVersion: ApiVersion): Array[Byte] = {
+
+    val (version, value) = {
+      if (apiVersion < KAFKA_0_10_1_IV0)
+        (0.toShort, new Struct(GROUP_METADATA_VALUE_SCHEMA_V0))
+      else if (apiVersion < KAFKA_2_0_IV2)
+        (1.toShort, new Struct(GROUP_METADATA_VALUE_SCHEMA_V1))
+      else
+        (CURRENT_OFFSET_VALUE_SCHEMA_VERSION, new Struct(CURRENT_GROUP_VALUE_SCHEMA))
     }
 
     value.set(PROTOCOL_TYPE_KEY, groupMetadata.protocolType.getOrElse(""))
@@ -1267,9 +1251,10 @@ object GroupMetadataManager {
    * Decodes the group metadata messages' payload and retrieves its member metadata from it
    *
    * @param buffer input byte-buffer
+   * @param time the time instance to use
    * @return a group metadata object from the message
    */
-  def readGroupMessageValue(groupId: String, buffer: ByteBuffer): GroupMetadata = {
+  def readGroupMessageValue(groupId: String, buffer: ByteBuffer, time: Time): GroupMetadata = {
     if (buffer == null) { // tombstone
       null
     } else {
@@ -1284,9 +1269,16 @@ object GroupMetadataManager {
         val leaderId = value.get(LEADER_KEY).asInstanceOf[String]
         val memberMetadataArray = value.getArray(MEMBERS_KEY)
         val initialState = if (memberMetadataArray.isEmpty) Empty else Stable
-        val currentStateTimestamp: Option[Long] =
-          if (version > 1) Some(value.getLong(CURRENT_STATE_TIMESTAMP_KEY))
-          else None
+        val rawCurrentStateTimestamp = value.getLong(CURRENT_STATE_TIMESTAMP_KEY)
+        val currentStateTimestamp: Option[Long] = version match {
+          case version if version >= 2 =>
+            if (rawCurrentStateTimestamp == -1)
+              None
+            else
+              Some(rawCurrentStateTimestamp)
+          case _ =>
+            None
+        }
 
         val members = memberMetadataArray.map { memberMetadataObj =>
           val memberMetadata = memberMetadataObj.asInstanceOf[Struct]
@@ -1302,7 +1294,7 @@ object GroupMetadataManager {
           member.assignment = Utils.toArray(memberMetadata.get(ASSIGNMENT_KEY).asInstanceOf[ByteBuffer])
           member
         }
-        GroupMetadata.loadGroup(groupId, initialState, generationId, protocolType, protocol, leaderId, currentStateTimestamp, members)
+        GroupMetadata.loadGroup(groupId, initialState, generationId, protocolType, protocol, leaderId, currentStateTimestamp, members, time)
       } else {
         throw new IllegalStateException(s"Unknown group metadata message version: $version")
       }
@@ -1342,7 +1334,7 @@ object GroupMetadataManager {
           val value = consumerRecord.value
           val formattedValue =
             if (value == null) "NULL"
-            else GroupMetadataManager.readGroupMessageValue(groupId, ByteBuffer.wrap(value)).toString
+            else GroupMetadataManager.readGroupMessageValue(groupId, ByteBuffer.wrap(value), Time.SYSTEM).toString
           output.write(groupId.getBytes(StandardCharsets.UTF_8))
           output.write("::".getBytes(StandardCharsets.UTF_8))
           output.write(formattedValue.getBytes(StandardCharsets.UTF_8))

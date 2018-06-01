@@ -745,7 +745,7 @@ class GroupMetadataManagerTest {
     val generation = 27
     val protocolType = "consumer"
 
-    val group = GroupMetadata.loadGroup(groupId, Empty, generation, protocolType, null, null, None, Seq.empty)
+    val group = GroupMetadata.loadGroup(groupId, Empty, generation, protocolType, null, null, None, Seq.empty, time)
     groupMetadataManager.addGroup(group)
 
     val capturedRecords = expectAppendMessage(Errors.NONE)
@@ -764,7 +764,7 @@ class GroupMetadataManagerTest {
     assertEquals(1, records.size)
 
     val record = records.head
-    val groupMetadata = GroupMetadataManager.readGroupMessageValue(groupId, record.value)
+    val groupMetadata = GroupMetadataManager.readGroupMessageValue(groupId, record.value, time)
     assertTrue(groupMetadata.is(Empty))
     assertEquals(generation, groupMetadata.generationId)
     assertEquals(Some(protocolType), groupMetadata.protocolType)
@@ -793,7 +793,7 @@ class GroupMetadataManagerTest {
     assertEquals(1, records.size)
 
     val record = records.head
-    val groupMetadata = GroupMetadataManager.readGroupMessageValue(groupId, record.value)
+    val groupMetadata = GroupMetadataManager.readGroupMessageValue(groupId, record.value, time)
     assertTrue(groupMetadata.is(Empty))
     assertEquals(0, groupMetadata.generationId)
     assertEquals(None, groupMetadata.protocolType)
@@ -1635,16 +1635,16 @@ class GroupMetadataManagerTest {
                                                memberId: String): SimpleRecord = {
     val memberProtocols = List((protocol, Array.emptyByteArray))
     val member = new MemberMetadata(memberId, groupId, "clientId", "clientHost", 30000, 10000, protocolType, memberProtocols)
-    val group = GroupMetadata.loadGroup(groupId, Stable, generation, protocolType, protocol, memberId, None, Seq(member))
+    val group = GroupMetadata.loadGroup(groupId, Stable, generation, protocolType, protocol, memberId, None, Seq(member), time)
     val groupMetadataKey = GroupMetadataManager.groupMetadataKey(groupId)
-    val groupMetadataValue = GroupMetadataManager.groupMetadataValue(group, Map(memberId -> Array.empty[Byte]), 2)
+    val groupMetadataValue = GroupMetadataManager.groupMetadataValue(group, Map(memberId -> Array.empty[Byte]), ApiVersion.latestVersion)
     new SimpleRecord(groupMetadataKey, groupMetadataValue)
   }
 
   private def buildEmptyGroupRecord(generation: Int, protocolType: String): SimpleRecord = {
-    val group = GroupMetadata.loadGroup(groupId, Empty, generation, protocolType, null, null, None, Seq.empty)
+    val group = GroupMetadata.loadGroup(groupId, Empty, generation, protocolType, null, null, None, Seq.empty, time)
     val groupMetadataKey = GroupMetadataManager.groupMetadataKey(groupId)
-    val groupMetadataValue = GroupMetadataManager.groupMetadataValue(group, Map.empty, 2)
+    val groupMetadataValue = GroupMetadataManager.groupMetadataValue(group, Map.empty, ApiVersion.latestVersion)
     new SimpleRecord(groupMetadataKey, groupMetadataValue)
   }
 
@@ -1694,7 +1694,7 @@ class GroupMetadataManagerTest {
     committedOffsets.map { case (topicPartition, offset) =>
       val offsetAndMetadata = OffsetAndMetadata(offset)
       val offsetCommitKey = GroupMetadataManager.offsetCommitKey(groupId, topicPartition)
-      val offsetCommitValue = GroupMetadataManager.offsetCommitValue(offsetAndMetadata)
+      val offsetCommitValue = GroupMetadataManager.offsetCommitValue(offsetAndMetadata, ApiVersion.latestVersion)
       new SimpleRecord(offsetCommitKey, offsetCommitValue)
     }.toSeq
   }
