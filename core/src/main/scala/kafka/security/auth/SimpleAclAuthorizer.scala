@@ -24,10 +24,11 @@ import com.typesafe.scalalogging.Logger
 import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
 import kafka.network.RequestChannel.Session
 import kafka.security.auth.SimpleAclAuthorizer.VersionedAcls
+import kafka.security.auth.storage.AclStore
 import kafka.server.KafkaConfig
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
-import kafka.zk.{AclChangeNotificationSequenceZNode, AclChangeNotificationZNode, KafkaZkClient}
+import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{SecurityUtils, Time}
 
@@ -54,8 +55,9 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   private val authorizerLogger = Logger("kafka.authorizer.logger")
   private var superUsers = Set.empty[KafkaPrincipal]
   private var shouldAllowEveryoneIfNoAclIsFound = false
-  private var zkClient: KafkaZkClient = null
-  private var aclChangeListener: ZkNodeChangeNotificationListener = null
+  private var zkClient: KafkaZkClient = _
+  private var aclChangeListener: ZkNodeChangeNotificationListener = _
+  private var wildcardSuffixedAclChangeListener: ZkNodeChangeNotificationListener = _
 
   private val aclCache = new scala.collection.mutable.HashMap[Resource, VersionedAcls]
   private val lock = new ReentrantReadWriteLock()
@@ -97,14 +99,16 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
     loadCache()
 
-    aclChangeListener = new ZkNodeChangeNotificationListener(zkClient, AclChangeNotificationZNode.path, AclChangeNotificationSequenceZNode.SequenceNumberPrefix, AclChangedNotificationHandler)
+    aclChangeListener = new ZkNodeChangeNotificationListener(zkClient, AclStore.literalAclStore.aclChangesZNode.path, AclStore.literalAclStore.aclChangeNotificationSequenceZNode.SequenceNumberPrefix, AclChangedNotificationHandler)
     aclChangeListener.init()
+    wildcardSuffixedAclChangeListener = new ZkNodeChangeNotificationListener(zkClient, AclStore.wildcardSuffixedAclStore.aclChangesZNode.path, AclStore.wildcardSuffixedAclStore.aclChangeNotificationSequenceZNode.SequenceNumberPrefix, AclChangedNotificationHandler)
+    wildcardSuffixedAclChangeListener.init()
   }
 
   override def authorize(session: Session, operation: Operation, resource: Resource): Boolean = {
     val principal = session.principal
     val host = session.clientAddress.getHostAddress
-    val acls = getAcls(resource) ++ getAcls(new Resource(resource.resourceType, Resource.WildCardResource))
+    val acls = getMatchingAcls(resource)
 
     // Check if there is any Deny acl match that would disallow this operation.
     val denyMatch = aclMatch(operation, resource, principal, host, Deny, acls)
@@ -143,16 +147,26 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     } else false
   }
 
-  private def aclMatch(operations: Operation, resource: Resource, principal: KafkaPrincipal, host: String, permissionType: PermissionType, acls: Set[Acl]): Boolean = {
+  private def aclMatch(operation: Operation, resource: Resource, principal: KafkaPrincipal, host: String, permissionType: PermissionType, acls: Set[Acl]): Boolean = {
     acls.find { acl =>
       acl.permissionType == permissionType &&
-        (acl.principal == principal || acl.principal == Acl.WildCardPrincipal) &&
-        (operations == acl.operation || acl.operation == All) &&
+        matchPrincipal(acl.principal, principal) &&
+        (operation == acl.operation || acl.operation == All) &&
         (acl.host == host || acl.host == Acl.WildCardHost)
     }.exists { acl =>
-      authorizerLogger.debug(s"operation = $operations on resource = $resource from host = $host is $permissionType based on acl = $acl")
+      authorizerLogger.debug(s"operation = $operation on resource = $resource from host = $host is $permissionType based on acl = $acl")
       true
     }
+  }
+
+  /**
+    * @param valueInAcl KafkaPrincipal value present in Acl.
+    * @param input KafkaPrincipal present in the request.
+    * @return true if there is a match (including wildcard-suffix matching).
+    */
+  def matchPrincipal(valueInAcl: KafkaPrincipal, input: KafkaPrincipal): Boolean = {
+    (valueInAcl.getPrincipalType == input.getPrincipalType || valueInAcl.getPrincipalType == Acl.WildCardString) &&
+      (valueInAcl.getName.equals(input.getName) || valueInAcl.getName.equals(Acl.WildCardString))
   }
 
   override def addAcls(acls: Set[Acl], resource: Resource) {
@@ -191,10 +205,19 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   override def getAcls(principal: KafkaPrincipal): Map[Resource, Set[Acl]] = {
     inReadLock(lock) {
       aclCache.mapValues { versionedAcls =>
-        versionedAcls.acls.filter(_.principal == principal)
+        versionedAcls.acls.filter(acl => matchPrincipal(acl.principal, principal))
       }.filter { case (_, acls) =>
         acls.nonEmpty
       }.toMap
+    }
+  }
+
+  private def getMatchingAcls(resource: Resource): Set[Acl] = {
+    inReadLock(lock) {
+      aclCache.filterKeys(stored => SecurityUtils.matchResource(
+        new org.apache.kafka.common.resource.Resource(stored.resourceType.toJava, stored.name, stored.resourceNameType.toJava),
+        new org.apache.kafka.common.resource.Resource(resource.resourceType.toJava, resource.name, resource.resourceNameType.toJava)
+      )).flatMap(_._2.acls).toSet
     }
   }
 
@@ -206,20 +229,23 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
   def close() {
     if (aclChangeListener != null) aclChangeListener.close()
+    if (wildcardSuffixedAclChangeListener != null) wildcardSuffixedAclChangeListener.close()
     if (zkClient != null) zkClient.close()
   }
 
-  private def loadCache()  {
+  private def loadCache() {
     inWriteLock(lock) {
-      val resourceTypes = zkClient.getResourceTypes()
-      for (rType <- resourceTypes) {
-        val resourceType = ResourceType.fromString(rType)
-        val resourceNames = zkClient.getResourceNames(resourceType.name)
-        for (resourceName <- resourceNames) {
-          val versionedAcls = getAclsFromZk(Resource(resourceType, resourceName))
-          updateCache(new Resource(resourceType, resourceName), versionedAcls)
+      AclStore.AclStores.foreach(aclStore => {
+        val resourceTypes = zkClient.getResourceTypes(aclStore)
+        for (rType <- resourceTypes) {
+          val resourceType = ResourceType.fromString(rType)
+          val resourceNames = zkClient.getResourceNames(aclStore, resourceType)
+          for (resourceName <- resourceNames) {
+            val versionedAcls = getAclsFromZk(new Resource(resourceType, resourceName, aclStore.resourceNameType))
+            updateCache(new Resource(resourceType, resourceName, aclStore.resourceNameType), versionedAcls)
+          }
         }
-      }
+      })
     }
   }
 
@@ -305,7 +331,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   }
 
   private def updateAclChangedFlag(resource: Resource) {
-    zkClient.createAclChangeNotification(resource.toString)
+    zkClient.createAclChangeNotification(AclStore.fromResource(resource), resource.toString)
   }
 
   private def backoffTime = {

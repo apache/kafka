@@ -32,6 +32,7 @@ import static org.apache.kafka.common.protocol.CommonFields.OPERATION;
 import static org.apache.kafka.common.protocol.CommonFields.PERMISSION_TYPE;
 import static org.apache.kafka.common.protocol.CommonFields.PRINCIPAL_FILTER;
 import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_NAME_FILTER;
+import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_NAME_TYPE;
 import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_TYPE;
 
 public class DescribeAclsRequest extends AbstractRequest {
@@ -43,10 +44,14 @@ public class DescribeAclsRequest extends AbstractRequest {
             OPERATION,
             PERMISSION_TYPE);
 
-    /**
-     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
-     */
-    private static final Schema DESCRIBE_ACLS_REQUEST_V1 = DESCRIBE_ACLS_REQUEST_V0;
+    private static final Schema DESCRIBE_ACLS_REQUEST_V1 = new Schema(
+            RESOURCE_TYPE,
+            RESOURCE_NAME_FILTER,
+            RESOURCE_NAME_TYPE,
+            PRINCIPAL_FILTER,
+            HOST_FILTER,
+            OPERATION,
+            PERMISSION_TYPE);
 
     public static Schema[] schemaVersions() {
         return new Schema[]{DESCRIBE_ACLS_REQUEST_V0, DESCRIBE_ACLS_REQUEST_V1};

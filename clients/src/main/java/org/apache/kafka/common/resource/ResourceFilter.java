@@ -18,6 +18,7 @@
 package org.apache.kafka.common.resource;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.utils.SecurityUtils;
 
 import java.util.Objects;
 
@@ -30,22 +31,37 @@ import java.util.Objects;
 public class ResourceFilter {
     private final ResourceType resourceType;
     private final String name;
+    private final ResourceNameType resourceNameType;
 
     /**
      * Matches any resource.
      */
-    public static final ResourceFilter ANY = new ResourceFilter(ResourceType.ANY, null);
+    public static final ResourceFilter ANY = new ResourceFilter(ResourceType.ANY, null, ResourceNameType.ANY);
+
+    /**
+     * Create an instance of this class with the provided parameters.
+     * Resource name type defaults to ResourceNameType.LITERAL
+     *
+     * @param resourceType non-null resource type
+     * @param name resource name or null
+     */
+    public ResourceFilter(ResourceType resourceType, String name) {
+        this(resourceType, name, ResourceNameType.LITERAL);
+    }
 
     /**
      * Create an instance of this class with the provided parameters.
      *
      * @param resourceType non-null resource type
      * @param name resource name or null
+     * @param resourceNameType non-null resource name type
      */
-    public ResourceFilter(ResourceType resourceType, String name) {
+    public ResourceFilter(ResourceType resourceType, String name, ResourceNameType resourceNameType) {
         Objects.requireNonNull(resourceType);
         this.resourceType = resourceType;
         this.name = name;
+        Objects.requireNonNull(resourceNameType);
+        this.resourceNameType = resourceNameType;
     }
 
     /**
@@ -62,16 +78,23 @@ public class ResourceFilter {
         return name;
     }
 
+    /**
+     * Return the resource name type.
+     */
+    public ResourceNameType resourceNameType() {
+        return resourceNameType;
+    }
+
     @Override
     public String toString() {
-        return "(resourceType=" + resourceType + ", name=" + ((name == null) ? "<any>" : name) + ")";
+        return "(resourceType=" + resourceType + ", name=" + ((name == null) ? "<any>" : name) + ", resourceNameType=" + resourceNameType + ")";
     }
 
     /**
      * Return true if this ResourceFilter has any UNKNOWN components.
      */
     public boolean isUnknown() {
-        return resourceType.isUnknown();
+        return resourceType.isUnknown() || resourceNameType.isUnknown();
     }
 
     @Override
@@ -79,23 +102,21 @@ public class ResourceFilter {
         if (!(o instanceof ResourceFilter))
             return false;
         ResourceFilter other = (ResourceFilter) o;
-        return resourceType.equals(other.resourceType) && Objects.equals(name, other.name);
+        return resourceType.equals(other.resourceType)
+                && Objects.equals(name, other.name)
+                && Objects.equals(resourceNameType, other.resourceNameType);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(resourceType, name);
+        return Objects.hash(resourceType, name, resourceNameType);
     }
 
     /**
      * Return true if this filter matches the given Resource.
      */
     public boolean matches(Resource other) {
-        if ((name != null) && (!name.equals(other.name())))
-            return false;
-        if ((resourceType != ResourceType.ANY) && (!resourceType.equals(other.resourceType())))
-            return false;
-        return true;
+        return SecurityUtils.matchResource(other, this);
     }
 
     /**
@@ -115,6 +136,10 @@ public class ResourceFilter {
             return "Resource type is UNKNOWN.";
         if (name == null)
             return "Resource name is NULL.";
+        if (resourceNameType == ResourceNameType.ANY)
+            return "Resource name type is ANY.";
+        if (resourceNameType == ResourceNameType.UNKNOWN)
+            return "Resource name type is UNKNOWN.";
         return null;
     }
 }

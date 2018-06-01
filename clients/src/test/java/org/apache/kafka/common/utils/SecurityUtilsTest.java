@@ -16,10 +16,15 @@
  */
 package org.apache.kafka.common.utils;
 
+import org.apache.kafka.common.resource.Resource;
+import org.apache.kafka.common.resource.ResourceNameType;
+import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 public class SecurityUtilsTest {
 
@@ -34,10 +39,92 @@ public class SecurityUtilsTest {
     @Test
     public void testParseKafkaPrincipalWithNonUserPrincipalType() {
         String name = "foo";
-        String principalType = "Group";
+        String principalType = "ResourceType.GROUP";
         KafkaPrincipal principal = SecurityUtils.parseKafkaPrincipal(principalType + ":" + name);
         assertEquals(principalType, principal.getPrincipalType());
         assertEquals(name, principal.getName());
+    }
+
+    @Test
+    public void testmatchWildcardSuffixedString() {
+        // everything should match wildcard string
+        assertTrue(SecurityUtils.matchWildcardSuffixedString(SecurityUtils.WILDCARD_MARKER, SecurityUtils.WILDCARD_MARKER));
+        assertTrue(SecurityUtils.matchWildcardSuffixedString(SecurityUtils.WILDCARD_MARKER, "f"));
+        assertTrue(SecurityUtils.matchWildcardSuffixedString(SecurityUtils.WILDCARD_MARKER, "foo"));
+        assertTrue(SecurityUtils.matchWildcardSuffixedString(SecurityUtils.WILDCARD_MARKER, "fo" + SecurityUtils.WILDCARD_MARKER));
+        assertTrue(SecurityUtils.matchWildcardSuffixedString(SecurityUtils.WILDCARD_MARKER, "f" + SecurityUtils.WILDCARD_MARKER));
+
+        assertTrue(SecurityUtils.matchWildcardSuffixedString("f", SecurityUtils.WILDCARD_MARKER));
+        assertTrue(SecurityUtils.matchWildcardSuffixedString("f", "f"));
+        assertTrue(SecurityUtils.matchWildcardSuffixedString("f", "f" + SecurityUtils.WILDCARD_MARKER));
+        assertFalse(SecurityUtils.matchWildcardSuffixedString("f", "foo"));
+        assertFalse(SecurityUtils.matchWildcardSuffixedString("f", "fo" + SecurityUtils.WILDCARD_MARKER));
+
+        assertTrue(SecurityUtils.matchWildcardSuffixedString("foo", SecurityUtils.WILDCARD_MARKER));
+        assertTrue(SecurityUtils.matchWildcardSuffixedString("foo", "foo"));
+        assertTrue(SecurityUtils.matchWildcardSuffixedString("foo", "fo" + SecurityUtils.WILDCARD_MARKER));
+        assertTrue(SecurityUtils.matchWildcardSuffixedString("foo", "f" + SecurityUtils.WILDCARD_MARKER));
+        assertTrue(SecurityUtils.matchWildcardSuffixedString("foo", "foo" + SecurityUtils.WILDCARD_MARKER));
+        assertFalse(SecurityUtils.matchWildcardSuffixedString("foo", "f"));
+        assertFalse(SecurityUtils.matchWildcardSuffixedString("foo", "foot" + SecurityUtils.WILDCARD_MARKER));
+
+        assertTrue(SecurityUtils.matchWildcardSuffixedString("fo" + SecurityUtils.WILDCARD_MARKER, SecurityUtils.WILDCARD_MARKER));
+        assertTrue(SecurityUtils.matchWildcardSuffixedString("fo" + SecurityUtils.WILDCARD_MARKER, "fo"));
+        assertTrue(SecurityUtils.matchWildcardSuffixedString("fo" + SecurityUtils.WILDCARD_MARKER, "foo"));
+        assertTrue(SecurityUtils.matchWildcardSuffixedString("fo" + SecurityUtils.WILDCARD_MARKER, "foot"));
+        assertTrue(SecurityUtils.matchWildcardSuffixedString("fo" + SecurityUtils.WILDCARD_MARKER, "fo" + SecurityUtils.WILDCARD_MARKER));
+
+        assertTrue(SecurityUtils.matchWildcardSuffixedString("fo" + SecurityUtils.WILDCARD_MARKER, "foo" + SecurityUtils.WILDCARD_MARKER));
+        assertTrue(SecurityUtils.matchWildcardSuffixedString("fo" + SecurityUtils.WILDCARD_MARKER, "foot" + SecurityUtils.WILDCARD_MARKER));
+        assertFalse(SecurityUtils.matchWildcardSuffixedString("fo" + SecurityUtils.WILDCARD_MARKER, "f"));
+        assertFalse(SecurityUtils.matchWildcardSuffixedString("fo" + SecurityUtils.WILDCARD_MARKER, "f" + SecurityUtils.WILDCARD_MARKER));
+    }
+
+    @Test
+    public void testMatchResource() {
+        // same resource should match
+        assertTrue(
+                SecurityUtils.matchResource(
+                        new Resource(ResourceType.TOPIC, "ResourceType.TOPICA"),
+                        new Resource(ResourceType.TOPIC, "ResourceType.TOPICA")
+                )
+        );
+
+        // different resource shouldn't match
+        assertFalse(
+                SecurityUtils.matchResource(
+                        new Resource(ResourceType.TOPIC, "ResourceType.TOPICA"),
+                        new Resource(ResourceType.TOPIC, "ResourceType.TOPICB")
+                )
+        );
+        assertFalse(
+                SecurityUtils.matchResource(
+                        new Resource(ResourceType.TOPIC, "ResourceType.TOPICA"),
+                        new Resource(ResourceType.GROUP, "ResourceType.TOPICA")
+                )
+        );
+
+        // wildcard resource should match
+        assertTrue(
+                SecurityUtils.matchResource(
+                        new Resource(ResourceType.TOPIC, SecurityUtils.WILDCARD_MARKER),
+                        new Resource(ResourceType.TOPIC, "ResourceType.TOPICA")
+                )
+        );
+
+        // wildcard-suffix resource should match
+        assertTrue(
+                SecurityUtils.matchResource(
+                        new Resource(ResourceType.TOPIC, "ResourceType.TOPIC", ResourceNameType.WILDCARD_SUFFIXED),
+                        new Resource(ResourceType.TOPIC, "ResourceType.TOPICA")
+                )
+        );
+        assertFalse(
+                SecurityUtils.matchResource(
+                        new Resource(ResourceType.TOPIC, "ResourceType.TOPIC", ResourceNameType.WILDCARD_SUFFIXED),
+                        new Resource(ResourceType.TOPIC, "topiA")
+                )
+        );
     }
 
 }

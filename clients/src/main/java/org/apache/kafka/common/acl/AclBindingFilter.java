@@ -19,7 +19,6 @@ package org.apache.kafka.common.acl;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.resource.ResourceFilter;
-import org.apache.kafka.common.resource.ResourceType;
 
 import java.util.Objects;
 
@@ -36,9 +35,7 @@ public class AclBindingFilter {
     /**
      * A filter which matches any ACL binding.
      */
-    public static final AclBindingFilter ANY = new AclBindingFilter(
-        new ResourceFilter(ResourceType.ANY, null),
-        new AccessControlEntryFilter(null, null, AclOperation.ANY, AclPermissionType.ANY));
+    public static final AclBindingFilter ANY = new AclBindingFilter(ResourceFilter.ANY, AccessControlEntryFilter.ANY);
 
     /**
      * Create an instance of this filter with the provided parameters.

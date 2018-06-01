@@ -43,6 +43,7 @@ import static org.apache.kafka.common.protocol.CommonFields.OPERATION;
 import static org.apache.kafka.common.protocol.CommonFields.PERMISSION_TYPE;
 import static org.apache.kafka.common.protocol.CommonFields.PRINCIPAL;
 import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_NAME;
+import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_NAME_TYPE;
 import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_TYPE;
 import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
 
@@ -51,11 +52,22 @@ public class DeleteAclsResponse extends AbstractResponse {
     private final static String FILTER_RESPONSES_KEY_NAME = "filter_responses";
     private final static String MATCHING_ACLS_KEY_NAME = "matching_acls";
 
-    private static final Schema MATCHING_ACL = new Schema(
+    private static final Schema MATCHING_ACL_V0 = new Schema(
             ERROR_CODE,
             ERROR_MESSAGE,
             RESOURCE_TYPE,
             RESOURCE_NAME,
+            PRINCIPAL,
+            HOST,
+            OPERATION,
+            PERMISSION_TYPE);
+
+    private static final Schema MATCHING_ACL_V1 = new Schema(
+            ERROR_CODE,
+            ERROR_MESSAGE,
+            RESOURCE_TYPE,
+            RESOURCE_NAME,
+            RESOURCE_NAME_TYPE,
             PRINCIPAL,
             HOST,
             OPERATION,
@@ -67,12 +79,15 @@ public class DeleteAclsResponse extends AbstractResponse {
                     new ArrayOf(new Schema(
                             ERROR_CODE,
                             ERROR_MESSAGE,
-                            new Field(MATCHING_ACLS_KEY_NAME, new ArrayOf(MATCHING_ACL), "The matching ACLs")))));
+                            new Field(MATCHING_ACLS_KEY_NAME, new ArrayOf(MATCHING_ACL_V0), "The matching ACLs")))));
 
-    /**
-     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
-     */
-    private static final Schema DELETE_ACLS_RESPONSE_V1 = DELETE_ACLS_RESPONSE_V0;
+    private static final Schema DELETE_ACLS_RESPONSE_V1 = new Schema(
+            THROTTLE_TIME_MS,
+            new Field(FILTER_RESPONSES_KEY_NAME,
+                    new ArrayOf(new Schema(
+                            ERROR_CODE,
+                            ERROR_MESSAGE,
+                            new Field(MATCHING_ACLS_KEY_NAME, new ArrayOf(MATCHING_ACL_V1), "The matching ACLs")))));
 
     public static Schema[] schemaVersions() {
         return new Schema[]{DELETE_ACLS_RESPONSE_V0, DELETE_ACLS_RESPONSE_V1};

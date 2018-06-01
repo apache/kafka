@@ -37,7 +37,7 @@ trait Authorizer extends Configurable {
   /**
    * @param session The session being authenticated.
    * @param operation Type of operation client is trying to perform on resource.
-   * @param resource Resource the client is trying to access.
+   * @param resource Resource the client is trying to access. Resource name type is always literal in input resource.
    * @return true if the operation should be permitted, false otherwise
    */
   def authorize(session: Session, operation: Operation, resource: Resource): Boolean
@@ -60,21 +60,21 @@ trait Authorizer extends Configurable {
 
   /**
    * remove a resource along with all of its acls from acl store.
-   * @param resource
+   * @param resource the resource from which these acls should be removed.
    * @return
    */
   def removeAcls(resource: Resource): Boolean
 
   /**
    * get set of acls for this resource
-   * @param resource
+   * @param resource the resource to which the acls belong.
    * @return empty set if no acls are found, otherwise the acls for the resource.
    */
   def getAcls(resource: Resource): Set[Acl]
 
   /**
    * get the acls for this principal.
-   * @param principal
+   * @param principal principal name.
    * @return empty Map if no acls exist for this principal, otherwise a map of resource -> acls for the principal.
    */
   def getAcls(principal: KafkaPrincipal): Map[Resource, Set[Acl]]
@@ -90,4 +90,3 @@ trait Authorizer extends Configurable {
   def close(): Unit
 
 }
-

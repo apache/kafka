@@ -43,7 +43,8 @@ public class CreateAclsResponse extends AbstractResponse {
                     ERROR_MESSAGE))));
 
     /**
-     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling
+     * and request has additional resource_name_type
      */
     private static final Schema CREATE_ACLS_RESPONSE_V1 = CREATE_ACLS_RESPONSE_V0;
 
