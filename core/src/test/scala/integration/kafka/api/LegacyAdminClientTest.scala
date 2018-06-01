@@ -16,21 +16,24 @@
  */
 package kafka.api
 
-import java.util.Collections
-import java.util.concurrent.TimeUnit
+import java.util.{Collections, Properties}
 
 import kafka.admin.AdminClient
-import kafka.admin.AdminClient.DeleteRecordsResult
 import kafka.server.KafkaConfig
 import java.lang.{Long => JLong}
+import java.util.concurrent.TimeUnit
+
 import kafka.utils.{Logging, TestUtils}
-import org.apache.kafka.clients.consumer.{KafkaConsumer, ConsumerConfig}
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord, ProducerConfig}
+import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
+import org.apache.kafka.clients.admin.{RecordsToDelete, AdminClient => JAdminClient}
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.protocol.{Errors, ApiKeys}
+import org.apache.kafka.common.errors.{LeaderNotAvailableException, OffsetOutOfRangeException}
+import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.DeleteRecordsRequest
 import org.junit.{After, Before, Test}
 import org.junit.Assert._
+
 import scala.collection.JavaConverters._
 
 /**
@@ -51,6 +54,7 @@ class LegacyAdminClientTest extends IntegrationTestHarness with Logging {
   val tp2 = new TopicPartition(topic, part2)
 
   var client: AdminClient = null
+  var jClient : JAdminClient = null
 
   // configure the servers and clients
   this.serverConfig.setProperty(KafkaConfig.ControlledShutdownEnableProp, "false") // speed up shutdown
@@ -69,12 +73,18 @@ class LegacyAdminClientTest extends IntegrationTestHarness with Logging {
   override def setUp() {
     super.setUp()
     client = AdminClient.createSimplePlaintext(this.brokerList)
+
+    val properties = new Properties
+    properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, this.brokerList)
+    jClient = JAdminClient.create(properties)
+
     createTopic(topic, 2, serverCount)
   }
 
   @After
   override def tearDown() {
     client.close()
+    jClient.close()
     super.tearDown()
   }
 
@@ -87,11 +97,11 @@ class LegacyAdminClientTest extends IntegrationTestHarness with Logging {
     consumer.seekToBeginning(Collections.singletonList(tp))
     assertEquals(0L, consumer.position(tp))
 
-    client.deleteRecordsBefore(Map((tp, 5L))).get()
+    jClient.deleteRecords(Map(tp -> RecordsToDelete.beforeOffset(5L)).asJava).all().get()
     consumer.seekToBeginning(Collections.singletonList(tp))
     assertEquals(5L, consumer.position(tp))
 
-    client.deleteRecordsBefore(Map((tp, DeleteRecordsRequest.HIGH_WATERMARK))).get()
+    jClient.deleteRecords(Map(tp -> RecordsToDelete.beforeOffset(DeleteRecordsRequest.HIGH_WATERMARK)).asJava).all().get()
     consumer.seekToBeginning(Collections.singletonList(tp))
     assertEquals(10L, consumer.position(tp))
   }
@@ -108,7 +118,7 @@ class LegacyAdminClientTest extends IntegrationTestHarness with Logging {
       messageCount == 10
     }, "Expected 10 messages", 3000L)
 
-    client.deleteRecordsBefore(Map((tp, 3L))).get()
+    jClient.deleteRecords(Map(tp -> RecordsToDelete.beforeOffset(3L)).asJava).all().get()
     consumer.seek(tp, 1)
     messageCount = 0
     TestUtils.waitUntilTrue(() => {
@@ -116,7 +126,7 @@ class LegacyAdminClientTest extends IntegrationTestHarness with Logging {
       messageCount == 7
     }, "Expected 7 messages", 3000L)
 
-    client.deleteRecordsBefore(Map((tp, 8L))).get()
+    jClient.deleteRecords(Map(tp -> RecordsToDelete.beforeOffset(8L)).asJava).all().get()
     consumer.seek(tp, 1)
     messageCount = 0
     TestUtils.waitUntilTrue(() => {
@@ -130,19 +140,22 @@ class LegacyAdminClientTest extends IntegrationTestHarness with Logging {
     subscribeAndWaitForAssignment(topic, consumers.head)
 
     sendRecords(producers.head, 10, tp)
-    assertEquals(DeleteRecordsResult(5L, null), client.deleteRecordsBefore(Map((tp, 5L))).get()(tp))
+    assertEquals(5L, jClient.deleteRecords(Map(tp -> RecordsToDelete.beforeOffset(5L)).asJava).lowWatermarks().get(tp).get().lowWatermark())
 
     for (i <- 0 until serverCount)
       killBroker(i)
     restartDeadBrokers()
 
-    client.close()
+    jClient.close()
     brokerList = TestUtils.bootstrapServers(servers, listenerName)
-    client = AdminClient.createSimplePlaintext(brokerList)
+    val properties = new Properties
+    properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, this.brokerList)
+    jClient = JAdminClient.create(properties)
 
     TestUtils.waitUntilTrue(() => {
       // Need to retry if leader is not available for the partition
-      client.deleteRecordsBefore(Map((tp, 0L))).get(1000L, TimeUnit.MILLISECONDS)(tp).equals(DeleteRecordsResult(5L, null))
+      jClient.deleteRecords(Map(tp -> RecordsToDelete.beforeOffset(0L)).asJava).lowWatermarks().get(tp)
+        .get(1000L, TimeUnit.MILLISECONDS).lowWatermark().equals(5L)
     }, "Expected low watermark of the partition to be 5L")
   }
 
@@ -151,7 +164,7 @@ class LegacyAdminClientTest extends IntegrationTestHarness with Logging {
     subscribeAndWaitForAssignment(topic, consumers.head)
 
     sendRecords(producers.head, 10, tp)
-    client.deleteRecordsBefore(Map((tp, 3L))).get()
+    jClient.deleteRecords(Map(tp -> RecordsToDelete.beforeOffset(3L)).asJava).all().get()
 
     for (i <- 0 until serverCount)
       assertEquals(3, servers(i).replicaManager.getReplica(tp).get.logStartOffset)
@@ -171,10 +184,10 @@ class LegacyAdminClientTest extends IntegrationTestHarness with Logging {
     sendRecords(producers.head, 10, tp)
     assertEquals(0L, consumer.offsetsForTimes(Map(tp -> JLong.valueOf(0L)).asJava).get(tp).offset())
 
-    client.deleteRecordsBefore(Map((tp, 5L))).get()
+    jClient.deleteRecords(Map(tp -> RecordsToDelete.beforeOffset(5L)).asJava).all().get()
     assertEquals(5L, consumer.offsetsForTimes(Map(tp -> JLong.valueOf(0L)).asJava).get(tp).offset())
 
-    client.deleteRecordsBefore(Map((tp, DeleteRecordsRequest.HIGH_WATERMARK))).get()
+    jClient.deleteRecords(Map(tp -> RecordsToDelete.beforeOffset(DeleteRecordsRequest.HIGH_WATERMARK)).asJava).all().get()
     assertNull(consumer.offsetsForTimes(Map(tp -> JLong.valueOf(0L)).asJava).get(tp))
   }
 
@@ -184,14 +197,24 @@ class LegacyAdminClientTest extends IntegrationTestHarness with Logging {
 
     sendRecords(producers.head, 10, tp)
     // Should get success result
-    assertEquals(DeleteRecordsResult(5L, null), client.deleteRecordsBefore(Map((tp, 5L))).get()(tp))
+
+    assertEquals(5L, jClient.deleteRecords(Map(tp -> RecordsToDelete.beforeOffset(5L)).asJava).lowWatermarks().get(tp).get().lowWatermark())
     // OffsetOutOfRangeException if offset > high_watermark
-    assertEquals(DeleteRecordsResult(-1L, Errors.OFFSET_OUT_OF_RANGE.exception()), client.deleteRecordsBefore(Map((tp, 20))).get()(tp))
+    try {
+      jClient.deleteRecords(Map(tp -> RecordsToDelete.beforeOffset(20)).asJava).lowWatermarks().get(tp).get()
+      fail("Expected an offset out of range exception")
+    } catch {
+      case e => assertTrue(e.getCause.isInstanceOf[OffsetOutOfRangeException])
+    }
 
     val nonExistPartition = new TopicPartition(topic, 3)
     // UnknownTopicOrPartitionException if user tries to delete records of a non-existent partition
-    assertEquals(DeleteRecordsResult(-1L, Errors.LEADER_NOT_AVAILABLE.exception()),
-                 client.deleteRecordsBefore(Map((nonExistPartition, 20))).get()(nonExistPartition))
+    try {
+      jClient.deleteRecords(Map(nonExistPartition -> RecordsToDelete.beforeOffset(20)).asJava).lowWatermarks().get(nonExistPartition).get()
+      fail("Expected a leader not available exception")
+    } catch {
+      case e => assertTrue(e.getCause.isInstanceOf[LeaderNotAvailableException])
+    }
   }
 
   @Test

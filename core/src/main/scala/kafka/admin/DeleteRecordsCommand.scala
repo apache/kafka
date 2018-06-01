@@ -18,7 +18,6 @@
 package kafka.admin
 
 import java.io.PrintStream
-import java.util
 import java.util.Properties
 
 import kafka.common.AdminCommandFailedException
@@ -64,13 +63,15 @@ object DeleteRecordsCommand {
     if (duplicatePartitions.nonEmpty)
       throw new AdminCommandFailedException("Offset json file contains duplicate topic partitions: %s".format(duplicatePartitions.mkString(",")))
 
-    val recordsToDelete = offsetSeq.map(offset => (offset._1, RecordsToDelete.beforeOffset(offset._2))).toMap.asJava
+    val recordsToDelete = offsetSeq.map { case (topicPartition, offset) =>
+      (topicPartition, RecordsToDelete.beforeOffset(offset))
+    }.toMap.asJava
 
     out.println("Executing records delete operation")
     val deleteRecordsResult = adminClient.deleteRecords(recordsToDelete)
     out.println("Records delete operation completed:")
 
-    deleteRecordsResult.lowWatermarks().asScala.foreach { case (tp, partitionResult) => {
+    deleteRecordsResult.lowWatermarks.asScala.foreach { case (tp, partitionResult) => {
       try {
         out.println(s"partition: $tp\tlow_watermark: ${partitionResult.get().lowWatermark()}")
       } catch {
