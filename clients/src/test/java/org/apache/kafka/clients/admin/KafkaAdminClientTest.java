@@ -192,7 +192,7 @@ public class KafkaAdminClientTest {
     }
 
     @Test
-    public void testCloseAdminClient() throws Exception {
+    public void testCloseAdminClient() {
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
         }
     }
@@ -235,7 +235,7 @@ public class KafkaAdminClientTest {
     @Test
     public void testConnectionFailureOnMetadataUpdate() throws Exception {
         // This tests the scenario in which we successfully connect to the bootstrap server, but
-        // the server disconnects before sending a response
+        // the server disconnects before sending the full response
 
         Cluster cluster = Cluster.bootstrap(Collections.singletonList(new InetSocketAddress("localhost", 8121)));
         MockClient mockClient = new MockClient(Time.SYSTEM);
@@ -262,13 +262,13 @@ public class KafkaAdminClientTest {
     @Test
     public void testUnreachableBootstrapServer() throws Exception {
         // This tests the scenario in which the bootstrap server is unreachable for a short while,
-        // which prevents NetworkClient from being able to accept the initial metadata request
+        // which prevents AdminClient from being able to send the initial metadata request
 
         Cluster cluster = Cluster.bootstrap(Collections.singletonList(new InetSocketAddress("localhost", 8121)));
         MockClient mockClient = new MockClient(Time.SYSTEM);
         mockClient.setNodeApiVersions(NodeApiVersions.create());
         mockClient.setNode(cluster.nodes().get(0));
-        mockClient.setUnreachable(cluster.nodes().get(0), 50);
+        mockClient.blackout(cluster.nodes().get(0), 200);
 
         try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockClient, Time.SYSTEM, cluster)) {
             Cluster discoveredCluster = mockCluster(0);

@@ -78,10 +78,7 @@ public class MockClient implements KafkaClient {
     private Cluster cluster;
     private Node node = null;
     private final Set<String> ready = new HashSet<>();
-
     private final TransientSet<Node> blackedOut;
-    private final TransientSet<Node> unreachable;
-
     private final Map<Node, Long> pendingAuthenticationErrors = new HashMap<>();
     private final Map<Node, AuthenticationException> authenticationErrors = new HashMap<>();
     // Use concurrent queue for requests so that requests may be queried from a different thread
@@ -102,7 +99,6 @@ public class MockClient implements KafkaClient {
         this.metadata = metadata;
         this.unavailableTopics = Collections.emptySet();
         this.blackedOut = new TransientSet<>(time);
-        this.unreachable = new TransientSet<>(time);
     }
 
     @Override
@@ -115,19 +111,9 @@ public class MockClient implements KafkaClient {
         if (blackedOut.contains(node, now))
             return false;
 
-        if (unreachable.contains(node, now)) {
-            blackout(node, 50);
-            return false;
-        }
-
         authenticationErrors.remove(node);
         ready.add(node.idString());
         return true;
-    }
-
-    public void setUnreachable(Node node, long durationMs) {
-        unreachable.add(node, durationMs);
-        disconnect(node.idString());
     }
 
     @Override
@@ -421,7 +407,6 @@ public class MockClient implements KafkaClient {
     public void reset() {
         ready.clear();
         blackedOut.clear();
-        unreachable.clear();
         requests.clear();
         responses.clear();
         futureResponses.clear();

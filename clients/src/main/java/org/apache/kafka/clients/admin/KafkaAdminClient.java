@@ -824,7 +824,7 @@ public class KafkaAdminClient extends AdminClient {
          * @return              The minimum time until a call is ready to be retried if any of the pending
          *                      calls are backing off after a failure
          */
-        private long checkPendingCalls(long now) {
+        private long maybeDrainPendingCalls(long now) {
             long pollTimeout = Long.MAX_VALUE;
             log.trace("Trying to choose nodes for {} at {}", pendingCalls, now);
 
@@ -835,7 +835,7 @@ public class KafkaAdminClient extends AdminClient {
                 // If the call is being retried, await the proper backoff before finding the node
                 if (now < call.nextAllowedTryMs) {
                     pollTimeout = Math.min(pollTimeout, call.nextAllowedTryMs - now);
-                } else if (checkPendingCall(call, now)) {
+                } else if (maybeDrainPendingCall(call, now)) {
                     pendingIter.remove();
                 }
             }
@@ -847,7 +847,7 @@ public class KafkaAdminClient extends AdminClient {
          * transferred to the callsToSend collection or if the call was failed. Return false if it
          * should remain pending.
          */
-        private boolean checkPendingCall(Call call, long now) {
+        private boolean maybeDrainPendingCall(Call call, long now) {
             try {
                 Node node = call.nodeProvider.provide();
                 if (node != null) {
@@ -1004,20 +1004,21 @@ public class KafkaAdminClient extends AdminClient {
         }
 
         /**
-         * Reassign calls that have not yet been sent. When metadata is refreshed,
-         * all unsent calls are reassigned to handle controller change and node changes.
-         * When a node is disconnected, all calls assigned to the node are reassigned.
+         * Unassign calls that have not yet been sent based on some predicate. For example, this
+         * is used to reassign the calls that have been assigned to a disconnected node.
          *
-         * @param shouldReassign Condition for reassignment. If the predicate is true, then the calls will
+         * @param shouldUnassign Condition for reassignment. If the predicate is true, then the calls will
          *                       be put back in the pendingCalls collection and they will be reassigned
          */
-        private void reassignUnsentCalls(Predicate<Node> shouldReassign) {
+        private void unassignUnsentCalls(Predicate<Node> shouldUnassign) {
             for (Iterator<Map.Entry<Node, List<Call>>> iter = callsToSend.entrySet().iterator(); iter.hasNext(); ) {
                 Map.Entry<Node, List<Call>> entry = iter.next();
                 Node node = entry.getKey();
                 List<Call> awaitingCalls = entry.getValue();
 
-                if (shouldReassign.test(node)) {
+                if (awaitingCalls.isEmpty()) {
+                    iter.remove();
+                } else if (shouldUnassign.test(node)) {
                     pendingCalls.addAll(awaitingCalls);
                     iter.remove();
                 }
@@ -1086,7 +1087,7 @@ public class KafkaAdminClient extends AdminClient {
                 }
 
                 // Choose nodes for our pending calls.
-                pollTimeout = Math.min(pollTimeout, checkPendingCalls(now));
+                pollTimeout = Math.min(pollTimeout, maybeDrainPendingCalls(now));
                 long metadataFetchDelayMs = metadataManager.metadataFetchDelayMs(now);
                 if (metadataFetchDelayMs == 0) {
                     metadataManager.transitionToUpdatePending(now);
@@ -1094,7 +1095,7 @@ public class KafkaAdminClient extends AdminClient {
                     // Create a new metadata fetch call and add it to the end of pendingCalls.
                     // Assign a node for just the new call (we handled the other pending nodes above).
 
-                    if (!checkPendingCall(metadataCall, now))
+                    if (!maybeDrainPendingCall(metadataCall, now))
                         pendingCalls.add(metadataCall);
                 }
                 pollTimeout = Math.min(pollTimeout, sendEligibleCalls(now));
@@ -1115,7 +1116,7 @@ public class KafkaAdminClient extends AdminClient {
 
                 // Update the current time and handle the latest responses.
                 now = time.milliseconds();
-                reassignUnsentCalls(client::connectionFailed); // reassign calls to disconnected nodes
+                unassignUnsentCalls(client::connectionFailed); // reassign calls to disconnected nodes
                 handleResponses(now, responses);
             }
             int numTimedOut = 0;
@@ -1203,7 +1204,7 @@ public class KafkaAdminClient extends AdminClient {
                     metadataManager.update(response.cluster(), now);
 
                     // Reassign all requests after a metadata refresh
-                    reassignUnsentCalls(node -> true);
+                    unassignUnsentCalls(node -> true);
                 }
 
                 @Override
