@@ -1,5 +1,5 @@
 dist
-*classes
+*.class
 target/
 build/
 build_eclipse/
@@ -50,4 +50,4 @@ docs/generated/
 
 kafkatest.egg-info/
 systest/
-
+*.swp
