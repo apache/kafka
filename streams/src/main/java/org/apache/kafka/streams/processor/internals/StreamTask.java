@@ -418,7 +418,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                 consumedOffsetsAndMetadata.put(partition, new OffsetAndMetadata(offset));
                 stateMgr.putOffsetLimit(partition, offset);
             }
-            if (eosEnabled && transactionInFlight) {
+            if (eosEnabled) {
                 producer.sendOffsetsToTransaction(consumedOffsetsAndMetadata, applicationId);
                 producer.commitTransaction();
                 transactionInFlight = false;

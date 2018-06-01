@@ -913,6 +913,7 @@ public class StreamTaskTest {
     @Test
     public void shouldCloseProducerOnCloseWhenEosEnabled() {
         task = createStatelessTask(createConfig(true));
+        task.initializeTopology();
         task.close(true, false);
         task = null;
 
@@ -1145,4 +1146,12 @@ public class StreamTaskTest {
         );
     }
 
+    @Test(expected = IllegalStateException.class)
+    public void shouldThrowOnCleanCloseTaskWhenEosEnabledIfTransactionInFlight() {
+        task = createStatelessTask(createConfig(true));
+        task.close(true, false);
+        task = null;
+
+        assertTrue(producer.closed());
+    }
 }
