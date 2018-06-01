@@ -80,8 +80,8 @@
       <p>The cache size is specified through the <code class="docutils literal"><span class="pre">cache.max.bytes.buffering</span></code> parameter, which is a global setting per
         processing topology:</p>
       <div class="highlight-java"><div class="highlight"><pre><span></span><span class="c1">// Enable record cache of size 10 MB.</span>
-<span class="n">Properties</span> <span class="n">streamsConfiguration</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Properties</span><span class="o">();</span>
-<span class="n">streamsConfiguration</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="na">CACHE_MAX_BYTES_BUFFERING_CONFIG</span><span class="o">,</span> <span class="mi">10</span> <span class="o">*</span> <span class="mi">1024</span> <span class="o">*</span> <span class="mi">1024L</span><span class="o">);</span>
+<span class="n">Properties</span> <span class="n">props</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Properties</span><span class="o">();</span>
+<span class="n">props</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="na">CACHE_MAX_BYTES_BUFFERING_CONFIG</span><span class="o">,</span> <span class="mi">10</span> <span class="o">*</span> <span class="mi">1024</span> <span class="o">*</span> <span class="mi">1024L</span><span class="o">);</span>
 </pre></div>
       </div>
       <p>This parameter controls the number of bytes allocated for caching. Specifically, for a processor topology instance with
@@ -105,8 +105,8 @@
         <li><p class="first">To turn off caching the cache size can be set to zero:</p>
           <blockquote>
             <div><div class="highlight-java"><div class="highlight"><pre><span></span><span class="c1">// Disable record cache</span>
-<span class="n">Properties</span> <span class="n">streamsConfiguration</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Properties</span><span class="o">();</span>
-<span class="n">streamsConfiguration</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="na">CACHE_MAX_BYTES_BUFFERING_CONFIG</span><span class="o">,</span> <span class="mi">0</span><span class="o">);</span>
+<span class="n">Properties</span> <span class="n">props</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Properties</span><span class="o">();</span>
+<span class="n">props</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="na">CACHE_MAX_BYTES_BUFFERING_CONFIG</span><span class="o">,</span> <span class="mi">0</span><span class="o">);</span>
 </pre></div>
             </div>
               <p>Turning off caching might result in high write traffic for the underlying RocksDB store.
@@ -118,11 +118,11 @@
         </li>
         <li><p class="first">To enable caching but still have an upper bound on how long records will be cached, you can set the commit interval. In this example, it is set to 1000 milliseconds:</p>
           <blockquote>
-            <div><div class="highlight-java"><div class="highlight"><pre><span></span><span class="n">Properties</span> <span class="n">streamsConfiguration</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Properties</span><span class="o">();</span>
+            <div><div class="highlight-java"><div class="highlight"><pre><span></span><span class="n">Properties</span> <span class="n">props</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Properties</span><span class="o">();</span>
 <span class="c1">// Enable record cache of size 10 MB.</span>
-<span class="n">streamsConfiguration</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="na">CACHE_MAX_BYTES_BUFFERING_CONFIG</span><span class="o">,</span> <span class="mi">10</span> <span class="o">*</span> <span class="mi">1024</span> <span class="o">*</span> <span class="mi">1024L</span><span class="o">);</span>
+<span class="n">props</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="na">CACHE_MAX_BYTES_BUFFERING_CONFIG</span><span class="o">,</span> <span class="mi">10</span> <span class="o">*</span> <span class="mi">1024</span> <span class="o">*</span> <span class="mi">1024L</span><span class="o">);</span>
 <span class="c1">// Set commit interval to 1 second.</span>
-<span class="n">streamsConfiguration</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="na">COMMIT_INTERVAL_MS_CONFIG</span><span class="o">,</span> <span class="mi">1000</span><span class="o">);</span>
+<span class="n">props</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="na">COMMIT_INTERVAL_MS_CONFIG</span><span class="o">,</span> <span class="mi">1000</span><span class="o">);</span>
 </pre></div>
             </div>
             </div></blockquote>

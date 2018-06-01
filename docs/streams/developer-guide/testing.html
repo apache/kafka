@@ -86,10 +86,10 @@ builder.stream("input-topic").filter(...).to("output-topic");
 Topology topology = builder.build();
 
 // setup test driver
-Properties config = new Properties();
-config.put(StreamsConfig.APPLICATION_ID_CONFIG, "test");
-config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
-TopologyTestDriver testDriver = new TopologyTestDriver(topology, config);
+Properties props = new Properties();
+props.put(StreamsConfig.APPLICATION_ID_CONFIG, "test");
+props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
+TopologyTestDriver testDriver = new TopologyTestDriver(topology, props);
         </pre>
             <p>
                 The test driver accepts <code>ConsumerRecord</code>s with key and value type <code>byte[]</code>.
@@ -171,12 +171,12 @@ public void setup() {
     topology.addSink("sinkProcessor", "result-topic", "aggregator");
 
     // setup test driver
-    Properties config = new Properties();
-    config.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "maxAggregation");
-    config.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
-    config.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
-    config.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Long().getClass().getName());
-    testDriver = new TopologyTestDriver(topology, config);
+    Properties props = new Properties();
+    props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "maxAggregation");
+    props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
+    props.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+    props.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Long().getClass().getName());
+    testDriver = new TopologyTestDriver(topology, props);
 
     // pre-populate store
     store = testDriver.getKeyValueStore("aggStore");
@@ -318,13 +318,13 @@ processorUnderTest.init(context);
             If you need to pass configuration to your processor or set the default serdes, you can create the mock with
             config:
             <pre>
-final Properties config = new Properties();
-config.put(StreamsConfig.APPLICATION_ID_CONFIG, "unit-test");
-config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "");
-config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
-config.put("some.other.config", "some config value");
-final MockProcessorContext context = new MockProcessorContext(config);
+final Properties props = new Properties();
+props.put(StreamsConfig.APPLICATION_ID_CONFIG, "unit-test");
+props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "");
+props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
+props.put("some.other.config", "some config value");
+final MockProcessorContext context = new MockProcessorContext(props);
                 </pre>
             </p>
             <b>Captured data</b>
