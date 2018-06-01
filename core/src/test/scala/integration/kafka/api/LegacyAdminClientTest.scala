@@ -16,21 +16,17 @@
  */
 package kafka.api
 
-import java.util.{Collections, Properties}
+import java.util.Collections
 
 import kafka.admin.AdminClient
 import kafka.server.KafkaConfig
 import java.lang.{Long => JLong}
-import java.util.concurrent.TimeUnit
 
 import kafka.utils.{Logging, TestUtils}
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
-import org.apache.kafka.clients.admin.{RecordsToDelete, AdminClient => JAdminClient}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.{LeaderNotAvailableException, OffsetOutOfRangeException}
 import org.apache.kafka.common.protocol.ApiKeys
-import org.apache.kafka.common.requests.DeleteRecordsRequest
 import org.junit.{After, Before, Test}
 import org.junit.Assert._
 
@@ -54,7 +50,6 @@ class LegacyAdminClientTest extends IntegrationTestHarness with Logging {
   val tp2 = new TopicPartition(topic, part2)
 
   var client: AdminClient = null
-  var jClient : JAdminClient = null
 
   // configure the servers and clients
   this.serverConfig.setProperty(KafkaConfig.ControlledShutdownEnableProp, "false") // speed up shutdown
@@ -73,148 +68,19 @@ class LegacyAdminClientTest extends IntegrationTestHarness with Logging {
   override def setUp() {
     super.setUp()
     client = AdminClient.createSimplePlaintext(this.brokerList)
-
-    val properties = new Properties
-    properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, this.brokerList)
-    jClient = JAdminClient.create(properties)
-
     createTopic(topic, 2, serverCount)
   }
 
   @After
   override def tearDown() {
     client.close()
-    jClient.close()
     super.tearDown()
-  }
-
-  @Test
-  def testSeekToBeginningAfterDeleteRecords() {
-    val consumer = consumers.head
-    subscribeAndWaitForAssignment(topic, consumer)
-
-    sendRecords(producers.head, 10, tp)
-    consumer.seekToBeginning(Collections.singletonList(tp))
-    assertEquals(0L, consumer.position(tp))
-
-    jClient.deleteRecords(Map(tp -> RecordsToDelete.beforeOffset(5L)).asJava).all().get()
-    consumer.seekToBeginning(Collections.singletonList(tp))
-    assertEquals(5L, consumer.position(tp))
-
-    jClient.deleteRecords(Map(tp -> RecordsToDelete.beforeOffset(DeleteRecordsRequest.HIGH_WATERMARK)).asJava).all().get()
-    consumer.seekToBeginning(Collections.singletonList(tp))
-    assertEquals(10L, consumer.position(tp))
-  }
-
-  @Test
-  def testConsumeAfterDeleteRecords() {
-    val consumer = consumers.head
-    subscribeAndWaitForAssignment(topic, consumer)
-
-    sendRecords(producers.head, 10, tp)
-    var messageCount = 0
-    TestUtils.waitUntilTrue(() => {
-      messageCount += consumer.poll(0).count()
-      messageCount == 10
-    }, "Expected 10 messages", 3000L)
-
-    jClient.deleteRecords(Map(tp -> RecordsToDelete.beforeOffset(3L)).asJava).all().get()
-    consumer.seek(tp, 1)
-    messageCount = 0
-    TestUtils.waitUntilTrue(() => {
-      messageCount += consumer.poll(0).count()
-      messageCount == 7
-    }, "Expected 7 messages", 3000L)
-
-    jClient.deleteRecords(Map(tp -> RecordsToDelete.beforeOffset(8L)).asJava).all().get()
-    consumer.seek(tp, 1)
-    messageCount = 0
-    TestUtils.waitUntilTrue(() => {
-      messageCount += consumer.poll(0).count()
-      messageCount == 2
-    }, "Expected 2 messages", 3000L)
-  }
-
-  @Test
-  def testLogStartOffsetCheckpoint() {
-    subscribeAndWaitForAssignment(topic, consumers.head)
-
-    sendRecords(producers.head, 10, tp)
-    assertEquals(5L, jClient.deleteRecords(Map(tp -> RecordsToDelete.beforeOffset(5L)).asJava).lowWatermarks().get(tp).get().lowWatermark())
-
-    for (i <- 0 until serverCount)
-      killBroker(i)
-    restartDeadBrokers()
-
-    jClient.close()
-    brokerList = TestUtils.bootstrapServers(servers, listenerName)
-    val properties = new Properties
-    properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, this.brokerList)
-    jClient = JAdminClient.create(properties)
-
-    TestUtils.waitUntilTrue(() => {
-      // Need to retry if leader is not available for the partition
-      jClient.deleteRecords(Map(tp -> RecordsToDelete.beforeOffset(0L)).asJava).lowWatermarks().get(tp)
-        .get(1000L, TimeUnit.MILLISECONDS).lowWatermark().equals(5L)
-    }, "Expected low watermark of the partition to be 5L")
-  }
-
-  @Test
-  def testLogStartOffsetAfterDeleteRecords() {
-    subscribeAndWaitForAssignment(topic, consumers.head)
-
-    sendRecords(producers.head, 10, tp)
-    jClient.deleteRecords(Map(tp -> RecordsToDelete.beforeOffset(3L)).asJava).all().get()
-
-    for (i <- 0 until serverCount)
-      assertEquals(3, servers(i).replicaManager.getReplica(tp).get.logStartOffset)
   }
 
   @Test
   def testOffsetsForTimesWhenOffsetNotFound() {
     val consumer = consumers.head
     assertNull(consumer.offsetsForTimes(Map(tp -> JLong.valueOf(0L)).asJava).get(tp))
-  }
-
-  @Test
-  def testOffsetsForTimesAfterDeleteRecords() {
-    val consumer = consumers.head
-    subscribeAndWaitForAssignment(topic, consumer)
-
-    sendRecords(producers.head, 10, tp)
-    assertEquals(0L, consumer.offsetsForTimes(Map(tp -> JLong.valueOf(0L)).asJava).get(tp).offset())
-
-    jClient.deleteRecords(Map(tp -> RecordsToDelete.beforeOffset(5L)).asJava).all().get()
-    assertEquals(5L, consumer.offsetsForTimes(Map(tp -> JLong.valueOf(0L)).asJava).get(tp).offset())
-
-    jClient.deleteRecords(Map(tp -> RecordsToDelete.beforeOffset(DeleteRecordsRequest.HIGH_WATERMARK)).asJava).all().get()
-    assertNull(consumer.offsetsForTimes(Map(tp -> JLong.valueOf(0L)).asJava).get(tp))
-  }
-
-  @Test
-  def testDeleteRecordsWithException() {
-    subscribeAndWaitForAssignment(topic, consumers.head)
-
-    sendRecords(producers.head, 10, tp)
-    // Should get success result
-
-    assertEquals(5L, jClient.deleteRecords(Map(tp -> RecordsToDelete.beforeOffset(5L)).asJava).lowWatermarks().get(tp).get().lowWatermark())
-    // OffsetOutOfRangeException if offset > high_watermark
-    try {
-      jClient.deleteRecords(Map(tp -> RecordsToDelete.beforeOffset(20)).asJava).lowWatermarks().get(tp).get()
-      fail("Expected an offset out of range exception")
-    } catch {
-      case e => assertTrue(e.getCause.isInstanceOf[OffsetOutOfRangeException])
-    }
-
-    val nonExistPartition = new TopicPartition(topic, 3)
-    // UnknownTopicOrPartitionException if user tries to delete records of a non-existent partition
-    try {
-      jClient.deleteRecords(Map(nonExistPartition -> RecordsToDelete.beforeOffset(20)).asJava).lowWatermarks().get(nonExistPartition).get()
-      fail("Expected a leader not available exception")
-    } catch {
-      case e => assertTrue(e.getCause.isInstanceOf[LeaderNotAvailableException])
-    }
   }
 
   @Test

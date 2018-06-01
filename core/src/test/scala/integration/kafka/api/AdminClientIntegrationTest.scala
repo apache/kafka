@@ -49,8 +49,6 @@ import scala.collection.JavaConverters._
 import java.lang.{Long => JLong}
 
 import kafka.zk.KafkaZkClient
-import org.apache.kafka.common.internals.Topic
-import org.scalatest.Assertions.intercept
 
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
@@ -291,8 +289,6 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
         )
       }
     }
-
-    client.close()
   }
 
   @Test
@@ -755,7 +751,9 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     consumer.seek(topicPartition, 7L)
     assertEquals(7L, consumer.position(topicPartition))
 
-    client.close()
+    client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(DeleteRecordsRequest.HIGH_WATERMARK)).asJava).all().get()
+    consumer.seekToBeginning(Collections.singletonList(topicPartition))
+    assertEquals(10L, consumer.position(topicPartition))
   }
 
   @Test
@@ -794,7 +792,6 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
           e.getCause.isInstanceOf[NotLeaderForPartitionException] => false
         }
     }, s"Expected low watermark of the partition to be 5 but got ${lowWatermark.getOrElse("no response within the timeout")}")
-    client.close()
   }
 
   @Test
@@ -812,8 +809,6 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
 
     for (i <- 0 until serverCount)
       assertEquals(3, servers(i).replicaManager.getReplica(topicPartition).get.logStartOffset)
-
-    client.close()
   }
 
   @Test
@@ -835,8 +830,6 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(DeleteRecordsRequest.HIGH_WATERMARK)).asJava)
     result.all().get()
     assertNull(consumer.offsetsForTimes(Map(topicPartition -> JLong.valueOf(0L)).asJava).get(topicPartition))
-
-    client.close()
   }
 
   @Test
@@ -856,8 +849,6 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     val describeResult2 = client.describeConfigs(Collections.singletonList(invalidTopic))
 
     assertTrue(intercept[ExecutionException](describeResult2.values.get(invalidTopic).get).getCause.isInstanceOf[InvalidTopicException])
-
-    client.close()
   }
 
   private def subscribeAndWaitForAssignment(topic: String, consumer: KafkaConsumer[Array[Byte], Array[Byte]]): Unit = {
@@ -902,7 +893,6 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
         classOf[SecurityDisabledException])
     assertFutureExceptionTypeEquals(client.deleteAcls(Collections.singleton(ACL1.toFilter())).all(),
       classOf[SecurityDisabledException])
-    client.close()
   }
 
   /**
@@ -955,7 +945,6 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     assertFutureExceptionTypeEquals(future, classOf[TimeoutException])
     val endTimeMs = Time.SYSTEM.milliseconds()
     assertTrue("Expected the timeout to take at least one millisecond.", endTimeMs > startTimeMs);
-    client.close()
   }
 
   /**
@@ -973,7 +962,6 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     val future2 = client.createTopics(Seq("mytopic3", "mytopic4").map(new NewTopic(_, 1, 1)).asJava,
       new CreateTopicsOptions().validateOnly(true)).all()
     future2.get
-    client.close()
     assertEquals(1, factory.failuresInjected)
   }
 
@@ -1091,6 +1079,67 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       Utils.closeQuietly(client, "adminClient")
     }
   }
+
+  @Test
+  def testConsumeAfterDeleteRecords() {
+    val consumer = consumers.head
+    subscribeAndWaitForAssignment(topic, consumer)
+
+    client = AdminClient.create(createConfig)
+
+    sendRecords(producers.head, 10, topicPartition)
+    var messageCount = 0
+    TestUtils.waitUntilTrue(() => {
+      messageCount += consumer.poll(0).count()
+      messageCount == 10
+    }, "Expected 10 messages", 3000L)
+
+    client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(3L)).asJava).all().get()
+    consumer.seek(topicPartition, 1)
+    messageCount = 0
+    TestUtils.waitUntilTrue(() => {
+      messageCount += consumer.poll(0).count()
+      messageCount == 7
+    }, "Expected 7 messages", 3000L)
+
+    client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(8L)).asJava).all().get()
+    consumer.seek(topicPartition, 1)
+    messageCount = 0
+    TestUtils.waitUntilTrue(() => {
+      messageCount += consumer.poll(0).count()
+      messageCount == 2
+    }, "Expected 2 messages", 3000L)
+  }
+
+  @Test
+  def testDeleteRecordsWithException() {
+    subscribeAndWaitForAssignment(topic, consumers.head)
+
+    client = AdminClient.create(createConfig)
+
+    sendRecords(producers.head, 10, topicPartition)
+    // Should get success result
+
+    assertEquals(5L, client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(5L)).asJava)
+      .lowWatermarks().get(topicPartition).get().lowWatermark())
+    // OffsetOutOfRangeException if offset > high_watermark
+    try {
+      client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(20)).asJava).lowWatermarks().get(topicPartition).get()
+      fail("Expected an offset out of range exception")
+    } catch {
+      case e => assertTrue(e.getCause.isInstanceOf[OffsetOutOfRangeException])
+    }
+
+    val nonExistPartition = new TopicPartition(topic, 3)
+    // UnknownTopicOrPartitionException if user tries to delete records of a non-existent partition
+    try {
+      client.deleteRecords(Map(nonExistPartition -> RecordsToDelete.beforeOffset(20)).asJava).lowWatermarks().get(nonExistPartition).get()
+      fail("Expected a leader not available exception")
+    } catch {
+      case e => assertTrue(e.getCause.isInstanceOf[LeaderNotAvailableException])
+    }
+  }
+
 }
 
 object AdminClientIntegrationTest {
