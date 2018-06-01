@@ -216,6 +216,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         parent = parentSensors.get(sensor);
         if (parent != null) {
             metrics.removeSensor(parent.name());
+            parentSensors.remove(sensor);
         }
 
     }
