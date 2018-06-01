@@ -639,9 +639,7 @@
 
   From a security perspective, we recommend you use the latest released version of JDK 1.8 as older freely available versions have disclosed security vulnerabilities.
 
-  LinkedIn is currently running JDK 1.8 u5 (looking to upgrade to a newer version) with the G1 collector. If you decide to use the G1 collector (the current default) and you are still on JDK 1.7, make sure you are on u51 or newer. LinkedIn tried out u21 in testing, but they had a number of problems with the GC implementation in that version.
-
-  LinkedIn's tuning looks like this:
+  LinkedIn is currently running JDK 1.8 u5 (looking to upgrade to a newer version) with the G1 collector. LinkedIn's tuning looks like this:
   <pre class="brush: text;">
   -Xmx6g -Xms6g -XX:MetaspaceSize=96m -XX:+UseG1GC
   -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:G1HeapRegionSize=16M
@@ -1353,7 +1351,12 @@ All the following metrics have a recording level of ``info``:
       </tr>
       <tr>
         <td>skipped-records-rate</td>
-        <td>The average number of skipped records per second. </td>
+        <td>The average number of skipped records per second.</td>
+        <td>kafka.streams:type=stream-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>skipped-records-total</td>
+        <td>The total number of skipped records.</td>
         <td>kafka.streams:type=stream-metrics,client-id=([-.\w]+)</td>
       </tr>
  </tbody>

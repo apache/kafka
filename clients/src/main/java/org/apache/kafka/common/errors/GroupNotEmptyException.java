@@ -17,15 +17,7 @@
 package org.apache.kafka.common.errors;
 
 public class GroupNotEmptyException extends ApiException {
-    private final String groupId;
-
-    public GroupNotEmptyException(String groupId) {
-        super("The group " + groupId + " is not empty");
-        this.groupId = groupId;
+    public GroupNotEmptyException(String message) {
+        super(message);
     }
-
-    public String groupId() {
-        return groupId;
-    }
-
 }

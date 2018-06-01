@@ -17,6 +17,8 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.RecordContext;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 /**
@@ -26,16 +28,19 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
  */
 public interface InternalProcessorContext extends ProcessorContext {
 
+    @Override
+    StreamsMetricsImpl metrics();
+
     /**
      * Returns the current {@link RecordContext}
      * @return the current {@link RecordContext}
      */
-    RecordContext recordContext();
+    ProcessorRecordContext recordContext();
 
     /**
-     * @param recordContext the {@link RecordContext} for the record about to be processes
+     * @param recordContext the {@link ProcessorRecordContext} for the record about to be processes
      */
-    void setRecordContext(RecordContext recordContext);
+    void setRecordContext(ProcessorRecordContext recordContext);
 
     /**
      * @param currentNode the current {@link ProcessorNode}

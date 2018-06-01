@@ -33,7 +33,7 @@ public class SubscriptionInfo {
     private static final Logger log = LoggerFactory.getLogger(SubscriptionInfo.class);
 
     public static final int LATEST_SUPPORTED_VERSION = 3;
-    public static final int UNKNOWN = -1;
+    static final int UNKNOWN = -1;
 
     private final int usedVersion;
     private final int latestSupportedVersion;
@@ -151,20 +151,20 @@ public class SubscriptionInfo {
                4 + standbyTasks.size() * 8; // length + standby tasks
     }
 
-    private void encodeClientUUID(final ByteBuffer buf) {
+    protected void encodeClientUUID(final ByteBuffer buf) {
         buf.putLong(processId.getMostSignificantBits());
         buf.putLong(processId.getLeastSignificantBits());
     }
 
-    private void encodeTasks(final ByteBuffer buf,
-                             final Collection<TaskId> taskIds) {
+    protected void encodeTasks(final ByteBuffer buf,
+                               final Collection<TaskId> taskIds) {
         buf.putInt(taskIds.size());
-        for (TaskId id : taskIds) {
+        for (final TaskId id : taskIds) {
             id.writeTo(buf);
         }
     }
 
-    private byte[] prepareUserEndPoint() {
+    protected byte[] prepareUserEndPoint() {
         if (userEndPoint == null) {
             return new byte[0];
         } else {
@@ -194,8 +194,8 @@ public class SubscriptionInfo {
                4 + endPointBytes.length; // length + userEndPoint
     }
 
-    private void encodeUserEndPoint(final ByteBuffer buf,
-                                    final byte[] endPointBytes) {
+    protected void encodeUserEndPoint(final ByteBuffer buf,
+                                      final byte[] endPointBytes) {
         if (endPointBytes != null) {
             buf.putInt(endPointBytes.length);
             buf.put(endPointBytes);
@@ -217,7 +217,7 @@ public class SubscriptionInfo {
         return buf;
     }
 
-    private int getVersionThreeByteLength(final byte[] endPointBytes) {
+    protected int getVersionThreeByteLength(final byte[] endPointBytes) {
         return 4 + // used version
                4 + // latest supported version version
                16 + // client ID
@@ -236,6 +236,7 @@ public class SubscriptionInfo {
         data.rewind();
 
         final int usedVersion = data.getInt();
+        final int latestSupportedVersion;
         switch (usedVersion) {
             case 1:
                 subscriptionInfo = new SubscriptionInfo(usedVersion, UNKNOWN);
@@ -246,12 +247,13 @@ public class SubscriptionInfo {
                 decodeVersionTwoData(subscriptionInfo, data);
                 break;
             case 3:
-                final int latestSupportedVersion = data.getInt();
+                latestSupportedVersion = data.getInt();
                 subscriptionInfo = new SubscriptionInfo(usedVersion, latestSupportedVersion);
                 decodeVersionThreeData(subscriptionInfo, data);
                 break;
             default:
-                subscriptionInfo = new SubscriptionInfo(usedVersion, UNKNOWN);
+                latestSupportedVersion = data.getInt();
+                subscriptionInfo = new SubscriptionInfo(usedVersion, latestSupportedVersion);
                 log.info("Unable to decode subscription data: used version: {}; latest supported version: {}", usedVersion, LATEST_SUPPORTED_VERSION);
         }
 
@@ -261,12 +263,7 @@ public class SubscriptionInfo {
     private static void decodeVersionOneData(final SubscriptionInfo subscriptionInfo,
                                              final ByteBuffer data) {
         decodeClientUUID(subscriptionInfo, data);
-
-        subscriptionInfo.prevTasks = new HashSet<>();
-        decodeTasks(subscriptionInfo.prevTasks, data);
-
-        subscriptionInfo.standbyTasks = new HashSet<>();
-        decodeTasks(subscriptionInfo.standbyTasks, data);
+        decodeTasks(subscriptionInfo, data);
     }
 
     private static void decodeClientUUID(final SubscriptionInfo subscriptionInfo,
@@ -274,30 +271,31 @@ public class SubscriptionInfo {
         subscriptionInfo.processId = new UUID(data.getLong(), data.getLong());
     }
 
-    private static void decodeTasks(final Collection<TaskId> taskIds,
+    private static void decodeTasks(final SubscriptionInfo subscriptionInfo,
                                     final ByteBuffer data) {
-        final int numPrevs = data.getInt();
-        for (int i = 0; i < numPrevs; i++) {
-            taskIds.add(TaskId.readFrom(data));
+        subscriptionInfo.prevTasks = new HashSet<>();
+        final int numPrevTasks = data.getInt();
+        for (int i = 0; i < numPrevTasks; i++) {
+            subscriptionInfo.prevTasks.add(TaskId.readFrom(data));
+        }
+
+        subscriptionInfo.standbyTasks = new HashSet<>();
+        final int numStandbyTasks = data.getInt();
+        for (int i = 0; i < numStandbyTasks; i++) {
+            subscriptionInfo.standbyTasks.add(TaskId.readFrom(data));
         }
     }
 
     private static void decodeVersionTwoData(final SubscriptionInfo subscriptionInfo,
                                              final ByteBuffer data) {
         decodeClientUUID(subscriptionInfo, data);
-
-        subscriptionInfo.prevTasks = new HashSet<>();
-        decodeTasks(subscriptionInfo.prevTasks, data);
-
-        subscriptionInfo.standbyTasks = new HashSet<>();
-        decodeTasks(subscriptionInfo.standbyTasks, data);
-
+        decodeTasks(subscriptionInfo, data);
         decodeUserEndPoint(subscriptionInfo, data);
     }
 
     private static void decodeUserEndPoint(final SubscriptionInfo subscriptionInfo,
                                            final ByteBuffer data) {
-        int bytesLength = data.getInt();
+        final int bytesLength = data.getInt();
         if (bytesLength != 0) {
             final byte[] bytes = new byte[bytesLength];
             data.get(bytes);
@@ -308,16 +306,11 @@ public class SubscriptionInfo {
     private static void decodeVersionThreeData(final SubscriptionInfo subscriptionInfo,
                                                final ByteBuffer data) {
         decodeClientUUID(subscriptionInfo, data);
-
-        subscriptionInfo.prevTasks = new HashSet<>();
-        decodeTasks(subscriptionInfo.prevTasks, data);
-
-        subscriptionInfo.standbyTasks = new HashSet<>();
-        decodeTasks(subscriptionInfo.standbyTasks, data);
-
+        decodeTasks(subscriptionInfo, data);
         decodeUserEndPoint(subscriptionInfo, data);
     }
 
+    @Override
     public int hashCode() {
         final int hashCode = usedVersion ^ latestSupportedVersion ^ processId.hashCode() ^ prevTasks.hashCode() ^ standbyTasks.hashCode();
         if (userEndPoint == null) {

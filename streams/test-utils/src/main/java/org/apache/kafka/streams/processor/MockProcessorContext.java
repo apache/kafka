@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
@@ -27,11 +28,10 @@ import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.kstream.ValueTransformer;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
-import org.apache.kafka.streams.processor.internals.StreamsMetricsImpl;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
 
 import java.io.File;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -62,6 +62,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     private String topic;
     private Integer partition;
     private Long offset;
+    private Headers headers;
     private Long timestamp;
 
     // mocks ================================================
@@ -194,7 +195,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         this.taskId = taskId;
         this.config = streamsConfig;
         this.stateDir = stateDir;
-        this.metrics = new StreamsMetricsImpl(new Metrics(), "mock-processor-context", Collections.<String, String>emptyMap());
+        this.metrics = new StreamsMetricsImpl(new Metrics(), "mock-processor-context-virtual-thread");
     }
 
     @Override
@@ -251,10 +252,11 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      * @param offset    A record offset
      * @param timestamp A record timestamp
      */
-    public void setRecordMetadata(final String topic, final int partition, final long offset, final long timestamp) {
+    public void setRecordMetadata(final String topic, final int partition, final long offset, final Headers headers, final long timestamp) {
         this.topic = topic;
         this.partition = partition;
         this.offset = offset;
+        this.headers = headers;
         this.timestamp = timestamp;
     }
 
@@ -290,6 +292,9 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         this.offset = offset;
     }
 
+    public void setHeaders(final Headers headers) {
+        this.headers = headers;
+    }
 
     /**
      * The context exposes this metadata for use in the processor. Normally, they are set by the Kafka Streams framework,
@@ -326,6 +331,11 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     }
 
     @Override
+    public Headers headers() {
+        return headers;
+    }
+
+    @Override
     public long timestamp() {
         if (timestamp == null) {
             throw new IllegalStateException("Timestamp must be set before use via setRecordMetadata() or setTimestamp().");
@@ -338,7 +348,6 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
 
     @Override
     public void register(final StateStore store,
-                         final boolean loggingEnabledIsDeprecatedAndIgnored,
                          final StateRestoreCallback stateRestoreCallbackIsIgnoredInMock) {
         stateStores.put(store.name(), store);
     }
@@ -360,14 +369,6 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
                 capturedPunctuator.cancel();
             }
         };
-    }
-
-    @Override
-    public void schedule(final long interval) {
-        throw new UnsupportedOperationException(
-            "schedule() is deprecated and not supported in Mock. " +
-                "Use schedule(final long intervalMs, final PunctuationType type, final Punctuator callback) instead."
-        );
     }
 
     /**

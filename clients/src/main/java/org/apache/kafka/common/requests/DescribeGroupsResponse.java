@@ -77,8 +77,13 @@ public class DescribeGroupsResponse extends AbstractResponse {
             THROTTLE_TIME_MS,
             new Field(GROUPS_KEY_NAME, new ArrayOf(DESCRIBE_GROUPS_RESPONSE_GROUP_METADATA_V0)));
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema DESCRIBE_GROUPS_RESPONSE_V2 = DESCRIBE_GROUPS_RESPONSE_V1;
+
     public static Schema[] schemaVersions() {
-        return new Schema[] {DESCRIBE_GROUPS_RESPONSE_V0, DESCRIBE_GROUPS_RESPONSE_V1};
+        return new Schema[] {DESCRIBE_GROUPS_RESPONSE_V0, DESCRIBE_GROUPS_RESPONSE_V1, DESCRIBE_GROUPS_RESPONSE_V2};
     }
 
     public static final String UNKNOWN_STATE = "";
@@ -133,6 +138,7 @@ public class DescribeGroupsResponse extends AbstractResponse {
         }
     }
 
+    @Override
     public int throttleTimeMs() {
         return throttleTimeMs;
     }
@@ -284,5 +290,10 @@ public class DescribeGroupsResponse extends AbstractResponse {
 
     public static DescribeGroupsResponse parse(ByteBuffer buffer, short version) {
         return new DescribeGroupsResponse(ApiKeys.DESCRIBE_GROUPS.parseResponse(version, buffer));
+    }
+
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 2;
     }
 }

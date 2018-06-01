@@ -44,7 +44,7 @@ public class WordCountProcessorTest {
                 .withLoggingDisabled() // Changelog is not supported by MockProcessorContext.
                 .build();
         store.init(context, store);
-        context.register(store, false, null);
+        context.register(store, null);
 
         // Create and initialize the processor under test
         final Processor<String, String> processor = new WordCountProcessorDemo.MyProcessorSupplier().get();

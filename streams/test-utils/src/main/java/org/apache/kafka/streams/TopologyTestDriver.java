@@ -23,6 +23,8 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
@@ -34,6 +36,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
+import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
@@ -52,7 +55,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StoreChangelogReader;
 import org.apache.kafka.streams.processor.internals.StreamTask;
-import org.apache.kafka.streams.processor.internals.StreamsMetricsImpl;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.WindowStore;
@@ -75,6 +78,7 @@ import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.regex.Pattern;
 
 /**
  * This class makes it easier to write tests to verify the behavior of topologies created with {@link Topology} or
@@ -176,8 +180,9 @@ public class TopologyTestDriver implements Closeable {
     private final GlobalStateManager globalStateManager;
 
     private final StateDirectory stateDirectory;
+    private final Metrics metrics;
     private final ProcessorTopology processorTopology;
-    
+
     private final MockProducer<byte[], byte[]> producer;
 
     private final Set<String> internalTopics = new HashSet<>();
@@ -211,10 +216,36 @@ public class TopologyTestDriver implements Closeable {
     public TopologyTestDriver(final Topology topology,
                               final Properties config,
                               final long initialWallClockTimeMs) {
+
+        this(topology.internalTopologyBuilder, config, initialWallClockTimeMs);
+    }
+
+    /**
+     * Create a new test diver instance.
+     *
+     * @param builder builder for the topology to be tested
+     * @param config the configuration for the topology
+     */
+    TopologyTestDriver(final InternalTopologyBuilder builder,
+                       final Properties config) {
+        this(builder, config,  System.currentTimeMillis());
+
+    }
+
+    /**
+     * Create a new test diver instance.
+     *
+     * @param builder builder for the topology to be tested
+     * @param config the configuration for the topology
+     * @param initialWallClockTimeMs the initial value of internally mocked wall-clock time
+     */
+    private TopologyTestDriver(final InternalTopologyBuilder builder,
+                              final Properties config,
+                              final long initialWallClockTimeMs) {
         final StreamsConfig streamsConfig = new StreamsConfig(config);
         mockTime = new MockTime(initialWallClockTimeMs);
 
-        internalTopologyBuilder = topology.internalTopologyBuilder;
+        internalTopologyBuilder = builder;
         internalTopologyBuilder.setApplicationId(streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG));
 
         processorTopology = internalTopologyBuilder.build(null);
@@ -230,10 +261,11 @@ public class TopologyTestDriver implements Closeable {
 
         final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
         stateDirectory = new StateDirectory(streamsConfig, mockTime);
-        final StreamsMetrics streamsMetrics = new StreamsMetricsImpl(
-            new Metrics(),
-            "topology-test-driver-stream-metrics",
-            Collections.<String, String>emptyMap());
+        metrics = new Metrics();
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(
+            metrics,
+            "topology-test-driver-virtual-thread"
+        );
         final ThreadCache cache = new ThreadCache(
             new LogContext("topology-test-driver "),
             Math.max(0, streamsConfig.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG)),
@@ -288,7 +320,8 @@ public class TopologyTestDriver implements Closeable {
                 globalProcessorContext,
                 globalStateManager,
                 new LogAndContinueExceptionHandler(),
-                new LogContext());
+                new LogContext()
+            );
             globalStateTask.initialize();
         } else {
             globalStateManager = null;
@@ -319,6 +352,15 @@ public class TopologyTestDriver implements Closeable {
     }
 
     /**
+     * Get read-only handle on global metrics registry.
+     *
+     * @return Map of all metrics.
+     */
+    public Map<MetricName, ? extends Metric> metrics() {
+        return Collections.unmodifiableMap(metrics.metrics());
+    }
+
+    /**
      * Send an input message with the given key, value, and timestamp on the specified topic to the topology and then
      * commit the messages.
      *
@@ -328,7 +370,10 @@ public class TopologyTestDriver implements Closeable {
     public void pipeInput(final ConsumerRecord<byte[], byte[]> consumerRecord) {
         final String topicName = consumerRecord.topic();
 
-        final TopicPartition topicPartition = partitionsByTopic.get(topicName);
+        if (!internalTopologyBuilder.getSourceTopicNames().isEmpty()) {
+            validateSourceTopicNameRegexPattern(consumerRecord.topic());
+        }
+        final TopicPartition topicPartition = getTopicPartition(topicName);
         if (topicPartition != null) {
             final long offset = offsetsByTopicPartition.get(topicPartition).incrementAndGet() - 1;
             task.addRecords(topicPartition, Collections.singleton(new ConsumerRecord<>(
@@ -337,14 +382,16 @@ public class TopologyTestDriver implements Closeable {
                 offset,
                 consumerRecord.timestamp(),
                 consumerRecord.timestampType(),
-                ConsumerRecord.NULL_CHECKSUM,
+                (long) ConsumerRecord.NULL_CHECKSUM,
                 consumerRecord.serializedKeySize(),
                 consumerRecord.serializedValueSize(),
                 consumerRecord.key(),
-                consumerRecord.value())));
+                consumerRecord.value(),
+                consumerRecord.headers())));
 
             // Process the record ...
-            ((InternalProcessorContext) task.context()).setRecordContext(new ProcessorRecordContext(consumerRecord.timestamp(), offset, topicPartition.partition(), topicName));
+            ((InternalProcessorContext) task.context()).setRecordContext(
+                    new ProcessorRecordContext(consumerRecord.timestamp(), offset, topicPartition.partition(), topicName, consumerRecord.headers()));
             task.process();
             task.maybePunctuateStreamTime();
             task.commit();
@@ -362,13 +409,36 @@ public class TopologyTestDriver implements Closeable {
                 offset,
                 consumerRecord.timestamp(),
                 consumerRecord.timestampType(),
-                ConsumerRecord.NULL_CHECKSUM,
+                (long) ConsumerRecord.NULL_CHECKSUM,
                 consumerRecord.serializedKeySize(),
                 consumerRecord.serializedValueSize(),
                 consumerRecord.key(),
-                consumerRecord.value()));
+                consumerRecord.value(),
+                consumerRecord.headers()));
             globalStateTask.flushState();
         }
+    }
+
+    private void validateSourceTopicNameRegexPattern(final String inputRecordTopic) {
+        for (final String sourceTopicName : internalTopologyBuilder.getSourceTopicNames()) {
+            if (!sourceTopicName.equals(inputRecordTopic) && Pattern.compile(sourceTopicName).matcher(inputRecordTopic).matches()) {
+                throw new TopologyException("Topology add source of type String for topic: " + sourceTopicName +
+                        " cannot contain regex pattern for input record topic: " + inputRecordTopic +
+                        " and hence cannot process the message.");
+            }
+        }
+    }
+
+    private TopicPartition getTopicPartition(final String topicName) {
+        final TopicPartition topicPartition = partitionsByTopic.get(topicName);
+        if (topicPartition == null) {
+            for (final Map.Entry<String, TopicPartition> entry : partitionsByTopic.entrySet()) {
+                if (Pattern.compile(entry.getKey()).matcher(topicName).matches()) {
+                    return entry.getValue();
+                }
+            }
+        }
+        return topicPartition;
     }
 
     private void captureOutputRecords() {
@@ -400,7 +470,8 @@ public class TopologyTestDriver implements Closeable {
                     serializedKey == null ? 0 : serializedKey.length,
                     serializedValue == null ? 0 : serializedValue.length,
                     serializedKey,
-                    serializedValue));
+                    serializedValue,
+                    record.headers()));
             }
         }
     }
@@ -469,9 +540,9 @@ public class TopologyTestDriver implements Closeable {
         }
         final K key = keyDeserializer.deserialize(record.topic(), record.key());
         final V value = valueDeserializer.deserialize(record.topic(), record.value());
-        return new ProducerRecord<>(record.topic(), record.partition(), record.timestamp(), key, value);
+        return new ProducerRecord<>(record.topic(), record.partition(), record.timestamp(), key, value, record.headers());
     }
-    
+
     /**
      * Get all {@link StateStore StateStores} from the topology.
      * The stores can be a "regular" or global stores.

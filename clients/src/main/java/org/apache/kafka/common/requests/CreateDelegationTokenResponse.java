@@ -62,6 +62,11 @@ public class CreateDelegationTokenResponse extends AbstractResponse {
         new Field(HMAC_KEY_NAME, BYTES, "HMAC of the delegation token."),
         THROTTLE_TIME_MS);
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema TOKEN_CREATE_RESPONSE_V1 = TOKEN_CREATE_RESPONSE_V0;
+
     public CreateDelegationTokenResponse(int throttleTimeMs,
                                          Errors error,
                                          KafkaPrincipal owner,
@@ -103,7 +108,7 @@ public class CreateDelegationTokenResponse extends AbstractResponse {
     }
 
     public static Schema[] schemaVersions() {
-        return new Schema[] {TOKEN_CREATE_RESPONSE_V0};
+        return new Schema[] {TOKEN_CREATE_RESPONSE_V0, TOKEN_CREATE_RESPONSE_V1};
     }
 
     @Override
@@ -158,11 +163,17 @@ public class CreateDelegationTokenResponse extends AbstractResponse {
         return byteArray;
     }
 
+    @Override
     public int throttleTimeMs() {
         return throttleTimeMs;
     }
 
     public boolean hasError() {
         return this.error != Errors.NONE;
+    }
+
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 1;
     }
 }

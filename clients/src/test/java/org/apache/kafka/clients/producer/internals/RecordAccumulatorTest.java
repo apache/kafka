@@ -537,7 +537,7 @@ public class RecordAccumulatorTest {
         List<ProducerBatch> expiredBatches = accum.expiredBatches(requestTimeout, time.milliseconds());
         assertEquals("The batch should not be expired when the partition is muted", 0, expiredBatches.size());
 
-        accum.unmutePartition(tp1);
+        accum.unmutePartition(tp1, 0L);
         expiredBatches = accum.expiredBatches(requestTimeout, time.milliseconds());
         assertEquals("The batch should be expired", 1, expiredBatches.size());
         assertEquals("No partitions should be ready.", 0, accum.ready(cluster, time.milliseconds()).readyNodes.size());
@@ -551,7 +551,7 @@ public class RecordAccumulatorTest {
         expiredBatches = accum.expiredBatches(requestTimeout, time.milliseconds());
         assertEquals("The batch should not be expired when metadata is still available and partition is muted", 0, expiredBatches.size());
 
-        accum.unmutePartition(tp1);
+        accum.unmutePartition(tp1, 0L);
         expiredBatches = accum.expiredBatches(requestTimeout, time.milliseconds());
         assertEquals("The batch should be expired when the partition is not muted", 1, expiredBatches.size());
         assertEquals("No partitions should be ready.", 0, accum.ready(cluster, time.milliseconds()).readyNodes.size());
@@ -577,9 +577,32 @@ public class RecordAccumulatorTest {
         expiredBatches = accum.expiredBatches(requestTimeout, time.milliseconds());
         assertEquals("The batch should not be expired when the partition is muted", 0, expiredBatches.size());
 
-        accum.unmutePartition(tp1);
+        accum.unmutePartition(tp1, 0L);
         expiredBatches = accum.expiredBatches(requestTimeout, time.milliseconds());
         assertEquals("The batch should be expired when the partition is not muted.", 1, expiredBatches.size());
+
+        // Test that when being throttled muted batches are expired before the throttle time is over.
+        accum.append(tp1, 0L, key, value, Record.EMPTY_HEADERS, null, 0);
+        time.sleep(lingerMs);
+        readyNodes = accum.ready(cluster, time.milliseconds()).readyNodes;
+        assertEquals("Our partition's leader should be ready", Collections.singleton(node1), readyNodes);
+        // Advance the clock to expire the batch.
+        time.sleep(requestTimeout + 1);
+        accum.mutePartition(tp1);
+        expiredBatches = accum.expiredBatches(requestTimeout, time.milliseconds());
+        assertEquals("The batch should not be expired when the partition is muted", 0, expiredBatches.size());
+
+        long throttleTimeMs = 100L;
+        accum.unmutePartition(tp1, time.milliseconds() + throttleTimeMs);
+        // The batch shouldn't be expired yet.
+        expiredBatches = accum.expiredBatches(requestTimeout, time.milliseconds());
+        assertEquals("The batch should not be expired when the partition is muted", 0, expiredBatches.size());
+
+        // Once the throttle time is over, the batch can be expired.
+        time.sleep(throttleTimeMs);
+        expiredBatches = accum.expiredBatches(requestTimeout, time.milliseconds());
+        assertEquals("The batch should be expired", 1, expiredBatches.size());
+        assertEquals("No partitions should be ready.", 0, accum.ready(cluster, time.milliseconds()).readyNodes.size());
     }
 
     @Test
@@ -603,7 +626,7 @@ public class RecordAccumulatorTest {
         assertEquals("No node should be ready", 0, result.readyNodes.size());
 
         // Test ready without muted partition
-        accum.unmutePartition(tp1);
+        accum.unmutePartition(tp1, 0L);
         result = accum.ready(cluster, time.milliseconds());
         assertTrue("The batch should be ready", result.readyNodes.size() > 0);
 
@@ -613,7 +636,7 @@ public class RecordAccumulatorTest {
         assertEquals("No batch should have been drained", 0, drained.get(node1.id()).size());
 
         // Test drain without muted partition.
-        accum.unmutePartition(tp1);
+        accum.unmutePartition(tp1, 0L);
         drained = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
         assertTrue("The batch should have been drained.", drained.get(node1.id()).size() > 0);
     }

@@ -16,36 +16,51 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.streams.processor.RecordContext;
+
 import java.util.Objects;
 
 public class ProcessorRecordContext implements RecordContext {
 
-    private long timestamp;
-    private final long offset;
-    private final String topic;
-    private final int partition;
+    long timestamp;
+    final long offset;
+    final String topic;
+    final int partition;
+    final Headers headers;
 
     public ProcessorRecordContext(final long timestamp,
                                   final long offset,
                                   final int partition,
-                                  final String topic) {
+                                  final String topic,
+                                  final Headers headers) {
 
         this.timestamp = timestamp;
         this.offset = offset;
         this.topic = topic;
         this.partition = partition;
+        this.headers = headers;
     }
 
-    public long offset() {
-        return offset;
-    }
-
-    public long timestamp() {
-        return timestamp;
+    public ProcessorRecordContext(final long timestamp,
+                                  final long offset,
+                                  final int partition,
+                                  final String topic) {
+        this(timestamp, offset, partition, topic, null);
     }
 
     public void setTimestamp(final long timestamp) {
         this.timestamp = timestamp;
+    }
+
+    @Override
+    public long offset() {
+        return offset;
+    }
+
+    @Override
+    public long timestamp() {
+        return timestamp;
     }
 
     @Override
@@ -59,6 +74,11 @@ public class ProcessorRecordContext implements RecordContext {
     }
 
     @Override
+    public Headers headers() {
+        return headers;
+    }
+
+    @Override
     public boolean equals(final Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
@@ -66,11 +86,12 @@ public class ProcessorRecordContext implements RecordContext {
         return timestamp == that.timestamp &&
                 offset == that.offset &&
                 partition == that.partition &&
-                Objects.equals(topic, that.topic);
+                Objects.equals(topic, that.topic) &&
+                Objects.equals(headers, that.headers);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(timestamp, offset, topic, partition);
+        return Objects.hash(timestamp, offset, topic, partition, headers);
     }
 }

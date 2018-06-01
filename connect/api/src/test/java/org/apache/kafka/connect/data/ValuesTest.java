@@ -367,7 +367,7 @@ public class ValuesTest {
         assertConsumable(parser, expectedTokens);
     }
 
-    protected void assertConsumable(Parser parser, String ... expectedTokens) {
+    protected void assertConsumable(Parser parser, String... expectedTokens) {
         for (String expectedToken : expectedTokens) {
             if (!expectedToken.trim().isEmpty()) {
                 int position = parser.mark();

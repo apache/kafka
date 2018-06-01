@@ -59,14 +59,14 @@ public class ThreadCacheTest {
         for (KeyValue<String, String> kvToInsert : toInsert) {
             Bytes key = Bytes.wrap(kvToInsert.key.getBytes());
             byte[] value = kvToInsert.value.getBytes();
-            cache.put(namespace, key, new LRUCacheEntry(value, true, 1L, 1L, 1, ""));
+            cache.put(namespace, key, new LRUCacheEntry(value, null, true, 1L, 1L, 1, ""));
         }
 
         for (KeyValue<String, String> kvToInsert : toInsert) {
             Bytes key = Bytes.wrap(kvToInsert.key.getBytes());
             LRUCacheEntry entry = cache.get(namespace, key);
             assertEquals(entry.isDirty(), true);
-            assertEquals(new String(entry.value), kvToInsert.value);
+            assertEquals(new String(entry.value()), kvToInsert.value);
         }
         assertEquals(cache.gets(), 5);
         assertEquals(cache.puts(), 5);
@@ -89,7 +89,7 @@ public class ThreadCacheTest {
             String keyStr = "K" + i;
             Bytes key = Bytes.wrap(keyStr.getBytes());
             byte[] value = new byte[valueSizeBytes];
-            cache.put(namespace, key, new LRUCacheEntry(value, true, 1L, 1L, 1, ""));
+            cache.put(namespace, key, new LRUCacheEntry(value, null, true, 1L, 1L, 1, ""));
         }
 
 
@@ -171,7 +171,7 @@ public class ThreadCacheTest {
         for (KeyValue<String, String> kvToInsert : toInsert) {
             final Bytes key = Bytes.wrap(kvToInsert.key.getBytes());
             final byte[] value = kvToInsert.value.getBytes();
-            cache.put(namespace, key, new LRUCacheEntry(value, true, 1, 1, 1, ""));
+            cache.put(namespace, key, new LRUCacheEntry(value, null, true, 1, 1, 1, ""));
         }
 
         for (int i = 0; i < expected.size(); i++) {
@@ -188,7 +188,7 @@ public class ThreadCacheTest {
         final Bytes key = Bytes.wrap(new byte[]{0});
 
         cache.put(namespace, key, dirtyEntry(key.get()));
-        assertEquals(key.get(), cache.delete(namespace, key).value);
+        assertEquals(key.get(), cache.delete(namespace, key).value());
         assertNull(cache.get(namespace, key));
     }
 
@@ -204,7 +204,7 @@ public class ThreadCacheTest {
             }
         });
         cache.put(namespace, key, dirtyEntry(key.get()));
-        assertEquals(key.get(), cache.delete(namespace, key).value);
+        assertEquals(key.get(), cache.delete(namespace, key).value());
 
         // flushing should have no further effect
         cache.flush(namespace);
@@ -235,8 +235,8 @@ public class ThreadCacheTest {
         cache.put(namespace1, nameByte, dirtyEntry(nameByte.get()));
         cache.put(namespace2, nameByte, dirtyEntry(name1Byte.get()));
 
-        assertArrayEquals(nameByte.get(), cache.get(namespace1, nameByte).value);
-        assertArrayEquals(name1Byte.get(), cache.get(namespace2, nameByte).value);
+        assertArrayEquals(nameByte.get(), cache.get(namespace1, nameByte).value());
+        assertArrayEquals(name1Byte.get(), cache.get(namespace2, nameByte).value());
     }
 
     @Test
@@ -413,8 +413,8 @@ public class ThreadCacheTest {
         cache.putAll(namespace, Arrays.asList(KeyValue.pair(Bytes.wrap(new byte[]{0}), dirtyEntry(new byte[]{5})),
                                            KeyValue.pair(Bytes.wrap(new byte[]{1}), dirtyEntry(new byte[]{6}))));
 
-        assertArrayEquals(new byte[]{5}, cache.get(namespace, Bytes.wrap(new byte[]{0})).value);
-        assertArrayEquals(new byte[]{6}, cache.get(namespace, Bytes.wrap(new byte[]{1})).value);
+        assertArrayEquals(new byte[]{5}, cache.get(namespace, Bytes.wrap(new byte[]{0})).value());
+        assertArrayEquals(new byte[]{6}, cache.get(namespace, Bytes.wrap(new byte[]{1})).value());
     }
 
     @Test
@@ -436,8 +436,8 @@ public class ThreadCacheTest {
         final Bytes key = Bytes.wrap(new byte[]{10});
         final byte[] value = {30};
         assertNull(cache.putIfAbsent(namespace, key, dirtyEntry(value)));
-        assertArrayEquals(value, cache.putIfAbsent(namespace, key, dirtyEntry(new byte[]{8})).value);
-        assertArrayEquals(value, cache.get(namespace, key).value);
+        assertArrayEquals(value, cache.putIfAbsent(namespace, key, dirtyEntry(new byte[]{8})).value());
+        assertArrayEquals(value, cache.get(namespace, key).value());
     }
 
     @Test
@@ -520,7 +520,7 @@ public class ThreadCacheTest {
     }
 
     private LRUCacheEntry dirtyEntry(final byte[] key) {
-        return new LRUCacheEntry(key, true, -1, -1, -1, "");
+        return new LRUCacheEntry(key, null, true, -1, -1, -1, "");
     }
 
     private LRUCacheEntry cleanEntry(final byte[] key) {

@@ -472,7 +472,7 @@ public class MemoryRecordsBuilderTest {
         MemoryRecords records = convertedRecords.records();
 
         // Transactional markers are skipped when down converting to V1, so exclude them from size
-        verifyRecordsProcessingStats(convertedRecords.recordsProcessingStats(),
+        verifyRecordsProcessingStats(convertedRecords.recordConversionStats(),
                 3, 3, records.sizeInBytes(), sizeExcludingTxnMarkers);
 
         List<? extends RecordBatch> batches = Utils.toList(records.batches().iterator());
@@ -513,7 +513,7 @@ public class MemoryRecordsBuilderTest {
         ConvertedRecords<MemoryRecords> convertedRecords = MemoryRecords.readableRecords(buffer)
                 .downConvert(RecordBatch.MAGIC_VALUE_V1, 0, time);
         MemoryRecords records = convertedRecords.records();
-        verifyRecordsProcessingStats(convertedRecords.recordsProcessingStats(), 3, 2,
+        verifyRecordsProcessingStats(convertedRecords.recordConversionStats(), 3, 2,
                 records.sizeInBytes(), buffer.limit());
 
         List<? extends RecordBatch> batches = Utils.toList(records.batches().iterator());
@@ -553,7 +553,7 @@ public class MemoryRecordsBuilderTest {
             assertEquals("1", utf8(logRecords.get(0).key()));
             assertEquals("2", utf8(logRecords.get(1).key()));
             assertEquals("3", utf8(logRecords.get(2).key()));
-            verifyRecordsProcessingStats(convertedRecords.recordsProcessingStats(), 3, 2,
+            verifyRecordsProcessingStats(convertedRecords.recordConversionStats(), 3, 2,
                     records.sizeInBytes(), buffer.limit());
         } else {
             assertEquals(2, batches.size());
@@ -563,7 +563,7 @@ public class MemoryRecordsBuilderTest {
             assertEquals(2, batches.get(1).baseOffset());
             assertEquals("1", utf8(logRecords.get(0).key()));
             assertEquals("3", utf8(logRecords.get(1).key()));
-            verifyRecordsProcessingStats(convertedRecords.recordsProcessingStats(), 3, 1,
+            verifyRecordsProcessingStats(convertedRecords.recordConversionStats(), 3, 1,
                     records.sizeInBytes(), buffer.limit());
         }
     }
@@ -678,8 +678,8 @@ public class MemoryRecordsBuilderTest {
         assertTrue("Memory usage too high: " + memUsed, iterations < 100);
     }
 
-    private void verifyRecordsProcessingStats(RecordsProcessingStats processingStats, int numRecords,
-            int numRecordsConverted, long finalBytes, long preConvertedBytes) {
+    private void verifyRecordsProcessingStats(RecordConversionStats processingStats, int numRecords,
+                                              int numRecordsConverted, long finalBytes, long preConvertedBytes) {
         assertNotNull("Records processing info is null", processingStats);
         assertEquals(numRecordsConverted, processingStats.numRecordsConverted());
         // Since nanoTime accuracy on build machines may not be sufficient to measure small conversion times,

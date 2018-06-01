@@ -72,7 +72,7 @@ public class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
 
         if (root != null) {
             // register the store
-            context.register(root, false, new StateRestoreCallback() {
+            context.register(root, new StateRestoreCallback() {
                 @Override
                 public void restore(byte[] key, byte[] value) {
                     // this is a delete
