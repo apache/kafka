@@ -16,13 +16,10 @@
  */
 package org.apache.kafka.connect.runtime.errors;
 
-import org.apache.kafka.common.config.AbstractConfig;
-import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.util.Map;
 
 /**
  * Writes errors and their context to application logs.
@@ -31,28 +28,15 @@ public class LogReporter implements ErrorReporter {
 
     private static final Logger log = LoggerFactory.getLogger(LogReporter.class);
 
-    public static final String PREFIX = "errors.log";
-
-    public static final String LOG_ENABLE = "enable";
-    public static final String LOG_ENABLE_DOC = "If true, log to application logs the errors and the information describing where they occurred.";
-    public static final boolean LOG_ENABLE_DEFAULT = false;
-
-    public static final String LOG_INCLUDE_MESSAGES = "include.messages";
-    public static final String LOG_INCLUDE_MESSAGES_DOC = "If true, include in the application log the Connect key, value, and other details of records that resulted in errors and failures.";
-    public static final boolean LOG_INCLUDE_MESSAGES_DEFAULT = false;
-
     private final ConnectorTaskId id;
+    private final ConnectorConfig connConfig;
 
-    private LogReporterConfig config;
     private ErrorHandlingMetrics errorHandlingMetrics;
 
-    public LogReporter(ConnectorTaskId id) {
+    public LogReporter(ConnectorTaskId id, ConnectorConfig connConfig) {
         this.id = id;
+        this.connConfig = connConfig;
     }
-
-    private static final ConfigDef CONFIG_DEF = new ConfigDef()
-                .define(LOG_ENABLE, ConfigDef.Type.BOOLEAN, LOG_ENABLE_DEFAULT, ConfigDef.Importance.MEDIUM, LOG_ENABLE_DOC)
-                .define(LOG_INCLUDE_MESSAGES, ConfigDef.Type.BOOLEAN, LOG_INCLUDE_MESSAGES_DEFAULT, ConfigDef.Importance.MEDIUM, LOG_INCLUDE_MESSAGES_DOC);
 
     /**
      * Log error context.
@@ -61,7 +45,7 @@ public class LogReporter implements ErrorReporter {
      */
     @Override
     public void report(ProcessingContext context) {
-        if (!config.isEnabled()) {
+        if (!connConfig.enableErrorLog()) {
             return;
         }
 
@@ -80,32 +64,8 @@ public class LogReporter implements ErrorReporter {
 
     // Visible for testing
     String message(ProcessingContext context) {
-        return String.format("Error encountered in task %s. %s", String.valueOf(id), context.toString(config.canLogMessages()));
-    }
-
-    @Override
-    public void configure(Map<String, ?> configs) {
-        config = new LogReporterConfig(configs);
-    }
-
-    private static class LogReporterConfig extends AbstractConfig {
-        public LogReporterConfig(Map<?, ?> originals) {
-            super(CONFIG_DEF, originals, true);
-        }
-
-        /**
-         * @return true, if logging of error context is desired; false otherwise.
-         */
-        public boolean isEnabled() {
-            return getBoolean(LOG_ENABLE);
-        }
-
-        /**
-         * @return if false, the connect record which caused the exception is not logged.
-         */
-        public boolean canLogMessages() {
-            return getBoolean(LOG_INCLUDE_MESSAGES);
-        }
+        return String.format("Error encountered in task %s. %s", String.valueOf(id),
+                context.toString(connConfig.includeRecordDetailsInErrorLog()));
     }
 
 }

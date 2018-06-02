@@ -98,9 +98,4 @@ public class SinkConnectorConfig extends ConnectorConfig {
     public String dlqTopicName() {
         return getString(DLQ_TOPIC_NAME_CONFIG);
     }
-
-    public Map<String, Object> dlqConfigurationProperties() {
-        return originalsWithPrefix(DLQ_PREFIX, true);
-    }
-
 }

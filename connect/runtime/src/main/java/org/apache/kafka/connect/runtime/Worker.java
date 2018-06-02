@@ -485,8 +485,7 @@ public class Worker {
                                        ClassLoader loader) {
         ErrorHandlingMetrics errorHandlingMetrics = errorHandlingMetrics(id);
 
-        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator();
-        retryWithToleranceOperator.configure(connConfig.originalsWithPrefix("errors."));
+        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(connConfig);
         retryWithToleranceOperator.metrics(errorHandlingMetrics);
 
         // Decide which type of worker task we need based on the type of task.
@@ -523,8 +522,7 @@ public class Worker {
     private List<ErrorReporter> sinkTaskReporters(ConnectorTaskId id, SinkConnectorConfig connConfig,
                                                   ErrorHandlingMetrics errorHandlingMetrics) {
         ArrayList<ErrorReporter> reporters = new ArrayList<>();
-        LogReporter logReporter = new LogReporter(id);
-        logReporter.configure(connConfig.originalsWithPrefix(LogReporter.PREFIX + "."));
+        LogReporter logReporter = new LogReporter(id, connConfig);
         logReporter.metrics(errorHandlingMetrics);
         reporters.add(logReporter);
 
@@ -532,7 +530,6 @@ public class Worker {
         String topic = connConfig.dlqTopicName();
         if (topic != null && !topic.isEmpty()) {
             DeadLetterQueueReporter reporter = DeadLetterQueueReporter.createAndSetup(config, connConfig, producerProps);
-            reporter.configure(connConfig.dlqConfigurationProperties());
             reporters.add(reporter);
         }
 
@@ -542,8 +539,7 @@ public class Worker {
     private List<ErrorReporter> sourceTaskReporters(ConnectorTaskId id, ConnectorConfig connConfig,
                                                       ErrorHandlingMetrics errorHandlingMetrics) {
         List<ErrorReporter> reporters = new ArrayList<>();
-        LogReporter logReporter = new LogReporter(id);
-        logReporter.configure(connConfig.originalsWithPrefix(LogReporter.PREFIX + "."));
+        LogReporter logReporter = new LogReporter(id, connConfig);
         logReporter.metrics(errorHandlingMetrics);
         reporters.add(logReporter);
 
