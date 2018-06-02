@@ -58,9 +58,8 @@ public class RetryWithToleranceOperator {
     public static final long RETRIES_DELAY_MIN_MS = 300;
 
     // for testing only
-    public static final RetryWithToleranceOperator NOOP_OPERATOR
-            = new RetryWithToleranceOperator(ConnectorConfig.ERRORS_RETRY_TIMEOUT_DEFAULT,
-            ConnectorConfig.ERRORS_RETRY_MAX_DELAY_DEFAULT, ToleranceType.NONE, Time.SYSTEM);
+    public static final RetryWithToleranceOperator NOOP_OPERATOR = new RetryWithToleranceOperator(
+            ConnectorConfig.ERRORS_RETRY_TIMEOUT_DEFAULT, ConnectorConfig.ERRORS_RETRY_MAX_DELAY_DEFAULT, ToleranceType.NONE, Time.SYSTEM);
     static {
         NOOP_OPERATOR.metrics(new ErrorHandlingMetrics());
     }
