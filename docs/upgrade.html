@@ -95,6 +95,7 @@
         timeout behavior for blocking APIs. In particular, a new <code>poll(Duration)</code> API has been added which
         does not block for dynamic partition assignment. The old <code>poll(long)</code> API has been deprecated and
         will be removed in a future version.</li>
+    <li>The internal method <code>kafka.admin.AdminClient.deleteRecordsBefore</code> has been removed. Users are encouraged to migrate to <code>org.apache.kafka.clients.admin.AdminClient.deleteRecords</code>.</li>
 </ul>
 
 <h5><a id="upgrade_200_new_protocols" href="#upgrade_200_new_protocols">New Protocol Versions</a></h5>
