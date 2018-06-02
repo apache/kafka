@@ -842,23 +842,23 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     sendRecords(producers.head, 10, topicPartition)
     var messageCount = 0
     TestUtils.waitUntilTrue(() => {
-      messageCount += consumer.poll(0).count()
+      messageCount += consumer.poll(0).count
       messageCount == 10
     }, "Expected 10 messages", 3000L)
 
-    client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(3L)).asJava).all().get()
+    client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(3L)).asJava).all.get
     consumer.seek(topicPartition, 1)
     messageCount = 0
     TestUtils.waitUntilTrue(() => {
-      messageCount += consumer.poll(0).count()
+      messageCount += consumer.poll(0).count
       messageCount == 7
     }, "Expected 7 messages", 3000L)
 
-    client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(8L)).asJava).all().get()
+    client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(8L)).asJava).all.get
     consumer.seek(topicPartition, 1)
     messageCount = 0
     TestUtils.waitUntilTrue(() => {
-      messageCount += consumer.poll(0).count()
+      messageCount += consumer.poll(0).count
       messageCount == 2
     }, "Expected 2 messages", 3000L)
   }
