@@ -18,7 +18,6 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -89,22 +88,12 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractStateS
 
     @Override
     public V get(final K key) {
-        try {
         return innerMetered.get(key);
-        } catch (final ProcessorStateException e) {
-            final String message = String.format(e.getMessage(), key);
-            throw new ProcessorStateException(message, e);
-        }
     }
 
     @Override
     public void put(final K key, final V value) {
-        try {
         innerMetered.put(key, value);
-        } catch (final ProcessorStateException e) {
-            final String message = String.format(e.getMessage(), key, value);
-            throw new ProcessorStateException(message, e);
-        }
     }
 
     @Override
@@ -119,12 +108,7 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractStateS
 
     @Override
     public V delete(final K key) {
-        try {
         return innerMetered.delete(key);
-        }  catch (final ProcessorStateException e) {
-            final String message = String.format(e.getMessage(), key);
-            throw new ProcessorStateException(message, e);
-        }
     }
 
     @Override
