@@ -97,13 +97,7 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
                     final Windowed<K> windowedKey = WindowKeySchema.fromStoreKey(binaryWindowKey, windowSize, serdes);
                     final Bytes key = Bytes.wrap(WindowKeySchema.extractStoreKeyBytes(binaryWindowKey));
                     maybeForward(entry, key, windowedKey, (InternalProcessorContext) context);
-                    try {
-                        underlying.put(key, entry.newValue(), timestamp);
-                    } catch (final ProcessorStateException e) {
-                        final String message = String.format(e.getMessage(), serdes.keyFrom(entry.key().get()),
-                                serdes.valueFrom(entry.newValue()));
-                        throw new ProcessorStateException(message, e);
-                    }
+                    underlying.put(key, entry.newValue(), timestamp);
                 }
             }
         });
