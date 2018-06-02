@@ -875,15 +875,15 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       .lowWatermarks.get(topicPartition).get.lowWatermark)
 
     // OffsetOutOfRangeException if offset > high_watermark
-    intercept[OffsetOutOfRangeException] {
+    assertTrue(intercept[ExecutionException] {
       client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(20L)).asJava).lowWatermarks.get(topicPartition).get
-    }
+    }.getCause.isInstanceOf[OffsetOutOfRangeException])
 
     val nonExistPartition = new TopicPartition(topic, 3)
     // LeaderNotAvailableException if non existent partition
-    intercept[LeaderNotAvailableException] {
+    assertTrue(intercept[ExecutionException] {
       client.deleteRecords(Map(nonExistPartition -> RecordsToDelete.beforeOffset(20L)).asJava).lowWatermarks.get(nonExistPartition).get
-    }
+    }.getCause.isInstanceOf[LeaderNotAvailableException])
   }
 
   @Test
