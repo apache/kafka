@@ -268,7 +268,7 @@ public class KafkaAdminClientTest {
         MockClient mockClient = new MockClient(Time.SYSTEM);
         mockClient.setNodeApiVersions(NodeApiVersions.create());
         mockClient.setNode(cluster.nodes().get(0));
-        mockClient.blackout(cluster.nodes().get(0), 200);
+        mockClient.setUnreachable(cluster.nodes().get(0), 200);
 
         try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockClient, Time.SYSTEM, cluster)) {
             Cluster discoveredCluster = mockCluster(0);

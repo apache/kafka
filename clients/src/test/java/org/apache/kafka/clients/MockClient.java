@@ -78,7 +78,12 @@ public class MockClient implements KafkaClient {
     private Cluster cluster;
     private Node node = null;
     private final Set<String> ready = new HashSet<>();
+
+    // Nodes awaiting reconnect backoff, will not be chosen by leastLoadedNode
     private final TransientSet<Node> blackedOut;
+    // Nodes which will always fail to connect, but can be chosen by leastLoadedNode
+    private final TransientSet<Node> unreachable;
+
     private final Map<Node, Long> pendingAuthenticationErrors = new HashMap<>();
     private final Map<Node, AuthenticationException> authenticationErrors = new HashMap<>();
     // Use concurrent queue for requests so that requests may be queried from a different thread
@@ -99,6 +104,7 @@ public class MockClient implements KafkaClient {
         this.metadata = metadata;
         this.unavailableTopics = Collections.emptySet();
         this.blackedOut = new TransientSet<>(time);
+        this.unreachable = new TransientSet<>(time);
     }
 
     @Override
@@ -111,7 +117,11 @@ public class MockClient implements KafkaClient {
         if (blackedOut.contains(node, now))
             return false;
 
-        authenticationErrors.remove(node);
+        if (unreachable.contains(node, now)) {
+            blackout(node, 100);
+            return false;
+        }
+
         ready.add(node.idString());
         return true;
     }
@@ -126,21 +136,25 @@ public class MockClient implements KafkaClient {
         return connectionDelay(node, now);
     }
 
-    public void blackout(Node node, long duration) {
-        blackedOut.add(node, duration);
+    public void blackout(Node node, long durationMs) {
+        blackedOut.add(node, durationMs);
     }
 
-    public void authenticationFailed(Node node, long duration) {
+    public void setUnreachable(Node node, long durationMs) {
+        disconnect(node.idString());
+        unreachable.add(node, durationMs);
+    }
+
+    public void authenticationFailed(Node node, long blackoutMs) {
         pendingAuthenticationErrors.remove(node);
         authenticationErrors.put(node, (AuthenticationException) Errors.SASL_AUTHENTICATION_FAILED.exception());
         disconnect(node.idString());
-        blackout(node, duration);
+        blackout(node, blackoutMs);
     }
 
     public void createPendingAuthenticationError(Node node, long blackoutMs) {
         pendingAuthenticationErrors.put(node, blackoutMs);
     }
-
 
     @Override
     public boolean connectionFailed(Node node) {
@@ -161,7 +175,7 @@ public class MockClient implements KafkaClient {
             if (request.destination().equals(node)) {
                 short version = request.requestBuilder().latestAllowedVersion();
                 responses.add(new ClientResponse(request.makeHeader(version), request.callback(), request.destination(),
-                        request.createdTimeMs(), now, true, null, null));
+                        request.createdTimeMs(), now, true, null, null, null));
                 iter.remove();
             }
         }
@@ -185,7 +199,8 @@ public class MockClient implements KafkaClient {
                 short version = nodeApiVersions.latestUsableVersion(request.apiKey(), builder.oldestAllowedVersion(),
                     builder.latestAllowedVersion());
                 ClientResponse resp = new ClientResponse(request.makeHeader(version), request.callback(), request.destination(),
-                    request.createdTimeMs(), time.milliseconds(), true, null, null);
+                    request.createdTimeMs(), time.milliseconds(), true, null,
+                        new AuthenticationException("Authentication failed"), null);
                 responses.add(resp);
                 return;
             }
@@ -210,7 +225,7 @@ public class MockClient implements KafkaClient {
 
             ClientResponse resp = new ClientResponse(request.makeHeader(version), request.callback(), request.destination(),
                     request.createdTimeMs(), time.milliseconds(), futureResp.disconnected,
-                    unsupportedVersionException, futureResp.responseBody);
+                    unsupportedVersionException, null, futureResp.responseBody);
             responses.add(resp);
             iterator.remove();
             return;
@@ -307,7 +322,7 @@ public class MockClient implements KafkaClient {
         requests.remove(clientRequest);
         short version = clientRequest.requestBuilder().latestAllowedVersion();
         responses.add(new ClientResponse(clientRequest.makeHeader(version), clientRequest.callback(), clientRequest.destination(),
-                clientRequest.createdTimeMs(), time.milliseconds(), false, null, response));
+                clientRequest.createdTimeMs(), time.milliseconds(), false, null, null, response));
     }
 
 
@@ -315,7 +330,7 @@ public class MockClient implements KafkaClient {
         ClientRequest request = requests.remove();
         short version = request.requestBuilder().latestAllowedVersion();
         responses.add(new ClientResponse(request.makeHeader(version), request.callback(), request.destination(),
-                request.createdTimeMs(), time.milliseconds(), disconnected, null, response));
+                request.createdTimeMs(), time.milliseconds(), disconnected, null, null, response));
     }
 
     public void respondFrom(AbstractResponse response, Node node) {
@@ -330,7 +345,7 @@ public class MockClient implements KafkaClient {
                 iterator.remove();
                 short version = request.requestBuilder().latestAllowedVersion();
                 responses.add(new ClientResponse(request.makeHeader(version), request.callback(), request.destination(),
-                        request.createdTimeMs(), time.milliseconds(), disconnected, null, response));
+                        request.createdTimeMs(), time.milliseconds(), disconnected, null, null, response));
                 return;
             }
         }
@@ -407,6 +422,7 @@ public class MockClient implements KafkaClient {
     public void reset() {
         ready.clear();
         blackedOut.clear();
+        unreachable.clear();
         requests.clear();
         responses.clear();
         futureResponses.clear();
@@ -498,6 +514,9 @@ public class MockClient implements KafkaClient {
 
     @Override
     public Node leastLoadedNode(long now) {
+        // Consistent with NetworkClient, we do not return nodes awaiting reconnect backoff
+        if (blackedOut.contains(node, now))
+            return null;
         return this.node;
     }
 
