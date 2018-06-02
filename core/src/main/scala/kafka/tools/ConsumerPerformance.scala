@@ -38,6 +38,7 @@ import java.text.SimpleDateFormat
 import java.util.concurrent.atomic.AtomicBoolean
 
 import com.typesafe.scalalogging.LazyLogging
+import org.apache.kafka.common.errors.TimeoutException
 
 import scala.collection.mutable
 
@@ -401,7 +402,7 @@ object ConsumerPerformance extends LazyLogging {
       } catch {
         case _: InterruptedException =>
         case _: ClosedByInterruptException =>
-        case _: ConsumerTimeoutException =>
+        case _: TimeoutException =>
           consumerTimeout.set(true)
         case e: Throwable => e.printStackTrace()
       }
