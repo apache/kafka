@@ -116,7 +116,8 @@ public class InternalTopicIntegrationTest {
                 DEFAULT_ZK_SESSION_TIMEOUT_MS, DEFAULT_ZK_CONNECTION_TIMEOUT_MS, Integer.MAX_VALUE,
                 Time.SYSTEM, "testMetricGroup", "testMetricType")) {
             final AdminZkClient adminZkClient = new AdminZkClient(kafkaZkClient);
-            final Map<String, Properties> topicConfigs = scala.collection.JavaConversions.mapAsJavaMap(adminZkClient.getAllTopicConfigs());
+            final Map<String, Properties> topicConfigs =
+                scala.collection.JavaConverters.mapAsJavaMapConverter(adminZkClient.getAllTopicConfigs()).asJava();
 
             for (Map.Entry<String, Properties> topicConfig : topicConfigs.entrySet()) {
                 if (topicConfig.getKey().equals(changelog)) {

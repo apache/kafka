@@ -297,7 +297,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         @Override
         public boolean conditionMet() {
             final Set<String> allTopics = new HashSet<>();
-            allTopics.addAll(scala.collection.JavaConversions.seqAsJavaList(zkUtils.getAllTopics()));
+            allTopics.addAll(scala.collection.JavaConverters.seqAsJavaListConverter(zkUtils.getAllTopics()).asJava());
             return !allTopics.removeAll(deletedTopics);
         }
     }
@@ -312,7 +312,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         @Override
         public boolean conditionMet() {
             final Set<String> allTopics = new HashSet<>();
-            allTopics.addAll(scala.collection.JavaConversions.seqAsJavaList(zkUtils.getAllTopics()));
+            allTopics.addAll(scala.collection.JavaConverters.seqAsJavaListConverter(zkUtils.getAllTopics()).asJava());
             return allTopics.equals(remainingTopics);
         }
     }

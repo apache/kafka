@@ -130,7 +130,7 @@ public class KafkaEmbedded {
         kafka.awaitShutdown();
         log.debug("Removing logs.dir at {} ...", logDir);
         final List<String> logDirs = Collections.singletonList(logDir.getAbsolutePath());
-        CoreUtils.delete(scala.collection.JavaConversions.asScalaBuffer(logDirs).seq());
+        CoreUtils.delete(scala.collection.JavaConverters.asScalaBufferConverter(logDirs).asScala());
         tmpFolder.delete();
         log.debug("Shutdown of embedded Kafka broker at {} completed (with ZK ensemble at {}) ...",
             brokerList(), zookeeperConnect());
