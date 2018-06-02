@@ -73,11 +73,9 @@ object DeleteRecordsCommand {
     out.println("Records delete operation completed:")
 
     deleteRecordsResult.lowWatermarks.asScala.foreach { case (tp, partitionResult) => {
-      try {
-        out.println(s"partition: $tp\tlow_watermark: ${partitionResult.get().lowWatermark()}")
-      } catch {
-        case e: Exception =>
-          out.println(s"partition: $tp\terror: ${e.getMessage}")
+      try out.println(s"partition: $tp\tlow_watermark: ${partitionResult.get.lowWatermark}")
+      catch {
+        case e: Exception => out.println(s"partition: $tp\terror: ${e.getMessage}")
       }
     }}
 

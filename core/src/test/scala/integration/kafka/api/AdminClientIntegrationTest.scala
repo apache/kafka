@@ -742,7 +742,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     assertEquals(0L, consumer.position(topicPartition))
 
     val result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(5L)).asJava)
-    val lowWatermark = result.lowWatermarks().get(topicPartition).get().lowWatermark()
+    val lowWatermark = result.lowWatermarks().get(topicPartition).get.lowWatermark
     assertEquals(5L, lowWatermark)
 
     consumer.seekToBeginning(Collections.singletonList(topicPartition))
@@ -751,7 +751,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     consumer.seek(topicPartition, 7L)
     assertEquals(7L, consumer.position(topicPartition))
 
-    client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(DeleteRecordsRequest.HIGH_WATERMARK)).asJava).all().get()
+    client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(DeleteRecordsRequest.HIGH_WATERMARK)).asJava).all.get
     consumer.seekToBeginning(Collections.singletonList(topicPartition))
     assertEquals(10L, consumer.position(topicPartition))
   }
@@ -804,7 +804,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
 
     sendRecords(producers.head, 10, topicPartition)
     val result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(3L)).asJava)
-    val lowWatermark = result.lowWatermarks().get(topicPartition).get().lowWatermark()
+    val lowWatermark = result.lowWatermarks.get(topicPartition).get.lowWatermark
     assertEquals(3L, lowWatermark)
 
     for (i <- 0 until serverCount)
@@ -824,12 +824,66 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     assertEquals(0L, consumer.offsetsForTimes(Map(topicPartition -> JLong.valueOf(0L)).asJava).get(topicPartition).offset())
 
     var result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(5L)).asJava)
-    result.all().get()
+    result.all.get
     assertEquals(5L, consumer.offsetsForTimes(Map(topicPartition -> JLong.valueOf(0L)).asJava).get(topicPartition).offset())
 
     result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(DeleteRecordsRequest.HIGH_WATERMARK)).asJava)
-    result.all().get()
+    result.all.get
     assertNull(consumer.offsetsForTimes(Map(topicPartition -> JLong.valueOf(0L)).asJava).get(topicPartition))
+  }
+
+  @Test
+  def testConsumeAfterDeleteRecords(): Unit = {
+    val consumer = consumers.head
+    subscribeAndWaitForAssignment(topic, consumer)
+
+    client = AdminClient.create(createConfig)
+
+    sendRecords(producers.head, 10, topicPartition)
+    var messageCount = 0
+    TestUtils.waitUntilTrue(() => {
+      messageCount += consumer.poll(0).count()
+      messageCount == 10
+    }, "Expected 10 messages", 3000L)
+
+    client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(3L)).asJava).all().get()
+    consumer.seek(topicPartition, 1)
+    messageCount = 0
+    TestUtils.waitUntilTrue(() => {
+      messageCount += consumer.poll(0).count()
+      messageCount == 7
+    }, "Expected 7 messages", 3000L)
+
+    client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(8L)).asJava).all().get()
+    consumer.seek(topicPartition, 1)
+    messageCount = 0
+    TestUtils.waitUntilTrue(() => {
+      messageCount += consumer.poll(0).count()
+      messageCount == 2
+    }, "Expected 2 messages", 3000L)
+  }
+
+  @Test
+  def testDeleteRecordsWithException(): Unit = {
+    subscribeAndWaitForAssignment(topic, consumers.head)
+
+    client = AdminClient.create(createConfig)
+
+    sendRecords(producers.head, 10, topicPartition)
+
+    assertEquals(5L, client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(5L)).asJava)
+      .lowWatermarks.get(topicPartition).get.lowWatermark)
+
+    // OffsetOutOfRangeException if offset > high_watermark
+    intercept[OffsetOutOfRangeException] {
+      client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(20L)).asJava).lowWatermarks.get(topicPartition).get
+    }
+
+    val nonExistPartition = new TopicPartition(topic, 3)
+    // LeaderNotAvailableException if non existent partition
+    intercept[LeaderNotAvailableException] {
+      client.deleteRecords(Map(nonExistPartition -> RecordsToDelete.beforeOffset(20L)).asJava).lowWatermarks.get(nonExistPartition).get
+    }
   }
 
   @Test
@@ -1077,66 +1131,6 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       }
     } finally {
       Utils.closeQuietly(client, "adminClient")
-    }
-  }
-
-  @Test
-  def testConsumeAfterDeleteRecords() {
-    val consumer = consumers.head
-    subscribeAndWaitForAssignment(topic, consumer)
-
-    client = AdminClient.create(createConfig)
-
-    sendRecords(producers.head, 10, topicPartition)
-    var messageCount = 0
-    TestUtils.waitUntilTrue(() => {
-      messageCount += consumer.poll(0).count()
-      messageCount == 10
-    }, "Expected 10 messages", 3000L)
-
-    client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(3L)).asJava).all().get()
-    consumer.seek(topicPartition, 1)
-    messageCount = 0
-    TestUtils.waitUntilTrue(() => {
-      messageCount += consumer.poll(0).count()
-      messageCount == 7
-    }, "Expected 7 messages", 3000L)
-
-    client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(8L)).asJava).all().get()
-    consumer.seek(topicPartition, 1)
-    messageCount = 0
-    TestUtils.waitUntilTrue(() => {
-      messageCount += consumer.poll(0).count()
-      messageCount == 2
-    }, "Expected 2 messages", 3000L)
-  }
-
-  @Test
-  def testDeleteRecordsWithException() {
-    subscribeAndWaitForAssignment(topic, consumers.head)
-
-    client = AdminClient.create(createConfig)
-
-    sendRecords(producers.head, 10, topicPartition)
-    // Should get success result
-
-    assertEquals(5L, client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(5L)).asJava)
-      .lowWatermarks().get(topicPartition).get().lowWatermark())
-    // OffsetOutOfRangeException if offset > high_watermark
-    try {
-      client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(20)).asJava).lowWatermarks().get(topicPartition).get()
-      fail("Expected an offset out of range exception")
-    } catch {
-      case e => assertTrue(e.getCause.isInstanceOf[OffsetOutOfRangeException])
-    }
-
-    val nonExistPartition = new TopicPartition(topic, 3)
-    // UnknownTopicOrPartitionException if user tries to delete records of a non-existent partition
-    try {
-      client.deleteRecords(Map(nonExistPartition -> RecordsToDelete.beforeOffset(20)).asJava).lowWatermarks().get(nonExistPartition).get()
-      fail("Expected a leader not available exception")
-    } catch {
-      case e => assertTrue(e.getCause.isInstanceOf[LeaderNotAvailableException])
     }
   }
 
