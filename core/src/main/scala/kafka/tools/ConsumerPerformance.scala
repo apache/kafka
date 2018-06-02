@@ -33,11 +33,11 @@ import java.util.{Collections, Properties, Random}
 import kafka.consumer.Consumer
 import kafka.consumer.ConsumerConnector
 import kafka.consumer.KafkaStream
+import kafka.consumer.ConsumerTimeoutException
 import java.text.SimpleDateFormat
 import java.util.concurrent.atomic.AtomicBoolean
 
 import com.typesafe.scalalogging.LazyLogging
-import org.apache.kafka.common.errors.TimeoutException
 
 import scala.collection.mutable
 
@@ -401,7 +401,7 @@ object ConsumerPerformance extends LazyLogging {
       } catch {
         case _: InterruptedException =>
         case _: ClosedByInterruptException =>
-        case _: TimeoutException =>
+        case _: ConsumerTimeoutException =>
           consumerTimeout.set(true)
         case e: Throwable => e.printStackTrace()
       }
