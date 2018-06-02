@@ -190,7 +190,7 @@ object ConsumerPerformance extends LazyLogging {
 
     if (messagesRead < count)
       println(s"WARNING: Exiting before consuming the expected number of messages: timeout ($timeout ms) exceeded. " +
-        s"Probably too much time spent on processing a polled list of records. Be sure to increase the --timeout option.")
+        "You can use the --timeout option to increase the timeout."))
     totalMessagesRead.set(messagesRead)
     totalBytesRead.set(bytesRead)
   }
