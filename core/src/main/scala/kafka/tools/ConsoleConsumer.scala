@@ -545,9 +545,10 @@ class DefaultMessageFormatter extends MessageFormatter {
 
   private def propertiesWithKeyPrefixStripped(prefix: String, props: Properties): Properties = {
     val newProps = new Properties()
-    for ((key, value) <- props.asScala.toMap if key.startsWith(prefix) && key.length > prefix.length)
-      newProps.put(key.substring(prefix.length), value)
-
+    props.asScala.toMap.foreach { case (key, value) =>
+      if (key.startsWith(prefix) && key.length > prefix.length)
+        newProps.put(key.substring(prefix.length), value)
+    }
     newProps
   }
 
