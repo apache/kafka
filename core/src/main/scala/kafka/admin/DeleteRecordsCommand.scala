@@ -22,31 +22,59 @@ import java.util.Properties
 
 import kafka.admin.AdminClient.DeleteRecordsResult
 import kafka.common.AdminCommandFailedException
-import kafka.utils.{CoreUtils, Json, CommandLineUtils}
+import kafka.utils.{CommandLineUtils, CoreUtils, Json}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.clients.CommonClientConfigs
 import joptsimple._
+import kafka.utils.json.JsonValue
 
 /**
  * A command for delete records of the given partitions down to the specified offset.
  */
 object DeleteRecordsCommand {
 
+  private[admin] val EarliestVersion = 1
+
   def main(args: Array[String]): Unit = {
     execute(args, System.out)
   }
 
   def parseOffsetJsonStringWithoutDedup(jsonData: String): Seq[(TopicPartition, Long)] = {
-    Json.parseFull(jsonData).toSeq.flatMap { js =>
-      js.asJsonObject.get("partitions").toSeq.flatMap { partitionsJs =>
-        partitionsJs.asJsonArray.iterator.map(_.asJsonObject).map { partitionJs =>
-          val topic = partitionJs("topic").to[String]
-          val partition = partitionJs("partition").to[Int]
-          val offset = partitionJs("offset").to[Long]
-          new TopicPartition(topic, partition) -> offset
-        }.toBuffer
+    Json.parseFull(jsonData) match {
+      case Some(js) => {
+
+        val version = js.asJsonObject.get("version") match {
+          case Some(jsonValue) => jsonValue.to[Int]
+          case None => EarliestVersion
+        }
+
+        parseJsonData(version, js)
       }
+      case None => throw new AdminOperationException("The input string is not a valid JSON")
+    }
+  }
+
+  def parseJsonData(version: Int, js: JsonValue): Seq[(TopicPartition, Long)] = {
+    version match {
+      case 1 => {
+
+        js.asJsonObject.get("partitions") match {
+          case Some(partitions) => {
+
+            partitions.asJsonArray.iterator.map(_.asJsonObject).map { partitionJs =>
+              val topic = partitionJs("topic").to[String]
+              val partition = partitionJs("partition").to[Int]
+              val offset = partitionJs("offset").to[Long]
+              new TopicPartition(topic, partition) -> offset
+            }.toBuffer
+
+          }
+          case _ => throw new AdminOperationException("Missing partitions field");
+        }
+
+      }
+      case _ => throw new AdminOperationException(s"Not supported version field value $version")
     }
   }
 
