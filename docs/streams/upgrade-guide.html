@@ -139,7 +139,7 @@
     <p>
         We have added support to allow routing records dynamically to Kafka topics. More specifically, in both the lower-level <code>Topology#addSink</code> and higher-level <code>KStream#to</code> APIs, we have added variants that
         take a <code>TopicNameExtractor</code> instance instead of a specific <code>String</code> typed topic name, such that for each received record from the upstream processor, the library will dynamically determine which Kafka topic to write to
-        based on the record's key and value, as well as record context. Note that all the Kafka topics that that may possibly be used are still considered as user topics and hence required to be pre-created. In addition to that, we have modified the
+        based on the record's key and value, as well as record context. Note that all the Kafka topics that may possibly be used are still considered as user topics and hence required to be pre-created. In addition to that, we have modified the
         <code>StreamPartitioner</code> interface to add the topic name parameter since the topic name now may not be known beforehand; users who have customized implementations of this interface would need to update their code while upgrading their application
         to use Kafka Streams 2.0.0.
     </p>
