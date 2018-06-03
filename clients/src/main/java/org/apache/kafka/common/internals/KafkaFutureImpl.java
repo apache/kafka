@@ -16,14 +16,14 @@
  */
 package org.apache.kafka.common.internals;
 
+import org.apache.kafka.common.KafkaFuture;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-
-import org.apache.kafka.common.KafkaFuture;
 
 /**
  * A flexible future which supports call chaining and other asynchronous programming patterns.
@@ -66,6 +66,35 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
                 } catch (Throwable t) {
                     future.completeExceptionally(t);
                 }
+            }
+        }
+    }
+
+    private static class FutureApplicant<A, B> implements BiConsumer<A, Throwable> {
+        private final BaseFunction<A, KafkaFuture<B>> function;
+        private final KafkaFutureImpl<B> future;
+
+        FutureApplicant(BaseFunction<A, KafkaFuture<B>> function, KafkaFutureImpl<B> future) {
+            this.function = function;
+            this.future = future;
+        }
+
+        @Override
+        public void accept(A a, Throwable exception) {
+            if (exception != null) {
+                future.completeExceptionally(exception);
+            } else {
+                final KafkaFuture<B> b = function.apply(a);
+                b.whenComplete(new BiConsumer<B, Throwable>() {
+                    @Override
+                    public void accept(B result, Throwable error) {
+                        if (error != null) {
+                            future.completeExceptionally(error);
+                        } else {
+                            future.complete(result);
+                        }
+                    }
+                });
             }
         }
     }
@@ -143,6 +172,13 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
     public <R> KafkaFuture<R> thenApply(BaseFunction<T, R> function) {
         KafkaFutureImpl<R> future = new KafkaFutureImpl<>();
         addWaiter(new Applicant<>(function, future));
+        return future;
+    }
+
+    @Override
+    public <R> KafkaFuture<R> thenCompose(BaseFunction<T, KafkaFuture<R>> function) {
+        KafkaFutureImpl<R> future = new KafkaFutureImpl<>();
+        addWaiter(new FutureApplicant<>(function, future));
         return future;
     }
 
