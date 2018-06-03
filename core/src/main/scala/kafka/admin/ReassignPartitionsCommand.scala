@@ -90,7 +90,7 @@ object ReassignPartitionsCommand extends Logging {
   def verifyAssignment(zkClient: KafkaZkClient, adminClientOpt: Option[JAdminClient], jsonString: String): Unit = {
     println("Status of partition reassignment: ")
     val adminZkClient = new AdminZkClient(zkClient)
-    val (partitionsToBeReassigned, replicaAssignment) = parsePartitionReassignmentString(jsonString)
+    val (partitionsToBeReassigned, replicaAssignment) = parsePartitionReassignmentData(jsonString)
     val reassignedPartitionsStatus = checkIfPartitionReassignmentSucceeded(zkClient, partitionsToBeReassigned.toMap)
     val replicasReassignmentStatus = checkIfReplicaReassignmentSucceeded(adminClientOpt, replicaAssignment)
 
@@ -171,7 +171,7 @@ object ReassignPartitionsCommand extends Logging {
   }
 
   def generateAssignment(zkClient: KafkaZkClient, brokerListToReassign: Seq[Int], topicsToMoveJsonString: String, disableRackAware: Boolean): (Map[TopicPartition, Seq[Int]], Map[TopicPartition, Seq[Int]]) = {
-    val topicsToReassign = parseTopicsJsonString(topicsToMoveJsonString)
+    val topicsToReassign = parseTopicsData(topicsToMoveJsonString)
     val duplicateTopicsToReassign = CoreUtils.duplicates(topicsToReassign)
     if (duplicateTopicsToReassign.nonEmpty)
       throw new AdminCommandFailedException("List of topics to reassign contains duplicate entries: %s".format(duplicateTopicsToReassign.mkString(",")))
@@ -244,15 +244,13 @@ object ReassignPartitionsCommand extends Logging {
     ).asJava)
   }
 
-  def parseTopicsJsonString(jsonData: String): Seq[String] = {
+  def parseTopicsData(jsonData: String): Seq[String] = {
     Json.parseFull(jsonData) match {
       case Some(js) => {
-
         val version = js.asJsonObject.get("version") match {
           case Some(jsonValue) => jsonValue.to[Int]
           case None => EarliestVersion
         }
-
         parseTopicsData(version, js)
       }
       case None => throw new AdminOperationException("The input string is not a valid JSON")
@@ -262,7 +260,6 @@ object ReassignPartitionsCommand extends Logging {
   def parseTopicsData(version: Int, js: JsonValue): Seq[String] = {
     version match {
       case 1 => {
-
         for {
           partitionsSeq <- js.asJsonObject.get("topics").toSeq
           p <- partitionsSeq.asJsonArray.iterator
@@ -272,15 +269,13 @@ object ReassignPartitionsCommand extends Logging {
     }
   }
 
-  def parsePartitionReassignmentString(jsonData: String): (Seq[(TopicPartition, Seq[Int])], Map[TopicPartitionReplica, String]) = {
+  def parsePartitionReassignmentData(jsonData: String): (Seq[(TopicPartition, Seq[Int])], Map[TopicPartitionReplica, String]) = {
     Json.parseFull(jsonData) match {
       case Some(js) => {
-
         val version = js.asJsonObject.get("version") match {
           case Some(jsonValue) => jsonValue.to[Int]
           case None => EarliestVersion
         }
-
         parsePartitionReassignmentData(version, js)
       }
       case None => throw new AdminOperationException("The input string is not a valid JSON")
@@ -291,7 +286,6 @@ object ReassignPartitionsCommand extends Logging {
   def parsePartitionReassignmentData(version:Int, jsonData: JsonValue): (Seq[(TopicPartition, Seq[Int])], Map[TopicPartitionReplica, String]) = {
     version match {
       case 1 => {
-
         val partitionAssignment = mutable.ListBuffer.empty[(TopicPartition, Seq[Int])]
         val replicaAssignment = mutable.Map.empty[TopicPartitionReplica, String]
         for {
@@ -315,14 +309,13 @@ object ReassignPartitionsCommand extends Logging {
           }.filter(_._2 != AnyLogDir)
         }
         (partitionAssignment, replicaAssignment)
-
       }
       case _ => throw new AdminOperationException(s"Not supported version field value $version")
     }
   }
 
   def parseAndValidate(zkClient: KafkaZkClient, reassignmentJsonString: String): (Seq[(TopicPartition, Seq[Int])], Map[TopicPartitionReplica, String]) = {
-    val (partitionsToBeReassigned, replicaAssignment) = parsePartitionReassignmentString(reassignmentJsonString)
+    val (partitionsToBeReassigned, replicaAssignment) = parsePartitionReassignmentData(reassignmentJsonString)
 
     if (partitionsToBeReassigned.isEmpty)
       throw new AdminCommandFailedException("Partition reassignment data file is empty")
