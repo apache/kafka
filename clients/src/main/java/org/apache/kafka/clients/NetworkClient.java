@@ -300,6 +300,22 @@ public class NetworkClient implements KafkaClient {
         return connectionStates.connectionDelay(node.idString(), now);
     }
 
+    // Return the remaining throttling delay in milliseconds if throttling is in progress. Return 0, otherwise.
+    // This is for testing.
+    public long throttleDelayMs(Node node, long now) {
+        return connectionStates.throttleDelayMs(node.idString(), now);
+    }
+
+    /**
+     * Return the poll delay in milliseconds based on both connection and throttle delay.
+     * @param node the connection to check
+     * @param now the current time in ms
+     */
+    @Override
+    public long pollDelayMs(Node node, long now) {
+        return connectionStates.pollDelayMs(node.idString(), now);
+    }
+
     /**
      * Check if the connection of the node has failed, based on the connection state. Such connection failure are
      * usually transient and can be resumed in the next {@link #ready(org.apache.kafka.common.Node, long)} }
@@ -336,16 +352,18 @@ public class NetworkClient implements KafkaClient {
     public boolean isReady(Node node, long now) {
         // if we need to update our metadata now declare all requests unready to make metadata requests first
         // priority
-        return !metadataUpdater.isUpdateDue(now) && canSendRequest(node.idString());
+        return !metadataUpdater.isUpdateDue(now) && canSendRequest(node.idString(), now);
     }
 
     /**
      * Are we connected and ready and able to send more requests to the given connection?
      *
      * @param node The node
+     * @param now the current timestamp
      */
-    private boolean canSendRequest(String node) {
-        return connectionStates.isReady(node) && selector.isChannelReady(node) && inFlightRequests.canSendMore(node);
+    private boolean canSendRequest(String node, long now) {
+        return connectionStates.isReady(node, now) && selector.isChannelReady(node) &&
+            inFlightRequests.canSendMore(node);
     }
 
     /**
@@ -373,7 +391,7 @@ public class NetworkClient implements KafkaClient {
             // will be slightly different for some internal requests (for
             // example, ApiVersionsRequests can be sent prior to being in
             // READY state.)
-            if (!canSendRequest(nodeId))
+            if (!canSendRequest(nodeId, now))
                 throw new IllegalStateException("Attempt to send a request to node " + nodeId + " which is not ready.");
         }
         AbstractRequest.Builder<?> builder = clientRequest.requestBuilder();
@@ -513,8 +531,8 @@ public class NetworkClient implements KafkaClient {
     }
 
     @Override
-    public boolean hasReadyNodes() {
-        return connectionStates.hasReadyNodes();
+    public boolean hasReadyNodes(long now) {
+        return connectionStates.hasReadyNodes(now);
     }
 
     /**
@@ -603,11 +621,13 @@ public class NetworkClient implements KafkaClient {
         nodesNeedingApiVersionsFetch.remove(nodeId);
         switch (disconnectState.state()) {
             case AUTHENTICATION_FAILED:
-                connectionStates.authenticationFailed(nodeId, now, disconnectState.exception());
-                log.error("Connection to node {} failed authentication due to: {}", nodeId, disconnectState.exception().getMessage());
+                AuthenticationException exception = disconnectState.exception();
+                connectionStates.authenticationFailed(nodeId, now, exception);
+                metadataUpdater.handleAuthenticationFailure(exception);
+                log.error("Connection to node {} failed authentication due to: {}", nodeId, exception.getMessage());
                 break;
             case AUTHENTICATE:
-                // This warning applies to older brokers which dont provide feedback on authentication failures
+                // This warning applies to older brokers which don't provide feedback on authentication failures
                 log.warn("Connection to node {} terminated during authentication. This may indicate " +
                         "that authentication failed due to invalid credentials.", nodeId);
                 break;
@@ -625,9 +645,6 @@ public class NetworkClient implements KafkaClient {
             else if (request.header.apiKey() == ApiKeys.METADATA)
                 metadataUpdater.handleDisconnection(request.destination);
         }
-        AuthenticationException authenticationException = connectionStates.authenticationException(nodeId);
-        if (authenticationException != null)
-            metadataUpdater.handleAuthenticationFailure(authenticationException);
     }
 
     /**
@@ -674,6 +691,24 @@ public class NetworkClient implements KafkaClient {
     }
 
     /**
+     * If a response from a node includes a non-zero throttle delay and client-side throttling has been enabled for
+     * the connection to the node, throttle the connection for the specified delay.
+     *
+     * @param response the response
+     * @param apiVersion the API version of the response
+     * @param nodeId the id of the node
+     * @param now The current time
+     */
+    private void maybeThrottle(AbstractResponse response, short apiVersion, String nodeId, long now) {
+        int throttleTimeMs = response.throttleTimeMs();
+        if (throttleTimeMs > 0 && response.shouldClientThrottle(apiVersion)) {
+            connectionStates.throttle(nodeId, now + throttleTimeMs);
+            log.trace("Connection to node {} is throttled for {} ms until timestamp {}", nodeId, throttleTimeMs,
+                      now + throttleTimeMs);
+        }
+    }
+
+    /**
      * Handle any completed receives and update the response list with the responses received.
      *
      * @param responses The list of responses to update
@@ -689,7 +724,9 @@ public class NetworkClient implements KafkaClient {
                 log.trace("Completed receive from node {} for {} with correlation id {}, received {}", req.destination,
                     req.header.apiKey(), req.header.correlationId(), responseStruct);
             }
+            // If the received response includes a throttle delay, throttle the connection.
             AbstractResponse body = AbstractResponse.parseResponse(req.header.apiKey(), responseStruct);
+            maybeThrottle(body, req.header.apiVersion(), req.destination, now);
             if (req.isInternalRequest && body instanceof MetadataResponse)
                 metadataUpdater.handleCompletedMetadataResponse(req.header, now, (MetadataResponse) body);
             else if (req.isInternalRequest && body instanceof ApiVersionsResponse)
@@ -716,9 +753,7 @@ public class NetworkClient implements KafkaClient {
         NodeApiVersions nodeVersionInfo = new NodeApiVersions(apiVersionsResponse.apiVersions());
         apiVersions.update(node, nodeVersionInfo);
         this.connectionStates.ready(node);
-        if (log.isDebugEnabled()) {
-            log.debug("Recorded API versions for node {}: {}", node, nodeVersionInfo);
-        }
+        log.debug("Recorded API versions for node {}: {}", node, nodeVersionInfo);
     }
 
     /**
@@ -833,6 +868,7 @@ public class NetworkClient implements KafkaClient {
             long waitForMetadataFetch = this.metadataFetchInProgress ? requestTimeoutMs : 0;
 
             long metadataTimeout = Math.max(timeToNextMetadataUpdate, waitForMetadataFetch);
+
             if (metadataTimeout > 0) {
                 return metadataTimeout;
             }
@@ -914,7 +950,7 @@ public class NetworkClient implements KafkaClient {
         private long maybeUpdate(long now, Node node) {
             String nodeConnectionId = node.idString();
 
-            if (canSendRequest(nodeConnectionId)) {
+            if (canSendRequest(nodeConnectionId, now)) {
                 this.metadataFetchInProgress = true;
                 MetadataRequest.Builder metadataRequest;
                 if (metadata.needMetadataForAllTopics())

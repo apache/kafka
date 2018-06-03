@@ -21,7 +21,7 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness with RackAw
   @Test
   def testRackAwareReassign() {
     val rackInfo = Map(0 -> "rack1", 1 -> "rack2", 2 -> "rack2", 3 -> "rack1", 4 -> "rack3", 5 -> "rack3")
-    TestUtils.createBrokersInZk(toBrokerMetadata(rackInfo), zkUtils)
+    TestUtils.createBrokersInZk(toBrokerMetadata(rackInfo), zkClient)
 
     val numPartitions = 18
     val replicationFactor = 3

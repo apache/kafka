@@ -53,7 +53,7 @@ public class DescribeConfigsResult {
      */
     public KafkaFuture<Map<ConfigResource, Config>> all() {
         return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0])).
-                thenApply(new KafkaFuture.Function<Void, Map<ConfigResource, Config>>() {
+                thenApply(new KafkaFuture.BaseFunction<Void, Map<ConfigResource, Config>>() {
                     @Override
                     public Map<ConfigResource, Config> apply(Void v) {
                         Map<ConfigResource, Config> configs = new HashMap<>(futures.size());

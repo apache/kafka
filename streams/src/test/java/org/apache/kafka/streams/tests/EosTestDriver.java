@@ -511,7 +511,6 @@ public class EosTestDriver extends SmokeTestUtil {
     private static void verifyCnt(final Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> inputPerTopicPerPartition,
                                   final Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> cntPerTopicPerPartition) {
         final StringDeserializer stringDeserializer = new StringDeserializer();
-        final IntegerDeserializer integerDeserializer = new IntegerDeserializer();
         final LongDeserializer longDeserializer = new LongDeserializer();
 
         final HashMap<String, Long> currentSumPerKey = new HashMap<>();
@@ -552,7 +551,7 @@ public class EosTestDriver extends SmokeTestUtil {
                                                      final boolean withRepartitioning) {
         final String[] topics;
         if (withRepartitioning) {
-            topics = new String[] {"echo", "min", "sum", "repartition", "max", "min"};
+            topics = new String[] {"echo", "min", "sum", "repartition", "max", "cnt"};
         } else {
             topics = new String[] {"echo", "min", "sum"};
         }
@@ -560,7 +559,9 @@ public class EosTestDriver extends SmokeTestUtil {
         final List<TopicPartition> partitions = getAllPartitions(consumer, topics);
         consumer.assign(partitions);
         consumer.seekToEnd(partitions);
-        consumer.poll(0);
+        for (final TopicPartition tp : partitions) {
+            System.out.println(tp + " at position " + consumer.position(tp));
+        }
 
         final Properties producerProps = new Properties();
         producerProps.put(ProducerConfig.CLIENT_ID_CONFIG, "VerifyProducer");
@@ -591,6 +592,12 @@ public class EosTestDriver extends SmokeTestUtil {
         long maxWaitTime = System.currentTimeMillis() + MAX_IDLE_TIME_MS;
         while (!partitions.isEmpty() && System.currentTimeMillis() < maxWaitTime) {
             final ConsumerRecords<byte[], byte[]> records = consumer.poll(100);
+            if (records.isEmpty()) {
+                System.out.println("No data received.");
+                for (final TopicPartition tp : partitions) {
+                    System.out.println(tp + " at position " + consumer.position(tp));
+                }
+            }
             for (final ConsumerRecord<byte[], byte[]> record : records) {
                 maxWaitTime = System.currentTimeMillis() + MAX_IDLE_TIME_MS;
                 final String topic = record.topic();
@@ -604,6 +611,8 @@ public class EosTestDriver extends SmokeTestUtil {
                         throw new RuntimeException("Post transactions verification failed. Received unexpected verification record: " +
                             "Expected record <'key','value'> from one of " + partitions + " but got"
                             + " <" + key + "," + value + "> [" + record.topic() + ", " + record.partition() + "]");
+                    } else {
+                        System.out.println("Verifying " + tp + " successful.");
                     }
                 } catch (final SerializationException e) {
                     throw new RuntimeException("Post transactions verification failed. Received unexpected verification record: " +

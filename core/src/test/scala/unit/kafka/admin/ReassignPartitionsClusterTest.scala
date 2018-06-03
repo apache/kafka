@@ -19,9 +19,8 @@ import kafka.admin.ReassignPartitionsCommand._
 import kafka.common.AdminCommandFailedException
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.TestUtils._
-import kafka.utils.ZkUtils._
-import kafka.utils.{Logging, TestUtils, ZkUtils}
-import kafka.zk.ZooKeeperTestHarness
+import kafka.utils.{Logging, TestUtils}
+import kafka.zk.{ReassignPartitionsZNode, ZooKeeperTestHarness}
 import org.junit.Assert.{assertEquals, assertTrue}
 import org.junit.{After, Before, Test}
 import kafka.admin.ReplicationQuotaUtils._
@@ -34,6 +33,8 @@ import scala.collection.Map
 import scala.collection.Seq
 import scala.util.Random
 import java.io.File
+
+import org.apache.kafka.clients.producer.ProducerRecord
 
 class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
   val partitionId = 0
@@ -78,6 +79,34 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
+  def testHwAfterPartitionReassignment(): Unit = {
+    //Given a single replica on server 100
+    startBrokers(Seq(100, 101, 102))
+    adminClient = createAdminClient(servers)
+    createTopic(zkClient, topicName, Map(0 -> Seq(100)), servers = servers)
+
+    val topicPartition = new TopicPartition(topicName, 0)
+    val leaderServer = servers.find(_.config.brokerId == 100).get
+    leaderServer.replicaManager.logManager.truncateFullyAndStartAt(topicPartition, 100L, false)
+
+    val topicJson: String = s"""{"version":1,"partitions":[{"topic":"$topicName","partition":0,"replicas":[101, 102]}]}"""
+    ReassignPartitionsCommand.executeAssignment(zkClient, Some(adminClient), topicJson, NoThrottle)
+
+    val newLeaderServer = servers.find(_.config.brokerId == 101).get
+
+    TestUtils.waitUntilTrue (
+      () => newLeaderServer.replicaManager.getPartition(topicPartition).flatMap(_.leaderReplicaIfLocal).isDefined,
+      "broker 101 should be the new leader", pause = 1L
+    )
+
+    assertEquals(100, newLeaderServer.replicaManager.getReplicaOrException(topicPartition).highWatermark.messageOffset)
+    val newFollowerServer = servers.find(_.config.brokerId == 102).get
+    TestUtils.waitUntilTrue(() => newFollowerServer.replicaManager.getReplicaOrException(topicPartition).highWatermark.messageOffset == 100,
+      "partition follower's highWatermark should be 100")
+  }
+
+
+  @Test
   def shouldMoveSinglePartition(): Unit = {
     //Given a single replica on server 100
     startBrokers(Seq(100, 101))
@@ -85,7 +114,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     val partition = 0
     // Get a random log directory on broker 101
     val expectedLogDir = getRandomLogDirAssignment(101)
-    createTopic(zkUtils, topicName, Map(partition -> Seq(100)), servers = servers)
+    createTopic(zkClient, topicName, Map(partition -> Seq(100)), servers = servers)
 
     //When we move the replica on 100 to broker 101
     val topicJson: String = s"""{"version":1,"partitions":[{"topic":"$topicName","partition":0,"replicas":[101],"log_dirs":["$expectedLogDir"]}]}"""
@@ -93,7 +122,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     waitForReassignmentToComplete()
 
     //Then the replica should be on 101
-    assertEquals(Seq(101), zkUtils.getPartitionAssignmentForTopics(Seq(topicName)).get(topicName).get(partition))
+    assertEquals(Seq(101), zkClient.getPartitionAssignmentForTopics(Set(topicName)).get(topicName).get(partition))
     // The replica should be in the expected log directory on broker 101
     val replica = new TopicPartitionReplica(topicName, 0, 101)
     assertEquals(expectedLogDir, adminClient.describeReplicaLogDirs(Collections.singleton(replica)).all().get.get(replica).getCurrentReplicaLogDir)
@@ -105,7 +134,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     startBrokers(Seq(100, 101))
     adminClient = createAdminClient(servers)
     val expectedLogDir = getRandomLogDirAssignment(100)
-    createTopic(zkUtils, topicName, Map(0 -> Seq(100)), servers = servers)
+    createTopic(zkClient, topicName, Map(0 -> Seq(100)), servers = servers)
 
     // When we execute an assignment that moves an existing replica to another log directory on the same broker
     val topicJson: String = s"""{"version":1,"partitions":[{"topic":"$topicName","partition":0,"replicas":[100],"log_dirs":["$expectedLogDir"]}]}"""
@@ -121,7 +150,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     val brokers = Array(100, 101, 102)
     startBrokers(brokers)
     adminClient = createAdminClient(servers)
-    createTopic(zkUtils, topicName, Map(
+    createTopic(zkClient, topicName, Map(
       0 -> Seq(100, 101),
       1 -> Seq(100, 101),
       2 -> Seq(100, 101)
@@ -147,7 +176,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     waitForReassignmentToComplete()
 
     // Then the replicas should span all three brokers
-    val actual = zkUtils.getPartitionAssignmentForTopics(Seq(topicName))(topicName)
+    val actual = zkClient.getPartitionAssignmentForTopics(Set(topicName))(topicName)
     assertEquals(Seq(100, 101, 102), actual.values.flatten.toSeq.distinct.sorted)
     // The replica should be in the expected log directory on broker 102 and 100
     waitUntilTrue(() => {
@@ -163,7 +192,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     //Given partitions on 3 of 3 brokers
     val brokers = Array(100, 101, 102)
     startBrokers(brokers)
-    createTopic(zkUtils, topicName, Map(
+    createTopic(zkClient, topicName, Map(
       0 -> Seq(100, 101),
       1 -> Seq(101, 102),
       2 -> Seq(102, 100)
@@ -176,7 +205,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     waitForReassignmentToComplete()
 
     //Then replicas should only span the first two brokers
-    val actual = zkUtils.getPartitionAssignmentForTopics(Seq(topicName))(topicName)
+    val actual = zkClient.getPartitionAssignmentForTopics(Set(topicName))(topicName)
     assertEquals(Seq(100, 101), actual.values.flatten.toSeq.distinct.sorted)
   }
 
@@ -186,12 +215,12 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     val brokers = Array(100, 101, 102)
     startBrokers(brokers)
     adminClient = createAdminClient(servers)
-    createTopic(zkUtils, "topic1", Map(
+    createTopic(zkClient, "topic1", Map(
       0 -> Seq(100, 101),
       1 -> Seq(101, 102),
       2 -> Seq(102, 100)
     ), servers = servers)
-    createTopic(zkUtils, "topic2", Map(
+    createTopic(zkClient, "topic2", Map(
       0 -> Seq(100, 101),
       1 -> Seq(101, 102),
       2 -> Seq(102, 100)
@@ -217,7 +246,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     waitForReassignmentToComplete()
 
     //Then the proposed changes should have been made
-    val actual = zkUtils.getPartitionAssignmentForTopics(Seq("topic1", "topic2"))
+    val actual = zkClient.getPartitionAssignmentForTopics(Set("topic1", "topic2"))
     assertEquals(Seq(100, 102), actual("topic1")(0))//changed
     assertEquals(Seq(101, 102), actual("topic1")(1))
     assertEquals(Seq(100, 102), actual("topic1")(2))//changed
@@ -237,16 +266,16 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     //Given partitions on 3 of 3 brokers
     val brokers = Array(100, 101, 102)
     startBrokers(brokers)
-    createTopic(zkUtils, topicName, Map(
+    createTopic(zkClient, topicName, Map(
       0 -> Seq(100, 101)
     ), servers = servers)
 
     //Given throttle set so replication will take a certain number of secs
     val initialThrottle = Throttle(10 * 1000 * 1000, -1, () => zkUpdateDelay)
     val expectedDurationSecs = 5
-    val numMessages: Int = 500
-    val msgSize: Int = 100 * 1000
-    produceMessages(servers, topicName, numMessages, acks = 0, msgSize)
+    val numMessages = 500
+    val msgSize = 100 * 1000
+    produceMessages(topicName, numMessages, acks = 0, msgSize)
     assertEquals(expectedDurationSecs, numMessages * msgSize / initialThrottle.interBrokerLimit)
 
     //Start rebalance which will move replica on 100 -> replica on 102
@@ -264,7 +293,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     val took = System.currentTimeMillis() - start - delayMs
 
     //Check move occurred
-    val actual = zkUtils.getPartitionAssignmentForTopics(Seq(topicName))(topicName)
+    val actual = zkClient.getPartitionAssignmentForTopics(Set(topicName))(topicName)
     assertEquals(Seq(101, 102), actual.values.flatten.toSeq.distinct.sorted)
 
     //Then command should have taken longer than the throttle rate
@@ -280,13 +309,13 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     //Given 6 brokers, two topics
     val brokers = Array(100, 101, 102, 103, 104, 105)
     startBrokers(brokers)
-    createTopic(zkUtils, "topic1", Map(
+    createTopic(zkClient, "topic1", Map(
       0 -> Seq(100, 101),
       1 -> Seq(100, 101),
       2 -> Seq(103, 104) //will leave in place
     ), servers = servers)
 
-    createTopic(zkUtils, "topic2", Map(
+    createTopic(zkClient, "topic2", Map(
       0 -> Seq(104, 105),
       1 -> Seq(104, 105),
       2 -> Seq(103, 104)//will leave in place
@@ -294,8 +323,8 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
 
     //Given throttle set so replication will take a while
     val throttle: Long = 1000 * 1000
-    produceMessages(servers, "topic1", 100, acks = 0, 100 * 1000)
-    produceMessages(servers, "topic2", 100, acks = 0, 100 * 1000)
+    produceMessages("topic1", 100, acks = 0, 100 * 1000)
+    produceMessages("topic2", 100, acks = 0, 100 * 1000)
 
     //Start rebalance
     val newAssignment = Map(
@@ -325,13 +354,13 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     //Given partitions on 3 of 3 brokers
     val brokers = Array(100, 101, 102)
     startBrokers(brokers)
-    createTopic(zkUtils, topicName, Map(
+    createTopic(zkClient, topicName, Map(
       0 -> Seq(100, 101)
     ), servers = servers)
 
     //Given throttle set so replication will take at least 20 sec (we won't wait this long)
     val initialThrottle: Long = 1000 * 1000
-    produceMessages(servers, topicName, numMessages = 200, acks = 0, valueBytes = 100 * 1000)
+    produceMessages(topicName, numMessages = 200, acks = 0, valueLength = 100 * 1000)
 
     //Start rebalance
     val newAssignment = generateAssignment(zkClient, Array(101, 102), json(topicName), true)._1
@@ -367,7 +396,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     checkThrottleConfigRemovedFromZK(adminZkClient, topicName, servers)
 
     //Check move occurred
-    val actual = zkUtils.getPartitionAssignmentForTopics(Seq(topicName))(topicName)
+    val actual = zkClient.getPartitionAssignmentForTopics(Set(topicName))(topicName)
     assertEquals(Seq(101, 102), actual.values.flatten.toSeq.distinct.sorted)
   }
 
@@ -375,7 +404,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
   def shouldFailIfProposedDoesNotMatchExisting() {
     //Given a single replica on server 100
     startBrokers(Seq(100, 101))
-    createTopic(zkUtils, topicName, Map(0 -> Seq(100)), servers = servers)
+    createTopic(zkClient, topicName, Map(0 -> Seq(100)), servers = servers)
 
     //When we execute an assignment that includes an invalid partition (1:101 in this case)
     val topicJson = s"""{"version":1,"partitions":[{"topic":"$topicName","partition":1,"replicas":[101]}]}"""
@@ -386,7 +415,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
   def shouldFailIfProposedHasEmptyReplicaList() {
     //Given a single replica on server 100
     startBrokers(Seq(100, 101))
-    createTopic(zkUtils, topicName, Map(0 -> Seq(100)), servers = servers)
+    createTopic(zkClient, topicName, Map(0 -> Seq(100)), servers = servers)
 
     //When we execute an assignment that specifies an empty replica list (0: empty list in this case)
     val topicJson = s"""{"version":1,"partitions":[{"topic":"$topicName","partition":0,"replicas":[]}]}"""
@@ -397,7 +426,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
   def shouldFailIfProposedHasInvalidBrokerID() {
     //Given a single replica on server 100
     startBrokers(Seq(100, 101))
-    createTopic(zkUtils, topicName, Map(0 -> Seq(100)), servers = servers)
+    createTopic(zkClient, topicName, Map(0 -> Seq(100)), servers = servers)
 
     //When we execute an assignment that specifies an invalid brokerID (102: invalid broker ID in this case)
     val topicJson = s"""{"version":1,"partitions":[{"topic":"$topicName","partition":0,"replicas":[101, 102]}]}"""
@@ -409,7 +438,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     // Given a single replica on server 100
     startBrokers(Seq(100, 101))
     adminClient = createAdminClient(servers)
-    createTopic(zkUtils, topicName, Map(0 -> Seq(100)), servers = servers)
+    createTopic(zkClient, topicName, Map(0 -> Seq(100)), servers = servers)
 
     // When we execute an assignment that specifies an invalid log directory
     val topicJson: String = s"""{"version":1,"partitions":[{"topic":"$topicName","partition":0,"replicas":[101],"log_dirs":["invalidDir"]}]}"""
@@ -422,7 +451,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     startBrokers(Seq(100, 101))
     adminClient = createAdminClient(servers)
     val logDir = getRandomLogDirAssignment(100)
-    createTopic(zkUtils, topicName, Map(0 -> Seq(100)), servers = servers)
+    createTopic(zkClient, topicName, Map(0 -> Seq(100)), servers = servers)
 
     // When we execute an assignment whose length of replicas doesn't match that of replicas
     val topicJson: String = s"""{"version":1,"partitions":[{"topic":"$topicName","partition":0,"replicas":[101],"log_dirs":["$logDir", "$logDir"]}]}"""
@@ -436,10 +465,10 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     startBrokers(Seq(0, 1, 2, 3))
 
     //With up several small topics
-    createTopic(zkUtils, "orders", Map(0 -> List(0, 1, 2), 1 -> List(0, 1, 2)), servers)
-    createTopic(zkUtils, "payments", Map(0 -> List(0, 1), 1 -> List(0, 1)), servers)
-    createTopic(zkUtils, "deliveries", Map(0 -> List(0)), servers)
-    createTopic(zkUtils, "customers", Map(0 -> List(0), 1 -> List(1), 2 -> List(2), 3 -> List(3)), servers)
+    createTopic(zkClient, "orders", Map(0 -> List(0, 1, 2), 1 -> List(0, 1, 2)), servers)
+    createTopic(zkClient, "payments", Map(0 -> List(0, 1), 1 -> List(0, 1)), servers)
+    createTopic(zkClient, "deliveries", Map(0 -> List(0)), servers)
+    createTopic(zkClient, "customers", Map(0 -> List(0), 1 -> List(1), 2 -> List(2), 3 -> List(3)), servers)
 
     //Define a move for some of them
     val move = Map(
@@ -455,17 +484,17 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     waitForReassignmentToComplete()
 
     //Check moved replicas did move
-    assertEquals(Seq(0, 2, 3), zkUtils.getReplicasForPartition("orders", 0))
-    assertEquals(Seq(0, 1, 2), zkUtils.getReplicasForPartition("orders", 1))
-    assertEquals(Seq(1, 2), zkUtils.getReplicasForPartition("payments", 1))
-    assertEquals(Seq(1, 2), zkUtils.getReplicasForPartition("deliveries", 0))
+    assertEquals(Seq(0, 2, 3), zkClient.getReplicasForPartition(new TopicPartition("orders", 0)))
+    assertEquals(Seq(0, 1, 2), zkClient.getReplicasForPartition(new TopicPartition("orders", 1)))
+    assertEquals(Seq(1, 2), zkClient.getReplicasForPartition(new TopicPartition("payments", 1)))
+    assertEquals(Seq(1, 2), zkClient.getReplicasForPartition(new TopicPartition("deliveries", 0)))
 
     //Check untouched replicas are still there
-    assertEquals(Seq(0, 1), zkUtils.getReplicasForPartition("payments", 0))
-    assertEquals(Seq(0), zkUtils.getReplicasForPartition("customers", 0))
-    assertEquals(Seq(1), zkUtils.getReplicasForPartition("customers", 1))
-    assertEquals(Seq(2), zkUtils.getReplicasForPartition("customers", 2))
-    assertEquals(Seq(3), zkUtils.getReplicasForPartition("customers", 3))
+    assertEquals(Seq(0, 1), zkClient.getReplicasForPartition(new TopicPartition("payments", 0)))
+    assertEquals(Seq(0), zkClient.getReplicasForPartition(new TopicPartition("customers", 0)))
+    assertEquals(Seq(1), zkClient.getReplicasForPartition(new TopicPartition("customers", 1)))
+    assertEquals(Seq(2), zkClient.getReplicasForPartition(new TopicPartition("customers", 2)))
+    assertEquals(Seq(3), zkClient.getReplicasForPartition(new TopicPartition("customers", 3)))
   }
 
   /**
@@ -478,10 +507,10 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
   def shouldPerformMultipleReassignmentOperationsOverVariousTopics() {
     startBrokers(Seq(0, 1, 2, 3))
 
-    createTopic(zkUtils, "orders", Map(0 -> List(0, 1, 2), 1 -> List(0, 1, 2)), servers)
-    createTopic(zkUtils, "payments", Map(0 -> List(0, 1), 1 -> List(0, 1)), servers)
-    createTopic(zkUtils, "deliveries", Map(0 -> List(0)), servers)
-    createTopic(zkUtils, "customers", Map(0 -> List(0), 1 -> List(1), 2 -> List(2), 3 -> List(3)), servers)
+    createTopic(zkClient, "orders", Map(0 -> List(0, 1, 2), 1 -> List(0, 1, 2)), servers)
+    createTopic(zkClient, "payments", Map(0 -> List(0, 1), 1 -> List(0, 1)), servers)
+    createTopic(zkClient, "deliveries", Map(0 -> List(0)), servers)
+    createTopic(zkClient, "customers", Map(0 -> List(0), 1 -> List(1), 2 -> List(2), 3 -> List(3)), servers)
 
     val firstMove = Map(
       new TopicPartition("orders", 0) -> Seq(0, 2, 3), //moves
@@ -495,17 +524,17 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     waitForReassignmentToComplete(pause = 1L)
 
     // Check moved replicas did move
-    assertEquals(Seq(0, 2, 3), zkUtils.getReplicasForPartition("orders", 0))
-    assertEquals(Seq(0, 1, 2), zkUtils.getReplicasForPartition("orders", 1))
-    assertEquals(Seq(1, 2), zkUtils.getReplicasForPartition("payments", 1))
-    assertEquals(Seq(1, 2), zkUtils.getReplicasForPartition("deliveries", 0))
+    assertEquals(Seq(0, 2, 3), zkClient.getReplicasForPartition(new TopicPartition("orders", 0)))
+    assertEquals(Seq(0, 1, 2), zkClient.getReplicasForPartition(new TopicPartition("orders", 1)))
+    assertEquals(Seq(1, 2), zkClient.getReplicasForPartition(new TopicPartition("payments", 1)))
+    assertEquals(Seq(1, 2), zkClient.getReplicasForPartition(new TopicPartition("deliveries", 0)))
 
     // Check untouched replicas are still there
-    assertEquals(Seq(0, 1), zkUtils.getReplicasForPartition("payments", 0))
-    assertEquals(Seq(0), zkUtils.getReplicasForPartition("customers", 0))
-    assertEquals(Seq(1), zkUtils.getReplicasForPartition("customers", 1))
-    assertEquals(Seq(2), zkUtils.getReplicasForPartition("customers", 2))
-    assertEquals(Seq(3), zkUtils.getReplicasForPartition("customers", 3))
+    assertEquals(Seq(0, 1), zkClient.getReplicasForPartition(new TopicPartition("payments", 0)))
+    assertEquals(Seq(0), zkClient.getReplicasForPartition(new TopicPartition("customers", 0)))
+    assertEquals(Seq(1), zkClient.getReplicasForPartition(new TopicPartition("customers", 1)))
+    assertEquals(Seq(2), zkClient.getReplicasForPartition(new TopicPartition("customers", 2)))
+    assertEquals(Seq(3), zkClient.getReplicasForPartition(new TopicPartition("customers", 3)))
 
     // Define a move for some of them
     val secondMove = Map(
@@ -520,17 +549,17 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     waitForReassignmentToComplete(pause = 1L)
 
     // Check moved replicas did move
-    assertEquals(Seq(0, 2, 3), zkUtils.getReplicasForPartition("orders", 0))
-    assertEquals(Seq(3, 1, 2), zkUtils.getReplicasForPartition("orders", 1))
-    assertEquals(Seq(2, 1), zkUtils.getReplicasForPartition("payments", 1))
-    assertEquals(Seq(1, 2, 3), zkUtils.getReplicasForPartition("deliveries", 0))
+    assertEquals(Seq(0, 2, 3), zkClient.getReplicasForPartition(new TopicPartition("orders", 0)))
+    assertEquals(Seq(3, 1, 2), zkClient.getReplicasForPartition(new TopicPartition("orders", 1)))
+    assertEquals(Seq(2, 1), zkClient.getReplicasForPartition(new TopicPartition("payments", 1)))
+    assertEquals(Seq(1, 2, 3), zkClient.getReplicasForPartition(new TopicPartition("deliveries", 0)))
 
     //Check untouched replicas are still there
-    assertEquals(Seq(0, 1), zkUtils.getReplicasForPartition("payments", 0))
-    assertEquals(Seq(0), zkUtils.getReplicasForPartition("customers", 0))
-    assertEquals(Seq(1), zkUtils.getReplicasForPartition("customers", 1))
-    assertEquals(Seq(2), zkUtils.getReplicasForPartition("customers", 2))
-    assertEquals(Seq(3), zkUtils.getReplicasForPartition("customers", 3))
+    assertEquals(Seq(0, 1), zkClient.getReplicasForPartition(new TopicPartition("payments", 0)))
+    assertEquals(Seq(0), zkClient.getReplicasForPartition(new TopicPartition("customers", 0)))
+    assertEquals(Seq(1), zkClient.getReplicasForPartition(new TopicPartition("customers", 1)))
+    assertEquals(Seq(2), zkClient.getReplicasForPartition(new TopicPartition("customers", 2)))
+    assertEquals(Seq(3), zkClient.getReplicasForPartition(new TopicPartition("customers", 3)))
 
     // We set the znode and then continuously attempt to set it again to exercise the case where the znode is set
     // immediately after deletion (i.e. before we set the watcher again)
@@ -554,17 +583,17 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     waitForReassignmentToComplete(pause = 1L)
 
     // Check moved replicas for thirdMove and fourthMove
-    assertEquals(Seq(1, 2, 3), zkUtils.getReplicasForPartition("orders", 0))
-    assertEquals(Seq(2, 3), zkUtils.getReplicasForPartition("payments", 1))
+    assertEquals(Seq(1, 2, 3), zkClient.getReplicasForPartition(new TopicPartition("orders", 0)))
+    assertEquals(Seq(2, 3), zkClient.getReplicasForPartition(new TopicPartition("payments", 1)))
 
     //Check untouched replicas are still there
-    assertEquals(Seq(3, 1, 2), zkUtils.getReplicasForPartition("orders", 1))
-    assertEquals(Seq(1, 2, 3), zkUtils.getReplicasForPartition("deliveries", 0))
-    assertEquals(Seq(0, 1), zkUtils.getReplicasForPartition("payments", 0))
-    assertEquals(Seq(0), zkUtils.getReplicasForPartition("customers", 0))
-    assertEquals(Seq(1), zkUtils.getReplicasForPartition("customers", 1))
-    assertEquals(Seq(2), zkUtils.getReplicasForPartition("customers", 2))
-    assertEquals(Seq(3), zkUtils.getReplicasForPartition("customers", 3))
+    assertEquals(Seq(3, 1, 2), zkClient.getReplicasForPartition(new TopicPartition("orders", 1)))
+    assertEquals(Seq(1, 2, 3), zkClient.getReplicasForPartition(new TopicPartition("deliveries", 0)))
+    assertEquals(Seq(0, 1), zkClient.getReplicasForPartition(new TopicPartition("payments", 0)))
+    assertEquals(Seq(0), zkClient.getReplicasForPartition(new TopicPartition("customers", 0)))
+    assertEquals(Seq(1), zkClient.getReplicasForPartition(new TopicPartition("customers", 1)))
+    assertEquals(Seq(2), zkClient.getReplicasForPartition(new TopicPartition("customers", 2)))
+    assertEquals(Seq(3), zkClient.getReplicasForPartition(new TopicPartition("customers", 3)))
   }
 
   /**
@@ -574,7 +603,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
   @Test
   def shouldTriggerReassignmentOnControllerStartup(): Unit = {
     startBrokers(Seq(0, 1, 2))
-    createTopic(zkUtils, "orders", Map(0 -> List(0, 1), 1 -> List(1, 2)), servers)
+    createTopic(zkClient, "orders", Map(0 -> List(0, 1), 1 -> List(1, 2)), servers)
     servers.foreach(_.shutdown())
 
     val firstMove = Map(
@@ -589,18 +618,24 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     servers.foreach(_.startup())
     waitForReassignmentToComplete()
 
-    assertEquals(Seq(2, 1), zkUtils.getReplicasForPartition("orders", 0))
-    assertEquals(Seq(1, 2), zkUtils.getReplicasForPartition("orders", 1))
-    assertEquals(Seq.empty, zkUtils.getReplicasForPartition("customers", 0))
+    assertEquals(Seq(2, 1), zkClient.getReplicasForPartition(new TopicPartition("orders", 0)))
+    assertEquals(Seq(1, 2), zkClient.getReplicasForPartition(new TopicPartition("orders", 1)))
+    assertEquals(Seq.empty, zkClient.getReplicasForPartition(new TopicPartition("customers", 0)))
   }
 
   def waitForReassignmentToComplete(pause: Long = 100L) {
-    waitUntilTrue(() => !zkUtils.pathExists(ReassignPartitionsPath),
-      s"Znode ${ZkUtils.ReassignPartitionsPath} wasn't deleted", pause = pause)
+    waitUntilTrue(() => !zkClient.reassignPartitionsInProgress,
+      s"Znode ${ReassignPartitionsZNode.path} wasn't deleted", pause = pause)
   }
 
   def json(topic: String*): String = {
     val topicStr = topic.map { t => "{\"topic\": \"" + t + "\"}" }.mkString(",")
     s"""{"topics": [$topicStr],"version":1}"""
+  }
+
+  private def produceMessages(topic: String, numMessages: Int, acks: Int, valueLength: Int): Unit = {
+    val records = (0 until numMessages).map(_ => new ProducerRecord[Array[Byte], Array[Byte]](topic,
+      new Array[Byte](valueLength)))
+    TestUtils.produceMessages(servers, records, acks)
   }
 }

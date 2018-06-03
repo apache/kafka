@@ -40,19 +40,29 @@ public class SyncGroupResponse extends AbstractResponse {
             ERROR_CODE,
             new Field(MEMBER_ASSIGNMENT_KEY_NAME, BYTES));
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema SYNC_GROUP_RESPONSE_V2 = SYNC_GROUP_RESPONSE_V1;
+
     public static Schema[] schemaVersions() {
-        return new Schema[] {SYNC_GROUP_RESPONSE_V0, SYNC_GROUP_RESPONSE_V1};
+        return new Schema[] {SYNC_GROUP_RESPONSE_V0, SYNC_GROUP_RESPONSE_V1,
+            SYNC_GROUP_RESPONSE_V2};
     }
 
     /**
      * Possible error codes:
      *
-     * GROUP_COORDINATOR_NOT_AVAILABLE (15)
+     * COORDINATOR_NOT_AVAILABLE (15)
      * NOT_COORDINATOR (16)
      * ILLEGAL_GENERATION (22)
      * UNKNOWN_MEMBER_ID (25)
      * REBALANCE_IN_PROGRESS (27)
      * GROUP_AUTHORIZATION_FAILED (30)
+     *
+     * NOTE: Currently the coordinator returns REBALANCE_IN_PROGRESS while the coordinator is
+     * loading. On the next protocol bump, we should consider using COORDINATOR_LOAD_IN_PROGRESS
+     * to be consistent with the other APIs.
      */
 
     private final Errors error;
@@ -75,6 +85,7 @@ public class SyncGroupResponse extends AbstractResponse {
         this.memberState = struct.getBytes(MEMBER_ASSIGNMENT_KEY_NAME);
     }
 
+    @Override
     public int throttleTimeMs() {
         return throttleTimeMs;
     }
@@ -105,4 +116,8 @@ public class SyncGroupResponse extends AbstractResponse {
         return new SyncGroupResponse(ApiKeys.SYNC_GROUP.parseResponse(version, buffer));
     }
 
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 2;
+    }
 }

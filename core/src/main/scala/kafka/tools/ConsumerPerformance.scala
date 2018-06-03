@@ -65,7 +65,7 @@ object ConsumerPerformance extends LazyLogging {
       val consumer = new KafkaConsumer[Array[Byte], Array[Byte]](config.props)
       consumer.subscribe(Collections.singletonList(config.topic))
       startMs = System.currentTimeMillis
-      consume(consumer, List(config.topic), config.numMessages, 1000, config, totalMessagesRead, totalBytesRead, joinGroupTimeInMs, startMs)
+      consume(consumer, List(config.topic), config.numMessages, config.recordFetchTimeoutMs, config, totalMessagesRead, totalBytesRead, joinGroupTimeInMs, startMs)
       endMs = System.currentTimeMillis
 
       if (config.printMetrics) {
@@ -157,8 +157,6 @@ object ConsumerPerformance extends LazyLogging {
       def onPartitionsRevoked(partitions: util.Collection[TopicPartition]) {
         joinStart = System.currentTimeMillis
       }})
-    consumer.poll(0)
-    consumer.seekToBeginning(Collections.emptyList())
 
     // Now start the benchmark
     val startMs = System.currentTimeMillis
@@ -190,6 +188,9 @@ object ConsumerPerformance extends LazyLogging {
       }
     }
 
+    if (messagesRead < count)
+      println(s"WARNING: Exiting before consuming the expected number of messages: timeout ($timeout ms) exceeded. " +
+        "You can use the --timeout option to increase the timeout.")
     totalMessagesRead.set(messagesRead)
     totalBytesRead.set(bytesRead)
   }
@@ -304,6 +305,11 @@ object ConsumerPerformance extends LazyLogging {
     val printMetricsOpt = parser.accepts("print-metrics", "Print out the metrics. This only applies to new consumer.")
     val showDetailedStatsOpt = parser.accepts("show-detailed-stats", "If set, stats are reported for each reporting " +
       "interval as configured by reporting-interval")
+    val recordFetchTimeoutOpt = parser.accepts("timeout", "The maximum allowed time in milliseconds between returned records.")
+      .withOptionalArg()
+      .describedAs("milliseconds")
+      .ofType(classOf[Long])
+      .defaultsTo(10000)
 
     val options = parser.parse(args: _*)
 
@@ -320,8 +326,8 @@ object ConsumerPerformance extends LazyLogging {
       CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServersOpt)
 
       if (options.has(newConsumerOpt)) {
-        Console.err.println("The --new-consumer option is deprecated and will be removed in a future major release." +
-          "The new consumer is used by default if the --bootstrap-server option is provided.")
+        Console.err.println("The --new-consumer option is deprecated and will be removed in a future major release. " +
+          "The new consumer is used by default if the --broker-list option is provided.")
       }
 
       import org.apache.kafka.clients.consumer.ConsumerConfig
@@ -356,6 +362,7 @@ object ConsumerPerformance extends LazyLogging {
     val showDetailedStats = options.has(showDetailedStatsOpt)
     val dateFormat = new SimpleDateFormat(options.valueOf(dateFormatOpt))
     val hideHeader = options.has(hideHeaderOpt)
+    val recordFetchTimeoutMs = options.valueOf(recordFetchTimeoutOpt).longValue()
   }
 
   class ConsumerPerfThread(threadId: Int,

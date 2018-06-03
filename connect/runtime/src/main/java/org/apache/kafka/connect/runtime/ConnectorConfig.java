@@ -37,6 +37,8 @@ import java.util.List;
 import java.util.Map;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
+import static org.apache.kafka.common.config.ConfigDef.NonEmptyStringWithoutControlChars.nonEmptyStringWithoutControlChars;
+import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 
 /**
  * <p>
@@ -72,6 +74,13 @@ public class ConnectorConfig extends AbstractConfig {
     public static final String VALUE_CONVERTER_CLASS_DOC = WorkerConfig.VALUE_CONVERTER_CLASS_DOC;
     public static final String VALUE_CONVERTER_CLASS_DISPLAY = "Value converter class";
 
+    public static final String HEADER_CONVERTER_CLASS_CONFIG = WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG;
+    public static final String HEADER_CONVERTER_CLASS_DOC = WorkerConfig.HEADER_CONVERTER_CLASS_DOC;
+    public static final String HEADER_CONVERTER_CLASS_DISPLAY = "Header converter class";
+    // The Connector config should not have a default for the header converter, since the absence of a config property means that
+    // the worker config settings should be used. Thus, we set the default to null here.
+    public static final String HEADER_CONVERTER_CLASS_DEFAULT = null;
+
     public static final String TASKS_MAX_CONFIG = "tasks.max";
     private static final String TASKS_MAX_DOC = "Maximum number of tasks to use for this connector.";
     public static final int TASKS_MAX_DEFAULT = 1;
@@ -83,34 +92,53 @@ public class ConnectorConfig extends AbstractConfig {
     private static final String TRANSFORMS_DOC = "Aliases for the transformations to be applied to records.";
     private static final String TRANSFORMS_DISPLAY = "Transforms";
 
+    public static final String CONFIG_RELOAD_ACTION_CONFIG = "config.action.reload";
+    private static final String CONFIG_RELOAD_ACTION_DOC =
+            "The action that Connect should take on the connector when changes in external " +
+            "configuration providers result in a change in the connector's configuration properties. " +
+            "A value of 'none' indicates that Connect will do nothing. " +
+            "A value of 'restart' indicates that Connect should restart/reload the connector with the " +
+            "updated configuration properties." +
+            "The restart may actually be scheduled in the future if the external configuration provider " +
+            "indicates that a configuration value will expire in the future.";
+
+    private static final String CONFIG_RELOAD_ACTION_DISPLAY = "Reload Action";
+    public static final String CONFIG_RELOAD_ACTION_NONE = Herder.ConfigReloadAction.NONE.toString();
+    public static final String CONFIG_RELOAD_ACTION_RESTART = Herder.ConfigReloadAction.RESTART.toString();
+
     private final EnrichedConnectorConfig enrichedConfig;
     private static class EnrichedConnectorConfig extends AbstractConfig {
         EnrichedConnectorConfig(ConfigDef configDef, Map<String, String> props) {
             super(configDef, props);
         }
 
+        @Override
         public Object get(String key) {
             return super.get(key);
         }
     }
 
     public static ConfigDef configDef() {
+        int orderInGroup = 0;
         return new ConfigDef()
-                .define(NAME_CONFIG, Type.STRING, Importance.HIGH, NAME_DOC, COMMON_GROUP, 1, Width.MEDIUM, NAME_DISPLAY)
-                .define(CONNECTOR_CLASS_CONFIG, Type.STRING, Importance.HIGH, CONNECTOR_CLASS_DOC, COMMON_GROUP, 2, Width.LONG, CONNECTOR_CLASS_DISPLAY)
-                .define(TASKS_MAX_CONFIG, Type.INT, TASKS_MAX_DEFAULT, atLeast(TASKS_MIN_CONFIG), Importance.HIGH, TASKS_MAX_DOC, COMMON_GROUP, 3, Width.SHORT, TASK_MAX_DISPLAY)
-                .define(KEY_CONVERTER_CLASS_CONFIG, Type.CLASS, null, Importance.LOW, KEY_CONVERTER_CLASS_DOC, COMMON_GROUP, 4, Width.SHORT, KEY_CONVERTER_CLASS_DISPLAY)
-                .define(VALUE_CONVERTER_CLASS_CONFIG, Type.CLASS, null, Importance.LOW, VALUE_CONVERTER_CLASS_DOC, COMMON_GROUP, 5, Width.SHORT, VALUE_CONVERTER_CLASS_DISPLAY)
-                .define(TRANSFORMS_CONFIG, Type.LIST, null, new ConfigDef.Validator() {
+                .define(NAME_CONFIG, Type.STRING, ConfigDef.NO_DEFAULT_VALUE, nonEmptyStringWithoutControlChars(), Importance.HIGH, NAME_DOC, COMMON_GROUP, ++orderInGroup, Width.MEDIUM, NAME_DISPLAY)
+                .define(CONNECTOR_CLASS_CONFIG, Type.STRING, Importance.HIGH, CONNECTOR_CLASS_DOC, COMMON_GROUP, ++orderInGroup, Width.LONG, CONNECTOR_CLASS_DISPLAY)
+                .define(TASKS_MAX_CONFIG, Type.INT, TASKS_MAX_DEFAULT, atLeast(TASKS_MIN_CONFIG), Importance.HIGH, TASKS_MAX_DOC, COMMON_GROUP, ++orderInGroup, Width.SHORT, TASK_MAX_DISPLAY)
+                .define(KEY_CONVERTER_CLASS_CONFIG, Type.CLASS, null, Importance.LOW, KEY_CONVERTER_CLASS_DOC, COMMON_GROUP, ++orderInGroup, Width.SHORT, KEY_CONVERTER_CLASS_DISPLAY)
+                .define(VALUE_CONVERTER_CLASS_CONFIG, Type.CLASS, null, Importance.LOW, VALUE_CONVERTER_CLASS_DOC, COMMON_GROUP, ++orderInGroup, Width.SHORT, VALUE_CONVERTER_CLASS_DISPLAY)
+                .define(HEADER_CONVERTER_CLASS_CONFIG, Type.CLASS, HEADER_CONVERTER_CLASS_DEFAULT, Importance.LOW, HEADER_CONVERTER_CLASS_DOC, COMMON_GROUP, ++orderInGroup, Width.SHORT, HEADER_CONVERTER_CLASS_DISPLAY)
+                .define(TRANSFORMS_CONFIG, Type.LIST, Collections.emptyList(), ConfigDef.CompositeValidator.of(new ConfigDef.NonNullValidator(), new ConfigDef.Validator() {
                     @Override
                     public void ensureValid(String name, Object value) {
-                        if (value == null) return;
                         final List<String> transformAliases = (List<String>) value;
                         if (transformAliases.size() > new HashSet<>(transformAliases).size()) {
                             throw new ConfigException(name, value, "Duplicate alias provided.");
                         }
                     }
-                }, Importance.LOW, TRANSFORMS_DOC, TRANSFORMS_GROUP, 6, Width.LONG, TRANSFORMS_DISPLAY);
+                }), Importance.LOW, TRANSFORMS_DOC, TRANSFORMS_GROUP, ++orderInGroup, Width.LONG, TRANSFORMS_DISPLAY)
+                .define(CONFIG_RELOAD_ACTION_CONFIG, Type.STRING, CONFIG_RELOAD_ACTION_RESTART,
+                        in(CONFIG_RELOAD_ACTION_NONE, CONFIG_RELOAD_ACTION_RESTART), Importance.LOW,
+                        CONFIG_RELOAD_ACTION_DOC, COMMON_GROUP, ++orderInGroup, Width.MEDIUM, CONFIG_RELOAD_ACTION_DISPLAY);
     }
 
     public ConnectorConfig(Plugins plugins) {
@@ -139,9 +167,6 @@ public class ConnectorConfig extends AbstractConfig {
      */
     public <R extends ConnectRecord<R>> List<Transformation<R>> transformations() {
         final List<String> transformAliases = getList(TRANSFORMS_CONFIG);
-        if (transformAliases == null || transformAliases.isEmpty()) {
-            return Collections.emptyList();
-        }
 
         final List<Transformation<R>> transformations = new ArrayList<>(transformAliases.size());
         for (String alias : transformAliases) {
@@ -220,11 +245,22 @@ public class ConnectorConfig extends AbstractConfig {
         if (transformationCls == null || !Transformation.class.isAssignableFrom(transformationCls)) {
             throw new ConfigException(key, String.valueOf(transformationCls), "Not a Transformation");
         }
+        Transformation transformation;
         try {
-            return (transformationCls.asSubclass(Transformation.class).newInstance()).config();
+            transformation = transformationCls.asSubclass(Transformation.class).newInstance();
         } catch (Exception e) {
             throw new ConfigException(key, String.valueOf(transformationCls), "Error getting config definition from Transformation: " + e.getMessage());
         }
+        ConfigDef configDef = transformation.config();
+        if (null == configDef) {
+            throw new ConnectException(
+                String.format(
+                    "%s.config() must return a ConfigDef that is not null.",
+                    transformationCls.getName()
+                )
+            );
+        }
+        return configDef;
     }
 
     /**

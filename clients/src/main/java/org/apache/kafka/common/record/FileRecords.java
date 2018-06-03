@@ -19,6 +19,7 @@ package org.apache.kafka.common.record;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.record.FileLogInputStream.FileChannelRecordBatch;
+import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 
@@ -132,9 +133,9 @@ public class FileRecords extends AbstractRecords implements Closeable {
      */
     public FileRecords read(int position, int size) throws IOException {
         if (position < 0)
-            throw new IllegalArgumentException("Invalid position: " + position);
+            throw new IllegalArgumentException("Invalid position: " + position + " in read from " + file);
         if (size < 0)
-            throw new IllegalArgumentException("Invalid size: " + size);
+            throw new IllegalArgumentException("Invalid size: " + size + " in read from " + file);
 
         int end = this.start + position + size;
         // handle integer overflow or if end is beyond the end of the file
@@ -228,7 +229,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
     public int truncateTo(int targetSize) throws IOException {
         int originalSize = sizeInBytes();
         if (targetSize > originalSize || targetSize < 0)
-            throw new KafkaException("Attempt to truncate log segment to " + targetSize + " bytes failed, " +
+            throw new KafkaException("Attempt to truncate log segment " + file + " to " + targetSize + " bytes failed, " +
                     " size of this log segment is " + originalSize + " bytes.");
         if (targetSize < (int) channel.size()) {
             channel.truncate(targetSize);
@@ -239,8 +240,8 @@ public class FileRecords extends AbstractRecords implements Closeable {
 
     @Override
     public ConvertedRecords<? extends Records> downConvert(byte toMagic, long firstOffset, Time time) {
-        ConvertedRecords<MemoryRecords> convertedRecords = downConvert(batches, toMagic, firstOffset, time);
-        if (convertedRecords.recordsProcessingStats().numRecordsConverted() == 0) {
+        ConvertedRecords<MemoryRecords> convertedRecords = RecordsUtil.downConvert(batches, toMagic, firstOffset, time);
+        if (convertedRecords.recordConversionStats().numRecordsConverted() == 0) {
             // This indicates that the message is too large, which means that the buffer is not large
             // enough to hold a full record batch. We just return all the bytes in this instance.
             // Even though the record batch does not have the right format version, we expect old clients
@@ -248,7 +249,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
             // are not enough available bytes in the response to read it fully. Note that this is
             // only possible prior to KIP-74, after which the broker was changed to always return at least
             // one full record batch, even if it requires exceeding the max fetch size requested by the client.
-            return new ConvertedRecords<>(this, RecordsProcessingStats.EMPTY);
+            return new ConvertedRecords<>(this, RecordConversionStats.EMPTY);
         } else {
             return convertedRecords;
         }
@@ -347,6 +348,14 @@ public class FileRecords extends AbstractRecords implements Closeable {
         return batches;
     }
 
+    @Override
+    public String toString() {
+        return "FileRecords(file= " + file +
+                ", start=" + start +
+                ", end=" + end +
+                ")";
+    }
+
     private Iterable<FileChannelRecordBatch> batchesFrom(final int start) {
         return new Iterable<FileChannelRecordBatch>() {
             @Override
@@ -356,13 +365,18 @@ public class FileRecords extends AbstractRecords implements Closeable {
         };
     }
 
-    private Iterator<FileChannelRecordBatch> batchIterator(int start) {
+    @Override
+    public AbstractIterator<FileChannelRecordBatch> batchIterator() {
+        return batchIterator(start);
+    }
+
+    private AbstractIterator<FileChannelRecordBatch> batchIterator(int start) {
         final int end;
         if (isSlice)
             end = this.end;
         else
             end = this.sizeInBytes();
-        FileLogInputStream inputStream = new FileLogInputStream(channel, start, end);
+        FileLogInputStream inputStream = new FileLogInputStream(this, start, end);
         return new RecordBatchIterator<>(inputStream);
     }
 
@@ -502,5 +516,4 @@ public class FileRecords extends AbstractRecords implements Closeable {
                     ')';
         }
     }
-
 }

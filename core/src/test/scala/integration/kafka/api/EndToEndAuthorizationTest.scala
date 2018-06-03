@@ -61,12 +61,13 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
 
   override def configureSecurityBeforeServersStart() {
     AclCommand.main(clusterAclArgs)
+    AclCommand.main(topicBrokerReadAclArgs)
   }
 
   val numRecords = 1
   val group = "group"
   val topic = "e2etopic"
-  val topicWildcard = "*"
+  val wildcard = "*"
   val part = 0
   val tp = new TopicPartition(topic, part)
   val topicAndPartition = TopicAndPartition(topic, part)
@@ -78,6 +79,8 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   val topicResource = new Resource(Topic, topic)
   val groupResource = new Resource(Group, group)
   val clusterResource = Resource.ClusterResource
+  val wildcardTopicResource = new Resource(Topic, wildcard)
+  val wildcardGroupResource = new Resource(Group, wildcard)
 
   // Arguments to AclCommand to set ACLs. There are three definitions here:
   // 1- Provides read and write access to topic
@@ -92,7 +95,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   def topicBrokerReadAclArgs: Array[String] = Array("--authorizer-properties",
                                                     s"zookeeper.connect=$zkConnect",
                                                     s"--add",
-                                                    s"--topic=$topicWildcard",
+                                                    s"--topic=$wildcard",
                                                     s"--operation=Read",
                                                     s"--allow-principal=$kafkaPrincipalType:$kafkaPrincipal")
   def produceAclArgs: Array[String] = Array("--authorizer-properties",
@@ -134,6 +137,15 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
                                           s"--group=$group",
                                           s"--operation=Read",
                                           s"--allow-principal=$kafkaPrincipalType:$clientPrincipal")
+  def produceConsumeWildcardAclArgs: Array[String] = Array("--authorizer-properties",
+                                            s"zookeeper.connect=$zkConnect",
+                                            s"--add",
+                                            s"--topic=$wildcard",
+                                            s"--group=$wildcard",
+                                            s"--consumer",
+                                            s"--producer",
+                                            s"--allow-principal=$kafkaPrincipalType:$clientPrincipal")
+
   def ClusterActionAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, kafkaPrincipal), Allow, Acl.WildCardHost, ClusterAction))
   def TopicBrokerReadAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, kafkaPrincipal), Allow, Acl.WildCardHost, Read))
   def GroupReadAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, clientPrincipal), Allow, Acl.WildCardHost, Read))
@@ -156,12 +168,12 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   @Before
   override def setUp() {
     super.setUp()
-    AclCommand.main(topicBrokerReadAclArgs)
     servers.foreach { s =>
+      TestUtils.waitAndVerifyAcls(ClusterActionAcl, s.apis.authorizer.get, Resource.ClusterResource)
       TestUtils.waitAndVerifyAcls(TopicBrokerReadAcl, s.apis.authorizer.get, new Resource(Topic, "*"))
     }
     // create the test topic with all the brokers as replicas
-    TestUtils.createTopic(zkUtils, topic, 1, 3, this.servers)
+    createTopic(topic, 1, 3)
   }
 
   override def createNewProducer: KafkaProducer[Array[Byte], Array[Byte]] = {
@@ -172,7 +184,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
                                 saslProperties = this.clientSaslProperties,
                                 props = Some(producerConfig))
   }
-  
+
   /**
     * Closes MiniKDC last when tearing down.
     */
@@ -198,6 +210,22 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     setAclsAndProduce()
     consumers.head.subscribe(List(topic).asJava)
     consumeRecords(this.consumers.head, numRecords)
+  }
+
+  @Test
+  def testProduceConsumeWithWildcardAcls(): Unit = {
+    setWildcardResourceAcls()
+    sendRecords(numRecords, tp)
+    consumers.head.subscribe(List(topic).asJava)
+    consumeRecords(this.consumers.head, numRecords)
+  }
+
+  private def setWildcardResourceAcls() {
+    AclCommand.main(produceConsumeWildcardAclArgs)
+    servers.foreach { s =>
+      TestUtils.waitAndVerifyAcls(TopicReadAcl ++ TopicWriteAcl ++ TopicDescribeAcl ++ TopicBrokerReadAcl, s.apis.authorizer.get, wildcardTopicResource)
+      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.apis.authorizer.get, wildcardGroupResource)
+    }
   }
 
   protected def setAclsAndProduce() {

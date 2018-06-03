@@ -22,13 +22,17 @@ import kafka.network.RequestChannel
 import org.apache.kafka.common.MetricName
 import org.apache.kafka.common.metrics._
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.server.quota.ClientQuotaCallback
+
+import scala.collection.JavaConverters._
 
 
 class ClientRequestQuotaManager(private val config: ClientQuotaManagerConfig,
                                 private val metrics: Metrics,
                                 private val time: Time,
-                                threadNamePrefix: String)
-                                extends ClientQuotaManager(config, metrics, QuotaType.Request, time, threadNamePrefix) {
+                                threadNamePrefix: String,
+                                quotaCallback: Option[ClientQuotaCallback])
+                                extends ClientQuotaManager(config, metrics, QuotaType.Request, time, threadNamePrefix, quotaCallback) {
   val maxThrottleTimeMs = TimeUnit.SECONDS.toMillis(this.config.quotaWindowSizeSeconds)
   def exemptSensor = getOrCreateSensor(exemptSensorName, exemptMetricName)
 
@@ -36,22 +40,25 @@ class ClientRequestQuotaManager(private val config: ClientQuotaManagerConfig,
     exemptSensor.record(value)
   }
 
-  def maybeRecordAndThrottle(request: RequestChannel.Request, sendResponseCallback: Int => Unit): Unit = {
+  /**
+    * Records that a user/clientId changed request processing time being throttled. If quota has been violated, return
+    * throttle time in milliseconds. Throttle time calculation may be overridden by sub-classes.
+    * @param request client request
+    * @return Number of milliseconds to throttle in case of quota violation. Zero otherwise
+    */
+  def maybeRecordAndGetThrottleTimeMs(request: RequestChannel.Request): Int = {
     if (request.apiRemoteCompleteTimeNanos == -1) {
       // When this callback is triggered, the remote API call has completed
       request.apiRemoteCompleteTimeNanos = time.nanoseconds
     }
 
     if (quotasEnabled) {
-      val quotaSensors = getOrCreateQuotaSensors(request.session.sanitizedUser, request.header.clientId)
-      request.recordNetworkThreadTimeCallback = Some(timeNanos => recordNoThrottle(quotaSensors, nanosToPercentage(timeNanos)))
-
-      recordAndThrottleOnQuotaViolation(
-          quotaSensors,
-          nanosToPercentage(request.requestThreadTimeNanos),
-          sendResponseCallback)
+      request.recordNetworkThreadTimeCallback = Some(timeNanos => recordNoThrottle(
+        getOrCreateQuotaSensors(request.session, request.header.clientId), nanosToPercentage(timeNanos)))
+      recordAndGetThrottleTimeMs(request.session, request.header.clientId,
+        nanosToPercentage(request.requestThreadTimeNanos), time.milliseconds())
     } else {
-      sendResponseCallback(0)
+      0
     }
   }
 
@@ -62,15 +69,14 @@ class ClientRequestQuotaManager(private val config: ClientQuotaManagerConfig,
     }
   }
 
-  override protected def throttleTime(clientMetric: KafkaMetric, config: MetricConfig): Long = {
-    math.min(super.throttleTime(clientMetric, config), maxThrottleTimeMs)
+  override protected def throttleTime(clientMetric: KafkaMetric): Long = {
+    math.min(super.throttleTime(clientMetric), maxThrottleTimeMs)
   }
 
-  override protected def clientRateMetricName(sanitizedUser: String, clientId: String): MetricName = {
+  override protected def clientRateMetricName(quotaMetricTags: Map[String, String]): MetricName = {
     metrics.metricName("request-time", QuotaType.Request.toString,
-                   "Tracking request-time per user/client-id",
-                   "user", sanitizedUser,
-                   "client-id", clientId)
+      "Tracking request-time per user/client-id",
+      quotaMetricTags.asJava)
   }
 
   private def exemptMetricName: MetricName = {

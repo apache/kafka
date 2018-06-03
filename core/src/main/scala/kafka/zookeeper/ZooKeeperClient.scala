@@ -24,7 +24,7 @@ import java.util.concurrent.{ArrayBlockingQueue, ConcurrentHashMap, CountDownLat
 import com.yammer.metrics.core.{Gauge, MetricName}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.CoreUtils.{inLock, inReadLock, inWriteLock}
-import kafka.utils.Logging
+import kafka.utils.{KafkaScheduler, Logging}
 import org.apache.kafka.common.utils.Time
 import org.apache.zookeeper.AsyncCallback.{ACLCallback, Children2Callback, DataCallback, StatCallback, StringCallback, VoidCallback}
 import org.apache.zookeeper.KeeperException.Code
@@ -49,8 +49,8 @@ class ZooKeeperClient(connectString: String,
                       connectionTimeoutMs: Int,
                       maxInFlightRequests: Int,
                       time: Time,
-                      metricGroup: String = "kafka.server",
-                      metricType: String = "KafkaHealthcheck") extends Logging with KafkaMetricsGroup {
+                      metricGroup: String,
+                      metricType: String) extends Logging with KafkaMetricsGroup {
   this.logIdent = "[ZooKeeperClient] "
   private val initializationLock = new ReentrantReadWriteLock()
   private val isConnectedOrExpiredLock = new ReentrantLock()
@@ -59,6 +59,7 @@ class ZooKeeperClient(connectString: String,
   private val zNodeChildChangeHandlers = new ConcurrentHashMap[String, ZNodeChildChangeHandler]().asScala
   private val inFlightRequests = new Semaphore(maxInFlightRequests)
   private val stateChangeHandlers = new ConcurrentHashMap[String, StateChangeHandler]().asScala
+  private[zookeeper] val expiryScheduler = new KafkaScheduler(threads = 1, "zk-session-expiry-handler")
 
   private val metricNames = Set[String]()
 
@@ -81,25 +82,26 @@ class ZooKeeperClient(connectString: String,
   }
 
   info(s"Initializing a new session to $connectString.")
+  // Fail-fast if there's an error during construction (so don't call initialize, which retries forever)
   @volatile private var zooKeeper = new ZooKeeper(connectString, sessionTimeoutMs, ZooKeeperClientWatcher)
 
-  private val sessionStateGauge =
-    newGauge("SessionState", new Gauge[String] {
-      override def value: String =
-        Option(zooKeeper.getState.toString).getOrElse("DISCONNECTED")
-    })
+  newGauge("SessionState", new Gauge[String] {
+    override def value: String = Option(connectionState.toString).getOrElse("DISCONNECTED")
+  })
 
   metricNames += "SessionState"
 
+  expiryScheduler.startup()
   waitUntilConnected(connectionTimeoutMs, TimeUnit.MILLISECONDS)
 
-
-  /**
-    * This is added to preserve the original metric name in JMX
-    */
   override def metricName(name: String, metricTags: scala.collection.Map[String, String]): MetricName = {
     explicitMetricName(metricGroup, metricType, name, metricTags)
   }
+
+  /**
+   * Return the state of the ZooKeeper connection.
+   */
+  def connectionState: States = zooKeeper.getState
 
   /**
    * Send a request and wait for its response. See handle(Seq[AsyncRequest]) for details.
@@ -122,7 +124,7 @@ class ZooKeeperClient(connectString: String,
    * response type (e.g. Seq[CreateRequest] -> Seq[CreateResponse]). Otherwise, the most specific common supertype
    * will be used (e.g. Seq[AsyncRequest] -> Seq[AsyncResponse]).
    */
-  def handleRequests[Req <: AsyncRequest](requests: Seq[Req]): Seq[Req#Response] = inReadLock(initializationLock) {
+  def handleRequests[Req <: AsyncRequest](requests: Seq[Req]): Seq[Req#Response] = {
     if (requests.isEmpty)
       Seq.empty
     else {
@@ -132,10 +134,12 @@ class ZooKeeperClient(connectString: String,
       requests.foreach { request =>
         inFlightRequests.acquire()
         try {
-          send(request) { response =>
-            responseQueue.add(response)
-            inFlightRequests.release()
-            countDownLatch.countDown()
+          inReadLock(initializationLock) {
+            send(request) { response =>
+              responseQueue.add(response)
+              inFlightRequests.release()
+              countDownLatch.countDown()
+            }
           }
         } catch {
           case e: Throwable =>
@@ -148,7 +152,8 @@ class ZooKeeperClient(connectString: String,
     }
   }
 
-  private def send[Req <: AsyncRequest](request: Req)(processResponse: Req#Response => Unit): Unit = {
+  // Visibility to override for testing
+  private[zookeeper] def send[Req <: AsyncRequest](request: Req)(processResponse: Req#Response => Unit): Unit = {
     // Safe to cast as we always create a response of the right type
     def callback(response: AsyncResponse): Unit = processResponse(response.asInstanceOf[Req#Response])
 
@@ -214,13 +219,13 @@ class ZooKeeperClient(connectString: String,
     info("Waiting until connected.")
     var nanos = timeUnit.toNanos(timeout)
     inLock(isConnectedOrExpiredLock) {
-      var state = zooKeeper.getState
+      var state = connectionState
       while (!state.isConnected && state.isAlive) {
         if (nanos <= 0) {
           throw new ZooKeeperClientTimeoutException(s"Timed out waiting for connection while in state: $state")
         }
         nanos = isConnectedOrExpiredCondition.awaitNanos(nanos)
-        state = zooKeeper.getState
+        state = connectionState
       }
       if (state == States.AUTH_FAILED) {
         throw new ZooKeeperClientAuthFailedException("Auth failed either before or while waiting for connection")
@@ -296,13 +301,18 @@ class ZooKeeperClient(connectString: String,
     stateChangeHandlers.remove(name)
   }
 
-  def close(): Unit = inWriteLock(initializationLock) {
+  def close(): Unit = {
     info("Closing.")
-    zNodeChangeHandlers.clear()
-    zNodeChildChangeHandlers.clear()
-    stateChangeHandlers.clear()
-    zooKeeper.close()
-    metricNames.foreach(removeMetric(_))
+    inWriteLock(initializationLock) {
+      zNodeChangeHandlers.clear()
+      zNodeChildChangeHandlers.clear()
+      stateChangeHandlers.clear()
+      zooKeeper.close()
+      metricNames.foreach(removeMetric(_))
+    }
+    // Shutdown scheduler outside of lock to avoid deadlock if scheduler
+    // is waiting for lock to process session expiry
+    expiryScheduler.shutdown()
     info("Closed.")
   }
 
@@ -310,38 +320,76 @@ class ZooKeeperClient(connectString: String,
     zooKeeper.getSessionId
   }
 
-  private def initialize(): Unit = {
-    if (!zooKeeper.getState.isAlive) {
-      info(s"Initializing a new session to $connectString.")
-      // retry forever until ZooKeeper can be instantiated
-      while (true) {
-        try {
-          zooKeeper.close()
-          zooKeeper = new ZooKeeper(connectString, sessionTimeoutMs, ZooKeeperClientWatcher)
-          return
-        } catch {
-          case e: Exception =>
-            info("Error when recreating ZooKeeper", e)
-            Thread.sleep(1000)
+  // Only for testing
+  private[kafka] def currentZooKeeper: ZooKeeper = inReadLock(initializationLock) {
+    zooKeeper
+  }
+  
+  private def reinitialize(): Unit = {
+    // Initialization callbacks are invoked outside of the lock to avoid deadlock potential since their completion
+    // may require additional Zookeeper requests, which will block to acquire the initialization lock
+    stateChangeHandlers.values.foreach(callBeforeInitializingSession _)
+
+    inWriteLock(initializationLock) {
+      if (!connectionState.isAlive) {
+        zooKeeper.close()
+        info(s"Initializing a new session to $connectString.")
+        // retry forever until ZooKeeper can be instantiated
+        var connected = false
+        while (!connected) {
+          try {
+            zooKeeper = new ZooKeeper(connectString, sessionTimeoutMs, ZooKeeperClientWatcher)
+            connected = true
+          } catch {
+            case e: Exception =>
+              info("Error when recreating ZooKeeper, retrying after a short sleep", e)
+              Thread.sleep(1000)
+          }
         }
       }
-      info(s"Timed out waiting for connection during session initialization while in state: ${zooKeeper.getState}")
-      stateChangeHandlers.values.foreach(_.onReconnectionTimeout())
     }
+
+    stateChangeHandlers.values.foreach(callAfterInitializingSession _)
   }
 
   /**
-   * reinitialize method to use in unit tests
+   * Close the zookeeper client to force session reinitialization. This is visible for testing only.
    */
-  private[zookeeper] def reinitialize(): Unit = {
+  private[zookeeper] def forceReinitialize(): Unit = {
     zooKeeper.close()
-    initialize()
+    reinitialize()
+  }
+
+  private def callBeforeInitializingSession(handler: StateChangeHandler): Unit = {
+    try {
+      handler.beforeInitializingSession()
+    } catch {
+      case t: Throwable =>
+        error(s"Uncaught error in handler ${handler.name}", t)
+    }
+  }
+
+  private def callAfterInitializingSession(handler: StateChangeHandler): Unit = {
+    try {
+      handler.afterInitializingSession()
+    } catch {
+      case t: Throwable =>
+        error(s"Uncaught error in handler ${handler.name}", t)
+    }
+  }
+
+  // Visibility for testing
+  private[zookeeper] def scheduleSessionExpiryHandler(): Unit = {
+    expiryScheduler.scheduleOnce("zk-session-expired", () => {
+      info("Session expired.")
+      reinitialize()
+    })
   }
 
   // package level visibility for testing only
   private[zookeeper] object ZooKeeperClientWatcher extends Watcher {
     override def process(event: WatchedEvent): Unit = {
-      debug("Received event: " + event)
+      debug(s"Received event: $event")
       Option(event.getPath) match {
         case None =>
           val state = event.getState
@@ -353,12 +401,7 @@ class ZooKeeperClient(connectString: String,
             error("Auth failed.")
             stateChangeHandlers.values.foreach(_.onAuthFailure())
           } else if (state == KeeperState.Expired) {
-            inWriteLock(initializationLock) {
-              info("Session expired.")
-              stateChangeHandlers.values.foreach(_.beforeInitializingSession())
-              initialize()
-              stateChangeHandlers.values.foreach(_.afterInitializingSession())
-            }
+            scheduleSessionExpiryHandler()
           }
         case Some(path) =>
           (event.getType: @unchecked) match {
@@ -377,7 +420,6 @@ trait StateChangeHandler {
   def beforeInitializingSession(): Unit = {}
   def afterInitializingSession(): Unit = {}
   def onAuthFailure(): Unit = {}
-  def onReconnectionTimeout(): Unit = {}
 }
 
 trait ZNodeChangeHandler {
@@ -456,7 +498,7 @@ sealed abstract class AsyncResponse {
 }
 
 case class ResponseMetadata(sendTimeMs: Long, receivedTimeMs: Long) {
-  def responseTimeMs: Long = sendTimeMs - receivedTimeMs
+  def responseTimeMs: Long = receivedTimeMs - sendTimeMs
 }
 
 case class CreateResponse(resultCode: Code, path: String, ctx: Option[Any], name: String, metadata: ResponseMetadata) extends AsyncResponse

@@ -20,6 +20,8 @@ package org.apache.kafka.trogdor.rest;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.NullNode;
 import org.apache.kafka.trogdor.task.TaskSpec;
 
 /**
@@ -37,12 +39,20 @@ import org.apache.kafka.trogdor.task.TaskSpec;
 public abstract class TaskState extends Message {
     private final TaskSpec spec;
 
-    public TaskState(TaskSpec spec) {
+    private final JsonNode status;
+
+    public TaskState(TaskSpec spec, JsonNode status) {
         this.spec = spec;
+        this.status = status == null ? NullNode.instance : status;
     }
 
     @JsonProperty
     public TaskSpec spec() {
         return spec;
+    }
+
+    @JsonProperty
+    public JsonNode status() {
+        return status;
     }
 }

@@ -65,7 +65,7 @@ abstract class AbstractStateManager implements StateManager {
         try {
             checkpoint.write(checkpointableOffsets);
         } catch (final IOException fatalException) {
-            log.error("Failed to update checkpoint file for global stores.", fatalException);
+            log.error("Failed to write offset checkpoint file to {} while re-initializing {}: {}", checkpoint, stateStores, fatalException);
             throw new StreamsException("Failed to reinitialize global store.", fatalException);
         }
 

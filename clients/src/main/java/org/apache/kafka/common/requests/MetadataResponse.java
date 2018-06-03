@@ -164,9 +164,14 @@ public class MetadataResponse extends AbstractResponse {
             new Field(CONTROLLER_ID_KEY_NAME, INT32, "The broker id of the controller broker."),
             new Field(TOPIC_METADATA_KEY_NAME, new ArrayOf(TOPIC_METADATA_V2)));
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema METADATA_RESPONSE_V6 = METADATA_RESPONSE_V5;
+
     public static Schema[] schemaVersions() {
         return new Schema[] {METADATA_RESPONSE_V0, METADATA_RESPONSE_V1, METADATA_RESPONSE_V2, METADATA_RESPONSE_V3,
-            METADATA_RESPONSE_V4, METADATA_RESPONSE_V5};
+            METADATA_RESPONSE_V4, METADATA_RESPONSE_V5, METADATA_RESPONSE_V6};
     }
 
     private final int throttleTimeMs;
@@ -277,6 +282,7 @@ public class MetadataResponse extends AbstractResponse {
         return null;
     }
 
+    @Override
     public int throttleTimeMs() {
         return throttleTimeMs;
     }
@@ -431,6 +437,14 @@ public class MetadataResponse extends AbstractResponse {
             return partitionMetadata;
         }
 
+        @Override
+        public String toString() {
+            return "(type=TopicMetadata" +
+                    ", error=" + error +
+                    ", topic=" + topic +
+                    ", isInternal=" + isInternal +
+                    ", partitionMetadata=" + partitionMetadata + ')';
+        }
     }
 
     // This is used to describe per-partition state in the MetadataResponse
@@ -464,6 +478,10 @@ public class MetadataResponse extends AbstractResponse {
             return partition;
         }
 
+        public int leaderId() {
+            return leader == null ? -1 : leader.id();
+        }
+
         public Node leader() {
             return leader;
         }
@@ -482,7 +500,7 @@ public class MetadataResponse extends AbstractResponse {
 
         @Override
         public String toString() {
-            return "(type=PartitionMetadata," +
+            return "(type=PartitionMetadata" +
                     ", error=" + error +
                     ", partition=" + partition +
                     ", leader=" + leader +
@@ -531,7 +549,7 @@ public class MetadataResponse extends AbstractResponse {
                 Struct partitionData = topicData.instance(PARTITION_METADATA_KEY_NAME);
                 partitionData.set(ERROR_CODE, partitionMetadata.error.code());
                 partitionData.set(PARTITION_ID, partitionMetadata.partition);
-                partitionData.set(LEADER_KEY_NAME, partitionMetadata.leader.id());
+                partitionData.set(LEADER_KEY_NAME, partitionMetadata.leaderId());
                 ArrayList<Integer> replicas = new ArrayList<>(partitionMetadata.replicas.size());
                 for (Node node : partitionMetadata.replicas)
                     replicas.add(node.id());
@@ -554,5 +572,10 @@ public class MetadataResponse extends AbstractResponse {
         }
         struct.set(TOPIC_METADATA_KEY_NAME, topicMetadataArray.toArray());
         return struct;
+    }
+
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 6;
     }
 }

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.file;
 
-import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTaskContext;
 import org.apache.kafka.connect.storage.OffsetStorageReader;
@@ -55,6 +54,7 @@ public class FileStreamSourceTaskTest extends EasyMockSupport {
         config = new HashMap<>();
         config.put(FileStreamSourceConnector.FILE_CONFIG, tempFile.getAbsolutePath());
         config.put(FileStreamSourceConnector.TOPIC_CONFIG, TOPIC);
+        config.put(FileStreamSourceConnector.TASK_BATCH_SIZE_CONFIG, String.valueOf(FileStreamSourceConnector.DEFAULT_TASK_BATCH_SIZE));
         task = new FileStreamSourceTask();
         offsetStorageReader = createMock(OffsetStorageReader.class);
         context = createMock(SourceTaskContext.class);
@@ -127,12 +127,28 @@ public class FileStreamSourceTaskTest extends EasyMockSupport {
         task.stop();
     }
 
-    @Test(expected = ConnectException.class)
-    public void testMissingTopic() throws InterruptedException {
+    @Test
+    public void testBatchSize() throws IOException, InterruptedException {
+        expectOffsetLookupReturnNone();
         replay();
 
-        config.remove(FileStreamSourceConnector.TOPIC_CONFIG);
+        config.put(FileStreamSourceConnector.TASK_BATCH_SIZE_CONFIG, "5000");
         task.start(config);
+
+        FileOutputStream os = new FileOutputStream(tempFile);
+        for (int i = 0; i < 10_000; i++) {
+            os.write("Neque porro quisquam est qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit...\n".getBytes());
+        }
+        os.flush();
+
+        List<SourceRecord> records = task.poll();
+        assertEquals(5000, records.size());
+
+        records = task.poll();
+        assertEquals(5000, records.size());
+
+        os.close();
+        task.stop();
     }
 
     @Test

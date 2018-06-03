@@ -368,7 +368,7 @@ private class ReplicaFetcher(name: String, sourceBroker: BrokerEndPoint, topicAn
       response = simpleConsumer.fetch(fetchRequest)
     } catch {
       case t: Throwable =>
-        if (!isRunning.get)
+        if (!isRunning)
           throw t
     }
 

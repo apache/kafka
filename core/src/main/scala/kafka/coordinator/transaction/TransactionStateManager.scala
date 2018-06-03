@@ -140,7 +140,7 @@ class TransactionStateManager(brokerId: Int,
       val now = time.milliseconds()
       inReadLock(stateLock) {
         val transactionalIdByPartition: Map[Int, mutable.Iterable[TransactionalIdCoordinatorEpochAndMetadata]] =
-          transactionMetadataCache.flatMap { case (partition, entry) =>
+          transactionMetadataCache.flatMap { case (_, entry) =>
             entry.metadataPerTransactionalId.filter { case (_, txnMetadata) => txnMetadata.state match {
               case Empty | CompleteCommit | CompleteAbort => true
               case _ => false

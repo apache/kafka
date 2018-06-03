@@ -51,8 +51,13 @@ public class DeleteAclsRequest extends AbstractRequest {
                     OPERATION,
                     PERMISSION_TYPE))));
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema DELETE_ACLS_REQUEST_V1 = DELETE_ACLS_REQUEST_V0;
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{DELETE_ACLS_REQUEST_V0};
+        return new Schema[]{DELETE_ACLS_REQUEST_V0, DELETE_ACLS_REQUEST_V1};
     }
 
     public static class Builder extends AbstractRequest.Builder<DeleteAclsRequest> {
@@ -115,6 +120,7 @@ public class DeleteAclsRequest extends AbstractRequest {
         short versionId = version();
         switch (versionId) {
             case 0:
+            case 1:
                 List<DeleteAclsResponse.AclFilterResponse> responses = new ArrayList<>();
                 for (int i = 0; i < filters.size(); i++) {
                     responses.add(new DeleteAclsResponse.AclFilterResponse(

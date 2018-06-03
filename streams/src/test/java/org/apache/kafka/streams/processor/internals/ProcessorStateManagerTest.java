@@ -309,8 +309,8 @@ public class ProcessorStateManagerTest {
             false,
             logContext);
         try {
-            // make sure the checkpoint file isn't deleted
-            assertTrue(checkpointFile.exists());
+            // make sure the checkpoint file is not written yet
+            assertFalse(checkpointFile.exists());
 
             stateMgr.register(persistentStore, persistentStore.stateRestoreCallback);
             stateMgr.register(nonPersistentStore, nonPersistentStore.stateRestoreCallback);
@@ -630,7 +630,7 @@ public class ProcessorStateManagerTest {
 
     @Test
     public void shouldDeleteCheckpointFileOnCreationIfEosEnabled() throws IOException {
-        checkpoint.write(Collections.<TopicPartition, Long>emptyMap());
+        checkpoint.write(Collections.singletonMap(new TopicPartition(persistentStoreTopicName, 1), 123L));
         assertTrue(checkpointFile.exists());
 
         ProcessorStateManager stateManager = null;
@@ -687,7 +687,7 @@ public class ProcessorStateManagerTest {
 
         stateManager.reinitializeStateStoresForPartitions(changelogPartitions, new NoOpProcessorContext() {
             @Override
-            public void register(final StateStore store, final boolean deprecatedAndIgnoredLoggingEnabled, final StateRestoreCallback stateRestoreCallback) {
+            public void register(final StateStore store, final StateRestoreCallback stateRestoreCallback) {
                 stateManager.register(store, stateRestoreCallback);
             }
         });

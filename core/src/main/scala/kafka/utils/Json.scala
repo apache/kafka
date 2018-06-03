@@ -16,13 +16,12 @@
  */
 package kafka.utils
 
-import java.nio.charset.StandardCharsets
-
 import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.ObjectMapper
 import kafka.utils.json.JsonValue
 
 import scala.collection._
+import scala.reflect.ClassTag
 
 /**
  * Provides methods for parsing JSON with Jackson and encoding to JSON with a simple and naive custom implementation.
@@ -48,11 +47,32 @@ object Json {
     }
 
   /**
+   * Parse a JSON string into either a generic type T, or a JsonProcessingException in the case of
+   * exception.
+   */
+  def parseStringAs[T](input: String)(implicit tag: ClassTag[T]): Either[JsonProcessingException, T] = {
+    try Right(mapper.readValue(input, tag.runtimeClass).asInstanceOf[T])
+    catch { case e: JsonProcessingException => Left(e) }
+  }
+
+  /**
    * Parse a JSON byte array into a JsonValue if possible. `None` is returned if `input` is not valid JSON.
    */
   def parseBytes(input: Array[Byte]): Option[JsonValue] =
     try Option(mapper.readTree(input)).map(JsonValue(_))
     catch { case _: JsonProcessingException => None }
+
+  def tryParseBytes(input: Array[Byte]): Either[JsonProcessingException, JsonValue] =
+    try Right(mapper.readTree(input)).right.map(JsonValue(_))
+    catch { case e: JsonProcessingException => Left(e) }
+
+  /**
+   * Parse a JSON byte array into either a generic type T, or a JsonProcessingException in the case of exception.
+   */
+  def parseBytesAs[T](input: Array[Byte])(implicit tag: ClassTag[T]): Either[JsonProcessingException, T] = {
+    try Right(mapper.readValue(input, tag.runtimeClass).asInstanceOf[T])
+    catch { case e: JsonProcessingException => Left(e) }
+  }
 
   /**
    * Encode an object into a JSON string. This method accepts any type T where
@@ -81,10 +101,10 @@ object Json {
   }
 
   /**
-    * Encode an object into a JSON string. This method accepts any type supported by Jackson's ObjectMapper in
+   * Encode an object into a JSON string. This method accepts any type supported by Jackson's ObjectMapper in
    * the default configuration. That is, Java collections are supported, but Scala collections are not (to avoid
    * a jackson-scala dependency).
-    */
+   */
   def encodeAsString(obj: Any): String = mapper.writeValueAsString(obj)
 
   /**

@@ -23,12 +23,11 @@ import java.util.Properties
 import kafka.api.KAFKA_0_11_0_IV2
 import kafka.log.LogConfig
 import kafka.utils.TestUtils
-import kafka.utils.TestUtils._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.{Record, RecordBatch}
-import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
+import org.apache.kafka.common.record.{MemoryRecords, Record, RecordBatch, Records}
+import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, FetchMetadata => JFetchMetadata}
 import org.apache.kafka.common.serialization.{ByteArraySerializer, StringSerializer}
 import org.junit.Assert._
 import org.junit.Test
@@ -64,7 +63,7 @@ class FetchRequestTest extends BaseRequestTest {
     partitionMap
   }
 
-  private def sendFetchRequest(leaderId: Int, request: FetchRequest): FetchResponse = {
+  private def sendFetchRequest(leaderId: Int, request: FetchRequest): FetchResponse[MemoryRecords] = {
     val response = connectAndSend(request, ApiKeys.FETCH, destination = brokerSocketServer(leaderId))
     FetchResponse.parse(response, request.version)
   }
@@ -170,6 +169,27 @@ class FetchRequestTest extends BaseRequestTest {
     assertEquals(0, records(partitionData).map(_.sizeInBytes).sum)
   }
 
+  @Test
+  def testFetchRequestToNonReplica(): Unit = {
+    val topic = "topic"
+    val partition = 0
+    val topicPartition = new TopicPartition(topic, partition)
+
+    // Create a single-partition topic and find a broker which is not the leader
+    val partitionToLeader = TestUtils.createTopic(zkClient, topic, numPartitions = 1, 1, servers)
+    val leader = partitionToLeader(partition)
+    val nonReplicaOpt = servers.find(_.config.brokerId != leader)
+    assertTrue(nonReplicaOpt.isDefined)
+    val nonReplicaId =  nonReplicaOpt.get.config.brokerId
+
+    // Send the fetch request to the non-replica and verify the error code
+    val fetchRequest = FetchRequest.Builder.forConsumer(Int.MaxValue, 0, createPartitionMap(1024,
+      Seq(topicPartition))).build()
+    val fetchResponse = sendFetchRequest(nonReplicaId, fetchRequest)
+    val partitionData = fetchResponse.responseData.get(topicPartition)
+    assertEquals(Errors.NOT_LEADER_FOR_PARTITION, partitionData.error)
+  }
+
   /**
    * Tests that down-conversions dont leak memory. Large down conversions are triggered
    * in the server. The client closes its connection after reading partial data when the
@@ -198,7 +218,7 @@ class FetchRequestTest extends BaseRequestTest {
     // batch is not complete, but sent when the producer is closed
     futures.foreach(_.get)
 
-    def fetch(version: Short, maxPartitionBytes: Int, closeAfterPartialResponse: Boolean): Option[FetchResponse] = {
+    def fetch(version: Short, maxPartitionBytes: Int, closeAfterPartialResponse: Boolean): Option[FetchResponse[MemoryRecords]] = {
       val fetchRequest = FetchRequest.Builder.forConsumer(Int.MaxValue, 0, createPartitionMap(maxPartitionBytes,
         Seq(topicPartition))).build(version)
 
@@ -258,17 +278,32 @@ class FetchRequestTest extends BaseRequestTest {
     secondBatchFutures.foreach(_.get)
 
     def check(fetchOffset: Long, requestVersion: Short, expectedOffset: Long, expectedNumBatches: Int, expectedMagic: Byte): Unit = {
-      val fetchRequest = FetchRequest.Builder.forConsumer(Int.MaxValue, 0, createPartitionMap(Int.MaxValue,
-        Seq(topicPartition), Map(topicPartition -> fetchOffset))).build(requestVersion)
-      val fetchResponse = sendFetchRequest(leaderId, fetchRequest)
-      val partitionData = fetchResponse.responseData.get(topicPartition)
-      assertEquals(Errors.NONE, partitionData.error)
-      assertTrue(partitionData.highWatermark > 0)
-      val batches = partitionData.records.batches.asScala.toBuffer
-      assertEquals(expectedNumBatches, batches.size)
-      val batch = batches.head
-      assertEquals(expectedMagic, batch.magic)
-      assertEquals(expectedOffset, batch.baseOffset)
+      var batchesReceived = 0
+      var currentFetchOffset = fetchOffset
+      var currentExpectedOffset = expectedOffset
+
+      // With KIP-283, we might not receive all batches in a single fetch request so loop through till we have consumed
+      // all batches we are interested in.
+      while (batchesReceived < expectedNumBatches) {
+        val fetchRequest = FetchRequest.Builder.forConsumer(Int.MaxValue, 0, createPartitionMap(Int.MaxValue,
+          Seq(topicPartition), Map(topicPartition -> currentFetchOffset))).build(requestVersion)
+        val fetchResponse = sendFetchRequest(leaderId, fetchRequest)
+
+        // validate response
+        val partitionData = fetchResponse.responseData.get(topicPartition)
+        assertEquals(Errors.NONE, partitionData.error)
+        assertTrue(partitionData.highWatermark > 0)
+        val batches = partitionData.records.batches.asScala.toBuffer
+        val batch = batches.head
+        assertEquals(expectedMagic, batch.magic)
+        assertEquals(currentExpectedOffset, batch.baseOffset)
+
+        currentFetchOffset = batches.last.lastOffset + 1
+        currentExpectedOffset += (batches.last.lastOffset - batches.head.baseOffset + 1)
+        batchesReceived += batches.size
+      }
+
+      assertEquals(expectedNumBatches, batchesReceived)
     }
 
     // down conversion to message format 0, batches of 1 message are returned so we receive the exact offset we requested
@@ -295,11 +330,65 @@ class FetchRequestTest extends BaseRequestTest {
       expectedMagic = RecordBatch.MAGIC_VALUE_V2)
   }
 
-  private def records(partitionData: FetchResponse.PartitionData): Seq[Record] = {
+  /**
+   * Test that when an incremental fetch session contains partitions with an error,
+   * those partitions are returned in all incremental fetch requests.
+   */
+  @Test
+  def testCreateIncrementalFetchWithPartitionsInError(): Unit = {
+    def createFetchRequest(topicPartitions: Seq[TopicPartition],
+                           metadata: JFetchMetadata,
+                           toForget: Seq[TopicPartition]): FetchRequest =
+      FetchRequest.Builder.forConsumer(Int.MaxValue, 0,
+        createPartitionMap(Integer.MAX_VALUE, topicPartitions, Map.empty))
+        .toForget(toForget.asJava)
+        .metadata(metadata)
+        .build()
+    val foo0 = new TopicPartition("foo", 0)
+    val foo1 = new TopicPartition("foo", 1)
+    createTopic("foo", Map(0 -> List(0, 1), 1 -> List(0, 2)))
+    val bar0 = new TopicPartition("bar", 0)
+    val req1 = createFetchRequest(List(foo0, foo1, bar0), JFetchMetadata.INITIAL, Nil)
+    val resp1 = sendFetchRequest(0, req1)
+    assertEquals(Errors.NONE, resp1.error())
+    assertTrue("Expected the broker to create a new incremental fetch session", resp1.sessionId() > 0)
+    debug(s"Test created an incremental fetch session ${resp1.sessionId}")
+    assertTrue(resp1.responseData().containsKey(foo0))
+    assertTrue(resp1.responseData().containsKey(foo1))
+    assertTrue(resp1.responseData().containsKey(bar0))
+    assertEquals(Errors.NONE, resp1.responseData().get(foo0).error)
+    assertEquals(Errors.NONE, resp1.responseData().get(foo1).error)
+    assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, resp1.responseData().get(bar0).error)
+    val req2 = createFetchRequest(Nil, new JFetchMetadata(resp1.sessionId(), 1), Nil)
+    val resp2 = sendFetchRequest(0, req2)
+    assertEquals(Errors.NONE, resp2.error())
+    assertEquals("Expected the broker to continue the incremental fetch session",
+      resp1.sessionId(), resp2.sessionId())
+    assertFalse(resp2.responseData().containsKey(foo0))
+    assertFalse(resp2.responseData().containsKey(foo1))
+    assertTrue(resp2.responseData().containsKey(bar0))
+    assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, resp2.responseData().get(bar0).error)
+    createTopic("bar", Map(0 -> List(0, 1)))
+    val req3 = createFetchRequest(Nil, new JFetchMetadata(resp1.sessionId(), 2), Nil)
+    val resp3 = sendFetchRequest(0, req3)
+    assertEquals(Errors.NONE, resp3.error())
+    assertFalse(resp3.responseData().containsKey(foo0))
+    assertFalse(resp3.responseData().containsKey(foo1))
+    assertTrue(resp3.responseData().containsKey(bar0))
+    assertEquals(Errors.NONE, resp3.responseData().get(bar0).error)
+    val req4 = createFetchRequest(Nil, new JFetchMetadata(resp1.sessionId(), 3), Nil)
+    val resp4 = sendFetchRequest(0, req4)
+    assertEquals(Errors.NONE, resp4.error())
+    assertFalse(resp4.responseData().containsKey(foo0))
+    assertFalse(resp4.responseData().containsKey(foo1))
+    assertFalse(resp4.responseData().containsKey(bar0))
+  }
+
+  private def records(partitionData: FetchResponse.PartitionData[MemoryRecords]): Seq[Record] = {
     partitionData.records.records.asScala.toIndexedSeq
   }
 
-  private def checkFetchResponse(expectedPartitions: Seq[TopicPartition], fetchResponse: FetchResponse,
+  private def checkFetchResponse(expectedPartitions: Seq[TopicPartition], fetchResponse: FetchResponse[MemoryRecords],
                                  maxPartitionBytes: Int, maxResponseBytes: Int, numMessagesPerPartition: Int): Unit = {
     assertEquals(expectedPartitions, fetchResponse.responseData.keySet.asScala.toSeq)
     var emptyResponseSeen = false
@@ -342,8 +431,8 @@ class FetchRequestTest extends BaseRequestTest {
     topicConfig.setProperty(LogConfig.MinInSyncReplicasProp, 2.toString)
     configs.foreach { case (k, v) => topicConfig.setProperty(k, v) }
     topics.flatMap { topic =>
-      val partitionToLeader = createTopic(zkUtils, topic, numPartitions = numPartitions, replicationFactor = 2,
-        servers = servers, topicConfig = topicConfig)
+      val partitionToLeader = createTopic(topic, numPartitions = numPartitions, replicationFactor = 2,
+        topicConfig = topicConfig)
       partitionToLeader.map { case (partition, leader) => new TopicPartition(topic, partition) -> leader }
     }.toMap
   }

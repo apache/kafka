@@ -17,17 +17,19 @@
 
 package kafka.security
 
-import java.util.{List, Properties}
+import java.util.{Collection, Properties}
 
 import org.apache.kafka.common.security.authenticator.CredentialCache
-import org.apache.kafka.common.security.scram.{ScramCredential, ScramCredentialUtils, ScramMechanism}
+import org.apache.kafka.common.security.scram.ScramCredential
 import org.apache.kafka.common.config.ConfigDef
 import org.apache.kafka.common.config.ConfigDef._
+import org.apache.kafka.common.security.scram.internal.{ScramCredentialUtils, ScramMechanism}
+import org.apache.kafka.common.security.token.delegation.internal.DelegationTokenCache
 
-class CredentialProvider(saslEnabledMechanisms: List[String]) {
+class CredentialProvider(scramMechanisms: Collection[String], val tokenCache: DelegationTokenCache) {
 
   val credentialCache = new CredentialCache
-  ScramCredentialUtils.createCache(credentialCache, saslEnabledMechanisms)
+  ScramCredentialUtils.createCache(credentialCache, scramMechanisms)
 
   def updateCredentials(username: String, config: Properties) {
     for (mechanism <- ScramMechanism.values()) {

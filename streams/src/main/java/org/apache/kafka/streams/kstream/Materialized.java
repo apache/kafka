@@ -160,7 +160,8 @@ public class Materialized<K, V, S extends StateStore> {
      * Set the valueSerde the materialized {@link StateStore} will use.
      *
      * @param valueSerde the value {@link Serde} to use. If the {@link Serde} is null, then the default value
-     *                   serde from configs will be used
+     *                   serde from configs will be used. If the serialized bytes is null for put operations,
+     *                   it is treated as delete operation
      * @return itself
      */
     public Materialized<K, V, S> withValueSerde(final Serde<V> valueSerde) {

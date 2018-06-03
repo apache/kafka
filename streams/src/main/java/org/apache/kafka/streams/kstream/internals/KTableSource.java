@@ -20,15 +20,19 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
+    private static final Logger LOG = LoggerFactory.getLogger(KTableSource.class);
 
     public final String storeName;
 
     private boolean sendOldValues = false;
 
-    public KTableSource(String storeName) {
+    public KTableSource(final String storeName) {
         this.storeName = storeName;
     }
 
@@ -45,21 +49,29 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
 
         private KeyValueStore<K, V> store;
         private TupleForwarder<K, V> tupleForwarder;
+        private StreamsMetricsImpl metrics;
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(ProcessorContext context) {
+        public void init(final ProcessorContext context) {
             super.init(context);
+            metrics = (StreamsMetricsImpl) context.metrics();
             store = (KeyValueStore<K, V>) context.getStateStore(storeName);
             tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context, sendOldValues), sendOldValues);
         }
 
         @Override
-        public void process(K key, V value) {
+        public void process(final K key, final V value) {
             // if the key is null, then ignore the record
-            if (key == null)
+            if (key == null) {
+                LOG.warn(
+                    "Skipping record due to null key. topic=[{}] partition=[{}] offset=[{}]",
+                    context().topic(), context().partition(), context().offset()
+                );
+                metrics.skippedRecordsSensor().record();
                 return;
-            V oldValue = store.get(key);
+            }
+            final V oldValue = store.get(key);
             store.put(key, value);
             tupleForwarder.maybeForward(key, value, oldValue);
         }

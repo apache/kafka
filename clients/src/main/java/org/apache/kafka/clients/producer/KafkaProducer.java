@@ -256,6 +256,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private final ProducerInterceptors<K, V> interceptors;
     private final ApiVersions apiVersions;
     private final TransactionManager transactionManager;
+    private TransactionalRequestResult initTransactionsResult;
 
     /**
      * A producer is instantiated by providing a set of key-value pairs as configuration. Valid configuration strings
@@ -267,7 +268,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * @param configs   The producer configs
      *
      */
-    public KafkaProducer(Map<String, Object> configs) {
+    public KafkaProducer(final Map<String, Object> configs) {
         this(new ProducerConfig(configs), null, null, null, null);
     }
 
@@ -286,7 +287,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     public KafkaProducer(Map<String, Object> configs, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
         this(new ProducerConfig(ProducerConfig.addSerializerToConfig(configs, keySerializer, valueSerializer)),
-                keySerializer, valueSerializer, null, null);
+            keySerializer,
+            valueSerializer,
+            null,
+            null);
     }
 
     /**
@@ -375,7 +379,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             userProvidedConfigs.put(ProducerConfig.CLIENT_ID_CONFIG, clientId);
             List<ProducerInterceptor<K, V>> interceptorList = (List) (new ProducerConfig(userProvidedConfigs, false)).getConfiguredInstances(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG,
                     ProducerInterceptor.class);
-            this.interceptors = interceptorList.isEmpty() ? null : new ProducerInterceptors<>(interceptorList);
+            this.interceptors = new ProducerInterceptors<>(interceptorList);
             ClusterResourceListeners clusterResourceListeners = configureClusterResourceListeners(keySerializer, valueSerializer, interceptorList, reporters);
             this.maxRequestSize = config.getInt(ProducerConfig.MAX_REQUEST_SIZE_CONFIG);
             this.totalMemorySize = config.getLong(ProducerConfig.BUFFER_MEMORY_CONFIG);
@@ -552,18 +556,36 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      *   2. Gets the internal producer id and epoch, used in all future transactional
      *      messages issued by the producer.
      *
+     * Note that this method will raise {@link TimeoutException} if the transactional state cannot
+     * be initialized before expiration of {@code max.block.ms}. Additionally, it will raise {@link InterruptException}
+     * if interrupted. It is safe to retry in either case, but once the transactional state has been successfully
+     * initialized, this method should no longer be used.
+     *
      * @throws IllegalStateException if no transactional.id has been configured
      * @throws org.apache.kafka.common.errors.UnsupportedVersionException fatal error indicating the broker
      *         does not support transactions (i.e. if its version is lower than 0.11.0.0)
      * @throws org.apache.kafka.common.errors.AuthorizationException fatal error indicating that the configured
      *         transactional.id is not authorized. See the exception for more details
      * @throws KafkaException if the producer has encountered a previous fatal error or for any other unexpected error
+     * @throws TimeoutException if the time taken for initialize the transaction has surpassed <code>max.block.ms</code>.
+     * @throws InterruptException if the thread is interrupted while blocked
      */
     public void initTransactions() {
         throwIfNoTransactionManager();
-        TransactionalRequestResult result = transactionManager.initializeTransactions();
-        sender.wakeup();
-        result.await();
+        if (initTransactionsResult == null) {
+            initTransactionsResult = transactionManager.initializeTransactions();
+            sender.wakeup();
+        }
+
+        try {
+            if (initTransactionsResult.await(maxBlockTimeMs, TimeUnit.MILLISECONDS)) {
+                initTransactionsResult = null;
+            } else {
+                throw new TimeoutException("Timeout expired while initializing transactional state in " + maxBlockTimeMs + "ms.");
+            }
+        } catch (InterruptedException e) {
+            throw new InterruptException("Initialize transactions interrupted.", e);
+        }
     }
 
     /**
@@ -777,7 +799,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     @Override
     public Future<RecordMetadata> send(ProducerRecord<K, V> record, Callback callback) {
         // intercept the record, which can be potentially modified; this method does not throw exceptions
-        ProducerRecord<K, V> interceptedRecord = this.interceptors == null ? record : this.interceptors.onSend(record);
+        ProducerRecord<K, V> interceptedRecord = this.interceptors.onSend(record);
         return doSend(interceptedRecord, callback);
     }
 
@@ -819,7 +841,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             long timestamp = record.timestamp() == null ? time.milliseconds() : record.timestamp();
             log.trace("Sending record {} with callback {} to topic {} partition {}", record, callback, record.topic(), partition);
             // producer callback will make sure to call both 'callback' and interceptor callback
-            Callback interceptCallback = this.interceptors == null ? callback : new InterceptorCallback<>(callback, this.interceptors, tp);
+            Callback interceptCallback = new InterceptorCallback<>(callback, this.interceptors, tp);
 
             if (transactionManager != null && transactionManager.isTransactional())
                 transactionManager.maybeAddPartitionToTransaction(tp);
@@ -839,29 +861,24 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             if (callback != null)
                 callback.onCompletion(null, e);
             this.errors.record();
-            if (this.interceptors != null)
-                this.interceptors.onSendError(record, tp, e);
+            this.interceptors.onSendError(record, tp, e);
             return new FutureFailure(e);
         } catch (InterruptedException e) {
             this.errors.record();
-            if (this.interceptors != null)
-                this.interceptors.onSendError(record, tp, e);
+            this.interceptors.onSendError(record, tp, e);
             throw new InterruptException(e);
         } catch (BufferExhaustedException e) {
             this.errors.record();
             this.metrics.sensor("buffer-exhausted-records").record();
-            if (this.interceptors != null)
-                this.interceptors.onSendError(record, tp, e);
+            this.interceptors.onSendError(record, tp, e);
             throw e;
         } catch (KafkaException e) {
             this.errors.record();
-            if (this.interceptors != null)
-                this.interceptors.onSendError(record, tp, e);
+            this.interceptors.onSendError(record, tp, e);
             throw e;
         } catch (Exception e) {
             // we notify interceptor about all exceptions, since onSend is called before anything else in this method
-            if (this.interceptors != null)
-                this.interceptors.onSendError(record, tp, e);
+            this.interceptors.onSendError(record, tp, e);
             throw e;
         }
     }
@@ -1195,14 +1212,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         }
 
         public void onCompletion(RecordMetadata metadata, Exception exception) {
-            if (this.interceptors != null) {
-                if (metadata == null) {
-                    this.interceptors.onAcknowledgement(new RecordMetadata(tp, -1, -1, RecordBatch.NO_TIMESTAMP,
-                                    Long.valueOf(-1L), -1, -1), exception);
-                } else {
-                    this.interceptors.onAcknowledgement(metadata, exception);
-                }
-            }
+            metadata = metadata != null ? metadata : new RecordMetadata(tp, -1, -1, RecordBatch.NO_TIMESTAMP, Long.valueOf(-1L), -1, -1);
+            this.interceptors.onAcknowledgement(metadata, exception);
             if (this.userCallback != null)
                 this.userCallback.onCompletion(metadata, exception);
         }

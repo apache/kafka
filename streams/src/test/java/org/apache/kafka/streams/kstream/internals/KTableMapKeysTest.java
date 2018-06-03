@@ -17,40 +17,30 @@
 package org.apache.kafka.streams.kstream.internals;
 
 
-import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.streams.Consumed;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
-import org.apache.kafka.test.KStreamTestDriver;
+import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockProcessorSupplier;
-import org.apache.kafka.test.TestUtils;
-
-import org.junit.Before;
-import org.junit.Rule;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
 
-import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Properties;
 
 import static org.junit.Assert.assertEquals;
 
 public class KTableMapKeysTest {
 
-    final private Serde<String> stringSerde = new Serdes.StringSerde();
-    final private Serde<Integer>  integerSerde = new Serdes.IntegerSerde();
-    private File stateDir = null;
-    @Rule
-    public final KStreamTestDriver driver = new KStreamTestDriver();
-
-    
-    @Before
-     public void setUp() {
-        stateDir = TestUtils.tempDirectory("kafka-test");
-    }
+    private final ConsumerRecordFactory<Integer, String> recordFactory = new ConsumerRecordFactory<>(new IntegerSerializer(), new StringSerializer());
+    private final Properties props = StreamsTestUtils.topologyTestConfig(Serdes.Integer(), Serdes.String());
 
     @Test
     public void testMapKeysConvertingToStream() {
@@ -58,7 +48,7 @@ public class KTableMapKeysTest {
 
         String topic1 = "topic_map_keys";
 
-        KTable<Integer, String> table1 = builder.table(topic1, Consumed.with(integerSerde, stringSerde));
+        KTable<Integer, String> table1 = builder.table(topic1, Consumed.with(Serdes.Integer(), Serdes.String()));
 
         final Map<Integer, String> keyMap = new HashMap<>();
         keyMap.put(1, "ONE");
@@ -78,20 +68,20 @@ public class KTableMapKeysTest {
         final int[] originalKeys = new int[]{1, 2, 3};
         final String[] values = new String[]{"V_ONE", "V_TWO", "V_THREE"};
 
-        MockProcessorSupplier<String, String> processor = new MockProcessorSupplier<>();
+        MockProcessorSupplier<String, String> supplier = new MockProcessorSupplier<>();
 
-        convertedStream.process(processor);
+        convertedStream.process(supplier);
 
-        driver.setUp(builder, stateDir);
-        for (int i = 0;  i < originalKeys.length; i++) {
-            driver.process(topic1, originalKeys[i], values[i]);
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            for (int i = 0; i < originalKeys.length; i++) {
+                driver.pipeInput(recordFactory.create(topic1, originalKeys[i], values[i]));
+            }
         }
-        driver.flushState();
 
-        assertEquals(3, processor.processed.size());
+        assertEquals(3, supplier.theCapturedProcessor().processed.size());
 
         for (int i = 0; i < expected.length; i++) {
-            assertEquals(expected[i], processor.processed.get(i));
+            assertEquals(expected[i], supplier.theCapturedProcessor().processed.get(i));
         }
     }
 }

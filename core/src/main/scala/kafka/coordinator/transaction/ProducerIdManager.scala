@@ -19,7 +19,7 @@ package kafka.coordinator.transaction
 import java.nio.charset.StandardCharsets
 
 import kafka.common.KafkaException
-import kafka.utils.{Json, Logging, ZkUtils}
+import kafka.utils.{Json, Logging}
 import kafka.zk.{KafkaZkClient, ProducerIdBlockZNode}
 
 import scala.collection.JavaConverters._

@@ -50,8 +50,13 @@ public class CreateAclsRequest extends AbstractRequest {
                     OPERATION,
                     PERMISSION_TYPE))));
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema CREATE_ACLS_REQUEST_V1 = CREATE_ACLS_REQUEST_V0;
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{CREATE_ACLS_REQUEST_V0};
+        return new Schema[]{CREATE_ACLS_REQUEST_V0, CREATE_ACLS_REQUEST_V1};
     }
 
     public static class AclCreation {
@@ -139,6 +144,7 @@ public class CreateAclsRequest extends AbstractRequest {
         short versionId = version();
         switch (versionId) {
             case 0:
+            case 1:
                 List<CreateAclsResponse.AclCreationResponse> responses = new ArrayList<>();
                 for (int i = 0; i < aclCreations.size(); i++)
                     responses.add(new CreateAclsResponse.AclCreationResponse(ApiError.fromThrowable(throwable)));

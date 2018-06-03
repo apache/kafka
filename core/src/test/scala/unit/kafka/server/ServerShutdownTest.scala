@@ -63,7 +63,7 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
     var producer = createProducer(server)
 
     // create topic
-    createTopic(zkUtils, topic, numPartitions = 1, replicationFactor = 1, servers = Seq(server))
+    createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 1, servers = Seq(server))
 
     // send some messages
     sent1.map(value => producer.send(new ProducerRecord(topic, 0, value))).foreach(_.get)
@@ -137,7 +137,7 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
   def testCleanShutdownAfterFailedStartupDueToCorruptLogs() {
     val server = new KafkaServer(config)
     server.startup()
-    createTopic(zkUtils, topic, numPartitions = 1, replicationFactor = 1, servers = Seq(server))
+    createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 1, servers = Seq(server))
     server.shutdown()
     server.awaitShutdown()
     config.logDirs.foreach { dirName =>

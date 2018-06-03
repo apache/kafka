@@ -18,6 +18,7 @@ package org.apache.kafka.streams;
 
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.errors.TopologyException;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KGroupedTable;
@@ -221,9 +222,10 @@ public class StreamsBuilder {
         Objects.requireNonNull(topic, "topic can't be null");
         Objects.requireNonNull(consumed, "consumed can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
-        materialized.withKeySerde(consumed.keySerde).withValueSerde(consumed.valueSerde);
+        final ConsumedInternal<K, V> consumedInternal = new ConsumedInternal<>(consumed);
+        materialized.withKeySerde(consumedInternal.keySerde()).withValueSerde(consumedInternal.valueSerde());
         return internalStreamsBuilder.table(topic,
-                                            new ConsumedInternal<>(consumed),
+                                            consumedInternal,
                                             new MaterializedInternal<>(materialized, internalStreamsBuilder, topic + "-"));
     }
 
@@ -270,10 +272,11 @@ public class StreamsBuilder {
                                                   final Consumed<K, V> consumed) {
         Objects.requireNonNull(topic, "topic can't be null");
         Objects.requireNonNull(consumed, "consumed can't be null");
+        final ConsumedInternal<K, V> consumedInternal = new ConsumedInternal<>(consumed);
         return internalStreamsBuilder.table(topic,
-                                            new ConsumedInternal<>(consumed),
+                                            consumedInternal,
                                             new MaterializedInternal<>(
-                                                    Materialized.<K, V, KeyValueStore<Bytes, byte[]>>with(consumed.keySerde, consumed.valueSerde),
+                                                    Materialized.<K, V, KeyValueStore<Bytes, byte[]>>with(consumedInternal.keySerde(), consumedInternal.valueSerde()),
                                                     internalStreamsBuilder,
                                                     topic + "-"));
     }
@@ -327,14 +330,15 @@ public class StreamsBuilder {
                                                               final Consumed<K, V> consumed) {
         Objects.requireNonNull(topic, "topic can't be null");
         Objects.requireNonNull(consumed, "consumed can't be null");
+        final ConsumedInternal<K, V> consumedInternal = new ConsumedInternal<>(consumed);
         final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized =
                 new MaterializedInternal<>(
-                        Materialized.<K, V, KeyValueStore<Bytes, byte[]>>with(consumed.keySerde, consumed.valueSerde),
+                        Materialized.<K, V, KeyValueStore<Bytes, byte[]>>with(consumedInternal.keySerde(), consumedInternal.valueSerde()),
                         internalStreamsBuilder,
                         topic + "-");
 
 
-        return internalStreamsBuilder.globalTable(topic, new ConsumedInternal<>(consumed), materialized);
+        return internalStreamsBuilder.globalTable(topic, consumedInternal, materialized);
     }
 
     /**
@@ -395,10 +399,11 @@ public class StreamsBuilder {
         Objects.requireNonNull(topic, "topic can't be null");
         Objects.requireNonNull(consumed, "consumed can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
+        final ConsumedInternal<K, V> consumedInternal = new ConsumedInternal<>(consumed);
         // always use the serdes from consumed
-        materialized.withKeySerde(consumed.keySerde).withValueSerde(consumed.valueSerde);
+        materialized.withKeySerde(consumedInternal.keySerde()).withValueSerde(consumedInternal.valueSerde());
         return internalStreamsBuilder.globalTable(topic,
-                                                  new ConsumedInternal<>(consumed),
+                                                  consumedInternal,
                                                   new MaterializedInternal<>(materialized, internalStreamsBuilder, topic + "-"));
     }
 
@@ -454,28 +459,10 @@ public class StreamsBuilder {
     }
 
     /**
-     * Adds a global {@link StateStore} to the topology.
-     * The {@link StateStore} sources its data from all partitions of the provided input topic.
-     * There will be exactly one instance of this {@link StateStore} per Kafka Streams instance.
-     * <p>
-     * A {@link SourceNode} with the provided sourceName will be added to consume the data arriving from the partitions
-     * of the input topic.
-     * <p>
-     * The provided {@link ProcessorSupplier} will be used to create an {@link ProcessorNode} that will receive all
-     * records forwarded from the {@link SourceNode}.
-     * This {@link ProcessorNode} should be used to keep the {@link StateStore} up-to-date.
-     * The default {@link TimestampExtractor} as specified in the {@link StreamsConfig config} is used.
-     *
-     * @param storeBuilder          user defined {@link StoreBuilder}; can't be {@code null}
-     * @param sourceName            name of the {@link SourceNode} that will be automatically added
-     * @param topic                 the topic to source the data from
-     * @param consumed              the instance of {@link Consumed} used to define optional parameters; can't be {@code null}
-     * @param processorName         the name of the {@link ProcessorSupplier}
-     * @param stateUpdateSupplier   the instance of {@link ProcessorSupplier}
-     * @return itself
-     * @throws TopologyException if the processor of state is already registered
+     * @deprecated use {@link #addGlobalStore(StoreBuilder, String, Consumed, ProcessorSupplier)} instead
      */
     @SuppressWarnings("unchecked")
+    @Deprecated
     public synchronized StreamsBuilder addGlobalStore(final StoreBuilder storeBuilder,
                                                       final String topic,
                                                       final String sourceName,
@@ -490,6 +477,40 @@ public class StreamsBuilder {
                                               new ConsumedInternal<>(consumed),
                                               processorName,
                                               stateUpdateSupplier);
+        return this;
+    }
+
+    /**
+     * Adds a global {@link StateStore} to the topology.
+     * The {@link StateStore} sources its data from all partitions of the provided input topic.
+     * There will be exactly one instance of this {@link StateStore} per Kafka Streams instance.
+     * <p>
+     * A {@link SourceNode} with the provided sourceName will be added to consume the data arriving from the partitions
+     * of the input topic.
+     * <p>
+     * The provided {@link ProcessorSupplier} will be used to create an {@link ProcessorNode} that will receive all
+     * records forwarded from the {@link SourceNode}.
+     * This {@link ProcessorNode} should be used to keep the {@link StateStore} up-to-date.
+     * The default {@link TimestampExtractor} as specified in the {@link StreamsConfig config} is used.
+     *
+     * @param storeBuilder          user defined {@link StoreBuilder}; can't be {@code null}
+     * @param topic                 the topic to source the data from
+     * @param consumed              the instance of {@link Consumed} used to define optional parameters; can't be {@code null}
+     * @param stateUpdateSupplier   the instance of {@link ProcessorSupplier}
+     * @return itself
+     * @throws TopologyException if the processor of state is already registered
+     */
+    @SuppressWarnings("unchecked")
+    public synchronized StreamsBuilder addGlobalStore(final StoreBuilder storeBuilder,
+                                                      final String topic,
+                                                      final Consumed consumed,
+                                                      final ProcessorSupplier stateUpdateSupplier) {
+        Objects.requireNonNull(storeBuilder, "storeBuilder can't be null");
+        Objects.requireNonNull(consumed, "consumed can't be null");
+        internalStreamsBuilder.addGlobalStore(storeBuilder,
+                topic,
+                new ConsumedInternal<>(consumed),
+                stateUpdateSupplier);
         return this;
     }
 

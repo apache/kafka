@@ -26,6 +26,7 @@ public class CommonFields {
     public static final Field.Int32 PARTITION_ID = new Field.Int32("partition", "Topic partition id");
     public static final Field.Int16 ERROR_CODE = new Field.Int16("error_code", "Response error code");
     public static final Field.NullableStr ERROR_MESSAGE = new Field.NullableStr("error_message", "Response error message");
+    public static final Field.Int32 LEADER_EPOCH = new Field.Int32("leader_epoch", "The epoch");
 
     // Group APIs
     public static final Field.Str GROUP_ID = new Field.Str("group_id", "The unique group identifier");
@@ -50,4 +51,8 @@ public class CommonFields {
     public static final Field.NullableStr HOST_FILTER = new Field.NullableStr("host", "The ACL host filter");
     public static final Field.Int8 OPERATION = new Field.Int8("operation", "The ACL operation");
     public static final Field.Int8 PERMISSION_TYPE = new Field.Int8("permission_type", "The ACL permission type");
+
+    public static final Field.Str PRINCIPAL_TYPE = new Field.Str("principal_type", "principalType of the Kafka principal");
+    public static final Field.Str PRINCIPAL_NAME = new Field.Str("name", "name of the Kafka principal");
+
 }

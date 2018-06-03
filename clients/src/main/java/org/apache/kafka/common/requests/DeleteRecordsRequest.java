@@ -64,8 +64,13 @@ public class DeleteRecordsRequest extends AbstractRequest {
             new Field(TOPICS_KEY_NAME, new ArrayOf(DELETE_RECORDS_REQUEST_TOPIC_V0)),
             new Field(TIMEOUT_KEY_NAME, INT32, "The maximum time to await a response in ms."));
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema DELETE_RECORDS_REQUEST_V1 = DELETE_RECORDS_REQUEST_V0;
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{DELETE_RECORDS_REQUEST_V0};
+        return new Schema[]{DELETE_RECORDS_REQUEST_V0, DELETE_RECORDS_REQUEST_V1};
     }
 
     private final int timeout;
@@ -153,6 +158,7 @@ public class DeleteRecordsRequest extends AbstractRequest {
         short versionId = version();
         switch (versionId) {
             case 0:
+            case 1:
                 return new DeleteRecordsResponse(throttleTimeMs, responseMap);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",

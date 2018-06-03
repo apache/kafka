@@ -93,6 +93,7 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
         this.rejoinRequested = false;
     }
 
+    @Override
     public void requestRejoin() {
         rejoinRequested = true;
     }
@@ -100,6 +101,12 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
     @Override
     public String protocolType() {
         return "connect";
+    }
+
+    // expose for tests
+    @Override
+    protected synchronized boolean ensureCoordinatorReady(final long timeoutMs) {
+        return super.ensureCoordinatorReady(timeoutMs);
     }
 
     public void poll(long timeout) {
@@ -110,11 +117,11 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
 
         do {
             if (coordinatorUnknown()) {
-                ensureCoordinatorReady();
+                ensureCoordinatorReady(Long.MAX_VALUE);
                 now = time.milliseconds();
             }
 
-            if (needRejoin()) {
+            if (rejoinNeededOrPending()) {
                 ensureActiveGroup();
                 now = time.milliseconds();
             }
@@ -281,8 +288,8 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
     }
 
     @Override
-    protected boolean needRejoin() {
-        return super.needRejoin() || (assignmentSnapshot == null || assignmentSnapshot.failed()) || rejoinRequested;
+    protected boolean rejoinNeededOrPending() {
+        return super.rejoinNeededOrPending() || (assignmentSnapshot == null || assignmentSnapshot.failed()) || rejoinRequested;
     }
 
     public String memberId() {
@@ -297,13 +304,13 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
     }
 
     public String ownerUrl(String connector) {
-        if (needRejoin() || !isLeader())
+        if (rejoinNeededOrPending() || !isLeader())
             return null;
         return leaderState.ownerUrl(connector);
     }
 
     public String ownerUrl(ConnectorTaskId task) {
-        if (needRejoin() || !isLeader())
+        if (rejoinNeededOrPending() || !isLeader())
             return null;
         return leaderState.ownerUrl(task);
     }
@@ -315,12 +322,14 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
             this.metricGrpName = metricGrpPrefix + "-coordinator-metrics";
 
             Measurable numConnectors = new Measurable() {
+                @Override
                 public double measure(MetricConfig config, long now) {
                     return assignmentSnapshot.connectors().size();
                 }
             };
 
             Measurable numTasks = new Measurable() {
+                @Override
                 public double measure(MetricConfig config, long now) {
                     return assignmentSnapshot.tasks().size();
                 }

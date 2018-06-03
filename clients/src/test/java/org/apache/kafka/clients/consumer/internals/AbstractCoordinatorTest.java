@@ -20,6 +20,7 @@ import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
@@ -101,7 +102,7 @@ public class AbstractCoordinatorTest {
         mockClient.blackout(coordinatorNode, 10L);
 
         long initialTime = mockTime.milliseconds();
-        coordinator.ensureCoordinatorReady();
+        coordinator.ensureCoordinatorReady(Long.MAX_VALUE);
         long endTime = mockTime.milliseconds();
 
         assertTrue(endTime - initialTime >= RETRY_BACKOFF_MS);
@@ -182,7 +183,7 @@ public class AbstractCoordinatorTest {
         assertTrue("New request sent while one is in progress", future == coordinator.lookupCoordinator());
 
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-        coordinator.ensureCoordinatorReady();
+        coordinator.ensureCoordinatorReady(Long.MAX_VALUE);
         assertTrue("New request not sent after previous completed", future != coordinator.lookupCoordinator());
     }
 
@@ -517,6 +518,30 @@ public class AbstractCoordinatorTest {
         assertEquals(1, coordinator.onJoinCompleteInvokes);
 
         awaitFirstHeartbeat(heartbeatReceived);
+    }
+
+    @Test
+    public void testEnsureCoordinatorReadyWithinBlackoutPeriodAfterAuthenticationFailure() {
+        setupCoordinator(RETRY_BACKOFF_MS);
+
+        mockClient.authenticationFailed(node, 300);
+
+        try {
+            coordinator.ensureCoordinatorReady(Long.MAX_VALUE);
+            fail("Expected an authentication error.");
+        } catch (AuthenticationException e) {
+            // OK
+        }
+
+        mockTime.sleep(30); // wait less than the blackout period
+        assertTrue(mockClient.connectionFailed(node));
+
+        try {
+            coordinator.ensureCoordinatorReady(Long.MAX_VALUE);
+            fail("Expected an authentication error.");
+        } catch (AuthenticationException e) {
+            // OK
+        }
     }
 
     private AtomicBoolean prepareFirstHeartbeat() {

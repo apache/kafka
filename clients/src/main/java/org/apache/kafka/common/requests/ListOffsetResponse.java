@@ -90,8 +90,14 @@ public class ListOffsetResponse extends AbstractResponse {
             THROTTLE_TIME_MS,
             new Field(RESPONSES_KEY_NAME, new ArrayOf(LIST_OFFSET_RESPONSE_TOPIC_V1)));
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema LIST_OFFSET_RESPONSE_V3 = LIST_OFFSET_RESPONSE_V2;
+
     public static Schema[] schemaVersions() {
-        return new Schema[] {LIST_OFFSET_RESPONSE_V0, LIST_OFFSET_RESPONSE_V1, LIST_OFFSET_RESPONSE_V2};
+        return new Schema[] {LIST_OFFSET_RESPONSE_V0, LIST_OFFSET_RESPONSE_V1, LIST_OFFSET_RESPONSE_V2,
+            LIST_OFFSET_RESPONSE_V3};
     }
 
     public static final class PartitionData {
@@ -183,6 +189,7 @@ public class ListOffsetResponse extends AbstractResponse {
         }
     }
 
+    @Override
     public int throttleTimeMs() {
         return throttleTimeMs;
     }
@@ -243,5 +250,10 @@ public class ListOffsetResponse extends AbstractResponse {
             .append(", responseData=").append(responseData)
             .append(")");
         return bld.toString();
+    }
+
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 3;
     }
 }

@@ -20,7 +20,6 @@ import joptsimple.OptionParser
 import kafka.utils._
 import kafka.common.AdminCommandFailedException
 import kafka.zk.KafkaZkClient
-import kafka.zookeeper.ZooKeeperClient
 
 import collection._
 import org.apache.kafka.common.utils.{Time, Utils}
@@ -54,12 +53,10 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
     CommandLineUtils.checkRequiredArgs(parser, options, zkConnectOpt)
 
     val zkConnect = options.valueOf(zkConnectOpt)
-    var zooKeeperClient: ZooKeeperClient = null
     var zkClient: KafkaZkClient = null
     try {
       val time = Time.SYSTEM
-      zooKeeperClient = new ZooKeeperClient(zkConnect, 30000, 30000, Int.MaxValue, time)
-      zkClient = new KafkaZkClient(zooKeeperClient, JaasUtils.isZkSecurityEnabled, time)
+      zkClient = KafkaZkClient(zkConnect, JaasUtils.isZkSecurityEnabled, 30000, 30000, Int.MaxValue, time)
 
       val partitionsForPreferredReplicaElection =
         if (!options.has(jsonFileOpt))

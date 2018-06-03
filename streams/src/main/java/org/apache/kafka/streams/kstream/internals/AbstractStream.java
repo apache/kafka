@@ -16,14 +16,15 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.internals.Topic;
-import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.ValueJoiner;
-import org.apache.kafka.streams.kstream.Window;
-import org.apache.kafka.streams.kstream.Windows;
-import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.streams.state.WindowStore;
+import org.apache.kafka.streams.kstream.ValueTransformer;
+import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
+import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
+import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
+import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.streams.kstream.ValueMapperWithKey;
+import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
 import java.util.HashSet;
 import java.util.Objects;
@@ -33,7 +34,7 @@ public abstract class AbstractStream<K> {
 
     protected final InternalStreamsBuilder builder;
     protected final String name;
-    final Set<String> sourceNodes;
+    protected final Set<String> sourceNodes;
 
     // This copy-constructor will allow to extend KStream
     // and KTable APIs with new methods without impacting the public interface.
@@ -53,6 +54,11 @@ public abstract class AbstractStream<K> {
         this.sourceNodes = sourceNodes;
     }
 
+    // This method allows to expose the InternalTopologyBuilder instance
+    // to subclasses that extend AbstractStream class.
+    protected InternalTopologyBuilder internalTopologyBuilder() {
+        return builder.internalTopologyBuilder;
+    }
 
     Set<String> ensureJoinableWith(final AbstractStream<K> other) {
         Set<String> allSourceNodes = new HashSet<>();
@@ -64,12 +70,6 @@ public abstract class AbstractStream<K> {
         return allSourceNodes;
     }
 
-    String getOrCreateName(final String queryableStoreName, final String prefix) {
-        final String returnName = queryableStoreName != null ? queryableStoreName : builder.newStoreName(prefix);
-        Topic.validate(returnName);
-        return returnName;
-    }
-
     static <T2, T1, R> ValueJoiner<T2, T1, R> reverseJoiner(final ValueJoiner<T1, T2, R> joiner) {
         return new ValueJoiner<T2, T1, R>() {
             @Override
@@ -79,37 +79,39 @@ public abstract class AbstractStream<K> {
         };
     }
 
-    @SuppressWarnings({"unchecked", "deprecation"})
-    static <T, K>  org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> keyValueStore(final Serde<K> keySerde,
-                                                                   final Serde<T> aggValueSerde,
-                                                                   final String storeName) {
-        Objects.requireNonNull(storeName, "storeName can't be null");
-        Topic.validate(storeName);
-        return storeFactory(keySerde, aggValueSerde, storeName).build();
+    static <K, V, VR> ValueMapperWithKey<K, V, VR> withKey(final ValueMapper<V, VR> valueMapper) {
+        Objects.requireNonNull(valueMapper, "valueMapper can't be null");
+        return new ValueMapperWithKey<K, V, VR>() {
+            @Override
+            public VR apply(final K readOnlyKey, final V value) {
+                return valueMapper.apply(value);
+            }
+        };
     }
 
-    @SuppressWarnings({"unchecked", "deprecation"})
-    static  <W extends Window, T, K> org.apache.kafka.streams.processor.StateStoreSupplier<WindowStore> windowedStore(final Serde<K> keySerde,
-                                                                                   final Serde<T> aggValSerde,
-                                                                                   final Windows<W> windows,
-                                                                                   final String storeName) {
-        Objects.requireNonNull(storeName, "storeName can't be null");
-        Topic.validate(storeName);
-        return storeFactory(keySerde, aggValSerde, storeName)
-                .windowed(windows.size(), windows.maintainMs(), windows.segments, false)
-                .build();
+    static <K, V, VR> ValueTransformerWithKeySupplier<K, V, VR> toValueTransformerWithKeySupplier(final ValueTransformerSupplier<V, VR> valueTransformerSupplier) {
+        Objects.requireNonNull(valueTransformerSupplier, "valueTransformerSupplier can't be null");
+        return new ValueTransformerWithKeySupplier<K, V, VR>() {
+            @Override
+            public ValueTransformerWithKey<K, V, VR> get() {
+                final ValueTransformer<V, VR> valueTransformer = valueTransformerSupplier.get();
+                return new ValueTransformerWithKey<K, V, VR>() {
+                    @Override
+                    public void init(final ProcessorContext context) {
+                        valueTransformer.init(context);
+                    }
+
+                    @Override
+                    public VR transform(final K readOnlyKey, final V value) {
+                        return valueTransformer.transform(value);
+                    }
+
+                    @Override
+                    public void close() {
+                        valueTransformer.close();
+                    }
+                };
+            }
+        };
     }
-
-    @SuppressWarnings("deprecation")
-    static  <T, K> Stores.PersistentKeyValueFactory<K, T> storeFactory(final Serde<K> keySerde,
-                                                                       final Serde<T> aggValueSerde,
-                                                                       final String storeName) {
-        return Stores.create(storeName)
-                .withKeys(keySerde)
-                .withValues(aggValueSerde)
-                .persistent()
-                .enableCaching();
-    }
-
-
 }
