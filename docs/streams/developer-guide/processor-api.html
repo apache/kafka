@@ -354,9 +354,10 @@
         </div>
         <div class="section" id="accessing-processor-context">
             <h2><a class="toc-backref" href="#id10">Accessing Processor Context</a><a class="headerlink" href="#accessing-processor-context" title="Permalink to this headline"></a></h2>
-            <p><code class="docutils literal"><span class="pre">ProcessorContext</span></code> gives access to metadata related with Processor state and the current record being processed.</p>
-            <p>This includes Stream Application metadata like <code class="docutils literal"><span class="pre">applicationId</span></code>, <code class="docutils literal"><span class="pre">taskId</span></code>, 
-                and <code class="docutils literal"><span class="pre">stateDir</span></code>, and also Record related metadata as <code class="docutils literal"><span class="pre">topic</span></code>, 
+            <p>As we have mentioned in <href=#defining-a-stream-processor>Defining a Stream Processor<\href>, a <code>ProcessorContext</code> control the processing workflow, such as scheduling a punctuation function, and committing the current processed state.</p>
+            <p>This object can also be used to access the metadata related with the application like 
+            <code class="docutils literal"><span class="pre">applicationId</span></code>, <code class="docutils literal"><span class="pre">taskId</span></code>, 
+                and <code class="docutils literal"><span class="pre">stateDir</span></code>, and also record related metadata as <code class="docutils literal"><span class="pre">topic</span></code>, 
                 <code class="docutils literal"><span class="pre">partition</span></code>, <code class="docutils literal"><span class="pre">offset</span></code>, <code class="docutils literal"><span class="pre">timestamp</span></code> and 
                 <code class="docutils literal"><span class="pre">headers</span></code>.</p>
             <p>Here is an example implementation of how to add a new header to the record:</p>
