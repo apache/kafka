@@ -22,5 +22,4 @@ package kafka.common
  * able to append (after some recovery)
  */
 class UnexpectedAppendOffsetException(val message: String, val firstOffset: Long) extends RuntimeException(message) {
-    def this(firstOffset: Long) = this(null, firstOffset)
 }
