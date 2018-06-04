@@ -220,7 +220,7 @@ public class ConsumerConfig extends AbstractConfig {
 
     /** <code>max.block.ms</code> */
     public static final String MAX_BLOCK_MS_CONFIG = "max.block.ms";
-    public static final String MAX_BLOCK_MS_DOC = "The configuration controls the maximum time that the consumer will block for";
+    public static final String MAX_BLOCK_MS_DOC = "The configuration controls the maximum time the consumer will block for. This configuration is used as the default timeout for all consumer operations that do not explicitly accept a <code>timeout</code> option.";
 
     /** <code>interceptor.classes</code> */
     public static final String INTERCEPTOR_CLASSES_CONFIG = "interceptor.classes";
