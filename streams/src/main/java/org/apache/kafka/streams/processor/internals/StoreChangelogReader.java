@@ -69,6 +69,9 @@ public class StoreChangelogReader implements ChangelogReader {
     public Collection<TopicPartition> restore(final RestoringTasks active) {
         if (!needsInitializing.isEmpty()) {
             initialize();
+            final Set<TopicPartition> remainingPartitions = new HashSet<>(needsRestoring.keySet());
+            remainingPartitions.removeAll(updatedEndOffsets.keySet());
+            updatedEndOffsets.putAll(restoreConsumer.endOffsets(remainingPartitions));
         }
 
         if (needsRestoring.isEmpty()) {
@@ -77,9 +80,6 @@ public class StoreChangelogReader implements ChangelogReader {
         }
 
         try {
-            final Set<TopicPartition> remainingPartitions = new HashSet<>(needsRestoring.keySet());
-            remainingPartitions.removeAll(updatedEndOffsets.keySet());
-            updatedEndOffsets.putAll(restoreConsumer.endOffsets(remainingPartitions));
             final ConsumerRecords<byte[], byte[]> records = restoreConsumer.poll(10);
             final Iterator<TopicPartition> iterator = needsRestoring.keySet().iterator();
             while (iterator.hasNext()) {
