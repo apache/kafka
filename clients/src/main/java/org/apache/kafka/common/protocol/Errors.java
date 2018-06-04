@@ -79,6 +79,7 @@ import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.errors.TopicDeletionDisabledException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.errors.TransactionCoordinatorFencedException;
@@ -623,6 +624,13 @@ public enum Errors {
             @Override
             public ApiException build(String message) {
                 return new InvalidFetchSessionEpochException(message);
+            }
+    }),
+    TOPIC_DELETION_DISABLED(72, "Topic deletion is disabled.",
+        new ApiExceptionBuilder() {
+            @Override
+            public ApiException build(String message) {
+                return new TopicDeletionDisabledException(message);
             }
     });
 
