@@ -96,7 +96,8 @@ public class DeadLetterQueueReporter implements ErrorReporter {
      * @param context processing context containing the raw record at {@link ProcessingContext#consumerRecord()}.
      */
     public void report(ProcessingContext context) {
-        if (connConfig.dlqTopicName().isEmpty()) {
+        final String dlqTopicName = connConfig.dlqTopicName();
+        if (dlqTopicName.isEmpty()) {
             return;
         }
 
@@ -110,16 +111,16 @@ public class DeadLetterQueueReporter implements ErrorReporter {
 
         ProducerRecord<byte[], byte[]> producerRecord;
         if (originalMessage.timestamp() == RecordBatch.NO_TIMESTAMP) {
-            producerRecord = new ProducerRecord<>(connConfig.dlqTopicName(), null,
+            producerRecord = new ProducerRecord<>(dlqTopicName, null,
                     originalMessage.key(), originalMessage.value(), originalMessage.headers());
         } else {
-            producerRecord = new ProducerRecord<>(connConfig.dlqTopicName(), null, originalMessage.timestamp(),
+            producerRecord = new ProducerRecord<>(dlqTopicName, null, originalMessage.timestamp(),
                     originalMessage.key(), originalMessage.value(), originalMessage.headers());
         }
 
         this.kafkaProducer.send(producerRecord, (metadata, exception) -> {
             if (exception != null) {
-                log.error("Could not produce message to dead letter queue. topic=" + connConfig.dlqTopicName(), exception);
+                log.error("Could not produce message to dead letter queue. topic=" + dlqTopicName, exception);
                 errorHandlingMetrics.recordDeadLetterQueueProduceFailed();
             }
         });

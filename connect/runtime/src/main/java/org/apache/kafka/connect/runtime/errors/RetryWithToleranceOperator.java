@@ -57,13 +57,6 @@ public class RetryWithToleranceOperator {
 
     public static final long RETRIES_DELAY_MIN_MS = 300;
 
-    // for testing only
-    public static final RetryWithToleranceOperator NOOP_OPERATOR = new RetryWithToleranceOperator(
-            ConnectorConfig.ERRORS_RETRY_TIMEOUT_DEFAULT, ConnectorConfig.ERRORS_RETRY_MAX_DELAY_DEFAULT, ToleranceType.NONE, Time.SYSTEM);
-    static {
-        NOOP_OPERATOR.metrics(new ErrorHandlingMetrics());
-    }
-
     private static final Map<Stage, Class<? extends Exception>> TOLERABLE_EXCEPTIONS = new HashMap<>();
     static {
         TOLERABLE_EXCEPTIONS.put(Stage.TRANSFORMATION, Exception.class);
@@ -81,15 +74,6 @@ public class RetryWithToleranceOperator {
     private ErrorHandlingMetrics errorHandlingMetrics;
 
     protected ProcessingContext context = new ProcessingContext();
-
-    public RetryWithToleranceOperator(ConnectorConfig connConfig) {
-        this(connConfig, Time.SYSTEM);
-    }
-
-    // Visible for testing
-    public RetryWithToleranceOperator(ConnectorConfig connConfig, Time time) {
-        this(connConfig.errorRetryTimeout(), connConfig.errorMaxDelayInMillis(), connConfig.errorToleranceType(), time);
-    }
 
     public RetryWithToleranceOperator(long errorRetryTimeout, long errorMaxDelayInMillis,
                                       ToleranceType toleranceType, Time time) {

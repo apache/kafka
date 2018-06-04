@@ -485,7 +485,8 @@ public class Worker {
                                        ClassLoader loader) {
         ErrorHandlingMetrics errorHandlingMetrics = errorHandlingMetrics(id);
 
-        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(connConfig);
+        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(connConfig.errorRetryTimeout(),
+                connConfig.errorMaxDelayInMillis(), connConfig.errorToleranceType(), Time.SYSTEM);
         retryWithToleranceOperator.metrics(errorHandlingMetrics);
 
         // Decide which type of worker task we need based on the type of task.

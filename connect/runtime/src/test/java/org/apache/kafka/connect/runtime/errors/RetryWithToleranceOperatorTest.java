@@ -38,8 +38,11 @@ import java.util.Map;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.utils.Time.SYSTEM;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.ERRORS_RETRY_MAX_DELAY_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.ERRORS_RETRY_MAX_DELAY_DEFAULT;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.ERRORS_RETRY_TIMEOUT_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.ERRORS_RETRY_TIMEOUT_DEFAULT;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.ERRORS_TOLERANCE_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.ERRORS_TOLERANCE_DEFAULT;
 import static org.apache.kafka.connect.runtime.errors.ToleranceType.ALL;
 import static org.apache.kafka.connect.runtime.errors.ToleranceType.NONE;
@@ -53,6 +56,12 @@ import static org.junit.Assert.assertTrue;
 @PrepareForTest({ProcessingContext.class})
 @PowerMockIgnore("javax.management.*")
 public class RetryWithToleranceOperatorTest {
+
+    public static final RetryWithToleranceOperator NOOP_OPERATOR = new RetryWithToleranceOperator(
+            ERRORS_RETRY_TIMEOUT_DEFAULT, ERRORS_RETRY_MAX_DELAY_DEFAULT, NONE, SYSTEM);
+    static {
+        NOOP_OPERATOR.metrics(new ErrorHandlingMetrics());
+    }
 
     @SuppressWarnings("unused")
     @Mock
@@ -277,13 +286,13 @@ public class RetryWithToleranceOperatorTest {
     @Test
     public void testSetConfigs() {
         ConnectorConfig configuration;
-        configuration = config(singletonMap("errors.retry.timeout", "100"));
+        configuration = config(singletonMap(ERRORS_RETRY_TIMEOUT_CONFIG, "100"));
         assertEquals(configuration.errorRetryTimeout(), 100);
 
-        configuration = config(singletonMap("errors.retry.delay.max.ms", "100"));
+        configuration = config(singletonMap(ERRORS_RETRY_MAX_DELAY_CONFIG, "100"));
         assertEquals(configuration.errorMaxDelayInMillis(), 100);
 
-        configuration = config(singletonMap("errors.allowed.max", "none"));
+        configuration = config(singletonMap(ERRORS_TOLERANCE_CONFIG, "none"));
         assertEquals(configuration.errorToleranceType(), ToleranceType.NONE);
 
         PowerMock.verifyAll();

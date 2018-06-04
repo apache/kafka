@@ -81,7 +81,7 @@ public class ErrorReporterTest {
 
     @Test
     public void testDLQConfigWithEmptyTopicName() {
-        DeadLetterQueueReporter deadLetterQueueReporter = new DeadLetterQueueReporter(producer, sinkConfig(emptyMap()));
+        DeadLetterQueueReporter deadLetterQueueReporter = new DeadLetterQueueReporter(producer, config(emptyMap()));
         deadLetterQueueReporter.metrics(errorHandlingMetrics);
 
         ProcessingContext context = processingContext();
@@ -96,7 +96,7 @@ public class ErrorReporterTest {
 
     @Test
     public void testDLQConfigWithValidTopicName() {
-        DeadLetterQueueReporter deadLetterQueueReporter = new DeadLetterQueueReporter(producer, sinkConfig(singletonMap(SinkConnectorConfig.DLQ_TOPIC_NAME_CONFIG, DLQ_TOPIC)));
+        DeadLetterQueueReporter deadLetterQueueReporter = new DeadLetterQueueReporter(producer, config(singletonMap(SinkConnectorConfig.DLQ_TOPIC_NAME_CONFIG, DLQ_TOPIC)));
         deadLetterQueueReporter.metrics(errorHandlingMetrics);
 
         ProcessingContext context = processingContext();
@@ -111,7 +111,7 @@ public class ErrorReporterTest {
 
     @Test
     public void testReportDLQTwice() {
-        DeadLetterQueueReporter deadLetterQueueReporter = new DeadLetterQueueReporter(producer, sinkConfig(singletonMap(SinkConnectorConfig.DLQ_TOPIC_NAME_CONFIG, DLQ_TOPIC)));
+        DeadLetterQueueReporter deadLetterQueueReporter = new DeadLetterQueueReporter(producer, config(singletonMap(SinkConnectorConfig.DLQ_TOPIC_NAME_CONFIG, DLQ_TOPIC)));
         deadLetterQueueReporter.metrics(errorHandlingMetrics);
 
         ProcessingContext context = processingContext();
@@ -187,20 +187,12 @@ public class ErrorReporterTest {
         return context;
     }
 
-    private SinkConnectorConfig sinkConfig(Map<String, String> configProps) {
+    private SinkConnectorConfig config(Map<String, String> configProps) {
         Map<String, String> props = new HashMap<>();
         props.put(ConnectorConfig.NAME_CONFIG, "test");
         props.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, SinkTask.class.getName());
         props.putAll(configProps);
         return new SinkConnectorConfig(plugins, props);
-    }
-
-    private ConnectorConfig config(Map<String, String> configProps) {
-        Map<String, String> props = new HashMap<>();
-        props.put(ConnectorConfig.NAME_CONFIG, "test");
-        props.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, SinkTask.class.getName());
-        props.putAll(configProps);
-        return new ConnectorConfig(plugins, props);
     }
 
     private void assertErrorHandlingMetricValue(String name, double expected) {

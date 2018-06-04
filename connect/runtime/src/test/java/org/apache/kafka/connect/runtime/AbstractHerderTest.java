@@ -172,7 +172,7 @@ public class AbstractHerderTest {
         assertEquals(TestSourceConnector.class.getName(), result.name());
         assertEquals(Arrays.asList(ConnectorConfig.COMMON_GROUP, ConnectorConfig.TRANSFORMS_GROUP, ConnectorConfig.ERROR_GROUP), result.groups());
         assertEquals(2, result.errorCount());
-        // Base connector config has 8 fields, connector's configs add 2
+        // Base connector config has 13 fields, connector's configs add 2
         assertEquals(15, result.values().size());
         // Missing name should generate an error
         assertEquals(ConnectorConfig.NAME_CONFIG, result.values().get(0).configValue().name());
@@ -234,7 +234,7 @@ public class AbstractHerderTest {
         );
         assertEquals(expectedGroups, result.groups());
         assertEquals(2, result.errorCount());
-        // Base connector config has 8 fields, connector's configs add 2, 2 type fields from the transforms, and
+        // Base connector config has 13 fields, connector's configs add 2, 2 type fields from the transforms, and
         // 1 from the valid transformation's config
         assertEquals(18, result.values().size());
         // Should get 2 type fields from the transforms, first adds its own config since it has a valid class

@@ -35,6 +35,7 @@ import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
 import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
 import org.apache.kafka.connect.runtime.errors.LogReporter;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
+import org.apache.kafka.connect.runtime.errors.ToleranceType;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
@@ -70,6 +71,7 @@ import java.util.Map;
 
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonList;
+import static org.apache.kafka.common.utils.Time.SYSTEM;
 import static org.junit.Assert.assertEquals;
 
 @RunWith(PowerMockRunner.class)
@@ -91,17 +93,11 @@ public class ErrorHandlingTaskTest {
         TASK_PROPS.put(TaskConfig.TASK_CLASS_CONFIG, TestSinkTask.class.getName());
     }
 
+    public static final long OPERATOR_RETRY_TIMEOUT_MILLIS = 60000;
+    public static final long OPERATOR_RETRY_MAX_DELAY_MILLIS = 5000;
+    public static final ToleranceType OPERATOR_TOLERANCE_TYPE = ToleranceType.ALL;
+
     private static final TaskConfig TASK_CONFIG = new TaskConfig(TASK_PROPS);
-
-    private static final Map<String, String> OPERATION_EXECUTOR_PROPS = new HashMap<>();
-
-    static {
-        OPERATION_EXECUTOR_PROPS.put(ConnectorConfig.ERRORS_TOLERANCE_CONFIG, "all");
-        // wait up to 1 minute for an operation
-        OPERATION_EXECUTOR_PROPS.put(ConnectorConfig.ERRORS_RETRY_TIMEOUT_CONFIG, "60000");
-        // wait for up to 5 seconds between reattempts
-        OPERATION_EXECUTOR_PROPS.put(ConnectorConfig.ERRORS_RETRY_MAX_DELAY_CONFIG, "5000");
-    }
 
     private ConnectorTaskId taskId = new ConnectorTaskId("job", 0);
     private TargetState initialState = TargetState.STARTED;
@@ -173,7 +169,7 @@ public class ErrorHandlingTaskTest {
         LogReporter reporter = new LogReporter(taskId, connConfig(reportProps));
         reporter.metrics(errorHandlingMetrics);
 
-        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(connConfig(OPERATION_EXECUTOR_PROPS), time);
+        RetryWithToleranceOperator retryWithToleranceOperator = operator();
         retryWithToleranceOperator.metrics(errorHandlingMetrics);
         retryWithToleranceOperator.reporters(singletonList(reporter));
         createSinkTask(initialState, retryWithToleranceOperator);
@@ -213,6 +209,10 @@ public class ErrorHandlingTaskTest {
         PowerMock.verifyAll();
     }
 
+    private RetryWithToleranceOperator operator() {
+        return new RetryWithToleranceOperator(OPERATOR_RETRY_TIMEOUT_MILLIS, OPERATOR_RETRY_MAX_DELAY_MILLIS, OPERATOR_TOLERANCE_TYPE, SYSTEM);
+    }
+
     @Test
     public void testErrorHandlingInSourceTasks() throws Exception {
         Map<String, String> reportProps = new HashMap<>();
@@ -221,7 +221,7 @@ public class ErrorHandlingTaskTest {
         LogReporter reporter = new LogReporter(taskId, connConfig(reportProps));
         reporter.metrics(errorHandlingMetrics);
 
-        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(connConfig(OPERATION_EXECUTOR_PROPS), time);
+        RetryWithToleranceOperator retryWithToleranceOperator = operator();
         retryWithToleranceOperator.metrics(errorHandlingMetrics);
         retryWithToleranceOperator.reporters(singletonList(reporter));
         createSourceTask(initialState, retryWithToleranceOperator);
@@ -286,7 +286,7 @@ public class ErrorHandlingTaskTest {
         LogReporter reporter = new LogReporter(taskId, connConfig(reportProps));
         reporter.metrics(errorHandlingMetrics);
 
-        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(connConfig(OPERATION_EXECUTOR_PROPS), time);
+        RetryWithToleranceOperator retryWithToleranceOperator = operator();
         retryWithToleranceOperator.metrics(errorHandlingMetrics);
         retryWithToleranceOperator.reporters(singletonList(reporter));
         createSourceTask(initialState, retryWithToleranceOperator, badConverter());
