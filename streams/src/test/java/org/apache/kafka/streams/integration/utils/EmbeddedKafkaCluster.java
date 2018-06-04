@@ -29,6 +29,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.rules.ExternalResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import scala.collection.JavaConverters;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -296,8 +297,8 @@ public class EmbeddedKafkaCluster extends ExternalResource {
 
         @Override
         public boolean conditionMet() {
-            final Set<String> allTopics = new HashSet<>();
-            allTopics.addAll(scala.collection.JavaConversions.seqAsJavaList(zkUtils.getAllTopics()));
+            final Set<String> allTopics = new HashSet<>(
+                    JavaConverters.seqAsJavaListConverter(zkUtils.getAllTopics()).asJava());
             return !allTopics.removeAll(deletedTopics);
         }
     }
@@ -311,8 +312,8 @@ public class EmbeddedKafkaCluster extends ExternalResource {
 
         @Override
         public boolean conditionMet() {
-            final Set<String> allTopics = new HashSet<>();
-            allTopics.addAll(scala.collection.JavaConversions.seqAsJavaList(zkUtils.getAllTopics()));
+            final Set<String> allTopics = new HashSet<>(
+                    JavaConverters.seqAsJavaListConverter(zkUtils.getAllTopics()).asJava());
             return allTopics.equals(remainingTopics);
         }
     }

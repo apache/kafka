@@ -214,25 +214,20 @@ public class JmxReporter implements MetricsReporter {
 
         @Override
         public MBeanInfo getMBeanInfo() {
-            return new LazyMBeanInfo(this.getClass().getName(), "", null, null, null) {
-                @Override
-                protected MBeanAttributeInfo[] buildAttributes() {
-                    MBeanAttributeInfo[] attrs = new MBeanAttributeInfo[metrics.size()];
-                    int i = 0;
-                    for (Map.Entry<String, KafkaMetric> entry : metrics.entrySet()) {
-                        String attribute = entry.getKey();
-                        KafkaMetric metric = entry.getValue();
-                        attrs[i] = new MBeanAttributeInfo(attribute,
-                            double.class.getName(),
-                            metric.metricName().description(),
-                            true,
-                            false,
-                            false);
-                        i += 1;
-                    }
-                    return attrs;
-                }
-            };
+            MBeanAttributeInfo[] attrs = new MBeanAttributeInfo[metrics.size()];
+            int i = 0;
+            for (Map.Entry<String, KafkaMetric> entry : this.metrics.entrySet()) {
+                String attribute = entry.getKey();
+                KafkaMetric metric = entry.getValue();
+                attrs[i] = new MBeanAttributeInfo(attribute,
+                                                  double.class.getName(),
+                                                  metric.metricName().description(),
+                                                  true,
+                                                  false,
+                                                  false);
+                i += 1;
+            }
+            return new MBeanInfo(this.getClass().getName(), "", attrs, null, null, null);
         }
 
         @Override
