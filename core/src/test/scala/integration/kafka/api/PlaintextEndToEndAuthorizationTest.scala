@@ -75,6 +75,7 @@ class PlaintextEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
 
   @Test
   def testListenerName() {
+    // To check the client listener name, establish a session on the server by sending any request eg sendRecords
     try {
       sendRecords(1, tp)
       fail("Should have thrown a TopicAuthorizationException")
