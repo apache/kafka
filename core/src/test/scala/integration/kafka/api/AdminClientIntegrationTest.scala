@@ -817,7 +817,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     val leaders = createTopic(topic, numPartitions = 1, replicationFactor = serverCount)
     val followerIndex = if (leaders(0) != servers(0).config.brokerId) 0 else 1
 
-    def waitForFollowerLSOandLOEAfterRestart(expectedLSO: Long, expectedLOE: Long): Unit = {
+    def waitForFollowerLSOandLEOAfterRestart(expectedLSO: Long, expectedLEO: Long): Unit = {
       TestUtils.waitUntilTrue(() => servers(followerIndex).replicaManager.getReplica(topicPartition) != None,
                               "Expected follower to create replica for partition")
 
@@ -827,8 +827,8 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       }, s"Expected follower to discover new log start offset $expectedLSO")
 
       TestUtils.waitUntilTrue(() => {
-        servers(followerIndex).replicaManager.getReplica(topicPartition).get.logEndOffset.messageOffset == expectedLOE
-      }, s"Expected new replica to catch up to log end offset $expectedLOE")
+        servers(followerIndex).replicaManager.getReplica(topicPartition).get.logEndOffset.messageOffset == expectedLEO
+      }, s"Expected new replica to catch up to log end offset $expectedLEO")
     }
 
     // we will produce to topic and delete records while one follower is down
@@ -843,7 +843,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     // start the stopped broker to verify that it will be able to fetch from new log start offset
     restartDeadBrokers()
 
-    waitForFollowerLSOandLOEAfterRestart(expectedLSO=3L, expectedLOE=100L)
+    waitForFollowerLSOandLEOAfterRestart(expectedLSO=3L, expectedLEO=100L)
 
     // after the new replica caught up, all replicas should have same log start offset
     for (i <- 0 until serverCount)
@@ -855,7 +855,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     val result1 = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(117L)).asJava)
     result1.all().get()
     restartDeadBrokers()
-    waitForFollowerLSOandLOEAfterRestart(expectedLSO=117L, expectedLOE=200L)
+    waitForFollowerLSOandLEOAfterRestart(expectedLSO=117L, expectedLEO=200L)
 
     client.close()
   }
@@ -864,8 +864,8 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
   def testAlterLogDirsAfterDeleteRecords(): Unit = {
     client = AdminClient.create(createConfig)
     createTopic(topic, numPartitions = 1, replicationFactor = serverCount)
-    val expectedLOE = 100
-    sendRecords(producers.head, expectedLOE, topicPartition)
+    val expectedLEO = 100
+    sendRecords(producers.head, expectedLEO, topicPartition)
 
     // delete records to move log start offset
     val result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(3L)).asJava)
@@ -873,7 +873,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     // make sure we are in the expected state after delete records
     for (i <- 0 until serverCount) {
       assertEquals(3, servers(i).replicaManager.getReplica(topicPartition).get.logStartOffset)
-      assertEquals(expectedLOE, servers(i).replicaManager.getReplica(topicPartition).get.logEndOffset.messageOffset)
+      assertEquals(expectedLEO, servers(i).replicaManager.getReplica(topicPartition).get.logEndOffset.messageOffset)
     }
 
     // we will create another dir just for one server
@@ -886,9 +886,9 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       futureLogDir == servers(0).logManager.getLog(topicPartition).get.dir.getParent
     }, "timed out waiting for replica movement")
 
-    // once replica moved, its LSO and LOE should match other replicas
+    // once replica moved, its LSO and LEO should match other replicas
     assertEquals(3, servers(0).replicaManager.getReplica(topicPartition).get.logStartOffset)
-    assertEquals(expectedLOE, servers(0).replicaManager.getReplica(topicPartition).get.logEndOffset.messageOffset)
+    assertEquals(expectedLEO, servers(0).replicaManager.getReplica(topicPartition).get.logEndOffset.messageOffset)
 
     client.close()
   }
