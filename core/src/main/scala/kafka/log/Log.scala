@@ -29,7 +29,7 @@ import java.util.regex.Pattern
 
 import com.yammer.metrics.core.Gauge
 import kafka.api.KAFKA_0_10_0_IV0
-import kafka.common.{InvalidOffsetException, KafkaException, LogSegmentOffsetOverflowException, LongRef}
+import kafka.common.{InvalidOffsetException, KafkaException, LogSegmentOffsetOverflowException, LongRef, UnexpectedAppendOffsetException}
 import kafka.message.{BrokerCompressionCodec, CompressionCodec, NoCompressionCodec}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.checkpoints.{LeaderEpochCheckpointFile, LeaderEpochFile}
@@ -798,9 +798,21 @@ class Log(@volatile var dir: File,
           }
         } else {
           // we are taking the offsets we are given
-          if (!appendInfo.offsetsMonotonic || appendInfo.firstOrLastOffset < nextOffsetMetadata.messageOffset)
+          if (!appendInfo.offsetsMonotonic)
             throw new IllegalArgumentException(s"Out of order offsets found in append to $topicPartition: " +
+                                               records.records.asScala.map(_.offset))
+
+          if (appendInfo.firstOrLastOffset < nextOffsetMetadata.messageOffset) {
+            if (appendInfo.firstOffset.isDefined && logStartOffset == nextOffsetMetadata.messageOffset) {
+              // we may still be able to recover from this since there are no records in the log
+              throw new UnexpectedAppendOffsetException(
+                s"Unexpected offset in append to $topicPartition. First offset ${appendInfo.firstOrLastOffset} is less than log start offset $logStartOffset",
+                appendInfo.firstOrLastOffset)
+            }
+            throw new IllegalArgumentException(
+              s"Out of order offsets found in append to $topicPartition: " +
               records.records.asScala.map(_.offset))
+          }
         }
 
         // update the epoch cache with the epoch stamped onto the message by the leader

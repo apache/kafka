@@ -23,6 +23,7 @@ import java.util.concurrent.{ExecutionException, TimeUnit}
 import java.io.File
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 
+import kafka.api.Request
 import org.apache.kafka.clients.admin.KafkaAdminClientTest
 import org.apache.kafka.common.utils.{Time, Utils}
 import kafka.log.LogConfig
@@ -809,6 +810,87 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
 
     for (i <- 0 until serverCount)
       assertEquals(3, servers(i).replicaManager.getReplica(topicPartition).get.logStartOffset)
+  }
+
+  @Test
+  def testReplicaCanFetchFromLogStartOffsetAfterDeleteRecords(): Unit = {
+    val leaders = createTopic(topic, numPartitions = 1, replicationFactor = serverCount)
+    val followerIndex = if (leaders(0) != servers(0).config.brokerId) 0 else 1
+
+    def waitForFollowerLSOandLOEAfterRestart(expectedLSO: Long, expectedLOE: Long): Unit = {
+      TestUtils.waitUntilTrue(() => servers(followerIndex).replicaManager.getReplica(topicPartition) != None,
+                              "Expected follower to create replica for partition")
+
+      // wait until the follower discovers that log start offset moved beyond its HW
+      TestUtils.waitUntilTrue(() => {
+        servers(followerIndex).replicaManager.getReplica(topicPartition).get.logStartOffset == expectedLSO
+      }, s"Expected follower to discover new log start offset $expectedLSO")
+
+      TestUtils.waitUntilTrue(() => {
+        servers(followerIndex).replicaManager.getReplica(topicPartition).get.logEndOffset.messageOffset == expectedLOE
+      }, s"Expected new replica to catch up to log end offset $expectedLOE")
+    }
+
+    // we will produce to topic and delete records while one follower is down
+    killBroker(followerIndex)
+
+    client = AdminClient.create(createConfig)
+    sendRecords(producers.head, 100, topicPartition)
+
+    val result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(3L)).asJava)
+    result.all().get()
+
+    // start the stopped broker to verify that it will be able to fetch from new log start offset
+    restartDeadBrokers()
+
+    waitForFollowerLSOandLOEAfterRestart(expectedLSO=3L, expectedLOE=100L)
+
+    // after the new replica caught up, all replicas should have same log start offset
+    for (i <- 0 until serverCount)
+      assertEquals(3, servers(i).replicaManager.getReplica(topicPartition).get.logStartOffset)
+
+    // kill the same follower again, produce more records, and delete records beyond follower's LOE
+    killBroker(followerIndex)
+    sendRecords(producers.head, 100, topicPartition)
+    val result1 = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(117L)).asJava)
+    result1.all().get()
+    restartDeadBrokers()
+    waitForFollowerLSOandLOEAfterRestart(expectedLSO=117L, expectedLOE=200L)
+
+    client.close()
+  }
+
+  @Test
+  def testAlterLogDirsAfterDeleteRecords(): Unit = {
+    client = AdminClient.create(createConfig)
+    createTopic(topic, numPartitions = 1, replicationFactor = serverCount)
+    val expectedLOE = 100
+    sendRecords(producers.head, expectedLOE, topicPartition)
+
+    // delete records to move log start offset
+    val result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(3L)).asJava)
+    result.all().get()
+    // make sure we are in the expected state after delete records
+    for (i <- 0 until serverCount) {
+      assertEquals(3, servers(i).replicaManager.getReplica(topicPartition).get.logStartOffset)
+      assertEquals(expectedLOE, servers(i).replicaManager.getReplica(topicPartition).get.logEndOffset.messageOffset)
+    }
+
+    // we will create another dir just for one server
+    val futureLogDir = servers(0).config.logDirs(1)
+    val futureReplica = new TopicPartitionReplica(topic, 0, servers(0).config.brokerId)
+
+    // Verify that replica can be moved to the specified log directory
+    client.alterReplicaLogDirs(Map(futureReplica -> futureLogDir).asJava).all.get
+    TestUtils.waitUntilTrue(() => {
+      futureLogDir == servers(0).logManager.getLog(topicPartition).get.dir.getParent
+    }, "timed out waiting for replica movement")
+
+    // once replica moved, its LSO and LOE should match other replicas
+    assertEquals(3, servers(0).replicaManager.getReplica(topicPartition).get.logStartOffset)
+    assertEquals(expectedLOE, servers(0).replicaManager.getReplica(topicPartition).get.logEndOffset.messageOffset)
+
+    client.close()
   }
 
   @Test

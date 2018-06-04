@@ -22,7 +22,8 @@ import java.nio.ByteBuffer
 import java.nio.file.{Files, Paths}
 import java.util.Properties
 
-import kafka.common.KafkaException
+import org.apache.kafka.common.errors._
+import kafka.common.{UnexpectedAppendOffsetException, KafkaException}
 import kafka.log.Log.DeleteDirSuffix
 import kafka.server.epoch.{EpochEntry, LeaderEpochCache, LeaderEpochFileCache}
 import kafka.server.{BrokerTopicStats, FetchDataInfo, KafkaConfig, LogDirFailureChannel}
@@ -1892,6 +1893,16 @@ class LogTest {
     records.foreach(record => log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, record), leaderEpoch = 0))
     val invalidRecord = MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord(1.toString.getBytes))
     log.appendAsFollower(invalidRecord)
+  }
+
+  @Test(expected = classOf[UnexpectedAppendOffsetException])
+  def testAppendEmptyLogBelowLogStartOffsetThrowsException() {
+    createEmptyLogs(logDir, 7)
+    val log = createLog(logDir, LogConfig())
+    assertEquals(7L, log.logStartOffset)
+    assertEquals(7L, log.logEndOffset)
+    val batch = singletonRecordsWithLeaderEpoch(value = "random".getBytes, leaderEpoch = 1, offset = 0)
+    log.appendAsFollower(records = batch)
   }
 
   @Test
