@@ -91,9 +91,6 @@ public class CommonClientConfigs {
                                                          + "elapses the client will resend the request if necessary or fail the request if "
                                                          + "retries are exhausted.";
 
-    public static final String MAX_BLOCK_MS_CONFIG = "max.block.ms";
-    public static final String MAX_BLOCK_MS_DOC = "The configuration controls the maximum time that the consumer will block for";
-
     /**
      * Postprocess the configuration so that exponential backoff is disabled when reconnect backoff
      * is explicitly configured but the maximum reconnect backoff is not explicitly configured.

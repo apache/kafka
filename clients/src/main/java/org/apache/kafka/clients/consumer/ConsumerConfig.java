@@ -219,8 +219,8 @@ public class ConsumerConfig extends AbstractConfig {
     private static final String REQUEST_TIMEOUT_MS_DOC = CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC;
 
     /** <code>max.block.ms</code> */
-    public static final String MAX_BLOCK_MS_CONFIG = CommonClientConfigs.MAX_BLOCK_MS_CONFIG;
-    private static final String MAX_BLOCK_MS_DOC = CommonClientConfigs.MAX_BLOCK_MS_DOC;
+    public static final String MAX_BLOCK_MS_CONFIG = "max.block.ms";
+    public static final String MAX_BLOCK_MS_DOC = "The configuration controls the maximum time that the consumer will block for";
 
     /** <code>interceptor.classes</code> */
     public static final String INTERCEPTOR_CLASSES_CONFIG = "interceptor.classes";
@@ -409,7 +409,7 @@ public class ConsumerConfig extends AbstractConfig {
                                         REQUEST_TIMEOUT_MS_DOC)
                                 .define(MAX_BLOCK_MS_CONFIG,
                                         Type.INT,
-                                        60*1000,
+                                        60 * 1000,
                                         atLeast(0),
                                         Importance.MEDIUM,
                                         MAX_BLOCK_MS_DOC)
