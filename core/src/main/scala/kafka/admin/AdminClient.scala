@@ -18,7 +18,6 @@ import java.util.{Collections, Properties}
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{ConcurrentLinkedQueue, Future, TimeUnit}
 
-import kafka.admin.AdminClient.DeleteRecordsResult
 import kafka.common.KafkaException
 import kafka.coordinator.group.GroupOverview
 import kafka.utils.Logging
@@ -216,73 +215,6 @@ class AdminClient(val time: Time,
       broker -> Try[NodeApiVersions](new NodeApiVersions(getApiVersions(broker).asJava))
     }.toMap
 
-  /*
-   * Remove all the messages whose offset is smaller than the given offset of the corresponding partition
-   *
-   * DeleteRecordsResult contains either lowWatermark of the partition or exception. We list the possible exception
-   * and their interpretations below:
-   *
-   * - DisconnectException if leader node of the partition is not available. Need retry by user.
-   * - PolicyViolationException if the topic is configured as non-deletable.
-   * - TopicAuthorizationException if the topic doesn't exist and the user doesn't have the authority to create the topic
-   * - TimeoutException if response is not available within the timeout specified by either Future's timeout or AdminClient's request timeout
-   * - UnknownTopicOrPartitionException if the partition doesn't exist or if the user doesn't have the authority to describe the topic
-   * - NotLeaderForPartitionException if broker is not leader of the partition. Need retry by user.
-   * - OffsetOutOfRangeException if the offset is larger than high watermark of this partition
-   *
-   */
-
-  def deleteRecordsBefore(offsets: Map[TopicPartition, Long]): Future[Map[TopicPartition, DeleteRecordsResult]] = {
-    val metadataRequest = new MetadataRequest.Builder(offsets.keys.map(_.topic).toSet.toList.asJava, true)
-    val response = sendAnyNode(ApiKeys.METADATA, metadataRequest).asInstanceOf[MetadataResponse]
-    val errors = response.errors
-    if (!errors.isEmpty)
-      error(s"Metadata request contained errors: $errors")
-
-    val (partitionsWithoutError, partitionsWithError) = offsets.partition{ partitionAndOffset =>
-      !response.errors().containsKey(partitionAndOffset._1.topic())}
-
-    val (partitionsWithLeader, partitionsWithoutLeader) = partitionsWithoutError.partition{ partitionAndOffset =>
-      response.cluster().leaderFor(partitionAndOffset._1) != null}
-
-    val partitionsWithErrorResults = partitionsWithError.keys.map( partition =>
-      partition -> DeleteRecordsResult(DeleteRecordsResponse.INVALID_LOW_WATERMARK, response.errors().get(partition.topic()).exception())).toMap
-
-    val partitionsWithoutLeaderResults = partitionsWithoutLeader.mapValues( _ =>
-      DeleteRecordsResult(DeleteRecordsResponse.INVALID_LOW_WATERMARK, Errors.LEADER_NOT_AVAILABLE.exception()))
-
-    val partitionsGroupByLeader = partitionsWithLeader.groupBy(partitionAndOffset =>
-      response.cluster().leaderFor(partitionAndOffset._1))
-
-    // prepare requests and generate Future objects
-    val futures = partitionsGroupByLeader.map{ case (node, partitionAndOffsets) =>
-      val convertedMap: java.util.Map[TopicPartition, java.lang.Long] = partitionAndOffsets.mapValues(_.asInstanceOf[java.lang.Long]).asJava
-      val future = client.send(node, new DeleteRecordsRequest.Builder(requestTimeoutMs, convertedMap))
-      pendingFutures.add(future)
-      future.compose(new RequestFutureAdapter[ClientResponse, Map[TopicPartition, DeleteRecordsResult]]() {
-          override def onSuccess(response: ClientResponse, future: RequestFuture[Map[TopicPartition, DeleteRecordsResult]]) {
-            val deleteRecordsResponse = response.responseBody().asInstanceOf[DeleteRecordsResponse]
-            val result = deleteRecordsResponse.responses().asScala.mapValues(v => DeleteRecordsResult(v.lowWatermark, v.error.exception())).toMap
-            future.complete(result)
-            pendingFutures.remove(future)
-          }
-
-          override def onFailure(e: RuntimeException, future: RequestFuture[Map[TopicPartition, DeleteRecordsResult]]) {
-            val result = partitionAndOffsets.mapValues(_ => DeleteRecordsResult(DeleteRecordsResponse.INVALID_LOW_WATERMARK, e))
-            future.complete(result)
-            pendingFutures.remove(future)
-          }
-
-        })
-    }
-
-    // default output if not receiving DeleteRecordsResponse before timeout
-    val defaultResults = offsets.mapValues(_ =>
-      DeleteRecordsResult(DeleteRecordsResponse.INVALID_LOW_WATERMARK, Errors.REQUEST_TIMED_OUT.exception())) ++ partitionsWithErrorResults ++ partitionsWithoutLeaderResults
-
-    new CompositeFuture(time, defaultResults, futures.toList)
-  }
-
   /**
    * Case class used to represent a consumer of a consumer group
    */
@@ -472,8 +404,6 @@ object AdminClient {
       .withClientSaslSupport()
     config
   }
-
-  case class DeleteRecordsResult(lowWatermark: Long, error: Exception)
 
   class AdminConfig(originals: Map[_,_]) extends AbstractConfig(AdminConfigDef, originals.asJava, false)
 
