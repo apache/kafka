@@ -45,7 +45,8 @@ public class DescribeAclsRequest extends AbstractRequest {
             PERMISSION_TYPE);
 
     /**
-     * V1 sees a new `RESOURCE_NAME_TYPE_FILTER` that controls how the filter handles different resource name types.
+     * V1 sees a new `RESOURCE_NAME_TYPE_FILTER` that controls how the filter handles different resource name types
+     * and version was bumped to indicate that, on quota violation, brokers send out responses before throttling.
      *
      * For more info, see {@link org.apache.kafka.common.resource.ResourceNameType}.
      */

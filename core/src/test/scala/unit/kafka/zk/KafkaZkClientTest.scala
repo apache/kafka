@@ -430,7 +430,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     ZkAclStore.stores.foreach(store => {
       assertFalse(zkClient.pathExists(store.aclPath))
       assertFalse(zkClient.pathExists(store.aclChangePath))
-      ResourceType.values.foreach(resource => assertFalse(zkClient.pathExists(store.resourceTypeZNode.path(resource))))
+      ResourceType.values.foreach(resource => assertFalse(zkClient.pathExists(store.path(resource))))
     })
 
     // create acl paths
@@ -439,7 +439,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     ZkAclStore.stores.foreach(store => {
       assertTrue(zkClient.pathExists(store.aclPath))
       assertTrue(zkClient.pathExists(store.aclChangePath))
-      ResourceType.values.foreach(resource => assertTrue(zkClient.pathExists(store.resourceTypeZNode.path(resource))))
+      ResourceType.values.foreach(resource => assertTrue(zkClient.pathExists(store.path(resource))))
 
       val resource1 = new Resource(Topic, UUID.randomUUID().toString, store.nameType)
       val resource2 = new Resource(Topic, UUID.randomUUID().toString, store.nameType)

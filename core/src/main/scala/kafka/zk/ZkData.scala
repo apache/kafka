@@ -28,7 +28,7 @@ import kafka.controller.{IsrChangeNotificationHandler, LeaderIsrAndControllerEpo
 import kafka.security.auth.SimpleAclAuthorizer.VersionedAcls
 import kafka.security.auth.{Acl, Literal, Prefixed, Resource, ResourceNameType, ResourceType}
 import kafka.server.{ConfigType, DelegationTokenManager}
-import kafka.utils.{Json, ZkUtils}
+import kafka.utils.{Json}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
@@ -40,7 +40,7 @@ import org.apache.zookeeper.data.{ACL, Stat}
 import scala.beans.BeanProperty
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
-import scala.collection.{GenTraversableOnce, Seq, breakOut}
+import scala.collection.{Seq, breakOut}
 
 // This file contains objects for encoding/decoding data stored in ZooKeeper nodes (znodes).
 
@@ -469,7 +469,9 @@ case class ZkAclStore(nameType: ResourceNameType) {
     case _ => throw new IllegalArgumentException("Unknown name type:" + nameType)
   }
 
-  def resourceTypeZNode: ResourceTypeZNode = ResourceTypeZNode(this)
+  def path(resourceType: ResourceType) = s"$aclPath/$resourceType"
+
+  def path(resourceType: ResourceType, resourceName: String): String = s"$aclPath/$resourceType/$resourceName"
 
   def changeSequenceZNode: AclChangeNotificationSequenceZNode = AclChangeNotificationSequenceZNode(this)
 
@@ -485,16 +487,10 @@ object ZkAclStore {
 }
 
 object ResourceZNode {
-  def path(resource: Resource): String = {
-    val store = ZkAclStore(resource.resourceNameType)
-    s"${store.aclPath}/${resource.resourceType}/${resource.name}"
-  }
+  def path(resource: Resource): String = ZkAclStore(resource.resourceNameType).path(resource.resourceType, resource.name)
+
   def encode(acls: Set[Acl]): Array[Byte] = Json.encodeAsBytes(Acl.toJsonCompatibleMap(acls).asJava)
   def decode(bytes: Array[Byte], stat: Stat): VersionedAcls = VersionedAcls(Acl.fromBytes(bytes), stat.getVersion)
-}
-
-case class ResourceTypeZNode(store: ZkAclStore) {
-  def path(resourceType: ResourceType) = s"${store.aclPath}/$resourceType"
 }
 
 object AclChangeNotificationSequenceZNode {

@@ -31,7 +31,7 @@ import java.util.Objects;
 public class ResourceFilter {
     private final ResourceType resourceType;
     private final String name;
-    private final ResourceNameType resourceNameType;
+    private final ResourceNameType nameType;
 
     /**
      * Matches any resource.
@@ -54,17 +54,31 @@ public class ResourceFilter {
 
     /**
      * Create a filter that matches resources of the supplied {@code resourceType}, {@code name} and
-     * {@code resourceNameType}.
+     * {@code nameType}.
+     * <p>
+     * If the filter has each three parameters fully supplied, then it will only match a resource that has exactly
+     * the same values, e.g. a filter of {@code new ResourceFilter(ResourceType.GROUP, "one", ResourceTypeName.PREFIXED)}
+     * will only match the resource {@code new Resource(ResourceType.GROUP, "one", ResourceTypeName.PREFIXED)}.
+     * <p>
+     * Any of the three parameters can be set to be ignored by the filter:
+     * <ul>
+     *     <li><b>{@code resourceType}</b> can be set to {@link ResourceType#ANY},
+     *     meaning it will match a resource of any resource type</li>
+     *     <li><b>{@code name}</b> can be set to {@code null}, meaning it will match a resource of any name.</li>
+     *     <li><b>{@code nameType}</b> can be set to {@link ResourceNameType#ANY},
+     *     meaning it will match a resource with any resource name type, including the
+     *     {@link AclUtils#WILDCARD_RESOURCE wildcard resource}</li>
+     * </ul>
      *
-     * @param resourceType non-null resource type.
-     * @param name resource name or {@code null}.
+     * @param resourceType non-null resource type to filter by.
+     * @param name resource name to filter by, or {@code null}.
      *             If {@code null}, the filter will ignore the name of resources.
-     * @param resourceNameType non-null resource name type
+     * @param nameType non-null resource name type to filter by.
      */
-    public ResourceFilter(ResourceType resourceType, String name, ResourceNameType resourceNameType) {
+    public ResourceFilter(ResourceType resourceType, String name, ResourceNameType nameType) {
         this.resourceType = Objects.requireNonNull(resourceType, "resourceType");
         this.name = name;
-        this.resourceNameType = Objects.requireNonNull(resourceNameType, "resourceNameType");
+        this.nameType = Objects.requireNonNull(nameType, "nameType");
     }
 
     /**
@@ -84,20 +98,20 @@ public class ResourceFilter {
     /**
      * Return the resource name type.
      */
-    public ResourceNameType resourceNameType() {
-        return resourceNameType;
+    public ResourceNameType nameType() {
+        return nameType;
     }
 
     @Override
     public String toString() {
-        return "(resourceType=" + resourceType + ", name=" + ((name == null) ? "<any>" : name) + ", resourceNameType=" + resourceNameType + ")";
+        return "(resourceType=" + resourceType + ", name=" + ((name == null) ? "<any>" : name) + ", nameType=" + nameType + ")";
     }
 
     /**
      * Return true if this ResourceFilter has any UNKNOWN components.
      */
     public boolean isUnknown() {
-        return resourceType.isUnknown() || resourceNameType.isUnknown();
+        return resourceType.isUnknown() || nameType.isUnknown();
     }
 
     @Override
@@ -110,12 +124,12 @@ public class ResourceFilter {
         final ResourceFilter that = (ResourceFilter) o;
         return resourceType == that.resourceType &&
             Objects.equals(name, that.name) &&
-            resourceNameType == that.resourceNameType;
+            nameType == that.nameType;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(resourceType, name, resourceNameType);
+        return Objects.hash(resourceType, name, nameType);
     }
 
     /**
@@ -143,9 +157,9 @@ public class ResourceFilter {
             return "Resource type is UNKNOWN.";
         if (name == null)
             return "Resource name is NULL.";
-        if (resourceNameType == ResourceNameType.ANY)
+        if (nameType == ResourceNameType.ANY)
             return "Resource name type is ANY.";
-        if (resourceNameType == ResourceNameType.UNKNOWN)
+        if (nameType == ResourceNameType.UNKNOWN)
             return "Resource name type is UNKNOWN.";
         return null;
     }

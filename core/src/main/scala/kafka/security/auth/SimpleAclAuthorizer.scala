@@ -27,12 +27,11 @@ import kafka.server.KafkaConfig
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
 import kafka.zk.{AclChangeNotificationSequenceZNode, KafkaZkClient, ZkAclStore}
-import org.apache.kafka.common.resource.{ResourceFilter, Resource => JResource, ResourceNameType => JResourceNameType}
+import org.apache.kafka.common.resource.{ResourceFilter, ResourceNameType => JResourceNameType}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{AclUtils, SecurityUtils, Time}
 
 import scala.collection.JavaConverters._
-import scala.collection.immutable.Stream.Empty
 import scala.util.Random
 
 object SimpleAclAuthorizer {
@@ -56,9 +55,10 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   private var superUsers = Set.empty[KafkaPrincipal]
   private var shouldAllowEveryoneIfNoAclIsFound = false
   private var zkClient: KafkaZkClient = _
-  private var aclChangeListeners: Seq[ZkNodeChangeNotificationListener] = _
+  private var aclChangeListeners: Seq[ZkNodeChangeNotificationListener] = List()
 
-  private val aclCache = new scala.collection.mutable.HashMap[Resource, VersionedAcls]
+  @volatile
+  private var aclCache = new scala.collection.immutable.TreeMap[Resource, VersionedAcls]()(ResourceOrdering)
   private val lock = new ReentrantReadWriteLock()
 
   // The maximum number of times we should try to update the resource acls in zookeeper before failing;
@@ -198,7 +198,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
         versionedAcls.acls.filter(_.principal == principal)
       }.filter { case (_, acls) =>
         acls.nonEmpty
-      }.toMap
+      }
     }
   }
 
@@ -206,10 +206,20 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     val filter = new ResourceFilter(resourceType.toJava, resourceName, JResourceNameType.ANY)
 
     inReadLock(lock) {
-      aclCache
-        .filterKeys(aclResource => AclUtils.matchResource(aclResource.toJava, filter))
-        .flatMap(_._2.acls)
+      val wildcard = aclCache.get(Resource(resourceType, Acl.WildCardResource, Literal))
+        .map(_.acls)
+        .getOrElse(Set.empty[Acl])
+
+      val literal = aclCache.get(Resource(resourceType, resourceName, Literal))
+        .map(_.acls)
+        .getOrElse(Set.empty[Acl])
+
+      val prefixed = aclCache.range(Resource(resourceType, resourceName, Prefixed), Resource(resourceType, resourceName.substring(0, 1), Prefixed))
+        .filterKeys(resource => resourceName.startsWith(resource.name))
+        .flatMap { case (resource, versionedAcls) => versionedAcls.acls }
         .toSet
+
+      prefixed ++ wildcard ++ literal
     }
   }
 
@@ -325,9 +335,9 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
   private def updateCache(resource: Resource, versionedAcls: VersionedAcls) {
     if (versionedAcls.acls.nonEmpty) {
-      aclCache.put(resource, versionedAcls)
+      aclCache = aclCache + (resource -> versionedAcls)
     } else {
-      aclCache.remove(resource)
+      aclCache = aclCache - resource
     }
   }
 
@@ -346,6 +356,22 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
       inWriteLock(lock) {
         val versionedAcls = getAclsFromZk(resource)
         updateCache(resource, versionedAcls)
+      }
+    }
+  }
+
+  private object ResourceOrdering extends Ordering[Resource] {
+
+    def compare(a: Resource, b: Resource): Int = {
+      val rt = a.resourceType compare b.resourceType
+      if (rt != 0)
+        rt
+      else {
+        val rnt = a.resourceNameType compare b.resourceNameType
+        if (rnt != 0)
+          rnt
+        else
+          (a.name compare b.name) * -1
       }
     }
   }

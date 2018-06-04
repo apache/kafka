@@ -80,7 +80,8 @@ public class DescribeAclsResponse extends AbstractResponse {
             new Field(RESOURCES_KEY_NAME, new ArrayOf(DESCRIBE_ACLS_RESOURCE_V0), "The resources and their associated ACLs."));
 
     /**
-     * V1 sees a new `RESOURCE_NAME_TYPE` field added to DESCRIBE_ACLS_RESOURCE_V1, that describes how the resource name is interpreted.
+     * V1 sees a new `RESOURCE_NAME_TYPE` field added to DESCRIBE_ACLS_RESOURCE_V1, that describes how the resource name is interpreted
+     * and version was bumped to indicate that, on quota violation, brokers send out responses before throttling.
      *
      * For more info, see {@link org.apache.kafka.common.resource.ResourceNameType}.
      */

@@ -87,7 +87,8 @@ public class DeleteAclsResponse extends AbstractResponse {
                             new Field(MATCHING_ACLS_KEY_NAME, new ArrayOf(MATCHING_ACL_V0), "The matching ACLs")))));
 
     /**
-     * V1 sees a new `RESOURCE_NAME_TYPE` field added to MATCHING_ACL_V1, that describes how the resource name is interpreted.
+     * V1 sees a new `RESOURCE_NAME_TYPE` field added to MATCHING_ACL_V1, that describes how the resource name is interpreted
+     * and version was bumped to indicate that, on quota violation, brokers send out responses before throttling.
      *
      * For more info, see {@link org.apache.kafka.common.resource.ResourceNameType}.
      */

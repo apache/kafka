@@ -946,7 +946,7 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
     ZkAclStore.stores.foreach(store => {
       createRecursive(store.aclPath, throwIfPathExists = false)
       createRecursive(store.aclChangePath, throwIfPathExists = false)
-      ResourceType.values.foreach(resourceType => createRecursive(store.resourceTypeZNode.path(resourceType), throwIfPathExists = false))
+      ResourceType.values.foreach(resourceType => createRecursive(store.path(resourceType), throwIfPathExists = false))
     })
   }
 
@@ -1071,13 +1071,13 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
   }
 
   /**
-   * Gets the resource names, for which ACLs are stored, for a give resource type and name type
+   * Gets the resource names, for which ACLs are stored, for a given resource type and name type
    * @param nameType The resource name type to retrieve the names for.
    * @param resourceType Resource type to retrieve the names for.
    * @return list of resource names
    */
   def getResourceNames(nameType: ResourceNameType, resourceType: ResourceType): Seq[String] = {
-    getChildren(ZkAclStore(nameType).resourceTypeZNode.path(resourceType))
+    getChildren(ZkAclStore(nameType).path(resourceType))
   }
 
   /**

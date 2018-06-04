@@ -18,11 +18,12 @@
 package kafka.security.auth
 
 import kafka.common.{BaseEnum, KafkaException}
-import kafka.utils.ZkUtils
 import org.apache.kafka.common.resource.{ResourceNameType => JResourceNameType}
 
-sealed trait ResourceNameType extends BaseEnum {
+sealed trait ResourceNameType extends BaseEnum  with Ordered[ ResourceNameType ] {
   def toJava: JResourceNameType
+
+  override def compare(that: ResourceNameType): Int = this.name compare that.name
 }
 
 case object Literal extends ResourceNameType {
@@ -44,5 +45,5 @@ object ResourceNameType {
 
   def values: Seq[ResourceNameType] = List(Literal, Prefixed)
 
-  def fromJava(operation: JResourceNameType): ResourceNameType = fromString(operation.toString.replaceAll("_", ""))
+  def fromJava(nameType: JResourceNameType): ResourceNameType = fromString(nameType.toString)
 }

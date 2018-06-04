@@ -43,7 +43,7 @@ public final class AclUtils {
             return false;
         }
 
-        if (!filter.resourceNameType().equals(ResourceNameType.ANY) && !filter.resourceNameType().equals(aclPath.resourceNameType())) {
+        if (!filter.nameType().equals(ResourceNameType.ANY) && !filter.nameType().equals(aclPath.resourceNameType())) {
             return false;
         }
 
@@ -51,7 +51,7 @@ public final class AclUtils {
             return true;
         }
 
-        if (filter.resourceNameType().equals(aclPath.resourceNameType())) {
+        if (filter.nameType().equals(aclPath.resourceNameType())) {
             return aclPath.name().equals(filter.name());
         }
 

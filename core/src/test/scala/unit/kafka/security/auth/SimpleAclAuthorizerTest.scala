@@ -30,12 +30,10 @@ import org.junit.{After, Before, Test}
 
 class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
 
-  val acl1 = Acl(Acl.WildCardPrincipal, Allow, WildCardHost, Read)
-  val acl2 = Acl(Acl.WildCardPrincipal, Deny, WildCardHost, Write)
-  val acl3 = Acl(Acl.WildCardPrincipal, Allow, WildCardHost, Read)
-  val acl4 = Acl(Acl.WildCardPrincipal, Allow, WildCardHost, Read)
+  val allowReadAcl = Acl(Acl.WildCardPrincipal, Allow, WildCardHost, Read)
+  val allowWriteAcl = Acl(Acl.WildCardPrincipal, Allow, WildCardHost, Write)
+  val denyReadAcl = Acl(Acl.WildCardPrincipal, Deny, WildCardHost, Read)
 
-  val literalResource = Resource(Topic, "foobar", Literal)
   val wildCardResource = Resource(Topic, WildCardResource, Literal)
   val prefixedResource = Resource(Topic, "foo", Prefixed)
 
@@ -64,7 +62,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
     config = KafkaConfig.fromProps(props)
     simpleAclAuthorizer.configure(config.originals)
     simpleAclAuthorizer2.configure(config.originals)
-    resource = new Resource(Topic, UUID.randomUUID().toString)
+    resource = new Resource(Topic, "foo-" + UUID.randomUUID(), Literal)
   }
 
   @After
@@ -435,23 +433,23 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
 
   @Test
   def testAccessAllowedIfAllowAclExistsOnWildcardResource(): Unit = {
-    simpleAclAuthorizer.addAcls(Set[Acl](acl1), wildCardResource)
+    simpleAclAuthorizer.addAcls(Set[Acl](allowReadAcl), wildCardResource)
 
     assertTrue(simpleAclAuthorizer.authorize(session, Read, resource))
   }
 
   @Test
   def testDeleteAclOnWildcardResource(): Unit = {
-    simpleAclAuthorizer.addAcls(Set[Acl](acl1, acl2), wildCardResource)
+    simpleAclAuthorizer.addAcls(Set[Acl](allowReadAcl, allowWriteAcl), wildCardResource)
 
-    simpleAclAuthorizer.removeAcls(Set[Acl](acl1), wildCardResource)
+    simpleAclAuthorizer.removeAcls(Set[Acl](allowReadAcl), wildCardResource)
 
-    assertEquals(Set(acl2), simpleAclAuthorizer.getAcls(wildCardResource))
+    assertEquals(Set(allowWriteAcl), simpleAclAuthorizer.getAcls(wildCardResource))
   }
 
   @Test
   def testDeleteAllAclOnWildcardResource(): Unit = {
-    simpleAclAuthorizer.addAcls(Set[Acl](acl1), wildCardResource)
+    simpleAclAuthorizer.addAcls(Set[Acl](allowReadAcl), wildCardResource)
 
     simpleAclAuthorizer.removeAcls(wildCardResource)
 
@@ -460,23 +458,23 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
 
   @Test
   def testAccessAllowedIfAllowAclExistsOnPrefixedResource(): Unit = {
-    simpleAclAuthorizer.addAcls(Set[Acl](acl1), prefixedResource)
+    simpleAclAuthorizer.addAcls(Set[Acl](allowReadAcl), prefixedResource)
 
-    assertTrue(simpleAclAuthorizer.authorize(session, Read, literalResource))
+    assertTrue(simpleAclAuthorizer.authorize(session, Read, resource))
   }
 
   @Test
   def testDeleteAclOnPrefixedResource(): Unit = {
-    simpleAclAuthorizer.addAcls(Set[Acl](acl1, acl2), prefixedResource)
+    simpleAclAuthorizer.addAcls(Set[Acl](allowReadAcl, allowWriteAcl), prefixedResource)
 
-    simpleAclAuthorizer.removeAcls(Set[Acl](acl1), prefixedResource)
+    simpleAclAuthorizer.removeAcls(Set[Acl](allowReadAcl), prefixedResource)
 
-    assertEquals(Set(acl2), simpleAclAuthorizer.getAcls(prefixedResource))
+    assertEquals(Set(allowWriteAcl), simpleAclAuthorizer.getAcls(prefixedResource))
   }
 
   @Test
   def testDeleteAllAclOnPrefixedResource(): Unit = {
-    simpleAclAuthorizer.addAcls(Set[Acl](acl1, acl2), prefixedResource)
+    simpleAclAuthorizer.addAcls(Set[Acl](allowReadAcl, allowWriteAcl), prefixedResource)
 
     simpleAclAuthorizer.removeAcls(prefixedResource)
 
@@ -485,32 +483,52 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
 
   @Test
   def testAddAclsOnLiteralResource(): Unit = {
-    simpleAclAuthorizer.addAcls(Set[Acl](acl1, acl2), literalResource)
-    simpleAclAuthorizer.addAcls(Set[Acl](acl2, acl3), literalResource)
+    simpleAclAuthorizer.addAcls(Set[Acl](allowReadAcl, allowWriteAcl), resource)
+    simpleAclAuthorizer.addAcls(Set[Acl](allowWriteAcl, denyReadAcl), resource)
 
-    assertEquals(Set(acl1, acl2, acl3), simpleAclAuthorizer.getAcls(literalResource))
+    assertEquals(Set(allowReadAcl, allowWriteAcl, denyReadAcl), simpleAclAuthorizer.getAcls(resource))
     assertEquals(Set(), simpleAclAuthorizer.getAcls(wildCardResource))
     assertEquals(Set(), simpleAclAuthorizer.getAcls(prefixedResource))
   }
 
   @Test
   def testAddAclsOnWildcardResource(): Unit = {
-    simpleAclAuthorizer.addAcls(Set[Acl](acl1, acl2), wildCardResource)
-    simpleAclAuthorizer.addAcls(Set[Acl](acl2, acl3), wildCardResource)
+    simpleAclAuthorizer.addAcls(Set[Acl](allowReadAcl, allowWriteAcl), wildCardResource)
+    simpleAclAuthorizer.addAcls(Set[Acl](allowWriteAcl, denyReadAcl), wildCardResource)
 
-    assertEquals(Set(acl1, acl2, acl3), simpleAclAuthorizer.getAcls(wildCardResource))
-    assertEquals(Set(), simpleAclAuthorizer.getAcls(literalResource))
+    assertEquals(Set(allowReadAcl, allowWriteAcl, denyReadAcl), simpleAclAuthorizer.getAcls(wildCardResource))
+    assertEquals(Set(), simpleAclAuthorizer.getAcls(resource))
     assertEquals(Set(), simpleAclAuthorizer.getAcls(prefixedResource))
   }
 
   @Test
   def testAddAclsOnPrefiexedResource(): Unit = {
-    simpleAclAuthorizer.addAcls(Set[Acl](acl1, acl2), prefixedResource)
-    simpleAclAuthorizer.addAcls(Set[Acl](acl2, acl3), prefixedResource)
+    simpleAclAuthorizer.addAcls(Set[Acl](allowReadAcl, allowWriteAcl), prefixedResource)
+    simpleAclAuthorizer.addAcls(Set[Acl](allowWriteAcl, denyReadAcl), prefixedResource)
 
-    assertEquals(Set(acl1, acl2, acl3), simpleAclAuthorizer.getAcls(prefixedResource))
+    assertEquals(Set(allowReadAcl, allowWriteAcl, denyReadAcl), simpleAclAuthorizer.getAcls(prefixedResource))
     assertEquals(Set(), simpleAclAuthorizer.getAcls(wildCardResource))
-    assertEquals(Set(), simpleAclAuthorizer.getAcls(literalResource))
+    assertEquals(Set(), simpleAclAuthorizer.getAcls(resource))
+  }
+
+  @Test
+  def testAuthorizeWithPrefixedResource(): Unit = {
+    simpleAclAuthorizer.addAcls(Set[Acl](denyReadAcl), Resource(Topic, "a_other", Literal))
+    simpleAclAuthorizer.addAcls(Set[Acl](denyReadAcl), Resource(Topic, "a_other", Prefixed))
+    simpleAclAuthorizer.addAcls(Set[Acl](denyReadAcl), Resource(Topic, "foo-" + UUID.randomUUID(), Prefixed))
+    simpleAclAuthorizer.addAcls(Set[Acl](denyReadAcl), Resource(Topic, "foo-" + UUID.randomUUID(), Prefixed))
+    simpleAclAuthorizer.addAcls(Set[Acl](denyReadAcl), Resource(Topic, "foo-" + UUID.randomUUID() + "-zzz", Prefixed))
+    simpleAclAuthorizer.addAcls(Set[Acl](denyReadAcl), Resource(Topic, "fooo-" + UUID.randomUUID(), Prefixed))
+    simpleAclAuthorizer.addAcls(Set[Acl](denyReadAcl), Resource(Topic, "fo-" + UUID.randomUUID(), Prefixed))
+    simpleAclAuthorizer.addAcls(Set[Acl](denyReadAcl), Resource(Topic, "fop-" + UUID.randomUUID(), Prefixed))
+    simpleAclAuthorizer.addAcls(Set[Acl](denyReadAcl), Resource(Topic, "fon-" + UUID.randomUUID(), Prefixed))
+    simpleAclAuthorizer.addAcls(Set[Acl](denyReadAcl), Resource(Topic, "fon-", Prefixed))
+    simpleAclAuthorizer.addAcls(Set[Acl](denyReadAcl), Resource(Topic, "z_other", Prefixed))
+    simpleAclAuthorizer.addAcls(Set[Acl](denyReadAcl), Resource(Topic, "z_other", Literal))
+
+    simpleAclAuthorizer.addAcls(Set[Acl](allowReadAcl), prefixedResource)
+
+    assertTrue(simpleAclAuthorizer.authorize(session, Read, resource))
   }
 
   @Test

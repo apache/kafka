@@ -52,7 +52,8 @@ public class CreateAclsRequest extends AbstractRequest {
                     PERMISSION_TYPE))));
 
     /**
-     * V1 sees a new `RESOURCE_NAME_TYPE` that controls how the resource name is interpreted.
+     * V1 sees a new `RESOURCE_NAME_TYPE` that controls how the resource name is interpreted and version
+     * was bumped to indicate that, on quota violation, brokers send out responses before throttling.
      *
      * For more info, see {@link org.apache.kafka.common.resource.ResourceNameType}.
      */

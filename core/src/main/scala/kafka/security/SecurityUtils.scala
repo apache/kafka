@@ -32,7 +32,7 @@ object SecurityUtils {
   def convertToResourceAndAcl(filter: AclBindingFilter): Either[ApiError, (Resource, Acl)] = {
     (for {
       resourceType <- Try(ResourceType.fromJava(filter.resourceFilter.resourceType))
-      resourceNameType <- Try(ResourceNameType.fromJava(filter.resourceFilter.resourceNameType))
+      resourceNameType <- Try(ResourceNameType.fromJava(filter.resourceFilter.nameType))
       principal <- Try(KafkaPrincipal.fromString(filter.entryFilter.principal))
       operation <- Try(Operation.fromJava(filter.entryFilter.operation))
       permissionType <- Try(PermissionType.fromJava(filter.entryFilter.permissionType))

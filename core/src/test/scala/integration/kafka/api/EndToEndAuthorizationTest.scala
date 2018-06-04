@@ -65,8 +65,10 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   }
 
   val numRecords = 1
-  val group = "group"
-  val topic = "e2etopic"
+  val groupPrefix = "gr"
+  val group = s"${groupPrefix}oup"
+  val topicPrefix = "e2e"
+  val topic = s"${topicPrefix}topic"
   val wildcard = "*"
   val part = 0
   val tp = new TopicPartition(topic, part)
@@ -79,8 +81,10 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   val topicResource = new Resource(Topic, topic)
   val groupResource = new Resource(Group, group)
   val clusterResource = Resource.ClusterResource
-  val wildcardTopicResource = new Resource(Topic, wildcard)
-  val wildcardGroupResource = new Resource(Group, wildcard)
+  val prefixedTopicResource = new Resource(Topic, topicPrefix, Prefixed)
+  val prefixedGroupResource = new Resource(Group, groupPrefix, Prefixed)
+  val wildcardTopicResource = new Resource(Topic, wildcard, Literal)
+  val wildcardGroupResource = new Resource(Group, wildcard, Literal)
 
   // Arguments to AclCommand to set ACLs. There are three definitions here:
   // 1- Provides read and write access to topic
@@ -145,6 +149,15 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
                                             s"--consumer",
                                             s"--producer",
                                             s"--allow-principal=$kafkaPrincipalType:$clientPrincipal")
+  def produceConsumePrefixedAclsArgs: Array[String] = Array("--authorizer-properties",
+                                        s"zookeeper.connect=$zkConnect",
+                                        s"--add",
+                                        s"--topic=$topicPrefix",
+                                        s"--group=$groupPrefix",
+                                        s"--resource-name-type=prefixed",
+                                        s"--consumer",
+                                        s"--producer",
+                                        s"--allow-principal=$kafkaPrincipalType:$clientPrincipal")
 
   def ClusterActionAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, kafkaPrincipal), Allow, Acl.WildCardHost, ClusterAction))
   def TopicBrokerReadAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, kafkaPrincipal), Allow, Acl.WildCardHost, Read))
@@ -220,11 +233,27 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     consumeRecords(this.consumers.head, numRecords)
   }
 
+  @Test
+  def testProduceConsumeWithPrefixedAcls(): Unit = {
+    setPrefixedResourceAcls()
+    sendRecords(numRecords, tp)
+    consumers.head.subscribe(List(topic).asJava)
+    consumeRecords(this.consumers.head, numRecords)
+  }
+
   private def setWildcardResourceAcls() {
     AclCommand.main(produceConsumeWildcardAclArgs)
     servers.foreach { s =>
       TestUtils.waitAndVerifyAcls(TopicReadAcl ++ TopicWriteAcl ++ TopicDescribeAcl ++ TopicBrokerReadAcl, s.apis.authorizer.get, wildcardTopicResource)
       TestUtils.waitAndVerifyAcls(GroupReadAcl, s.apis.authorizer.get, wildcardGroupResource)
+    }
+  }
+
+  private def setPrefixedResourceAcls() {
+    AclCommand.main(produceConsumePrefixedAclsArgs)
+    servers.foreach { s =>
+      TestUtils.waitAndVerifyAcls(TopicReadAcl ++ TopicWriteAcl ++ TopicDescribeAcl, s.apis.authorizer.get, prefixedTopicResource)
+      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.apis.authorizer.get, prefixedGroupResource)
     }
   }
 
