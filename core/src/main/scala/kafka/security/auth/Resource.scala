@@ -29,6 +29,9 @@ object Resource {
       case _ => throw new IllegalArgumentException("expected a string in format ResourceType:ResourceName but got " + str)
     }
   }
+
+    def apply(resourceType: ResourceType, name: String) = new Resource(resourceType, name, Literal)
+
 }
 
 /**
@@ -48,7 +51,5 @@ case class Resource(resourceType: ResourceType, name: String, resourceNameType: 
     // can't be changed because it will break backward compatibility with acl change notification
     resourceType.name + Resource.Separator + name
   }
-
-  // TODO why does this class not have equals() and hashCode()?
 }
 

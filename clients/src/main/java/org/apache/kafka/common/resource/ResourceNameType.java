@@ -76,11 +76,7 @@ public enum ResourceNameType {
      * Return the ResourceNameType with the provided code or `ResourceNameType.UNKNOWN` if one cannot be found.
      */
     public static ResourceNameType fromCode(byte code) {
-        ResourceNameType resourceNameType = CODE_TO_VALUE.get(code);
-        if (resourceNameType == null) {
-            return UNKNOWN;
-        }
-        return resourceNameType;
+        return CODE_TO_VALUE.getOrDefault(code, UNKNOWN);
     }
 
     /**

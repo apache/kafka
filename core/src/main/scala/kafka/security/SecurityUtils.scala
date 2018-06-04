@@ -36,7 +36,7 @@ object SecurityUtils {
       principal <- Try(KafkaPrincipal.fromString(filter.entryFilter.principal))
       operation <- Try(Operation.fromJava(filter.entryFilter.operation))
       permissionType <- Try(PermissionType.fromJava(filter.entryFilter.permissionType))
-      resource = new Resource(resourceType, filter.resourceFilter.name, resourceNameType)
+      resource = Resource(resourceType, filter.resourceFilter.name, resourceNameType)
       acl = Acl(principal, permissionType, filter.entryFilter.host, operation)
     } yield (resource, acl)) match {
       case Failure(throwable) => Left(new ApiError(Errors.INVALID_REQUEST, throwable.getMessage))

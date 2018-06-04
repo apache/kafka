@@ -98,6 +98,8 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
     new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.WRITE, AclPermissionType.ALLOW))
   val groupAcl = new AclBinding(new Resource(ResourceType.GROUP, "*"),
     new AccessControlEntry("User:*", "*", AclOperation.ALL, AclPermissionType.ALLOW))
+  val userAcl = new AclBinding(new Resource(ResourceType.TOPIC, "*"),
+    new AccessControlEntry("User:*", "*", AclOperation.ALL, AclPermissionType.ALLOW))
 
   @Test
   override def testAclOperations(): Unit = {
@@ -145,7 +147,7 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
     assertEquals(Set(filterA, filterB, filterC), results2.values.keySet.asScala)
     assertEquals(Set(groupAcl), results2.values.get(filterA).get.values.asScala.map(_.binding).toSet)
     assertEquals(Set(transactionalIdAcl), results2.values.get(filterC).get.values.asScala.map(_.binding).toSet)
-    assertEquals(Set(acl2), results2.values.get(filterB).get.values.asScala.map(_.binding).toSet)
+    assertEquals(Set(acl2, userAcl), results2.values.get(filterB).get.values.asScala.map(_.binding).toSet)
 
     waitForDescribeAcls(client, filterB, Set())
     waitForDescribeAcls(client, filterC, Set())
@@ -224,8 +226,6 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
 
   private def testAclGet(expectAuth: Boolean): Unit = {
     TestUtils.waitUntilTrue(() => {
-      val userAcl = new AclBinding(new Resource(ResourceType.TOPIC, "*"),
-        new AccessControlEntry("User:*", "*", AclOperation.ALL, AclPermissionType.ALLOW))
       val results = client.describeAcls(userAcl.toFilter)
       if (expectAuth) {
         Try(results.values.get) match {

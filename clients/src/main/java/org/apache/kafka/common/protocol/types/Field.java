@@ -50,8 +50,8 @@ public class Field {
         public Int8(String name, String docString) {
             super(name, Type.INT8, docString, false, null);
         }
-        public Int8(String name, String docString, byte byt) {
-            super(name, Type.INT8, docString, true, byt);
+        public Int8(String name, String docString, byte defaultValue) {
+            super(name, Type.INT8, docString, true, defaultValue);
         }
     }
 

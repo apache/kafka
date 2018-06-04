@@ -18,9 +18,10 @@
 package org.apache.kafka.common.resource;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
-import org.apache.kafka.common.utils.SecurityUtils;
 
 import java.util.Objects;
+
+import static org.apache.kafka.common.resource.ResourceUtils.matchResource;
 
 /**
  * A filter which matches Resource objects.
@@ -116,7 +117,7 @@ public class ResourceFilter {
      * Return true if this filter matches the given Resource.
      */
     public boolean matches(Resource other) {
-        return SecurityUtils.matchResource(other, this);
+        return matchResource(other, this);
     }
 
     /**
