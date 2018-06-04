@@ -50,7 +50,7 @@ public class SinkConnectorConfig extends ConnectorConfig {
         "result in an error when processed by this sink connector, transformations, or converter. The topic name is blank by default, " +
         "which means that no messages are to be recorded in the DLQ.";
     public static final String DLQ_TOPIC_DEFAULT = "";
-    private static final String DLQ_TOPIC_DISPLAY = "DLQ Topic Name";
+    private static final String DLQ_TOPIC_DISPLAY = "Dead Letter Queue Topic Name";
 
     static ConfigDef config = ConnectorConfig.configDef()
         .define(TOPICS_CONFIG, ConfigDef.Type.LIST, TOPICS_DEFAULT, ConfigDef.Importance.HIGH, TOPICS_DOC, COMMON_GROUP, 4, ConfigDef.Width.LONG, TOPICS_DISPLAY)
