@@ -21,7 +21,7 @@ import org.apache.kafka.common.resource.{Resource => JResource}
 
 object Resource {
   val ClusterResourceName = "kafka-cluster"
-  val ClusterResource = new Resource(Cluster, Resource.ClusterResourceName)
+  val ClusterResource = new Resource(Cluster, Resource.ClusterResourceName, Literal)
   val ProducerIdResourceName = "producer-id"
   val WildCardResource = "*"
 }

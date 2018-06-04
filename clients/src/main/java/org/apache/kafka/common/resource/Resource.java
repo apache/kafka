@@ -40,7 +40,7 @@ public class Resource {
     /**
      * A resource representing the whole cluster.
      */
-    public final static Resource CLUSTER = new Resource(ResourceType.CLUSTER, CLUSTER_NAME);
+    public final static Resource CLUSTER = new Resource(ResourceType.CLUSTER, CLUSTER_NAME, ResourceNameType.LITERAL);
 
     /**
      * Create an instance of this class with the provided parameters.

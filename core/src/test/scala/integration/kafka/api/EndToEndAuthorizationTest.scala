@@ -78,8 +78,8 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
 
   override protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
 
-  val topicResource = new Resource(Topic, topic)
-  val groupResource = new Resource(Group, group)
+  val topicResource = new Resource(Topic, topic, Literal)
+  val groupResource = new Resource(Group, group, Literal)
   val clusterResource = Resource.ClusterResource
   val prefixedTopicResource = new Resource(Topic, topicPrefix, Prefixed)
   val prefixedGroupResource = new Resource(Group, groupPrefix, Prefixed)
@@ -183,7 +183,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     super.setUp()
     servers.foreach { s =>
       TestUtils.waitAndVerifyAcls(ClusterActionAcl, s.apis.authorizer.get, Resource.ClusterResource)
-      TestUtils.waitAndVerifyAcls(TopicBrokerReadAcl, s.apis.authorizer.get, new Resource(Topic, "*"))
+      TestUtils.waitAndVerifyAcls(TopicBrokerReadAcl, s.apis.authorizer.get, new Resource(Topic, "*", Literal))
     }
     // create the test topic with all the brokers as replicas
     createTopic(topic, 1, 3)

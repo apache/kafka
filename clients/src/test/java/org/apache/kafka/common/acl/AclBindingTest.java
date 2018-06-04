@@ -18,6 +18,7 @@ package org.apache.kafka.common.acl;
 
 import org.apache.kafka.common.resource.Resource;
 import org.apache.kafka.common.resource.ResourceFilter;
+import org.apache.kafka.common.resource.ResourceNameType;
 import org.apache.kafka.common.resource.ResourceType;
 import org.junit.Test;
 
@@ -27,19 +28,19 @@ import static org.junit.Assert.assertTrue;
 
 public class AclBindingTest {
     private static final AclBinding ACL1 = new AclBinding(
-        new Resource(ResourceType.TOPIC, "mytopic"),
+        new Resource(ResourceType.TOPIC, "mytopic", ResourceNameType.LITERAL),
         new AccessControlEntry("User:ANONYMOUS", "", AclOperation.ALL, AclPermissionType.ALLOW));
 
     private static final AclBinding ACL2 = new AclBinding(
-        new Resource(ResourceType.TOPIC, "mytopic"),
+        new Resource(ResourceType.TOPIC, "mytopic", ResourceNameType.LITERAL),
         new AccessControlEntry("User:*", "", AclOperation.READ, AclPermissionType.ALLOW));
 
     private static final AclBinding ACL3 = new AclBinding(
-        new Resource(ResourceType.TOPIC, "mytopic2"),
+        new Resource(ResourceType.TOPIC, "mytopic2", ResourceNameType.LITERAL),
         new AccessControlEntry("User:ANONYMOUS", "127.0.0.1", AclOperation.READ, AclPermissionType.DENY));
 
     private static final AclBinding UNKNOWN_ACL = new AclBinding(
-        new Resource(ResourceType.TOPIC, "mytopic2"),
+        new Resource(ResourceType.TOPIC, "mytopic2", ResourceNameType.LITERAL),
         new AccessControlEntry("User:ANONYMOUS", "127.0.0.1", AclOperation.UNKNOWN, AclPermissionType.DENY));
 
     private static final AclBindingFilter ANY_ANONYMOUS = new AclBindingFilter(
@@ -51,14 +52,14 @@ public class AclBindingTest {
         new AccessControlEntryFilter(null, null, AclOperation.ANY, AclPermissionType.DENY));
 
     private static final AclBindingFilter ANY_MYTOPIC = new AclBindingFilter(
-        new ResourceFilter(ResourceType.TOPIC, "mytopic"),
+        new ResourceFilter(ResourceType.TOPIC, "mytopic", ResourceNameType.LITERAL),
         new AccessControlEntryFilter(null, null, AclOperation.ANY, AclPermissionType.ANY));
 
     @Test
     public void testMatching() throws Exception {
         assertTrue(ACL1.equals(ACL1));
         final AclBinding acl1Copy = new AclBinding(
-            new Resource(ResourceType.TOPIC, "mytopic"),
+            new Resource(ResourceType.TOPIC, "mytopic", ResourceNameType.LITERAL),
             new AccessControlEntry("User:ANONYMOUS", "", AclOperation.ALL, AclPermissionType.ALLOW));
         assertTrue(ACL1.equals(acl1Copy));
         assertTrue(acl1Copy.equals(ACL1));
