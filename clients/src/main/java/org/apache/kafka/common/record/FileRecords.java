@@ -186,7 +186,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
      */
     public boolean deleteIfExists() throws IOException {
         Utils.closeQuietly(channel, "FileChannel");
-        return Files.deleteIfExists(file.toPath());
+        return file.exists() ? file.delete() : false;
     }
 
     /**
