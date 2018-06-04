@@ -109,12 +109,11 @@ import static org.apache.kafka.common.utils.Utils.getPort;
  * props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
  * props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
  * props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
- * StreamsConfig config = new StreamsConfig(props);
  *
  * StreamsBuilder builder = new StreamsBuilder();
  * builder.<String, String>stream("my-input-topic").mapValues(value -> value.length().toString()).to("my-output-topic");
  *
- * KafkaStreams streams = new KafkaStreams(builder.build(), config);
+ * KafkaStreams streams = new KafkaStreams(builder.build(), props);
  * streams.start();
  * }</pre>
  *
@@ -1028,7 +1027,7 @@ public class KafkaStreams {
      * @param <T>                 return type
      * @return A facade wrapping the local {@link StateStore} instances
      * @throws InvalidStateStoreException if Kafka Streams is (re-)initializing or a store with {@code storeName} and
-     * {@code queryableStoreType} doesnt' exist
+     * {@code queryableStoreType} doesn't exist
      */
     public <T> T store(final String storeName, final QueryableStoreType<T> queryableStoreType) {
         validateIsRunning();

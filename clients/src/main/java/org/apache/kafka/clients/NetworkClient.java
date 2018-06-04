@@ -260,7 +260,7 @@ public class NetworkClient implements KafkaClient {
                 requestTypes.add(request.header.apiKey());
                 abortedSends.add(new ClientResponse(request.header,
                         request.callback, request.destination, request.createdTimeMs, now,
-                        true, null, null));
+                        true, null, null, null));
             }
         }
         connectionStates.disconnected(nodeId, now);
@@ -413,14 +413,14 @@ public class NetworkClient implements KafkaClient {
             // The call to build may also throw UnsupportedVersionException, if there are essential
             // fields that cannot be represented in the chosen version.
             doSend(clientRequest, isInternalRequest, now, builder.build(version));
-        } catch (UnsupportedVersionException e) {
+        } catch (UnsupportedVersionException unsupportedVersionException) {
             // If the version is not supported, skip sending the request over the wire.
             // Instead, simply add it to the local queue of aborted requests.
             log.debug("Version mismatch when attempting to send {} with correlation id {} to {}", builder,
-                    clientRequest.correlationId(), clientRequest.destination(), e);
+                    clientRequest.correlationId(), clientRequest.destination(), unsupportedVersionException);
             ClientResponse clientResponse = new ClientResponse(clientRequest.makeHeader(builder.latestAllowedVersion()),
                     clientRequest.callback(), clientRequest.destination(), now, now,
-                    false, e, null);
+                    false, unsupportedVersionException, null, null);
             abortedSends.add(clientResponse);
         }
     }
@@ -615,7 +615,10 @@ public class NetworkClient implements KafkaClient {
      * @param nodeId Id of the node to be disconnected
      * @param now The current time
      */
-    private void processDisconnection(List<ClientResponse> responses, String nodeId, long now, ChannelState disconnectState) {
+    private void processDisconnection(List<ClientResponse> responses,
+                                      String nodeId,
+                                      long now,
+                                      ChannelState disconnectState) {
         connectionStates.disconnected(nodeId, now);
         apiVersions.remove(nodeId);
         nodesNeedingApiVersionsFetch.remove(nodeId);
@@ -641,7 +644,7 @@ public class NetworkClient implements KafkaClient {
             log.trace("Cancelled request {} {} with correlation id {} due to node {} being disconnected",
                     request.header.apiKey(), request.request, request.header.correlationId(), nodeId);
             if (!request.isInternalRequest)
-                responses.add(request.disconnected(now));
+                responses.add(request.disconnected(now, disconnectState.exception()));
             else if (request.header.apiKey() == ApiKeys.METADATA)
                 metadataUpdater.handleDisconnection(request.destination);
         }
@@ -1034,11 +1037,13 @@ public class NetworkClient implements KafkaClient {
         }
 
         public ClientResponse completed(AbstractResponse response, long timeMs) {
-            return new ClientResponse(header, callback, destination, createdTimeMs, timeMs, false, null, response);
+            return new ClientResponse(header, callback, destination, createdTimeMs, timeMs,
+                    false, null, null, response);
         }
 
-        public ClientResponse disconnected(long timeMs) {
-            return new ClientResponse(header, callback, destination, createdTimeMs, timeMs, true, null, null);
+        public ClientResponse disconnected(long timeMs, AuthenticationException authenticationException) {
+            return new ClientResponse(header, callback, destination, createdTimeMs, timeMs,
+                    true, null, authenticationException, null);
         }
 
         @Override

@@ -28,7 +28,6 @@ class SaslScramSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTes
   override protected def kafkaServerSaslMechanisms = ScramMechanism.mechanismNames.asScala.toList
   override val clientPrincipal = JaasTestUtils.KafkaScramUser
   override val kafkaPrincipal = JaasTestUtils.KafkaScramAdmin
-  private val clientPassword = JaasTestUtils.KafkaScramPassword
   private val kafkaPassword = JaasTestUtils.KafkaScramAdminPassword
 
   override def configureSecurityBeforeServersStart() {
@@ -42,7 +41,7 @@ class SaslScramSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTes
   override def setUp() {
     super.setUp()
     // Create client credentials after starting brokers so that dynamic credential creation is also tested
-    createScramCredentials(zkConnect, clientPrincipal, clientPassword)
+    createScramCredentials(zkConnect, JaasTestUtils.KafkaScramUser, JaasTestUtils.KafkaScramPassword)
     createScramCredentials(zkConnect, JaasTestUtils.KafkaScramUser2, JaasTestUtils.KafkaScramPassword2)
   }
 }

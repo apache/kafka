@@ -119,11 +119,10 @@
         <li>The first argument of the <code class="docutils literal"><span class="pre">KafkaStreams</span></code> constructor takes a topology (either <code class="docutils literal"><span class="pre">StreamsBuilder#build()</span></code> for the
           <a class="reference internal" href="dsl-api.html#streams-developer-guide-dsl"><span class="std std-ref">DSL</span></a> or <code class="docutils literal"><span class="pre">Topology</span></code> for the
           <a class="reference internal" href="processor-api.html#streams-developer-guide-processor-api"><span class="std std-ref">Processor API</span></a>) that is used to define a topology.</li>
-        <li>The second argument is an instance of <code class="docutils literal"><span class="pre">StreamsConfig</span></code>, which defines the configuration for this specific topology.</li>
+        <li>The second argument is an instance of <code class="docutils literal"><span class="pre">java.util.Properties</span></code>, which defines the configuration for this specific topology.</li>
       </ul>
       <p>Code example:</p>
       <div class="highlight-java"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">org.apache.kafka.streams.KafkaStreams</span><span class="o">;</span>
-<span class="kn">import</span> <span class="nn">org.apache.kafka.streams.StreamsConfig</span><span class="o">;</span>
 <span class="kn">import</span> <span class="nn">org.apache.kafka.streams.kstream.StreamsBuilder</span><span class="o">;</span>
 <span class="kn">import</span> <span class="nn">org.apache.kafka.streams.processor.Topology</span><span class="o">;</span>
 
@@ -142,9 +141,9 @@
 <span class="c1">// Use the configuration to tell your application where the Kafka cluster is,</span>
 <span class="c1">// which Serializers/Deserializers to use by default, to specify security settings,</span>
 <span class="c1">// and so on.</span>
-<span class="n">StreamsConfig</span> <span class="n">config</span> <span class="o">=</span> <span class="o">...;</span>
+<span class="n">Properties</span> <span class="n">props</span> <span class="o">=</span> <span class="o">...;</span>
 
-<span class="n">KafkaStreams</span> <span class="n">streams</span> <span class="o">=</span> <span class="k">new</span> <span class="n">KafkaStreams</span><span class="o">(</span><span class="n">topology</span><span class="o">,</span> <span class="n">config</span><span class="o">);</span>
+<span class="n">KafkaStreams</span> <span class="n">streams</span> <span class="o">=</span> <span class="k">new</span> <span class="n">KafkaStreams</span><span class="o">(</span><span class="n">topology</span><span class="o">,</span> <span class="n">props</span><span class="o">);</span>
 </pre></div>
       </div>
       <p>At this point, internal structures are initialized, but the processing is not started yet.

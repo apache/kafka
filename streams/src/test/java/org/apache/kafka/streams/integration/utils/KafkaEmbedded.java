@@ -20,21 +20,19 @@ import kafka.admin.RackAwareMode;
 import kafka.server.KafkaConfig;
 import kafka.server.KafkaConfig$;
 import kafka.server.KafkaServer;
-import kafka.utils.CoreUtils;
 import kafka.utils.MockTime;
 import kafka.utils.TestUtils;
 import kafka.zk.AdminZkClient;
 import kafka.zk.KafkaZkClient;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.junit.rules.TemporaryFolder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Collections;
-import java.util.List;
 import java.util.Properties;
 
 /**
@@ -128,9 +126,12 @@ public class KafkaEmbedded {
             brokerList(), zookeeperConnect());
         kafka.shutdown();
         kafka.awaitShutdown();
-        log.debug("Removing logs.dir at {} ...", logDir);
-        final List<String> logDirs = Collections.singletonList(logDir.getAbsolutePath());
-        CoreUtils.delete(scala.collection.JavaConversions.asScalaBuffer(logDirs).seq());
+        log.debug("Removing log dir at {} ...", logDir);
+        try {
+            Utils.delete(logDir);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
         tmpFolder.delete();
         log.debug("Shutdown of embedded Kafka broker at {} completed (with ZK ensemble at {}) ...",
             brokerList(), zookeeperConnect());
