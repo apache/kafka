@@ -246,38 +246,35 @@ object ReassignPartitionsCommand extends Logging {
 
   def parseTopicsData(jsonData: String): Seq[String] = {
     Json.parseFull(jsonData) match {
-      case Some(js) => {
+      case Some(js) =>
         val version = js.asJsonObject.get("version") match {
           case Some(jsonValue) => jsonValue.to[Int]
           case None => EarliestVersion
         }
         parseTopicsData(version, js)
-      }
       case None => throw new AdminOperationException("The input string is not a valid JSON")
     }
   }
 
   def parseTopicsData(version: Int, js: JsonValue): Seq[String] = {
     version match {
-      case 1 => {
+      case 1 =>
         for {
           partitionsSeq <- js.asJsonObject.get("topics").toSeq
           p <- partitionsSeq.asJsonArray.iterator
         } yield p.asJsonObject("topic").to[String]
-      }
       case _ => throw new AdminOperationException(s"Not supported version field value $version")
     }
   }
 
   def parsePartitionReassignmentData(jsonData: String): (Seq[(TopicPartition, Seq[Int])], Map[TopicPartitionReplica, String]) = {
     Json.parseFull(jsonData) match {
-      case Some(js) => {
+      case Some(js) =>
         val version = js.asJsonObject.get("version") match {
           case Some(jsonValue) => jsonValue.to[Int]
           case None => EarliestVersion
         }
         parsePartitionReassignmentData(version, js)
-      }
       case None => throw new AdminOperationException("The input string is not a valid JSON")
     }
   }
@@ -285,7 +282,7 @@ object ReassignPartitionsCommand extends Logging {
   // Parses without deduplicating keys so the data can be checked before allowing reassignment to proceed
   def parsePartitionReassignmentData(version:Int, jsonData: JsonValue): (Seq[(TopicPartition, Seq[Int])], Map[TopicPartitionReplica, String]) = {
     version match {
-      case 1 => {
+      case 1 =>
         val partitionAssignment = mutable.ListBuffer.empty[(TopicPartition, Seq[Int])]
         val replicaAssignment = mutable.Map.empty[TopicPartitionReplica, String]
         for {
@@ -309,7 +306,6 @@ object ReassignPartitionsCommand extends Logging {
           }.filter(_._2 != AnyLogDir)
         }
         (partitionAssignment, replicaAssignment)
-      }
       case _ => throw new AdminOperationException(s"Not supported version field value $version")
     }
   }

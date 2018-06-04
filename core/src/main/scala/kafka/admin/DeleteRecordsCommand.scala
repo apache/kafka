@@ -42,20 +42,19 @@ object DeleteRecordsCommand {
 
   def parseOffsetJsonStringWithoutDedup(jsonData: String): Seq[(TopicPartition, Long)] = {
     Json.parseFull(jsonData) match {
-      case Some(js) => {
+      case Some(js) =>
         val version = js.asJsonObject.get("version") match {
           case Some(jsonValue) => jsonValue.to[Int]
           case None => EarliestVersion
         }
         parseJsonData(version, js)
-      }
       case None => throw new AdminOperationException("The input string is not a valid JSON")
     }
   }
 
   def parseJsonData(version: Int, js: JsonValue): Seq[(TopicPartition, Long)] = {
     version match {
-      case 1 => {
+      case 1 =>
         js.asJsonObject.get("partitions") match {
           case Some(partitions) => {
             partitions.asJsonArray.iterator.map(_.asJsonObject).map { partitionJs =>
@@ -67,7 +66,6 @@ object DeleteRecordsCommand {
           }
           case _ => throw new AdminOperationException("Missing partitions field");
         }
-      }
       case _ => throw new AdminOperationException(s"Not supported version field value $version")
     }
   }
