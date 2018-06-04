@@ -28,7 +28,7 @@ import kafka.controller.{IsrChangeNotificationHandler, LeaderIsrAndControllerEpo
 import kafka.security.auth.SimpleAclAuthorizer.VersionedAcls
 import kafka.security.auth.{Acl, Literal, Prefixed, Resource, ResourceNameType, ResourceType}
 import kafka.server.{ConfigType, DelegationTokenManager}
-import kafka.utils.{Json}
+import kafka.utils.Json
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
