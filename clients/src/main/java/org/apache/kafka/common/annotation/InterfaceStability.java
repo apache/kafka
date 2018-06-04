@@ -28,7 +28,7 @@ import java.lang.annotation.RetentionPolicy;
 public class InterfaceStability {
     /**
      * Compatibility is maintained in major, minor and patch releases with one exception: compatibility may be broken
-     * in a major release (i.e. 0.m) for APIs that have been deprecated for at least one major/minor release cycle.
+     * in a major release (i.e. m.0) for APIs that have been deprecated for at least one major/minor release cycle.
      * In cases where the impact of breaking compatibility is significant, there is also a minimum deprecation period
      * of one year.
      *
