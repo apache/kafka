@@ -52,11 +52,29 @@
                 <li>validity: the valid time of the certificate in days.</li>
             </ol>
             <br>
-        Note: By default the property <code>ssl.endpoint.identification.algorithm</code> is not defined, so hostname verification is not performed. In order to enable hostname verification, set the following property:
+
+        <h5><a id="security_confighostname" href="#security_confighostname">Configuring Host Name Verification</a></h5>
+        From Kafka version 2.0.0 onwards, host name verification of servers is enabled by default for client connections
+        as well as inter-broker connections to prevent man-in-the-middle attacks. Server host name verification may be disabled
+        by setting <code>ssl.endpoint.identification.algorithm</code> to an empty string. For example,
+        <pre class="brush: text;">	ssl.endpoint.identification.algorithm=</pre>
+        For dynamically configured broker listeners, hostname verification may be disabled using <code>kafka-configs.sh</code>.
+        For example,
+        <pre class="brush: text;">
+        bin/kafka-configs.sh --bootstrap-server localhost:9093 --entity-type brokers --entity-name 0 --alter --add-config "listener.name.internal.ssl.endpoint.identification.algorithm="
+        </pre>
+
+        For older versions of Kafka, <code>ssl.endpoint.identification.algorithm</code> is not defined by default, so host name
+        verification is not performed. The property should be set to <code>HTTPS</code> to enable host name verification.
 
         <pre class="brush: text;">	ssl.endpoint.identification.algorithm=HTTPS </pre>
 
-        Once enabled, clients will verify the server's fully qualified domain name (FQDN) against one of the following two fields:
+        Host name verification must be enabled to prevent man-in-the-middle attacks if server endpoints are not validated
+        externally.
+
+        <h5><a id="security_configcerthostname" href="#security_configcerthstname">Configuring Host Name In Certificates</a></h5>
+        If host name verification is enabled, clients will verify the server's fully qualified domain name (FQDN) against one of
+        the following two fields:
         <ol>
             <li>Common Name (CN)
             <li>Subject Alternative Name (SAN)

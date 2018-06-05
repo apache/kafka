@@ -183,8 +183,8 @@ public class KafkaAdminClientTest {
         nodes.put(1, new Node(1, "localhost", 8122));
         nodes.put(2, new Node(2, "localhost", 8123));
         return new Cluster("mockClusterId", nodes.values(),
-                Collections.<PartitionInfo>emptySet(), Collections.<String>emptySet(),
-                Collections.<String>emptySet(), nodes.get(controllerIndex));
+                Collections.emptySet(), Collections.emptySet(),
+                Collections.emptySet(), nodes.get(controllerIndex));
     }
 
     private static AdminClientUnitTestEnv mockClientEnv(String... configVals) {
@@ -192,7 +192,7 @@ public class KafkaAdminClientTest {
     }
 
     @Test
-    public void testCloseAdminClient() throws Exception {
+    public void testCloseAdminClient() {
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
         }
     }
@@ -229,6 +229,60 @@ public class KafkaAdminClientTest {
                     Collections.singleton(new NewTopic("myTopic", Collections.singletonMap(0, asList(0, 1, 2)))),
                     new CreateTopicsOptions().timeoutMs(1000)).all();
             assertFutureError(future, TimeoutException.class);
+        }
+    }
+
+    @Test
+    public void testConnectionFailureOnMetadataUpdate() throws Exception {
+        // This tests the scenario in which we successfully connect to the bootstrap server, but
+        // the server disconnects before sending the full response
+
+        Cluster cluster = Cluster.bootstrap(Collections.singletonList(new InetSocketAddress("localhost", 8121)));
+        MockClient mockClient = new MockClient(Time.SYSTEM);
+        mockClient.setNodeApiVersions(NodeApiVersions.create());
+        mockClient.setNode(cluster.nodes().get(0));
+
+        try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockClient, Time.SYSTEM, cluster)) {
+            Cluster discoveredCluster = mockCluster(0);
+            env.kafkaClient().prepareResponse(request -> request instanceof MetadataRequest, null, true);
+            env.kafkaClient().prepareResponse(body -> body instanceof MetadataRequest,
+                    new  MetadataResponse(discoveredCluster.nodes(), discoveredCluster.clusterResource().clusterId(),
+                            1, Collections.emptyList()));
+            env.kafkaClient().prepareResponse(body -> body instanceof CreateTopicsRequest,
+                    new CreateTopicsResponse(Collections.singletonMap("myTopic", new ApiError(Errors.NONE, ""))));
+
+            KafkaFuture<Void> future = env.adminClient().createTopics(
+                    Collections.singleton(new NewTopic("myTopic", Collections.singletonMap(0, asList(0, 1, 2)))),
+                    new CreateTopicsOptions().timeoutMs(10000)).all();
+
+            future.get();
+        }
+    }
+
+    @Test
+    public void testUnreachableBootstrapServer() throws Exception {
+        // This tests the scenario in which the bootstrap server is unreachable for a short while,
+        // which prevents AdminClient from being able to send the initial metadata request
+
+        Cluster cluster = Cluster.bootstrap(Collections.singletonList(new InetSocketAddress("localhost", 8121)));
+        MockClient mockClient = new MockClient(Time.SYSTEM);
+        mockClient.setNodeApiVersions(NodeApiVersions.create());
+        mockClient.setNode(cluster.nodes().get(0));
+        mockClient.setUnreachable(cluster.nodes().get(0), 200);
+
+        try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockClient, Time.SYSTEM, cluster)) {
+            Cluster discoveredCluster = mockCluster(0);
+            env.kafkaClient().prepareResponse(body -> body instanceof MetadataRequest,
+                    new  MetadataResponse(discoveredCluster.nodes(), discoveredCluster.clusterResource().clusterId(),
+                            1, Collections.emptyList()));
+            env.kafkaClient().prepareResponse(body -> body instanceof CreateTopicsRequest,
+                    new CreateTopicsResponse(Collections.singletonMap("myTopic", new ApiError(Errors.NONE, ""))));
+
+            KafkaFuture<Void> future = env.adminClient().createTopics(
+                    Collections.singleton(new NewTopic("myTopic", Collections.singletonMap(0, asList(0, 1, 2)))),
+                    new CreateTopicsOptions().timeoutMs(10000)).all();
+
+            future.get();
         }
     }
 

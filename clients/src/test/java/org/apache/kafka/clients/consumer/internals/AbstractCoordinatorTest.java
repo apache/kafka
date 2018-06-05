@@ -521,20 +521,10 @@ public class AbstractCoordinatorTest {
     }
 
     @Test
-    public void testEnsureCoordinatorReadyWithinBlackoutPeriodAfterAuthenticationFailure() {
+    public void testAuthenticationErrorInEnsureCoordinatorReady() {
         setupCoordinator(RETRY_BACKOFF_MS);
 
-        mockClient.authenticationFailed(node, 300);
-
-        try {
-            coordinator.ensureCoordinatorReady(Long.MAX_VALUE);
-            fail("Expected an authentication error.");
-        } catch (AuthenticationException e) {
-            // OK
-        }
-
-        mockTime.sleep(30); // wait less than the blackout period
-        assertTrue(mockClient.connectionFailed(node));
+        mockClient.createPendingAuthenticationError(node, 300);
 
         try {
             coordinator.ensureCoordinatorReady(Long.MAX_VALUE);
