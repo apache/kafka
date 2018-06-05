@@ -35,6 +35,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
@@ -122,9 +123,7 @@ public class ConnectorConfig extends AbstractConfig {
 
     public static final String ERRORS_TOLERANCE_CONFIG = "errors.allowed.max";
     public static final String ERRORS_TOLERANCE_DISPLAY = "Error Tolerance";
-    public static final String ERRORS_TOLERANCE_NONE = "none";
-    public static final String ERRORS_TOLERANCE_ALL = "all";
-    public static final String ERRORS_TOLERANCE_DEFAULT = ERRORS_TOLERANCE_NONE;
+    public static final String ERRORS_TOLERANCE_DEFAULT = ToleranceType.NONE.name().toLowerCase(Locale.ROOT);
     public static final String ERRORS_TOLERANCE_DOC = "Behavior for tolerating errors during connector operation. 'none' is the default value " +
             "and signals that any error will result in an immediate connector task failure. 'all' changes the behavior to skip over problematic records.";
 
@@ -180,7 +179,7 @@ public class ConnectorConfig extends AbstractConfig {
                 .define(ERRORS_RETRY_MAX_DELAY_CONFIG, Type.LONG, ERRORS_RETRY_MAX_DELAY_DEFAULT, Importance.MEDIUM,
                         ERRORS_RETRY_MAX_DELAY_DOC, ERROR_GROUP, ++orderInErrorGroup, Width.MEDIUM, ERRORS_RETRY_MAX_DELAY_DISPLAY)
                 .define(ERRORS_TOLERANCE_CONFIG, Type.STRING, ERRORS_TOLERANCE_DEFAULT,
-                        in(ERRORS_TOLERANCE_NONE, ERRORS_TOLERANCE_ALL), Importance.MEDIUM,
+                        in(ToleranceType.NONE.name().toLowerCase(Locale.ROOT), ToleranceType.ALL.name().toLowerCase(Locale.ROOT)), Importance.MEDIUM,
                         ERRORS_TOLERANCE_DOC, ERROR_GROUP, ++orderInErrorGroup, Width.SHORT, ERRORS_TOLERANCE_DISPLAY)
                 .define(ERRORS_LOG_ENABLE_CONFIG, Type.BOOLEAN, ERRORS_LOG_ENABLE_DEFAULT, Importance.MEDIUM,
                         ERRORS_LOG_ENABLE_DOC, ERROR_GROUP, ++orderInErrorGroup, Width.SHORT, ERRORS_LOG_ENABLE_DISPLAY)
@@ -219,7 +218,12 @@ public class ConnectorConfig extends AbstractConfig {
 
     public ToleranceType errorToleranceType() {
         String tolerance = getString(ERRORS_TOLERANCE_CONFIG);
-        return ERRORS_TOLERANCE_ALL.equalsIgnoreCase(tolerance) ? ToleranceType.ALL : ToleranceType.NONE;
+        for (ToleranceType type: ToleranceType.values()) {
+            if (type.name().equalsIgnoreCase(tolerance)) {
+                return type;
+            }
+        }
+        return ToleranceType.NONE;
     }
 
     public boolean enableErrorLog() {
