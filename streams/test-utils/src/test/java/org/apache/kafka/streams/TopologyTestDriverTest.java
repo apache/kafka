@@ -824,18 +824,6 @@ public class TopologyTestDriverTest {
         Assert.assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
     }
 
-    @Test
-    public void shouldNotAllowToPutStoreAfterProcessingStarted() {
-        setup();
-        testDriver.pipeInput(recordFactory.create("input-topic", "a", 1L, 9999L));
-        try {
-            store.put("a", 21L);
-            fail("Should have thrown IllegalStateException");
-        } catch (final IllegalStateException expected) {
-            // pass
-        }
-    }
-
     private class CustomMaxAggregatorSupplier implements ProcessorSupplier<String, Long> {
         @Override
         public Processor<String, Long> get() {

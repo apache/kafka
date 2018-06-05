@@ -389,7 +389,6 @@ public class TopologyTestDriver implements Closeable {
             task.maybePunctuateStreamTime();
             task.commit();
             captureOutputRecords();
-            context.setRecordContext(null);
         } else {
             final TopicPartition globalTopicPartition = globalPartitionsByTopic.get(topicName);
             if (globalTopicPartition == null) {
@@ -489,7 +488,6 @@ public class TopologyTestDriver implements Closeable {
         if (task != null) {
             task.maybePunctuateSystemTime();
             task.commit();
-            context.setRecordContext(null);
         }
         captureOutputRecords();
     }
