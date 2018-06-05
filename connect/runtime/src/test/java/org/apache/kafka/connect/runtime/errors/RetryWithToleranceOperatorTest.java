@@ -32,7 +32,6 @@ import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.util.HashMap;
-import java.util.Locale;
 import java.util.Map;
 
 import static java.util.Collections.emptyMap;
@@ -270,7 +269,7 @@ public class RetryWithToleranceOperatorTest {
         ConnectorConfig configuration = config(emptyMap());
         assertEquals(configuration.errorRetryTimeout(), ERRORS_RETRY_TIMEOUT_DEFAULT);
         assertEquals(configuration.errorMaxDelayInMillis(), ERRORS_RETRY_MAX_DELAY_DEFAULT);
-        assertEquals(configuration.errorToleranceType(), ToleranceType.valueOf(ERRORS_TOLERANCE_DEFAULT.toUpperCase(Locale.ROOT)));
+        assertEquals(configuration.errorToleranceType(), ERRORS_TOLERANCE_DEFAULT);
 
         PowerMock.verifyAll();
     }
