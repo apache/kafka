@@ -328,8 +328,8 @@ public class DelegatingClassLoader extends URLClassLoader {
     private <T> Collection<PluginDesc<T>> getServiceLoaderPluginDesc(Class<T> klass, ClassLoader loader) {
         ServiceLoader<T> serviceLoader = ServiceLoader.load(klass, loader);
         Collection<PluginDesc<T>> result = new ArrayList<>();
-        for (T impl : serviceLoader) {
-            result.add(new PluginDesc<>((Class<? extends T>) impl.getClass(), versionFor(impl), loader));
+        for (T pluginImpl : serviceLoader) {
+            result.add(new PluginDesc<>((Class<? extends T>) pluginImpl.getClass(), versionFor(pluginImpl), loader));
         }
         return result;
     }
@@ -410,15 +410,15 @@ public class DelegatingClassLoader extends URLClassLoader {
 
     @Override
     public URL getResource(String name) {
-        // Default implementation of getResource searches the parent class loader. This will enable the PluginClassLoader to limit its
-        // resource search only to the URL path.
+        // Default implementation of getResource searches the parent class loader and if not available/found, its own URL paths.
+        // This will enable thePluginClassLoader to limit its resource search only to its own URL paths.
         return null;
     }
 
     @Override
     public Enumeration<URL> getResources(String name) throws IOException {
-        // Default implementation of getResources searches the parent class loader and also the URL Paths. This will enable the
-        // PluginClassLoader to limit its resource search to only the URL path.
+        // Default implementation of getResources searches the parent class loader and and also its own URL paths. This will enable the
+        // PluginClassLoader to limit its resource search to only its own URL paths.
         return null;
     }
 }
