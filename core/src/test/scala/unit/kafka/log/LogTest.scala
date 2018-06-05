@@ -23,7 +23,7 @@ import java.nio.file.{Files, Paths}
 import java.util.Properties
 
 import org.apache.kafka.common.errors._
-import kafka.common.{UnexpectedAppendOffsetException, KafkaException}
+import kafka.common.{OffsetsOutOfOrderException, UnexpectedAppendOffsetException, KafkaException}
 import kafka.log.Log.DeleteDirSuffix
 import kafka.server.epoch.{EpochEntry, LeaderEpochCache, LeaderEpochFileCache}
 import kafka.server.{BrokerTopicStats, FetchDataInfo, KafkaConfig, LogDirFailureChannel}
@@ -43,6 +43,7 @@ import org.junit.{After, Before, Test}
 import scala.collection.Iterable
 import scala.collection.JavaConverters._
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
+import org.scalatest.Assertions.{assertThrows, intercept}
 
 class LogTest {
   var config: KafkaConfig = null
@@ -1886,8 +1887,29 @@ class LogTest {
     assertTrue("Message payload should be null.", !head.hasValue)
   }
 
-  @Test(expected = classOf[UnexpectedAppendOffsetException])
+  @Test
   def testAppendWithOutOfOrderOffsetsThrowsException() {
+    val log = createLog(logDir, LogConfig(), brokerTopicStats = brokerTopicStats)
+
+    val appendOffsets = Seq(0L, 1L, 3L, 2L, 4L)
+    val buffer = ByteBuffer.allocate(512)
+    for (offset <- appendOffsets) {
+      val builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE,
+                                          TimestampType.LOG_APPEND_TIME, offset, mockTime.milliseconds(),
+                                          1L, 0, 0, false, 0)
+      builder.append(new SimpleRecord("key".getBytes, "value".getBytes))
+      builder.close()
+    }
+    buffer.flip()
+    val memoryRecords = MemoryRecords.readableRecords(buffer)
+
+    assertThrows[OffsetsOutOfOrderException] {
+      log.appendAsFollower(memoryRecords)
+    }
+  }
+
+  @Test(expected = classOf[UnexpectedAppendOffsetException])
+  def testAppendBelowExpectedOffsetThrowsException() {
     val log = createLog(logDir, LogConfig(), brokerTopicStats = brokerTopicStats)
     val records = (0 until 2).map(id => new SimpleRecord(id.toString.getBytes)).toArray
     records.foreach(record => log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, record), leaderEpoch = 0))
@@ -1898,19 +1920,17 @@ class LogTest {
   @Test
   def testAppendEmptyLogBelowLogStartOffsetThrowsException() {
     createEmptyLogs(logDir, 7)
-    val log = createLog(logDir, LogConfig())
+    val log = createLog(logDir, LogConfig(), brokerTopicStats = brokerTopicStats)
     assertEquals(7L, log.logStartOffset)
     assertEquals(7L, log.logEndOffset)
 
     val firstOffset = 5L
     val batch = singletonRecordsWithLeaderEpoch(value = "random".getBytes, leaderEpoch = 1, offset = firstOffset)
-    try {
+
+    val actualFirstOffset = intercept[UnexpectedAppendOffsetException] {
       log.appendAsFollower(records = batch)
-    } catch {
-      case e: UnexpectedAppendOffsetException =>
-        assertTrue(s"UnexpectedAppendOffsetException#firstOffset should be defined", e.firstOffset.isDefined)
-        assertEquals(s"UnexpectedAppendOffsetException#firstOffset:", firstOffset, e.firstOffset.get)
-    }
+    }.firstOffset
+    assertEquals("UnexpectedAppendOffsetException#firstOffset", Some(firstOffset), actualFirstOffset)
   }
 
   @Test

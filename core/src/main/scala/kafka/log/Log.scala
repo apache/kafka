@@ -29,7 +29,7 @@ import java.util.regex.Pattern
 
 import com.yammer.metrics.core.Gauge
 import kafka.api.KAFKA_0_10_0_IV0
-import kafka.common.{InvalidOffsetException, KafkaException, LogSegmentOffsetOverflowException, LongRef, UnexpectedAppendOffsetException}
+import kafka.common.{InvalidOffsetException, KafkaException, LogSegmentOffsetOverflowException, LongRef, UnexpectedAppendOffsetException, OffsetsOutOfOrderException}
 import kafka.message.{BrokerCompressionCodec, CompressionCodec, NoCompressionCodec}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.checkpoints.{LeaderEpochCheckpointFile, LeaderEpochFile}
@@ -799,8 +799,8 @@ class Log(@volatile var dir: File,
         } else {
           // we are taking the offsets we are given
           if (!appendInfo.offsetsMonotonic)
-            throw new IllegalArgumentException(s"Out of order offsets found in append to $topicPartition: " +
-                                               records.records.asScala.map(_.offset))
+            throw new OffsetsOutOfOrderException(s"Out of order offsets found in append to $topicPartition: " +
+                                                 records.records.asScala.map(_.offset))
 
           if (appendInfo.firstOrLastOffset < nextOffsetMetadata.messageOffset) {
             // we may still be able to recover in some situations
