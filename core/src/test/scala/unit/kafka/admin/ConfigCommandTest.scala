@@ -137,6 +137,20 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     val deletedProps = ConfigCommand.parseConfigsToBeDeleted(createOpts)
     assertEquals(1, deletedProps.size)
     assertEquals("a", deletedProps.head)
+
+    createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
+      "--entity-name", "x",
+      "--entity-type", entityType,
+      "--alter",
+      "--add-config", "a=b,c=,d=e,f="))
+    createOpts.checkArgs()
+
+    val addedProps2 = ConfigCommand.parseConfigsToBeAdded(createOpts)
+    assertEquals(4, addedProps2.size())
+    assertEquals("b", addedProps2.getProperty("a"))
+    assertEquals("e", addedProps2.getProperty("d"))
+    assertTrue(addedProps2.getProperty("c").isEmpty)
+    assertTrue(addedProps2.getProperty("f").isEmpty)
   }
 
   @Test(expected = classOf[IllegalArgumentException])

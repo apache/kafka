@@ -237,23 +237,41 @@ public class SslTransportLayerTest {
     }
 
     /**
-     * Tests that server certificate with invalid IP address is accepted by
+     * Tests that server certificate with invalid host name is accepted by
      * a client that has disabled endpoint validation
      */
     @Test
     public void testEndpointIdentificationDisabled() throws Exception {
-        String node = "0";
-        String serverHost = InetAddress.getLocalHost().getHostAddress();
-        SecurityProtocol securityProtocol = SecurityProtocol.SSL;
-        server = new NioEchoServer(ListenerName.forSecurityProtocol(securityProtocol), securityProtocol,
-                new TestSecurityConfig(sslServerConfigs), serverHost, null, null);
-        server.start();
-        sslClientConfigs.remove(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG);
-        createSelector(sslClientConfigs);
-        InetSocketAddress addr = new InetSocketAddress(serverHost, server.port());
-        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+        serverCertStores = new CertStores(true, "server", "notahost");
+        clientCertStores = new CertStores(false, "client", "localhost");
+        sslServerConfigs = serverCertStores.getTrustingConfig(clientCertStores);
+        sslClientConfigs = clientCertStores.getTrustingConfig(serverCertStores);
 
+        SecurityProtocol securityProtocol = SecurityProtocol.SSL;
+        server = createEchoServer(SecurityProtocol.SSL);
+        InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
+
+        // Disable endpoint validation, connection should succeed
+        String node = "1";
+        sslClientConfigs.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "");
+        createSelector(sslClientConfigs);
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
         NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
+
+        // Disable endpoint validation using null value, connection should succeed
+        String node2 = "2";
+        sslClientConfigs.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, null);
+        createSelector(sslClientConfigs);
+        selector.connect(node2, addr, BUFFER_SIZE, BUFFER_SIZE);
+        NetworkTestUtils.checkClientConnection(selector, node2, 100, 10);
+
+        // Connection should fail with endpoint validation enabled
+        String node3 = "3";
+        sslClientConfigs.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "HTTPS");
+        createSelector(sslClientConfigs);
+        selector.connect(node3, addr, BUFFER_SIZE, BUFFER_SIZE);
+        NetworkTestUtils.waitForChannelClose(selector, node3, ChannelState.State.AUTHENTICATION_FAILED);
+        selector.close();
     }
 
     /**
