@@ -1453,7 +1453,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             duplicateTopics.keySet.map((_, new ApiError(Errors.INVALID_REQUEST, errorMessage))).toMap
           } else Map.empty
 
-        val unauthorizedTopicsResults =  unauthorizedTopics.keySet.map(_ -> new ApiError(Errors.TOPIC_AUTHORIZATION_FAILED, null)) 
+        val unauthorizedTopicsResults = unauthorizedTopics.keySet.map(_ -> new ApiError(Errors.TOPIC_AUTHORIZATION_FAILED, null)) 
         val completeResults = results ++ duplicatedTopicsResults ++ unauthorizedTopicsResults
         sendResponseCallback(completeResults)
       }
