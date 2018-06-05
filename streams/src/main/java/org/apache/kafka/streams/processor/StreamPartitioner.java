@@ -52,11 +52,12 @@ public interface StreamPartitioner<K, V> {
 
     /**
      * Determine the partition number for a record with the given key and value and the current number of partitions.
-     * 
+     *
+     * @param topic the topic name this record is sent to
      * @param key the key of the record
      * @param value the value of the record
      * @param numPartitions the total number of partitions
      * @return an integer between 0 and {@code numPartitions-1}, or {@code null} if the default partitioning logic should be used
      */
-    Integer partition(K key, V value, int numPartitions);
+    Integer partition(String topic, K key, V value, int numPartitions);
 }

@@ -54,12 +54,16 @@ public class AdminClientUnitTestEnv implements AutoCloseable {
         this(newMockClient(time, cluster), time, cluster, config);
     }
 
+    public AdminClientUnitTestEnv(MockClient mockClient, Time time, Cluster cluster) {
+        this(mockClient, time, cluster, newStrMap());
+    }
+
     private static MockClient newMockClient(Time time, Cluster cluster) {
         MockClient mockClient = new MockClient(time);
         mockClient.prepareResponse(new MetadataResponse(cluster.nodes(),
             cluster.clusterResource().clusterId(),
-            cluster.controller().id(),
-            Collections.<MetadataResponse.TopicMetadata>emptyList()));
+            cluster.controller() == null ? MetadataResponse.NO_CONTROLLER_ID : cluster.controller().id(),
+            Collections.emptyList()));
         return mockClient;
     }
 

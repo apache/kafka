@@ -40,8 +40,14 @@ public class SyncGroupResponse extends AbstractResponse {
             ERROR_CODE,
             new Field(MEMBER_ASSIGNMENT_KEY_NAME, BYTES));
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema SYNC_GROUP_RESPONSE_V2 = SYNC_GROUP_RESPONSE_V1;
+
     public static Schema[] schemaVersions() {
-        return new Schema[] {SYNC_GROUP_RESPONSE_V0, SYNC_GROUP_RESPONSE_V1};
+        return new Schema[] {SYNC_GROUP_RESPONSE_V0, SYNC_GROUP_RESPONSE_V1,
+            SYNC_GROUP_RESPONSE_V2};
     }
 
     /**
@@ -79,6 +85,7 @@ public class SyncGroupResponse extends AbstractResponse {
         this.memberState = struct.getBytes(MEMBER_ASSIGNMENT_KEY_NAME);
     }
 
+    @Override
     public int throttleTimeMs() {
         return throttleTimeMs;
     }
@@ -109,4 +116,8 @@ public class SyncGroupResponse extends AbstractResponse {
         return new SyncGroupResponse(ApiKeys.SYNC_GROUP.parseResponse(version, buffer));
     }
 
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 2;
+    }
 }

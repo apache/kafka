@@ -24,6 +24,8 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.json.JsonConverterConfig;
+import org.apache.kafka.connect.rest.ConnectRestExtension;
+import org.apache.kafka.connect.rest.ConnectRestExtensionContext;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.isolation.Plugins.ClassLoaderUsage;
 import org.apache.kafka.connect.storage.Converter;
@@ -37,6 +39,7 @@ import org.junit.Test;
 
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
@@ -142,6 +145,26 @@ public class PluginsTest {
     }
 
     @Test
+    public void shouldInstantiateAndConfigureConnectRestExtension() {
+        props.put(WorkerConfig.REST_EXTENSION_CLASSES_CONFIG,
+                  TestConnectRestExtension.class.getName());
+        createConfig();
+
+        List<ConnectRestExtension> connectRestExtensions =
+            plugins.newPlugins(config.getList(WorkerConfig.REST_EXTENSION_CLASSES_CONFIG),
+                               config,
+                               ConnectRestExtension.class);
+        assertNotNull(connectRestExtensions);
+        assertEquals("One Rest Extension expected", 1, connectRestExtensions.size());
+        assertNotNull(connectRestExtensions.get(0));
+        assertTrue("Should be instance of TestConnectRestExtension",
+                   connectRestExtensions.get(0) instanceof TestConnectRestExtension);
+        assertNotNull(((TestConnectRestExtension) connectRestExtensions.get(0)).configs);
+        assertEquals(config.originals(),
+                     ((TestConnectRestExtension) connectRestExtensions.get(0)).configs);
+    }
+
+    @Test
     public void shouldInstantiateAndConfigureDefaultHeaderConverter() {
         props.remove(WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG);
         createConfig();
@@ -240,6 +263,30 @@ public class PluginsTest {
 
         @Override
         public void close() throws IOException {
+        }
+    }
+
+
+    public static class TestConnectRestExtension implements ConnectRestExtension {
+
+        public Map<String, ?> configs;
+
+        @Override
+        public void register(ConnectRestExtensionContext restPluginContext) {
+        }
+
+        @Override
+        public void close() throws IOException {
+        }
+
+        @Override
+        public void configure(Map<String, ?> configs) {
+            this.configs = configs;
+        }
+
+        @Override
+        public String version() {
+            return "test";
         }
     }
 

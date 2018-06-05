@@ -38,6 +38,7 @@ import java.util.Map;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.NonEmptyStringWithoutControlChars.nonEmptyStringWithoutControlChars;
+import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 
 /**
  * <p>
@@ -91,6 +92,20 @@ public class ConnectorConfig extends AbstractConfig {
     private static final String TRANSFORMS_DOC = "Aliases for the transformations to be applied to records.";
     private static final String TRANSFORMS_DISPLAY = "Transforms";
 
+    public static final String CONFIG_RELOAD_ACTION_CONFIG = "config.action.reload";
+    private static final String CONFIG_RELOAD_ACTION_DOC =
+            "The action that Connect should take on the connector when changes in external " +
+            "configuration providers result in a change in the connector's configuration properties. " +
+            "A value of 'none' indicates that Connect will do nothing. " +
+            "A value of 'restart' indicates that Connect should restart/reload the connector with the " +
+            "updated configuration properties." +
+            "The restart may actually be scheduled in the future if the external configuration provider " +
+            "indicates that a configuration value will expire in the future.";
+
+    private static final String CONFIG_RELOAD_ACTION_DISPLAY = "Reload Action";
+    public static final String CONFIG_RELOAD_ACTION_NONE = Herder.ConfigReloadAction.NONE.toString();
+    public static final String CONFIG_RELOAD_ACTION_RESTART = Herder.ConfigReloadAction.RESTART.toString();
+
     private final EnrichedConnectorConfig enrichedConfig;
     private static class EnrichedConnectorConfig extends AbstractConfig {
         EnrichedConnectorConfig(ConfigDef configDef, Map<String, String> props) {
@@ -120,7 +135,10 @@ public class ConnectorConfig extends AbstractConfig {
                             throw new ConfigException(name, value, "Duplicate alias provided.");
                         }
                     }
-                }), Importance.LOW, TRANSFORMS_DOC, TRANSFORMS_GROUP, ++orderInGroup, Width.LONG, TRANSFORMS_DISPLAY);
+                }), Importance.LOW, TRANSFORMS_DOC, TRANSFORMS_GROUP, ++orderInGroup, Width.LONG, TRANSFORMS_DISPLAY)
+                .define(CONFIG_RELOAD_ACTION_CONFIG, Type.STRING, CONFIG_RELOAD_ACTION_RESTART,
+                        in(CONFIG_RELOAD_ACTION_NONE, CONFIG_RELOAD_ACTION_RESTART), Importance.LOW,
+                        CONFIG_RELOAD_ACTION_DOC, COMMON_GROUP, ++orderInGroup, Width.MEDIUM, CONFIG_RELOAD_ACTION_DISPLAY);
     }
 
     public ConnectorConfig(Plugins plugins) {

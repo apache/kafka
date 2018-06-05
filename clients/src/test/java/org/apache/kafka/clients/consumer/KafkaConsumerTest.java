@@ -44,11 +44,10 @@ import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.FetchRequest;
-import org.apache.kafka.common.requests.FetchResponse;
-import org.apache.kafka.common.requests.FetchResponse.PartitionData;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.HeartbeatResponse;
 import org.apache.kafka.common.requests.IsolationLevel;
@@ -333,7 +332,6 @@ public class KafkaConsumerTest {
     private KafkaConsumer<byte[], byte[]> newConsumer(Properties props) {
         return new KafkaConsumer<>(props, new ByteArrayDeserializer(), new ByteArrayDeserializer());
     }
-
 
     @Test
     public void verifyHeartbeatSent() throws Exception {
@@ -1216,7 +1214,7 @@ public class KafkaConsumerTest {
         Set<TopicPartition> partitions = Utils.mkSet(tp0, tp1);
         consumer.assign(partitions);
         // verify consumer's assignment
-        assertTrue(consumer.assignment().equals(partitions));
+        assertEquals(partitions, consumer.assignment());
 
         consumer.pause(partitions);
         consumer.seekToEnd(partitions);
@@ -1492,8 +1490,52 @@ public class KafkaConsumerTest {
         }
     }
 
-    @Test
-    public void testConsumerWithinBlackoutPeriodAfterAuthenticationFailure() {
+    @Test(expected = AuthenticationException.class)
+    public void testPartitionsForAuthenticationFailure() {
+        final KafkaConsumer<String, String> consumer = consumerWithPendingAuthentication();
+        consumer.partitionsFor("some other topic");
+    }
+
+    @Test(expected = AuthenticationException.class)
+    public void testBeginningOffsetsAuthenticationFailure() {
+        final KafkaConsumer<String, String> consumer = consumerWithPendingAuthentication();
+        consumer.beginningOffsets(Collections.singleton(tp0));
+    }
+
+    @Test(expected = AuthenticationException.class)
+    public void testEndOffsetsAuthenticationFailure() {
+        final KafkaConsumer<String, String> consumer = consumerWithPendingAuthentication();
+        consumer.endOffsets(Collections.singleton(tp0));
+    }
+
+    @Test(expected = AuthenticationException.class)
+    public void testPollAuthenticationFailure() {
+        final KafkaConsumer<String, String> consumer = consumerWithPendingAuthentication();
+        consumer.subscribe(singleton(topic));
+        consumer.poll(Duration.ZERO);
+    }
+
+    @Test(expected = AuthenticationException.class)
+    public void testOffsetsForTimesAuthenticationFailure() {
+        final KafkaConsumer<String, String> consumer = consumerWithPendingAuthentication();
+        consumer.offsetsForTimes(singletonMap(tp0, 0L));
+    }
+
+    @Test(expected = AuthenticationException.class)
+    public void testCommitSyncAuthenticationFailure() {
+        final KafkaConsumer<String, String> consumer = consumerWithPendingAuthentication();
+        Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+        offsets.put(tp0, new OffsetAndMetadata(10L));
+        consumer.commitSync(offsets);
+    }
+
+    @Test(expected = AuthenticationException.class)
+    public void testCommittedAuthenticationFaiure() {
+        final KafkaConsumer<String, String> consumer = consumerWithPendingAuthentication();
+        consumer.committed(tp0);
+    }
+
+    private KafkaConsumer<String, String> consumerWithPendingAuthentication() {
         Time time = new MockTime();
         Map<String, Integer> tpCounts = new HashMap<>();
         tpCounts.put(topic, 1);
@@ -1501,70 +1543,14 @@ public class KafkaConsumerTest {
         Node node = cluster.nodes().get(0);
 
         Metadata metadata = createMetadata();
-        metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
+        metadata.update(cluster, Collections.emptySet(), time.milliseconds());
 
         MockClient client = new MockClient(time, metadata);
         client.setNode(node);
-        client.authenticationFailed(node, 300);
         PartitionAssignor assignor = new RangeAssignor();
 
-        final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, true);
-        consumer.subscribe(Collections.singleton(topic));
-        callConsumerApisAndExpectAnAuthenticationError(consumer, tp0);
-
-        time.sleep(30); // wait less than the blackout period
-        assertTrue(client.connectionFailed(node));
-        callConsumerApisAndExpectAnAuthenticationError(consumer, tp0);
-
-        client.requests().clear();
-        consumer.close(0, TimeUnit.MILLISECONDS);
-    }
-
-    private void callConsumerApisAndExpectAnAuthenticationError(KafkaConsumer<?, ?> consumer, TopicPartition partition) {
-        try {
-            consumer.partitionsFor("some other topic");
-            fail("Expected an authentication error!");
-        } catch (AuthenticationException e) {
-            // OK
-        }
-
-        try {
-            consumer.beginningOffsets(Collections.singleton(partition));
-            fail("Expected an authentication error!");
-        } catch (AuthenticationException e) {
-            // OK
-        }
-
-        try {
-            consumer.endOffsets(Collections.singleton(partition));
-            fail("Expected an authentication error!");
-        } catch (AuthenticationException e) {
-            // OK
-        }
-
-        try {
-            consumer.poll(Duration.ZERO);
-            fail("Expected an authentication error!");
-        } catch (AuthenticationException e) {
-            // OK
-        }
-
-        Map<TopicPartition, OffsetAndMetadata> offset = new HashMap<>();
-        offset.put(partition, new OffsetAndMetadata(10L));
-
-        try {
-            consumer.commitSync(offset);
-            fail("Expected an authentication error!");
-        } catch (AuthenticationException e) {
-            // OK
-        }
-
-        try {
-            consumer.committed(partition);
-            fail("Expected an authentication error!");
-        } catch (AuthenticationException e) {
-            // OK
-        }
+        client.createPendingAuthenticationError(node, 0);
+        return newConsumer(time, client, metadata, assignor, false);
     }
 
     private ConsumerRebalanceListener getConsumerRebalanceListener(final KafkaConsumer<String, String> consumer) {
@@ -1709,8 +1695,8 @@ public class KafkaConsumerTest {
     }
 
 
-    private FetchResponse fetchResponse(Map<TopicPartition, FetchInfo> fetches) {
-        LinkedHashMap<TopicPartition, PartitionData> tpResponses = new LinkedHashMap<>();
+    private FetchResponse<MemoryRecords> fetchResponse(Map<TopicPartition, FetchInfo> fetches) {
+        LinkedHashMap<TopicPartition, FetchResponse.PartitionData<MemoryRecords>> tpResponses = new LinkedHashMap<>();
         for (Map.Entry<TopicPartition, FetchInfo> fetchEntry : fetches.entrySet()) {
             TopicPartition partition = fetchEntry.getKey();
             long fetchOffset = fetchEntry.getValue().offset;
@@ -1725,10 +1711,11 @@ public class KafkaConsumerTest {
                     builder.append(0L, ("key-" + i).getBytes(), ("value-" + i).getBytes());
                 records = builder.build();
             }
-            tpResponses.put(partition, new FetchResponse.PartitionData(Errors.NONE, 0, FetchResponse.INVALID_LAST_STABLE_OFFSET, 0L,
-                    null, records));
+            tpResponses.put(partition, new FetchResponse.PartitionData<>(
+                    Errors.NONE, 0, FetchResponse.INVALID_LAST_STABLE_OFFSET,
+                    0L, null, records));
         }
-        return new FetchResponse(Errors.NONE, tpResponses, 0, INVALID_SESSION_ID);
+        return new FetchResponse<>(Errors.NONE, tpResponses, 0, INVALID_SESSION_ID);
     }
 
     private FetchResponse fetchResponse(TopicPartition partition, long fetchOffset, int count) {

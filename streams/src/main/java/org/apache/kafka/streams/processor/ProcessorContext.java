@@ -199,7 +199,7 @@ public interface ProcessorContext {
     long offset();
 
     /**
-     * Returns the headers of the current input record
+     * Returns the headers of the current input record; could be null if it is not available
      * @return the headers
      */
     Headers headers();

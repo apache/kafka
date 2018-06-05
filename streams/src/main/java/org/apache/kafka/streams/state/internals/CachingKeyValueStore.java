@@ -23,8 +23,8 @@ import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
-import org.apache.kafka.streams.processor.internals.RecordContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StateSerdes;
@@ -87,7 +87,7 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
     }
 
     private void putAndMaybeForward(final ThreadCache.DirtyEntry entry, final InternalProcessorContext context) {
-        final RecordContext current = context.recordContext();
+        final ProcessorRecordContext current = context.recordContext();
         try {
             context.setRecordContext(entry.recordContext());
             if (flushListener != null) {
@@ -179,7 +179,7 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
             }
             return rawValue;
         } else {
-            return entry.value;
+            return entry.value();
         }
     }
 

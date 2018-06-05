@@ -433,7 +433,7 @@ public class RequestResponseTest {
         ProduceResponse.PartitionResponse partitionResponse = v5FromBytes.responses().get(tp0);
         assertEquals(100, partitionResponse.logStartOffset);
         assertEquals(10000, partitionResponse.baseOffset);
-        assertEquals(10, v5FromBytes.getThrottleTime());
+        assertEquals(10, v5FromBytes.throttleTimeMs());
         assertEquals(responseData, v5Response.responses());
     }
 
@@ -445,9 +445,9 @@ public class RequestResponseTest {
         ProduceResponse v0Response = new ProduceResponse(responseData);
         ProduceResponse v1Response = new ProduceResponse(responseData, 10);
         ProduceResponse v2Response = new ProduceResponse(responseData, 10);
-        assertEquals("Throttle time must be zero", 0, v0Response.getThrottleTime());
-        assertEquals("Throttle time must be 10", 10, v1Response.getThrottleTime());
-        assertEquals("Throttle time must be 10", 10, v2Response.getThrottleTime());
+        assertEquals("Throttle time must be zero", 0, v0Response.throttleTimeMs());
+        assertEquals("Throttle time must be 10", 10, v1Response.throttleTimeMs());
+        assertEquals("Throttle time must be 10", 10, v2Response.throttleTimeMs());
         assertEquals("Should use schema version 0", ApiKeys.PRODUCE.responseSchema((short) 0),
                 v0Response.toStruct((short) 0).schema());
         assertEquals("Should use schema version 1", ApiKeys.PRODUCE.responseSchema((short) 1),

@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.connect.runtime.isolation;
 
+import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.AbstractConfig;
+import org.apache.kafka.common.config.ConfigProvider;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.Task;
@@ -143,6 +146,10 @@ public class Plugins {
 
     public Set<PluginDesc<Transformation>> transformations() {
         return delegatingLoader.transformations();
+    }
+
+    public Set<PluginDesc<ConfigProvider>> configProviders() {
+        return delegatingLoader.configProviders();
     }
 
     public Connector newConnector(String connectorClassOrAlias) {
@@ -313,6 +320,92 @@ public class Plugins {
         converterConfig.put(ConverterConfig.TYPE_CONFIG, ConverterType.HEADER.getName());
         log.debug("Configuring the header converter with configuration:{}{}", System.lineSeparator(), converterConfig);
         plugin.configure(converterConfig);
+        return plugin;
+    }
+
+    public ConfigProvider newConfigProvider(AbstractConfig config, String providerPrefix, ClassLoaderUsage classLoaderUsage) {
+        String classPropertyName = providerPrefix + ".class";
+        Map<String, String> originalConfig = config.originalsStrings();
+        if (!originalConfig.containsKey(classPropertyName)) {
+            // This configuration does not define the config provider via the specified property name
+            return null;
+        }
+        ConfigProvider plugin = null;
+        switch (classLoaderUsage) {
+            case CURRENT_CLASSLOADER:
+                // Attempt to load first with the current classloader, and plugins as a fallback.
+                plugin = getInstance(config, classPropertyName, ConfigProvider.class);
+                break;
+            case PLUGINS:
+                // Attempt to load with the plugin class loader, which uses the current classloader as a fallback
+                String configProviderClassOrAlias = originalConfig.get(classPropertyName);
+                Class<? extends ConfigProvider> klass;
+                try {
+                    klass = pluginClass(delegatingLoader, configProviderClassOrAlias, ConfigProvider.class);
+                } catch (ClassNotFoundException e) {
+                    throw new ConnectException(
+                            "Failed to find any class that implements ConfigProvider and which name matches "
+                                    + configProviderClassOrAlias + ", available ConfigProviders are: "
+                                    + pluginNames(delegatingLoader.configProviders())
+                    );
+                }
+                plugin = newPlugin(klass);
+                break;
+        }
+        if (plugin == null) {
+            throw new ConnectException("Unable to instantiate the ConfigProvider specified in '" + classPropertyName + "'");
+        }
+
+        // Configure the ConfigProvider
+        String configPrefix = providerPrefix + ".param.";
+        Map<String, Object> configProviderConfig = config.originalsWithPrefix(configPrefix);
+        plugin.configure(configProviderConfig);
+        return plugin;
+    }
+
+    /**
+     * If the given class names are available in the classloader, return a list of new configured
+     * instances. If the instances implement {@link Configurable}, they are configured with provided {@param config}
+     *
+     * @param klassNames         the list of class names of plugins that needs to instantiated and configured
+     * @param config             the configuration containing the {@link org.apache.kafka.connect.runtime.Worker}'s configuration; may not be {@code null}
+     * @param pluginKlass        the type of the plugin class that is being instantiated
+     * @return the instantiated and configured list of plugins of type <T>; empty list if the {@param klassNames} is {@code null} or empty
+     * @throws ConnectException if the implementation class could not be found
+     */
+    public <T> List<T> newPlugins(List<String> klassNames, AbstractConfig config, Class<T> pluginKlass) {
+        List<T> plugins = new ArrayList<>();
+        if (klassNames != null) {
+            for (String klassName : klassNames) {
+                plugins.add(newPlugin(klassName, config, pluginKlass));
+            }
+        }
+        return plugins;
+    }
+
+    public <T> T newPlugin(String klassName, AbstractConfig config, Class<T> pluginKlass) {
+        T plugin;
+        Class<? extends T> klass;
+        try {
+            klass = pluginClass(delegatingLoader, klassName, pluginKlass);
+        } catch (ClassNotFoundException e) {
+            String msg = String.format("Failed to find any class that implements %s and which "
+                                       + "name matches %s", pluginKlass, klassName);
+            throw new ConnectException(msg);
+        }
+        plugin = newPlugin(klass);
+        if (plugin == null) {
+            throw new ConnectException("Unable to instantiate '" + klassName + "'");
+        }
+        if (plugin instanceof Versioned) {
+            Versioned versionedPlugin = (Versioned) plugin;
+            if (versionedPlugin.version() == null || versionedPlugin.version().trim().isEmpty()) {
+                throw new ConnectException("Version not defined for '" + klassName + "'");
+            }
+        }
+        if (plugin instanceof Configurable) {
+            ((Configurable) plugin).configure(config.originals());
+        }
         return plugin;
     }
 

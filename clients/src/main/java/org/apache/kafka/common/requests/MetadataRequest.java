@@ -62,9 +62,14 @@ public class MetadataRequest extends AbstractRequest {
     /* The v5 metadata request is the same as v4. An additional field for offline_replicas has been added to the v5 metadata response */
     private static final Schema METADATA_REQUEST_V5 = METADATA_REQUEST_V4;
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema METADATA_REQUEST_V6 = METADATA_REQUEST_V5;
+
     public static Schema[] schemaVersions() {
         return new Schema[] {METADATA_REQUEST_V0, METADATA_REQUEST_V1, METADATA_REQUEST_V2, METADATA_REQUEST_V3,
-            METADATA_REQUEST_V4, METADATA_REQUEST_V5};
+            METADATA_REQUEST_V4, METADATA_REQUEST_V5, METADATA_REQUEST_V6};
     }
 
     public static class Builder extends AbstractRequest.Builder<MetadataRequest> {
@@ -170,6 +175,7 @@ public class MetadataRequest extends AbstractRequest {
             case 3:
             case 4:
             case 5:
+            case 6:
                 return new MetadataResponse(throttleTimeMs, Collections.<Node>emptyList(), null, MetadataResponse.NO_CONTROLLER_ID, topicMetadatas);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",

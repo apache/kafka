@@ -152,14 +152,6 @@ object ZkUtils {
     assignments.map { case (tp, p) => (new TopicAndPartition(tp), p) }
   }
 
-  def parseTopicsData(jsonData: String): Seq[String] = {
-    for {
-      js <- Json.parseFull(jsonData).toSeq
-      partitionsSeq <- js.asJsonObject.get("topics").toSeq
-      p <- partitionsSeq.asJsonArray.iterator
-    } yield p.asJsonObject("topic").to[String]
-  }
-
   def controllerZkData(brokerId: Int, timestamp: Long): String = {
     Json.legacyEncodeAsString(Map("version" -> 1, "brokerid" -> brokerId, "timestamp" -> timestamp.toString))
   }

@@ -18,13 +18,13 @@ package kafka.server
 
 
 import kafka.api.Request
-import kafka.cluster.{BrokerEndPoint, Replica, Partition}
+import kafka.cluster.{BrokerEndPoint, Partition, Replica}
 import kafka.log.LogManager
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import kafka.server.epoch.LeaderEpochCache
-import org.apache.kafka.common.errors.{ReplicaNotAvailableException, KafkaStorageException}
 import kafka.utils.{DelayedItem, TestUtils}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.errors.{KafkaStorageException, ReplicaNotAvailableException}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.EpochEndOffset
 import org.apache.kafka.common.requests.EpochEndOffset.{UNDEFINED_EPOCH_OFFSET, UNDEFINED_EPOCH}

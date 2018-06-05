@@ -40,50 +40,25 @@ class TimeWindowedKStream[K, V](val inner: TimeWindowedKStreamJ[K, V]) {
    *
    * @param initializer   an initializer function that computes an initial intermediate aggregation result
    * @param aggregator    an aggregator function that computes a new aggregate result
+   * @param materialized  an instance of `Materialized` used to materialize a state store.
    * @return a [[KTable]] that contains "update" records with unmodified keys, and values that represent the
    * latest (rolling) aggregate for each key
    * @see `org.apache.kafka.streams.kstream.TimeWindowedKStream#aggregate`
    */
-  def aggregate[VR](initializer: => VR)(aggregator: (K, V, VR) => VR): KTable[Windowed[K], VR] =
-    inner.aggregate((() => initializer).asInitializer, aggregator.asAggregator)
-
-  /**
-   * Aggregate the values of records in this stream by the grouped key.
-   *
-   * @param initializer   an initializer function that computes an initial intermediate aggregation result
-   * @param aggregator    an aggregator function that computes a new aggregate result
-   * @param materialized  an instance of `Materialized` used to materialize a state store. 
-   * @return a [[KTable]] that contains "update" records with unmodified keys, and values that represent the
-   * latest (rolling) aggregate for each key
-   * @see `org.apache.kafka.streams.kstream.TimeWindowedKStream#aggregate`
-   */
-  def aggregate[VR](initializer: => VR)(
-    aggregator: (K, V, VR) => VR,
-    materialized: Materialized[K, VR, ByteArrayWindowStore]
+  def aggregate[VR](initializer: => VR)(aggregator: (K, V, VR) => VR)(
+    implicit materialized: Materialized[K, VR, ByteArrayWindowStore]
   ): KTable[Windowed[K], VR] =
     inner.aggregate((() => initializer).asInitializer, aggregator.asAggregator, materialized)
 
   /**
    * Count the number of records in this stream by the grouped key and the defined windows.
    *
-   * @return a [[KTable]] that contains "update" records with unmodified keys and `Long` values that
-   * represent the latest (rolling) count (i.e., number of records) for each key
-   * @see `org.apache.kafka.streams.kstream.TimeWindowedKStream#count`
-   */ 
-  def count(): KTable[Windowed[K], Long] = {
-    val c: KTable[Windowed[K], java.lang.Long] = inner.count()
-    c.mapValues[Long](Long2long _)
-  }
-
-  /**
-   * Count the number of records in this stream by the grouped key and the defined windows.
-   *
    * @param materialized  an instance of `Materialized` used to materialize a state store. 
    * @return a [[KTable]] that contains "update" records with unmodified keys and `Long` values that
    * represent the latest (rolling) count (i.e., number of records) for each key
    * @see `org.apache.kafka.streams.kstream.TimeWindowedKStream#count`
    */ 
-  def count(materialized: Materialized[K, Long, ByteArrayWindowStore]): KTable[Windowed[K], Long] = {
+  def count()(implicit materialized: Materialized[K, Long, ByteArrayWindowStore]): KTable[Windowed[K], Long] = {
     val c: KTable[Windowed[K], java.lang.Long] =
       inner.count(materialized.asInstanceOf[Materialized[K, java.lang.Long, ByteArrayWindowStore]])
     c.mapValues[Long](Long2long _)
@@ -93,23 +68,13 @@ class TimeWindowedKStream[K, V](val inner: TimeWindowedKStreamJ[K, V]) {
    * Combine the values of records in this stream by the grouped key.
    *
    * @param reducer   a function that computes a new aggregate result
-   * @return a [[KTable]] that contains "update" records with unmodified keys, and values that represent the
-   * latest (rolling) aggregate for each key
-   * @see `org.apache.kafka.streams.kstream.TimeWindowedKStream#reduce`
-   */
-  def reduce(reducer: (V, V) => V): KTable[Windowed[K], V] =
-    inner.reduce(reducer.asReducer)
-
-  /**
-   * Combine the values of records in this stream by the grouped key.
-   *
-   * @param reducer   a function that computes a new aggregate result
    * @param materialized  an instance of `Materialized` used to materialize a state store. 
    * @return a [[KTable]] that contains "update" records with unmodified keys, and values that represent the
    * latest (rolling) aggregate for each key
    * @see `org.apache.kafka.streams.kstream.TimeWindowedKStream#reduce`
    */
-  def reduce(reducer: (V, V) => V,
-    materialized: Materialized[K, V, ByteArrayWindowStore]): KTable[Windowed[K], V] =
+  def reduce(reducer: (V, V) => V)(
+    implicit materialized: Materialized[K, V, ByteArrayWindowStore]
+  ): KTable[Windowed[K], V] =
     inner.reduce(reducer.asReducer, materialized)
 }
