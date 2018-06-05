@@ -2079,7 +2079,7 @@ object Log extends Logging {
     val sourceRecords = segment.log
     var readBuffer = ByteBuffer.allocate(1024 * 1024)
 
-    class CopyResult(val bytesRead: Option[Int], val overflowOffset: Option[Long])
+    class CopyResult(val bytesRead: Int, val overflowOffset: Option[Long])
 
     // Helper method to copy `records` into `segment`. Makes sure records being appended do not result in offset overflow.
     def copyRecordsToSegment(records: FileRecords, segment: LogSegment, readBuffer: ByteBuffer): CopyResult = {
@@ -2097,8 +2097,10 @@ object Log extends Logging {
       })
 
       // return early if no valid batches were found
-      if (validBatches.isEmpty)
-        return new CopyResult(None, overflowOffset)
+      if (validBatches.isEmpty) {
+        require(overflowOffset.isDefined, "No batches found during split")
+        return new CopyResult(0, overflowOffset)
+      }
 
       // determine the maximum offset and timestamp in batches
       for (batch <- validBatches) {
@@ -2123,7 +2125,7 @@ object Log extends Logging {
       readBuffer.clear()
       log.info(s"Appended messages till $maxOffset to segment $segment during split")
 
-      new CopyResult(Some(bytesRead), overflowOffset)
+      new CopyResult(bytesRead, overflowOffset)
     }
 
     log.info(s"Splitting segment $segment in log $log")
@@ -2139,7 +2141,7 @@ object Log extends Logging {
       // get records we want to copy and copy them into the new segment
       val recordsToCopy = sourceRecords.slice(position, readBuffer.capacity)
       val copyResult = copyRecordsToSegment(recordsToCopy, currentSegment, readBuffer)
-      position += copyResult.bytesRead.getOrElse(0)
+      position += copyResult.bytesRead
 
       // create a new segment if there was an overflow
       copyResult.overflowOffset.foreach(overflowOffset => newSegments += LogCleaner.createNewCleanedSegment(log, overflowOffset))
