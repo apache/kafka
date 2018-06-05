@@ -143,7 +143,11 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
    * @throws IOException if rename fails
    */
   def renameTo(f: File) {
-    try Utils.atomicMoveWithFallback(file.toPath, f.toPath)
+
+    try {
+      closeHandler()
+      Utils.atomicMoveWithFallback(file.toPath, f.toPath)
+    }
     finally file = f
   }
 

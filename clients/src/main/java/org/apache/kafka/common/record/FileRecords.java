@@ -210,6 +210,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
      */
     public void renameTo(File f) throws IOException {
         try {
+            channel.close();
             Utils.atomicMoveWithFallback(file.toPath(), f.toPath());
         } finally {
             this.file = f;
