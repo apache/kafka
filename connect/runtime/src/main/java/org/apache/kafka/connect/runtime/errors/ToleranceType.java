@@ -33,7 +33,8 @@ public enum ToleranceType {
      */
     ALL;
 
-    public static ToleranceType fromString(String typeStr) {
-        return "ALL".equals(typeStr.toUpperCase(Locale.ROOT)) ? ToleranceType.ALL : ToleranceType.NONE;
+    public String value() {
+        return name().toLowerCase(Locale.ROOT);
     }
+
 }

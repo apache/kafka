@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.sink.SinkTask;
@@ -42,9 +43,19 @@ public class SinkConnectorConfig extends ConnectorConfig {
     public static final String TOPICS_REGEX_DEFAULT = "";
     private static final String TOPICS_REGEX_DISPLAY = "Topics regex";
 
+    public static final String DLQ_PREFIX = "errors.deadletterqueue.";
+
+    public static final String DLQ_TOPIC_NAME_CONFIG = DLQ_PREFIX + "topic.name";
+    public static final String DLQ_TOPIC_NAME_DOC = "The name of the topic to be used as the dead letter queue (DLQ) for messages that " +
+        "result in an error when processed by this sink connector, or its transformations or converters. The topic name is blank by default, " +
+        "which means that no messages are to be recorded in the DLQ.";
+    public static final String DLQ_TOPIC_DEFAULT = "";
+    private static final String DLQ_TOPIC_DISPLAY = "Dead Letter Queue Topic Name";
+
     static ConfigDef config = ConnectorConfig.configDef()
         .define(TOPICS_CONFIG, ConfigDef.Type.LIST, TOPICS_DEFAULT, ConfigDef.Importance.HIGH, TOPICS_DOC, COMMON_GROUP, 4, ConfigDef.Width.LONG, TOPICS_DISPLAY)
-        .define(TOPICS_REGEX_CONFIG, ConfigDef.Type.STRING, TOPICS_REGEX_DEFAULT, new RegexValidator(), ConfigDef.Importance.HIGH, TOPICS_REGEX_DOC, COMMON_GROUP, 4, ConfigDef.Width.LONG, TOPICS_REGEX_DISPLAY);
+        .define(TOPICS_REGEX_CONFIG, ConfigDef.Type.STRING, TOPICS_REGEX_DEFAULT, new RegexValidator(), ConfigDef.Importance.HIGH, TOPICS_REGEX_DOC, COMMON_GROUP, 4, ConfigDef.Width.LONG, TOPICS_REGEX_DISPLAY)
+        .define(DLQ_TOPIC_NAME_CONFIG, ConfigDef.Type.STRING, DLQ_TOPIC_DEFAULT, Importance.MEDIUM, DLQ_TOPIC_NAME_DOC, ERROR_GROUP, 6, ConfigDef.Width.MEDIUM, DLQ_TOPIC_DISPLAY);
 
     public static ConfigDef configDef() {
         return config;
@@ -83,4 +94,7 @@ public class SinkConnectorConfig extends ConnectorConfig {
         return topicsRegexStr != null && !topicsRegexStr.trim().isEmpty();
     }
 
+    public String dlqTopicName() {
+        return getString(DLQ_TOPIC_NAME_CONFIG);
+    }
 }
