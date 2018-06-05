@@ -502,14 +502,6 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
     sendRequestAndVerifyResponseError(ApiKeys.CREATE_TOPICS, createTopicsRequest, resources, isAuthorized = false)
 
-    clusterCreateAcl.get(topicResource).foreach { acls =>
-      val describeAcls = topicDescribeAcl(topicResource)
-      val isAuthorized =  describeAcls == acls
-      addAndVerifyAcls(describeAcls, topicResource)
-      sendRequestAndVerifyResponseError(ApiKeys.CREATE_TOPICS, createTopicsRequest, resources, isAuthorized = isAuthorized)
-      removeAllAcls()
-    }
-
     for ((resource, acls) <- clusterCreateAcl)
       addAndVerifyAcls(acls, resource)
     sendRequestAndVerifyResponseError(ApiKeys.CREATE_TOPICS, createTopicsRequest, resources, isAuthorized = true)
