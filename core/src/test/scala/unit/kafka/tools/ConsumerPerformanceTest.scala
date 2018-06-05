@@ -20,6 +20,7 @@ package kafka.tools
 import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
 
+import joptsimple.OptionException
 import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
 import org.junit.Test
 
@@ -82,7 +83,7 @@ class ConsumerPerformanceTest {
     assertEquals(10, config.numMessages)
   }
 
-  @Test(expected = classOf[joptsimple.OptionException])
+  @Test(expected = classOf[OptionException])
   def testConfigUsingNewConsumerUnrecognizedOption(): Unit = {
     //Given
     val args: Array[String] = Array(

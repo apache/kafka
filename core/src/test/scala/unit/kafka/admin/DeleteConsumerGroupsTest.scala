@@ -25,12 +25,11 @@ import org.junit.Test
 
 class DeleteConsumerGroupTest extends ConsumerGroupCommandTest {
 
-  @Test(expected = classOf[joptsimple.OptionException])
+  @Test(expected = classOf[OptionException])
   def testDeleteWithTopicOption() {
     TestUtils.createOffsetsTopic(zkClient, servers)
     val cgcArgs = Array("--bootstrap-server", brokerList, "--delete", "--group", group, "--topic")
     getConsumerGroupService(cgcArgs)
-    fail("Expected an error due to presence of mutually exclusive options")
   }
 
   @Test
