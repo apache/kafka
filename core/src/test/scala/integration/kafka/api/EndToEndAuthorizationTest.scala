@@ -240,6 +240,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     }
   }
 
+  @Test
   def testProduceConsumeTopicAutoCreateTopicCreateAcl(): Unit = {
     // topic2 is not created on setup()
     val tp2 = new TopicPartition("topic2", 0)
