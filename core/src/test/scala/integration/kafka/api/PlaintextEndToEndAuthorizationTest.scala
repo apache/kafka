@@ -80,8 +80,8 @@ class PlaintextEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
     // To check the client listener name, establish a session on the server by sending any request eg sendRecords
     intercept[TopicAuthorizationException](sendRecords(1, tp))
 
-    assertEquals("CLIENT", PlaintextEndToEndAuthorizationTest.clientListenerName.get)
-    assertEquals("SERVER", PlaintextEndToEndAuthorizationTest.serverListenerName.get)
+    assertEquals(Some("CLIENT"), PlaintextEndToEndAuthorizationTest.clientListenerName)
+    assertEquals(Some("SERVER"), PlaintextEndToEndAuthorizationTest.serverListenerName)
   }
 
 }
