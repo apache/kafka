@@ -857,8 +857,8 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     val newTopicResource = new Resource(Topic, newTopic)
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Read)), newTopicResource)
     addAndVerifyAcls(groupReadAcl(groupResource), groupResource)
+    this.consumers.head.assign(List(topicPartition).asJava)
     try {
-      this.consumers.head.assign(List(topicPartition).asJava)
       this.consumers.head.poll(Duration.ofMillis(50L));
       Assert.fail("should have thrown Authorization Exception")
     } catch {
@@ -869,9 +869,9 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     val resource = if (resType == Topic) newTopicResource else Resource.ClusterResource
     addAndVerifyAcls(acls, resource)
 
-    // need to check twice as a single poll may not cause topic creation
-    this.consumers.head.poll(Duration.ofMillis(50L));
-    this.consumers.head.poll(Duration.ofMillis(50L));
+    // need to use a larger timeout in this subsequent poll else it may not cause topic auto-creation
+    // this can be verified by commenting the above addAndVerifyAcls line and expecting this test to fail
+    this.consumers.head.poll(Duration.ofMillis(300L));
   }
 
   @Test(expected = classOf[AuthorizationException])
