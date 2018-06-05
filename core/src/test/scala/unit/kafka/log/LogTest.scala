@@ -1886,7 +1886,7 @@ class LogTest {
     assertTrue("Message payload should be null.", !head.hasValue)
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test(expected = classOf[UnexpectedAppendOffsetException])
   def testAppendWithOutOfOrderOffsetsThrowsException() {
     val log = createLog(logDir, LogConfig(), brokerTopicStats = brokerTopicStats)
     val records = (0 until 2).map(id => new SimpleRecord(id.toString.getBytes)).toArray
@@ -1895,14 +1895,22 @@ class LogTest {
     log.appendAsFollower(invalidRecord)
   }
 
-  @Test(expected = classOf[UnexpectedAppendOffsetException])
+  @Test
   def testAppendEmptyLogBelowLogStartOffsetThrowsException() {
     createEmptyLogs(logDir, 7)
     val log = createLog(logDir, LogConfig())
     assertEquals(7L, log.logStartOffset)
     assertEquals(7L, log.logEndOffset)
-    val batch = singletonRecordsWithLeaderEpoch(value = "random".getBytes, leaderEpoch = 1, offset = 0)
-    log.appendAsFollower(records = batch)
+
+    val firstOffset = 5L
+    val batch = singletonRecordsWithLeaderEpoch(value = "random".getBytes, leaderEpoch = 1, offset = firstOffset)
+    try {
+      log.appendAsFollower(records = batch)
+    } catch {
+      case e: UnexpectedAppendOffsetException =>
+        assertTrue(s"UnexpectedAppendOffsetException#firstOffset should be defined", e.firstOffset.isDefined)
+        assertEquals(s"UnexpectedAppendOffsetException#firstOffset:", firstOffset, e.firstOffset.get)
+    }
   }
 
   @Test

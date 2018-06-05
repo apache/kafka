@@ -18,8 +18,8 @@
 package kafka.common
 
 /**
- * Indicates unexpected offset received from the leader that the follower may still be
- * able to append (after some recovery)
+ * Indicates the follower or the future replica received an unexpected offset from the leader (or
+ * current replica)
  */
-class UnexpectedAppendOffsetException(val message: String, val firstOffset: Long) extends RuntimeException(message) {
+class UnexpectedAppendOffsetException(val message: String, val firstOffset: Option[Long]) extends RuntimeException(message) {
 }
