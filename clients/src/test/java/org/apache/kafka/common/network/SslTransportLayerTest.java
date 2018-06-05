@@ -447,8 +447,7 @@ public class SslTransportLayerTest {
      */
     @Test
     public void testInvalidSecureRandomImplementation() throws Exception {
-        SslChannelBuilder channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false);
-        try {
+        try (SslChannelBuilder channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false)) {
             sslClientConfigs.put(SslConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG, "invalid");
             channelBuilder.configure(sslClientConfigs);
             fail("SSL channel configured with invalid SecureRandom implementation");
@@ -462,8 +461,7 @@ public class SslTransportLayerTest {
      */
     @Test
     public void testInvalidTruststorePassword() throws Exception {
-        SslChannelBuilder channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false);
-        try {
+        try (SslChannelBuilder channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false)) {
             sslClientConfigs.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, "invalid");
             channelBuilder.configure(sslClientConfigs);
             fail("SSL channel configured with invalid truststore password");
@@ -477,8 +475,7 @@ public class SslTransportLayerTest {
      */
     @Test
     public void testInvalidKeystorePassword() throws Exception {
-        SslChannelBuilder channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false);
-        try {
+        try (SslChannelBuilder channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false)) {
             sslClientConfigs.put(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, "invalid");
             channelBuilder.configure(sslClientConfigs);
             fail("SSL channel configured with invalid keystore password");
@@ -785,7 +782,7 @@ public class SslTransportLayerTest {
 
     @Test
     public void testClosePlaintext() throws Exception {
-        testClose(SecurityProtocol.PLAINTEXT, new PlaintextChannelBuilder());
+        testClose(SecurityProtocol.PLAINTEXT, new PlaintextChannelBuilder(null));
     }
 
     private void testClose(SecurityProtocol securityProtocol, ChannelBuilder clientChannelBuilder) throws Exception {
