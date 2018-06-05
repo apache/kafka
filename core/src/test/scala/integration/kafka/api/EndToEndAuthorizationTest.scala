@@ -249,27 +249,6 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     consumeRecords(this.consumers.head, numRecords, topic = tp2.topic)
   }
 
-  @Test
-  def testProduceConsumeTopicAutoCreateClusterCreateAcl(): Unit = {
-    // topic2 is not created on setup()
-    val tp2 = new TopicPartition("topic2", 0)
-    setClusterCreateAclsAndProduce(tp2)
-    consumers.head.assign(List(tp2).asJava)
-    consumeRecords(this.consumers.head, numRecords, topic = tp2.topic)
-  }
-
-  protected def setClusterCreateAclsAndProduce(tp: TopicPartition) {
-    AclCommand.main(clusterCreateAclArgs)
-    AclCommand.main(topicWriteAclArgs(tp.topic))
-    AclCommand.main(consumeAclArgs(tp.topic))
-    servers.foreach { s =>
-      TestUtils.waitAndVerifyAcls(TopicReadAcl ++ TopicWriteAcl ++ TopicDescribeAcl, s.apis.authorizer.get, new Resource(Topic, tp.topic))
-      TestUtils.waitAndVerifyAcls(ClusterBrokerActionAcl ++ ClusterCreateAcl, s.apis.authorizer.get, clusterResource)
-      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.apis.authorizer.get, groupResource)
-    }
-    sendRecords(numRecords, tp)
-  }
-
   protected def setAclsAndProduce(tp: TopicPartition) {
     AclCommand.main(produceAclArgs(tp.topic))
     AclCommand.main(consumeAclArgs(tp.topic))
