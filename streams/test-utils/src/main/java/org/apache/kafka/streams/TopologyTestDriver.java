@@ -181,7 +181,6 @@ public class TopologyTestDriver implements Closeable {
     private final GlobalStateManager globalStateManager;
 
     private final InternalProcessorContext context;
-    private final InternalProcessorContext globalContext;
 
     private final StateDirectory stateDirectory;
     private final Metrics metrics;
@@ -302,22 +301,22 @@ public class TopologyTestDriver implements Closeable {
                 stateRestoreListener,
                 streamsConfig);
 
-            globalContext = new GlobalProcessorContextImpl(streamsConfig, globalStateManager, streamsMetrics, cache);
-            globalStateManager.setGlobalProcessorContext(globalContext);
+            final GlobalProcessorContextImpl globalProcessorContext
+                = new GlobalProcessorContextImpl(streamsConfig, globalStateManager, streamsMetrics, cache);
+            globalStateManager.setGlobalProcessorContext(globalProcessorContext);
 
             globalStateTask = new GlobalStateUpdateTask(
                 globalTopology,
-                globalContext,
+                globalProcessorContext,
                 globalStateManager,
                 new LogAndContinueExceptionHandler(),
                 new LogContext()
             );
             globalStateTask.initialize();
-            globalContext.setRecordContext(new ProcessorRecordContext(0L, -1L, -1, null, new RecordHeaders()));
+            globalProcessorContext.setRecordContext(new ProcessorRecordContext(0L, -1L, -1, null, new RecordHeaders()));
         } else {
             globalStateManager = null;
             globalStateTask = null;
-            globalContext = null;
         }
 
         if (!partitionsByTopic.isEmpty()) {
@@ -573,9 +572,22 @@ public class TopologyTestDriver implements Closeable {
      */
     @SuppressWarnings("WeakerAccess")
     public StateStore getStateStore(final String name) {
-        final StateStore store = getStateStoreInternal(name).key;
-        //return store != null ? new StoreFacade(store) : null;
-        return store;
+        if (task != null) {
+            final StateStore stateStore = ((ProcessorContextImpl) task.context()).getStateMgr().getStore(name);
+            if (stateStore != null) {
+                return stateStore;
+            }
+        }
+
+        if (globalStateManager != null) {
+            final StateStore stateStore = globalStateManager.getGlobalStore(name);
+            if (stateStore != null) {
+                return stateStore;
+            }
+
+        }
+
+        return null;
     }
 
     /**
@@ -594,9 +606,7 @@ public class TopologyTestDriver implements Closeable {
      */
     @SuppressWarnings({"unchecked", "WeakerAccess"})
     public <K, V> KeyValueStore<K, V> getKeyValueStore(final String name) {
-        final KeyValue<StateStore, InternalProcessorContext> storeAndContext = getStateStoreInternal(name);
-        final StateStore store = storeAndContext.key;
-//        return store instanceof KeyValueStore ? new KeyValueStoreFacade((KeyValueStore<K, V>) store, storeAndContext.value) : null;
+        final StateStore store = getStateStore(name);
         return store instanceof KeyValueStore ? (KeyValueStore<K, V>) store : null;
     }
 
@@ -616,9 +626,7 @@ public class TopologyTestDriver implements Closeable {
      */
     @SuppressWarnings({"unchecked", "WeakerAccess", "unused"})
     public <K, V> WindowStore<K, V> getWindowStore(final String name) {
-        final KeyValue<StateStore, InternalProcessorContext> storeAndContext = getStateStoreInternal(name);
-        final StateStore store = storeAndContext.key;
-//        return store instanceof WindowStore ? new WindowStoreFacade((WindowStore<K, V>) store, storeAndContext.value) : null;
+        final StateStore store = getStateStore(name);
         return store instanceof WindowStore ? (WindowStore<K, V>) store : null;
     }
 
@@ -638,29 +646,8 @@ public class TopologyTestDriver implements Closeable {
      */
     @SuppressWarnings({"unchecked", "WeakerAccess", "unused"})
     public <K, V> SessionStore<K, V> getSessionStore(final String name) {
-        final KeyValue<StateStore, InternalProcessorContext> storeAndContext = getStateStoreInternal(name);
-        final StateStore store = storeAndContext.key;
-//        return store instanceof SessionStore ? new SessionStoreFacade((SessionStore<K, V>) store, storeAndContext.value) : null;
+        final StateStore store = getStateStore(name);
         return store instanceof SessionStore ? (SessionStore<K, V>) store : null;
-    }
-
-    private KeyValue<StateStore, InternalProcessorContext> getStateStoreInternal(final String name) {
-        if (task != null) {
-            final StateStore stateStore = ((ProcessorContextImpl) task.context()).getStateMgr().getStore(name);
-            if (stateStore != null) {
-                return new KeyValue<>(stateStore, context);
-            }
-        }
-
-        if (globalStateManager != null) {
-            final StateStore stateStore = globalStateManager.getGlobalStore(name);
-            if (stateStore != null) {
-                return new KeyValue<>(stateStore, globalContext);
-            }
-
-        }
-
-        return new KeyValue<>(null, null);
     }
 
     /**

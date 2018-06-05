@@ -178,9 +178,9 @@ public class MockProcessorContextTest {
     @Test
     public void shouldThrowIfForwardedWithDeprecatedChildName() {
         final AbstractProcessor<String, Long> processor = new AbstractProcessor<String, Long>() {
+            @SuppressWarnings("deprecation")
             @Override
             public void process(final String key, final Long value) {
-                //noinspection deprecation
                 context().forward(key, value, "child1");
             }
         };

@@ -414,6 +414,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         capturedForwards.add(new CapturedForward(to, new KeyValue(key, value)));
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public <K, V> void forward(final K key, final V value, final int childIndex) {
         throw new UnsupportedOperationException(
@@ -422,6 +423,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         );
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public <K, V> void forward(final K key, final V value, final String childName) {
         throw new UnsupportedOperationException(
