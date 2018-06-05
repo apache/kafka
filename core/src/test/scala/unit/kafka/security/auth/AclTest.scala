@@ -22,25 +22,29 @@ import kafka.utils.Json
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.junit.{Assert, Test}
 import org.scalatest.junit.JUnitSuite
+
 import scala.collection.JavaConverters._
 
 class AclTest extends JUnitSuite {
 
-  val AclJson = "{\"version\": 1, \"acls\": [{\"host\": \"host1\",\"permissionType\": \"Deny\",\"operation\": \"READ\", \"principal\": \"User:alice\"  },  " +
-    "{  \"host\":  \"*\" ,  \"permissionType\": \"Allow\",  \"operation\":  \"Read\", \"principal\": \"User:bob\"  },  " +
-    "{  \"host\": \"host1\",  \"permissionType\": \"Deny\",  \"operation\":   \"Read\" ,  \"principal\": \"User:bob\"}  ]}"
+  val AclJson = """{"version": 1, "acls": [{"host": "host1","permissionType": "Deny","operation": "READ", "principal": "User:alice"  },
+    {  "host":  "*" ,  "permissionType": "Allow",  "operation":  "Read", "principal": "User:bob"  },
+    {  "host": "host1",  "permissionType": "Deny",  "operation":   "Read" ,  "principal": "User:bob"},
+    {  "host": "host1",  "permissionType": "Deny",  "operation":   "Read" ,  "principal": "User:\\bob"},
+    {  "host": "host1",  "permissionType": "Deny",  "operation":   "Read" ,  "principal": "User:bob1\\bob2"}]}"""
 
   @Test
   def testAclJsonConversion(): Unit = {
     val acl1 = new Acl(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "alice"), Deny, "host1" , Read)
     val acl2 = new Acl(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob"), Allow, "*", Read)
     val acl3 = new Acl(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob"), Deny, "host1", Read)
+    val acl4 = new Acl(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "\\bob"), Deny, "host1", Read)
+    val acl5 = new Acl(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob1\\bob2"), Deny, "host1", Read)
 
-    val acls = Set[Acl](acl1, acl2, acl3)
+    val acls = Set[Acl](acl1, acl2, acl3, acl4, acl5)
     val jsonAcls = Json.encodeAsBytes(Acl.toJsonCompatibleMap(acls).asJava)
 
     Assert.assertEquals(acls, Acl.fromBytes(jsonAcls))
     Assert.assertEquals(acls, Acl.fromBytes(AclJson.getBytes(UTF_8)))
   }
-
 }

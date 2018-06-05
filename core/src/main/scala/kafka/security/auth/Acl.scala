@@ -17,9 +17,13 @@
 
 package kafka.security.auth
 
+import java.nio.charset.StandardCharsets
+
 import kafka.utils.Json
+import kafka.utils.json.JsonValue
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.SecurityUtils
+
 import scala.collection.JavaConverters._
 
 object Acl {
@@ -58,7 +62,7 @@ object Acl {
     if (bytes == null || bytes.isEmpty)
       return collection.immutable.Set.empty[Acl]
 
-    Json.parseBytes(bytes).map(_.asJsonObject).map { js =>
+    parseBytesWithAclFallback(bytes).map(_.asJsonObject).map { js =>
       //the acl json version.
       require(js(VersionKey).to[Int] == CurrentVersion)
       js(AclsKey).asJsonArray.iterator.map(_.asJsonObject).map { itemJs =>
@@ -73,6 +77,23 @@ object Acl {
 
   def toJsonCompatibleMap(acls: Set[Acl]): Map[String, Any] = {
     Map(Acl.VersionKey -> Acl.CurrentVersion, Acl.AclsKey -> acls.map(acl => acl.toMap.asJava).toList.asJava)
+  }
+
+  /**
+    * Parse a JSON string into a JsonValue if possible. `None` is returned if `input` is not valid JSON. This method is currently used
+    * to read the already stored invalid ACLs JSON which was persisted using older versions of Kafka (prior to Kafka 1.1.0). KAFKA-6319
+    */
+  private def parseBytesWithAclFallback(input: Array[Byte]): Option[JsonValue] = {
+    // Before 1.0.1, Json#encode did not escape backslash or any other special characters. SSL principals
+    // stored in ACLs may contain backslash as an escape char, making the JSON generated in earlier versions invalid.
+    // Escape backslash and retry to handle these strings which may have been persisted in ZK.
+    // Note that this does not handle all special characters (e.g. non-escaped double quotes are not supported)
+    Json.tryParseBytes(input) match {
+      case Left(e) =>
+        val escapedInput = new String(input, StandardCharsets.UTF_8).replaceAll("\\\\", "\\\\\\\\")
+        Json.parseFull(escapedInput)
+      case Right(v) => Some(v)
+    }
   }
 }
 
