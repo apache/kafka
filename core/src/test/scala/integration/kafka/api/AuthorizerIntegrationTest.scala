@@ -567,32 +567,28 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
   @Test
   def testCreatePermissionOnTopicToWriteToNonExistentTopic() {
-    testCreatePermissionNeededToWriteToNonExistentTopic("newTopic",
-      Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Write), new Acl(userPrincipal, Allow, Acl.WildCardHost, Create)),
-      Topic)
+    testCreatePermissionNeededToWriteToNonExistentTopic(Topic)
   }
 
   @Test
   def testCreatePermissionOnClusterToWriteToNonExistentTopic() {
-    testCreatePermissionNeededToWriteToNonExistentTopic("newTopic",
-      Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Create)), 
-      Cluster)
+    testCreatePermissionNeededToWriteToNonExistentTopic(Cluster)
   }
 
-  private def testCreatePermissionNeededToWriteToNonExistentTopic(newTopic: String, acls: Set[Acl], resType: ResourceType) {
-    val topicPartition = new TopicPartition(newTopic, 0)
-    val newTopicResource = new Resource(Topic, newTopic)
+  private def testCreatePermissionNeededToWriteToNonExistentTopic(resType: ResourceType) {
+    val topicPartition = new TopicPartition(createTopic, 0)
+    val newTopicResource = new Resource(Topic, createTopic)
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Write)), newTopicResource)
     try {
       sendRecords(numRecords, topicPartition)
       Assert.fail("should have thrown exception")
     } catch {
       case e: TopicAuthorizationException => 
-        assertEquals(Collections.singleton(newTopic), e.unauthorizedTopics())
+        assertEquals(Collections.singleton(createTopic), e.unauthorizedTopics())
     }
 
     val resource = if (resType == Topic) newTopicResource else Resource.ClusterResource
-    addAndVerifyAcls(acls, resource)
+    addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Create)), resource)
 
     sendRecords(numRecords, topicPartition)
   }
