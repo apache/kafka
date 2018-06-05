@@ -157,8 +157,8 @@ object AclCommand extends Logging {
     val transactionalIdAcls = getAcl(opts, Set(Write, Describe))
 
     //Write, Describe, Create permission on topics, Write, Describe on transactionalIds
-    topics.map(_ -> topicAcls).toMap[Resource, Set[Acl]] ++
-      transactionalIds.map(_ -> transactionalIdAcls).toMap[Resource, Set[Acl]] ++
+    topics.map(_ -> topicAcls).toMap ++
+      transactionalIds.map(_ -> transactionalIdAcls).toMap ++
         (if (enableIdempotence) 
           Map(Resource.ClusterResource -> getAcl(opts, Set(IdempotentWrite))) 
         else
@@ -175,8 +175,8 @@ object AclCommand extends Logging {
 
     val acls = getAcl(opts, Set(Read, Describe))
 
-    topics.map(_ -> acls).toMap[Resource, Set[Acl]] ++
-      groups.map(_ -> getAcl(opts, Set(Read))).toMap[Resource, Set[Acl]]
+    topics.map(_ -> acls).toMap ++
+      groups.map(_ -> getAcl(opts, Set(Read))).toMap
   }
 
   private def getCliResourceToAcls(opts: AclCommandOptions): Map[Resource, Set[Acl]] = {
