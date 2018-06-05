@@ -457,11 +457,15 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         }
 
         @Override
-        public KeyValue<Bytes, byte[]> makeNext() {
+        public boolean hasNext() {
             if (!open) {
                 throw new InvalidStateStoreException(String.format("RocksDB store %s has closed", storeName));
             }
+            return super.hasNext();
+        }
 
+        @Override
+        public KeyValue<Bytes, byte[]> makeNext() {
             if (!iter.isValid()) {
                 return allDone();
             } else {
