@@ -349,8 +349,9 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
   private def toRelative(offset: Long): Option[Int] = {
     val relativeOffset = offset - baseOffset
     if (relativeOffset < 0 || relativeOffset > Int.MaxValue)
-      return None
-    Some(relativeOffset.toInt)
+      None
+    else
+      Some(relativeOffset.toInt)
   }
 
 }
