@@ -29,7 +29,7 @@ import kafka.utils._
 import kafka.zk.{AclChangeNotificationSequenceZNode, KafkaZkClient, ZkAclStore}
 import org.apache.kafka.common.resource.{ResourceFilter, ResourceNameType => JResourceNameType}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.kafka.common.utils.{AclUtils, SecurityUtils, Time}
+import org.apache.kafka.common.utils.{SecurityUtils, Time}
 
 import scala.collection.JavaConverters._
 import scala.util.Random
@@ -360,6 +360,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     }
   }
 
+  // Orders by resource type, then resource name type and finally reverse ordering by name.
   private object ResourceOrdering extends Ordering[Resource] {
 
     def compare(a: Resource, b: Resource): Int = {

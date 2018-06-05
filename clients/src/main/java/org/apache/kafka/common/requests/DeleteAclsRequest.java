@@ -18,12 +18,14 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.acl.AccessControlEntryFilter;
 import org.apache.kafka.common.acl.AclBindingFilter;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.resource.ResourceFilter;
+import org.apache.kafka.common.resource.ResourceNameType;
 import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
@@ -53,8 +55,8 @@ public class DeleteAclsRequest extends AbstractRequest {
                     PERMISSION_TYPE))));
 
     /**
-     * V1 sees a new `RESOURCE_NAME_TYPE_FILTER` that controls how the filter handles different resource name types
-     * and version was bumped to indicate that, on quota violation, brokers send out responses before throttling.
+     * V1 sees a new `RESOURCE_NAME_TYPE_FILTER` that controls how the filter handles different resource name types.
+     * Also, when the quota is violated, brokers will respond to a version 1 or later request before throttling.
      *
      * For more info, see {@link org.apache.kafka.common.resource.ResourceNameType}.
      */
@@ -96,6 +98,16 @@ public class DeleteAclsRequest extends AbstractRequest {
     DeleteAclsRequest(short version, List<AclBindingFilter> filters) {
         super(version);
         this.filters = filters;
+
+        if (version == 0) {
+            final boolean unsupported = filters.stream()
+                .map(AclBindingFilter::resourceFilter)
+                .map(ResourceFilter::nameType)
+                .anyMatch(nameType -> nameType != ResourceNameType.LITERAL);
+            if (unsupported) {
+                throw new UnsupportedVersionException("Version 0 only supports literal resource name types");
+            }
+        }
     }
 
     public DeleteAclsRequest(Struct struct, short version) {

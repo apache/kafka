@@ -261,27 +261,27 @@ object AclCommand extends Logging {
   private def getResourceFilter(opts: AclCommandOptions, dieIfNoResourceFound: Boolean = true): Set[ResourceFilter] = {
     val resourceNameType: JResourceNameType = opts.options.valueOf(opts.resourceNameType)
 
-    var resources = Set.empty[ResourceFilter]
+    var resourceFilters = Set.empty[ResourceFilter]
     if (opts.options.has(opts.topicOpt))
-      opts.options.valuesOf(opts.topicOpt).asScala.foreach(topic => resources += new ResourceFilter(JResourceType.TOPIC, topic.trim, resourceNameType))
+      opts.options.valuesOf(opts.topicOpt).asScala.foreach(topic => resourceFilters += new ResourceFilter(JResourceType.TOPIC, topic.trim, resourceNameType))
 
     if (resourceNameType == JResourceNameType.LITERAL && (opts.options.has(opts.clusterOpt) || opts.options.has(opts.idempotentOpt)))
-      resources += ClusterResourceFilter
+      resourceFilters += ClusterResourceFilter
 
     if (opts.options.has(opts.groupOpt))
-      opts.options.valuesOf(opts.groupOpt).asScala.foreach(group => resources += new ResourceFilter(JResourceType.GROUP, group.trim, resourceNameType))
+      opts.options.valuesOf(opts.groupOpt).asScala.foreach(group => resourceFilters += new ResourceFilter(JResourceType.GROUP, group.trim, resourceNameType))
 
     if (opts.options.has(opts.transactionalIdOpt))
       opts.options.valuesOf(opts.transactionalIdOpt).asScala.foreach(transactionalId =>
-        resources += new ResourceFilter(JResourceType.TRANSACTIONAL_ID, transactionalId, resourceNameType))
+        resourceFilters += new ResourceFilter(JResourceType.TRANSACTIONAL_ID, transactionalId, resourceNameType))
 
     if (opts.options.has(opts.delegationTokenOpt))
-      opts.options.valuesOf(opts.delegationTokenOpt).asScala.foreach(token => resources += new ResourceFilter(JResourceType.DELEGATION_TOKEN, token.trim, resourceNameType))
+      opts.options.valuesOf(opts.delegationTokenOpt).asScala.foreach(token => resourceFilters += new ResourceFilter(JResourceType.DELEGATION_TOKEN, token.trim, resourceNameType))
 
-    if (resources.isEmpty && dieIfNoResourceFound)
+    if (resourceFilters.isEmpty && dieIfNoResourceFound)
       CommandLineUtils.printUsageAndDie(opts.parser, "You must provide at least one resource: --topic <topic> or --cluster or --group <group> or --delegation-token <Delegation Token ID>")
 
-    resources
+    resourceFilters
   }
 
   private def confirmAction(opts: AclCommandOptions, msg: String): Boolean = {

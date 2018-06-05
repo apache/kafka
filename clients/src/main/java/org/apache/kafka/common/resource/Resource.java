@@ -28,6 +28,11 @@ import java.util.Objects;
  */
 @InterfaceStability.Evolving
 public class Resource {
+    /**
+     * A special literal resource name that corresponds to 'all resources of a certain type'.
+     */
+    public static final String WILDCARD_RESOURCE = "*";
+
     private final ResourceType resourceType;
     private final String name;
     private final ResourceNameType nameType;
@@ -78,7 +83,7 @@ public class Resource {
     /**
      * Return the resource name type.
      */
-    public ResourceNameType resourceNameType() {
+    public ResourceNameType nameType() {
         return nameType;
     }
 

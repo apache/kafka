@@ -21,6 +21,7 @@ import org.apache.kafka.common.acl.AccessControlEntryFilter;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.resource.ResourceFilter;
 import org.apache.kafka.common.resource.ResourceNameType;
@@ -44,6 +45,11 @@ public class DeleteAclsRequestTest {
 
     private static final AclBindingFilter ANY_FILTER = new AclBindingFilter(new ResourceFilter(ResourceType.GROUP, "prefix", ResourceNameType.PREFIXED),
         new AccessControlEntryFilter("User:*", "127.0.0.1", AclOperation.CREATE, AclPermissionType.ALLOW));
+
+    @Test(expected = UnsupportedVersionException.class)
+    public void shouldThrowOnV0IfNotLiteral() {
+        new DeleteAclsRequest(V0, aclFilters(PREFIXED_FILTER));
+    }
 
     @Test
     public void shouldRoundTripV0() {

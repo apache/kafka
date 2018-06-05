@@ -21,6 +21,7 @@ import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.requests.CreateAclsRequest.AclCreation;
 import org.apache.kafka.common.resource.Resource;
@@ -46,6 +47,11 @@ public class CreateAclsRequestTest {
 
     private static final AclBinding PREFIXED_ACL1 = new AclBinding(new Resource(ResourceType.GROUP, "prefix", ResourceNameType.PREFIXED),
         new AccessControlEntry("User:*", "127.0.0.1", AclOperation.CREATE, AclPermissionType.ALLOW));
+
+    @Test(expected = UnsupportedVersionException.class)
+    public void shouldThrowOnV0IfNotLiteral() {
+        new CreateAclsRequest(V0, aclCreations(PREFIXED_ACL1));
+    }
 
     @Test
     public void shouldRoundTripV0() {

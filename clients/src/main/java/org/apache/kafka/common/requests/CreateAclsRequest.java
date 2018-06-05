@@ -19,12 +19,14 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.resource.Resource;
+import org.apache.kafka.common.resource.ResourceNameType;
 import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
@@ -52,8 +54,8 @@ public class CreateAclsRequest extends AbstractRequest {
                     PERMISSION_TYPE))));
 
     /**
-     * V1 sees a new `RESOURCE_NAME_TYPE` that controls how the resource name is interpreted and version
-     * was bumped to indicate that, on quota violation, brokers send out responses before throttling.
+     * Version 1 adds RESOURCE_NAME_TYPE.
+     * Also, when the quota is violated, brokers will respond to a version 1 or later request before throttling.
      *
      * For more info, see {@link org.apache.kafka.common.resource.ResourceNameType}.
      */
@@ -123,6 +125,17 @@ public class CreateAclsRequest extends AbstractRequest {
     CreateAclsRequest(short version, List<AclCreation> aclCreations) {
         super(version);
         this.aclCreations = aclCreations;
+
+        if (version == 0) {
+            final boolean unsupported = aclCreations.stream()
+                .map(AclCreation::acl)
+                .map(AclBinding::resource)
+                .map(Resource::nameType)
+                .anyMatch(nameType -> nameType != ResourceNameType.LITERAL);
+            if (unsupported) {
+                throw new UnsupportedVersionException("Version 0 only supports literal resource name types");
+            }
+        }
     }
 
     public CreateAclsRequest(Struct struct, short version) {

@@ -56,7 +56,7 @@ final class RequestUtils {
         struct.set(RESOURCE_TYPE, resource.resourceType().code());
         struct.set(RESOURCE_NAME, resource.name());
         if (struct.hasField(RESOURCE_NAME_TYPE)) {
-            struct.set(RESOURCE_NAME_TYPE, resource.resourceNameType().code());
+            struct.set(RESOURCE_NAME_TYPE, resource.nameType().code());
         }
     }
 
