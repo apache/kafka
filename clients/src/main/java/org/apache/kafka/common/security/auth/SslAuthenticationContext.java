@@ -17,7 +17,6 @@
 package org.apache.kafka.common.security.auth;
 
 import javax.net.ssl.SSLSession;
-
 import java.net.InetAddress;
 
 public class SslAuthenticationContext implements AuthenticationContext {

@@ -172,9 +172,13 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
         @Override
         public KafkaPrincipal principal() {
             InetAddress clientAddress = transportLayer.socketChannel().socket().getInetAddress();
-            // listenerName should only be null in Client mode
-            String listenerNameStr = listenerName != null ? listenerName.value() : null;
-            SslAuthenticationContext context = new SslAuthenticationContext(transportLayer.sslSession(), clientAddress, listenerNameStr);
+            // listenerName should only be null in Client mode where principal() should not be called
+            if (listenerName == null)
+                throw new IllegalStateException("Unexpected call to principal() when listenerName is null");
+            SslAuthenticationContext context = new SslAuthenticationContext(
+                    transportLayer.sslSession(),
+                    clientAddress,
+                    listenerName.value());
             return principalBuilder.build(context);
         }
 

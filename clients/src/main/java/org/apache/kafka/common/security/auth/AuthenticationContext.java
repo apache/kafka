@@ -22,7 +22,7 @@ import java.net.InetAddress;
 /**
  * An object representing contextual information from the authentication session. See
  * {@link PlaintextAuthenticationContext}, {@link SaslAuthenticationContext}
- * and {@link SslAuthenticationContext}.
+ * and {@link SslAuthenticationContext}. This class is only used in the broker.
  */
 public interface AuthenticationContext {
     /**

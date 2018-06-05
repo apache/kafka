@@ -26,11 +26,13 @@ import org.apache.kafka.common.errors.TopicAuthorizationException
 // This test case uses a separate listener for client and inter-broker communication, from
 // which we derive corresponding principals
 object PlaintextEndToEndAuthorizationTest {
-  var clientListenerName: String = ""
-  var serverListenerName: String = ""
+  @volatile
+  private var clientListenerName = None: Option[String]
+  @volatile
+  private var serverListenerName = None: Option[String]
   class TestClientPrincipalBuilder extends KafkaPrincipalBuilder {
     override def build(context: AuthenticationContext): KafkaPrincipal = {
-      clientListenerName = context.listenerName
+      clientListenerName = Some(context.listenerName)
       context match {
         case ctx: PlaintextAuthenticationContext if ctx.clientAddress != null =>
           new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "client")
@@ -42,7 +44,7 @@ object PlaintextEndToEndAuthorizationTest {
 
   class TestServerPrincipalBuilder extends KafkaPrincipalBuilder {
     override def build(context: AuthenticationContext): KafkaPrincipal = {
-      serverListenerName = context.listenerName
+      serverListenerName = Some(context.listenerName)
       context match {
         case ctx: PlaintextAuthenticationContext =>
           new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "server")
@@ -76,14 +78,10 @@ class PlaintextEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
   @Test
   def testListenerName() {
     // To check the client listener name, establish a session on the server by sending any request eg sendRecords
-    try {
-      sendRecords(1, tp)
-      fail("Should have thrown a TopicAuthorizationException")
-    } catch {
-      case tae: TopicAuthorizationException => //expected
-    }
-    assertEquals("CLIENT", PlaintextEndToEndAuthorizationTest.clientListenerName)
-    assertEquals("SERVER", PlaintextEndToEndAuthorizationTest.serverListenerName)
+    intercept[TopicAuthorizationException](sendRecords(1, tp))
+
+    assertEquals("CLIENT", PlaintextEndToEndAuthorizationTest.clientListenerName.get)
+    assertEquals("SERVER", PlaintextEndToEndAuthorizationTest.serverListenerName.get)
   }
 
 }

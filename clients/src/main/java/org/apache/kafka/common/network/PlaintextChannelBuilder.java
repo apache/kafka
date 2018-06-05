@@ -33,12 +33,12 @@ import java.util.Map;
 
 public class PlaintextChannelBuilder implements ChannelBuilder {
     private static final Logger log = LoggerFactory.getLogger(PlaintextChannelBuilder.class);
-    private Map<String, ?> configs;
     private final ListenerName listenerName;
+    private Map<String, ?> configs;
 
     /**
-     * Constructs a plaintext channel builder. ListenerName is provided only
-     * for server channel builder and will be null for client channel builder.
+     * Constructs a plaintext channel builder. ListenerName is non-null whenever
+     * it's instantiated in the broker and null otherwise.
      */
     public PlaintextChannelBuilder(ListenerName listenerName) {
         this.listenerName = listenerName;
@@ -81,9 +81,10 @@ public class PlaintextChannelBuilder implements ChannelBuilder {
         @Override
         public KafkaPrincipal principal() {
             InetAddress clientAddress = transportLayer.socketChannel().socket().getInetAddress();
-            // listenerName should only be null in Client mode
-            String listenerNameStr = listenerName != null ? listenerName.value() : null;
-            return principalBuilder.build(new PlaintextAuthenticationContext(clientAddress, listenerNameStr));
+            // listenerName should only be null in Client mode where principal() should not be called
+            if (listenerName == null)
+                throw new IllegalStateException("Unexpected call to principal() when listenerName is null");
+            return principalBuilder.build(new PlaintextAuthenticationContext(clientAddress, listenerName.value()));
         }
 
         @Override
