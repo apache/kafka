@@ -125,8 +125,8 @@ public class ConnectorConfig extends AbstractConfig {
     public static final String ERRORS_TOLERANCE_NONE = "none";
     public static final String ERRORS_TOLERANCE_ALL = "all";
     public static final String ERRORS_TOLERANCE_DEFAULT = ERRORS_TOLERANCE_NONE;
-    public static final String ERRORS_TOLERANCE_DOC = "Behavior for tolerating errors during connector operation. 'NONE' is the default value " +
-            "and signals that any error will result in an immediate connector task failure. 'ALL' changes the behavior to skip over problematic records.";
+    public static final String ERRORS_TOLERANCE_DOC = "Behavior for tolerating errors during connector operation. 'none' is the default value " +
+            "and signals that any error will result in an immediate connector task failure. 'all' changes the behavior to skip over problematic records.";
 
     public static final String ERRORS_LOG_ENABLE_CONFIG = "errors.log.enable";
     public static final String ERRORS_LOG_ENABLE_DISPLAY = "Log Errors";
