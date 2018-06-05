@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.kstream.internals;
+package org.apache.kafka.streams.kstream.internals.graph;
 
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
@@ -25,13 +25,13 @@ import java.util.Arrays;
  * Represents a join between a KStream and a KTable or GlobalKTable
  */
 
-class StreamTableJoinNode<K, V> extends StreamsGraphNode {
+public class StreamTableJoinNode<K, V> extends StreamsGraphNode {
 
     private final String[] storeNames;
     private final ProcessorParameters<K, V> processorParameters;
     private boolean isGlobalKTableJoin;
 
-    StreamTableJoinNode(final String nodeName,
+    public StreamTableJoinNode(final String nodeName,
                         final ProcessorParameters<K, V> processorParameters,
                         final String[] storeNames) {
         super(nodeName,
@@ -50,7 +50,7 @@ class StreamTableJoinNode<K, V> extends StreamsGraphNode {
         return processorParameters;
     }
 
-    void setGlobalKTableJoin(boolean globalKTableJoin) {
+    public void setGlobalKTableJoin(boolean globalKTableJoin) {
         isGlobalKTableJoin = globalKTableJoin;
     }
 
@@ -59,7 +59,7 @@ class StreamTableJoinNode<K, V> extends StreamsGraphNode {
     }
 
     @Override
-    void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
+    public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
         //TODO will implement in follow-up pr
     }
 }

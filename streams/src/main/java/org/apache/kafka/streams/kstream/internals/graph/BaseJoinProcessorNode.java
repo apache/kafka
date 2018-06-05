@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.kstream.internals;
+package org.apache.kafka.streams.kstream.internals.graph;
 
 import org.apache.kafka.streams.kstream.ValueJoiner;
 

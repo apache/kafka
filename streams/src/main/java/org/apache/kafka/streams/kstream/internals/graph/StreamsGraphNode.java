@@ -15,14 +15,15 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.kstream.internals;
+package org.apache.kafka.streams.kstream.internals.graph;
 
+import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilder;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
 import java.util.Collection;
 import java.util.LinkedHashSet;
 
-abstract class StreamsGraphNode {
+public abstract class StreamsGraphNode {
 
     private StreamsGraphNode parentNode;
     private final Collection<StreamsGraphNode> childNodes = new LinkedHashSet<>();
@@ -32,38 +33,38 @@ abstract class StreamsGraphNode {
     private Integer id;
     private InternalStreamsBuilder internalStreamsBuilder;
 
-    StreamsGraphNode(final String nodeName,
+    public StreamsGraphNode(final String nodeName,
                      final boolean repartitionRequired) {
         this.nodeName = nodeName;
         this.repartitionRequired = repartitionRequired;
     }
 
-    StreamsGraphNode parentNode() {
+    public StreamsGraphNode parentNode() {
         return parentNode;
     }
 
-    void setParentNode(final StreamsGraphNode parentNode) {
+    public void setParentNode(final StreamsGraphNode parentNode) {
         this.parentNode = parentNode;
     }
 
-    Collection<StreamsGraphNode> children() {
+    public Collection<StreamsGraphNode> children() {
         return new LinkedHashSet<>(childNodes);
     }
 
-    void addChildNode(final StreamsGraphNode childNode) {
+    public void addChildNode(final StreamsGraphNode childNode) {
         this.childNodes.add(childNode);
         childNode.setParentNode(this);
     }
 
-    String nodeName() {
+    public String nodeName() {
         return nodeName;
     }
 
-    boolean repartitionRequired() {
+    public boolean repartitionRequired() {
         return repartitionRequired;
     }
 
-    void setRepartitionRequired(boolean repartitionRequired) {
+    public void setRepartitionRequired(boolean repartitionRequired) {
         this.repartitionRequired = repartitionRequired;
     }
 
@@ -75,22 +76,22 @@ abstract class StreamsGraphNode {
         this.triggersRepartitioning = triggersRepartitioning;
     }
 
-    void setId(final int id) {
+    public void setId(final int id) {
         this.id = id;
     }
 
-    Integer id() {
+    public Integer id() {
         return this.id;
     }
 
-    void setInternalStreamsBuilder(final InternalStreamsBuilder internalStreamsBuilder) {
+    public void setInternalStreamsBuilder(final InternalStreamsBuilder internalStreamsBuilder) {
         this.internalStreamsBuilder = internalStreamsBuilder;
     }
 
-    InternalStreamsBuilder internalStreamsBuilder() {
+    public InternalStreamsBuilder internalStreamsBuilder() {
         return internalStreamsBuilder;
     }
 
-    abstract void writeToTopology(final InternalTopologyBuilder topologyBuilder);
+    public abstract void writeToTopology(final InternalTopologyBuilder topologyBuilder);
 
 }

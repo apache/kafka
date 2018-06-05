@@ -15,17 +15,18 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.kstream.internals;
+package org.apache.kafka.streams.kstream.internals.graph;
 
+import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
-class TableProcessorNode<K, V, S extends StateStore> extends StreamsGraphNode {
+public class TableProcessorNode<K, V, S extends StateStore> extends StreamsGraphNode {
 
     private final MaterializedInternal<K, V, S> materializedInternal;
     private final ProcessorParameters<K, V> processorParameters;
 
-    TableProcessorNode(final String nodeName,
+    public TableProcessorNode(final String nodeName,
                        final ProcessorParameters<K, V> processorParameters,
                        final MaterializedInternal<K, V, S> materializedInternal) {
 
@@ -37,7 +38,7 @@ class TableProcessorNode<K, V, S extends StateStore> extends StreamsGraphNode {
 
 
     @Override
-    void writeToTopology(InternalTopologyBuilder topologyBuilder) {
+    public void writeToTopology(InternalTopologyBuilder topologyBuilder) {
 
     }
 }

@@ -15,20 +15,23 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.kstream.internals;
+package org.apache.kafka.streams.kstream.internals.graph;
 
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.kstream.internals.ChangedDeserializer;
+import org.apache.kafka.streams.kstream.internals.ChangedSerializer;
+import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 
-class StatefulRepartitionNode<K, V, T> extends RepartitionNode<K, V> {
+public class StatefulRepartitionNode<K, V, T> extends RepartitionNode<K, V> {
 
     private final MaterializedInternal<K, T, KeyValueStore<Bytes, byte[]>> materialized;
 
-    StatefulRepartitionNode(final String nodeName,
+    public StatefulRepartitionNode(final String nodeName,
                             final String sourceName,
                             final Serde<K> keySerde,
                             final Serde<V> valueSerde,
@@ -64,17 +67,17 @@ class StatefulRepartitionNode<K, V, T> extends RepartitionNode<K, V> {
         return new ChangedDeserializer<>(valueDeserializer);
     }
 
-    static <K, V, T> StatefulRepartitionNodeBuilder<K, V, T> statefulRepartitionNodeBuilder() {
+    public static <K, V, T> StatefulRepartitionNodeBuilder<K, V, T> statefulRepartitionNodeBuilder() {
         return new StatefulRepartitionNodeBuilder<>();
     }
 
     @Override
-    void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
+   public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
         //TODO will implement in follow-up pr
     }
 
 
-    static final class StatefulRepartitionNodeBuilder<K, V, T> {
+   public static final class StatefulRepartitionNodeBuilder<K, V, T> {
 
         private String nodeName;
         private Serde<K> keySerde;
@@ -88,43 +91,43 @@ class StatefulRepartitionNode<K, V, T> extends RepartitionNode<K, V> {
         private StatefulRepartitionNodeBuilder() {
         }
 
-        StatefulRepartitionNodeBuilder<K, V, T> withKeySerde(final Serde<K> keySerde) {
+       public StatefulRepartitionNodeBuilder<K, V, T> withKeySerde(final Serde<K> keySerde) {
             this.keySerde = keySerde;
             return this;
         }
 
 
-        StatefulRepartitionNodeBuilder<K, V, T> withValueSerde(final Serde<V> valueSerde) {
+        public StatefulRepartitionNodeBuilder<K, V, T> withValueSerde(final Serde<V> valueSerde) {
             this.valueSerde = valueSerde;
             return this;
         }
 
-        StatefulRepartitionNodeBuilder<K, V, T> withSinkName(final String sinkName) {
+        public StatefulRepartitionNodeBuilder<K, V, T> withSinkName(final String sinkName) {
             this.sinkName = sinkName;
             return this;
         }
 
-        StatefulRepartitionNodeBuilder<K, V, T> withSourceName(final String sourceName) {
+        public StatefulRepartitionNodeBuilder<K, V, T> withSourceName(final String sourceName) {
             this.sourceName = sourceName;
             return this;
         }
 
-        StatefulRepartitionNodeBuilder<K, V, T> withRepartitionTopic(final String repartitionTopic) {
+        public StatefulRepartitionNodeBuilder<K, V, T> withRepartitionTopic(final String repartitionTopic) {
             this.repartitionTopic = repartitionTopic;
             return this;
         }
 
-        StatefulRepartitionNodeBuilder<K, V, T> withNodeName(final String nodeName) {
+        public StatefulRepartitionNodeBuilder<K, V, T> withNodeName(final String nodeName) {
             this.nodeName = nodeName;
             return this;
         }
 
-        StatefulRepartitionNodeBuilder<K, V, T> withProcessorParameters(final ProcessorParameters processorParameters) {
+        public StatefulRepartitionNodeBuilder<K, V, T> withProcessorParameters(final ProcessorParameters processorParameters) {
             this.processorParameters = processorParameters;
             return this;
         }
 
-        StatefulRepartitionNodeBuilder<K, V, T> withMaterialized(final MaterializedInternal<K, T, KeyValueStore<Bytes, byte[]>> materialized) {
+        public StatefulRepartitionNodeBuilder<K, V, T> withMaterialized(final MaterializedInternal<K, T, KeyValueStore<Bytes, byte[]>> materialized) {
             this.materialized = materialized;
             return this;
         }

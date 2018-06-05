@@ -15,27 +15,22 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.kstream.internals;
+package org.apache.kafka.streams.kstream.internals.graph;
 
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.streams.Topology;
-import org.apache.kafka.streams.processor.TimestampExtractor;
+import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.List;
 import java.util.regex.Pattern;
 
-class StreamSourceNode<K, V> extends StreamsGraphNode {
+public class StreamSourceNode<K, V> extends StreamsGraphNode {
 
     private Collection<String> topicNames;
     private Pattern topicPattern;
     private final ConsumedInternal<K, V> consumedInternal;
 
 
-    StreamSourceNode(final String nodeName,
+    public StreamSourceNode(final String nodeName,
                      final Collection<String> topicNames,
                      final ConsumedInternal<K, V> consumedInternal) {
         super(nodeName,
@@ -45,7 +40,7 @@ class StreamSourceNode<K, V> extends StreamsGraphNode {
         this.consumedInternal = consumedInternal;
     }
 
-    StreamSourceNode(final String nodeName,
+    public StreamSourceNode(final String nodeName,
                      final Pattern topicPattern,
                      final ConsumedInternal<K, V> consumedInternal) {
 
@@ -56,32 +51,9 @@ class StreamSourceNode<K, V> extends StreamsGraphNode {
         this.consumedInternal = consumedInternal;
     }
 
-    List<String> getTopicNames() {
-        return new ArrayList<>(topicNames);
-    }
-
-    Pattern getTopicPattern() {
-        return topicPattern;
-    }
-
-    Serde<K> keySerde() {
-        return consumedInternal.keySerde();
-    }
-
-    Deserializer<K> keyDeserializer() {
-        return consumedInternal.keySerde() != null ? consumedInternal.keySerde().deserializer() : null;
-    }
-
-    TimestampExtractor timestampExtractor() {
-        return consumedInternal.timestampExtractor();
-    }
-
-    Topology.AutoOffsetReset autoOffsetReset() {
-        return consumedInternal.offsetResetPolicy();
-    }
 
     @Override
-    void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
+    public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
         //TODO will implement in follow-up pr
     }
 

@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.kstream.internals;
+package org.apache.kafka.streams.kstream.internals.graph;
 
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
@@ -28,7 +28,7 @@ import java.util.List;
  * map, mapValues, flatMap, flatMapValues, filter, filterNot, branch
  *
  */
-class StatelessProcessorNode<K, V> extends StreamsGraphNode {
+public class StatelessProcessorNode<K, V> extends StreamsGraphNode {
 
     private final ProcessorParameters<K, V> processorParameters;
 
@@ -40,7 +40,7 @@ class StatelessProcessorNode<K, V> extends StreamsGraphNode {
     private List<String> multipleParentNames = new ArrayList<>();
 
 
-    StatelessProcessorNode(final String nodeName,
+    public StatelessProcessorNode(final String nodeName,
                            final ProcessorParameters processorParameters,
                            final boolean repartitionRequired) {
 
@@ -50,7 +50,7 @@ class StatelessProcessorNode<K, V> extends StreamsGraphNode {
         this.processorParameters = processorParameters;
     }
 
-    StatelessProcessorNode(final String nodeName,
+    public StatelessProcessorNode(final String nodeName,
                            final ProcessorParameters processorParameters,
                            final boolean repartitionRequired,
                            final List<String> multipleParentNames) {
@@ -69,7 +69,7 @@ class StatelessProcessorNode<K, V> extends StreamsGraphNode {
     }
 
     @Override
-    void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
+    public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
         //TODO will implement in follow-up pr
     }
 }

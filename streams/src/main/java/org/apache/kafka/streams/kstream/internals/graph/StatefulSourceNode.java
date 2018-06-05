@@ -15,8 +15,9 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.kstream.internals;
+package org.apache.kafka.streams.kstream.internals.graph;
 
+import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -27,7 +28,7 @@ import java.util.Collections;
  * Used to represent either a KTable source or a GlobalKTable source. A boolean flag is used to indicate if this represents a GlobalKTable a {@link
  * org.apache.kafka.streams.kstream.GlobalKTable}
  */
-class StatefulSourceNode<K, V> extends StreamSourceNode<K, V> {
+public class StatefulSourceNode<K, V> extends StreamSourceNode<K, V> {
 
     private StoreBuilder<KeyValueStore<K, V>> storeBuilder;
     private final ProcessorParameters<K, V> processorParameters;
@@ -68,16 +69,16 @@ class StatefulSourceNode<K, V> extends StreamSourceNode<K, V> {
         return isGlobalKTable;
     }
 
-    static <K, V> StatefulSourceNodeBuilder<K, V> statefulSourceNodeBuilder() {
+    public static <K, V> StatefulSourceNodeBuilder<K, V> statefulSourceNodeBuilder() {
         return new StatefulSourceNodeBuilder<>();
     }
 
     @Override
-    void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
+    public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
         //TODO will implement in follow-up pr
     }
 
-    static final class StatefulSourceNodeBuilder<K, V> {
+    public static final class StatefulSourceNodeBuilder<K, V> {
 
         private String nodeName;
         private String sourceName;
@@ -90,42 +91,42 @@ class StatefulSourceNode<K, V> extends StreamSourceNode<K, V> {
         private StatefulSourceNodeBuilder() {
         }
 
-        StatefulSourceNodeBuilder<K, V> withSourceName(final String sourceName) {
+        public StatefulSourceNodeBuilder<K, V> withSourceName(final String sourceName) {
             this.sourceName = sourceName;
             return this;
         }
 
-        StatefulSourceNodeBuilder<K, V> withTopic(final String topic) {
+        public StatefulSourceNodeBuilder<K, V> withTopic(final String topic) {
             this.topic = topic;
             return this;
         }
 
-        StatefulSourceNodeBuilder<K, V> withStoreBuilder(final StoreBuilder<KeyValueStore<K, V>> storeBuilder) {
+        public StatefulSourceNodeBuilder<K, V> withStoreBuilder(final StoreBuilder<KeyValueStore<K, V>> storeBuilder) {
             this.storeBuilder = storeBuilder;
             return this;
         }
 
-        StatefulSourceNodeBuilder<K, V> withConsumedInternal(final ConsumedInternal<K, V> consumedInternal) {
+        public StatefulSourceNodeBuilder<K, V> withConsumedInternal(final ConsumedInternal<K, V> consumedInternal) {
             this.consumedInternal = consumedInternal;
             return this;
         }
 
-        StatefulSourceNodeBuilder<K, V> withProcessorParameters(final ProcessorParameters<K, V> processorParameters) {
+        public StatefulSourceNodeBuilder<K, V> withProcessorParameters(final ProcessorParameters<K, V> processorParameters) {
             this.processorParameters = processorParameters;
             return this;
         }
 
-        StatefulSourceNodeBuilder<K, V> withNodeName(final String nodeName) {
+        public StatefulSourceNodeBuilder<K, V> withNodeName(final String nodeName) {
             this.nodeName = nodeName;
             return this;
         }
 
-        StatefulSourceNodeBuilder<K, V> isGlobalKTable(final boolean isGlobaKTable) {
+        public StatefulSourceNodeBuilder<K, V> isGlobalKTable(final boolean isGlobaKTable) {
             this.isGlobalKTable = isGlobaKTable;
             return this;
         }
 
-        StatefulSourceNode<K, V> build() {
+        public StatefulSourceNode<K, V> build() {
             return new StatefulSourceNode<>(nodeName,
                                             sourceName,
                                             topic,

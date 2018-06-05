@@ -15,12 +15,12 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.kstream.internals;
+package org.apache.kafka.streams.kstream.internals.graph;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
-class RepartitionNode<K, V> extends StatelessProcessorNode<K, V> {
+public class RepartitionNode<K, V> extends StatelessProcessorNode<K, V> {
 
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
@@ -70,16 +70,16 @@ class RepartitionNode<K, V> extends StatelessProcessorNode<K, V> {
 
 
     @Override
-    void writeToTopology(InternalTopologyBuilder topologyBuilder) {
+    public void writeToTopology(InternalTopologyBuilder topologyBuilder) {
         //TODO will implement in follow-up pr
     }
 
-    static <K, V> RepartitionNodeBuilder<K, V> repartitionNodeBuilder() {
+    public static <K, V> RepartitionNodeBuilder<K, V> repartitionNodeBuilder() {
         return new RepartitionNodeBuilder<>();
     }
 
 
-    static final class RepartitionNodeBuilder<K, V> {
+    public static final class RepartitionNodeBuilder<K, V> {
 
         private String nodeName;
         private ProcessorParameters processorParameters;
@@ -92,43 +92,43 @@ class RepartitionNode<K, V> extends StatelessProcessorNode<K, V> {
         private RepartitionNodeBuilder() {
         }
 
-        RepartitionNodeBuilder<K, V> withProcessorParameters(final ProcessorParameters processorParameters) {
+        public RepartitionNodeBuilder<K, V> withProcessorParameters(final ProcessorParameters processorParameters) {
             this.processorParameters = processorParameters;
             return this;
         }
 
-        RepartitionNodeBuilder<K, V> withKeySerde(final Serde<K> keySerde) {
+        public RepartitionNodeBuilder<K, V> withKeySerde(final Serde<K> keySerde) {
             this.keySerde = keySerde;
             return this;
         }
 
-        RepartitionNodeBuilder<K, V> withValueSerde(final Serde<V> valueSerde) {
+        public RepartitionNodeBuilder<K, V> withValueSerde(final Serde<V> valueSerde) {
             this.valueSerde = valueSerde;
             return this;
         }
 
-        RepartitionNodeBuilder<K, V> withSinkName(final String sinkName) {
+        public RepartitionNodeBuilder<K, V> withSinkName(final String sinkName) {
             this.sinkName = sinkName;
             return this;
         }
 
-        RepartitionNodeBuilder<K, V> withSourceName(final String sourceName) {
+        public RepartitionNodeBuilder<K, V> withSourceName(final String sourceName) {
             this.sourceName = sourceName;
             return this;
         }
 
-        RepartitionNodeBuilder<K, V> withRepartitionTopic(final String repartitionTopic) {
+        public RepartitionNodeBuilder<K, V> withRepartitionTopic(final String repartitionTopic) {
             this.repartitionTopic = repartitionTopic;
             return this;
         }
 
 
-        RepartitionNodeBuilder<K, V> withNodeName(final String nodeName) {
+        public RepartitionNodeBuilder<K, V> withNodeName(final String nodeName) {
             this.nodeName = nodeName;
             return this;
         }
 
-        RepartitionNode<K, V> build() {
+        public RepartitionNode<K, V> build() {
 
             return new RepartitionNode<>(nodeName,
                                          sourceName,

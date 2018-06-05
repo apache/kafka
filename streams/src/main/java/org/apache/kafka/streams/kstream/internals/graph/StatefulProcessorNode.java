@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.kstream.internals;
+package org.apache.kafka.streams.kstream.internals.graph;
 
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -23,14 +23,14 @@ import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.util.Arrays;
 
-class StatefulProcessorNode<K, V> extends StatelessProcessorNode<K, V> {
+public class StatefulProcessorNode<K, V> extends StatelessProcessorNode<K, V> {
 
     private final String[] storeNames;
     private final StoreBuilder<KeyValueStore<K, V>> storeBuilder;
     private final String maybeRepartitionedSourceName;
 
 
-    StatefulProcessorNode(final String nodeName,
+    public StatefulProcessorNode(final String nodeName,
                           final ProcessorParameters processorParameters,
                           final String[] storeNames,
                           final String maybeRepartitionedSourceName,
@@ -52,15 +52,15 @@ class StatefulProcessorNode<K, V> extends StatelessProcessorNode<K, V> {
 
 
     @Override
-    void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
+    public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
         //TODO will implement in follow-up pr
     }
 
-    static <K, V> StatefulProcessorNodeBuilder<K, V> statefulProcessorNodeBuilder() {
+    public static <K, V> StatefulProcessorNodeBuilder<K, V> statefulProcessorNodeBuilder() {
         return new StatefulProcessorNodeBuilder<>();
     }
 
-    static final class StatefulProcessorNodeBuilder<K, V> {
+    public static final class StatefulProcessorNodeBuilder<K, V> {
 
         private ProcessorParameters processorSupplier;
         private String nodeName;
@@ -72,37 +72,37 @@ class StatefulProcessorNode<K, V> extends StatelessProcessorNode<K, V> {
         private StatefulProcessorNodeBuilder() {
         }
 
-        StatefulProcessorNodeBuilder<K, V> withProcessorParameters(final ProcessorParameters processorParameters) {
+        public StatefulProcessorNodeBuilder<K, V> withProcessorParameters(final ProcessorParameters processorParameters) {
             this.processorSupplier = processorParameters;
             return this;
         }
 
-        StatefulProcessorNodeBuilder<K, V> withNodeName(final String nodeName) {
+        public StatefulProcessorNodeBuilder<K, V> withNodeName(final String nodeName) {
             this.nodeName = nodeName;
             return this;
         }
 
-        StatefulProcessorNodeBuilder<K, V> withStoreNames(final String[] storeNames) {
+        public StatefulProcessorNodeBuilder<K, V> withStoreNames(final String[] storeNames) {
             this.storeNames = storeNames;
             return this;
         }
 
-        StatefulProcessorNodeBuilder<K, V> withRepartitionRequired(final boolean repartitionRequired) {
+        public StatefulProcessorNodeBuilder<K, V> withRepartitionRequired(final boolean repartitionRequired) {
             this.repartitionRequired = repartitionRequired;
             return this;
         }
 
-        StatefulProcessorNodeBuilder<K, V> withStoreBuilder(final StoreBuilder<KeyValueStore<K, V>> storeBuilder) {
+        public StatefulProcessorNodeBuilder<K, V> withStoreBuilder(final StoreBuilder<KeyValueStore<K, V>> storeBuilder) {
             this.storeBuilder = storeBuilder;
             return this;
         }
 
-        StatefulProcessorNodeBuilder<K, V> withMaybeRepartitionedSourceName(String maybeRepartitionedSourceName) {
+        public StatefulProcessorNodeBuilder<K, V> withMaybeRepartitionedSourceName(String maybeRepartitionedSourceName) {
             this.maybeRepartitionedSourceName = maybeRepartitionedSourceName;
             return this;
         }
 
-        StatefulProcessorNode<K, V> build() {
+        public StatefulProcessorNode<K, V> build() {
             return new StatefulProcessorNode<>(nodeName,
                                                processorSupplier,
                                                storeNames,

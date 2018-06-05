@@ -20,6 +20,11 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
+import org.apache.kafka.streams.kstream.internals.graph.StatefulSourceNode;
+import org.apache.kafka.streams.kstream.internals.graph.StreamSinkNode;
+import org.apache.kafka.streams.kstream.internals.graph.StreamSourceNode;
+import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -50,7 +55,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
     protected final StreamsGraphNode root = new StreamsGraphNode(TOPOLOGY_ROOT, false) {
         @Override
-        void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
+        public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
             // no-op for root node
         }
     };

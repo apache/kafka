@@ -15,21 +15,22 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.kstream.internals;
+package org.apache.kafka.streams.kstream.internals.graph;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.kstream.internals.ProducedInternal;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.StaticTopicNameExtractor;
 
-class StreamSinkNode<K, V> extends StreamsGraphNode {
+public class StreamSinkNode<K, V> extends StreamsGraphNode {
 
     private final TopicNameExtractor<K, V> topicNameExtractor;
     private final ProducedInternal<K, V> producedInternal;
 
-    StreamSinkNode(final String nodeName,
+    public StreamSinkNode(final String nodeName,
                    final TopicNameExtractor<K, V> topicNameExtractor,
                    final ProducedInternal<K, V> producedInternal) {
 
@@ -69,7 +70,7 @@ class StreamSinkNode<K, V> extends StreamsGraphNode {
     }
 
     @Override
-    void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
+    public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
         //TODO will implement in follow-up pr
     }
 
