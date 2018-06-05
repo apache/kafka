@@ -46,6 +46,7 @@ import java.sql.Driver;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -324,12 +325,11 @@ public class DelegatingClassLoader extends URLClassLoader {
         return result;
     }
 
-    private <T> Collection<PluginDesc<T>> getServiceLoaderPluginDesc(Class<T> klass,
-                                                                     ClassLoader loader) {
+    private <T> Collection<PluginDesc<T>> getServiceLoaderPluginDesc(Class<T> klass, ClassLoader loader) {
         ServiceLoader<T> serviceLoader = ServiceLoader.load(klass, loader);
         Collection<PluginDesc<T>> result = new ArrayList<>();
         for (T impl : serviceLoader) {
-            result.add(new PluginDesc<>(klass, versionFor(impl), loader));
+            result.add(new PluginDesc<>((Class<? extends T>) impl.getClass(), versionFor(impl), loader));
         }
         return result;
     }
@@ -406,5 +406,19 @@ public class DelegatingClassLoader extends URLClassLoader {
                 }
             }
         }
+    }
+
+    @Override
+    public URL getResource(String name) {
+        // Default implementation of getResource searches the parent class loader. This will enable the PluginClassLoader to limit its
+        // resource search only to the URL path.
+        return null;
+    }
+
+    @Override
+    public Enumeration<URL> getResources(String name) throws IOException {
+        // Default implementation of getResources searches the parent class loader and also the URL Paths. This will enable the
+        // PluginClassLoader to limit its resource search to only the URL path.
+        return null;
     }
 }
