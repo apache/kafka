@@ -125,15 +125,14 @@ public class ConnectorConfig extends AbstractConfig {
     public static final String ERRORS_TOLERANCE_NONE = "none";
     public static final String ERRORS_TOLERANCE_ALL = "all";
     public static final String ERRORS_TOLERANCE_DEFAULT = ERRORS_TOLERANCE_NONE;
-    public static final String ERRORS_TOLERANCE_DOC = "Behavior for tolerating errors during connector operation. NONE is the default " +
-            "and signals that any error will result in a connector task failure, and this matches the old behavior. ALL changes the " +
-            "behavior to skip over problem records.";
+    public static final String ERRORS_TOLERANCE_DOC = "Behavior for tolerating errors during connector operation. 'NONE' is the default value " +
+            "and signals that any error will result in an immediate connector task failure. 'ALL' changes the behavior to skip over problematic records.";
 
     public static final String ERRORS_LOG_ENABLE_CONFIG = "errors.log.enable";
     public static final String ERRORS_LOG_ENABLE_DISPLAY = "Log Errors";
     public static final boolean ERRORS_LOG_ENABLE_DEFAULT = false;
-    public static final String ERRORS_LOG_ENABLE_DOC = "Whether to output in the Connect application log each error and the context " +
-            "describing where the error. This is 'false' by default, so that only errors that are not tolerated are reported.";
+    public static final String ERRORS_LOG_ENABLE_DOC = "If true, write each error and the details of the failed operation and problematic record " +
+            "to the Connect application log. This is 'false' by default, so that only errors that are not tolerated are reported.";
 
     public static final String ERRORS_LOG_INCLUDE_MESSAGES_CONFIG = "errors.log.include.messages";
     public static final String ERRORS_LOG_INCLUDE_MESSAGES_DISPLAY = "Log Error Details";
