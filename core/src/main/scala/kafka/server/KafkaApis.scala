@@ -1041,7 +1041,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       val nonExistingTopics = metadataCache.getNonExistingTopics(authorizedTopics)
       if (metadataRequest.allowAutoTopicCreation && config.autoCreateTopicsEnable && nonExistingTopics.nonEmpty) {
         if (!authorize(request.session, Create, Resource.ClusterResource)) {
-          val unauthorizedForCreateTopics = authorizedTopics.filter(topic => !authorize(request.session, Create, new Resource(Topic, topic)))
+          val unauthorizedForCreateTopics = authorizedTopics.filter(
+              topic => !authorize(request.session, Create, new Resource(Topic, topic)))
           authorizedTopics --= unauthorizedForCreateTopics
           authorizedForDescribeNotCreateTopics ++= unauthorizedForCreateTopics
         }
