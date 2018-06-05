@@ -19,6 +19,9 @@ package org.apache.kafka.connect.runtime.errors;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.RetriableException;
+import org.apache.kafka.connect.runtime.ConnectorConfig;
+import org.apache.kafka.connect.runtime.isolation.Plugins;
+import org.apache.kafka.connect.sink.SinkTask;
 import org.easymock.EasyMock;
 import org.easymock.Mock;
 import org.junit.Test;
@@ -31,7 +34,17 @@ import org.powermock.modules.junit4.PowerMockRunner;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator.RetryWithToleranceOperatorConfig;
+import static java.util.Collections.emptyMap;
+import static java.util.Collections.singletonMap;
+import static org.apache.kafka.common.utils.Time.SYSTEM;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.ERRORS_RETRY_MAX_DELAY_CONFIG;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.ERRORS_RETRY_MAX_DELAY_DEFAULT;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.ERRORS_RETRY_TIMEOUT_CONFIG;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.ERRORS_RETRY_TIMEOUT_DEFAULT;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.ERRORS_TOLERANCE_CONFIG;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.ERRORS_TOLERANCE_DEFAULT;
+import static org.apache.kafka.connect.runtime.errors.ToleranceType.ALL;
+import static org.apache.kafka.connect.runtime.errors.ToleranceType.NONE;
 import static org.easymock.EasyMock.replay;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -43,12 +56,21 @@ import static org.junit.Assert.assertTrue;
 @PowerMockIgnore("javax.management.*")
 public class RetryWithToleranceOperatorTest {
 
+    public static final RetryWithToleranceOperator NOOP_OPERATOR = new RetryWithToleranceOperator(
+            ERRORS_RETRY_TIMEOUT_DEFAULT, ERRORS_RETRY_MAX_DELAY_DEFAULT, NONE, SYSTEM);
+    static {
+        NOOP_OPERATOR.metrics(new ErrorHandlingMetrics());
+    }
+
     @SuppressWarnings("unused")
     @Mock
     private Operation<String> mockOperation;
 
     @Mock
     ErrorHandlingMetrics errorHandlingMetrics;
+
+    @Mock
+    Plugins plugins;
 
     @Test
     public void testHandleExceptionInTransformations() {
@@ -108,10 +130,7 @@ public class RetryWithToleranceOperatorTest {
     }
 
     private RetryWithToleranceOperator setupExecutor() {
-        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator();
-        Map<String, Object> props = config(RetryWithToleranceOperator.RETRY_TIMEOUT, "0");
-        props.put(RetryWithToleranceOperator.TOLERANCE_LIMIT, "all");
-        retryWithToleranceOperator.configure(props);
+        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(0, ERRORS_RETRY_MAX_DELAY_DEFAULT, ALL, SYSTEM);
         retryWithToleranceOperator.metrics(errorHandlingMetrics);
         return retryWithToleranceOperator;
     }
@@ -138,10 +157,7 @@ public class RetryWithToleranceOperatorTest {
 
     public void execAndHandleRetriableError(int numRetriableExceptionsThrown, long expectedWait, Exception e) throws Exception {
         MockTime time = new MockTime(0, 0, 0);
-        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(time);
-        Map<String, Object> props = config(RetryWithToleranceOperator.RETRY_TIMEOUT, "6000");
-        props.put(RetryWithToleranceOperator.TOLERANCE_LIMIT, "all");
-        retryWithToleranceOperator.configure(props);
+        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(6000, ERRORS_RETRY_MAX_DELAY_DEFAULT, ALL, time);
         retryWithToleranceOperator.metrics(errorHandlingMetrics);
 
         EasyMock.expect(mockOperation.call()).andThrow(e).times(numRetriableExceptionsThrown);
@@ -159,10 +175,7 @@ public class RetryWithToleranceOperatorTest {
 
     public void execAndHandleNonRetriableError(int numRetriableExceptionsThrown, long expectedWait, Exception e) throws Exception {
         MockTime time = new MockTime(0, 0, 0);
-        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(time);
-        Map<String, Object> props = config(RetryWithToleranceOperator.RETRY_TIMEOUT, "6000");
-        props.put(RetryWithToleranceOperator.TOLERANCE_LIMIT, "all");
-        retryWithToleranceOperator.configure(props);
+        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(6000, ERRORS_RETRY_MAX_DELAY_DEFAULT, ALL, time);
         retryWithToleranceOperator.metrics(errorHandlingMetrics);
 
         EasyMock.expect(mockOperation.call()).andThrow(e).times(numRetriableExceptionsThrown);
@@ -181,10 +194,7 @@ public class RetryWithToleranceOperatorTest {
     @Test
     public void testCheckRetryLimit() {
         MockTime time = new MockTime(0, 0, 0);
-        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(time);
-        Map<String, Object> props = config(RetryWithToleranceOperator.RETRY_TIMEOUT, "500");
-        props.put(RetryWithToleranceOperator.RETRY_DELAY_MAX_MS, "100");
-        retryWithToleranceOperator.configure(props);
+        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(500, 100, NONE, time);
 
         time.setCurrentTimeMs(100);
         assertTrue(retryWithToleranceOperator.checkRetry(0));
@@ -208,11 +218,7 @@ public class RetryWithToleranceOperatorTest {
     @Test
     public void testBackoffLimit() {
         MockTime time = new MockTime(0, 0, 0);
-        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(time);
-
-        Map<String, Object> props = config(RetryWithToleranceOperator.RETRY_TIMEOUT, "5");
-        props.put(RetryWithToleranceOperator.RETRY_DELAY_MAX_MS, "5000");
-        retryWithToleranceOperator.configure(props);
+        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(5, 5000, NONE, time);
 
         long prevTs = time.hiResClockMs();
         retryWithToleranceOperator.backoff(1, 5000);
@@ -243,54 +249,52 @@ public class RetryWithToleranceOperatorTest {
 
     @Test
     public void testToleranceLimit() {
-        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator();
-        retryWithToleranceOperator.configure(config(RetryWithToleranceOperator.TOLERANCE_LIMIT, "none"));
+        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(ERRORS_RETRY_TIMEOUT_DEFAULT, ERRORS_RETRY_MAX_DELAY_DEFAULT, NONE, SYSTEM);
         retryWithToleranceOperator.metrics(errorHandlingMetrics);
         retryWithToleranceOperator.markAsFailed();
         assertFalse("should not tolerate any errors", retryWithToleranceOperator.withinToleranceLimits());
 
-        retryWithToleranceOperator = new RetryWithToleranceOperator();
-        retryWithToleranceOperator.configure(config(RetryWithToleranceOperator.TOLERANCE_LIMIT, "all"));
+        retryWithToleranceOperator = new RetryWithToleranceOperator(ERRORS_RETRY_TIMEOUT_DEFAULT, ERRORS_RETRY_MAX_DELAY_DEFAULT, ALL, SYSTEM);
         retryWithToleranceOperator.metrics(errorHandlingMetrics);
         retryWithToleranceOperator.markAsFailed();
         retryWithToleranceOperator.markAsFailed();
         assertTrue("should tolerate all errors", retryWithToleranceOperator.withinToleranceLimits());
 
-        retryWithToleranceOperator = new RetryWithToleranceOperator();
-        retryWithToleranceOperator.configure(config(RetryWithToleranceOperator.TOLERANCE_LIMIT, "none"));
+        retryWithToleranceOperator = new RetryWithToleranceOperator(ERRORS_RETRY_TIMEOUT_DEFAULT, ERRORS_RETRY_MAX_DELAY_DEFAULT, NONE, SYSTEM);
         assertTrue("no tolerance is within limits if no failures", retryWithToleranceOperator.withinToleranceLimits());
     }
 
     @Test
     public void testDefaultConfigs() {
-        RetryWithToleranceOperatorConfig configuration;
-        configuration = new RetryWithToleranceOperatorConfig(new HashMap<>());
-        assertEquals(configuration.retryTimeout(), 0);
-        assertEquals(configuration.retryDelayMax(), 60000);
-        assertEquals(configuration.toleranceLimit(), ToleranceType.NONE);
+        ConnectorConfig configuration = config(emptyMap());
+        assertEquals(configuration.errorRetryTimeout(), ERRORS_RETRY_TIMEOUT_DEFAULT);
+        assertEquals(configuration.errorMaxDelayInMillis(), ERRORS_RETRY_MAX_DELAY_DEFAULT);
+        assertEquals(configuration.errorToleranceType(), ERRORS_TOLERANCE_DEFAULT);
 
         PowerMock.verifyAll();
+    }
+
+    ConnectorConfig config(Map<String, String> connProps) {
+        Map<String, String> props = new HashMap<>();
+        props.put(ConnectorConfig.NAME_CONFIG, "test");
+        props.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, SinkTask.class.getName());
+        props.putAll(connProps);
+        return new ConnectorConfig(plugins, props);
     }
 
     @Test
-    public void testConfigs() {
-        RetryWithToleranceOperatorConfig configuration;
-        configuration = new RetryWithToleranceOperatorConfig(config("retry.timeout", "100"));
-        assertEquals(configuration.retryTimeout(), 100);
+    public void testSetConfigs() {
+        ConnectorConfig configuration;
+        configuration = config(singletonMap(ERRORS_RETRY_TIMEOUT_CONFIG, "100"));
+        assertEquals(configuration.errorRetryTimeout(), 100);
 
-        configuration = new RetryWithToleranceOperatorConfig(config("retry.delay.max.ms", "100"));
-        assertEquals(configuration.retryDelayMax(), 100);
+        configuration = config(singletonMap(ERRORS_RETRY_MAX_DELAY_CONFIG, "100"));
+        assertEquals(configuration.errorMaxDelayInMillis(), 100);
 
-        configuration = new RetryWithToleranceOperatorConfig(config("allowed.max", "none"));
-        assertEquals(configuration.toleranceLimit(), ToleranceType.NONE);
+        configuration = config(singletonMap(ERRORS_TOLERANCE_CONFIG, "none"));
+        assertEquals(configuration.errorToleranceType(), ToleranceType.NONE);
 
         PowerMock.verifyAll();
-    }
-
-    Map<String, Object> config(String key, Object val) {
-        Map<String, Object> configs = new HashMap<>();
-        configs.put(key, val);
-        return configs;
     }
 
     private static class ExceptionThrower implements Operation<Object> {

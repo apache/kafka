@@ -170,16 +170,16 @@ public class AbstractHerderTest {
         // We expect there to be errors due to the missing name and .... Note that these assertions depend heavily on
         // the config fields for SourceConnectorConfig, but we expect these to change rarely.
         assertEquals(TestSourceConnector.class.getName(), result.name());
-        assertEquals(Arrays.asList(ConnectorConfig.COMMON_GROUP, ConnectorConfig.TRANSFORMS_GROUP), result.groups());
+        assertEquals(Arrays.asList(ConnectorConfig.COMMON_GROUP, ConnectorConfig.TRANSFORMS_GROUP, ConnectorConfig.ERROR_GROUP), result.groups());
         assertEquals(2, result.errorCount());
-        // Base connector config has 8 fields, connector's configs add 2
-        assertEquals(10, result.values().size());
+        // Base connector config has 13 fields, connector's configs add 2
+        assertEquals(15, result.values().size());
         // Missing name should generate an error
         assertEquals(ConnectorConfig.NAME_CONFIG, result.values().get(0).configValue().name());
         assertEquals(1, result.values().get(0).configValue().errors().size());
         // "required" config from connector should generate an error
-        assertEquals("required", result.values().get(8).configValue().name());
-        assertEquals(1, result.values().get(8).configValue().errors().size());
+        assertEquals("required", result.values().get(13).configValue().name());
+        assertEquals(1, result.values().get(13).configValue().errors().size());
 
         verifyAll();
     }
@@ -228,20 +228,21 @@ public class AbstractHerderTest {
         List<String> expectedGroups = Arrays.asList(
                 ConnectorConfig.COMMON_GROUP,
                 ConnectorConfig.TRANSFORMS_GROUP,
+                ConnectorConfig.ERROR_GROUP,
                 "Transforms: xformA",
                 "Transforms: xformB"
         );
         assertEquals(expectedGroups, result.groups());
         assertEquals(2, result.errorCount());
-        // Base connector config has 8 fields, connector's configs add 2, 2 type fields from the transforms, and
+        // Base connector config has 13 fields, connector's configs add 2, 2 type fields from the transforms, and
         // 1 from the valid transformation's config
-        assertEquals(13, result.values().size());
+        assertEquals(18, result.values().size());
         // Should get 2 type fields from the transforms, first adds its own config since it has a valid class
-        assertEquals("transforms.xformA.type", result.values().get(8).configValue().name());
-        assertTrue(result.values().get(8).configValue().errors().isEmpty());
-        assertEquals("transforms.xformA.subconfig", result.values().get(9).configValue().name());
-        assertEquals("transforms.xformB.type", result.values().get(10).configValue().name());
-        assertFalse(result.values().get(10).configValue().errors().isEmpty());
+        assertEquals("transforms.xformA.type", result.values().get(13).configValue().name());
+        assertTrue(result.values().get(13).configValue().errors().isEmpty());
+        assertEquals("transforms.xformA.subconfig", result.values().get(14).configValue().name());
+        assertEquals("transforms.xformB.type", result.values().get(15).configValue().name());
+        assertFalse(result.values().get(15).configValue().errors().isEmpty());
 
         verifyAll();
     }

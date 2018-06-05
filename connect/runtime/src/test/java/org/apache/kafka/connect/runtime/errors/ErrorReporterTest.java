@@ -21,7 +21,11 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.runtime.ConnectMetrics;
+import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.MockConnectMetrics;
+import org.apache.kafka.connect.runtime.SinkConnectorConfig;
+import org.apache.kafka.connect.runtime.isolation.Plugins;
+import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.easymock.EasyMock;
 import org.easymock.Mock;
@@ -37,6 +41,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Future;
 
+import static java.util.Collections.emptyMap;
+import static java.util.Collections.singletonMap;
 import static org.easymock.EasyMock.replay;
 import static org.junit.Assert.assertEquals;
 
@@ -54,13 +60,14 @@ public class ErrorReporterTest {
     @Mock
     Future<RecordMetadata> metadata;
 
-    private HashMap<String, Object> config;
+    @Mock
+    Plugins plugins;
+
     private ErrorHandlingMetrics errorHandlingMetrics;
     private MockConnectMetrics metrics;
 
     @Before
     public void setup() {
-        config = new HashMap<>();
         metrics = new MockConnectMetrics();
         errorHandlingMetrics = new ErrorHandlingMetrics(new ConnectorTaskId("connector-", 1), metrics);
     }
@@ -74,8 +81,7 @@ public class ErrorReporterTest {
 
     @Test
     public void testDLQConfigWithEmptyTopicName() {
-        DeadLetterQueueReporter deadLetterQueueReporter = new DeadLetterQueueReporter(producer);
-        deadLetterQueueReporter.configure(config);
+        DeadLetterQueueReporter deadLetterQueueReporter = new DeadLetterQueueReporter(producer, config(emptyMap()));
         deadLetterQueueReporter.metrics(errorHandlingMetrics);
 
         ProcessingContext context = processingContext();
@@ -90,8 +96,7 @@ public class ErrorReporterTest {
 
     @Test
     public void testDLQConfigWithValidTopicName() {
-        DeadLetterQueueReporter deadLetterQueueReporter = new DeadLetterQueueReporter(producer);
-        deadLetterQueueReporter.configure(config(DeadLetterQueueReporter.DLQ_TOPIC_NAME, DLQ_TOPIC));
+        DeadLetterQueueReporter deadLetterQueueReporter = new DeadLetterQueueReporter(producer, config(singletonMap(SinkConnectorConfig.DLQ_TOPIC_NAME_CONFIG, DLQ_TOPIC)));
         deadLetterQueueReporter.metrics(errorHandlingMetrics);
 
         ProcessingContext context = processingContext();
@@ -106,8 +111,7 @@ public class ErrorReporterTest {
 
     @Test
     public void testReportDLQTwice() {
-        DeadLetterQueueReporter deadLetterQueueReporter = new DeadLetterQueueReporter(producer);
-        deadLetterQueueReporter.configure(config(DeadLetterQueueReporter.DLQ_TOPIC_NAME, DLQ_TOPIC));
+        DeadLetterQueueReporter deadLetterQueueReporter = new DeadLetterQueueReporter(producer, config(singletonMap(SinkConnectorConfig.DLQ_TOPIC_NAME_CONFIG, DLQ_TOPIC)));
         deadLetterQueueReporter.metrics(errorHandlingMetrics);
 
         ProcessingContext context = processingContext();
@@ -123,8 +127,7 @@ public class ErrorReporterTest {
 
     @Test
     public void testLogOnDisabledLogReporter() {
-        LogReporter logReporter = new LogReporter(TASK_ID);
-        logReporter.configure(config);
+        LogReporter logReporter = new LogReporter(TASK_ID, config(emptyMap()));
         logReporter.metrics(errorHandlingMetrics);
 
         ProcessingContext context = processingContext();
@@ -137,8 +140,7 @@ public class ErrorReporterTest {
 
     @Test
     public void testLogOnEnabledLogReporter() {
-        LogReporter logReporter = new LogReporter(TASK_ID);
-        logReporter.configure(config(LogReporter.LOG_ENABLE, "true"));
+        LogReporter logReporter = new LogReporter(TASK_ID, config(singletonMap(ConnectorConfig.ERRORS_LOG_ENABLE_CONFIG, "true")));
         logReporter.metrics(errorHandlingMetrics);
 
         ProcessingContext context = processingContext();
@@ -151,8 +153,7 @@ public class ErrorReporterTest {
 
     @Test
     public void testLogMessageWithNoRecords() {
-        LogReporter logReporter = new LogReporter(TASK_ID);
-        logReporter.configure(config(LogReporter.LOG_ENABLE, "true"));
+        LogReporter logReporter = new LogReporter(TASK_ID, config(singletonMap(ConnectorConfig.ERRORS_LOG_ENABLE_CONFIG, "true")));
         logReporter.metrics(errorHandlingMetrics);
 
         ProcessingContext context = processingContext();
@@ -164,9 +165,11 @@ public class ErrorReporterTest {
 
     @Test
     public void testLogMessageWithSinkRecords() {
-        LogReporter logReporter = new LogReporter(TASK_ID);
-        logReporter.configure(config(LogReporter.LOG_ENABLE, "true"));
-        logReporter.configure(config(LogReporter.LOG_INCLUDE_MESSAGES, "true"));
+        Map<String, String> props = new HashMap<>();
+        props.put(ConnectorConfig.ERRORS_LOG_ENABLE_CONFIG, "true");
+        props.put(ConnectorConfig.ERRORS_LOG_INCLUDE_MESSAGES_CONFIG, "true");
+
+        LogReporter logReporter = new LogReporter(TASK_ID, config(props));
         logReporter.metrics(errorHandlingMetrics);
 
         ProcessingContext context = processingContext();
@@ -184,9 +187,12 @@ public class ErrorReporterTest {
         return context;
     }
 
-    private Map<String, Object> config(String key, Object val) {
-        config.put(key, val);
-        return config;
+    private SinkConnectorConfig config(Map<String, String> configProps) {
+        Map<String, String> props = new HashMap<>();
+        props.put(ConnectorConfig.NAME_CONFIG, "test");
+        props.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, SinkTask.class.getName());
+        props.putAll(configProps);
+        return new SinkConnectorConfig(plugins, props);
     }
 
     private void assertErrorHandlingMetricValue(String name, double expected) {

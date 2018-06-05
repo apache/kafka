@@ -24,6 +24,7 @@ import org.apache.kafka.common.config.ConfigDef.Width;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.runtime.errors.ToleranceType;
 import org.apache.kafka.connect.runtime.isolation.PluginDesc;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.transforms.Transformation;
@@ -36,8 +37,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.NonEmptyStringWithoutControlChars.nonEmptyStringWithoutControlChars;
+import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 
 /**
@@ -54,6 +55,7 @@ import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 public class ConnectorConfig extends AbstractConfig {
     protected static final String COMMON_GROUP = "Common";
     protected static final String TRANSFORMS_GROUP = "Transforms";
+    protected static final String ERROR_GROUP = "Error Handling";
 
     public static final String NAME_CONFIG = "name";
     private static final String NAME_DOC = "Globally unique name to use for this connector.";
@@ -106,6 +108,37 @@ public class ConnectorConfig extends AbstractConfig {
     public static final String CONFIG_RELOAD_ACTION_NONE = Herder.ConfigReloadAction.NONE.toString();
     public static final String CONFIG_RELOAD_ACTION_RESTART = Herder.ConfigReloadAction.RESTART.toString();
 
+    public static final String ERRORS_RETRY_TIMEOUT_CONFIG = "errors.retry.timeout";
+    public static final String ERRORS_RETRY_TIMEOUT_DISPLAY = "Retry Timeout for Errors";
+    public static final int ERRORS_RETRY_TIMEOUT_DEFAULT = 0;
+    public static final String ERRORS_RETRY_TIMEOUT_DOC = "The maximum duration in milliseconds that a failed operation " +
+            "will be reattempted. The default is 0, which means no retries will be attempted. Use -1 for infinite retries.";
+
+    public static final String ERRORS_RETRY_MAX_DELAY_CONFIG = "errors.retry.delay.max.ms";
+    public static final String ERRORS_RETRY_MAX_DELAY_DISPLAY = "Maximum Delay Between Retries for Errors";
+    public static final int ERRORS_RETRY_MAX_DELAY_DEFAULT = 60000;
+    public static final String ERRORS_RETRY_MAX_DELAY_DOC = "The maximum duration in milliseconds between consecutive retry attempts. " +
+            "Jitter will be added to the delay once this limit is reached to prevent thundering herd issues.";
+
+    public static final String ERRORS_TOLERANCE_CONFIG = "errors.allowed.max";
+    public static final String ERRORS_TOLERANCE_DISPLAY = "Error Tolerance";
+    public static final ToleranceType ERRORS_TOLERANCE_DEFAULT = ToleranceType.NONE;
+    public static final String ERRORS_TOLERANCE_DOC = "Behavior for tolerating errors during connector operation. 'none' is the default value " +
+            "and signals that any error will result in an immediate connector task failure; 'all' changes the behavior to skip over problematic records.";
+
+    public static final String ERRORS_LOG_ENABLE_CONFIG = "errors.log.enable";
+    public static final String ERRORS_LOG_ENABLE_DISPLAY = "Log Errors";
+    public static final boolean ERRORS_LOG_ENABLE_DEFAULT = false;
+    public static final String ERRORS_LOG_ENABLE_DOC = "If true, write each error and the details of the failed operation and problematic record " +
+            "to the Connect application log. This is 'false' by default, so that only errors that are not tolerated are reported.";
+
+    public static final String ERRORS_LOG_INCLUDE_MESSAGES_CONFIG = "errors.log.include.messages";
+    public static final String ERRORS_LOG_INCLUDE_MESSAGES_DISPLAY = "Log Error Details";
+    public static final boolean ERRORS_LOG_INCLUDE_MESSAGES_DEFAULT = false;
+    public static final String ERRORS_LOG_INCLUDE_MESSAGES_DOC = "Whether to the include in the log the Connect record that resulted in " +
+            "a failure. This is 'false' by default, which will prevent record keys, values, and headers from being written to log files, " +
+            "although some information such as topic and partition number will still be logged.";
+
     private final EnrichedConnectorConfig enrichedConfig;
     private static class EnrichedConnectorConfig extends AbstractConfig {
         EnrichedConnectorConfig(ConfigDef configDef, Map<String, String> props) {
@@ -120,6 +153,7 @@ public class ConnectorConfig extends AbstractConfig {
 
     public static ConfigDef configDef() {
         int orderInGroup = 0;
+        int orderInErrorGroup = 0;
         return new ConfigDef()
                 .define(NAME_CONFIG, Type.STRING, ConfigDef.NO_DEFAULT_VALUE, nonEmptyStringWithoutControlChars(), Importance.HIGH, NAME_DOC, COMMON_GROUP, ++orderInGroup, Width.MEDIUM, NAME_DISPLAY)
                 .define(CONNECTOR_CLASS_CONFIG, Type.STRING, Importance.HIGH, CONNECTOR_CLASS_DOC, COMMON_GROUP, ++orderInGroup, Width.LONG, CONNECTOR_CLASS_DISPLAY)
@@ -138,7 +172,18 @@ public class ConnectorConfig extends AbstractConfig {
                 }), Importance.LOW, TRANSFORMS_DOC, TRANSFORMS_GROUP, ++orderInGroup, Width.LONG, TRANSFORMS_DISPLAY)
                 .define(CONFIG_RELOAD_ACTION_CONFIG, Type.STRING, CONFIG_RELOAD_ACTION_RESTART,
                         in(CONFIG_RELOAD_ACTION_NONE, CONFIG_RELOAD_ACTION_RESTART), Importance.LOW,
-                        CONFIG_RELOAD_ACTION_DOC, COMMON_GROUP, ++orderInGroup, Width.MEDIUM, CONFIG_RELOAD_ACTION_DISPLAY);
+                        CONFIG_RELOAD_ACTION_DOC, COMMON_GROUP, ++orderInGroup, Width.MEDIUM, CONFIG_RELOAD_ACTION_DISPLAY)
+                .define(ERRORS_RETRY_TIMEOUT_CONFIG, Type.LONG, ERRORS_RETRY_TIMEOUT_DEFAULT, Importance.MEDIUM,
+                        ERRORS_RETRY_TIMEOUT_DOC, ERROR_GROUP, ++orderInErrorGroup, Width.MEDIUM, ERRORS_RETRY_TIMEOUT_DISPLAY)
+                .define(ERRORS_RETRY_MAX_DELAY_CONFIG, Type.LONG, ERRORS_RETRY_MAX_DELAY_DEFAULT, Importance.MEDIUM,
+                        ERRORS_RETRY_MAX_DELAY_DOC, ERROR_GROUP, ++orderInErrorGroup, Width.MEDIUM, ERRORS_RETRY_MAX_DELAY_DISPLAY)
+                .define(ERRORS_TOLERANCE_CONFIG, Type.STRING, ERRORS_TOLERANCE_DEFAULT.value(),
+                        in(ToleranceType.NONE.value(), ToleranceType.ALL.value()), Importance.MEDIUM,
+                        ERRORS_TOLERANCE_DOC, ERROR_GROUP, ++orderInErrorGroup, Width.SHORT, ERRORS_TOLERANCE_DISPLAY)
+                .define(ERRORS_LOG_ENABLE_CONFIG, Type.BOOLEAN, ERRORS_LOG_ENABLE_DEFAULT, Importance.MEDIUM,
+                        ERRORS_LOG_ENABLE_DOC, ERROR_GROUP, ++orderInErrorGroup, Width.SHORT, ERRORS_LOG_ENABLE_DISPLAY)
+                .define(ERRORS_LOG_INCLUDE_MESSAGES_CONFIG, Type.BOOLEAN, ERRORS_LOG_INCLUDE_MESSAGES_DEFAULT, Importance.MEDIUM,
+                        ERRORS_LOG_INCLUDE_MESSAGES_DOC, ERROR_GROUP, ++orderInErrorGroup, Width.SHORT, ERRORS_LOG_INCLUDE_MESSAGES_DISPLAY);
     }
 
     public ConnectorConfig(Plugins plugins) {
@@ -160,6 +205,32 @@ public class ConnectorConfig extends AbstractConfig {
     @Override
     public Object get(String key) {
         return enrichedConfig.get(key);
+    }
+
+    public long errorRetryTimeout() {
+        return getLong(ERRORS_RETRY_TIMEOUT_CONFIG);
+    }
+
+    public long errorMaxDelayInMillis() {
+        return getLong(ERRORS_RETRY_MAX_DELAY_CONFIG);
+    }
+
+    public ToleranceType errorToleranceType() {
+        String tolerance = getString(ERRORS_TOLERANCE_CONFIG);
+        for (ToleranceType type: ToleranceType.values()) {
+            if (type.name().equalsIgnoreCase(tolerance)) {
+                return type;
+            }
+        }
+        return ERRORS_TOLERANCE_DEFAULT;
+    }
+
+    public boolean enableErrorLog() {
+        return getBoolean(ERRORS_LOG_ENABLE_CONFIG);
+    }
+
+    public boolean includeRecordDetailsInErrorLog() {
+        return getBoolean(ERRORS_LOG_INCLUDE_MESSAGES_CONFIG);
     }
 
     /**
