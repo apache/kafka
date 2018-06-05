@@ -31,8 +31,8 @@ import javax.security.auth.spi.LoginModule;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.Login;
-import org.apache.kafka.common.security.oauthbearer.internal.OAuthBearerSaslClientProvider;
-import org.apache.kafka.common.security.oauthbearer.internal.OAuthBearerSaslServerProvider;
+import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerSaslClientProvider;
+import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerSaslServerProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
