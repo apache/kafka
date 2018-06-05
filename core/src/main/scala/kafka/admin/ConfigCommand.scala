@@ -173,7 +173,9 @@ object ConfigCommand extends Config {
   private[admin] def parseConfigsToBeAdded(opts: ConfigCommandOptions): Properties = {
     val props = new Properties
     if (opts.options.has(opts.addConfig)) {
-      //split by commas, but avoid those in [], then into KV pairs
+      // Split list by commas, but avoid those in [], then into KV pairs
+      // Each KV pair is of format key=value, split them into key and value, using -1 as the limit for split() to
+      // include trailing empty strings. This is to support empty value (e.g. 'ssl.endpoint.identification.algorithm=')
       val pattern = "(?=[^\\]]*(?:\\[|$))"
       val configsToBeAdded = opts.options.valueOf(opts.addConfig)
         .split("," + pattern)

@@ -258,12 +258,19 @@ public class SslTransportLayerTest {
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
         NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
 
+        // Disable endpoint validation using null value, connection should succeed
+        String node2 = "2";
+        sslClientConfigs.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, null);
+        createSelector(sslClientConfigs);
+        selector.connect(node2, addr, BUFFER_SIZE, BUFFER_SIZE);
+        NetworkTestUtils.checkClientConnection(selector, node2, 100, 10);
+
         // Connection should fail with endpoint validation enabled
-        String node1 = "1";
+        String node3 = "3";
         sslClientConfigs.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "HTTPS");
         createSelector(sslClientConfigs);
-        selector.connect(node1, addr, BUFFER_SIZE, BUFFER_SIZE);
-        NetworkTestUtils.waitForChannelClose(selector, node1, ChannelState.State.AUTHENTICATION_FAILED);
+        selector.connect(node3, addr, BUFFER_SIZE, BUFFER_SIZE);
+        NetworkTestUtils.waitForChannelClose(selector, node3, ChannelState.State.AUTHENTICATION_FAILED);
         selector.close();
     }
 
