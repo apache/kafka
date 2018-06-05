@@ -18,7 +18,7 @@ package kafka.api
 
 import kafka.utils.JaasTestUtils
 import kafka.zk.ConfigEntityChangeNotificationZNode
-import org.apache.kafka.common.security.scram.internal.ScramMechanism
+import org.apache.kafka.common.security.scram.internals.ScramMechanism
 
 import scala.collection.JavaConverters._
 import org.junit.Before
