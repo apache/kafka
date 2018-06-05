@@ -112,7 +112,7 @@ public class ConnectorConfig extends AbstractConfig {
     public static final String ERRORS_RETRY_TIMEOUT_CONFIG = "errors.retry.timeout";
     public static final String ERRORS_RETRY_TIMEOUT_DISPLAY = "Retry Timeout for Errors";
     public static final int ERRORS_RETRY_TIMEOUT_DEFAULT = 0;
-    public static final String ERRORS_RETRY_TIMEOUT_DOC = "The maximum duration in milliseconds for that a failed operation " +
+    public static final String ERRORS_RETRY_TIMEOUT_DOC = "The maximum duration in milliseconds that a failed operation " +
             "will be reattempted. The default is 0, which means no retries will be attempted. Use -1 for infinite retries.";
 
     public static final String ERRORS_RETRY_MAX_DELAY_CONFIG = "errors.retry.delay.max.ms";
@@ -125,7 +125,7 @@ public class ConnectorConfig extends AbstractConfig {
     public static final String ERRORS_TOLERANCE_DISPLAY = "Error Tolerance";
     public static final String ERRORS_TOLERANCE_DEFAULT = ToleranceType.NONE.name().toLowerCase(Locale.ROOT);
     public static final String ERRORS_TOLERANCE_DOC = "Behavior for tolerating errors during connector operation. 'none' is the default value " +
-            "and signals that any error will result in an immediate connector task failure. 'all' changes the behavior to skip over problematic records.";
+            "and signals that any error will result in an immediate connector task failure; 'all' changes the behavior to skip over problematic records.";
 
     public static final String ERRORS_LOG_ENABLE_CONFIG = "errors.log.enable";
     public static final String ERRORS_LOG_ENABLE_DISPLAY = "Log Errors";
