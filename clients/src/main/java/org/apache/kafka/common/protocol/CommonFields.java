@@ -47,7 +47,7 @@ public class CommonFields {
     public static final Field.Str RESOURCE_NAME = new Field.Str("resource_name", "The resource name");
     public static final Field.NullableStr RESOURCE_NAME_FILTER = new Field.NullableStr("resource_name", "The resource name filter");
     public static final Field.Int8 RESOURCE_NAME_TYPE = new Field.Int8("resource_name_type", "The resource name type", AclUtils.LITERAL.code());
-    public static final Field.Int8 RESOURCE_NAME_TYPE_FILTER = new Field.Int8("resource_name_type", "The resource name type filter", AclUtils.LITERAL.code());
+    public static final Field.Int8 RESOURCE_NAME_TYPE_FILTER = new Field.Int8("resource_name_type_filter", "The resource name type filter", AclUtils.LITERAL.code());
     public static final Field.Str PRINCIPAL = new Field.Str("principal", "The ACL principal");
     public static final Field.NullableStr PRINCIPAL_FILTER = new Field.NullableStr("principal", "The ACL principal filter");
     public static final Field.Str HOST = new Field.Str("host", "The ACL host");
