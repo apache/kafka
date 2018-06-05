@@ -186,8 +186,6 @@ class ConsoleConsumerTest {
   @Test(expected = classOf[IllegalArgumentException])
   def shouldExitOnUnrecognizedNewConsumerOption(): Unit = {
 
-    // Override exit procedure to throw an exception instead of exiting, so we can catch the exit
-    // properly for this test case
     Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
 
     //Given
@@ -403,8 +401,6 @@ class ConsoleConsumerTest {
   @Test(expected = classOf[IllegalArgumentException])
   def shouldExitOnInvalidConfigWithAutoOffsetResetAndConflictingFromBeginningNewConsumer() {
 
-    // Override exit procedure to throw an exception instead of exiting, so we can catch the exit
-    // properly for this test case
     Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
 
     //Given
@@ -427,8 +423,6 @@ class ConsoleConsumerTest {
   @Test(expected = classOf[IllegalArgumentException])
   def shouldExitOnInvalidConfigWithAutoOffsetResetAndConflictingFromBeginningOldConsumer() {
 
-    // Override exit procedure to throw an exception instead of exiting, so we can catch the exit
-    // properly for this test case
     Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
 
     //Given

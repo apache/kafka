@@ -16,6 +16,7 @@
  */
 package unit.kafka.admin
 
+import joptsimple.OptionException
 import kafka.admin.ConsumerGroupCommandTest
 import kafka.utils.TestUtils
 import org.apache.kafka.common.protocol.Errors
@@ -223,10 +224,9 @@ class DeleteConsumerGroupTest extends ConsumerGroupCommandTest {
         result.keySet.contains(group) && result.get(group).contains(Errors.COORDINATOR_NOT_AVAILABLE))
   }
 
-  @Test(expected = classOf[joptsimple.OptionException])
+  @Test(expected = classOf[OptionException])
   def testDeleteWithUnrecognizedNewConsumerOption() {
     val cgcArgs = Array("--new-consumer", "--bootstrap-server", brokerList, "--delete", "--group", group)
     getConsumerGroupService(cgcArgs)
-    fail("Expected an error due to presence of unrecognized --new-consumer option")
   }
 }
