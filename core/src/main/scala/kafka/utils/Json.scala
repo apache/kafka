@@ -16,8 +16,6 @@
  */
 package kafka.utils
 
-import java.nio.charset.StandardCharsets
-
 import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.ObjectMapper
 import kafka.utils.json.JsonValue
@@ -33,8 +31,8 @@ object Json {
   private val mapper = new ObjectMapper()
 
   /**
-    * Parse a JSON string into a JsonValue if possible. `None` is returned if `input` is not valid JSON.
-    */
+   * Parse a JSON string into a JsonValue if possible. `None` is returned if `input` is not valid JSON.
+   */
   def parseFull(input: String): Option[JsonValue] =
     try Option(mapper.readTree(input)).map(JsonValue(_))
     catch { case _: JsonProcessingException => None }
