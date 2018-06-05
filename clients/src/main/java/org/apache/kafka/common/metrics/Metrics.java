@@ -96,7 +96,7 @@ public class Metrics implements Closeable {
      * Expiration of Sensors is disabled.
      */
     public Metrics(MetricConfig defaultConfig, Time time) {
-      this(defaultConfig, new ArrayList<MetricsReporter>(0), time);
+        this(defaultConfig, new ArrayList<MetricsReporter>(0), time);
     }
 
 
@@ -524,8 +524,14 @@ public class Metrics implements Closeable {
     public synchronized KafkaMetric removeMetric(MetricName metricName) {
         KafkaMetric metric = this.metrics.remove(metricName);
         if (metric != null) {
-            for (MetricsReporter reporter : reporters)
-                reporter.metricRemoval(metric);
+            for (MetricsReporter reporter : reporters) {
+                try {
+                    reporter.metricRemoval(metric);
+                } catch (Exception e) {
+                    log.error("Error when removing metric from " + reporter.getClass().getName(), e);
+                }
+            }
+            log.trace("Removed metric named {}", metricName);
         }
         return metric;
     }
@@ -552,8 +558,14 @@ public class Metrics implements Closeable {
         if (this.metrics.containsKey(metricName))
             throw new IllegalArgumentException("A metric named '" + metricName + "' already exists, can't register another one.");
         this.metrics.put(metricName, metric);
-        for (MetricsReporter reporter : reporters)
-            reporter.metricChange(metric);
+        for (MetricsReporter reporter : reporters) {
+            try {
+                reporter.metricChange(metric);
+            } catch (Exception e) {
+                log.error("Error when registering metric on " + reporter.getClass().getName(), e);
+            }
+        }
+        log.trace("Registered metric named {}", metricName);
     }
 
     /**
@@ -634,8 +646,13 @@ public class Metrics implements Closeable {
             }
         }
 
-        for (MetricsReporter reporter : this.reporters)
-            reporter.close();
+        for (MetricsReporter reporter : reporters) {
+            try {
+                reporter.close();
+            } catch (Exception e) {
+                log.error("Error when closing " + reporter.getClass().getName(), e);
+            }
+        }
     }
 
 }

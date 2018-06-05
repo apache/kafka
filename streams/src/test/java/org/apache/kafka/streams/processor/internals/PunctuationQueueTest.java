@@ -21,26 +21,24 @@ import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
+import org.apache.kafka.test.MockProcessorNode;
 import org.junit.Test;
-
-import java.util.ArrayList;
 
 import static org.junit.Assert.assertEquals;
 
 public class PunctuationQueueTest {
 
+    private final MockProcessorNode<String, String> node = new MockProcessorNode<>();
+    private final PunctuationQueue queue = new PunctuationQueue();
+    private final Punctuator punctuator = new Punctuator() {
+        @Override
+        public void punctuate(final long timestamp) {
+            node.mockProcessor.punctuatedStreamTime.add(timestamp);
+        }
+    };
+
     @Test
     public void testPunctuationInterval() {
-        final TestProcessor processor = new TestProcessor();
-        final ProcessorNode<String, String> node = new ProcessorNode<>("test", processor, null);
-        final PunctuationQueue queue = new PunctuationQueue();
-        final Punctuator punctuator = new Punctuator() {
-            @Override
-            public void punctuate(long timestamp) {
-                node.processor().punctuate(timestamp);
-            }
-        };
-
         final PunctuationSchedule sched = new PunctuationSchedule(node, 0L, 100L, punctuator);
         final long now = sched.timestamp - 100L;
 
@@ -54,42 +52,32 @@ public class PunctuationQueueTest {
         };
 
         queue.mayPunctuate(now, PunctuationType.STREAM_TIME, processorNodePunctuator);
-        assertEquals(0, processor.punctuatedAt.size());
+        assertEquals(0, node.mockProcessor.punctuatedStreamTime.size());
 
         queue.mayPunctuate(now + 99L, PunctuationType.STREAM_TIME, processorNodePunctuator);
-        assertEquals(0, processor.punctuatedAt.size());
+        assertEquals(0, node.mockProcessor.punctuatedStreamTime.size());
 
         queue.mayPunctuate(now + 100L, PunctuationType.STREAM_TIME, processorNodePunctuator);
-        assertEquals(1, processor.punctuatedAt.size());
+        assertEquals(1, node.mockProcessor.punctuatedStreamTime.size());
 
         queue.mayPunctuate(now + 199L, PunctuationType.STREAM_TIME, processorNodePunctuator);
-        assertEquals(1, processor.punctuatedAt.size());
+        assertEquals(1, node.mockProcessor.punctuatedStreamTime.size());
 
         queue.mayPunctuate(now + 200L, PunctuationType.STREAM_TIME, processorNodePunctuator);
-        assertEquals(2, processor.punctuatedAt.size());
+        assertEquals(2, node.mockProcessor.punctuatedStreamTime.size());
 
         queue.mayPunctuate(now + 1001L, PunctuationType.STREAM_TIME, processorNodePunctuator);
-        assertEquals(3, processor.punctuatedAt.size());
+        assertEquals(3, node.mockProcessor.punctuatedStreamTime.size());
 
         queue.mayPunctuate(now + 1002L, PunctuationType.STREAM_TIME, processorNodePunctuator);
-        assertEquals(3, processor.punctuatedAt.size());
+        assertEquals(3, node.mockProcessor.punctuatedStreamTime.size());
 
         queue.mayPunctuate(now + 1100L, PunctuationType.STREAM_TIME, processorNodePunctuator);
-        assertEquals(4, processor.punctuatedAt.size());
+        assertEquals(4, node.mockProcessor.punctuatedStreamTime.size());
     }
 
     @Test
     public void testPunctuationIntervalCustomAlignment() {
-        final TestProcessor processor = new TestProcessor();
-        final ProcessorNode<String, String> node = new ProcessorNode<>("test", processor, null);
-        final PunctuationQueue queue = new PunctuationQueue();
-        final Punctuator punctuator = new Punctuator() {
-            @Override
-            public void punctuate(long timestamp) {
-                node.processor().punctuate(timestamp);
-            }
-        };
-
         final PunctuationSchedule sched = new PunctuationSchedule(node, 50L, 100L, punctuator);
         final long now = sched.timestamp - 50L;
 
@@ -103,42 +91,32 @@ public class PunctuationQueueTest {
         };
 
         queue.mayPunctuate(now, PunctuationType.STREAM_TIME, processorNodePunctuator);
-        assertEquals(0, processor.punctuatedAt.size());
+        assertEquals(0, node.mockProcessor.punctuatedStreamTime.size());
 
         queue.mayPunctuate(now + 49L, PunctuationType.STREAM_TIME, processorNodePunctuator);
-        assertEquals(0, processor.punctuatedAt.size());
+        assertEquals(0, node.mockProcessor.punctuatedStreamTime.size());
 
         queue.mayPunctuate(now + 50L, PunctuationType.STREAM_TIME, processorNodePunctuator);
-        assertEquals(1, processor.punctuatedAt.size());
+        assertEquals(1, node.mockProcessor.punctuatedStreamTime.size());
 
         queue.mayPunctuate(now + 149L, PunctuationType.STREAM_TIME, processorNodePunctuator);
-        assertEquals(1, processor.punctuatedAt.size());
+        assertEquals(1, node.mockProcessor.punctuatedStreamTime.size());
 
         queue.mayPunctuate(now + 150L, PunctuationType.STREAM_TIME, processorNodePunctuator);
-        assertEquals(2, processor.punctuatedAt.size());
+        assertEquals(2, node.mockProcessor.punctuatedStreamTime.size());
 
         queue.mayPunctuate(now + 1051L, PunctuationType.STREAM_TIME, processorNodePunctuator);
-        assertEquals(3, processor.punctuatedAt.size());
+        assertEquals(3, node.mockProcessor.punctuatedStreamTime.size());
 
         queue.mayPunctuate(now + 1052L, PunctuationType.STREAM_TIME, processorNodePunctuator);
-        assertEquals(3, processor.punctuatedAt.size());
+        assertEquals(3, node.mockProcessor.punctuatedStreamTime.size());
 
         queue.mayPunctuate(now + 1150L, PunctuationType.STREAM_TIME, processorNodePunctuator);
-        assertEquals(4, processor.punctuatedAt.size());
+        assertEquals(4, node.mockProcessor.punctuatedStreamTime.size());
     }
 
     @Test
     public void testPunctuationIntervalCancelFromPunctuator() {
-        final TestProcessor processor = new TestProcessor();
-        final ProcessorNode<String, String> node = new ProcessorNode<>("test", processor, null);
-        final PunctuationQueue queue = new PunctuationQueue();
-        final Punctuator punctuator = new Punctuator() {
-            @Override
-            public void punctuate(long timestamp) {
-                node.processor().punctuate(timestamp);
-            }
-        };
-
         final PunctuationSchedule sched = new PunctuationSchedule(node, 0L, 100L, punctuator);
         final long now = sched.timestamp - 100L;
 
@@ -154,35 +132,25 @@ public class PunctuationQueueTest {
         };
 
         queue.mayPunctuate(now, PunctuationType.STREAM_TIME, processorNodePunctuator);
-        assertEquals(0, processor.punctuatedAt.size());
+        assertEquals(0, node.mockProcessor.punctuatedStreamTime.size());
 
         queue.mayPunctuate(now + 100L, PunctuationType.STREAM_TIME, processorNodePunctuator);
-        assertEquals(1, processor.punctuatedAt.size());
+        assertEquals(1, node.mockProcessor.punctuatedStreamTime.size());
 
         queue.mayPunctuate(now + 200L, PunctuationType.STREAM_TIME, processorNodePunctuator);
-        assertEquals(1, processor.punctuatedAt.size());
+        assertEquals(1, node.mockProcessor.punctuatedStreamTime.size());
     }
 
     private static class TestProcessor extends AbstractProcessor<String, String> {
 
-        public final ArrayList<Long> punctuatedAt = new ArrayList<>();
+        @Override
+        public void init(ProcessorContext context) {}
 
         @Override
-        public void init(ProcessorContext context) {
-        }
+        public void process(String key, String value) {}
 
         @Override
-        public void process(String key, String value) {
-        }
-
-        @Override
-        public void punctuate(long streamTime) {
-            punctuatedAt.add(streamTime);
-        }
-
-        @Override
-        public void close() {
-        }
+        public void close() {}
     }
 
 }

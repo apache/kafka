@@ -935,7 +935,7 @@ class GroupCoordinatorTest extends JUnitSuite {
     val offsetsTopic = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId)
 
     // Send commit marker.
-    groupCoordinator.handleTxnCompletion(producerId, List(offsetsTopic), TransactionResult.COMMIT)
+    handleTxnCompletion(producerId, List(offsetsTopic), TransactionResult.COMMIT)
 
     // Validate that committed offset is materialized.
     val (secondReqError, secondReqPartitionData) = groupCoordinator.handleFetchOffsets(groupId, Some(Seq(tp)))
@@ -960,7 +960,7 @@ class GroupCoordinatorTest extends JUnitSuite {
     val offsetsTopic = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId)
 
     // Validate that the pending commit is discarded.
-    groupCoordinator.handleTxnCompletion(producerId, List(offsetsTopic), TransactionResult.ABORT)
+    handleTxnCompletion(producerId, List(offsetsTopic), TransactionResult.ABORT)
 
     val (secondReqError, secondReqPartitionData) = groupCoordinator.handleFetchOffsets(groupId, Some(Seq(tp)))
     assertEquals(Errors.NONE, secondReqError)
@@ -982,14 +982,14 @@ class GroupCoordinatorTest extends JUnitSuite {
     assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), partitionData.get(tp).map(_.offset))
 
     val offsetsTopic = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId)
-    groupCoordinator.handleTxnCompletion(producerId, List(offsetsTopic), TransactionResult.ABORT)
+    handleTxnCompletion(producerId, List(offsetsTopic), TransactionResult.ABORT)
 
     val (secondReqError, secondReqPartitionData) = groupCoordinator.handleFetchOffsets(groupId, Some(Seq(tp)))
     assertEquals(Errors.NONE, secondReqError)
     assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), secondReqPartitionData.get(tp).map(_.offset))
 
     // Ignore spurious commit.
-    groupCoordinator.handleTxnCompletion(producerId, List(offsetsTopic), TransactionResult.COMMIT)
+    handleTxnCompletion(producerId, List(offsetsTopic), TransactionResult.COMMIT)
 
     val (thirdReqError, thirdReqPartitionData) = groupCoordinator.handleFetchOffsets(groupId, Some(Seq(tp)))
     assertEquals(Errors.NONE, thirdReqError)
@@ -1026,7 +1026,7 @@ class GroupCoordinatorTest extends JUnitSuite {
     assertEquals(Errors.NONE, commitOffsetResults(1)(partitions(1)))
 
     // We got a commit for only one __consumer_offsets partition. We should only materialize it's group offsets.
-    groupCoordinator.handleTxnCompletion(producerId, List(offsetTopicPartitions(0)), TransactionResult.COMMIT)
+    handleTxnCompletion(producerId, List(offsetTopicPartitions(0)), TransactionResult.COMMIT)
     groupCoordinator.handleFetchOffsets(groupIds(0), Some(partitions)) match {
       case (error, partData) =>
         errors.append(error)
@@ -1052,7 +1052,7 @@ class GroupCoordinatorTest extends JUnitSuite {
     assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), partitionData(1).get(partitions(1)).map(_.offset))
 
     // Now we receive the other marker.
-    groupCoordinator.handleTxnCompletion(producerId, List(offsetTopicPartitions(1)), TransactionResult.COMMIT)
+    handleTxnCompletion(producerId, List(offsetTopicPartitions(1)), TransactionResult.COMMIT)
     errors.clear()
     partitionData.clear()
     groupCoordinator.handleFetchOffsets(groupIds(0), Some(partitions)) match {
@@ -1102,7 +1102,7 @@ class GroupCoordinatorTest extends JUnitSuite {
     assertEquals(Errors.NONE, commitOffsetResults(1)(partitions(1)))
 
     // producer0 commits its transaction.
-    groupCoordinator.handleTxnCompletion(producerIds(0), List(offsetTopicPartition), TransactionResult.COMMIT)
+    handleTxnCompletion(producerIds(0), List(offsetTopicPartition), TransactionResult.COMMIT)
     groupCoordinator.handleFetchOffsets(groupId, Some(partitions)) match {
       case (error, partData) =>
         errors.append(error)
@@ -1117,7 +1117,7 @@ class GroupCoordinatorTest extends JUnitSuite {
     assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), partitionData(0).get(partitions(1)).map(_.offset))
 
     // producer1 now commits its transaction.
-    groupCoordinator.handleTxnCompletion(producerIds(1), List(offsetTopicPartition), TransactionResult.COMMIT)
+    handleTxnCompletion(producerIds(1), List(offsetTopicPartition), TransactionResult.COMMIT)
 
     groupCoordinator.handleFetchOffsets(groupId, Some(partitions)) match {
       case (error, partData) =>
@@ -1721,6 +1721,13 @@ class GroupCoordinatorTest extends JUnitSuite {
 
     groupCoordinator.handleLeaveGroup(groupId, consumerId, responseCallback)
     Await.result(responseFuture, Duration(40, TimeUnit.MILLISECONDS))
+  }
+
+  def handleTxnCompletion(producerId: Long,
+                          offsetsPartitions: Iterable[TopicPartition],
+                          transactionResult: TransactionResult): Unit = {
+    val isCommit = transactionResult == TransactionResult.COMMIT
+    groupCoordinator.groupManager.handleTxnCompletion(producerId, offsetsPartitions.map(_.partition).toSet, isCommit)
   }
 
 }

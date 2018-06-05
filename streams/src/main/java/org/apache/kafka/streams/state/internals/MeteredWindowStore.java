@@ -20,11 +20,11 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.WindowStore;
@@ -37,7 +37,7 @@ public class MeteredWindowStore<K, V> extends WrappedStateStore.AbstractStateSto
     private final Time time;
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
-    private StreamsMetrics metrics;
+    private StreamsMetricsImpl metrics;
     private Sensor putTime;
     private Sensor fetchTime;
     private Sensor flushTime;
@@ -65,16 +65,16 @@ public class MeteredWindowStore<K, V> extends WrappedStateStore.AbstractStateSto
                                         keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
                                         valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
         final String tagKey = "task-id";
-        final String tagValue = context.taskId().toString();
-        this.metrics = context.metrics();
-        this.putTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name(), "put",
-                                                                  Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
-        this.fetchTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name(), "fetch",
-                                                                    Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
-        this.flushTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name(), "flush",
-                                                                    Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
-        final Sensor restoreTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name(), "restore",
-                                                                              Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
+        final String taskName = context.taskId().toString();
+        this.metrics = (StreamsMetricsImpl) context.metrics();
+        this.putTime = this.metrics.addLatencyAndThroughputSensor(taskName, metricScope, name(), "put",
+                                                                  Sensor.RecordingLevel.DEBUG, tagKey, taskName);
+        this.fetchTime = this.metrics.addLatencyAndThroughputSensor(taskName, metricScope, name(), "fetch",
+                                                                    Sensor.RecordingLevel.DEBUG, tagKey, taskName);
+        this.flushTime = this.metrics.addLatencyAndThroughputSensor(taskName, metricScope, name(), "flush",
+                                                                    Sensor.RecordingLevel.DEBUG, tagKey, taskName);
+        final Sensor restoreTime = this.metrics.addLatencyAndThroughputSensor(taskName, metricScope, name(), "restore",
+                                                                              Sensor.RecordingLevel.DEBUG, tagKey, taskName);
         // register and possibly restore the state from the logs
         final long startNs = time.nanoseconds();
         try {

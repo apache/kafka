@@ -138,8 +138,12 @@ public class SslConfigs {
                 .define(SslConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG, ConfigDef.Type.STRING, null, ConfigDef.Importance.LOW, SslConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_DOC);
     }
 
-    public static final Set<String> RECONFIGURABLE_CONFIGS = Utils.mkSet(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG,
+    public static final Set<String> RECONFIGURABLE_CONFIGS = Utils.mkSet(
+            SslConfigs.SSL_KEYSTORE_TYPE_CONFIG,
             SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG,
             SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG,
-            SslConfigs.SSL_KEY_PASSWORD_CONFIG);
+            SslConfigs.SSL_KEY_PASSWORD_CONFIG,
+            SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG,
+            SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG,
+            SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG);
 }

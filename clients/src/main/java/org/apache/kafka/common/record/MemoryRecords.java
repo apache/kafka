@@ -18,7 +18,9 @@ package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention;
+import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.Time;
@@ -48,7 +50,7 @@ public class MemoryRecords extends AbstractRecords {
     private final Iterable<MutableRecordBatch> batches = new Iterable<MutableRecordBatch>() {
         @Override
         public Iterator<MutableRecordBatch> iterator() {
-            return new RecordBatchIterator<>(new ByteBufferLogInputStream(buffer.duplicate(), Integer.MAX_VALUE));
+            return batchIterator();
         }
     };
 
@@ -114,7 +116,24 @@ public class MemoryRecords extends AbstractRecords {
 
     @Override
     public ConvertedRecords<MemoryRecords> downConvert(byte toMagic, long firstOffset, Time time) {
-        return downConvert(batches(), toMagic, firstOffset, time);
+        return RecordsUtil.downConvert(batches(), toMagic, firstOffset, time);
+    }
+
+    @Override
+    public AbstractIterator<MutableRecordBatch> batchIterator() {
+        return new RecordBatchIterator<>(new ByteBufferLogInputStream(buffer.duplicate(), Integer.MAX_VALUE));
+    }
+
+    /**
+     * Validates the header of the first batch and returns batch size.
+     * @return first batch size including LOG_OVERHEAD if buffer contains header up to
+     *         magic byte, null otherwise
+     * @throws CorruptRecordException if record size or magic is invalid
+     */
+    public Integer firstBatchSize() {
+        if (buffer.remaining() < HEADER_SIZE_UP_TO_MAGIC)
+            return null;
+        return new ByteBufferLogInputStream(buffer, Integer.MAX_VALUE).nextBatchSize();
     }
 
     /**
@@ -145,7 +164,7 @@ public class MemoryRecords extends AbstractRecords {
         long maxOffset = -1L;
         long shallowOffsetOfMaxTimestamp = -1L;
         int messagesRead = 0;
-        int bytesRead = 0;
+        int bytesRead = 0; // bytes processed from `batches`
         int messagesRetained = 0;
         int bytesRetained = 0;
 
@@ -359,6 +378,8 @@ public class MemoryRecords extends AbstractRecords {
         public final long maxTimestamp;
         public final long shallowOffsetOfMaxTimestamp;
 
+        // Note that `bytesRead` should contain only bytes from batches that have been processed,
+        // i.e. bytes from `messagesRead` and any discarded batches.
         public FilterResult(ByteBuffer output,
                             int messagesRead,
                             int bytesRead,
@@ -569,7 +590,7 @@ public class MemoryRecords extends AbstractRecords {
     public static MemoryRecords withRecords(byte magic, long initialOffset, CompressionType compressionType,
                                             TimestampType timestampType, long producerId, short producerEpoch,
                                             int baseSequence, int partitionLeaderEpoch, boolean isTransactional,
-                                            SimpleRecord ... records) {
+                                            SimpleRecord... records) {
         if (records.length == 0)
             return MemoryRecords.EMPTY;
         int sizeEstimate = AbstractRecords.estimateSizeInBytes(magic, compressionType, Arrays.asList(records));

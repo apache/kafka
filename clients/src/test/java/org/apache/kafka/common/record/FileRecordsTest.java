@@ -17,6 +17,7 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.utils.MockTime;
@@ -38,11 +39,11 @@ import java.util.List;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.test.TestUtils.tempFile;
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import static org.junit.Assert.assertArrayEquals;
 
 public class FileRecordsTest {
 
@@ -347,6 +348,12 @@ public class FileRecordsTest {
         Records messageV0 = slice.downConvert(RecordBatch.MAGIC_VALUE_V0, 0, time).records();
         assertTrue("No message should be there", batches(messageV0).isEmpty());
         assertEquals("There should be " + (size - 1) + " bytes", size - 1, messageV0.sizeInBytes());
+
+        // Lazy down-conversion will not return any messages for a partial input batch
+        TopicPartition tp = new TopicPartition("topic-1", 0);
+        LazyDownConversionRecords lazyRecords = new LazyDownConversionRecords(tp, slice, RecordBatch.MAGIC_VALUE_V0, 0, Time.SYSTEM);
+        Iterator<ConvertedRecords> it = lazyRecords.iterator(16 * 1024L);
+        assertTrue("No messages should be returned", !it.hasNext());
     }
 
     @Test
@@ -402,8 +409,7 @@ public class FileRecordsTest {
         try (FileRecords fileRecords = FileRecords.open(tempFile())) {
             fileRecords.append(MemoryRecords.readableRecords(buffer));
             fileRecords.flush();
-            Records convertedRecords = fileRecords.downConvert(toMagic, 0L, time).records();
-            verifyConvertedRecords(records, offsets, convertedRecords, compressionType, toMagic);
+            downConvertAndVerifyRecords(records, offsets, fileRecords, compressionType, toMagic, 0L, time);
 
             if (toMagic <= RecordBatch.MAGIC_VALUE_V1 && compressionType == CompressionType.NONE) {
                 long firstOffset;
@@ -411,17 +417,15 @@ public class FileRecordsTest {
                     firstOffset = 11L; // v1 record
                 else
                     firstOffset = 17; // v2 record
-                Records convertedRecords2 = fileRecords.downConvert(toMagic, firstOffset, time).records();
                 List<Long> filteredOffsets = new ArrayList<>(offsets);
                 List<SimpleRecord> filteredRecords = new ArrayList<>(records);
                 int index = filteredOffsets.indexOf(firstOffset) - 1;
                 filteredRecords.remove(index);
                 filteredOffsets.remove(index);
-                verifyConvertedRecords(filteredRecords, filteredOffsets, convertedRecords2, compressionType, toMagic);
+                downConvertAndVerifyRecords(filteredRecords, filteredOffsets, fileRecords, compressionType, toMagic, firstOffset, time);
             } else {
                 // firstOffset doesn't have any effect in this case
-                Records convertedRecords2 = fileRecords.downConvert(toMagic, 10L, time).records();
-                verifyConvertedRecords(records, offsets, convertedRecords2, compressionType, toMagic);
+                downConvertAndVerifyRecords(records, offsets, fileRecords, compressionType, toMagic, 10L, time);
             }
         }
     }
@@ -430,40 +434,98 @@ public class FileRecordsTest {
         return Utils.utf8(buffer, buffer.remaining());
     }
 
+    private void downConvertAndVerifyRecords(List<SimpleRecord> initialRecords,
+                                             List<Long> initialOffsets,
+                                             FileRecords fileRecords,
+                                             CompressionType compressionType,
+                                             byte toMagic,
+                                             long firstOffset,
+                                             Time time) {
+        long numBatches = 0;
+        long minBatchSize = Long.MAX_VALUE;
+        long maxBatchSize = Long.MIN_VALUE;
+        for (RecordBatch batch : fileRecords.batches()) {
+            minBatchSize = Math.min(minBatchSize, batch.sizeInBytes());
+            maxBatchSize = Math.max(maxBatchSize, batch.sizeInBytes());
+            numBatches++;
+        }
+
+        // Test the normal down-conversion path
+        List<Records> convertedRecords = new ArrayList<>();
+        convertedRecords.add(fileRecords.downConvert(toMagic, firstOffset, time).records());
+        verifyConvertedRecords(initialRecords, initialOffsets, convertedRecords, compressionType, toMagic);
+        convertedRecords.clear();
+
+        // Test the lazy down-conversion path
+        List<Long> maximumReadSize = asList(16L * 1024L,
+                (long) fileRecords.sizeInBytes(),
+                (long) fileRecords.sizeInBytes() - 1,
+                (long) fileRecords.sizeInBytes() / 4,
+                maxBatchSize + 1,
+                1L);
+        for (long readSize : maximumReadSize) {
+            TopicPartition tp = new TopicPartition("topic-1", 0);
+            LazyDownConversionRecords lazyRecords = new LazyDownConversionRecords(tp, fileRecords, toMagic, firstOffset, Time.SYSTEM);
+            Iterator<ConvertedRecords> it = lazyRecords.iterator(readSize);
+            while (it.hasNext())
+                convertedRecords.add(it.next().records());
+
+            // Check if chunking works as expected. The only way to predictably test for this is by testing the edge cases.
+            // 1. If maximum read size is greater than the size of all batches combined, we must get all down-conversion
+            //    records in exactly two batches; the first chunk is pre down-converted and returned, and the second chunk
+            //    contains the remaining batches.
+            // 2. If maximum read size is just smaller than the size of all batches combined, we must get results in two
+            //    chunks.
+            // 3. If maximum read size is less than the size of a single record, we get one batch in each chunk.
+            if (readSize >= fileRecords.sizeInBytes())
+                assertEquals(2, convertedRecords.size());
+            else if (readSize == fileRecords.sizeInBytes() - 1)
+                assertEquals(2, convertedRecords.size());
+            else if (readSize <= minBatchSize)
+                assertEquals(numBatches, convertedRecords.size());
+
+            verifyConvertedRecords(initialRecords, initialOffsets, convertedRecords, compressionType, toMagic);
+            convertedRecords.clear();
+        }
+    }
+
     private void verifyConvertedRecords(List<SimpleRecord> initialRecords,
                                         List<Long> initialOffsets,
-                                        Records convertedRecords,
+                                        List<Records> convertedRecordsList,
                                         CompressionType compressionType,
                                         byte magicByte) {
         int i = 0;
-        for (RecordBatch batch : convertedRecords.batches()) {
-            assertTrue("Magic byte should be lower than or equal to " + magicByte, batch.magic() <= magicByte);
-            if (batch.magic() == RecordBatch.MAGIC_VALUE_V0)
-                assertEquals(TimestampType.NO_TIMESTAMP_TYPE, batch.timestampType());
-            else
-                assertEquals(TimestampType.CREATE_TIME, batch.timestampType());
-            assertEquals("Compression type should not be affected by conversion", compressionType, batch.compressionType());
-            for (Record record : batch) {
-                assertTrue("Inner record should have magic " + magicByte, record.hasMagic(batch.magic()));
-                assertEquals("Offset should not change", initialOffsets.get(i).longValue(), record.offset());
-                assertEquals("Key should not change", utf8(initialRecords.get(i).key()), utf8(record.key()));
-                assertEquals("Value should not change", utf8(initialRecords.get(i).value()), utf8(record.value()));
-                assertFalse(record.hasTimestampType(TimestampType.LOG_APPEND_TIME));
-                if (batch.magic() == RecordBatch.MAGIC_VALUE_V0) {
-                    assertEquals(RecordBatch.NO_TIMESTAMP, record.timestamp());
-                    assertFalse(record.hasTimestampType(TimestampType.CREATE_TIME));
-                    assertTrue(record.hasTimestampType(TimestampType.NO_TIMESTAMP_TYPE));
-                } else if (batch.magic() == RecordBatch.MAGIC_VALUE_V1) {
-                    assertEquals("Timestamp should not change", initialRecords.get(i).timestamp(), record.timestamp());
-                    assertTrue(record.hasTimestampType(TimestampType.CREATE_TIME));
-                    assertFalse(record.hasTimestampType(TimestampType.NO_TIMESTAMP_TYPE));
-                } else {
-                    assertEquals("Timestamp should not change", initialRecords.get(i).timestamp(), record.timestamp());
-                    assertFalse(record.hasTimestampType(TimestampType.CREATE_TIME));
-                    assertFalse(record.hasTimestampType(TimestampType.NO_TIMESTAMP_TYPE));
-                    assertArrayEquals("Headers should not change", initialRecords.get(i).headers(), record.headers());
+
+        for (Records convertedRecords : convertedRecordsList) {
+            for (RecordBatch batch : convertedRecords.batches()) {
+                assertTrue("Magic byte should be lower than or equal to " + magicByte, batch.magic() <= magicByte);
+                if (batch.magic() == RecordBatch.MAGIC_VALUE_V0)
+                    assertEquals(TimestampType.NO_TIMESTAMP_TYPE, batch.timestampType());
+                else
+                    assertEquals(TimestampType.CREATE_TIME, batch.timestampType());
+                assertEquals("Compression type should not be affected by conversion", compressionType, batch.compressionType());
+                for (Record record : batch) {
+                    assertTrue("Inner record should have magic " + magicByte, record.hasMagic(batch.magic()));
+                    assertEquals("Offset should not change", initialOffsets.get(i).longValue(), record.offset());
+                    assertEquals("Key should not change", utf8(initialRecords.get(i).key()), utf8(record.key()));
+                    assertEquals("Value should not change", utf8(initialRecords.get(i).value()), utf8(record.value()));
+                    assertFalse(record.hasTimestampType(TimestampType.LOG_APPEND_TIME));
+                    if (batch.magic() == RecordBatch.MAGIC_VALUE_V0) {
+                        assertEquals(RecordBatch.NO_TIMESTAMP, record.timestamp());
+                        assertFalse(record.hasTimestampType(TimestampType.CREATE_TIME));
+                        assertTrue(record.hasTimestampType(TimestampType.NO_TIMESTAMP_TYPE));
+                    } else if (batch.magic() == RecordBatch.MAGIC_VALUE_V1) {
+                        assertEquals("Timestamp should not change", initialRecords.get(i).timestamp(), record.timestamp());
+                        assertTrue(record.hasTimestampType(TimestampType.CREATE_TIME));
+                        assertFalse(record.hasTimestampType(TimestampType.NO_TIMESTAMP_TYPE));
+                    } else {
+                        assertEquals("Timestamp should not change", initialRecords.get(i).timestamp(), record.timestamp());
+                        assertFalse(record.hasTimestampType(TimestampType.CREATE_TIME));
+                        assertFalse(record.hasTimestampType(TimestampType.NO_TIMESTAMP_TYPE));
+                        assertArrayEquals("Headers should not change", initialRecords.get(i).headers(), record.headers());
+                    }
+                    i += 1;
                 }
-                i += 1;
             }
         }
         assertEquals(initialOffsets.size(), i);
@@ -490,5 +552,4 @@ public class FileRecordsTest {
         }
         fileRecords.flush();
     }
-
 }

@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
@@ -79,11 +80,18 @@ public class RocksDBWindowStoreTest {
     private final ThreadCache cache = new ThreadCache(new LogContext("TestCache "), DEFAULT_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()));
 
     private final Producer<byte[], byte[]> producer = new MockProducer<>(true, Serdes.ByteArray().serializer(), Serdes.ByteArray().serializer());
-    private final RecordCollector recordCollector = new RecordCollectorImpl(producer, "RocksDBWindowStoreTestTask", new LogContext("RocksDBWindowStoreTestTask "), new DefaultProductionExceptionHandler()) {
+    private final RecordCollector recordCollector = new RecordCollectorImpl(
+        producer,
+        "RocksDBWindowStoreTestTask",
+        new LogContext("RocksDBWindowStoreTestTask "),
+        new DefaultProductionExceptionHandler(),
+        new Metrics().sensor("skipped-records")
+    ) {
         @Override
         public <K1, V1> void send(final String topic,
                                   final K1 key,
                                   final V1 value,
+                                  final Headers headers,
                                   final Integer partition,
                                   final Long timestamp,
                                   final Serializer<K1> keySerializer,
@@ -120,7 +128,6 @@ public class RocksDBWindowStoreTest {
 
     @After
     public void closeStore() {
-        context.close();
         if (windowStore != null) {
             windowStore.close();
         }
@@ -155,7 +162,7 @@ public class RocksDBWindowStoreTest {
     }
 
     private ProcessorRecordContext createRecordContext(final long time) {
-        return new ProcessorRecordContext(time, 0, 0, "topic");
+        return new ProcessorRecordContext(time, 0, 0, "topic", null);
     }
 
     @Test

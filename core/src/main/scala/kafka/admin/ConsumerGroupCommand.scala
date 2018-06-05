@@ -1017,8 +1017,8 @@ object ConsumerGroupCommand extends Logging {
         CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt)
 
         if (options.has(newConsumerOpt)) {
-          Console.err.println(s"The $newConsumerOpt option is deprecated and will be removed in a future major release." +
-            s"The new consumer is used by default if the $bootstrapServerOpt option is provided.")
+          Console.err.println(s"The --new-consumer option is deprecated and will be removed in a future major release. " +
+            s"The new consumer is used by default if the --bootstrap-server option is provided.")
         }
 
         if (options.has(deleteOpt) && options.has(topicOpt))

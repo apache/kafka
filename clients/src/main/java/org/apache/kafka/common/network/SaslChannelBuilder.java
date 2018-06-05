@@ -35,6 +35,10 @@ import org.apache.kafka.common.security.authenticator.SaslServerCallbackHandler;
 import org.apache.kafka.common.security.kerberos.KerberosClientCallbackHandler;
 import org.apache.kafka.common.security.kerberos.KerberosLogin;
 import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
+import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
+import org.apache.kafka.common.security.oauthbearer.internal.OAuthBearerRefreshingLogin;
+import org.apache.kafka.common.security.oauthbearer.internal.OAuthBearerSaslClientCallbackHandler;
+import org.apache.kafka.common.security.oauthbearer.internal.unsecured.OAuthBearerUnsecuredValidatorCallbackHandler;
 import org.apache.kafka.common.security.plain.internal.PlainSaslServer;
 import org.apache.kafka.common.security.plain.internal.PlainServerCallbackHandler;
 import org.apache.kafka.common.security.scram.ScramCredential;
@@ -118,7 +122,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
                 entry.getValue().configure(configs, mechanism, jaasContexts.get(mechanism).configurationEntries());
             }
 
-            Class<? extends Login> defaultLoginClass = DefaultLogin.class;
+            Class<? extends Login> defaultLoginClass = defaultLoginClass(configs);
             if (jaasContexts.containsKey(SaslConfigs.GSSAPI_MECHANISM)) {
                 String defaultRealm;
                 try {
@@ -130,7 +134,6 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
                 List<String> principalToLocalRules = (List<String>) configs.get(BrokerSecurityConfigs.SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_CONFIG);
                 if (principalToLocalRules != null)
                     kerberosShortNamer = KerberosShortNamer.fromUnparsedRules(defaultRealm, principalToLocalRules);
-                defaultLoginClass = KerberosLogin.class;
             }
             for (Map.Entry<String, JaasContext> entry : jaasContexts.entrySet()) {
                 String mechanism = entry.getKey();
@@ -271,7 +274,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
     private void createClientCallbackHandler(Map<String, ?> configs) {
         Class<? extends AuthenticateCallbackHandler> clazz = (Class<? extends AuthenticateCallbackHandler>) configs.get(SaslConfigs.SASL_CLIENT_CALLBACK_HANDLER_CLASS);
         if (clazz == null)
-            clazz = clientSaslMechanism.equals(SaslConfigs.GSSAPI_MECHANISM) ? KerberosClientCallbackHandler.class : SaslClientCallbackHandler.class;
+            clazz = clientCallbackHandlerClass();
         AuthenticateCallbackHandler callbackHandler = Utils.newInstance(clazz);
         saslCallbackHandlers.put(clientSaslMechanism, callbackHandler);
     }
@@ -288,9 +291,30 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
                 callbackHandler = new PlainServerCallbackHandler();
             else if (ScramMechanism.isScram(mechanism))
                 callbackHandler = new ScramServerCallbackHandler(credentialCache.cache(mechanism, ScramCredential.class), tokenCache);
+            else if (mechanism.equals(OAuthBearerLoginModule.OAUTHBEARER_MECHANISM))
+                callbackHandler = new OAuthBearerUnsecuredValidatorCallbackHandler();
             else
                 callbackHandler = new SaslServerCallbackHandler();
             saslCallbackHandlers.put(mechanism, callbackHandler);
+        }
+    }
+
+    private Class<? extends Login> defaultLoginClass(Map<String, ?> configs) {
+        if (jaasContexts.containsKey(SaslConfigs.GSSAPI_MECHANISM))
+            return KerberosLogin.class;
+        if (OAuthBearerLoginModule.OAUTHBEARER_MECHANISM.equals(clientSaslMechanism))
+            return OAuthBearerRefreshingLogin.class;
+        return DefaultLogin.class;
+    }
+
+    private Class<? extends AuthenticateCallbackHandler> clientCallbackHandlerClass() {
+        switch (clientSaslMechanism) {
+            case SaslConfigs.GSSAPI_MECHANISM:
+                return KerberosClientCallbackHandler.class;
+            case OAuthBearerLoginModule.OAUTHBEARER_MECHANISM:
+                return OAuthBearerSaslClientCallbackHandler.class;
+            default:
+                return SaslClientCallbackHandler.class;
         }
     }
 }

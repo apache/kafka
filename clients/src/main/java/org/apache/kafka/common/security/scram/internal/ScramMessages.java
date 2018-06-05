@@ -16,9 +16,8 @@
  */
 package org.apache.kafka.common.security.scram.internal;
 
-import org.apache.kafka.common.utils.Base64;
-
 import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -156,7 +155,7 @@ public class ScramMessages {
             }
             this.nonce = matcher.group("nonce");
             String salt = matcher.group("salt");
-            this.salt = Base64.decoder().decode(salt);
+            this.salt = Base64.getDecoder().decode(salt);
         }
         public ServerFirstMessage(String clientNonce, String serverNonce, byte[] salt, int iterations) {
             this.nonce = clientNonce + serverNonce;
@@ -173,7 +172,7 @@ public class ScramMessages {
             return iterations;
         }
         String toMessage() {
-            return String.format("r=%s,s=%s,i=%d", nonce, Base64.encoder().encodeToString(salt), iterations);
+            return String.format("r=%s,s=%s,i=%d", nonce, Base64.getEncoder().encodeToString(salt), iterations);
         }
     }
     /**
@@ -200,9 +199,9 @@ public class ScramMessages {
             if (!matcher.matches())
                 throw new SaslException("Invalid SCRAM client final message format: " + message);
 
-            this.channelBinding = Base64.decoder().decode(matcher.group("channel"));
+            this.channelBinding = Base64.getDecoder().decode(matcher.group("channel"));
             this.nonce = matcher.group("nonce");
-            this.proof = Base64.decoder().decode(matcher.group("proof"));
+            this.proof = Base64.getDecoder().decode(matcher.group("proof"));
         }
         public ClientFinalMessage(byte[] channelBinding, String nonce) {
             this.channelBinding = channelBinding;
@@ -222,13 +221,13 @@ public class ScramMessages {
         }
         public String clientFinalMessageWithoutProof() {
             return String.format("c=%s,r=%s",
-                    Base64.encoder().encodeToString(channelBinding),
+                    Base64.getEncoder().encodeToString(channelBinding),
                     nonce);
         }
         String toMessage() {
             return String.format("%s,p=%s",
                     clientFinalMessageWithoutProof(),
-                    Base64.encoder().encodeToString(proof));
+                    Base64.getEncoder().encodeToString(proof));
         }
     }
     /**
@@ -259,7 +258,7 @@ public class ScramMessages {
                 // ignore
             }
             if (error == null) {
-                this.serverSignature = Base64.decoder().decode(matcher.group("signature"));
+                this.serverSignature = Base64.getDecoder().decode(matcher.group("signature"));
                 this.error = null;
             } else {
                 this.serverSignature = null;
@@ -280,7 +279,7 @@ public class ScramMessages {
             if (error != null)
                 return "e=" + error;
             else
-                return "v=" + Base64.encoder().encodeToString(serverSignature);
+                return "v=" + Base64.getEncoder().encodeToString(serverSignature);
         }
     }
 }

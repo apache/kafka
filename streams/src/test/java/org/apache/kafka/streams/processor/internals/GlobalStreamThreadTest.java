@@ -73,19 +73,21 @@ public class GlobalStreamThreadTest {
     @Before
     public void before() {
         final MaterializedInternal<Object, Object, KeyValueStore<Bytes, byte[]>> materialized = new MaterializedInternal<>(
-            Materialized.<Object, Object, KeyValueStore<Bytes, byte[]>>with(null, null),
+            Materialized.with(null, null));
+        materialized.generateStoreNameIfNeeded(
             new InternalNameProvider() {
                 @Override
-                public String newProcessorName(String prefix) {
+                public String newProcessorName(final String prefix) {
                     return "processorName";
                 }
 
                 @Override
-                public String newStoreName(String prefix) {
+                public String newStoreName(final String prefix) {
                     return GLOBAL_STORE_NAME;
                 }
             },
-            "store-");
+            "store-"
+        );
 
         builder.addGlobalStore(
             (StoreBuilder) new KeyValueStoreMaterializer<>(materialized).materialize().withLoggingDisabled(),

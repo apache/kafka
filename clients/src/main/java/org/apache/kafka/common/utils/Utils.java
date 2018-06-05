@@ -151,7 +151,7 @@ public final class Utils {
      * @param rest The remaining values to compare
      * @return The minimum of all passed values
      */
-    public static long min(long first, long ... rest) {
+    public static long min(long first, long... rest) {
         long min = first;
         for (long r : rest) {
             if (r < min)
@@ -166,7 +166,7 @@ public final class Utils {
      * @param rest The remaining values to compare
      * @return The maximum of all passed values
      */
-    public static long max(long first, long ... rest) {
+    public static long max(long first, long... rest) {
         long max = first;
         for (long r : rest) {
             if (r > max)

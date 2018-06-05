@@ -27,9 +27,12 @@ import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
+import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
-import org.apache.kafka.streams.state.internals.RocksDBSessionStoreSupplier;
+import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.NoOpRecordCollector;
@@ -41,9 +44,11 @@ import org.junit.Test;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 
+import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
+import static org.hamcrest.CoreMatchers.hasItem;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -101,22 +106,21 @@ public class KStreamSessionWindowAggregateProcessorTest {
     }
 
     private void initStore(final boolean enableCaching) {
-        final RocksDBSessionStoreSupplier<String, Long> supplier =
-            new RocksDBSessionStoreSupplier<>(
-                STORE_NAME,
-                GAP_MS * 3,
+        final StoreBuilder<SessionStore<String, Long>> storeBuilder = Stores.sessionStoreBuilder(Stores.persistentSessionStore(STORE_NAME, GAP_MS * 3),
                 Serdes.String(),
-                Serdes.Long(),
-                false,
-                Collections.<String, String>emptyMap(),
-                enableCaching);
-        sessionStore = supplier.get();
+                Serdes.Long())
+                .withLoggingDisabled();
+
+        if (enableCaching) {
+            storeBuilder.withCachingEnabled();
+        }
+
+        sessionStore = storeBuilder.build();
         sessionStore.init(context, sessionStore);
     }
 
     @After
     public void closeStore() {
-        context.close();
         sessionStore.close();
     }
 
@@ -300,4 +304,16 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
     }
 
+    @Test
+    public void shouldLogAndMeterWhenSkippingNullKey() {
+        initStore(false);
+        processor.init(context);
+        context.setRecordContext(new ProcessorRecordContext(-1, -2, -3, "topic", null));
+        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
+        processor.process(null, "1");
+        LogCaptureAppender.unregister(appender);
+
+        assertEquals(1.0, getMetricByName(context.metrics().metrics(), "skipped-records-total", "stream-metrics").metricValue());
+        assertThat(appender.getMessages(), hasItem("Skipping record due to null key. value=[1] topic=[topic] partition=[-3] offset=[-2]"));
+    }
 }

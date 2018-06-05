@@ -18,6 +18,8 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
@@ -54,8 +56,18 @@ public class RecordQueueTest {
     private final TimestampExtractor timestampExtractor = new MockTimestampExtractor();
     private final String[] topics = {"topic"};
 
-    final InternalMockProcessorContext context = new InternalMockProcessorContext(StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class),
-        new RecordCollectorImpl(null, null, new LogContext("record-queue-test "), new DefaultProductionExceptionHandler()));
+    private final Sensor skippedRecordsSensor = new Metrics().sensor("skipped-records");
+
+    final InternalMockProcessorContext context = new InternalMockProcessorContext(
+        StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class),
+        new RecordCollectorImpl(
+            null,
+            null,
+            new LogContext("record-queue-test "),
+            new DefaultProductionExceptionHandler(),
+            skippedRecordsSensor
+        )
+    );
     private final MockSourceNode mockSourceNodeWithMetrics = new MockSourceNode<>(topics, intDeserializer, intDeserializer);
     private final RecordQueue queue = new RecordQueue(
         new TopicPartition(topics[0], 1),
@@ -230,8 +242,9 @@ public class RecordQueueTest {
             new MockSourceNode<>(topics, intDeserializer, intDeserializer),
             new FailOnInvalidTimestamp(),
             new LogAndContinueExceptionHandler(),
-            null,
+            new InternalMockProcessorContext(),
             new LogContext());
+
         queue.addRawRecords(records);
     }
 
@@ -245,7 +258,7 @@ public class RecordQueueTest {
             new MockSourceNode<>(topics, intDeserializer, intDeserializer),
             new LogAndSkipOnInvalidTimestamp(),
             new LogAndContinueExceptionHandler(),
-            null,
+            new InternalMockProcessorContext(),
             new LogContext());
         queue.addRawRecords(records);
 

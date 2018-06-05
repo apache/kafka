@@ -89,12 +89,6 @@ For a detailed description of findbugs bug categories, see http://findbugs.sourc
     </Match>
 
     <Match>
-        <!-- Add a suppression for having the thread start in the constructor of the old, deprecated consumer. -->
-        <Class name="kafka.producer.Producer"/>
-        <Bug pattern="SC_START_IN_CTOR"/>
-    </Match>
-
-    <Match>
         <!-- Add a suppression for the equals() method of NetworkClientBlockingOps. -->
         <Class name="kafka.utils.NetworkClientBlockingOps"/>
         <Bug pattern="EQ_UNUSUAL"/>
@@ -304,5 +298,20 @@ For a detailed description of findbugs bug categories, see http://findbugs.sourc
         <Package name="org.apache.kafka.trogdor.workload"/>
         <Source name="RoundTripWorker.java"/>
         <Bug pattern="NN_NAKED_NOTIFY"/>
+    </Match>
+
+    <Match>
+        <Package name="org.apache.kafka.streams.scala"/>
+        <Source name="FunctionConversions.scala"/>
+        <Bug pattern="EQ_UNUSUAL"/>
+    </Match>
+
+-    <Match>
+        <Package name="org.apache.kafka.streams.scala"/>
+        <Or>
+            <Class name="org.apache.kafka.streams.scala.Serializer" />
+            <Class name="org.apache.kafka.streams.scala.Deserializer" />
+        </Or>
+        <Bug pattern="NM_SAME_SIMPLE_NAME_AS_INTERFACE"/>
     </Match>
 </FindBugsFilter>

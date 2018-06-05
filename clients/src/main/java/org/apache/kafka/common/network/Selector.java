@@ -397,7 +397,7 @@ public class Selector implements Selectable, AutoCloseable {
             log.trace("Broker no longer low on memory - unmuting incoming sockets");
             for (KafkaChannel channel : channels.values()) {
                 if (channel.isInMutableState() && !explicitlyMutedChannels.contains(channel)) {
-                    channel.unmute();
+                    channel.maybeUnmute();
                 }
             }
             outOfMemory = false;
@@ -610,8 +610,10 @@ public class Selector implements Selectable, AutoCloseable {
     }
 
     private void unmute(KafkaChannel channel) {
-        explicitlyMutedChannels.remove(channel);
-        channel.unmute();
+        // Remove the channel from explicitlyMutedChannels only if the channel has been actually unmuted.
+        if (channel.maybeUnmute()) {
+            explicitlyMutedChannels.remove(channel);
+        }
     }
 
     @Override

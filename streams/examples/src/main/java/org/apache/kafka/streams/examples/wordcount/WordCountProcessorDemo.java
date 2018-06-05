@@ -98,10 +98,6 @@ public class WordCountProcessorDemo {
                 }
 
                 @Override
-                @Deprecated
-                public void punctuate(long timestamp) {}
-
-                @Override
                 public void close() {}
             };
         }

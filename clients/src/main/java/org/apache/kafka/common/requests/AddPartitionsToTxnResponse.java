@@ -48,8 +48,13 @@ public class AddPartitionsToTxnResponse extends AbstractResponse {
                             PARTITION_ID,
                             ERROR_CODE)))))));
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema ADD_PARTITIONS_TO_TXN_RESPONSE_V1 = ADD_PARTITIONS_TO_TXN_RESPONSE_V0;
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{ADD_PARTITIONS_TO_TXN_RESPONSE_V0};
+        return new Schema[]{ADD_PARTITIONS_TO_TXN_RESPONSE_V0, ADD_PARTITIONS_TO_TXN_RESPONSE_V1};
     }
 
     private final int throttleTimeMs;
@@ -86,6 +91,7 @@ public class AddPartitionsToTxnResponse extends AbstractResponse {
         }
     }
 
+    @Override
     public int throttleTimeMs() {
         return throttleTimeMs;
     }
@@ -136,4 +142,8 @@ public class AddPartitionsToTxnResponse extends AbstractResponse {
                 ')';
     }
 
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 1;
+    }
 }

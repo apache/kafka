@@ -20,7 +20,7 @@ package kafka.consumer
 import kafka.api.{FetchRequestBuilder, FetchResponsePartitionData, OffsetRequest, Request}
 import kafka.cluster.BrokerEndPoint
 import kafka.message.ByteBufferMessageSet
-import kafka.server.{AbstractFetcherThread, PartitionFetchState}
+import kafka.server.{AbstractFetcherThread, PartitionFetchState, OffsetTruncationState}
 import AbstractFetcherThread.ResultWithPartitions
 import kafka.common.{ErrorMapping, TopicAndPartition}
 
@@ -129,7 +129,7 @@ class ConsumerFetcherThread(consumerIdString: String,
 
   override def fetchEpochsFromLeader(partitions: Map[TopicPartition, Int]): Map[TopicPartition, EpochEndOffset] = { Map() }
 
-  override def maybeTruncate(fetchedEpochs: Map[TopicPartition, EpochEndOffset]): ResultWithPartitions[Map[TopicPartition, Long]] = {
+  override def maybeTruncate(fetchedEpochs: Map[TopicPartition, EpochEndOffset]): ResultWithPartitions[Map[TopicPartition, OffsetTruncationState]] = {
     ResultWithPartitions(Map(), Set())
   }
 }

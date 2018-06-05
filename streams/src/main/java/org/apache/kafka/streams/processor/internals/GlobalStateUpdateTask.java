@@ -63,7 +63,15 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
         for (final String storeName : storeNames) {
             final String sourceTopic = storeNameToTopic.get(storeName);
             final SourceNode source = topology.source(sourceTopic);
-            deserializers.put(sourceTopic, new RecordDeserializer(source, deserializationExceptionHandler, logContext));
+            deserializers.put(
+                sourceTopic,
+                new RecordDeserializer(
+                    source,
+                    deserializationExceptionHandler,
+                    logContext,
+                    processorContext.metrics().skippedRecordsSensor()
+                )
+            );
         }
         initTopology();
         processorContext.initialized();
@@ -81,7 +89,8 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
                 new ProcessorRecordContext(deserialized.timestamp(),
                     deserialized.offset(),
                     deserialized.partition(),
-                    deserialized.topic());
+                    deserialized.topic(),
+                    deserialized.headers());
             processorContext.setRecordContext(recordContext);
             processorContext.setCurrentNode(sourceNodeAndDeserializer.sourceNode());
             sourceNodeAndDeserializer.sourceNode().process(deserialized.key(), deserialized.value());

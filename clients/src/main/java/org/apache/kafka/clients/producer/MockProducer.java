@@ -32,7 +32,6 @@ import org.apache.kafka.common.serialization.Serializer;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
@@ -70,6 +69,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
     private boolean producerFenced;
     private boolean sentOffsets;
     private long commitCount = 0L;
+    private Map<MetricName, Metric> mockMetrics;
 
     /**
      * Create a mock producer
@@ -99,6 +99,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
         this.consumerGroupOffsets = new ArrayList<>();
         this.uncommittedConsumerGroupOffsets = new HashMap<>();
         this.completions = new ArrayDeque<>();
+        this.mockMetrics = new HashMap<>();
     }
 
     /**
@@ -293,7 +294,14 @@ public class MockProducer<K, V> implements Producer<K, V> {
     }
 
     public Map<MetricName, Metric> metrics() {
-        return Collections.emptyMap();
+        return mockMetrics;
+    }
+
+    /**
+     * Set a mock metric for testing purpose
+     */
+    public void setMockMetrics(MetricName name, Metric metric) {
+        mockMetrics.put(name, metric);
     }
 
     @Override

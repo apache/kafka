@@ -163,5 +163,4 @@ public class WriteTxnMarkersResponse extends AbstractResponse {
     public static WriteTxnMarkersResponse parse(ByteBuffer buffer, short version) {
         return new WriteTxnMarkersResponse(ApiKeys.WRITE_TXN_MARKERS.parseResponse(version, buffer));
     }
-
 }

@@ -16,12 +16,12 @@
  */
 package org.apache.kafka.common.security.scram.internal;
 
+import java.util.Base64;
 import java.util.Collection;
 import java.util.Properties;
 
 import org.apache.kafka.common.security.authenticator.CredentialCache;
 import org.apache.kafka.common.security.scram.ScramCredential;
-import org.apache.kafka.common.utils.Base64;
 
 /**
  * SCRAM Credential persistence utility functions. Implements format conversion used
@@ -43,11 +43,11 @@ public final class ScramCredentialUtils {
     public static String credentialToString(ScramCredential credential) {
         return String.format("%s=%s,%s=%s,%s=%s,%s=%d",
                SALT,
-               Base64.encoder().encodeToString(credential.salt()),
+               Base64.getEncoder().encodeToString(credential.salt()),
                STORED_KEY,
-                Base64.encoder().encodeToString(credential.storedKey()),
+               Base64.getEncoder().encodeToString(credential.storedKey()),
                SERVER_KEY,
-                Base64.encoder().encodeToString(credential.serverKey()),
+               Base64.getEncoder().encodeToString(credential.serverKey()),
                ITERATIONS,
                credential.iterations());
     }
@@ -58,9 +58,9 @@ public final class ScramCredentialUtils {
                 !props.containsKey(SERVER_KEY) || !props.containsKey(ITERATIONS)) {
             throw new IllegalArgumentException("Credentials not valid: " + str);
         }
-        byte[] salt = Base64.decoder().decode(props.getProperty(SALT));
-        byte[] storedKey = Base64.decoder().decode(props.getProperty(STORED_KEY));
-        byte[] serverKey = Base64.decoder().decode(props.getProperty(SERVER_KEY));
+        byte[] salt = Base64.getDecoder().decode(props.getProperty(SALT));
+        byte[] storedKey = Base64.getDecoder().decode(props.getProperty(STORED_KEY));
+        byte[] serverKey = Base64.getDecoder().decode(props.getProperty(SERVER_KEY));
         int iterations = Integer.parseInt(props.getProperty(ITERATIONS));
         return new ScramCredential(salt, storedKey, serverKey, iterations);
     }

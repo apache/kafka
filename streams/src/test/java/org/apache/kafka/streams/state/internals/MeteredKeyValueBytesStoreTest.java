@@ -40,10 +40,11 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThat;
@@ -53,7 +54,11 @@ import static org.junit.Assert.assertTrue;
 public class MeteredKeyValueBytesStoreTest {
 
     private final TaskId taskId = new TaskId(0, 0);
-    private final Map<String, String> tags = new HashMap<>();
+    private final Map<String, String> tags = mkMap(
+        mkEntry("client-id", "test"),
+        mkEntry("task-id", taskId.toString()),
+        mkEntry("scope-id", "metered")
+    );
     @Mock(type = MockType.NICE)
     private KeyValueStore<Bytes, byte[]> inner;
     @Mock(type = MockType.NICE)
@@ -68,13 +73,13 @@ public class MeteredKeyValueBytesStoreTest {
 
     @Before
     public void before() {
-        metered = new MeteredKeyValueBytesStore<>(inner,
-                                                  "scope",
-                                                  new MockTime(),
-                                                  Serdes.String(),
-                                                  Serdes.String());
-        tags.put("task-id", taskId.toString());
-        tags.put("scope-id", "metered");
+        metered = new MeteredKeyValueBytesStore<>(
+            inner,
+            "scope",
+            new MockTime(),
+            Serdes.String(),
+            Serdes.String()
+        );
         metrics.config().recordLevel(Sensor.RecordingLevel.DEBUG);
         EasyMock.expect(context.metrics()).andReturn(new MockStreamsMetrics(metrics));
         EasyMock.expect(context.taskId()).andReturn(taskId);

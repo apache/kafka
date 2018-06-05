@@ -16,12 +16,13 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.io.File;
@@ -36,18 +37,18 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     private final TaskId taskId;
     private final String applicationId;
     private final StreamsConfig config;
-    private final StreamsMetrics metrics;
+    private final StreamsMetricsImpl metrics;
     private final Serde keySerde;
     private final ThreadCache cache;
     private final Serde valueSerde;
     private boolean initialized;
-    protected RecordContext recordContext;
+    protected ProcessorRecordContext recordContext;
     protected ProcessorNode currentNode;
     final StateManager stateManager;
 
     public AbstractProcessorContext(final TaskId taskId,
                                     final StreamsConfig config,
-                                    final StreamsMetrics metrics,
+                                    final StreamsMetricsImpl metrics,
                                     final StateManager stateManager,
                                     final ThreadCache cache) {
         this.taskId = taskId;
@@ -86,13 +87,12 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     }
 
     @Override
-    public StreamsMetrics metrics() {
+    public StreamsMetricsImpl metrics() {
         return metrics;
     }
 
     @Override
     public void register(final StateStore store,
-                         final boolean deprecatedAndIgnoredLoggingEnabled,
                          final StateRestoreCallback stateRestoreCallback) {
         if (initialized) {
             throw new IllegalStateException("Can only create state stores during initialization.");
@@ -143,6 +143,15 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
         return recordContext.offset();
     }
 
+    @Override
+    public Headers headers() {
+        if (recordContext == null) {
+            throw new IllegalStateException("This should not happen as headers() should only be called while a record is processed");
+        }
+
+        return recordContext.headers();
+    }
+
     /**
      * @throws IllegalStateException if timestamp is null
      */
@@ -169,12 +178,12 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     }
 
     @Override
-    public void setRecordContext(final RecordContext recordContext) {
+    public void setRecordContext(final ProcessorRecordContext recordContext) {
         this.recordContext = recordContext;
     }
 
     @Override
-    public RecordContext recordContext() {
+    public ProcessorRecordContext recordContext() {
         return recordContext;
     }
 

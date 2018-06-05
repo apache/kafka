@@ -25,6 +25,8 @@ public class RocksDbSessionBytesStoreSupplier implements SessionBytesStoreSuppli
     private final String name;
     private final long retentionPeriod;
 
+    private static final int NUM_SEGMENTS = 3;
+
     public RocksDbSessionBytesStoreSupplier(final String name,
                                             final long retentionPeriod) {
         this.name = name;
@@ -36,13 +38,12 @@ public class RocksDbSessionBytesStoreSupplier implements SessionBytesStoreSuppli
         return name;
     }
 
-    @SuppressWarnings("deprecation")
     @Override
     public SessionStore<Bytes, byte[]> get() {
         final RocksDBSegmentedBytesStore segmented = new RocksDBSegmentedBytesStore(
             name,
             retentionPeriod,
-            org.apache.kafka.streams.state.internals.RocksDBSessionStoreSupplier.NUM_SEGMENTS,
+            NUM_SEGMENTS,
             new SessionKeySchema());
         return new RocksDBSessionStore<>(segmented, Serdes.Bytes(), Serdes.ByteArray());
     }
@@ -52,11 +53,10 @@ public class RocksDbSessionBytesStoreSupplier implements SessionBytesStoreSuppli
         return "rocksdb-session";
     }
 
-    @SuppressWarnings("deprecation")
     @Override
     public long segmentIntervalMs() {
         return Segments.segmentInterval(
             retentionPeriod,
-            org.apache.kafka.streams.state.internals.RocksDBSessionStoreSupplier.NUM_SEGMENTS);
+            NUM_SEGMENTS);
     }
 }

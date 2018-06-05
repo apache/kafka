@@ -105,6 +105,20 @@
   configured for that listener. For other listeners, no trust validation is performed on the keystore by the broker. Certificates
   must be signed by the same certificate authority that signed the old certificate to avoid any client authentication failures.
 
+  <h5>Updating SSL Truststore of an Existing Listener</h5>
+  Broker truststores may be updated dynamically without restarting the broker to add or remove certificates.
+  Updated truststore will be used to authenticate new client connections. The config name must be prefixed with the
+  listener prefix <code>listener.name.{listenerName}.</code> so that only the truststore config of a specific listener
+  is updated. The following configs may be updated in a single alter request at per-broker level:
+  <ul>
+    <li><code>ssl.truststore.type</code></li>
+    <li><code>ssl.truststore.location</code></li>
+    <li><code>ssl.truststore.password</code></li>
+  </ul>
+  If the listener is the inter-broker listener, the update is allowed only if the existing keystore for that listener is trusted by
+  the new truststore. For other listeners, no trust validation is performed by the broker before the update. Removal of CA certificates
+  used to sign client certificates from the new truststore can lead to client authentication failures.
+
   <h5>Updating Default Topic Configuration</h5>
   Default topic configuration options used by brokers may be updated without broker restart. The configs are applied to topics
   without a topic config override for the equivalent per-topic config. One or more of these configs may be overridden at
@@ -137,6 +151,8 @@
     <li><code>log.message.timestamp.difference.max.ms</code></li>
   </ul>
 
+  From Kafka version 2.0.0 onwards, unclean leader election is automatically enabled by the controller when the config
+  <code>unclean.leader.election.enable</code> is dynamically updated.
   In Kafka version 1.1.x, changes to <code>unclean.leader.election.enable</code> take effect only when a new controller is elected.
   Controller re-election may be forced by running:
 

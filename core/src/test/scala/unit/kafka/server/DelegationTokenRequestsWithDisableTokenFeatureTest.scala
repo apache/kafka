@@ -16,7 +16,6 @@
   */
 package kafka.server
 
-import java.nio.ByteBuffer
 import java.util
 
 import kafka.api.{KafkaSasl, SaslSetup}

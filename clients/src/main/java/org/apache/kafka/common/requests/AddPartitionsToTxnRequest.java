@@ -50,8 +50,13 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
                     new Field(PARTITIONS_KEY_NAME, new ArrayOf(INT32)))),
                     "The partitions to add to the transaction."));
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema ADD_PARTITIONS_TO_TXN_REQUEST_V1 = ADD_PARTITIONS_TO_TXN_REQUEST_V0;
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{ADD_PARTITIONS_TO_TXN_REQUEST_V0};
+        return new Schema[]{ADD_PARTITIONS_TO_TXN_REQUEST_V0, ADD_PARTITIONS_TO_TXN_REQUEST_V1};
     }
 
     public static class Builder extends AbstractRequest.Builder<AddPartitionsToTxnRequest> {
