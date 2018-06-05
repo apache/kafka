@@ -33,6 +33,8 @@ import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.Login;
+import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
+import org.apache.kafka.common.security.oauthbearer.internal.unsecured.OAuthBearerUnsecuredLoginCallbackHandler;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -90,9 +92,11 @@ public class LoginManager {
                                                    Map<String, ?> configs) throws IOException, LoginException {
         Class<? extends Login> loginClass = configuredClassOrDefault(configs, jaasContext,
                 saslMechanism, SaslConfigs.SASL_LOGIN_CLASS, defaultLoginClass);
-        Class<? extends AuthenticateCallbackHandler> loginCallbackClass = configuredClassOrDefault(configs,
-                jaasContext, saslMechanism, SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS,
-                AbstractLogin.DefaultLoginCallbackHandler.class);
+        Class<? extends AuthenticateCallbackHandler> defaultLoginCallbackHandlerClass = OAuthBearerLoginModule.OAUTHBEARER_MECHANISM
+                .equals(saslMechanism) ? OAuthBearerUnsecuredLoginCallbackHandler.class
+                        : AbstractLogin.DefaultLoginCallbackHandler.class;
+        Class<? extends AuthenticateCallbackHandler> loginCallbackClass = configuredClassOrDefault(configs, jaasContext,
+                saslMechanism, SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, defaultLoginCallbackHandlerClass);
         synchronized (LoginManager.class) {
             LoginManager loginManager;
             Password jaasConfigValue = jaasContext.dynamicJaasConfig();

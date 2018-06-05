@@ -36,7 +36,7 @@
     <p>Every Kafka Streams application must provide SerDes (Serializer/Deserializer) for the data types of record keys and record values (e.g. <code class="docutils literal"><span class="pre">java.lang.String</span></code>) to materialize the data when necessary.  Operations that require such SerDes information include: <code class="docutils literal"><span class="pre">stream()</span></code>, <code class="docutils literal"><span class="pre">table()</span></code>, <code class="docutils literal"><span class="pre">to()</span></code>, <code class="docutils literal"><span class="pre">through()</span></code>, <code class="docutils literal"><span class="pre">groupByKey()</span></code>, <code class="docutils literal"><span class="pre">groupBy()</span></code>.</p>
     <p>You can provide SerDes by using either of these methods:</p>
     <ul class="simple">
-      <li>By setting default SerDes via a <code class="docutils literal"><span class="pre">StreamsConfig</span></code> instance.</li>
+      <li>By setting default SerDes in the <code class="docutils literal"><span class="pre">java.util.Properties</span></code> config instance.</li>
       <li>By specifying explicit SerDes when calling the appropriate API methods, thus overriding the defaults.</li>
     </ul>
 
@@ -55,7 +55,7 @@
       </ul>
     <div class="section" id="configuring-serdes">
       <h2>Configuring SerDes<a class="headerlink" href="#configuring-serdes" title="Permalink to this headline"></a></h2>
-      <p>SerDes specified in the Streams configuration via <code class="docutils literal"><span class="pre">StreamsConfig</span></code> are used as the default in your Kafka Streams application.</p>
+      <p>SerDes specified in the Streams configuration are used as the default in your Kafka Streams application.</p>
       <div class="highlight-java"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">org.apache.kafka.common.serialization.Serdes</span><span class="o">;</span>
 <span class="kn">import</span> <span class="nn">org.apache.kafka.streams.StreamsConfig</span><span class="o">;</span>
 
@@ -64,8 +64,6 @@
 <span class="n">settings</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="na">KEY_SERDE_CLASS_CONFIG</span><span class="o">,</span> <span class="n">Serdes</span><span class="o">.</span><span class="na">String</span><span class="o">().</span><span class="na">getClass</span><span class="o">().</span><span class="na">getName</span><span class="o">());</span>
 <span class="c1">// Default serde for values of data records (here: built-in serde for Long type)</span>
 <span class="n">settings</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="na">VALUE_SERDE_CLASS_CONFIG</span><span class="o">,</span> <span class="n">Serdes</span><span class="o">.</span><span class="na">Long</span><span class="o">().</span><span class="na">getClass</span><span class="o">().</span><span class="na">getName</span><span class="o">());</span>
-
-<span class="n">StreamsConfig</span> <span class="n">config</span> <span class="o">=</span> <span class="k">new</span> <span class="n">StreamsConfig</span><span class="o">(</span><span class="n">settings</span><span class="o">);</span>
 </pre></div>
       </div>
     </div>

@@ -65,7 +65,6 @@ public class StreamsMetadataStateTest {
     private TopicPartition topic1P1;
     private TopicPartition topic2P1;
     private TopicPartition topic4P0;
-    private List<PartitionInfo> partitionInfos;
     private Cluster cluster;
     private final String globalTable = "global-table";
     private StreamPartitioner<String, Object> partitioner;
@@ -113,7 +112,7 @@ public class StreamsMetadataStateTest {
         hostToPartitions.put(hostTwo, Utils.mkSet(topic2P0, topic1P1));
         hostToPartitions.put(hostThree, Collections.singleton(topic3P0));
 
-        partitionInfos = Arrays.asList(
+        final List<PartitionInfo> partitionInfos = Arrays.asList(
                 new PartitionInfo("topic-one", 0, null, null, null),
                 new PartitionInfo("topic-one", 1, null, null, null),
                 new PartitionInfo("topic-two", 0, null, null, null),
@@ -126,7 +125,7 @@ public class StreamsMetadataStateTest {
         discovery.onChange(hostToPartitions, cluster);
         partitioner = new StreamPartitioner<String, Object>() {
             @Override
-            public Integer partition(final String key, final Object value, final int numPartitions) {
+            public Integer partition(final String topic, final String key, final Object value, final int numPartitions) {
                 return 1;
             }
         };
@@ -246,7 +245,7 @@ public class StreamsMetadataStateTest {
 
         final StreamsMetadata actual = discovery.getMetadataWithKey("merged-table", "123", new StreamPartitioner<String, Object>() {
             @Override
-            public Integer partition(final String key, final Object value, final int numPartitions) {
+            public Integer partition(final String topic, final String key, final Object value, final int numPartitions) {
                 return 2;
             }
         });

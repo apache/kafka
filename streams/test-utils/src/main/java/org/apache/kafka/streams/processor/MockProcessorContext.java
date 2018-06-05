@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
@@ -61,6 +62,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     private String topic;
     private Integer partition;
     private Long offset;
+    private Headers headers;
     private Long timestamp;
 
     // mocks ================================================
@@ -250,10 +252,11 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      * @param offset    A record offset
      * @param timestamp A record timestamp
      */
-    public void setRecordMetadata(final String topic, final int partition, final long offset, final long timestamp) {
+    public void setRecordMetadata(final String topic, final int partition, final long offset, final Headers headers, final long timestamp) {
         this.topic = topic;
         this.partition = partition;
         this.offset = offset;
+        this.headers = headers;
         this.timestamp = timestamp;
     }
 
@@ -289,6 +292,9 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         this.offset = offset;
     }
 
+    public void setHeaders(final Headers headers) {
+        this.headers = headers;
+    }
 
     /**
      * The context exposes this metadata for use in the processor. Normally, they are set by the Kafka Streams framework,
@@ -322,6 +328,11 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
             throw new IllegalStateException("Offset must be set before use via setRecordMetadata() or setOffset().");
         }
         return offset;
+    }
+
+    @Override
+    public Headers headers() {
+        return headers;
     }
 
     @Override

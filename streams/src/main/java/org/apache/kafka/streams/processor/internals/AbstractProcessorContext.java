@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
@@ -41,7 +42,7 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     private final ThreadCache cache;
     private final Serde valueSerde;
     private boolean initialized;
-    protected RecordContext recordContext;
+    protected ProcessorRecordContext recordContext;
     protected ProcessorNode currentNode;
     final StateManager stateManager;
 
@@ -142,6 +143,15 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
         return recordContext.offset();
     }
 
+    @Override
+    public Headers headers() {
+        if (recordContext == null) {
+            throw new IllegalStateException("This should not happen as headers() should only be called while a record is processed");
+        }
+
+        return recordContext.headers();
+    }
+
     /**
      * @throws IllegalStateException if timestamp is null
      */
@@ -168,12 +178,12 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     }
 
     @Override
-    public void setRecordContext(final RecordContext recordContext) {
+    public void setRecordContext(final ProcessorRecordContext recordContext) {
         this.recordContext = recordContext;
     }
 
     @Override
-    public RecordContext recordContext() {
+    public ProcessorRecordContext recordContext() {
         return recordContext;
     }
 

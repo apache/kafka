@@ -26,9 +26,8 @@ import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.{Record, RecordBatch}
-import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
-import org.apache.kafka.common.requests.{FetchMetadata => JFetchMetadata}
+import org.apache.kafka.common.record.{MemoryRecords, Record, RecordBatch, Records}
+import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, FetchMetadata => JFetchMetadata}
 import org.apache.kafka.common.serialization.{ByteArraySerializer, StringSerializer}
 import org.junit.Assert._
 import org.junit.Test
@@ -64,7 +63,7 @@ class FetchRequestTest extends BaseRequestTest {
     partitionMap
   }
 
-  private def sendFetchRequest(leaderId: Int, request: FetchRequest): FetchResponse = {
+  private def sendFetchRequest(leaderId: Int, request: FetchRequest): FetchResponse[MemoryRecords] = {
     val response = connectAndSend(request, ApiKeys.FETCH, destination = brokerSocketServer(leaderId))
     FetchResponse.parse(response, request.version)
   }
@@ -219,7 +218,7 @@ class FetchRequestTest extends BaseRequestTest {
     // batch is not complete, but sent when the producer is closed
     futures.foreach(_.get)
 
-    def fetch(version: Short, maxPartitionBytes: Int, closeAfterPartialResponse: Boolean): Option[FetchResponse] = {
+    def fetch(version: Short, maxPartitionBytes: Int, closeAfterPartialResponse: Boolean): Option[FetchResponse[MemoryRecords]] = {
       val fetchRequest = FetchRequest.Builder.forConsumer(Int.MaxValue, 0, createPartitionMap(maxPartitionBytes,
         Seq(topicPartition))).build(version)
 
@@ -279,17 +278,32 @@ class FetchRequestTest extends BaseRequestTest {
     secondBatchFutures.foreach(_.get)
 
     def check(fetchOffset: Long, requestVersion: Short, expectedOffset: Long, expectedNumBatches: Int, expectedMagic: Byte): Unit = {
-      val fetchRequest = FetchRequest.Builder.forConsumer(Int.MaxValue, 0, createPartitionMap(Int.MaxValue,
-        Seq(topicPartition), Map(topicPartition -> fetchOffset))).build(requestVersion)
-      val fetchResponse = sendFetchRequest(leaderId, fetchRequest)
-      val partitionData = fetchResponse.responseData.get(topicPartition)
-      assertEquals(Errors.NONE, partitionData.error)
-      assertTrue(partitionData.highWatermark > 0)
-      val batches = partitionData.records.batches.asScala.toBuffer
-      assertEquals(expectedNumBatches, batches.size)
-      val batch = batches.head
-      assertEquals(expectedMagic, batch.magic)
-      assertEquals(expectedOffset, batch.baseOffset)
+      var batchesReceived = 0
+      var currentFetchOffset = fetchOffset
+      var currentExpectedOffset = expectedOffset
+
+      // With KIP-283, we might not receive all batches in a single fetch request so loop through till we have consumed
+      // all batches we are interested in.
+      while (batchesReceived < expectedNumBatches) {
+        val fetchRequest = FetchRequest.Builder.forConsumer(Int.MaxValue, 0, createPartitionMap(Int.MaxValue,
+          Seq(topicPartition), Map(topicPartition -> currentFetchOffset))).build(requestVersion)
+        val fetchResponse = sendFetchRequest(leaderId, fetchRequest)
+
+        // validate response
+        val partitionData = fetchResponse.responseData.get(topicPartition)
+        assertEquals(Errors.NONE, partitionData.error)
+        assertTrue(partitionData.highWatermark > 0)
+        val batches = partitionData.records.batches.asScala.toBuffer
+        val batch = batches.head
+        assertEquals(expectedMagic, batch.magic)
+        assertEquals(currentExpectedOffset, batch.baseOffset)
+
+        currentFetchOffset = batches.last.lastOffset + 1
+        currentExpectedOffset += (batches.last.lastOffset - batches.head.baseOffset + 1)
+        batchesReceived += batches.size
+      }
+
+      assertEquals(expectedNumBatches, batchesReceived)
     }
 
     // down conversion to message format 0, batches of 1 message are returned so we receive the exact offset we requested
@@ -317,9 +331,9 @@ class FetchRequestTest extends BaseRequestTest {
   }
 
   /**
-    * Test that when an incremental fetch session contains partitions with an error,
-    * those partitions are returned in all incremental fetch requests.
-    */
+   * Test that when an incremental fetch session contains partitions with an error,
+   * those partitions are returned in all incremental fetch requests.
+   */
   @Test
   def testCreateIncrementalFetchWithPartitionsInError(): Unit = {
     def createFetchRequest(topicPartitions: Seq[TopicPartition],
@@ -327,9 +341,9 @@ class FetchRequestTest extends BaseRequestTest {
                            toForget: Seq[TopicPartition]): FetchRequest =
       FetchRequest.Builder.forConsumer(Int.MaxValue, 0,
         createPartitionMap(Integer.MAX_VALUE, topicPartitions, Map.empty))
-          .toForget(toForget.asJava)
-          .metadata(metadata)
-          .build()
+        .toForget(toForget.asJava)
+        .metadata(metadata)
+        .build()
     val foo0 = new TopicPartition("foo", 0)
     val foo1 = new TopicPartition("foo", 1)
     createTopic("foo", Map(0 -> List(0, 1), 1 -> List(0, 2)))
@@ -370,11 +384,11 @@ class FetchRequestTest extends BaseRequestTest {
     assertFalse(resp4.responseData().containsKey(bar0))
   }
 
-  private def records(partitionData: FetchResponse.PartitionData): Seq[Record] = {
+  private def records(partitionData: FetchResponse.PartitionData[MemoryRecords]): Seq[Record] = {
     partitionData.records.records.asScala.toIndexedSeq
   }
 
-  private def checkFetchResponse(expectedPartitions: Seq[TopicPartition], fetchResponse: FetchResponse,
+  private def checkFetchResponse(expectedPartitions: Seq[TopicPartition], fetchResponse: FetchResponse[MemoryRecords],
                                  maxPartitionBytes: Int, maxResponseBytes: Int, numMessagesPerPartition: Int): Unit = {
     assertEquals(expectedPartitions, fetchResponse.responseData.keySet.asScala.toSeq)
     var emptyResponseSeen = false

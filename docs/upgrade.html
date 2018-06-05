@@ -59,13 +59,15 @@
         with the new protocol by default.</li>
     <li>Bumping the protocol version and restarting can be done any time after the brokers are upgraded. It does not have to be immediately after.
         Similarly for the message format version.</li>
-    <li>If you are using Java8 method references in your Kafka Streams code you might need to update your code to resolve method ambiguties.
-        Hot-swaping the jar-file only might not work.</li>
+    <li>If you are using Java8 method references in your Kafka Streams code you might need to update your code to resolve method ambiguities.
+        Hot-swapping the jar-file only might not work.</li>
 </ol>
 
 <h5><a id="upgrade_200_notable" href="#upgrade_200_notable">Notable changes in 2.0.0</a></h5>
 <ul>
     <li><a href="https://cwiki.apache.org/confluence/x/oYtjB">KIP-186</a> increases the default offset retention time from 1 day to 7 days. This makes it less likely to "lose" offsets in an application that commits infrequently. It also increases the active set of offsets and therefore can increase memory usage on the broker. Note that the console consumer currently enables offset commit by default and can be the source of a large number of offsets which this change will now preserve for 7 days instead of 1. You can preserve the existing behavior by setting the broker config <code>offsets.retention.minutes</code> to 1440.</li>
+    <li>Support for Java 7 has been dropped, Java 8 is now the minimum version required.</li>
+    <li> The default value for <code>ssl.endpoint.identification.algorithm</code> was changed to <code>https</code>, which performs hostname verification (man-in-the-middle attacks are possible otherwise). Set <code>ssl.endpoint.identification.algorithm</code> to an empty string to restore the previous behaviour. </li>
     <li><a href="https://issues.apache.org/jira/browse/KAFKA-5674">KAFKA-5674</a> extends the lower interval of <code>max.connections.per.ip minimum</code> to zero and therefore allows IP-based filtering of inbound connections.</li>
     <li><a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-272%3A+Add+API+version+tag+to+broker%27s+RequestsPerSec+metric">KIP-272</a>
         added API version tag to the metric <code>kafka.network:type=RequestMetrics,name=RequestsPerSec,request={Produce|FetchConsumer|FetchFollower|...}</code>.
@@ -73,14 +75,35 @@
         JMX monitoring tools that do not automatically aggregate. To get the total count for a specific request type, the tool needs to be
         updated to aggregate across different versions.
     </li>
+    <li>The Scala producers, which have been deprecated since 0.10.0.0, have been removed. The Java producer has been the recommended option
+        since 0.9.0.0. Note that the behaviour of the default partitioner in the Java producer differs from the default partitioner
+        in the Scala producers. Users migrating should consider configuring a custom partitioner that retains the previous behaviour.</li>
+    <li>The ConsoleProducer no longer supports the Scala producer.</li>
+    <li>The deprecated kafka.tools.ProducerPerformance has been removed, please use org.apache.kafka.tools.ProducerPerformance.</li>
     <li>New Kafka Streams configuration parameter <code>upgrade.from</code> added that allows rolling bounce upgrade from older version. </li>
     <li><a href="https://cwiki.apache.org/confluence/x/DVyHB">KIP-284</a> changed the retention time for Kafka Streams repartition topics by setting its default value to <code>Long.MAX_VALUE</code>.</li>
     <li>Updated <code>ProcessorStateManager</code> APIs in Kafka Streams for registering state stores to the processor topology. For more details please read the Streams <a href="/{{version}}/documentation/streams/upgrade-guide#streams_api_changes_200">Upgrade Guide</a>.</li>
+    <li>
+        In earlier releases, Connect's worker configuration required the <code>internal.key.converter</code> and <code>internal.value.converter</code> properties.
+        In 2.0, these are <a href="https://cwiki.apache.org/confluence/x/AZQ7B">no longer required</a> and default to the JSON converter.
+        You may safely remove these properties from your Connect standalone and distributed worker configurations:<br />
+        <code>internal.key.converter=org.apache.kafka.connect.json.JsonConverter</code>
+        <code>internal.key.converter.schemas.enable=false</code>
+        <code>internal.value.converter=org.apache.kafka.connect.json.JsonConverter</code>
+        <code>internal.value.converter.schemas.enable=false</code>
+    </li>
+    <li><a href="https://cwiki.apache.org/confluence/x/5kiHB">KIP-266</a> adds overloads to the consumer to support
+        timeout behavior for blocking APIs. In particular, a new <code>poll(Duration)</code> API has been added which
+        does not block for dynamic partition assignment. The old <code>poll(long)</code> API has been deprecated and
+        will be removed in a future version.</li>
+    <li>The internal method <code>kafka.admin.AdminClient.deleteRecordsBefore</code> has been removed. Users are encouraged to migrate to <code>org.apache.kafka.clients.admin.AdminClient.deleteRecords</code>.</li>
+    <li>The tool kafka.tools.ReplayLogProducer has been removed.</li>
 </ul>
 
 <h5><a id="upgrade_200_new_protocols" href="#upgrade_200_new_protocols">New Protocol Versions</a></h5>
 <ul>
     <li> <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-279%3A+Fix+log+divergence+between+leader+and+follower+after+fast+leader+fail+over">KIP-279</a>: OffsetsForLeaderEpochResponse v1 introduces a partition-level <code>leader_epoch</code> field. </li>
+    <li> <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-219+-+Improve+quota+communication">KIP-219</a>: Bump up the protocol versions of non-cluster action requests and responses that are throttled on quota violation.</li>
 </ul>
 
 

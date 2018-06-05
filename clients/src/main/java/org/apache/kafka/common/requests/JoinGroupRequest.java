@@ -71,8 +71,14 @@ public class JoinGroupRequest extends AbstractRequest {
     /* v2 request is the same as v1. Throttle time has been added to response */
     private static final Schema JOIN_GROUP_REQUEST_V2 = JOIN_GROUP_REQUEST_V1;
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema JOIN_GROUP_REQUEST_V3 = JOIN_GROUP_REQUEST_V2;
+
     public static Schema[] schemaVersions() {
-        return new Schema[] {JOIN_GROUP_REQUEST_V0, JOIN_GROUP_REQUEST_V1, JOIN_GROUP_REQUEST_V2};
+        return new Schema[] {JOIN_GROUP_REQUEST_V0, JOIN_GROUP_REQUEST_V1, JOIN_GROUP_REQUEST_V2,
+            JOIN_GROUP_REQUEST_V3};
     }
 
     public static final String UNKNOWN_MEMBER_ID = "";
@@ -202,6 +208,7 @@ public class JoinGroupRequest extends AbstractRequest {
                         JoinGroupResponse.UNKNOWN_MEMBER_ID, // leaderId
                         Collections.<String, ByteBuffer>emptyMap());
             case 2:
+            case 3:
                 return new JoinGroupResponse(
                         throttleTimeMs,
                         Errors.forException(e),

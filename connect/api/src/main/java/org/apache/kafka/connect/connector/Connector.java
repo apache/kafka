@@ -19,6 +19,8 @@ package org.apache.kafka.connect.connector;
 import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigValue;
+import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.components.Versioned;
 
 import java.util.List;
 import java.util.Map;
@@ -40,16 +42,10 @@ import java.util.Map;
  * Tasks.
  * </p>
  */
-public abstract class Connector {
+public abstract class Connector implements Versioned {
 
     protected ConnectorContext context;
 
-    /**
-     * Get the version of this connector.
-     *
-     * @return the version, formatted as a String
-     */
-    public abstract String version();
 
     /**
      * Initialize this connector, using the provided ConnectorContext to notify the runtime of
@@ -130,13 +126,18 @@ public abstract class Connector {
      */
     public Config validate(Map<String, String> connectorConfigs) {
         ConfigDef configDef = config();
+        if (null == configDef) {
+            throw new ConnectException(
+                String.format("%s.config() must return a ConfigDef that is not null.", this.getClass().getName())
+            );
+        }
         List<ConfigValue> configValues = configDef.validate(connectorConfigs);
         return new Config(configValues);
     }
 
     /**
      * Define the configuration for the connector.
-     * @return The ConfigDef for this connector.
+     * @return The ConfigDef for this connector; may not be null.
      */
     public abstract ConfigDef config();
 }

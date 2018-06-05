@@ -74,4 +74,9 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, R> extends AbstractProcessor<K1
             }
         }
     }
+
+    @Override
+    public void close() {
+        valueGetter.close();
+    }
 }

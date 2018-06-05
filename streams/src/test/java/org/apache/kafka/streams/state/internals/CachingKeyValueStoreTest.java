@@ -75,7 +75,8 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
         cache = new ThreadCache(new LogContext("testCache "), maxCacheSizeBytes, new MockStreamsMetrics(new Metrics()));
         context = new InternalMockProcessorContext(null, null, null, (RecordCollector) null, cache);
         topic = "topic";
-        context.setRecordContext(new ProcessorRecordContext(10, 0, 0, topic));
+        context.setRecordContext(
+            new ProcessorRecordContext(10, 0, 0, topic, null));
         store.init(context, null);
     }
 

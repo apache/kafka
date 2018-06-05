@@ -531,7 +531,7 @@ public class KGroupedStreamImplTest {
         driver.pipeInput(recordFactory.create(TOPIC, "1", "D"));
         driver.pipeInput(recordFactory.create(TOPIC, "3", "E"));
         driver.pipeInput(recordFactory.create(TOPIC, "3", "F"));
-        driver.pipeInput(recordFactory.create(TOPIC, "3", null));
+        driver.pipeInput(recordFactory.create(TOPIC, "3", (String) null));
     }
 
     private void doCountWindowed(final List<KeyValue<Windowed<String>, Long>> results) {

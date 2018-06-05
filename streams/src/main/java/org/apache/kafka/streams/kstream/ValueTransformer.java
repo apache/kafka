@@ -50,6 +50,8 @@ public interface ValueTransformer<V, VR> {
     /**
      * Initialize this transformer.
      * This is called once per instance when the topology gets initialized.
+     * When the framework is done with the transformer, {@link #close()} will be called on it; the
+     * framework may later re-use the transformer by calling {@link #init()} again.
      * <p>
      * The provided {@link ProcessorContext context} can be used to access topology and record meta data, to
      * {@link ProcessorContext#schedule(long, PunctuationType, Punctuator) schedule} a method to be
@@ -84,7 +86,8 @@ public interface ValueTransformer<V, VR> {
     VR transform(final V value);
 
     /**
-     * Close this processor and clean up any resources.
+     * Close this transformer and clean up any resources. The framework may
+     * later re-use this transformer by calling {@link #init()} on it again.
      * <p>
      * It is not possible to return any new output records within {@code close()}.
      * Using {@link ProcessorContext#forward(Object, Object)} or {@link ProcessorContext#forward(Object, Object, To)}

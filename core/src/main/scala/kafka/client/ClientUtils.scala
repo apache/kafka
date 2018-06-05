@@ -21,16 +21,15 @@ import org.apache.kafka.common.protocol.Errors
 import scala.collection._
 import kafka.cluster._
 import kafka.api._
-import kafka.producer._
 import kafka.common.{BrokerEndPointNotAvailableException, KafkaException}
 import kafka.utils.{CoreUtils, Logging}
-import java.util.Properties
 
 import util.Random
 import kafka.network.BlockingChannel
 import kafka.utils.ZkUtils
 import java.io.IOException
 
+import kafka.consumer.SimpleConsumer
 import org.apache.kafka.common.security.auth.SecurityProtocol
 
  /**
@@ -39,28 +38,32 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 @deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
 object ClientUtils extends Logging {
 
-  /**
-   * Used by the producer to send a metadata request since it has access to the ProducerConfig
+   /**
+   * Send a metadata request
    * @param topics The topics for which the metadata needs to be fetched
-   * @param brokers The brokers in the cluster as configured on the producer through metadata.broker.list
-   * @param producerConfig The producer's config
+   * @param brokers The brokers in the cluster as configured on the client
+   * @param clientId The client's identifier
    * @return topic metadata response
    */
-  @deprecated("This method has been deprecated and will be removed in a future release.", "0.10.0.0")
-  def fetchTopicMetadata(topics: Set[String], brokers: Seq[BrokerEndPoint], producerConfig: ProducerConfig, correlationId: Int): TopicMetadataResponse = {
+  def fetchTopicMetadata(topics: Set[String], brokers: Seq[BrokerEndPoint], clientId: String, timeoutMs: Int,
+                                 correlationId: Int = 0): TopicMetadataResponse = {
     var fetchMetaDataSucceeded: Boolean = false
     var i: Int = 0
-    val topicMetadataRequest = new TopicMetadataRequest(TopicMetadataRequest.CurrentVersion, correlationId, producerConfig.clientId, topics.toSeq)
+    val topicMetadataRequest = new TopicMetadataRequest(TopicMetadataRequest.CurrentVersion, correlationId, clientId,
+      topics.toSeq)
     var topicMetadataResponse: TopicMetadataResponse = null
     var t: Throwable = null
     // shuffle the list of brokers before sending metadata requests so that most requests don't get routed to the
     // same broker
     val shuffledBrokers = Random.shuffle(brokers)
     while(i < shuffledBrokers.size && !fetchMetaDataSucceeded) {
-      val producer: SyncProducer = ProducerPool.createSyncProducer(producerConfig, shuffledBrokers(i))
-      info("Fetching metadata from broker %s with correlation id %d for %d topic(s) %s".format(shuffledBrokers(i), correlationId, topics.size, topics))
+      val broker = shuffledBrokers(i)
+      val consumer = new SimpleConsumer(broker.host, broker.port, timeoutMs, BlockingChannel.UseDefaultBufferSize,
+        clientId)
+      info("Fetching metadata from broker %s with correlation id %d for %d topic(s) %s".format(shuffledBrokers(i),
+        correlationId, topics.size, topics))
       try {
-        topicMetadataResponse = producer.send(topicMetadataRequest)
+        topicMetadataResponse = consumer.send(topicMetadataRequest)
         fetchMetaDataSucceeded = true
       }
       catch {
@@ -70,32 +73,15 @@ object ClientUtils extends Logging {
           t = e
       } finally {
         i = i + 1
-        producer.close()
+        consumer.close()
       }
     }
-    if(!fetchMetaDataSucceeded) {
+    if (!fetchMetaDataSucceeded) {
       throw new KafkaException("fetching topic metadata for topics [%s] from broker [%s] failed".format(topics, shuffledBrokers), t)
     } else {
       debug("Successfully fetched metadata for %d topic(s) %s".format(topics.size, topics))
     }
     topicMetadataResponse
-  }
-
-  /**
-   * Used by a non-producer client to send a metadata request
-   * @param topics The topics for which the metadata needs to be fetched
-   * @param brokers The brokers in the cluster as configured on the client
-   * @param clientId The client's identifier
-   * @return topic metadata response
-   */
-  def fetchTopicMetadata(topics: Set[String], brokers: Seq[BrokerEndPoint], clientId: String, timeoutMs: Int,
-                         correlationId: Int = 0): TopicMetadataResponse = {
-    val props = new Properties()
-    props.put("metadata.broker.list", brokers.map(_.connectionString).mkString(","))
-    props.put("client.id", clientId)
-    props.put("request.timeout.ms", timeoutMs.toString)
-    val producerConfig = new ProducerConfig(props)
-    fetchTopicMetadata(topics, brokers, producerConfig, correlationId)
   }
 
   /**

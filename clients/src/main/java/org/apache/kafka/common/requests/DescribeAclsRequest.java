@@ -43,8 +43,13 @@ public class DescribeAclsRequest extends AbstractRequest {
             OPERATION,
             PERMISSION_TYPE);
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema DESCRIBE_ACLS_REQUEST_V1 = DESCRIBE_ACLS_REQUEST_V0;
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{DESCRIBE_ACLS_REQUEST_V0};
+        return new Schema[]{DESCRIBE_ACLS_REQUEST_V0, DESCRIBE_ACLS_REQUEST_V1};
     }
 
     public static class Builder extends AbstractRequest.Builder<DescribeAclsRequest> {
@@ -93,6 +98,7 @@ public class DescribeAclsRequest extends AbstractRequest {
         short versionId = version();
         switch (versionId) {
             case 0:
+            case 1:
                 return new DescribeAclsResponse(throttleTimeMs, ApiError.fromThrowable(throwable),
                         Collections.<AclBinding>emptySet());
             default:

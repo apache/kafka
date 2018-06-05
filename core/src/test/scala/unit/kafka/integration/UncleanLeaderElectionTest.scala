@@ -54,8 +54,6 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
 
   val kafkaApisLogger = Logger.getLogger(classOf[kafka.server.KafkaApis])
   val networkProcessorLogger = Logger.getLogger(classOf[kafka.network.Processor])
-  val syncProducerLogger = Logger.getLogger(classOf[kafka.producer.SyncProducer])
-  val eventHandlerLogger = Logger.getLogger(classOf[kafka.producer.async.DefaultEventHandler[Object, Object]])
 
   @Before
   override def setUp() {
@@ -73,8 +71,6 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
     // temporarily set loggers to a higher level so that tests run quietly
     kafkaApisLogger.setLevel(Level.FATAL)
     networkProcessorLogger.setLevel(Level.FATAL)
-    syncProducerLogger.setLevel(Level.FATAL)
-    eventHandlerLogger.setLevel(Level.FATAL)
   }
 
   @After
@@ -85,8 +81,6 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
     // restore log levels
     kafkaApisLogger.setLevel(Level.ERROR)
     networkProcessorLogger.setLevel(Level.ERROR)
-    syncProducerLogger.setLevel(Level.ERROR)
-    eventHandlerLogger.setLevel(Level.ERROR)
 
     super.tearDown()
   }

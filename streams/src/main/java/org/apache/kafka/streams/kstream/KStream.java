@@ -27,6 +27,7 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.processor.TopicNameExtractor;
 
 /**
  * {@code KStream} is an abstraction of a <i>record stream</i> of {@link KeyValue} pairs, i.e., each record is an
@@ -461,10 +462,29 @@ public interface KStream<K, V> {
      * The specified topic should be manually created before it is used (i.e., before the Kafka Streams application is
      * started).
      *
-     * @param produced    the options to use when producing to the topic
      * @param topic       the topic name
+     * @param produced    the options to use when producing to the topic
      */
     void to(final String topic,
+            final Produced<K, V> produced);
+
+    /**
+     * Dynamically materialize this stream to topics using default serializers specified in the config and producer's
+     * {@link DefaultPartitioner}.
+     * The topic names for each record to send to is dynamically determined based on the {@link TopicNameExtractor}.
+     *
+     * @param topicExtractor    the extractor to determine the name of the Kafka topic to write to for each record
+     */
+    void to(final TopicNameExtractor<K, V> topicExtractor);
+
+    /**
+     * Dynamically materialize this stream to topics using the provided {@link Produced} instance.
+     * The topic names for each record to send to is dynamically determined based on the {@link TopicNameExtractor}.
+     *
+     * @param topicExtractor    the extractor to determine the name of the Kafka topic to write to for each record
+     * @param produced          the options to use when producing to the topic
+     */
+    void to(final TopicNameExtractor<K, V> topicExtractor,
             final Produced<K, V> produced);
 
     /**
@@ -544,12 +564,12 @@ public interface KStream<K, V> {
 
     /**
      * Transform the value of each input record into a new value (with possible new type) of the output record.
-     * A {@link ValueTransformer} (provided by the given {@link ValueTransformerSupplier}) is applies to each input
+     * A {@link ValueTransformer} (provided by the given {@link ValueTransformerSupplier}) is applied to each input
      * record value and computes a new value for it.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
      * This is a stateful record-by-record operation (cf. {@link #mapValues(ValueMapper)}).
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress can be observed and additional
-     * periodic actions get be performed.
+     * periodic actions can be performed.
      * <p>
      * In order to assign a state, the state must be created and registered beforehand:
      * <pre>{@code
@@ -613,12 +633,12 @@ public interface KStream<K, V> {
 
     /**
      * Transform the value of each input record into a new value (with possible new type) of the output record.
-     * A {@link ValueTransformerWithKey} (provided by the given {@link ValueTransformerWithKeySupplier}) is applies to each input
+     * A {@link ValueTransformerWithKey} (provided by the given {@link ValueTransformerWithKeySupplier}) is applied to each input
      * record value and computes a new value for it.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
      * This is a stateful record-by-record operation (cf. {@link #mapValues(ValueMapperWithKey)}).
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress can be observed and additional
-     * periodic actions get be performed.
+     * periodic actions can be performed.
      * <p>
      * In order to assign a state, the state must be created and registered beforehand:
      * <pre>{@code

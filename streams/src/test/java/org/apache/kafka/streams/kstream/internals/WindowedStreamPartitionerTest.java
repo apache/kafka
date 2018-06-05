@@ -57,7 +57,7 @@ public class WindowedStreamPartitionerTest {
         final Random rand = new Random();
         final DefaultPartitioner defaultPartitioner = new DefaultPartitioner();
         final WindowedSerializer<Integer> timeWindowedSerializer = new TimeWindowedSerializer<>(intSerializer);
-        final WindowedStreamPartitioner<Integer, String> streamPartitioner = new WindowedStreamPartitioner<>(topicName, timeWindowedSerializer);
+        final WindowedStreamPartitioner<Integer, String> streamPartitioner = new WindowedStreamPartitioner<>(timeWindowedSerializer);
 
         for (int k = 0; k < 10; k++) {
             Integer key = rand.nextInt();
@@ -72,7 +72,7 @@ public class WindowedStreamPartitionerTest {
                 TimeWindow window = new TimeWindow(10 * w, 20 * w);
 
                 Windowed<Integer> windowedKey = new Windowed<>(key, window);
-                Integer actual = streamPartitioner.partition(windowedKey, value, infos.size());
+                Integer actual = streamPartitioner.partition(topicName, windowedKey, value, infos.size());
 
                 assertEquals(expected, actual);
             }

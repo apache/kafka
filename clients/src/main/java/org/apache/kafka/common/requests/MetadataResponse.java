@@ -164,9 +164,14 @@ public class MetadataResponse extends AbstractResponse {
             new Field(CONTROLLER_ID_KEY_NAME, INT32, "The broker id of the controller broker."),
             new Field(TOPIC_METADATA_KEY_NAME, new ArrayOf(TOPIC_METADATA_V2)));
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema METADATA_RESPONSE_V6 = METADATA_RESPONSE_V5;
+
     public static Schema[] schemaVersions() {
         return new Schema[] {METADATA_RESPONSE_V0, METADATA_RESPONSE_V1, METADATA_RESPONSE_V2, METADATA_RESPONSE_V3,
-            METADATA_RESPONSE_V4, METADATA_RESPONSE_V5};
+            METADATA_RESPONSE_V4, METADATA_RESPONSE_V5, METADATA_RESPONSE_V6};
     }
 
     private final int throttleTimeMs;
@@ -277,6 +282,7 @@ public class MetadataResponse extends AbstractResponse {
         return null;
     }
 
+    @Override
     public int throttleTimeMs() {
         return throttleTimeMs;
     }
@@ -566,5 +572,10 @@ public class MetadataResponse extends AbstractResponse {
         }
         struct.set(TOPIC_METADATA_KEY_NAME, topicMetadataArray.toArray());
         return struct;
+    }
+
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 6;
     }
 }

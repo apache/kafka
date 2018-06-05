@@ -102,7 +102,7 @@ public class AbstractCoordinatorTest {
         mockClient.blackout(coordinatorNode, 10L);
 
         long initialTime = mockTime.milliseconds();
-        coordinator.ensureCoordinatorReady();
+        coordinator.ensureCoordinatorReady(Long.MAX_VALUE);
         long endTime = mockTime.milliseconds();
 
         assertTrue(endTime - initialTime >= RETRY_BACKOFF_MS);
@@ -183,7 +183,7 @@ public class AbstractCoordinatorTest {
         assertTrue("New request sent while one is in progress", future == coordinator.lookupCoordinator());
 
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-        coordinator.ensureCoordinatorReady();
+        coordinator.ensureCoordinatorReady(Long.MAX_VALUE);
         assertTrue("New request not sent after previous completed", future != coordinator.lookupCoordinator());
     }
 
@@ -521,23 +521,13 @@ public class AbstractCoordinatorTest {
     }
 
     @Test
-    public void testEnsureCoordinatorReadyWithinBlackoutPeriodAfterAuthenticationFailure() {
+    public void testAuthenticationErrorInEnsureCoordinatorReady() {
         setupCoordinator(RETRY_BACKOFF_MS);
 
-        mockClient.authenticationFailed(node, 300);
+        mockClient.createPendingAuthenticationError(node, 300);
 
         try {
-            coordinator.ensureCoordinatorReady();
-            fail("Expected an authentication error.");
-        } catch (AuthenticationException e) {
-            // OK
-        }
-
-        mockTime.sleep(30); // wait less than the blackout period
-        assertTrue(mockClient.connectionFailed(node));
-
-        try {
-            coordinator.ensureCoordinatorReady();
+            coordinator.ensureCoordinatorReady(Long.MAX_VALUE);
             fail("Expected an authentication error.");
         } catch (AuthenticationException e) {
             // OK

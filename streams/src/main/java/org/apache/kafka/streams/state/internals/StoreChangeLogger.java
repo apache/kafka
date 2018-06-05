@@ -55,7 +55,8 @@ class StoreChangeLogger<K, V> {
         if (collector != null) {
             final Serializer<K> keySerializer = serialization.keySerializer();
             final Serializer<V> valueSerializer = serialization.valueSerializer();
-            collector.send(this.topic, key, value, this.partition, context.timestamp(), keySerializer, valueSerializer);
+            // Sending null headers to changelog topics (KIP-244)
+            collector.send(this.topic, key, value, null, this.partition, context.timestamp(), keySerializer, valueSerializer);
         }
     }
 }

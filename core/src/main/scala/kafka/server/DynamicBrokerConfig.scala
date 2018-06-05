@@ -710,7 +710,11 @@ object DynamicListenerConfig {
     KafkaConfig.SaslKerberosTicketRenewWindowFactorProp,
     KafkaConfig.SaslKerberosTicketRenewJitterProp,
     KafkaConfig.SaslKerberosMinTimeBeforeReloginProp,
-    KafkaConfig.SaslKerberosPrincipalToLocalRulesProp
+    KafkaConfig.SaslKerberosPrincipalToLocalRulesProp,
+    KafkaConfig.SaslLoginRefreshWindowFactorProp,
+    KafkaConfig.SaslLoginRefreshWindowJitterProp,
+    KafkaConfig.SaslLoginRefreshMinPeriodSecondsProp,
+    KafkaConfig.SaslLoginRefreshBufferSecondsProp
   )
 }
 
