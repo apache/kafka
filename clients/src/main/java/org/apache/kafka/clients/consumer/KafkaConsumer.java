@@ -1611,6 +1611,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         final long timeoutMs = timeout.toMillis();
         acquireAndEnsureOpen();
         try {
+            coordinator.poll(timeout.toMillis());
             if (!this.subscriptions.isAssigned(partition))
                 throw new IllegalStateException("You can only check the position for partitions assigned to this consumer.");
             Long offset = this.subscriptions.position(partition);
