@@ -29,7 +29,7 @@ import java.util.regex.Pattern
 
 import com.yammer.metrics.core.Gauge
 import kafka.api.KAFKA_0_10_0_IV0
-import kafka.common.{InvalidOffsetException, KafkaException, LongRef}
+import kafka.common.{IndexOffsetOverflowException, InvalidOffsetException, KafkaException, LongRef}
 import kafka.message.{BrokerCompressionCodec, CompressionCodec, NoCompressionCodec}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.checkpoints.{LeaderEpochCheckpointFile, LeaderEpochFile}
@@ -37,7 +37,7 @@ import kafka.server.epoch.{LeaderEpochCache, LeaderEpochFileCache}
 import kafka.server.{BrokerTopicStats, FetchDataInfo, LogDirFailureChannel, LogOffsetMetadata}
 import kafka.utils._
 import org.apache.kafka.common.{TopicPartition, errors}
-import org.apache.kafka.common.errors.{CorruptRecordException, IndexOffsetOverflowException, KafkaStorageException, OffsetOutOfRangeException, RecordBatchTooLargeException, RecordTooLargeException, UnsupportedForMessageFormatException}
+import org.apache.kafka.common.errors.{CorruptRecordException, KafkaStorageException, OffsetOutOfRangeException, RecordBatchTooLargeException, RecordTooLargeException, UnsupportedForMessageFormatException}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import org.apache.kafka.common.requests.{IsolationLevel, ListOffsetRequest}
@@ -301,7 +301,7 @@ class Log(@volatile var dir: File,
    * in place of existing segment(s). For log splitting, we know that any .swap file whose base offset is higher than
    * the smallest offset .clean file could be part of an incomplete split operation. Such .swap files are also deleted
    * by this method.
-   * @return
+   * @return Set of .swap files that are valid to be swapped in as segment files
    */
   private def removeTempFilesAndCollectSwapFiles(): Set[File] = {
 
@@ -346,18 +346,18 @@ class Log(@volatile var dir: File,
     // files could be part of an incomplete split operation that could not complete. See Log#splitSegmentOnOffsetOverflow
     // for more details about the split operation.
     val (invalidSwapFiles, validSwapFiles) = swapFiles.partition(file => offsetFromFile(file) >= minCleanedFileOffset)
-    invalidSwapFiles.foreach(file => {
+    invalidSwapFiles.foreach { file =>
       debug(s"Deleting invalid swap file ${file.getAbsoluteFile} minCleanedFileOffset: $minCleanedFileOffset")
       val baseFile = new File(CoreUtils.replaceSuffix(file.getPath, SwapFileSuffix, ""))
       deleteIndicesIfExist(baseFile, SwapFileSuffix)
       Files.deleteIfExists(file.toPath)
-    })
+    }
 
     // Now that we have deleted all .swap files that constitute an incomplete split operation, let's delete all .clean files
-    cleanFiles.foreach(file => {
+    cleanFiles.foreach { file =>
       debug(s"Deleting stray .clean file ${file.getAbsolutePath}")
       Files.deleteIfExists(file.toPath)
-    })
+    }
 
     validSwapFiles
   }
@@ -432,11 +432,10 @@ class Log(@volatile var dir: File,
     val bytesTruncated =
       try segment.recover(stateManager, leaderEpochCache)
       catch {
-        case e: IndexOffsetOverflowException => {
+        case e: IndexOffsetOverflowException =>
           info(s"Splitting segment on offset overflow ${segment.log.file.getAbsolutePath}")
           Log.splitSegmentOnOffsetOverflow(this, segment)
           throw e
-        }
       }
 
     // once we have recovered the segment's data, take a snapshot to ensure that we won't
@@ -446,6 +445,7 @@ class Log(@volatile var dir: File,
   }
 
   // This method does not need to convert IOException to KafkaStorageException because it is only called before all logs are loaded
+  @throws(classOf[IndexOffsetOverflowException])
   private def completeSwapOperations(swapFiles: Set[File]): Unit = {
     for (swapFile <- swapFiles) {
       val logFile = new File(CoreUtils.replaceSuffix(swapFile.getPath, SwapFileSuffix, ""))
@@ -457,13 +457,12 @@ class Log(@volatile var dir: File,
         fileSuffix = SwapFileSuffix)
       info(s"Found log file ${swapFile.getPath} from interrupted swap operation, repairing.")
 
-      try recoverSegment(swapSegment)
-      catch {
-        case e: IndexOffsetOverflowException => {
-          error(s"Unexpected IndexOffsetOverflowException for swap segment ${swapSegment.log.file.getAbsolutePath}")
-          throw e
-        }
-      }
+      // Recover this swap segment. If this swap segment contains offsets that overflow the index (KAFKA-6264),
+      // recoverSegment wil throw an IndexOffsetOverflowException. We currently do not have a good way of dealing with
+      // this situation so we let this exception propagate all the way up to KafkaServer#startup which will log
+      // this as a fatal exception and will cause the broker to shut down. This scenario is expected to be extremely rare
+      // in practice, and manual intervention might be required to get out of the situation.
+      recoverSegment(swapSegment)
 
       var oldSegments = logSegments(swapSegment.baseOffset, swapSegment.readNextOffset)
 
@@ -473,7 +472,7 @@ class Log(@volatile var dir: File,
       // must fall within the range of existing segment(s). If we cannot find such a segment, it means the deletion
       // of that segment was successful. In such an event, we should simply rename the .swap to .log without having to
       // do a replace with an existing segment.
-      if (!oldSegments.isEmpty) {
+      if (oldSegments.nonEmpty) {
         val start = oldSegments.head.baseOffset
         val end = oldSegments.last.readNextOffset
         if (!(swapSegment.baseOffset >= start && swapSegment.baseOffset <= end))
@@ -486,6 +485,7 @@ class Log(@volatile var dir: File,
 
   // Load the log segments from the log files on disk and return the next offset
   // This method does not need to convert IOException to KafkaStorageException because it is only called before all logs are loaded
+  @throws(classOf[IndexOffsetOverflowException])
   private def loadSegments(): Long = {
     // first do a pass through the files in the log directory and remove any temporary files
     // and find any interrupted swap operations
@@ -2064,8 +2064,11 @@ object Log extends Logging {
    * resulting segments will contain the exact same messages that are present in the input segment. On successful
    * completion of this method, the input segment will be deleted and will be replaced by the resulting new segments.
    * See replaceSegments for recovery logic, in case the broker dies in the middle of this operation.
-   * Note that this method assumes we have already determined that the segment passed in contains records that cause
-   * offset overflow.
+   * <p>Note that this method assumes we have already determined that the segment passed in contains records that cause
+   * offset overflow.</p>
+   * <p>The split logic overloads the use of .clean files that LogCleaner typically uses to make the process of replacing
+   * the input segment with multiple new segments atomic and recoverable in the event of a crash. See replaceSegments
+   * and completeSwapOperations for the implementation to make this operation recoverable on crashes.</p>
    * @param log The log containing segment to split
    * @param segment Segment to split
    * @return List of new segments that replace the input segment
@@ -2087,24 +2090,17 @@ object Log extends Logging {
       var maxOffset = Long.MinValue
 
       // find all batches that are valid to be appended to the current log segment
-      val (validBatches, overflowBatches) = records.batches.asScala.span(batch => (batch.lastOffset - Int.MaxValue <= baseOffset))
+      val (validBatches, overflowBatches) = records.batches.asScala.span(batch => segment.offsetIndex.canAppendOffset(batch.lastOffset))
       val overflowOffset = overflowBatches.headOption.map(firstBatch => {
         log.info(s"Found overflow at offset ${firstBatch.baseOffset} in segment $segment of log $log")
         firstBatch.baseOffset
       })
 
       // return early if no valid batches were found
-      if (validBatches.size == 0)
+      if (validBatches.isEmpty)
         return new CopyResult(None, overflowOffset)
 
-      // read all the valid batches
-      val lastValidBatch = validBatches.last
-      val validRecords = records.slice(0, lastValidBatch.position + lastValidBatch.sizeInBytes)
-      require(readBuffer.capacity >= validRecords.sizeInBytes)
-      readBuffer.clear()
-      readBuffer.limit(validRecords.sizeInBytes)
-      validRecords.readInto(readBuffer, 0)
-
+      // determine the maximum offset and timestamp in batches
       for (batch <- validBatches) {
         if (batch.maxTimestamp > maxTimestamp) {
           maxTimestamp = batch.maxTimestamp
@@ -2115,13 +2111,19 @@ object Log extends Logging {
         bytesRead += batch.sizeInBytes
       }
 
+      // read all valid batches into memory
+      val validRecords = records.slice(0, bytesRead)
+      require(readBuffer.capacity >= validRecords.sizeInBytes)
+      readBuffer.clear()
+      readBuffer.limit(validRecords.sizeInBytes)
+      validRecords.readInto(readBuffer, 0)
+
       // append valid batches into the segment
-      require(bytesRead > 0, "no valid bytes found during split")
       segment.append(maxOffset, maxTimestamp, offsetOfMaxTimestamp, MemoryRecords.readableRecords(readBuffer))
       readBuffer.clear()
       log.info(s"Appended messages till $maxOffset to segment $segment during split")
 
-      return new CopyResult(Some(bytesRead), overflowOffset)
+      new CopyResult(Some(bytesRead), overflowOffset)
     }
 
     log.info(s"Splitting segment $segment in log $log")
@@ -2130,15 +2132,14 @@ object Log extends Logging {
       val currentSegment = newSegments.last
 
       // grow buffers if needed
-      val firstBatch = sourceRecords.slice(position, Int.MaxValue).batches.asScala.head
+      val firstBatch = sourceRecords.batchesFrom(position).asScala.head
       if (firstBatch.sizeInBytes > readBuffer.capacity)
         readBuffer = ByteBuffer.allocate(firstBatch.sizeInBytes)
 
       // get records we want to copy and copy them into the new segment
       val recordsToCopy = sourceRecords.slice(position, readBuffer.capacity)
       val copyResult = copyRecordsToSegment(recordsToCopy, currentSegment, readBuffer)
-      require(copyResult.bytesRead.isDefined, "could not copy records into new segment")
-      position += copyResult.bytesRead.get
+      position += copyResult.bytesRead.getOrElse(0)
 
       // create a new segment if there was an overflow
       copyResult.overflowOffset.foreach(overflowOffset => newSegments += LogCleaner.createNewCleanedSegment(log, overflowOffset))
@@ -2147,12 +2148,12 @@ object Log extends Logging {
 
     // prepare new segments
     log.info(s"Split messages from $segment of $log into ${newSegments.length} new segments")
-    newSegments.foreach(splitSegment => {
+    newSegments.foreach { splitSegment =>
       splitSegment.onBecomeInactiveSegment()
       splitSegment.flush()
       splitSegment.lastModified = segment.lastModified
       log.info(s"New segment: $splitSegment")
-    })
+    }
 
     // replace old segment with new ones
     log.replaceSegments(newSegments.toList, List(segment), isRecoveredSwapFile = false)

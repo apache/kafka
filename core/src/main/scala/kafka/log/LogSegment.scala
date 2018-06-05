@@ -21,11 +21,12 @@ import java.nio.file.{Files, NoSuchFileException}
 import java.nio.file.attribute.FileTime
 import java.util.concurrent.TimeUnit
 
+import kafka.common.IndexOffsetOverflowException
 import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
 import kafka.server.epoch.LeaderEpochCache
 import kafka.server.{FetchDataInfo, LogOffsetMetadata}
 import kafka.utils._
-import org.apache.kafka.common.errors.{CorruptRecordException, InvalidOffsetException, IndexOffsetOverflowException}
+import org.apache.kafka.common.errors.{CorruptRecordException, InvalidOffsetException}
 import org.apache.kafka.common.record.FileRecords.LogOffsetPosition
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Time
@@ -103,7 +104,7 @@ class LogSegment private[log] (val log: FileRecords,
    * checks that the argument offset can be represented as an integer offset relative to the baseOffset.
    */
   def canConvertToRelativeOffset(offset: Long): Boolean = {
-    (offset - baseOffset) <= Integer.MAX_VALUE
+    offsetIndex.canAppendOffset(offset)
   }
 
   /**

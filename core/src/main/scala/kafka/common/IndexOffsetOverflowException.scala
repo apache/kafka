@@ -1,10 +1,10 @@
-/*
+/**
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements. See the NOTICE file distributed with
+ * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
+ * the License.  You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,18 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.errors;
 
-import org.apache.kafka.common.KafkaException;
+package kafka.common
 
-public class IndexOffsetOverflowException extends KafkaException {
-    private static final long serialVersionUID = 1L;
-
-    public IndexOffsetOverflowException(String message) {
-        super(message);
-    }
-
-    public IndexOffsetOverflowException(String message, Throwable cause) {
-        super(message, cause);
-    }
+/**
+ * Indicates that an attempt was made to append a message whose offset could cause the index offset to overflow.
+ */
+class IndexOffsetOverflowException(message: String, cause: Throwable) extends KafkaException(message, cause) {
+  def this(message: String) = this(message, null)
 }

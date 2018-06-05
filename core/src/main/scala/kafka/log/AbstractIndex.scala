@@ -23,10 +23,10 @@ import java.nio.file.Files
 import java.nio.{ByteBuffer, MappedByteBuffer}
 import java.util.concurrent.locks.{Lock, ReentrantLock}
 
+import kafka.common.IndexOffsetOverflowException
 import kafka.log.IndexSearchType.IndexSearchEntity
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.{CoreUtils, Logging}
-import org.apache.kafka.common.errors.IndexOffsetOverflowException
 import org.apache.kafka.common.utils.{MappedByteBuffers, OperatingSystem, Utils}
 
 import scala.math.ceil
@@ -232,10 +232,19 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
    * @throws IndexOffsetOverflowException
    */
   def relativeOffset(offset: Long): Int = {
-    val relativeOffset = offset - baseOffset
-    if (relativeOffset < 0 || relativeOffset > Int.MaxValue)
+    val relativeOffset = toRelative(offset)
+    if (relativeOffset.isEmpty)
       throw new IndexOffsetOverflowException(s"Integer overflow for offset: $offset (${file.getAbsoluteFile})")
-    relativeOffset.toInt
+    relativeOffset.get
+  }
+
+  /**
+   * Check if a particular offset is valid to be appended to this index.
+   * @param offset The offset to check
+   * @return true if this offset is valid to be appended to this index; false otherwise
+   */
+  def canAppendOffset(offset: Long): Boolean = {
+    toRelative(offset).isDefined
   }
 
   protected def safeForceUnmap(): Unit = {
@@ -336,6 +345,13 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
    * E.g. roundDownToExactMultiple(67, 8) == 64
    */
   private def roundDownToExactMultiple(number: Int, factor: Int) = factor * (number / factor)
+
+  private def toRelative(offset: Long): Option[Int] = {
+    val relativeOffset = offset - baseOffset
+    if (relativeOffset < 0 || relativeOffset > Int.MaxValue)
+      return None
+    Some(relativeOffset.toInt)
+  }
 
 }
 
