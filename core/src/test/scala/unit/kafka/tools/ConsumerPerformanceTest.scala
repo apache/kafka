@@ -60,7 +60,7 @@ class ConsumerPerformanceTest {
 
     //Then
     assertFalse(config.useOldConsumer)
-    assertEquals("localhost:9092", config.bootstrapServers)
+    assertEquals("localhost:9092", config.options.valueOf(config.bootstrapServersOpt))
     assertEquals("test", config.topic)
     assertEquals(10, config.numMessages)
   }
@@ -78,7 +78,7 @@ class ConsumerPerformanceTest {
 
     //Then
     assertTrue(config.useOldConsumer)
-    assertEquals("localhost:2181", config.zkConnectionStr)
+    assertEquals("localhost:2181", config.options.valueOf(config.zkConnectOpt))
     assertEquals("test", config.topic)
     assertEquals(10, config.numMessages)
   }

@@ -185,7 +185,6 @@ class ConsoleConsumerTest {
 
   @Test(expected = classOf[IllegalArgumentException])
   def shouldExitOnUnrecognizedNewConsumerOption(): Unit = {
-
     Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
 
     //Given
@@ -201,8 +200,6 @@ class ConsoleConsumerTest {
     } finally {
       Exit.resetExitProcedure()
     }
-
-    fail("Expected consumer config construction to fail due to unrecognized --new-consumer option")
   }
 
   @Test
@@ -400,7 +397,6 @@ class ConsoleConsumerTest {
 
   @Test(expected = classOf[IllegalArgumentException])
   def shouldExitOnInvalidConfigWithAutoOffsetResetAndConflictingFromBeginningNewConsumer() {
-
     Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
 
     //Given
@@ -416,13 +412,10 @@ class ConsoleConsumerTest {
     } finally {
       Exit.resetExitProcedure()
     }
-
-    fail("Expected consumer property construction to fail due to inconsistent reset options")
   }
 
   @Test(expected = classOf[IllegalArgumentException])
   def shouldExitOnInvalidConfigWithAutoOffsetResetAndConflictingFromBeginningOldConsumer() {
-
     Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
 
     //Given
@@ -438,8 +431,6 @@ class ConsoleConsumerTest {
     } finally {
       Exit.resetExitProcedure()
     }
-
-    fail("Expected consumer property construction to fail due to inconsistent reset options")
   }
 
   @Test

@@ -355,8 +355,6 @@ object ConsumerPerformance extends LazyLogging {
     val dateFormat = new SimpleDateFormat(options.valueOf(dateFormatOpt))
     val hideHeader = options.has(hideHeaderOpt)
     val recordFetchTimeoutMs = options.valueOf(recordFetchTimeoutOpt).longValue()
-    val bootstrapServers = options.valueOf(bootstrapServersOpt)
-    val zkConnectionStr = options.valueOf(zkConnectOpt)
   }
 
   class ConsumerPerfThread(threadId: Int,
