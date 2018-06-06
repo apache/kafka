@@ -21,6 +21,7 @@ import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.resource.Resource;
 import org.apache.kafka.common.resource.ResourceNameType;
@@ -34,7 +35,7 @@ import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
 
-public class DecribeAclsResponseTest {
+public class DescribeAclsResponseTest {
     private static final short V0 = 0;
     private static final short V1 = 1;
 
@@ -46,6 +47,11 @@ public class DecribeAclsResponseTest {
 
     private static final AclBinding PREFIXED_ACL1 = new AclBinding(new Resource(ResourceType.GROUP, "prefix", ResourceNameType.PREFIXED),
         new AccessControlEntry("User:*", "127.0.0.1", AclOperation.CREATE, AclPermissionType.ALLOW));
+
+    @Test(expected = UnsupportedVersionException.class)
+    public void shouldThrowOnV0IfNotLiteral() {
+        new DescribeAclsResponse(10, ApiError.NONE, aclBindings(PREFIXED_ACL1)).toStruct(V0);
+    }
 
     @Test
     public void shouldRoundTripV0() {

@@ -90,9 +90,7 @@ public class DescribeAclsRequest extends AbstractRequest {
         super(version);
         this.filter = filter;
 
-        if (version == 0 && filter.resourceFilter().nameType() != ResourceNameType.LITERAL) {
-            throw new UnsupportedVersionException("Version 0 only supports literal resource name types");
-        }
+        validate(filter, version);
     }
 
     public DescribeAclsRequest(Struct struct, short version) {
@@ -130,5 +128,11 @@ public class DescribeAclsRequest extends AbstractRequest {
 
     public AclBindingFilter filter() {
         return filter;
+    }
+
+    private void validate(AclBindingFilter filter, short version) {
+        if (version == 0 && filter.resourceFilter().nameType() != ResourceNameType.LITERAL) {
+            throw new UnsupportedVersionException("Version 0 only supports literal resource name types");
+        }
     }
 }

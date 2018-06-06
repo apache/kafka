@@ -19,6 +19,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.ArrayOf;
@@ -26,6 +27,7 @@ import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.resource.Resource;
+import org.apache.kafka.common.resource.ResourceNameType;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -122,6 +124,8 @@ public class DescribeAclsResponse extends AbstractResponse {
 
     @Override
     protected Struct toStruct(short version) {
+        validate(version);
+
         Struct struct = new Struct(ApiKeys.DESCRIBE_ACLS.responseSchema(version));
         struct.set(THROTTLE_TIME_MS, throttleTimeMs);
         error.write(struct);
@@ -179,5 +183,17 @@ public class DescribeAclsResponse extends AbstractResponse {
     @Override
     public boolean shouldClientThrottle(short version) {
         return version >= 1;
+    }
+
+    private void validate(short version) {
+        if (version == 0) {
+            final boolean unsupported = acls.stream()
+                .map(AclBinding::resource)
+                .map(Resource::nameType)
+                .anyMatch(nameType -> nameType != ResourceNameType.LITERAL);
+            if (unsupported) {
+                throw new UnsupportedVersionException("Version 0 only supports literal resource name types");
+            }
+        }
     }
 }

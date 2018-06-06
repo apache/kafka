@@ -126,16 +126,7 @@ public class CreateAclsRequest extends AbstractRequest {
         super(version);
         this.aclCreations = aclCreations;
 
-        if (version == 0) {
-            final boolean unsupported = aclCreations.stream()
-                .map(AclCreation::acl)
-                .map(AclBinding::resource)
-                .map(Resource::nameType)
-                .anyMatch(nameType -> nameType != ResourceNameType.LITERAL);
-            if (unsupported) {
-                throw new UnsupportedVersionException("Version 0 only supports literal resource name types");
-            }
-        }
+        validate(aclCreations);
     }
 
     public CreateAclsRequest(Struct struct, short version) {
@@ -182,5 +173,18 @@ public class CreateAclsRequest extends AbstractRequest {
 
     public static CreateAclsRequest parse(ByteBuffer buffer, short version) {
         return new CreateAclsRequest(ApiKeys.CREATE_ACLS.parseRequest(version, buffer), version);
+    }
+
+    private void validate(List<AclCreation> aclCreations) {
+        if (version() == 0) {
+            final boolean unsupported = aclCreations.stream()
+                .map(AclCreation::acl)
+                .map(AclBinding::resource)
+                .map(Resource::nameType)
+                .anyMatch(nameType -> nameType != ResourceNameType.LITERAL);
+            if (unsupported) {
+                throw new UnsupportedVersionException("Version 0 only supports literal resource name types");
+            }
+        }
     }
 }

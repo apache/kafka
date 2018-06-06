@@ -21,6 +21,7 @@ import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.requests.DeleteAclsResponse.AclDeletionResult;
 import org.apache.kafka.common.requests.DeleteAclsResponse.AclFilterResponse;
@@ -52,6 +53,11 @@ public class DeleteAclsResponseTest {
     private static final AclFilterResponse LITERAL_RESPONSE = new AclFilterResponse(aclDeletions(LITERAL_ACL1, LITERAL_ACL2));
 
     private static final AclFilterResponse PREFIXED_RESPONSE = new AclFilterResponse(aclDeletions(LITERAL_ACL1, PREFIXED_ACL1));
+
+    @Test(expected = UnsupportedVersionException.class)
+    public void shouldThrowOnV0IfNotLiteral() {
+        new DeleteAclsResponse(10, aclResponses(PREFIXED_RESPONSE)).toStruct(V0);
+    }
 
     @Test
     public void shouldRoundTripV0() {

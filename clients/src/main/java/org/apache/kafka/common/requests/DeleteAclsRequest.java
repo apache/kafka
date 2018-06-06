@@ -99,15 +99,7 @@ public class DeleteAclsRequest extends AbstractRequest {
         super(version);
         this.filters = filters;
 
-        if (version == 0) {
-            final boolean unsupported = filters.stream()
-                .map(AclBindingFilter::resourceFilter)
-                .map(ResourceFilter::nameType)
-                .anyMatch(nameType -> nameType != ResourceNameType.LITERAL);
-            if (unsupported) {
-                throw new UnsupportedVersionException("Version 0 only supports literal resource name types");
-            }
-        }
+        validate(version, filters);
     }
 
     public DeleteAclsRequest(Struct struct, short version) {
@@ -159,5 +151,17 @@ public class DeleteAclsRequest extends AbstractRequest {
 
     public static DeleteAclsRequest parse(ByteBuffer buffer, short version) {
         return new DeleteAclsRequest(DELETE_ACLS.parseRequest(version, buffer), version);
+    }
+
+    private void validate(short version, List<AclBindingFilter> filters) {
+        if (version == 0) {
+            final boolean unsupported = filters.stream()
+                .map(AclBindingFilter::resourceFilter)
+                .map(ResourceFilter::nameType)
+                .anyMatch(nameType -> nameType != ResourceNameType.LITERAL);
+            if (unsupported) {
+                throw new UnsupportedVersionException("Version 0 only supports literal resource name types");
+            }
+        }
     }
 }
