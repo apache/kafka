@@ -30,6 +30,7 @@ import java.util.regex.Pattern
 import com.yammer.metrics.core.Gauge
 import kafka.api.KAFKA_0_10_0_IV0
 import kafka.common.{InvalidOffsetException, KafkaException, LogSegmentOffsetOverflowException, LongRef}
+import kafka.log.Log.info
 import kafka.message.{BrokerCompressionCodec, CompressionCodec, NoCompressionCodec}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.checkpoints.{LeaderEpochCheckpointFile, LeaderEpochFile}
@@ -364,8 +365,9 @@ class Log(@volatile var dir: File,
 
   /**
    * This method does not need to convert IOException to KafkaStorageException because it is only called before all logs are loaded
-   * It is possible that we encounter a segment with index offset overflow. In that case, the segment will be split appropriately
-   * but loadSegmentFiles itself would fail and must be retried.
+   * It is possible that we encounter a segment with index offset overflow in which case the LogSegmentOffsetOverflowException
+   * will be thrown. Note that any segments that were opened before we encountered the exception will remain open and the
+   * caller is responsible for closing them appropriately, if needed.
    * @throws LogSegmentOffsetOverflowException if the log directory contains a segment with messages that overflow the index offset
    */
   private def loadSegmentFiles(): Unit = {
@@ -384,7 +386,6 @@ class Log(@volatile var dir: File,
         // if it's a log file, load the corresponding log segment
         val baseOffset = offsetFromFile(file)
         val timeIndexFileNewlyCreated = !Log.timeIndexFile(dir, baseOffset).exists()
-        var doSegmentRecovery = false
         val segment = LogSegment.open(dir = dir,
           baseOffset = baseOffset,
           config,
@@ -396,23 +397,11 @@ class Log(@volatile var dir: File,
           case _: NoSuchFileException =>
             error(s"Could not find offset index file corresponding to log file ${segment.log.file.getAbsolutePath}, " +
               "recovering segment and rebuilding index files...")
-            doSegmentRecovery = true
+            recoverSegment(segment)
           case e: CorruptIndexException =>
             warn(s"Found a corrupted index file corresponding to log file ${segment.log.file.getAbsolutePath} due " +
               s"to ${e.getMessage}}, recovering segment and rebuilding index files...")
-            doSegmentRecovery = true
-        }
-
-        if (doSegmentRecovery) {
-          try recoverSegment(segment)
-          catch {
-            case e: LogSegmentOffsetOverflowException =>
-              // Close all segments that were opened and throw the exception up. Note that we cannot close the current
-              // segment because the caller will use it to drive the split logic.
-              logSegments.foreach(_.close())
-              segments.clear()
-              throw e
-          }
+            recoverSegment(segment)
         }
         addSegment(segment)
       }
@@ -452,11 +441,11 @@ class Log(@volatile var dir: File,
    * This method does not need to convert IOException to KafkaStorageException because it is only called before all logs
    * are loaded.
    * @throws LogSegmentOffsetOverflowException if the swap file contains messages that cause the log segment offset to
-   *                                           overflow (KAFKA-6264). Note that this is currently a fatal exception as we
-   *                                           do not have a way to deal with it. The exception is propagated all the way
-   *                                           up to KafkaServer#startup which will cause the broker to shut down if we are
-   *                                           in this situation. This is expected to be an extremely rare scenario in
-   *                                           practice, and manual intervention might be required to get out of it.
+   *                                           overflow. Note that this is currently a fatal exception as we do not have
+   *                                           a way to deal with it. The exception is propagated all the way up to
+   *                                           KafkaServer#startup which will cause the broker to shut down if we are in
+   *                                           this situation. This is expected to be an extremely rare scenario in practice,
+   *                                           and manual intervention might be required to get out of it.
    */
   private def completeSwapOperations(swapFiles: Set[File]): Unit = {
     for (swapFile <- swapFiles) {
@@ -510,6 +499,11 @@ class Log(@volatile var dir: File,
       if (isLogFile(file))
         maxTries += 1
     maybeRetryOnOffsetOverflow(maxTries) {
+      // In case we encounter a segment with offset overflow, the retry logic will split it after which we need to retry
+      // loading of segments. In that case, we also need to close all segments that could have been left open in previous
+      // call to loadSegmentFiles().
+      logSegments.foreach(_.close())
+      segments.clear()
       loadSegmentFiles()
     }
 
@@ -547,7 +541,7 @@ class Log(@volatile var dir: File,
    * Recover the log segments and return the next offset after recovery.
    * This method does not need to convert IOException to KafkaStorageException because it is only called before all
    * logs are loaded.
-   * @throws LogSegmentOffsetOverflowException if we encountered a legacy segment with offset overflow (KAFKA-6264)
+   * @throws LogSegmentOffsetOverflowException if we encountered a legacy segment with offset overflow
    */
   private def recoverLog(): Long = {
     // if we have the clean shutdown marker, skip recovery
@@ -1832,24 +1826,126 @@ class Log(@volatile var dir: File,
     while (triesSoFar < maxTries) {
       try {
         return fn
-      }
-      catch {
+      } catch {
         case e: LogSegmentOffsetOverflowException =>
           triesSoFar += 1
           if (triesSoFar == maxTries)
             throw e
           info(s"Caught LogOffsetOverflowException ${e.getMessage}. Split segment and retry (${triesSoFar}/${maxTries}).")
-          Log.splitSegmentOnOffsetOverflow(this, e.logSegment)
+          splitSegmentOnOffsetOverflow(e.logSegment)
       }
     }
     throw new IllegalStateException()
+  }
+
+  /**
+   * Split the given log segment into multiple such that there is no offset overflow in the resulting segments. The
+   * resulting segments will contain the exact same messages that are present in the input segment. On successful
+   * completion of this method, the input segment will be deleted and will be replaced by the resulting new segments.
+   * See replaceSegments for recovery logic, in case the broker dies in the middle of this operation.
+   * <p>Note that this method assumes we have already determined that the segment passed in contains records that cause
+   * offset overflow.</p>
+   * <p>The split logic overloads the use of .clean files that LogCleaner typically uses to make the process of replacing
+   * the input segment with multiple new segments atomic and recoverable in the event of a crash. See replaceSegments
+   * and completeSwapOperations for the implementation to make this operation recoverable on crashes.</p>
+   * @param segment Segment to split
+   * @return List of new segments that replace the input segment
+   */
+  private[log] def splitSegmentOnOffsetOverflow(segment: LogSegment): List[LogSegment] = {
+    require(isLogFile(segment.log.file), s"Cannot split file ${segment.log.file.getAbsoluteFile}")
+    info(s"Attempting to split segment ${segment.log.file.getAbsolutePath}")
+
+    val newSegments = ListBuffer[LogSegment]()
+    var position = 0
+    val sourceRecords = segment.log
+    var readBuffer = ByteBuffer.allocate(1024 * 1024)
+
+    class CopyResult(val bytesRead: Int, val overflowOffset: Option[Long])
+
+    // Helper method to copy `records` into `segment`. Makes sure records being appended do not result in offset overflow.
+    def copyRecordsToSegment(records: FileRecords, segment: LogSegment, readBuffer: ByteBuffer): CopyResult = {
+      var bytesRead = 0
+      var maxTimestamp = Long.MinValue
+      var offsetOfMaxTimestamp = Long.MinValue
+      var maxOffset = Long.MinValue
+
+      // find all batches that are valid to be appended to the current log segment
+      val (validBatches, overflowBatches) = records.batches.asScala.span(batch => segment.offsetIndex.canAppendOffset(batch.lastOffset))
+      val overflowOffset = overflowBatches.headOption.map(firstBatch => {
+        info(s"Found overflow at offset ${firstBatch.baseOffset} in segment $segment of log $this")
+        firstBatch.baseOffset
+      })
+
+      // return early if no valid batches were found
+      if (validBatches.isEmpty) {
+        require(overflowOffset.isDefined, "No batches found during split")
+        return new CopyResult(0, overflowOffset)
+      }
+
+      // determine the maximum offset and timestamp in batches
+      for (batch <- validBatches) {
+        if (batch.maxTimestamp > maxTimestamp) {
+          maxTimestamp = batch.maxTimestamp
+          offsetOfMaxTimestamp = batch.lastOffset
+        }
+        maxOffset = batch.lastOffset
+        bytesRead += batch.sizeInBytes
+      }
+
+      // read all valid batches into memory
+      val validRecords = records.slice(0, bytesRead)
+      require(readBuffer.capacity >= validRecords.sizeInBytes)
+      readBuffer.clear()
+      readBuffer.limit(validRecords.sizeInBytes)
+      validRecords.readInto(readBuffer, 0)
+
+      // append valid batches into the segment
+      segment.append(maxOffset, maxTimestamp, offsetOfMaxTimestamp, MemoryRecords.readableRecords(readBuffer))
+      readBuffer.clear()
+      info(s"Appended messages till $maxOffset to segment $segment during split")
+
+      new CopyResult(bytesRead, overflowOffset)
+    }
+
+    info(s"Splitting segment $segment in log $this")
+    newSegments += LogCleaner.createNewCleanedSegment(this, segment.baseOffset)
+    while (position < sourceRecords.sizeInBytes) {
+      val currentSegment = newSegments.last
+
+      // grow buffers if needed
+      val firstBatch = sourceRecords.batchesFrom(position).asScala.head
+      if (firstBatch.sizeInBytes > readBuffer.capacity)
+        readBuffer = ByteBuffer.allocate(firstBatch.sizeInBytes)
+
+      // get records we want to copy and copy them into the new segment
+      val recordsToCopy = sourceRecords.slice(position, readBuffer.capacity)
+      val copyResult = copyRecordsToSegment(recordsToCopy, currentSegment, readBuffer)
+      position += copyResult.bytesRead
+
+      // create a new segment if there was an overflow
+      copyResult.overflowOffset.foreach(overflowOffset => newSegments += LogCleaner.createNewCleanedSegment(this, overflowOffset))
+    }
+    require(newSegments.length > 1, s"No offset overflow found for $segment in $this")
+
+    // prepare new segments
+    info(s"Split messages from $segment of $this into ${newSegments.length} new segments")
+    newSegments.foreach { splitSegment =>
+      splitSegment.onBecomeInactiveSegment()
+      splitSegment.flush()
+      splitSegment.lastModified = segment.lastModified
+      info(s"New segment: $splitSegment")
+    }
+
+    // replace old segment with new ones
+    replaceSegments(newSegments.toList, List(segment), isRecoveredSwapFile = false)
+    newSegments.toList
   }
 }
 
 /**
  * Helper functions for logs
  */
-object Log extends Logging {
+object Log {
 
   /** a log file */
   val LogFileSuffix = ".log"
@@ -2067,107 +2163,4 @@ object Log extends Logging {
   private def isLogFile(file: File): Boolean =
     file.getPath.endsWith(LogFileSuffix)
 
-  /**
-   * Split the given log segment into multiple such that there is no offset overflow in the resulting segments. The
-   * resulting segments will contain the exact same messages that are present in the input segment. On successful
-   * completion of this method, the input segment will be deleted and will be replaced by the resulting new segments.
-   * See replaceSegments for recovery logic, in case the broker dies in the middle of this operation.
-   * <p>Note that this method assumes we have already determined that the segment passed in contains records that cause
-   * offset overflow.</p>
-   * <p>The split logic overloads the use of .clean files that LogCleaner typically uses to make the process of replacing
-   * the input segment with multiple new segments atomic and recoverable in the event of a crash. See replaceSegments
-   * and completeSwapOperations for the implementation to make this operation recoverable on crashes.</p>
-   * @param log The log containing segment to split
-   * @param segment Segment to split
-   * @return List of new segments that replace the input segment
-   */
-  private[log] def splitSegmentOnOffsetOverflow(log: Log, segment: LogSegment): List[LogSegment] = {
-    require(isLogFile(segment.log.file), s"Cannot split file ${segment.log.file.getAbsoluteFile}")
-    info(s"Attempting to split segment ${segment.log.file.getAbsolutePath}")
-
-    val newSegments = ListBuffer[LogSegment]()
-    var position = 0
-    val sourceRecords = segment.log
-    var readBuffer = ByteBuffer.allocate(1024 * 1024)
-
-    class CopyResult(val bytesRead: Int, val overflowOffset: Option[Long])
-
-    // Helper method to copy `records` into `segment`. Makes sure records being appended do not result in offset overflow.
-    def copyRecordsToSegment(records: FileRecords, segment: LogSegment, readBuffer: ByteBuffer): CopyResult = {
-      var bytesRead = 0
-      var maxTimestamp = Long.MinValue
-      var offsetOfMaxTimestamp = Long.MinValue
-      var maxOffset = Long.MinValue
-
-      // find all batches that are valid to be appended to the current log segment
-      val (validBatches, overflowBatches) = records.batches.asScala.span(batch => segment.offsetIndex.canAppendOffset(batch.lastOffset))
-      val overflowOffset = overflowBatches.headOption.map(firstBatch => {
-        log.info(s"Found overflow at offset ${firstBatch.baseOffset} in segment $segment of log $log")
-        firstBatch.baseOffset
-      })
-
-      // return early if no valid batches were found
-      if (validBatches.isEmpty) {
-        require(overflowOffset.isDefined, "No batches found during split")
-        return new CopyResult(0, overflowOffset)
-      }
-
-      // determine the maximum offset and timestamp in batches
-      for (batch <- validBatches) {
-        if (batch.maxTimestamp > maxTimestamp) {
-          maxTimestamp = batch.maxTimestamp
-          offsetOfMaxTimestamp = batch.lastOffset
-        }
-        maxOffset = batch.lastOffset
-        bytesRead += batch.sizeInBytes
-      }
-
-      // read all valid batches into memory
-      val validRecords = records.slice(0, bytesRead)
-      require(readBuffer.capacity >= validRecords.sizeInBytes)
-      readBuffer.clear()
-      readBuffer.limit(validRecords.sizeInBytes)
-      validRecords.readInto(readBuffer, 0)
-
-      // append valid batches into the segment
-      segment.append(maxOffset, maxTimestamp, offsetOfMaxTimestamp, MemoryRecords.readableRecords(readBuffer))
-      readBuffer.clear()
-      log.info(s"Appended messages till $maxOffset to segment $segment during split")
-
-      new CopyResult(bytesRead, overflowOffset)
-    }
-
-    log.info(s"Splitting segment $segment in log $log")
-    newSegments += LogCleaner.createNewCleanedSegment(log, segment.baseOffset)
-    while (position < sourceRecords.sizeInBytes) {
-      val currentSegment = newSegments.last
-
-      // grow buffers if needed
-      val firstBatch = sourceRecords.batchesFrom(position).asScala.head
-      if (firstBatch.sizeInBytes > readBuffer.capacity)
-        readBuffer = ByteBuffer.allocate(firstBatch.sizeInBytes)
-
-      // get records we want to copy and copy them into the new segment
-      val recordsToCopy = sourceRecords.slice(position, readBuffer.capacity)
-      val copyResult = copyRecordsToSegment(recordsToCopy, currentSegment, readBuffer)
-      position += copyResult.bytesRead
-
-      // create a new segment if there was an overflow
-      copyResult.overflowOffset.foreach(overflowOffset => newSegments += LogCleaner.createNewCleanedSegment(log, overflowOffset))
-    }
-    require(newSegments.length > 1, s"No offset overflow found for $segment in $log")
-
-    // prepare new segments
-    log.info(s"Split messages from $segment of $log into ${newSegments.length} new segments")
-    newSegments.foreach { splitSegment =>
-      splitSegment.onBecomeInactiveSegment()
-      splitSegment.flush()
-      splitSegment.lastModified = segment.lastModified
-      log.info(s"New segment: $splitSegment")
-    }
-
-    // replace old segment with new ones
-    log.replaceSegments(newSegments.toList, List(segment), isRecoveredSwapFile = false)
-    newSegments.toList
-  }
 }

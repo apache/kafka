@@ -511,10 +511,10 @@ private[log] class Cleaner(val id: Int,
             transactionMetadata, log.activeProducersWithLastSequence, stats)
         } catch {
           case e: LogSegmentOffsetOverflowException =>
-            // KAFKA-6264: if we got a LogSegmentOverflowException, split the current segment. It's also safest to abort
-            // the current cleaning process, so that we retry from scratch once the split is complete.
+            // Split the current segment. It's also safest to abort the current cleaning process, so that we retry from
+            // scratch once the split is complete.
             info(s"Caught LogSegmentOverflowException during log cleaning $e")
-            Log.splitSegmentOnOffsetOverflow(log, currentSegment)
+            log.splitSegmentOnOffsetOverflow(currentSegment)
             throw new LogCleaningAbortedException()
         }
         currentSegmentOpt = nextSegmentOpt
