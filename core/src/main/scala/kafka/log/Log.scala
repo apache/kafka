@@ -30,7 +30,6 @@ import java.util.regex.Pattern
 import com.yammer.metrics.core.Gauge
 import kafka.api.KAFKA_0_10_0_IV0
 import kafka.common.{InvalidOffsetException, KafkaException, LogSegmentOffsetOverflowException, LongRef}
-import kafka.log.Log.info
 import kafka.message.{BrokerCompressionCodec, CompressionCodec, NoCompressionCodec}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.checkpoints.{LeaderEpochCheckpointFile, LeaderEpochFile}
@@ -492,13 +491,8 @@ class Log(@volatile var dir: File,
 
     // Now do a second pass and load all the log and index files.
     // We might encounter legacy log segments with offset overflow (KAFKA-6264). We need to split such segments. Whe
-    // this happens, restart loading segment files from scratch. Theoretically, it is possible that we see
-    // LogOffsetOverflowException as many times as the number of log segments.
-    var maxTries = 1
-    for (file <- dir.listFiles)
-      if (isLogFile(file))
-        maxTries += 1
-    maybeRetryOnOffsetOverflow(maxTries) {
+    // this happens, restart loading segment files from scratch.
+    retryOnOffsetOverflow {
       // In case we encounter a segment with offset overflow, the retry logic will split it after which we need to retry
       // loading of segments. In that case, we also need to close all segments that could have been left open in previous
       // call to loadSegmentFiles().
@@ -523,7 +517,7 @@ class Log(@volatile var dir: File,
         preallocate = config.preallocate))
       0
     } else if (!dir.getAbsolutePath.endsWith(Log.DeleteDirSuffix)) {
-      val nextOffset = maybeRetryOnOffsetOverflow(maxTries) {
+      val nextOffset = retryOnOffsetOverflow {
         recoverLog()
       }
 
@@ -1821,17 +1815,15 @@ class Log(@volatile var dir: File,
   /**
    * @throws LogSegmentOffsetOverflowException if we encounter segments with index overflow for more than maxTries
    */
-  private[log] def maybeRetryOnOffsetOverflow[T](maxTries: Int = 1)(fn: => T): T = {
+  private[log] def retryOnOffsetOverflow[T](fn: => T): T = {
     var triesSoFar = 0
-    while (triesSoFar < maxTries) {
+    while (true) {
       try {
         return fn
       } catch {
         case e: LogSegmentOffsetOverflowException =>
           triesSoFar += 1
-          if (triesSoFar == maxTries)
-            throw e
-          info(s"Caught LogOffsetOverflowException ${e.getMessage}. Split segment and retry (${triesSoFar}/${maxTries}).")
+          info(s"Caught LogOffsetOverflowException ${e.getMessage}. Split segment and retry. retry#: $triesSoFar.")
           splitSegmentOnOffsetOverflow(e.logSegment)
       }
     }
@@ -1907,33 +1899,47 @@ class Log(@volatile var dir: File,
       new CopyResult(bytesRead, overflowOffset)
     }
 
-    info(s"Splitting segment $segment in log $this")
-    newSegments += LogCleaner.createNewCleanedSegment(this, segment.baseOffset)
-    while (position < sourceRecords.sizeInBytes) {
-      val currentSegment = newSegments.last
+    try {
+      info(s"Splitting segment $segment in log $this")
+      newSegments += LogCleaner.createNewCleanedSegment(this, segment.baseOffset)
+      while (position < sourceRecords.sizeInBytes) {
+        val currentSegment = newSegments.last
 
-      // grow buffers if needed
-      val firstBatch = sourceRecords.batchesFrom(position).asScala.head
-      if (firstBatch.sizeInBytes > readBuffer.capacity)
-        readBuffer = ByteBuffer.allocate(firstBatch.sizeInBytes)
+        // grow buffers if needed
+        val firstBatch = sourceRecords.batchesFrom(position).asScala.head
+        if (firstBatch.sizeInBytes > readBuffer.capacity)
+          readBuffer = ByteBuffer.allocate(firstBatch.sizeInBytes)
 
-      // get records we want to copy and copy them into the new segment
-      val recordsToCopy = sourceRecords.slice(position, readBuffer.capacity)
-      val copyResult = copyRecordsToSegment(recordsToCopy, currentSegment, readBuffer)
-      position += copyResult.bytesRead
+        // get records we want to copy and copy them into the new segment
+        val recordsToCopy = sourceRecords.slice(position, readBuffer.capacity)
+        val copyResult = copyRecordsToSegment(recordsToCopy, currentSegment, readBuffer)
+        position += copyResult.bytesRead
 
-      // create a new segment if there was an overflow
-      copyResult.overflowOffset.foreach(overflowOffset => newSegments += LogCleaner.createNewCleanedSegment(this, overflowOffset))
-    }
-    require(newSegments.length > 1, s"No offset overflow found for $segment in $this")
+        // create a new segment if there was an overflow
+        copyResult.overflowOffset.foreach(overflowOffset => newSegments += LogCleaner.createNewCleanedSegment(this, overflowOffset))
+      }
+      require(newSegments.length > 1, s"No offset overflow found for $segment in $this")
 
-    // prepare new segments
-    info(s"Split messages from $segment of $this into ${newSegments.length} new segments")
-    newSegments.foreach { splitSegment =>
-      splitSegment.onBecomeInactiveSegment()
-      splitSegment.flush()
-      splitSegment.lastModified = segment.lastModified
-      info(s"New segment: $splitSegment")
+      // prepare new segments
+      var totalSizeOfNewSegments = 0
+      info(s"Split messages from $segment of $this into ${newSegments.length} new segments")
+      newSegments.foreach { splitSegment =>
+        splitSegment.onBecomeInactiveSegment()
+        splitSegment.flush()
+        splitSegment.lastModified = segment.lastModified
+        totalSizeOfNewSegments += splitSegment.log.sizeInBytes
+        info(s"New segment: $splitSegment")
+      }
+      // size of all the new segments combined must equal size of the original segment
+      require(totalSizeOfNewSegments == segment.log.sizeInBytes, "Inconsistent segment sizes after split" +
+        s" before: ${segment.log.sizeInBytes} after: $totalSizeOfNewSegments")
+    } catch {
+      case e: Exception =>
+        newSegments.foreach { splitSegment =>
+          splitSegment.close()
+          splitSegment.deleteIfExists()
+        }
+        throw e
     }
 
     // replace old segment with new ones
