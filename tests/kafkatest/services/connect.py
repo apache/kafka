@@ -20,12 +20,12 @@ import signal
 import time
 
 import requests
-from ducktape.cluster.remoteaccount import RemoteCommandError
 from ducktape.errors import DucktapeError
 from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
 
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
+from kafkatest.utils.util import listening
 
 
 class ConnectServiceBase(KafkaPathResolverMixin, Service):
@@ -87,15 +87,6 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
         self.config_template_func = config_template_func
         self.connector_config_templates = connector_config_templates
 
-    def listening(self, node):
-        try:
-            cmd = "nc -z %s %s" % (node.account.hostname, self.CONNECT_REST_PORT)
-            node.account.ssh_output(cmd, allow_fail=False)
-            self.logger.debug("Connect worker started accepting connections at: '%s:%s')", node.account.hostname,
-                              self.CONNECT_REST_PORT)
-            return True
-        except (RemoteCommandError, ValueError) as e:
-            return False
 
     def start(self, mode=STARTUP_MODE_LISTEN):
         self.startup_mode = mode
@@ -115,7 +106,7 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
 
     def start_and_wait_to_start_listening(self, node, worker_type, remote_connector_configs):
         self.start_and_return_immediately(node, worker_type, remote_connector_configs)
-        wait_until(lambda: self.listening(node), timeout_sec=60,
+        wait_until(lambda: listening(self.logger, node, self.CONNECT_REST_PORT), timeout_sec=60,
                    err_msg="Kafka Connect failed to start on node: %s in condition mode: %s" %
                    (str(node.account), self.startup_mode))
 

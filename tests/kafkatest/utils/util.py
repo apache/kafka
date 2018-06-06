@@ -16,7 +16,7 @@ from kafkatest import __version__ as __kafkatest_version__
 
 import re
 import time
-
+from ducktape.cluster.remoteaccount import RemoteCommandError
 
 def kafkatest_version():
     """Return string representation of current ducktape version."""
@@ -105,10 +105,44 @@ def is_int_with_prefix(msg):
 
 def node_is_reachable(src_node, dst_node):
     """
-    Returns true if a node is unreachable from another node.
+    Returns true if a node is reachable from another node.
 
     :param src_node:        The source node to check from reachability from.
     :param dst_node:        The destination node to check for reachability to.
     :return:                True only if dst is reachable from src.
     """
     return 0 == src_node.account.ssh("nc -w 3 -z %s 22" % dst_node.account.hostname, allow_fail=True)
+
+def listening_any(logger, node, ports):
+    """
+    Returns true if any of the specified ports is listening for connections on the given node.
+
+    :param logger:          Logger object.
+    :param node:            Node to log into via SSH.
+    :param ports:           Ports to connect to and test whether any of them is listening for connections.
+
+    :return:                True only if the node is listening for connections on any of the specified ports.
+    """
+    for port in ports:
+        if listening(logger, node, port):
+            return True
+    return False
+
+def listening(logger, node, port):
+    """
+    Returns true if the specified port is listening for connections on the given node.
+
+    :param logger:          Logger object.
+    :param node:            Node to log into via SSH.
+    :param port:            Port to connect to and test whether it is listening for connections.
+
+    :return:                True only if the node is listening for connections on the specified port.
+    """
+    try:
+        cmd = "nc -z %s %s" % (node.account.hostname, port)
+        node.account.ssh_output(cmd, allow_fail=False)
+        logger.debug("Server started accepting connections at: '%s:%s')", node.account.hostname, port)
+        return True
+    except (RemoteCommandError, ValueError) as e:
+        logger.debug("Server does not accept connections at: '%s:%s')", node.account.hostname, port)
+        return False

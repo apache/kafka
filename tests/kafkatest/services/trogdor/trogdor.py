@@ -22,7 +22,7 @@ from requests.packages.urllib3 import Retry
 from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
-
+from kafkatest.utils.util import listening
 
 class TrogdorService(KafkaPathResolverMixin, Service):
     """
@@ -55,6 +55,7 @@ class TrogdorService(KafkaPathResolverMixin, Service):
     DEFAULT_COORDINATOR_PORT=8889
     REQUEST_TIMEOUT=5
     REQUEST_HEADERS = {"Content-type": "application/json"}
+    AGENT="agent"
 
     logs = {
         "trogdor_coordinator_stdout_stderr": {
@@ -153,7 +154,7 @@ class TrogdorService(KafkaPathResolverMixin, Service):
         node.account.create_file(TrogdorService.AGENT_LOG4J_PROPERTIES,
                                  self.render('log4j.properties',
                                              log_path=TrogdorService.AGENT_LOG))
-        self._start_trogdor_daemon("agent", TrogdorService.AGENT_STDOUT_STDERR,
+        self._start_trogdor_daemon(TrogdorService.AGENT, TrogdorService.AGENT_STDOUT_STDERR,
                                    TrogdorService.AGENT_LOG4J_PROPERTIES,
                                    TrogdorService.AGENT_LOG, node)
         self.logger.info("Started trogdor agent on %s." % node.name)
@@ -170,9 +171,12 @@ class TrogdorService(KafkaPathResolverMixin, Service):
                 stdout_stderr_capture_path,
                 stdout_stderr_capture_path)
         node.account.ssh(cmd)
-        with node.account.monitor_log(log_path) as monitor:
-            monitor.wait_until("Starting %s process." % daemon_name, timeout_sec=60, backoff_sec=.10,
-                               err_msg=("%s on %s didn't finish startup" % (daemon_name, node.name)))
+        if daemon_name == TrogdorService.AGENT:
+            wait_until(lambda: listening(self.logger, node, self.agent_port), timeout_sec=60, backoff_sec=.1,
+                       err_msg="Trogdor agent didn't finish startup")
+        else:
+            wait_until(lambda: listening(self.logger, node, self.coordinator_port), timeout_sec=60, backoff_sec=.1,
+                       err_msg="Trogdor coordinator didn't finish startup")
 
     def wait_node(self, node, timeout_sec=None):
         if self.is_coordinator(node):

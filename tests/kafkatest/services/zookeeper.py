@@ -20,11 +20,11 @@ import time
 
 from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
-from ducktape.cluster.remoteaccount import RemoteCommandError
 
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.security.security_config import SecurityConfig
 from kafkatest.version import DEV_BRANCH
+from kafkatest.utils.util import listening
 
 
 class ZookeeperService(KafkaPathResolverMixin, Service):
@@ -82,16 +82,7 @@ class ZookeeperService(KafkaPathResolverMixin, Service):
         start_cmd += "%s/zookeeper.properties &>> %s &" % (ZookeeperService.ROOT, self.logs["zk_log"]["path"])
         node.account.ssh(start_cmd)
 
-        wait_until(lambda: self.listening(node), timeout_sec=30, err_msg="Zookeeper node failed to start")
-
-    def listening(self, node):
-        try:
-            cmd = "nc -z %s %s" % (node.account.hostname, 2181)
-            node.account.ssh_output(cmd, allow_fail=False)
-            self.logger.debug("Zookeeper started accepting connections at: '%s:%s')", node.account.hostname, 2181)
-            return True
-        except (RemoteCommandError, ValueError) as e:
-            return False
+        wait_until(lambda: listening(self.logger, node, 2181), timeout_sec=30, err_msg="Zookeeper node failed to start")
 
     def pids(self, node):
         return node.account.java_pids(self.java_class_name())
