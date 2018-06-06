@@ -417,8 +417,8 @@ public interface KStream<K, V> {
     KStream<K, V> merge(final KStream<K, V> stream);
 
     /**
-     * Materialize this stream to a topic and creates a new {@code KStream} from the topic using default serializers and
-     * deserializers and producer's {@link DefaultPartitioner}.
+     * Materialize this stream to a topic and creates a new {@code KStream} from the topic using default serializers,
+     * deserializers, and producer's {@link DefaultPartitioner}.
      * The specified topic should be manually created before it is used (i.e., before the Kafka Streams application is
      * started).
      * <p>
