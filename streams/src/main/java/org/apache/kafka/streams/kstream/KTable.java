@@ -192,7 +192,7 @@ public interface KTable<K, V> {
 
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
-     * (with possibly new type) in the new {@code KTable}, with default serializers, deserializers, and state store.
+     * (with possibly a new type) in the new {@code KTable}, with default serializers, deserializers, and state store.
      * For each {@code KTable} update the provided {@link ValueMapper} is applied to the value of the updated record and
      * computes a new value for it, resulting in an updated record for the result {@code KTable}.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
@@ -226,7 +226,7 @@ public interface KTable<K, V> {
 
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
-     * (with possibly new type) in the new {@code KTable}, with default serializers, deserializers, and state store.
+     * (with possibly a new type) in the new {@code KTable}, with default serializers, deserializers, and state store.
      * For each {@code KTable} update the provided {@link ValueMapperWithKey} is applied to the value of the update
      * record and computes a new value for it, resulting in an updated record for the result {@code KTable}.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
@@ -261,7 +261,7 @@ public interface KTable<K, V> {
 
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
-     * (with possibly new type) in the new {@code KTable}, with the {@link Serde key serde}, {@link Serde value serde},
+     * (with possibly a new type) in the new {@code KTable}, with the {@link Serde key serde}, {@link Serde value serde},
      * and the underlying {@link KeyValueStore materialized state storage} configured in the {@link Materialized}
      * instance.
      * For each {@code KTable} update the provided {@link ValueMapper} is applied to the value of the updated record and
@@ -307,7 +307,7 @@ public interface KTable<K, V> {
 
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
-     * (with possibly new type) in the new {@code KTable}, with the {@link Serde key serde}, {@link Serde value serde},
+     * (with possibly a new type) in the new {@code KTable}, with the {@link Serde key serde}, {@link Serde value serde},
      * and the underlying {@link KeyValueStore materialized state storage} configured in the {@link Materialized}
      * instance.
      * For each {@code KTable} update the provided {@link ValueMapperWithKey} is applied to the value of the update
@@ -391,7 +391,7 @@ public interface KTable<K, V> {
 
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
-     * (with possibly new type), with default serializers, deserializers, and state store.
+     * (with possibly a new type), with default serializers, deserializers, and state store.
      * A {@link ValueTransformerWithKey} (provided by the given {@link ValueTransformerWithKeySupplier}) is applied to each input
      * record value and computes a new value for it.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
@@ -464,7 +464,7 @@ public interface KTable<K, V> {
 
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
-     * (with possibly new type), with the {@link Serde key serde}, {@link Serde value serde}, and the underlying
+     * (with possibly a new type), with the {@link Serde key serde}, {@link Serde value serde}, and the underlying
      * {@link KeyValueStore materialized state storage} configured in the {@link Materialized} instance.
      * A {@link ValueTransformerWithKey} (provided by the given {@link ValueTransformerWithKeySupplier}) is applied to each input
      * record value and computes a new value for it.
