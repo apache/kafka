@@ -55,6 +55,8 @@ public class ProcessorStateManager extends AbstractStateManager {
     // of the same topic can be assigned to the same topic.
     private final Map<String, TopicPartition> partitionForTopic;
 
+    private String applicationId;
+
     /**
      * @throws ProcessorStateException if the task directory does not exist and could not be created
      * @throws IOException if any severe error happens while creating or locking the state directory
@@ -96,6 +98,9 @@ public class ProcessorStateManager extends AbstractStateManager {
         log.debug("Created state store manager for task {} with the acquired state dir lock", taskId);
     }
 
+    public void setApplicationId(final String applicationId) {
+        this.applicationId = applicationId;
+    }
 
     public static String storeChangelogTopic(final String applicationId, final String storeName) {
         return applicationId + "-" + storeName + STATE_CHANGELOG_TOPIC_SUFFIX;
@@ -127,14 +132,28 @@ public class ProcessorStateManager extends AbstractStateManager {
             return;
         }
 
-        final TopicPartition storePartition = new TopicPartition(topic, getPartition(topic));
+        TopicPartition storePartition = new TopicPartition(topic, getPartition(topic));
 
         if (isStandby) {
             log.trace("Preparing standby replica of persistent state store {} with changelog topic {}", storeName, topic);
             restoreCallbacks.put(topic, stateRestoreCallback);
-
         } else {
-            log.trace("Restoring state store {} from changelog topic {}", storeName, topic);
+            Long checkpointedOffset = checkpointableOffsets.get(storePartition);
+
+            // if the checkpoint offset does not exist, and this store's changelog topic is not normally set,
+            // try to find if the normal changelog topic exists. And if yes, use that.
+            // This is a special handling logic for StreamsBuilder.table() from 1.0/1.1 to 2.0
+            if (checkpointedOffset == null) {
+                final String changelogTopic = storeChangelogTopic(applicationId, storeName);
+                final TopicPartition alternativeStorePartition = new TopicPartition(changelogTopic, getPartition(changelogTopic));
+
+                if (!topic.equals(changelogTopic) && checkpointableOffsets.containsKey(alternativeStorePartition)) {
+                    storePartition = alternativeStorePartition;
+                }
+            }
+
+            log.trace("Restoring state store {} from changelog {}", storeName, storePartition);
+
             final StateRestorer restorer = new StateRestorer(storePartition,
                                                              new CompositeRestoreListener(stateRestoreCallback),
                                                              checkpointableOffsets.get(storePartition),
