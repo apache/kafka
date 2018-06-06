@@ -125,11 +125,10 @@ class SkimpyCleanerCache(val memory: Int, val hashAlgorithm: String = "MD5", val
 
   /**
    * The number of bytes of space each entry uses.
-   * This evaluates to the number of bytes in the hash plus 8 bytes
-   * for either the offset or the timestamp, depending on the strategy.
-   * If using a custom strategy, another 8 bytes are added for the custom header versioning.
+-   * This evaluates to the number of bytes in the hash plus 8 bytes for the offset
+-   * and, if applicable, another 8 bytes for versioning.
    */
-  val bytesPerEntry: Int = hashSize + 8 + (if (isOffsetStrategy || isTimestampStrategy) 0 else 8)
+  val bytesPerEntry: Int = hashSize + 8 + (if (isOffsetStrategy) 0 else 8)
 
   val slots: Int = memory / bytesPerEntry
 
@@ -170,10 +169,6 @@ class SkimpyCleanerCache(val memory: Int, val hashAlgorithm: String = "MD5", val
       if (recordVersion >= 0 && cachedVersion >= 0 && recordVersion != cachedVersion) {
         return recordVersion >= 0 && cachedVersion < recordVersion
       }
-      if (isTimestampStrategy) {
-        // timestamp strategy doesn't store offsets, so it can't compare them
-        return cachedVersion < 0 || cachedVersion <= recordVersion
-      }
     }
     // compare greatness based purely on offset
     val cachedOffset = offset(record.key)
@@ -181,9 +176,6 @@ class SkimpyCleanerCache(val memory: Int, val hashAlgorithm: String = "MD5", val
   }
 
   override def offset(key: ByteBuffer): Long = {
-    if (isTimestampStrategy) {
-      return -1
-    }
     lookups += 1
     hashInto(key, hash1)
     // search for the hash of this key by repeated probing until we find the hash we are looking for or we find an empty slot
@@ -227,9 +219,7 @@ class SkimpyCleanerCache(val memory: Int, val hashAlgorithm: String = "MD5", val
       bytes.get(hash2)
       attempt += 1
     } while (!util.Arrays.equals(hash1, hash2))
-    if (!isTimestampStrategy) {
-      bytes.position(bytes.position() + 8)
-    }
+    bytes.position(bytes.position() + 8)
     bytes.getLong()
   }
 
@@ -317,12 +307,8 @@ class SkimpyCleanerCache(val memory: Int, val hashAlgorithm: String = "MD5", val
   /** Inserts the record at the current position. */
   private def insertRecord(record: Record): Unit = {
     val recordOffset = record.offset
-    if (isOffsetStrategy) {
-      bytes.putLong(recordOffset)
-    } else if (isTimestampStrategy) {
-      bytes.putLong(extractVersion(record))
-    } else {
-      bytes.putLong(recordOffset)
+    bytes.putLong(recordOffset)
+    if (!isOffsetStrategy) {
       bytes.putLong(extractVersion(record))
     }
     updateLatestOffset(recordOffset)

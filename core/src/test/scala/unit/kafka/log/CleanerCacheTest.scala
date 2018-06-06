@@ -42,7 +42,7 @@ class CleanerCacheTest extends JUnitSuite {
     validateMap(1000, strategy = Constants.TimestampStrategy)
     validateMap(5000, strategy = Constants.TimestampStrategy)
   }
-  
+
   @Test
   def testBasicValidationWithHeaderStrategy() {
     validateMap(10, strategy = "version")
@@ -50,7 +50,7 @@ class CleanerCacheTest extends JUnitSuite {
     validateMap(1000, strategy = "version")
     validateMap(5000, strategy = "version")
   }
-  
+
   @Test
   def testClearWithDefaultStrategy() {
     val cache = new SkimpyCleanerCache(4000)
@@ -73,7 +73,7 @@ class CleanerCacheTest extends JUnitSuite {
     for (i <- 0 until 10)
       cache.putIfGreater(new FakeRecord(key(i), 100 + i, 200 + i, 300 + i))
     for (i <- 0 until 10) {
-      assertEquals(-1L, cache.offset(key(i)))
+      assertEquals(100 + i, cache.offset(key(i)))
       assertEquals(300 + i, cache.version(key(i)))
     }
     cache.clear()
@@ -123,7 +123,7 @@ class CleanerCacheTest extends JUnitSuite {
     }
     assertEquals(-1L, cache.offset(key(i)))
     assertEquals(-1L, cache.version(key(i)))
-    assertEquals(-1L, cache.offset(key(i - 1L)))
+    assertEquals(100 + (i - 1), cache.offset(key(i - 1L)))
     assertEquals(300 + (i - 1), cache.version(key(i - 1L)))
   }
 
@@ -164,7 +164,7 @@ class CleanerCacheTest extends JUnitSuite {
     }
     assertEquals(size, cache.size)
     for (i <- 1 to size) {
-      assertEquals(-1L, cache.offset(key(i)))
+      assertEquals(100 + i, cache.offset(key(i)))
       assertEquals(300 + i, cache.version(key(i)))
     }
   }
@@ -209,17 +209,17 @@ class CleanerCacheTest extends JUnitSuite {
 
     cache.putIfGreater(new FakeRecord(key(1), 1, 2, 3))
     assertEquals(1, cache.size)
-    assertEquals(-1, cache.offset(key(1)))
+    assertEquals(1, cache.offset(key(1)))
     assertEquals(3, cache.version(key(1)))
 
     cache.putIfGreater(new FakeRecord(key(1), 1, 1, 2))
     assertEquals(1, cache.size)
-    assertEquals(-1, cache.offset(key(1)))
+    assertEquals(1, cache.offset(key(1)))
     assertEquals(3, cache.version(key(1)))
 
     cache.putIfGreater(new FakeRecord(key(1), 1, 3, 4))
     assertEquals(1, cache.size)
-    assertEquals(-1, cache.offset(key(1)))
+    assertEquals(1, cache.offset(key(1)))
     assertEquals(4, cache.version(key(1)))
   }
 
@@ -281,7 +281,7 @@ class CleanerCacheTest extends JUnitSuite {
     assertEquals(false, cache.greater(new FakeRecord(key(1), 3, 3, 1)))
     assertEquals(true, cache.greater(new FakeRecord(key(1), 1, 1, 3)))
     // check when version is the same as cached value
-    assertEquals(true, cache.greater(new FakeRecord(key(1), 1, 3, 2)))
+    assertEquals(false, cache.greater(new FakeRecord(key(1), 1, 3, 2)))
     assertEquals(true, cache.greater(new FakeRecord(key(1), 2, 1, 2)))
     assertEquals(true, cache.greater(new FakeRecord(key(1), 3, 1, 2)))
   }
@@ -311,7 +311,7 @@ class CleanerCacheTest extends JUnitSuite {
           assertEquals(100 + i, cache.offset(key(i)))
           assertEquals(-1, cache.version(key(i)))
         case Constants.TimestampStrategy =>
-          assertEquals(-1, cache.offset(key(i)))
+          assertEquals(100 + i, cache.offset(key(i)))
           assertEquals(300 + i, cache.version(key(i)))
         case _ =>
           assertEquals(100 + i, cache.offset(key(i)))
