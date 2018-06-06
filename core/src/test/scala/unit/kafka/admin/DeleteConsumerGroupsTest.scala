@@ -16,6 +16,7 @@
  */
 package unit.kafka.admin
 
+import joptsimple.OptionException
 import kafka.admin.ConsumerGroupCommandTest
 import kafka.utils.TestUtils
 import org.apache.kafka.common.protocol.Errors
@@ -24,12 +25,11 @@ import org.junit.Test
 
 class DeleteConsumerGroupTest extends ConsumerGroupCommandTest {
 
-  @Test(expected = classOf[joptsimple.OptionException])
+  @Test(expected = classOf[OptionException])
   def testDeleteWithTopicOption() {
     TestUtils.createOffsetsTopic(zkClient, servers)
     val cgcArgs = Array("--bootstrap-server", brokerList, "--delete", "--group", group, "--topic")
     getConsumerGroupService(cgcArgs)
-    fail("Expected an error due to presence of mutually exclusive options")
   }
 
   @Test
@@ -221,5 +221,11 @@ class DeleteConsumerGroupTest extends ConsumerGroupCommandTest {
     assertTrue(s"The consumer group deletion did not work as expected",
       result.size == 1 &&
         result.keySet.contains(group) && result.get(group).contains(Errors.COORDINATOR_NOT_AVAILABLE))
+  }
+
+  @Test(expected = classOf[OptionException])
+  def testDeleteWithUnrecognizedNewConsumerOption() {
+    val cgcArgs = Array("--new-consumer", "--bootstrap-server", brokerList, "--delete", "--group", group)
+    getConsumerGroupService(cgcArgs)
   }
 }
