@@ -1035,21 +1035,21 @@ class KafkaApis(val requestChannel: RequestChannel,
     var (authorizedTopics, unauthorizedForDescribeTopics) =
       topics.partition(topic => authorize(request.session, Describe, new Resource(Topic, topic)))
 
-    var authorizedForDescribeNotCreateTopics = Set[String]()
+    var unauthorizedForCreateTopics = Set[String]()
 
     if (authorizedTopics.nonEmpty) {
       val nonExistingTopics = metadataCache.getNonExistingTopics(authorizedTopics)
       if (metadataRequest.allowAutoTopicCreation && config.autoCreateTopicsEnable && nonExistingTopics.nonEmpty) {
         if (!authorize(request.session, Create, Resource.ClusterResource)) {
-          val unauthorizedForCreateTopics = authorizedTopics.filter(
-              topic => !authorize(request.session, Create, new Resource(Topic, topic)))
+          unauthorizedForCreateTopics = nonExistingTopics.filter { topic =>
+            !authorize(request.session, Create, new Resource(Topic, topic))
+          }
           authorizedTopics --= unauthorizedForCreateTopics
-          authorizedForDescribeNotCreateTopics ++= unauthorizedForCreateTopics
         }
       }
     }
 
-    val unauthorizedForCreateTopicMetadata = authorizedForDescribeNotCreateTopics.map(topic =>
+    val unauthorizedForCreateTopicMetadata = unauthorizedForCreateTopics.map(topic =>
       new MetadataResponse.TopicMetadata(Errors.TOPIC_AUTHORIZATION_FAILED, topic, isInternal(topic),
         java.util.Collections.emptyList()))
 
