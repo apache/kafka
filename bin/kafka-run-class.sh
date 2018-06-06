@@ -244,7 +244,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-if [ "CONSOLE_OUTPUT_FILE" = "x" ]; then 
+if [ -z "{$CONSOLE_OUTPUT_FILE+x}" ]; then
   CONSOLE_OUTPUT_FILE=$LOG_DIR/$DAEMON_NAME.out
 fi
  
