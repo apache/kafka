@@ -92,8 +92,8 @@ public interface KTable<K, V> {
 
     /**
      * Create a new {@code KTable} that consists of all records of this {@code KTable} which satisfy the given
-     * predicate, using the {@link Materialized} instance for configuration of the {@link Serde key serde},
-     * {@link Serde the result table's value serde}, and {@link KeyValueStore state store}.
+     * predicate, with the {@link Serde key serde}, {@link Serde value serde}, and the underlying
+     * {@link KeyValueStore materialized state storage} configured in the {@link Materialized} instance.
      * All records that do not satisfy the predicate are dropped.
      * For each {@code KTable} update, the filter is evaluated based on the current update
      * record and then an update record is produced for the result {@code KTable}.
@@ -153,8 +153,8 @@ public interface KTable<K, V> {
 
     /**
      * Create a new {@code KTable} that consists all records of this {@code KTable} which do <em>not</em> satisfy the
-     * given predicate, using the {@link Materialized} instance for configuration of the {@link Serde key serde},
-     * {@link Serde the result table's value serde}, and {@link KeyValueStore state store}.
+     * given predicate, with the {@link Serde key serde}, {@link Serde value serde}, and the underlying
+     * {@link KeyValueStore materialized state storage} configured in the {@link Materialized} instance.
      * All records that <em>do</em> satisfy the predicate are dropped.
      * For each {@code KTable} update, the filter is evaluated based on the current update
      * record and then an update record is produced for the result {@code KTable}.
@@ -261,8 +261,9 @@ public interface KTable<K, V> {
 
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
-     * (with possibly new type) in the new {@code KTable}, using the {@link Materialized} instance for configuration of
-     * the {@link Serde key serde}, {@link Serde the result table's value serde}, and {@link KeyValueStore state store}.
+     * (with possibly new type) in the new {@code KTable}, with the {@link Serde key serde}, {@link Serde value serde},
+     * and the underlying {@link KeyValueStore materialized state storage} configured in the {@link Materialized}
+     * instance.
      * For each {@code KTable} update the provided {@link ValueMapper} is applied to the value of the updated record and
      * computes a new value for it, resulting in an updated record for the result {@code KTable}.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
@@ -306,8 +307,9 @@ public interface KTable<K, V> {
 
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
-     * (with possibly new type) in the new {@code KTable}, using the {@link Materialized} instance for configuration of
-     * the {@link Serde key serde}, {@link Serde the result table's value serde}, and {@link KeyValueStore state store}.
+     * (with possibly new type) in the new {@code KTable}, with the {@link Serde key serde}, {@link Serde value serde},
+     * and the underlying {@link KeyValueStore materialized state storage} configured in the {@link Materialized}
+     * instance.
      * For each {@code KTable} update the provided {@link ValueMapperWithKey} is applied to the value of the update
      * record and computes a new value for it, resulting in an updated record for the result {@code KTable}.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
@@ -462,8 +464,8 @@ public interface KTable<K, V> {
 
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
-     * (with possibly new type), using the {@link Materialized} instance for configuration of the {@link Serde key serde},
-     * {@link Serde the result table's value serde}, and {@link KeyValueStore state store}.
+     * (with possibly new type), with the {@link Serde key serde}, {@link Serde value serde}, and the underlying
+     * {@link KeyValueStore materialized state storage} configured in the {@link Materialized} instance.
      * A {@link ValueTransformerWithKey} (provided by the given {@link ValueTransformerWithKeySupplier}) is applied to each input
      * record value and computes a new value for it.
      * This is similar to {@link #mapValues(ValueMapperWithKey)}, but more flexible, allowing stateful, rather than stateless,
