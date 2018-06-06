@@ -789,6 +789,7 @@ project(':clients') {
     jacksonDatabindConfig
   }
 
+  // add jacksonDatabindConfig as provided scope config with high priority (1000)
   conf2ScopeMappings.addMapping(1000, configurations.jacksonDatabindConfig, "provided")
 
   dependencies {
