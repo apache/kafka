@@ -846,18 +846,14 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Read)), newTopicResource)
     addAndVerifyAcls(groupReadAcl(groupResource), groupResource)
     this.consumers.head.assign(List(topicPartition).asJava)
-    try {
-      this.consumers.head.poll(Duration.ofMillis(50L));
-      Assert.fail("should have thrown Authorization Exception")
-    } catch {
-      case e: TopicAuthorizationException =>
-        assertEquals(Collections.singleton(newTopic), e.unauthorizedTopics())
-    }
+    val unauthorizedTopics = intercept[TopicAuthorizationException] {
+      (0 until 10).foreach(_ => consumers.head.poll(Duration.ofMillis(50L)))
+    }.unauthorizedTopics
+    assertEquals(Collections.singleton(newTopic), unauthorizedTopics)
 
     val resource = if (resType == Topic) newTopicResource else Resource.ClusterResource
     addAndVerifyAcls(acls, resource)
 
-    // need to retry to avoid using a long timeout  
     TestUtils.waitUntilTrue(() => {
       this.consumers.head.poll(Duration.ofMillis(50L))
       this.zkClient.topicExists(newTopic)
