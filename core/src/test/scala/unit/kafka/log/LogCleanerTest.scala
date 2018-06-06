@@ -507,11 +507,11 @@ class LogCleanerTest extends JUnitSuite {
    */
   @Test
   def testMessageLargerThanMaxMessageSize() {
-    val (log, offsetMap) = createLogWithMessagesLargerThanMaxSize(largeMessageSize = 1024 * 1024)
+    val (log, cache) = createLogWithMessagesLargerThanMaxSize(largeMessageSize = 1024 * 1024)
 
     val cleaner = makeCleaner(Int.MaxValue, maxMessageSize=1024)
-    cleaner.cleanSegments(log, Seq(log.logSegments.head), offsetMap, 0L, new CleanerStats)
-    val shouldRemain = keysInLog(log).filter(k => !offsetMap.map.containsKey(k.toString))
+    cleaner.cleanSegments(log, Seq(log.logSegments.head), cache, 0L, new CleanerStats)
+    val shouldRemain = keysInLog(log).filter(k => !cache.map.containsKey(k.toString))
     assertEquals(shouldRemain, keysInLog(log))
   }
 
@@ -521,7 +521,7 @@ class LogCleanerTest extends JUnitSuite {
    */
   @Test
   def testMessageLargerThanMaxMessageSizeWithCorruptHeader() {
-    val (log, offsetMap) = createLogWithMessagesLargerThanMaxSize(largeMessageSize = 1024 * 1024)
+    val (log, cache) = createLogWithMessagesLargerThanMaxSize(largeMessageSize = 1024 * 1024)
     val file = new RandomAccessFile(log.logSegments.head.log.file, "rw")
     file.seek(Records.MAGIC_OFFSET)
     file.write(0xff)
@@ -529,7 +529,7 @@ class LogCleanerTest extends JUnitSuite {
 
     val cleaner = makeCleaner(Int.MaxValue, maxMessageSize=1024)
     intercept[CorruptRecordException] {
-      cleaner.cleanSegments(log, Seq(log.logSegments.head), offsetMap, 0L, new CleanerStats)
+      cleaner.cleanSegments(log, Seq(log.logSegments.head), cache, 0L, new CleanerStats)
     }
   }
 
@@ -539,18 +539,18 @@ class LogCleanerTest extends JUnitSuite {
    */
   @Test
   def testCorruptMessageSizeLargerThanBytesAvailable() {
-    val (log, offsetMap) = createLogWithMessagesLargerThanMaxSize(largeMessageSize = 1024 * 1024)
+    val (log, cache) = createLogWithMessagesLargerThanMaxSize(largeMessageSize = 1024 * 1024)
     val file = new RandomAccessFile(log.logSegments.head.log.file, "rw")
     file.setLength(1024)
     file.close()
 
     val cleaner = makeCleaner(Int.MaxValue, maxMessageSize=1024)
     intercept[CorruptRecordException] {
-      cleaner.cleanSegments(log, Seq(log.logSegments.head), offsetMap, 0L, new CleanerStats)
+      cleaner.cleanSegments(log, Seq(log.logSegments.head), cache, 0L, new CleanerStats)
     }
   }
 
-  def createLogWithMessagesLargerThanMaxSize(largeMessageSize: Int): (Log, FakeOffsetMap) = {
+  def createLogWithMessagesLargerThanMaxSize(largeMessageSize: Int): (Log, FakeCleanerCache) = {
     val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, largeMessageSize * 16: java.lang.Integer)
     logProps.put(LogConfig.MaxMessageBytesProp, largeMessageSize * 2: java.lang.Integer)
@@ -568,10 +568,10 @@ class LogCleanerTest extends JUnitSuite {
 
     // pretend we have the following keys
     val keys = immutable.ListSet(1, 3, 5, 7, 9)
-    val map = new FakeOffsetMap(Int.MaxValue)
-    keys.foreach(k => map.put(key(k), Long.MaxValue))
+    val cache = new FakeCleanerCache(Int.MaxValue)
+    keys.foreach(k => cache.putIfGreater(new FakeRecord(key(k), Long.MaxValue)))
 
-    (log, map)
+    (log, cache)
   }
 
   @Test
