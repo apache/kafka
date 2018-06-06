@@ -882,9 +882,8 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     addAndVerifyAcls(createAcls, createTopicResource)
 
     // retry as topic being created can have MetadataResponse with Errors.LEADER_NOT_AVAILABLE
-    TestUtils.retry(JTestUtils.DEFAULT_MAX_WAIT_MS)( () => {
+    TestUtils.retry(JTestUtils.DEFAULT_MAX_WAIT_MS)(() => {
       val metadataResponse = MetadataResponse.parse(connectAndSend(metadataRequest, ApiKeys.METADATA), ApiKeys.METADATA.latestVersion)
-      assertEquals(Set().asJava, metadataResponse.topicsByError(Errors.TOPIC_AUTHORIZATION_FAILED))
       assertEquals(Set(topic, createTopic).asJava, metadataResponse.topicsByError(Errors.NONE))
     })
   }
