@@ -301,7 +301,7 @@ public class DelegatingClassLoader extends URLClassLoader {
                 getPluginDesc(reflections, Converter.class, loader),
                 getPluginDesc(reflections, HeaderConverter.class, loader),
                 getPluginDesc(reflections, Transformation.class, loader),
-                getPluginDesc(reflections, ConfigProvider.class, loader),
+                getServiceLoaderPluginDesc(ConfigProvider.class, loader),
                 getServiceLoaderPluginDesc(ConnectRestExtension.class, loader)
         );
     }
@@ -326,7 +326,6 @@ public class DelegatingClassLoader extends URLClassLoader {
 
     private <T> Collection<PluginDesc<T>> getServiceLoaderPluginDesc(Class<T> klass,
                                                                      ClassLoader loader) {
-
         ServiceLoader<T> serviceLoader = ServiceLoader.load(klass, loader);
         Collection<PluginDesc<T>> result = new ArrayList<>();
         for (T impl : serviceLoader) {
