@@ -53,6 +53,7 @@
                     </ul>
                 </li>
                 <li><a class="reference internal" href="#connecting-processors-and-state-stores" id="id8">Connecting Processors and State Stores</a></li>
+                <li><a class="reference internal" href="#accessing-processor-context" id="id10">Accessing Processor Context</a></li>
             </ul>
         </div>
         <div class="section" id="overview">
@@ -351,6 +352,22 @@
                     your store.</p>
             </div>
         </div>
+        <div class="section" id="accessing-processor-context">
+            <h2><a class="toc-backref" href="#id10">Accessing Processor Context</a><a class="headerlink" href="#accessing-processor-context" title="Permalink to this headline"></a></h2>
+            <p>As we have mentioned in <href=#defining-a-stream-processor>Defining a Stream Processor<\href>, a <code>ProcessorContext</code> control the processing workflow, such as scheduling a punctuation function, and committing the current processed state.</p>
+            <p>This object can also be used to access the metadata related with the application like 
+            <code class="docutils literal"><span class="pre">applicationId</span></code>, <code class="docutils literal"><span class="pre">taskId</span></code>, 
+                and <code class="docutils literal"><span class="pre">stateDir</span></code>, and also record related metadata as <code class="docutils literal"><span class="pre">topic</span></code>, 
+                <code class="docutils literal"><span class="pre">partition</span></code>, <code class="docutils literal"><span class="pre">offset</span></code>, <code class="docutils literal"><span class="pre">timestamp</span></code> and 
+                <code class="docutils literal"><span class="pre">headers</span></code>.</p>
+            <p>Here is an example implementation of how to add a new header to the record:</p>
+            <div class="highlight-java"><div class="highlight"><pre><span></span><span class="n">public void process(String key, String value) {</span>
+            
+            <span class="c1">// add a heaeder to the elements</span>
+            <span class="n">context()</span><span class="o">.</span><span class="na">headers</span><span class="o">()</span><span class="o">.</span><span class="na">add</span><span class="o">.</span><span class="o">(</span><span class="s">&quot;key&quot;</span><span class="o">,</span> <span class="s">&quot;key&quot;</span>
+            <span class="o">}</span>
+            </pre></div>
+        </div>
         <div class="section" id="connecting-processors-and-state-stores">
             <h2><a class="toc-backref" href="#id8">Connecting Processors and State Stores</a><a class="headerlink" href="#connecting-processors-and-state-stores" title="Permalink to this headline"></a></h2>
             <p>Now that a <a class="reference internal" href="#streams-developer-guide-stream-processor"><span class="std std-ref">processor</span></a> (WordCountProcessor) and the
@@ -399,8 +416,8 @@
                 runtime, indicating the state store is not accessible from this processor.</p>
             <p>Now that you have fully defined your processor topology in your application, you can proceed to
                 <a class="reference internal" href="running-app.html#streams-developer-guide-execution"><span class="std std-ref">running the Kafka Streams application</span></a>.</p>
-</div>
-</div>
+        </div>
+        </div>
 
 
                </div>

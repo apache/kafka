@@ -829,7 +829,9 @@ public class StreamThreadTest {
         final TopicPartition partition2 = t2p1;
         internalStreamsBuilder.stream(Collections.singleton(topic1), consumed)
             .groupByKey().count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>as(storeName1));
-        internalStreamsBuilder.table(topic2, new ConsumedInternal(), new MaterializedInternal(Materialized.as(storeName2), internalStreamsBuilder, ""));
+        final MaterializedInternal materialized = new MaterializedInternal(Materialized.as(storeName2));
+        materialized.generateStoreNameIfNeeded(internalStreamsBuilder, "");
+        internalStreamsBuilder.table(topic2, new ConsumedInternal(), materialized);
 
         final StreamThread thread = createStreamThread(clientId, config, false);
         final MockConsumer<byte[], byte[]> restoreConsumer = clientSupplier.restoreConsumer;

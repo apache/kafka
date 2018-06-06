@@ -21,12 +21,10 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.common.config.AbstractConfig;
-import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.connect.errors.ConnectException;
-import org.apache.kafka.connect.runtime.ConnectorConfig;
+import org.apache.kafka.connect.runtime.SinkConnectorConfig;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,22 +47,14 @@ public class DeadLetterQueueReporter implements ErrorReporter {
     private static final short DLQ_MAX_DESIRED_REPLICATION_FACTOR = 3;
     private static final int DLQ_NUM_DESIRED_PARTITIONS = 1;
 
-    public static final String PREFIX = "errors.deadletterqueue";
+    private final SinkConnectorConfig connConfig;
 
-    public static final String DLQ_TOPIC_NAME = "topic.name";
-    public static final String DLQ_TOPIC_NAME_DOC = "The name of the topic where these messages are written to.";
-    public static final String DLQ_TOPIC_DEFAULT = "";
-
-    private DeadLetterQueueReporterConfig config;
     private KafkaProducer<byte[], byte[]> kafkaProducer;
     private ErrorHandlingMetrics errorHandlingMetrics;
 
-    private static final ConfigDef CONFIG_DEF = new ConfigDef()
-            .define(DLQ_TOPIC_NAME, ConfigDef.Type.STRING, DLQ_TOPIC_DEFAULT, ConfigDef.Importance.HIGH, DLQ_TOPIC_NAME_DOC);
-
     public static DeadLetterQueueReporter createAndSetup(WorkerConfig workerConfig,
-                                                         ConnectorConfig connConfig, Map<String, Object> producerProps) {
-        String topic = connConfig.getString(PREFIX + "." + DLQ_TOPIC_NAME);
+                                                         SinkConnectorConfig connConfig, Map<String, Object> producerProps) {
+        String topic = connConfig.dlqTopicName();
 
         try (AdminClient admin = AdminClient.create(workerConfig.originals())) {
             if (!admin.listTopics().names().get().contains(topic)) {
@@ -81,7 +71,7 @@ public class DeadLetterQueueReporter implements ErrorReporter {
         }
 
         KafkaProducer<byte[], byte[]> dlqProducer = new KafkaProducer<>(producerProps);
-        return new DeadLetterQueueReporter(dlqProducer);
+        return new DeadLetterQueueReporter(dlqProducer, connConfig);
     }
 
     /**
@@ -90,13 +80,9 @@ public class DeadLetterQueueReporter implements ErrorReporter {
      * @param kafkaProducer a Kafka Producer to produce the original consumed records.
      */
     // Visible for testing
-    DeadLetterQueueReporter(KafkaProducer<byte[], byte[]> kafkaProducer) {
+    DeadLetterQueueReporter(KafkaProducer<byte[], byte[]> kafkaProducer, SinkConnectorConfig connConfig) {
         this.kafkaProducer = kafkaProducer;
-    }
-
-    @Override
-    public void configure(Map<String, ?> configs) {
-        config = new DeadLetterQueueReporterConfig(configs);
+        this.connConfig = connConfig;
     }
 
     @Override
@@ -110,7 +96,8 @@ public class DeadLetterQueueReporter implements ErrorReporter {
      * @param context processing context containing the raw record at {@link ProcessingContext#consumerRecord()}.
      */
     public void report(ProcessingContext context) {
-        if (config.topic().isEmpty()) {
+        final String dlqTopicName = connConfig.dlqTopicName();
+        if (dlqTopicName.isEmpty()) {
             return;
         }
 
@@ -124,31 +111,18 @@ public class DeadLetterQueueReporter implements ErrorReporter {
 
         ProducerRecord<byte[], byte[]> producerRecord;
         if (originalMessage.timestamp() == RecordBatch.NO_TIMESTAMP) {
-            producerRecord = new ProducerRecord<>(config.topic(), null,
+            producerRecord = new ProducerRecord<>(dlqTopicName, null,
                     originalMessage.key(), originalMessage.value(), originalMessage.headers());
         } else {
-            producerRecord = new ProducerRecord<>(config.topic(), null, originalMessage.timestamp(),
+            producerRecord = new ProducerRecord<>(dlqTopicName, null, originalMessage.timestamp(),
                     originalMessage.key(), originalMessage.value(), originalMessage.headers());
         }
 
         this.kafkaProducer.send(producerRecord, (metadata, exception) -> {
             if (exception != null) {
-                log.error("Could not produce message to dead letter queue. topic=" + config.topic(), exception);
+                log.error("Could not produce message to dead letter queue. topic=" + dlqTopicName, exception);
                 errorHandlingMetrics.recordDeadLetterQueueProduceFailed();
             }
         });
-    }
-
-    static class DeadLetterQueueReporterConfig extends AbstractConfig {
-        public DeadLetterQueueReporterConfig(Map<?, ?> originals) {
-            super(CONFIG_DEF, originals, true);
-        }
-
-        /**
-         * @return name of the dead letter queue topic.
-         */
-        public String topic() {
-            return getString(DLQ_TOPIC_NAME);
-        }
     }
 }

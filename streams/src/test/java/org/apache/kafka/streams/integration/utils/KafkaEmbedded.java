@@ -87,7 +87,7 @@ public class KafkaEmbedded {
     private Properties effectiveConfigFrom(final Properties initialConfig) throws IOException {
         final Properties effectiveConfig = new Properties();
         effectiveConfig.put(KafkaConfig$.MODULE$.BrokerIdProp(), 0);
-        effectiveConfig.put(KafkaConfig$.MODULE$.HostNameProp(), "127.0.0.1");
+        effectiveConfig.put(KafkaConfig$.MODULE$.HostNameProp(), "localhost");
         effectiveConfig.put(KafkaConfig$.MODULE$.PortProp(), "9092");
         effectiveConfig.put(KafkaConfig$.MODULE$.NumPartitionsProp(), 1);
         effectiveConfig.put(KafkaConfig$.MODULE$.AutoCreateTopicsEnableProp(), true);
@@ -100,7 +100,7 @@ public class KafkaEmbedded {
     }
 
     /**
-     * This broker's `metadata.broker.list` value.  Example: `127.0.0.1:9092`.
+     * This broker's `metadata.broker.list` value.  Example: `localhost:9092`.
      * <p>
      * You can use this to tell Kafka producers and consumers how to connect to this instance.
      */

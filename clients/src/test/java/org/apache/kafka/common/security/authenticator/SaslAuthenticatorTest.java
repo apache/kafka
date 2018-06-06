@@ -82,15 +82,15 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.plain.PlainLoginModule;
 import org.apache.kafka.common.security.scram.ScramCredential;
-import org.apache.kafka.common.security.scram.internal.ScramCredentialUtils;
-import org.apache.kafka.common.security.scram.internal.ScramFormatter;
+import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils;
+import org.apache.kafka.common.security.scram.internals.ScramFormatter;
 import org.apache.kafka.common.security.scram.ScramLoginModule;
-import org.apache.kafka.common.security.scram.internal.ScramMechanism;
+import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.utils.SecurityUtils;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.authenticator.TestDigestLoginModule.DigestServerCallbackHandler;
-import org.apache.kafka.common.security.plain.internal.PlainServerCallbackHandler;
+import org.apache.kafka.common.security.plain.internals.PlainServerCallbackHandler;
 
 import org.junit.After;
 import org.junit.Before;
@@ -472,7 +472,7 @@ public class SaslAuthenticatorTest {
      */
     @Test
     public void testUnauthenticatedApiVersionsRequestOverSslHandshakeVersion1() throws Exception {
-        testUnauthenticatedApiVersionsRequest(SecurityProtocol.SASL_PLAINTEXT, (short) 1);
+        testUnauthenticatedApiVersionsRequest(SecurityProtocol.SASL_SSL, (short) 1);
     }
 
     /**
@@ -1466,7 +1466,7 @@ public class SaslAuthenticatorTest {
 
     private void createClientConnection(SecurityProtocol securityProtocol, String node) throws Exception {
         createSelector(securityProtocol, saslClientConfigs);
-        InetSocketAddress addr = new InetSocketAddress("127.0.0.1", server.port());
+        InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
     }
 

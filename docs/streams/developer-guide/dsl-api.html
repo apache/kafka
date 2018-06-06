@@ -3044,14 +3044,14 @@ t=5 (blue), which lead to a merge of sessions and an extension of a session, res
 
 
 <span class="c1">// Write the stream to the output topic, using the configured default key</span>
-<span class="c1">// and value serdes of your `StreamsConfig`.</span>
+<span class="c1">// and value serdes.</span>
 <span class="n">stream</span><span class="o">.</span><span class="na">to</span><span class="o">(</span><span class="s">&quot;my-stream-output-topic&quot;</span><span class="o">);</span>
 
 <span class="c1">// Same for table</span>
 <span class="n">table</span><span class="o">.</span><span class="na">to</span><span class="o">(</span><span class="s">&quot;my-table-output-topic&quot;</span><span class="o">);</span>
 
 <span class="c1">// Write the stream to the output topic, using explicit key and value serdes,</span>
-<span class="c1">// (thus overriding the defaults of your `StreamsConfig`).</span>
+<span class="c1">// (thus overriding the defaults in the config properties).</span>
 <span class="n">stream</span><span class="o">.</span><span class="na">to</span><span class="o">(</span><span class="s">&quot;my-stream-output-topic&quot;</span><span class="o">,</span> <span class="n">Produced</span><span class="o">.</span><span class="na">with</span><span class="o">(</span><span class="n">Serdes</span><span class="o">.</span><span class="na">String</span><span class="o">(),</span> <span class="n">Serdes</span><span class="o">.</span><span class="na">Long</span><span class="o">());</span>
 </pre></div>
                         </div>
@@ -3131,7 +3131,7 @@ t=5 (blue), which lead to a merge of sessions and an extension of a session, res
             </div>
         </div>
         <div class="section" id="testing-a-streams-app">
-            <a class="headerlink" href="#testing-a-streams-app" title="Permalink to this headline"><h2>Testing a Streams application</a></h2>
+            <a class="headerlink" href="#testing-a-streams-app" title="Permalink to this headline"><h2>Testing a Streams application</h2></a>
             Kafka Streams comes with a <code>test-utils</code> module to help you test your application <a href="testing.html">here</a>.
             </div>
         </div>
@@ -3201,7 +3201,7 @@ import org.apache.kafka.streams.{KafkaStreams, StreamsConfig}
 object WordCountApplication extends App {
   import Serdes._
 
-  val config: Properties = {
+  val props: Properties = {
     val p = new Properties()
     p.put(StreamsConfig.APPLICATION_ID_CONFIG, "wordcount-application")
     p.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "kafka-broker1:9092")
@@ -3216,7 +3216,7 @@ object WordCountApplication extends App {
     .count(Materialized.as("counts-store"))
   wordCounts.toStream.to("WordsWithCountsTopic")
 
-  val streams: KafkaStreams = new KafkaStreams(builder.build(), config)
+  val streams: KafkaStreams = new KafkaStreams(builder.build(), props)
   streams.start()
 
   sys.ShutdownHookThread {
