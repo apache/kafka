@@ -40,7 +40,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.apache.kafka.common.security.scram.internal.ScramMechanism.SCRAM_SHA_256;
+import static org.apache.kafka.common.security.scram.internals.ScramMechanism.SCRAM_SHA_256;
 import static org.junit.Assert.fail;
 
 public class SaslServerAuthenticatorTest {

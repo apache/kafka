@@ -50,8 +50,8 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
   )
 
   private val ResourceToOperations = Map[Set[Resource], (Set[Operation], Array[String])](
-    TopicResources -> (Set(Read, Write, Describe, Delete, DescribeConfigs, AlterConfigs),
-      Array("--operation", "Read" , "--operation", "Write", "--operation", "Describe", "--operation", "Delete",
+    TopicResources -> (Set(Read, Write, Create, Describe, Delete, DescribeConfigs, AlterConfigs),
+      Array("--operation", "Read" , "--operation", "Write", "--operation", "Create", "--operation", "Describe", "--operation", "Delete",
         "--operation", "DescribeConfigs", "--operation", "AlterConfigs")),
     Set(Resource.ClusterResource) -> (Set(Create, ClusterAction, DescribeConfigs, AlterConfigs, IdempotentWrite),
       Array("--operation", "Create", "--operation", "ClusterAction", "--operation", "DescribeConfigs",
@@ -62,10 +62,10 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
   )
 
   private def ProducerResourceToAcls(enableIdempotence: Boolean = false) = Map[Set[Resource], Set[Acl]](
-    TopicResources -> AclCommand.getAcls(Users, Allow, Set(Write, Describe), Hosts),
+    TopicResources -> AclCommand.getAcls(Users, Allow, Set(Write, Describe, Create), Hosts),
     TransactionalIdResources -> AclCommand.getAcls(Users, Allow, Set(Write, Describe), Hosts),
-    Set(Resource.ClusterResource) -> AclCommand.getAcls(Users, Allow, Set(Some(Create),
-      if (enableIdempotence) Some(IdempotentWrite) else None).flatten, Hosts)
+    Set(Resource.ClusterResource) -> AclCommand.getAcls(Users, Allow, 
+      Set(if (enableIdempotence) Some(IdempotentWrite) else None).flatten, Hosts)
   )
 
   private val ConsumerResourceToAcls = Map[Set[Resource], Set[Acl]](
@@ -140,9 +140,7 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
       val writeAcl = Acl(principal, Allow, Acl.WildCardHost, Write)
       val describeAcl = Acl(principal, Allow, Acl.WildCardHost, Describe)
       val createAcl = Acl(principal, Allow, Acl.WildCardHost, Create)
-
-      TestUtils.waitAndVerifyAcls(Set(createAcl), authorizer, Resource(Cluster, "kafka-cluster", Literal))
-      TestUtils.waitAndVerifyAcls(Set(writeAcl, describeAcl), authorizer, Resource(Topic, "Test-", Prefixed))
+      TestUtils.waitAndVerifyAcls(Set(writeAcl, describeAcl, createAcl), authorizer, Resource(Topic, "Test-", Prefixed))
     }
 
     AclCommand.main(zkArgs ++ cmd :+ "--remove" :+ "--force")

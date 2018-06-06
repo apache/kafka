@@ -23,8 +23,8 @@ import org.apache.kafka.common.security.authenticator.CredentialCache
 import org.apache.kafka.common.security.scram.ScramCredential
 import org.apache.kafka.common.config.ConfigDef
 import org.apache.kafka.common.config.ConfigDef._
-import org.apache.kafka.common.security.scram.internal.{ScramCredentialUtils, ScramMechanism}
-import org.apache.kafka.common.security.token.delegation.internal.DelegationTokenCache
+import org.apache.kafka.common.security.scram.internals.{ScramCredentialUtils, ScramMechanism}
+import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 
 class CredentialProvider(scramMechanisms: Collection[String], val tokenCache: DelegationTokenCache) {
 

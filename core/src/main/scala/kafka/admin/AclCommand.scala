@@ -36,7 +36,7 @@ object AclCommand extends Logging {
   private val Newline = scala.util.Properties.lineSeparator
 
   val ResourceTypeToValidOperations: Map[JResourceType, Set[Operation]] = Map[JResourceType, Set[Operation]](
-    JResourceType.TOPIC -> Set(Read, Write, Describe, Delete, DescribeConfigs, AlterConfigs, All),
+    JResourceType.TOPIC -> Set(Read, Write, Create, Describe, Delete, DescribeConfigs, AlterConfigs, All),
     JResourceType.GROUP -> Set(Read, Describe, Delete, All),
     JResourceType.CLUSTER -> Set(Create, ClusterAction, DescribeConfigs, AlterConfigs, IdempotentWrite, Alter, Describe, All),
     JResourceType.TRANSACTIONAL_ID -> Set(Describe, Write, All),
@@ -179,13 +179,16 @@ object AclCommand extends Logging {
     val transactionalIds: Set[ResourceFilter] = filters.filter(_.resourceType == JResourceType.TRANSACTIONAL_ID)
     val enableIdempotence = opts.options.has(opts.idempotentOpt)
 
-    val acls = getAcl(opts, Set(Write, Describe))
+    val topicAcls = getAcl(opts, Set(Write, Describe, Create))
+    val transactionalIdAcls = getAcl(opts, Set(Write, Describe))
 
-    //Write, Describe permission on topics, Create permission on cluster, Write, Describe on transactionalIds
-    topics.map(_ -> acls).toMap[ResourceFilter, Set[Acl]] ++
-      transactionalIds.map(_ -> acls).toMap[ResourceFilter, Set[Acl]] +
-      (ClusterResourceFilter -> (getAcl(opts, Set(Create)) ++
-        (if (enableIdempotence) getAcl(opts, Set(IdempotentWrite)) else Set.empty[Acl])))
+    //Write, Describe, Create permission on topics, Write, Describe on transactionalIds
+    topics.map(_ -> topicAcls).toMap ++
+      transactionalIds.map(_ -> transactionalIdAcls).toMap ++
+        (if (enableIdempotence) 
+          Map(ClusterResourceFilter -> getAcl(opts, Set(IdempotentWrite)))
+        else
+          Map.empty)
   }
 
   private def getConsumerResourceFilterToAcls(opts: AclCommandOptions): Map[ResourceFilter, Set[Acl]] = {
@@ -194,7 +197,7 @@ object AclCommand extends Logging {
     val topics: Set[ResourceFilter] = filters.filter(_.resourceType == JResourceType.TOPIC)
     val groups: Set[ResourceFilter] = filters.filter(_.resourceType == JResourceType.GROUP)
 
-    //Read,Describe on topic, Read on consumerGroup + Create on cluster
+    //Read, Describe on topic, Read on consumerGroup
 
     val acls = getAcl(opts, Set(Read, Describe))
 
@@ -389,7 +392,7 @@ object AclCommand extends Logging {
       .ofType(classOf[String])
 
     val producerOpt = parser.accepts("producer", "Convenience option to add/remove ACLs for producer role. " +
-      "This will generate ACLs that allows WRITE,DESCRIBE on topic and CREATE on cluster. ")
+      "This will generate ACLs that allows WRITE,DESCRIBE and CREATE on topic.")
 
     val consumerOpt = parser.accepts("consumer", "Convenience option to add/remove ACLs for consumer role. " +
       "This will generate ACLs that allows READ,DESCRIBE on topic and READ on group.")

@@ -32,7 +32,7 @@ import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.{AlterConfigsOptions, ConfigEntry, DescribeConfigsOptions, AdminClient => JAdminClient, Config => JConfig}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.security.JaasUtils
-import org.apache.kafka.common.security.scram.internal.{ScramCredentialUtils, ScramFormatter, ScramMechanism}
+import org.apache.kafka.common.security.scram.internals.{ScramCredentialUtils, ScramFormatter, ScramMechanism}
 import org.apache.kafka.common.utils.{Sanitizer, Time, Utils}
 
 import scala.collection._
@@ -173,11 +173,13 @@ object ConfigCommand extends Config {
   private[admin] def parseConfigsToBeAdded(opts: ConfigCommandOptions): Properties = {
     val props = new Properties
     if (opts.options.has(opts.addConfig)) {
-      //split by commas, but avoid those in [], then into KV pairs
+      // Split list by commas, but avoid those in [], then into KV pairs
+      // Each KV pair is of format key=value, split them into key and value, using -1 as the limit for split() to
+      // include trailing empty strings. This is to support empty value (e.g. 'ssl.endpoint.identification.algorithm=')
       val pattern = "(?=[^\\]]*(?:\\[|$))"
       val configsToBeAdded = opts.options.valueOf(opts.addConfig)
         .split("," + pattern)
-        .map(_.split("""\s*=\s*""" + pattern))
+        .map(_.split("""\s*=\s*""" + pattern, -1))
       require(configsToBeAdded.forall(config => config.length == 2), "Invalid entity config: all configs to be added must be in the format \"key=val\".")
       //Create properties, parsing square brackets from values if necessary
       configsToBeAdded.foreach(pair => props.setProperty(pair(0).trim, pair(1).replaceAll("\\[?\\]?", "").trim))

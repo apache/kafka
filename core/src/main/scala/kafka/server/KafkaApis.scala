@@ -62,6 +62,7 @@ import scala.collection.JavaConverters._
 import scala.collection._
 import scala.collection.mutable.ArrayBuffer
 import scala.util.{Failure, Success, Try}
+import org.apache.kafka.common.requests.CreateTopicsRequest.TopicDetails
 
 /**
  * Logic to handle the various Kafka requests
@@ -1040,8 +1041,10 @@ class KafkaApis(val requestChannel: RequestChannel,
       val nonExistingTopics = metadataCache.getNonExistingTopics(authorizedTopics)
       if (metadataRequest.allowAutoTopicCreation && config.autoCreateTopicsEnable && nonExistingTopics.nonEmpty) {
         if (!authorize(request.session, Create, Resource.ClusterResource)) {
-          authorizedTopics --= nonExistingTopics
-          unauthorizedForCreateTopics ++= nonExistingTopics
+          unauthorizedForCreateTopics = nonExistingTopics.filter { topic =>
+            !authorize(request.session, Create, new Resource(Topic, topic))
+          }
+          authorizedTopics --= unauthorizedForCreateTopics
         }
       }
     }
@@ -1424,15 +1427,19 @@ class KafkaApis(val requestChannel: RequestChannel,
         (topic, new ApiError(Errors.NOT_CONTROLLER, null))
       }
       sendResponseCallback(results)
-    } else if (!authorize(request.session, Create, Resource.ClusterResource)) {
-      val results = createTopicsRequest.topics.asScala.map { case (topic, _) =>
-        (topic, new ApiError(Errors.CLUSTER_AUTHORIZATION_FAILED, null))
-      }
-      sendResponseCallback(results)
     } else {
       val (validTopics, duplicateTopics) = createTopicsRequest.topics.asScala.partition { case (topic, _) =>
         !createTopicsRequest.duplicateTopics.contains(topic)
       }
+
+      val (authorizedTopics, unauthorizedTopics) =
+        if (authorize(request.session, Create, Resource.ClusterResource)) {
+          (validTopics, Map[String, TopicDetails]())
+        } else {
+          validTopics.partition { case (topic, _) =>
+            authorize(request.session, Create, new Resource(Topic, topic))
+          }
+        }
 
       // Special handling to add duplicate topics to the response
       def sendResponseWithDuplicatesCallback(results: Map[String, ApiError]): Unit = {
@@ -1447,14 +1454,15 @@ class KafkaApis(val requestChannel: RequestChannel,
             duplicateTopics.keySet.map((_, new ApiError(Errors.INVALID_REQUEST, errorMessage))).toMap
           } else Map.empty
 
-        val completeResults = results ++ duplicatedTopicsResults
+        val unauthorizedTopicsResults = unauthorizedTopics.keySet.map(_ -> new ApiError(Errors.TOPIC_AUTHORIZATION_FAILED, null)) 
+        val completeResults = results ++ duplicatedTopicsResults ++ unauthorizedTopicsResults
         sendResponseCallback(completeResults)
       }
 
       adminManager.createTopics(
         createTopicsRequest.timeout,
         createTopicsRequest.validateOnly,
-        validTopics,
+        authorizedTopics,
         sendResponseWithDuplicatesCallback
       )
     }
