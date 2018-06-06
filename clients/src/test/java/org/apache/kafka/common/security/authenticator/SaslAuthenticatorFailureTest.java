@@ -50,9 +50,9 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.scram.ScramCredential;
 import org.apache.kafka.common.security.scram.ScramLoginModule;
-import org.apache.kafka.common.security.scram.internal.ScramCredentialUtils;
-import org.apache.kafka.common.security.scram.internal.ScramFormatter;
-import org.apache.kafka.common.security.scram.internal.ScramMechanism;
+import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils;
+import org.apache.kafka.common.security.scram.internals.ScramFormatter;
+import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 import org.apache.kafka.common.utils.Time;
 import org.junit.After;
 import org.junit.Before;
@@ -101,9 +101,8 @@ public class SaslAuthenticatorFailureTest {
     @Parameterized.Parameters(name = "failedAuthenticationDelayMs={0}")
     public static Collection<Object[]> data() {
         List<Object[]> values = new ArrayList<>();
-        values.add(new Object[]{-1});
         values.add(new Object[]{0});
-        values.add(new Object[]{5000});
+        values.add(new Object[]{500});
         return values;
     }
 
@@ -262,7 +261,7 @@ public class SaslAuthenticatorFailureTest {
     /**
      * Tests that ApiVersionsRequest after Kafka SASL handshake request flow,
      * but prior to actual SASL authentication, results in authentication failure.
-     * This is similar to {@link #testUnauthenticatedApiVersionsRequest(SecurityProtocol, short)}
+     * This is similar to {@link SaslAuthenticatorTest#testUnauthenticatedApiVersionsRequest(SecurityProtocol, short)}
      * where a non-SASL client is used to send requests that are processed by
      * {@link SaslServerAuthenticator} of the server prior to client authentication.
      */

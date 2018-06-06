@@ -19,6 +19,7 @@ package org.apache.kafka.common.network;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.DelayedResponseAuthenticationException;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -488,7 +489,6 @@ public class Selector implements Selectable, AutoCloseable {
             KafkaChannel channel = channel(key);
             long channelStartTimeNanos = recordTimePerConnection ? time.nanoseconds() : 0;
             boolean sendFailed = false;
-            boolean prepareFailed = false;
 
             // register all per-connection metrics at once
             sensors.maybeRegisterConnectionMetrics(channel.id());
@@ -518,7 +518,6 @@ public class Selector implements Selectable, AutoCloseable {
                         channel.prepare();
                     } catch (AuthenticationException e) {
                         sensors.failedAuthentication.record();
-                        prepareFailed = true;
                         throw e;
                     }
                     if (channel.ready())
@@ -564,11 +563,11 @@ public class Selector implements Selectable, AutoCloseable {
                     log.debug("Connection with {} disconnected due to authentication exception", desc, e);
                 else
                     log.warn("Unexpected error from {}; closing connection", desc, e);
-                CloseMode closeMode = sendFailed ? CloseMode.NOTIFY_ONLY : CloseMode.GRACEFUL;
-                if (prepareFailed && e instanceof AuthenticationException)
-                    mayBeDelayCloseOnPrepareFailure(channel, closeMode);
+
+                if (e instanceof DelayedResponseAuthenticationException)
+                    maybeDelayCloseOnAuthenticationFailure(channel);
                 else
-                    close(channel, closeMode);
+                    close(channel, sendFailed ? CloseMode.NOTIFY_ONLY : CloseMode.GRACEFUL);
             } finally {
                 maybeRecordTimePerConnection(channel, channelStartTimeNanos);
             }
@@ -667,14 +666,15 @@ public class Selector implements Selectable, AutoCloseable {
             unmute(channel);
     }
 
-    private void completeDelayedChannelClose() throws IOException {
+    private void completeDelayedChannelClose() {
         if (delayedClosingChannels == null)
             return;
 
         DelayedChannelClose delayedClose;
-        while (((delayedClose = delayedClosingChannels.peek()) != null) && delayedClose.isCloseable()) {
-            handleCloseOnPrepareFailure(delayedClose.channel, delayedClose.closeMode);
-            delayedClosingChannels.remove();
+        if (delayedClosingChannels.size() > 0) {
+            long now = System.currentTimeMillis();
+            while (((delayedClose = delayedClosingChannels.peek()) != null) && delayedClose.tryClose(now))
+                delayedClosingChannels.remove();
         }
     }
 
@@ -704,6 +704,7 @@ public class Selector implements Selectable, AutoCloseable {
         this.completedReceives.clear();
         this.connected.clear();
         this.disconnected.clear();
+
         // Remove closed channels after all their staged receives have been processed or if a send was requested
         for (Iterator<Map.Entry<String, KafkaChannel>> it = closingChannels.entrySet().iterator(); it.hasNext(); ) {
             KafkaChannel channel = it.next().getValue();
@@ -714,6 +715,10 @@ public class Selector implements Selectable, AutoCloseable {
                 it.remove();
             }
         }
+
+        // Close any channels that were delayed and are now eligible to be closed
+        completeDelayedChannelClose();
+
         for (String channel : this.failedSends)
             this.disconnected.put(channel, ChannelState.FAILED_SEND);
         this.failedSends.clear();
@@ -754,21 +759,21 @@ public class Selector implements Selectable, AutoCloseable {
         }
     }
 
-    private void mayBeDelayCloseOnPrepareFailure(KafkaChannel channel, CloseMode closeMode) {
+    private void maybeDelayCloseOnAuthenticationFailure(KafkaChannel channel) {
+        DelayedAuthenticationFailureClose delayedClose = new DelayedAuthenticationFailureClose(channel, failedAuthenticationDelayMs);
         if (delayedClosingChannels != null)
-            delayedClosingChannels.add(new DelayedChannelClose(Time.SYSTEM, channel.prepareStartTimeMs(),
-                    failedAuthenticationDelayMs, channel, closeMode));
+            delayedClosingChannels.add(delayedClose);
         else
-            handleCloseOnPrepareFailure(channel, closeMode);
+            delayedClose.closeNow();
     }
 
-    private void handleCloseOnPrepareFailure(KafkaChannel channel, CloseMode closeMode) {
+    private void handleCloseOnAuthenticationFailure(KafkaChannel channel) {
         try {
-            channel.completeCloseOnPrepareFailure();
+            channel.completeCloseOnAuthenticationFailure();
         } catch (IOException e) {
-            log.error("Exception handling close on prepare failure node {}:", channel.id(), e);
+            log.error("Exception handling close on authentication failure node {}:", channel.id(), e);
         } finally {
-            close(channel, closeMode);
+            close(channel, CloseMode.GRACEFUL);
         }
     }
 
@@ -1130,34 +1135,63 @@ public class Selector implements Selectable, AutoCloseable {
         }
     }
 
-    private static class DelayedChannelClose {
-        private final Time time;
+    /**
+     * Encapsulate a channel that must be closed after a specific delay has elapsed.
+     */
+    private abstract class DelayedChannelClose {
         private final KafkaChannel channel;
-        private final CloseMode closeMode;
         private final long endTime;
+        private boolean closed;
 
-        public DelayedChannelClose(Time time, long startMs, int minimumDelayMs, KafkaChannel channel, CloseMode closeMode) {
-            this.time = time;
+        /**
+         * @param channel The channel whose close is being delayed
+         * @param delayMs The amount of time by which the operation should be delayed
+         */
+        public DelayedChannelClose(KafkaChannel channel, int delayMs) {
             this.channel = channel;
-            this.closeMode = closeMode;
-            this.endTime = computeDelay(time, startMs, minimumDelayMs);
+            this.endTime = System.currentTimeMillis() + delayMs;
+            this.closed = false;
         }
 
-        private long computeDelay(Time time, long startMs, int minimumDelayMs) {
-            if (startMs < 0)
-                throw new IllegalArgumentException();
-
-            long now = time.milliseconds();
-            long elapsed = now - startMs;
-            long delayMs = minimumDelayMs;
-            long remainingMs;
-            while ((remainingMs = delayMs - elapsed) < 0)
-                delayMs *= 2;
-            return now + remainingMs;
+        public KafkaChannel channel() {
+            return channel;
         }
 
-        public boolean isCloseable() {
-            return endTime <= time.milliseconds();
+        /**
+         * Try to close this channel if the delay has expired.
+         * @param now The current time
+         * @return True if the delay has expired and the channel was closed; false otherwise
+         */
+        public final boolean tryClose(long now) {
+            if (endTime <= now)
+                closeNow();
+            return closed;
+        }
+
+        /**
+         * Close the channel now, regardless of whether the delay has expired or not.
+         */
+        public final void closeNow() {
+            if (closed)
+                throw new IllegalStateException("Attempt to close a channel that has already been closed");
+            close();
+            closed = true;
+        }
+
+        protected abstract void close();
+    }
+
+    /**
+     * Encapsulate a channel whose close is being delayed because of failed authentication.
+     */
+    private class DelayedAuthenticationFailureClose extends DelayedChannelClose {
+        public DelayedAuthenticationFailureClose(KafkaChannel channel, int delayMs) {
+            super(channel, delayMs);
+        }
+
+        @Override
+        protected void close() {
+            handleCloseOnAuthenticationFailure(channel());
         }
     }
 

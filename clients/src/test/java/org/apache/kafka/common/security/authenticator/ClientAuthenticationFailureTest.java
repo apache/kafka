@@ -71,9 +71,8 @@ public class ClientAuthenticationFailureTest {
     @Parameterized.Parameters(name = "failedAuthenticationDelayMs={0}")
     public static Collection<Object[]> data() {
         List<Object[]> values = new ArrayList<>();
-        values.add(new Object[]{-1});
         values.add(new Object[]{0});
-        values.add(new Object[]{5000});
+        values.add(new Object[]{500});
         return values;
     }
 

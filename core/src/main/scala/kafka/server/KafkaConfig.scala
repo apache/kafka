@@ -539,7 +539,8 @@ object KafkaConfig {
     "configured using " + MaxConnectionsPerIpOverridesProp + " property"
   val MaxConnectionsPerIpOverridesDoc = "A comma-separated list of per-ip or hostname overrides to the default maximum number of connections. An example value is \"hostName:100,127.0.0.1:200\""
   val ConnectionsMaxIdleMsDoc = "Idle connections timeout: the server socket processor threads close the connections that idle more than this"
-  val FailedAuthenticationDelayMsDoc = "Connection close delay on failed authentication: this is the time (in milleseconds) by which connection close will be delayed on authentication failure"
+  val FailedAuthenticationDelayMsDoc = "Connection close delay on failed authentication: this is the time (in milleseconds) by which connection close will be delayed on authentication failure. " +
+    s"This must be configured to be less than $ConnectionsMaxIdleMsProp to prevent connection timeout."
   /************* Rack Configuration **************/
   val RackDoc = "Rack of the broker. This will be used in rack aware replication assignment for fault tolerance. Examples: `RACK1`, `us-east-1d`"
   /** ********* Log Configuration ***********/
@@ -1402,5 +1403,9 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
     val invalidAddresses = maxConnectionsPerIpOverrides.keys.filterNot(address => Utils.validHostPattern(address))
     if (!invalidAddresses.isEmpty)
       throw new IllegalArgumentException(s"${KafkaConfig.MaxConnectionsPerIpOverridesProp} contains invalid addresses : ${invalidAddresses.mkString(",")}")
+
+    require(failedAuthenticationDelayMs < connectionsMaxIdleMs, s"${KafkaConfig.FailedAuthenticationDelayMsProp}=$failedAuthenticationDelayMs" +
+      s" should always be less than ${KafkaConfig.ConnectionsMaxIdleMsProp}=$connectionsMaxIdleMs to prevent failed" +
+      " authentication responses from timing out")
   }
 }

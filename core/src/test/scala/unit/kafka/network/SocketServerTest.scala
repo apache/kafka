@@ -746,7 +746,7 @@ class SocketServerTest extends JUnitSuite {
   @Test
   def testBrokerSendAfterChannelClosedUpdatesRequestMetrics() {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
-    props.setProperty(KafkaConfig.ConnectionsMaxIdleMsProp, "100")
+    props.setProperty(KafkaConfig.ConnectionsMaxIdleMsProp, "110")
     val serverMetrics = new Metrics
     var conn: Socket = null
     val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics, Time.SYSTEM, credentialProvider)
