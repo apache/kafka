@@ -58,7 +58,9 @@ trait Authorizer extends Configurable {
    * {code}
    *
    * @param acls set of acls to add to existing acls
-   * @param resource the resource path to which these acls should be attached
+   * @param resource the resource path to which these acls should be attached.
+   *                the supplied resource will have a specific resource name type,
+   *                i.e. the resource name type will not be ``ResourceNameType.ANY`` or ``ResourceNameType.UNKNOWN``.
    */
   def addAcls(acls: Set[Acl], resource: Resource): Unit
 
@@ -78,6 +80,8 @@ trait Authorizer extends Configurable {
    *
    * @param acls set of acls to be removed.
    * @param resource resource path from which the acls should be removed.
+   *                 the supplied resource will have a specific resource name type,
+   *                 i.e. the resource name type will not be ``ResourceNameType.ANY`` or ``ResourceNameType.UNKNOWN``.
    * @return true if some acl got removed, false if no acl was removed.
    */
   def removeAcls(acls: Set[Acl], resource: Resource): Boolean
@@ -97,6 +101,8 @@ trait Authorizer extends Configurable {
    * {code}
    *
    * @param resource the resource path from which these acls should be removed.
+   *                 the supplied resource will have a specific resource name type,
+   *                 i.e. the resource name type will not be ``ResourceNameType.ANY`` or ``ResourceNameType.UNKNOWN``.
    * @return
    */
   def removeAcls(resource: Resource): Boolean
@@ -116,6 +122,8 @@ trait Authorizer extends Configurable {
    * {code}
    *
    * @param resource the resource path to which the acls belong.
+   *                 the supplied resource will have a specific resource name type,
+   *                 i.e. the resource name type will not be ``ResourceNameType.ANY`` or ``ResourceNameType.UNKNOWN``.
    * @return empty set if no acls are found, otherwise the acls for the resource.
    */
   def getAcls(resource: Resource): Set[Acl]
