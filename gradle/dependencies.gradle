@@ -48,7 +48,7 @@ versions["baseScala"] = versions.scala.substring(0, versions.scala.lastIndexOf("
 
 versions += [
   activation: "1.1.1",
-  apacheda: "1.0.1",
+  apacheda: "1.0.2",
   apacheds: "2.0.0-M24",
   argparse4j: "0.7.0",
   bcpkix: "1.59",
@@ -79,7 +79,7 @@ versions += [
   scalatest: "3.0.5",
   scoverage: "1.3.1",
   slf4j: "1.7.25",
-  snappy: "1.1.7.1",
+  snappy: "1.1.7.2",
   zkclient: "0.10",
   zookeeper: "3.4.12"
 ]
