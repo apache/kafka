@@ -60,7 +60,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   override val serverCount = 3
 
   override def configureSecurityBeforeServersStart() {
-    AclCommand.main(clusterBrokerAclArgs)
+    AclCommand.main(clusterActionArgs)
     AclCommand.main(topicBrokerReadAclArgs)
   }
 
@@ -83,7 +83,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   val wildcardGroupResource = new Resource(Group, wildcard)
 
   // Arguments to AclCommand to set ACLs.
-  def clusterBrokerAclArgs: Array[String] = Array("--authorizer-properties",
+  def clusterActionArgs: Array[String] = Array("--authorizer-properties",
                                           s"zookeeper.connect=$zkConnect",
                                           s"--add",
                                           s"--cluster",
@@ -95,7 +95,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
                                           s"--topic=$wildcard",
                                           s"--operation=Read",
                                           s"--allow-principal=$kafkaPrincipalType:$kafkaPrincipal")
-  def produceAclArgs(topic:String): Array[String] = Array("--authorizer-properties",
+  def produceAclArgs(topic: String): Array[String] = Array("--authorizer-properties",
                                           s"zookeeper.connect=$zkConnect",
                                           s"--add",
                                           s"--topic=$topic",
@@ -142,27 +142,14 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
                                           s"--consumer",
                                           s"--producer",
                                           s"--allow-principal=$kafkaPrincipalType:$clientPrincipal")
-  def clusterCreateAclArgs: Array[String] = Array("--authorizer-properties",
-                                          s"zookeeper.connect=$zkConnect",
-                                          s"--add",
-                                          s"--cluster",
-                                          s"--operation=Create",
-                                          s"--allow-principal=$kafkaPrincipalType:$clientPrincipal")
-  def topicWriteAclArgs(topic:String): Array[String] = Array("--authorizer-properties",
-                                          s"zookeeper.connect=$zkConnect",
-                                          s"--add",
-                                          s"--topic=$topic",
-                                          s"--operation=Write",
-                                          s"--allow-principal=$kafkaPrincipalType:$clientPrincipal")
 
-  def ClusterBrokerActionAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, kafkaPrincipal), Allow, Acl.WildCardHost, ClusterAction))
+  def ClusterActionAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, kafkaPrincipal), Allow, Acl.WildCardHost, ClusterAction))
   def TopicBrokerReadAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, kafkaPrincipal), Allow, Acl.WildCardHost, Read))
   def GroupReadAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, clientPrincipal), Allow, Acl.WildCardHost, Read))
   def TopicReadAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, clientPrincipal), Allow, Acl.WildCardHost, Read))
   def TopicWriteAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, clientPrincipal), Allow, Acl.WildCardHost, Write))
   def TopicDescribeAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, clientPrincipal), Allow, Acl.WildCardHost, Describe))
   def TopicCreateAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, clientPrincipal), Allow, Acl.WildCardHost, Create))
-  def ClusterCreateAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, clientPrincipal), Allow, Acl.WildCardHost, Create))
   // The next two configuration parameters enable ZooKeeper secure ACLs
   // and sets the Kafka authorizer, both necessary to enable security.
   this.serverConfig.setProperty(KafkaConfig.ZkEnableSecureAclsProp, "true")
@@ -181,7 +168,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   override def setUp() {
     super.setUp()
     servers.foreach { s =>
-      TestUtils.waitAndVerifyAcls(ClusterBrokerActionAcl, s.apis.authorizer.get, Resource.ClusterResource)
+      TestUtils.waitAndVerifyAcls(ClusterActionAcl, s.apis.authorizer.get, Resource.ClusterResource)
       TestUtils.waitAndVerifyAcls(TopicBrokerReadAcl, s.apis.authorizer.get, new Resource(Topic, "*"))
     }
     // create the test topic with all the brokers as replicas
