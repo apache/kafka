@@ -13,14 +13,15 @@
 package kafka.api
 
 import java.io.File
+import java.util
 
-import kafka.security.auth.{All, Allow, Alter, AlterConfigs, Authorizer, ClusterAction, Create, Delete, Deny, Describe, Group, Operation, PermissionType, SimpleAclAuthorizer, Topic, Acl => AuthAcl, Resource => AuthResource}
+import kafka.security.auth.{All, Allow, Alter, AlterConfigs, Authorizer, ClusterAction, Create, Delete, Deny, Describe, Group, Literal, Operation, PermissionType, SimpleAclAuthorizer, Topic, Prefixed, Acl => AuthAcl, Resource => AuthResource}
 import kafka.server.KafkaConfig
 import kafka.utils.{CoreUtils, JaasTestUtils, TestUtils}
 import org.apache.kafka.clients.admin.{AdminClient, CreateAclsOptions, DeleteAclsOptions}
-import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
+import org.apache.kafka.common.acl._
 import org.apache.kafka.common.errors.{ClusterAuthorizationException, InvalidRequestException}
-import org.apache.kafka.common.resource.{Resource, ResourceFilter, ResourceType}
+import org.apache.kafka.common.resource.{Resource, ResourceFilter, ResourceNameType, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.junit.Assert.assertEquals
 import org.junit.{After, Assert, Before, Test}
@@ -88,25 +89,29 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
     closeSasl()
   }
 
-  val acl2 = new AclBinding(new Resource(ResourceType.TOPIC, "mytopic2"),
+  val anyAcl = new AclBinding(new Resource(ResourceType.TOPIC, "*", ResourceNameType.LITERAL),
+    new AccessControlEntry("User:*", "*", AclOperation.ALL, AclPermissionType.ALLOW))
+  val acl2 = new AclBinding(new Resource(ResourceType.TOPIC, "mytopic2", ResourceNameType.LITERAL),
     new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.WRITE, AclPermissionType.ALLOW))
-  val acl3 = new AclBinding(new Resource(ResourceType.TOPIC, "mytopic3"),
+  val acl3 = new AclBinding(new Resource(ResourceType.TOPIC, "mytopic3", ResourceNameType.LITERAL),
     new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.READ, AclPermissionType.ALLOW))
-  val fooAcl = new AclBinding(new Resource(ResourceType.TOPIC, "foobar"),
+  val fooAcl = new AclBinding(new Resource(ResourceType.TOPIC, "foobar", ResourceNameType.LITERAL),
     new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.READ, AclPermissionType.ALLOW))
-  val transactionalIdAcl = new AclBinding(new Resource(ResourceType.TRANSACTIONAL_ID, "transactional_id"),
+  val prefixAcl = new AclBinding(new Resource(ResourceType.TOPIC, "mytopic", ResourceNameType.PREFIXED),
+    new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.READ, AclPermissionType.ALLOW))
+  val transactionalIdAcl = new AclBinding(new Resource(ResourceType.TRANSACTIONAL_ID, "transactional_id", ResourceNameType.LITERAL),
     new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.WRITE, AclPermissionType.ALLOW))
-  val groupAcl = new AclBinding(new Resource(ResourceType.GROUP, "*"),
+  val groupAcl = new AclBinding(new Resource(ResourceType.GROUP, "*", ResourceNameType.LITERAL),
     new AccessControlEntry("User:*", "*", AclOperation.ALL, AclPermissionType.ALLOW))
 
   @Test
   override def testAclOperations(): Unit = {
     client = AdminClient.create(createConfig())
-    assertEquals(7, client.describeAcls(AclBindingFilter.ANY).values.get().size)
+    assertEquals(7, getAcls(AclBindingFilter.ANY).size)
     val results = client.createAcls(List(acl2, acl3).asJava)
     assertEquals(Set(acl2, acl3), results.values.keySet().asScala)
     results.values.values().asScala.foreach(value => value.get)
-    val aclUnknown = new AclBinding(new Resource(ResourceType.TOPIC, "mytopic3"),
+    val aclUnknown = new AclBinding(new Resource(ResourceType.TOPIC, "mytopic3", ResourceNameType.LITERAL),
       new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.UNKNOWN, AclPermissionType.ALLOW))
     val results2 = client.createAcls(List(aclUnknown).asJava)
     assertEquals(Set(aclUnknown), results2.values.keySet().asScala)
@@ -118,13 +123,6 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
     assertEquals(Set(acl3), results3.get(acl3.toFilter).get.values.asScala.map(_.binding).toSet)
   }
 
-  def waitForDescribeAcls(client: AdminClient, filter: AclBindingFilter, acls: Set[AclBinding]): Unit = {
-    TestUtils.waitUntilTrue(() => {
-      val results = client.describeAcls(filter).values.get()
-      acls == results.asScala.toSet
-    }, s"timed out waiting for ACLs $acls")
-  }
-
   @Test
   def testAclOperations2(): Unit = {
     client = AdminClient.create(createConfig())
@@ -134,9 +132,9 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
     waitForDescribeAcls(client, acl2.toFilter, Set(acl2))
     waitForDescribeAcls(client, transactionalIdAcl.toFilter, Set(transactionalIdAcl))
 
-    val filterA = new AclBindingFilter(new ResourceFilter(ResourceType.GROUP, null), AccessControlEntryFilter.ANY)
-    val filterB = new AclBindingFilter(new ResourceFilter(ResourceType.TOPIC, "mytopic2"), AccessControlEntryFilter.ANY)
-    val filterC = new AclBindingFilter(new ResourceFilter(ResourceType.TRANSACTIONAL_ID, null), AccessControlEntryFilter.ANY)
+    val filterA = new AclBindingFilter(new ResourceFilter(ResourceType.GROUP, null, ResourceNameType.LITERAL), AccessControlEntryFilter.ANY)
+    val filterB = new AclBindingFilter(new ResourceFilter(ResourceType.TOPIC, "mytopic2", ResourceNameType.LITERAL), AccessControlEntryFilter.ANY)
+    val filterC = new AclBindingFilter(new ResourceFilter(ResourceType.TRANSACTIONAL_ID, null, ResourceNameType.LITERAL), AccessControlEntryFilter.ANY)
 
     waitForDescribeAcls(client, filterA, Set(groupAcl))
     waitForDescribeAcls(client, filterC, Set(transactionalIdAcl))
@@ -152,11 +150,125 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
   }
 
   @Test
+  def testAclDescribe(): Unit = {
+    client = AdminClient.create(createConfig())
+    ensureAcls(Set(anyAcl, acl2, fooAcl, prefixAcl))
+
+    val allTopicAcls = new AclBindingFilter(new ResourceFilter(ResourceType.TOPIC, null, ResourceNameType.ANY), AccessControlEntryFilter.ANY)
+    val allLiteralTopicAcls = new AclBindingFilter(new ResourceFilter(ResourceType.TOPIC, null, ResourceNameType.LITERAL), AccessControlEntryFilter.ANY)
+    val allPrefixedTopicAcls = new AclBindingFilter(new ResourceFilter(ResourceType.TOPIC, null, ResourceNameType.PREFIXED), AccessControlEntryFilter.ANY)
+    val literalMyTopic2Acls = new AclBindingFilter(new ResourceFilter(ResourceType.TOPIC, "mytopic2", ResourceNameType.LITERAL), AccessControlEntryFilter.ANY)
+    val prefixedMyTopicAcls = new AclBindingFilter(new ResourceFilter(ResourceType.TOPIC, "mytopic", ResourceNameType.PREFIXED), AccessControlEntryFilter.ANY)
+    val allMyTopic2Acls = new AclBindingFilter(new ResourceFilter(ResourceType.TOPIC, "mytopic2", ResourceNameType.ANY), AccessControlEntryFilter.ANY)
+    val allFooTopicAcls = new AclBindingFilter(new ResourceFilter(ResourceType.TOPIC, "foobar", ResourceNameType.ANY), AccessControlEntryFilter.ANY)
+
+    assertEquals(Set(anyAcl), getAcls(anyAcl.toFilter))
+    assertEquals(Set(prefixAcl), getAcls(prefixAcl.toFilter))
+    assertEquals(Set(acl2), getAcls(acl2.toFilter))
+    assertEquals(Set(fooAcl), getAcls(fooAcl.toFilter))
+
+    assertEquals(Set(acl2), getAcls(literalMyTopic2Acls))
+    assertEquals(Set(prefixAcl), getAcls(prefixedMyTopicAcls))
+    assertEquals(Set(anyAcl, acl2, fooAcl), getAcls(allLiteralTopicAcls))
+    assertEquals(Set(prefixAcl), getAcls(allPrefixedTopicAcls))
+    assertEquals(Set(anyAcl, acl2, prefixAcl), getAcls(allMyTopic2Acls))
+    assertEquals(Set(anyAcl, fooAcl), getAcls(allFooTopicAcls))
+    assertEquals(Set(anyAcl, acl2, fooAcl, prefixAcl), getAcls(allTopicAcls))
+  }
+
+  @Test
+  def testAclDelete(): Unit = {
+    client = AdminClient.create(createConfig())
+    ensureAcls(Set(anyAcl, acl2, fooAcl, prefixAcl))
+
+    val allTopicAcls = new AclBindingFilter(new ResourceFilter(ResourceType.TOPIC, null, ResourceNameType.ANY), AccessControlEntryFilter.ANY)
+    val allLiteralTopicAcls = new AclBindingFilter(new ResourceFilter(ResourceType.TOPIC, null, ResourceNameType.LITERAL), AccessControlEntryFilter.ANY)
+    val allPrefixedTopicAcls = new AclBindingFilter(new ResourceFilter(ResourceType.TOPIC, null, ResourceNameType.PREFIXED), AccessControlEntryFilter.ANY)
+
+    // Delete only ACLs on literal 'mytopic2' topic
+    var deleted = client.deleteAcls(List(acl2.toFilter).asJava).all().get().asScala.toSet
+    assertEquals(Set(acl2), deleted)
+    assertEquals(Set(anyAcl, fooAcl, prefixAcl), getAcls(allTopicAcls))
+
+    ensureAcls(deleted)
+
+    // Delete only ACLs on literal '*' topic
+    deleted = client.deleteAcls(List(anyAcl.toFilter).asJava).all().get().asScala.toSet
+    assertEquals(Set(anyAcl), deleted)
+    assertEquals(Set(acl2, fooAcl, prefixAcl), getAcls(allTopicAcls))
+
+    ensureAcls(deleted)
+
+    // Delete only ACLs on specific prefixed 'mytopic' topics:
+    deleted = client.deleteAcls(List(prefixAcl.toFilter).asJava).all().get().asScala.toSet
+    assertEquals(Set(prefixAcl), deleted)
+    assertEquals(Set(anyAcl, acl2, fooAcl), getAcls(allTopicAcls))
+
+    ensureAcls(deleted)
+
+    // Delete all literal ACLs:
+    deleted = client.deleteAcls(List(allLiteralTopicAcls).asJava).all().get().asScala.toSet
+    assertEquals(Set(anyAcl, acl2, fooAcl), deleted)
+    assertEquals(Set(prefixAcl), getAcls(allTopicAcls))
+
+    ensureAcls(deleted)
+
+    // Delete all prefixed ACLs:
+    deleted = client.deleteAcls(List(allPrefixedTopicAcls).asJava).all().get().asScala.toSet
+    assertEquals(Set(prefixAcl), deleted)
+    assertEquals(Set(anyAcl, acl2, fooAcl), getAcls(allTopicAcls))
+
+    ensureAcls(deleted)
+
+    // Delete all topic ACLs:
+    deleted = client.deleteAcls(List(allTopicAcls).asJava).all().get().asScala.toSet
+    assertEquals(Set(), getAcls(allTopicAcls))
+  }
+
+  //noinspection ScalaDeprecation - test explicitly covers clients using legacy / deprecated constructors
+  @Test
+  def testLegacyAclOpsNeverAffectOrReturnPrefixed(): Unit = {
+    client = AdminClient.create(createConfig())
+    ensureAcls(Set(anyAcl, acl2, fooAcl, prefixAcl))  // <-- prefixed exists, but should never be returned.
+
+    val allTopicAcls = new AclBindingFilter(new ResourceFilter(ResourceType.TOPIC, null, ResourceNameType.ANY), AccessControlEntryFilter.ANY)
+    val legacyAllTopicAcls = new AclBindingFilter(new ResourceFilter(ResourceType.TOPIC, null, ResourceNameType.LITERAL), AccessControlEntryFilter.ANY)
+    val legacyMyTopic2Acls = new AclBindingFilter(new ResourceFilter(ResourceType.TOPIC, "mytopic2", ResourceNameType.LITERAL), AccessControlEntryFilter.ANY)
+    val legacyAnyTopicAcls = new AclBindingFilter(new ResourceFilter(ResourceType.TOPIC, "*", ResourceNameType.LITERAL), AccessControlEntryFilter.ANY)
+    val legacyFooTopicAcls = new AclBindingFilter(new ResourceFilter(ResourceType.TOPIC, "foobar", ResourceNameType.LITERAL), AccessControlEntryFilter.ANY)
+
+    assertEquals(Set(anyAcl, acl2, fooAcl), getAcls(legacyAllTopicAcls))
+    assertEquals(Set(acl2), getAcls(legacyMyTopic2Acls))
+    assertEquals(Set(anyAcl), getAcls(legacyAnyTopicAcls))
+    assertEquals(Set(fooAcl), getAcls(legacyFooTopicAcls))
+
+    // Delete only (legacy) ACLs on 'mytopic2' topic
+    var deleted = client.deleteAcls(List(legacyMyTopic2Acls).asJava).all().get().asScala.toSet
+    assertEquals(Set(acl2), deleted)
+    assertEquals(Set(anyAcl, fooAcl, prefixAcl), getAcls(allTopicAcls))
+
+    ensureAcls(deleted)
+
+    // Delete only (legacy) ACLs on '*' topic
+    deleted = client.deleteAcls(List(legacyAnyTopicAcls).asJava).all().get().asScala.toSet
+    assertEquals(Set(anyAcl), deleted)
+    assertEquals(Set(acl2, fooAcl, prefixAcl), getAcls(allTopicAcls))
+
+    ensureAcls(deleted)
+
+    // Delete all (legacy) topic ACLs:
+    deleted = client.deleteAcls(List(legacyAllTopicAcls).asJava).all().get().asScala.toSet
+    assertEquals(Set(anyAcl, acl2, fooAcl), deleted)
+    assertEquals(Set(), getAcls(legacyAllTopicAcls))
+    assertEquals(Set(prefixAcl), getAcls(allTopicAcls))
+  }
+
+  @Test
   def testAttemptToCreateInvalidAcls(): Unit = {
     client = AdminClient.create(createConfig())
-    val clusterAcl = new AclBinding(new Resource(ResourceType.CLUSTER, "foobar"),
+    val clusterAcl = new AclBinding(new Resource(ResourceType.CLUSTER, "foobar", ResourceNameType.LITERAL),
       new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.READ, AclPermissionType.ALLOW))
-    val emptyResourceNameAcl = new AclBinding(new Resource(ResourceType.TOPIC, ""),
+    val emptyResourceNameAcl = new AclBinding(new Resource(ResourceType.TOPIC, "", ResourceNameType.LITERAL),
       new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.READ, AclPermissionType.ALLOW))
     val results = client.createAcls(List(clusterAcl, emptyResourceNameAcl).asJava, new CreateAclsOptions())
     assertEquals(Set(clusterAcl, emptyResourceNameAcl), results.values.keySet().asScala)
@@ -224,7 +336,7 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
 
   private def testAclGet(expectAuth: Boolean): Unit = {
     TestUtils.waitUntilTrue(() => {
-      val userAcl = new AclBinding(new Resource(ResourceType.TOPIC, "*"),
+      val userAcl = new AclBinding(new Resource(ResourceType.TOPIC, "*", ResourceNameType.LITERAL),
         new AccessControlEntry("User:*", "*", AclOperation.ALL, AclPermissionType.ALLOW))
       val results = client.describeAcls(userAcl.toFilter)
       if (expectAuth) {
@@ -275,5 +387,23 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
     addClusterAcl(Allow, Describe)
     testAclGet(expectAuth = true)
     testAclCreateGetDelete(expectAuth = false)
+  }
+
+  private def waitForDescribeAcls(client: AdminClient, filter: AclBindingFilter, acls: Set[AclBinding]): Unit = {
+    var lastResults: util.Collection[AclBinding] = null
+    TestUtils.waitUntilTrue(() => {
+      lastResults = client.describeAcls(filter).values.get()
+      acls == lastResults.asScala.toSet
+    }, s"timed out waiting for ACLs $acls.\nActual $lastResults")
+  }
+
+  private def ensureAcls(bindings: Set[AclBinding]): Unit = {
+    client.createAcls(bindings.asJava).all().get()
+
+    bindings.foreach(binding => waitForDescribeAcls(client, binding.toFilter, Set(binding)))
+  }
+
+  private def getAcls(allTopicAcls: AclBindingFilter) = {
+    client.describeAcls(allTopicAcls).values.get().asScala.toSet
   }
 }

@@ -65,8 +65,10 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   }
 
   val numRecords = 1
-  val group = "group"
-  val topic = "e2etopic"
+  val groupPrefix = "gr"
+  val group = s"${groupPrefix}oup"
+  val topicPrefix = "e2e"
+  val topic = s"${topicPrefix}topic"
   val wildcard = "*"
   val part = 0
   val tp = new TopicPartition(topic, part)
@@ -76,11 +78,13 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
 
   override protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
 
-  val topicResource = new Resource(Topic, topic)
-  val groupResource = new Resource(Group, group)
+  val topicResource = new Resource(Topic, topic, Literal)
+  val groupResource = new Resource(Group, group, Literal)
   val clusterResource = Resource.ClusterResource
-  val wildcardTopicResource = new Resource(Topic, wildcard)
-  val wildcardGroupResource = new Resource(Group, wildcard)
+  val prefixedTopicResource = new Resource(Topic, topicPrefix, Prefixed)
+  val prefixedGroupResource = new Resource(Group, groupPrefix, Prefixed)
+  val wildcardTopicResource = new Resource(Topic, wildcard, Literal)
+  val wildcardGroupResource = new Resource(Group, wildcard, Literal)
 
   // Arguments to AclCommand to set ACLs.
   def clusterActionArgs: Array[String] = Array("--authorizer-properties",
@@ -142,6 +146,15 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
                                           s"--consumer",
                                           s"--producer",
                                           s"--allow-principal=$kafkaPrincipalType:$clientPrincipal")
+  def produceConsumePrefixedAclsArgs: Array[String] = Array("--authorizer-properties",
+                                          s"zookeeper.connect=$zkConnect",
+                                          s"--add",
+                                          s"--topic=$topicPrefix",
+                                          s"--group=$groupPrefix",
+                                          s"--resource-name-type=prefixed",
+                                          s"--consumer",
+                                          s"--producer",
+                                          s"--allow-principal=$kafkaPrincipalType:$clientPrincipal")
 
   def ClusterActionAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, kafkaPrincipal), Allow, Acl.WildCardHost, ClusterAction))
   def TopicBrokerReadAcl = Set(new Acl(new KafkaPrincipal(kafkaPrincipalType, kafkaPrincipal), Allow, Acl.WildCardHost, Read))
@@ -169,7 +182,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     super.setUp()
     servers.foreach { s =>
       TestUtils.waitAndVerifyAcls(ClusterActionAcl, s.apis.authorizer.get, Resource.ClusterResource)
-      TestUtils.waitAndVerifyAcls(TopicBrokerReadAcl, s.apis.authorizer.get, new Resource(Topic, "*"))
+      TestUtils.waitAndVerifyAcls(TopicBrokerReadAcl, s.apis.authorizer.get, new Resource(Topic, "*", Literal))
     }
     // create the test topic with all the brokers as replicas
     createTopic(topic, 1, 3)
@@ -219,12 +232,12 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     consumeRecords(this.consumers.head, numRecords)
   }
 
-  private def setWildcardResourceAcls() {
-    AclCommand.main(produceConsumeWildcardAclArgs)
-    servers.foreach { s =>
-      TestUtils.waitAndVerifyAcls(TopicReadAcl ++ TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl ++ TopicBrokerReadAcl, s.apis.authorizer.get, wildcardTopicResource)
-      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.apis.authorizer.get, wildcardGroupResource)
-    }
+  @Test
+  def testProduceConsumeWithPrefixedAcls(): Unit = {
+    setPrefixedResourceAcls()
+    sendRecords(numRecords, tp)
+    consumers.head.subscribe(List(topic).asJava)
+    consumeRecords(this.consumers.head, numRecords)
   }
 
   @Test
@@ -234,6 +247,22 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     setAclsAndProduce(tp2)
     consumers.head.assign(List(tp2).asJava)
     consumeRecords(this.consumers.head, numRecords, topic = tp2.topic)
+  }
+
+  private def setWildcardResourceAcls() {
+    AclCommand.main(produceConsumeWildcardAclArgs)
+    servers.foreach { s =>
+      TestUtils.waitAndVerifyAcls(TopicReadAcl ++ TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl ++ TopicBrokerReadAcl, s.apis.authorizer.get, wildcardTopicResource)
+      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.apis.authorizer.get, wildcardGroupResource)
+    }
+  }
+
+  private def setPrefixedResourceAcls() {
+    AclCommand.main(produceConsumePrefixedAclsArgs)
+    servers.foreach { s =>
+      TestUtils.waitAndVerifyAcls(TopicReadAcl ++ TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl, s.apis.authorizer.get, prefixedTopicResource)
+      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.apis.authorizer.get, prefixedGroupResource)
+    }
   }
 
   protected def setAclsAndProduce(tp: TopicPartition) {

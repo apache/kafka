@@ -61,6 +61,11 @@
         Similarly for the message format version.</li>
     <li>If you are using Java8 method references in your Kafka Streams code you might need to update your code to resolve method ambiguities.
         Hot-swapping the jar-file only might not work.</li>
+    <li>ACLs should not be added to prefixed resources,
+        (added in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-290%3A+Support+for+Prefixed+ACLs">KIP-290</a>),
+        until all brokers in the cluster have been updated.
+        <p><b>NOTE:</b> any prefixed ACLs added to a cluster will be ignored should the cluster be downgraded again.
+    </li>
 </ol>
 
 <h5><a id="upgrade_200_notable" href="#upgrade_200_notable">Notable changes in 2.0.0</a></h5>
@@ -103,12 +108,15 @@
         the <code>--new-consumer</code> option for all consumer based tools. This option is redundant since the new consumer is automatically
         used if --bootstrap-server is defined.
     </li>
+    <li><a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-290%3A+Support+for+Prefixed+ACLs">KIP-290</a> adds the ability
+        to define ACLs on prefixed resources, e.g. any topic starting with 'foo'.</li>
 </ul>
 
 <h5><a id="upgrade_200_new_protocols" href="#upgrade_200_new_protocols">New Protocol Versions</a></h5>
 <ul>
     <li> <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-279%3A+Fix+log+divergence+between+leader+and+follower+after+fast+leader+fail+over">KIP-279</a>: OffsetsForLeaderEpochResponse v1 introduces a partition-level <code>leader_epoch</code> field. </li>
     <li> <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-219+-+Improve+quota+communication">KIP-219</a>: Bump up the protocol versions of non-cluster action requests and responses that are throttled on quota violation.</li>
+    <li> <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-290%3A+Support+for+Prefixed+ACLs">KIP-290</a>: Bump up the protocol versions ACL create, describe and delete requests and responses.</li>
 </ul>
 
 

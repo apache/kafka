@@ -16,31 +16,44 @@
  */
 package kafka.security.auth
 
+import java.util.Objects
+import org.apache.kafka.common.resource.{Resource => JResource}
+
 object Resource {
-  val Separator = ":"
   val ClusterResourceName = "kafka-cluster"
-  val ClusterResource = new Resource(Cluster, Resource.ClusterResourceName)
+  val ClusterResource = new Resource(Cluster, Resource.ClusterResourceName, Literal)
   val ProducerIdResourceName = "producer-id"
   val WildCardResource = "*"
-
-  def fromString(str: String): Resource = {
-    str.split(Separator, 2) match {
-      case Array(resourceType, name, _*) => new Resource(ResourceType.fromString(resourceType), name)
-      case _ => throw new IllegalArgumentException("expected a string in format ResourceType:ResourceName but got " + str)
-    }
-  }
 }
 
 /**
  *
- * @param resourceType type of resource.
- * @param name name of the resource, for topic this will be topic name , for group it will be group name. For cluster type
+ * @param resourceType non-null type of resource.
+ * @param name non-null name of the resource, for topic this will be topic name , for group it will be group name. For cluster type
  *             it will be a constant string kafka-cluster.
+ * @param resourceNameType non-null type of resource name: literal, prefixed, etc.
  */
-case class Resource(resourceType: ResourceType, name: String) {
+case class Resource(resourceType: ResourceType, name: String, resourceNameType: ResourceNameType) {
 
-  override def toString: String = {
-    resourceType.name + Resource.Separator + name
+  Objects.requireNonNull(resourceType, "resourceType")
+  Objects.requireNonNull(name, "name")
+  Objects.requireNonNull(resourceNameType, "resourceNameType")
+
+  /**
+    * Create an instance of this class with the provided parameters.
+    * Resource name type would default to ResourceNameType.LITERAL.
+    *
+    * @param resourceType non-null resource type
+    * @param name         non-null resource name
+    * @deprecated Since 2.0, use [[kafka.security.auth.Resource(ResourceType, String, ResourceNameType)]]
+    */
+  @deprecated("Use Resource(ResourceType, String, ResourceNameType")
+  def this(resourceType: ResourceType, name: String) {
+    this(resourceType, name, Literal)
+  }
+
+  def toJava: JResource = {
+    new JResource(resourceType.toJava, name, resourceNameType.toJava)
   }
 }
 

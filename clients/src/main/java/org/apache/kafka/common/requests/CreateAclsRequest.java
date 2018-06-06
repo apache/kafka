@@ -19,12 +19,14 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.resource.Resource;
+import org.apache.kafka.common.resource.ResourceNameType;
 import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
@@ -36,6 +38,7 @@ import static org.apache.kafka.common.protocol.CommonFields.OPERATION;
 import static org.apache.kafka.common.protocol.CommonFields.PERMISSION_TYPE;
 import static org.apache.kafka.common.protocol.CommonFields.PRINCIPAL;
 import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_NAME;
+import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_NAME_TYPE;
 import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_TYPE;
 
 public class CreateAclsRequest extends AbstractRequest {
@@ -51,9 +54,20 @@ public class CreateAclsRequest extends AbstractRequest {
                     PERMISSION_TYPE))));
 
     /**
-     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     * Version 1 adds RESOURCE_NAME_TYPE.
+     * Also, when the quota is violated, brokers will respond to a version 1 or later request before throttling.
+     *
+     * For more info, see {@link org.apache.kafka.common.resource.ResourceNameType}.
      */
-    private static final Schema CREATE_ACLS_REQUEST_V1 = CREATE_ACLS_REQUEST_V0;
+    private static final Schema CREATE_ACLS_REQUEST_V1 = new Schema(
+            new Field(CREATIONS_KEY_NAME, new ArrayOf(new Schema(
+                    RESOURCE_TYPE,
+                    RESOURCE_NAME,
+                    RESOURCE_NAME_TYPE,
+                    PRINCIPAL,
+                    HOST,
+                    OPERATION,
+                    PERMISSION_TYPE))));
 
     public static Schema[] schemaVersions() {
         return new Schema[]{CREATE_ACLS_REQUEST_V0, CREATE_ACLS_REQUEST_V1};
@@ -111,6 +125,8 @@ public class CreateAclsRequest extends AbstractRequest {
     CreateAclsRequest(short version, List<AclCreation> aclCreations) {
         super(version);
         this.aclCreations = aclCreations;
+
+        validate(aclCreations);
     }
 
     public CreateAclsRequest(Struct struct, short version) {
@@ -157,5 +173,18 @@ public class CreateAclsRequest extends AbstractRequest {
 
     public static CreateAclsRequest parse(ByteBuffer buffer, short version) {
         return new CreateAclsRequest(ApiKeys.CREATE_ACLS.parseRequest(version, buffer), version);
+    }
+
+    private void validate(List<AclCreation> aclCreations) {
+        if (version() == 0) {
+            final boolean unsupported = aclCreations.stream()
+                .map(AclCreation::acl)
+                .map(AclBinding::resource)
+                .map(Resource::nameType)
+                .anyMatch(nameType -> nameType != ResourceNameType.LITERAL);
+            if (unsupported) {
+                throw new UnsupportedVersionException("Version 0 only supports literal resource name types");
+            }
+        }
     }
 }

@@ -17,7 +17,7 @@
 
 package kafka.security
 
-import kafka.security.auth.{Acl, Operation, PermissionType, Resource, ResourceType}
+import kafka.security.auth.{Acl, Operation, PermissionType, Resource, ResourceNameType, ResourceType}
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding, AclBindingFilter}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.ApiError
@@ -32,10 +32,11 @@ object SecurityUtils {
   def convertToResourceAndAcl(filter: AclBindingFilter): Either[ApiError, (Resource, Acl)] = {
     (for {
       resourceType <- Try(ResourceType.fromJava(filter.resourceFilter.resourceType))
+      resourceNameType <- Try(ResourceNameType.fromJava(filter.resourceFilter.nameType))
       principal <- Try(KafkaPrincipal.fromString(filter.entryFilter.principal))
       operation <- Try(Operation.fromJava(filter.entryFilter.operation))
       permissionType <- Try(PermissionType.fromJava(filter.entryFilter.permissionType))
-      resource = Resource(resourceType, filter.resourceFilter.name)
+      resource = Resource(resourceType, filter.resourceFilter.name, resourceNameType)
       acl = Acl(principal, permissionType, filter.entryFilter.host, operation)
     } yield (resource, acl)) match {
       case Failure(throwable) => Left(new ApiError(Errors.INVALID_REQUEST, throwable.getMessage))
@@ -44,7 +45,7 @@ object SecurityUtils {
   }
 
   def convertToAclBinding(resource: Resource, acl: Acl): AclBinding = {
-    val adminResource = new AdminResource(resource.resourceType.toJava, resource.name)
+    val adminResource = new AdminResource(resource.resourceType.toJava, resource.name, resource.resourceNameType.toJava)
     val entry = new AccessControlEntry(acl.principal.toString, acl.host.toString,
       acl.operation.toJava, acl.permissionType.toJava)
     new AclBinding(adminResource, entry)

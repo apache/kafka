@@ -1100,6 +1100,19 @@
             <td>Resource</td>
         </tr>
         <tr>
+            <td>--resource-name-type [name-type]</td>
+            <td>Specifies the resource name type to use.<br>
+                Valid values are:<br>
+                <ul>
+                    <li><b>Literal</b> Match resource names exactly or, in the case of the Wildcard name '*', match all resources.</li>
+                    <li><b>Prefixed</b> Match any resource whose name starts with the prefix.</li>
+                    <li><b>All</b> (list|remove only) Matching any name type, including the Wildcard name.</li>
+                </ul>
+            </td>
+            <td>literal</td>
+            <td>Configuration</td>
+        </tr>
+        <tr>
             <td>--allow-principal</td>
             <td>Principal is in PrincipalType:name format that will be added to ACL with Allow permission. <br>You can specify multiple --allow-principal in a single command.</td>
             <td></td>
@@ -1161,14 +1174,26 @@
             <pre class="brush: bash;">bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:* --allow-host * --deny-principal User:BadBob --deny-host 198.51.100.3 --operation Read --topic Test-topic</pre>
             Note that ``--allow-host`` and ``deny-host`` only support IP addresses (hostnames are not supported).
             Above examples add acls to a topic by specifying --topic [topic-name] as the resource option. Similarly user can add acls to cluster by specifying --cluster and to a consumer group by specifying --group [group-name].</li>
+            You can add acls on any resource of a certain type, e.g. suppose you wanted to add an acl "Principal User:Peter is allowed to produce to any Topic from IP 198.51.200.0"
+            You can do that by using the wildcard resource '*', e.g. by executing the CLI with following options:
+            <pre class="brush: bash;">bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:Peter --allow-host 198.51.200.1 --producer --topic *</pre>
+            You can add acls on resources matching a certain prefix, e.g. suppose you want to add an acl "Principal User:Jane is allowed to produce to any Topic whose name is prefixed with 'Test-' from any host".
+            You can do that by executing the CLI with following options:
+            <pre class="brush: bash;">bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:Jane --producer --topic Test- --resource-name-type Prefixed</pre>
+            Note, --resource-name-type defaults to 'literal', which only affects resources with the exact same name. The exception to this is the wildcard resource name '*', which should also be added using 'literal'.
 
         <li><b>Removing Acls</b><br>
                 Removing acls is pretty much the same. The only difference is instead of --add option users will have to specify --remove option. To remove the acls added by the first example above we can execute the CLI with following options:
             <pre class="brush: bash;"> bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --remove --allow-principal User:Bob --allow-principal User:Alice --allow-host 198.51.100.0 --allow-host 198.51.100.1 --operation Read --operation Write --topic Test-topic </pre></li>
+            If you wan to remove the prefixed acl added above we can execute the CLI with following options:
+            <pre class="brush: bash;"> bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --remove --allow-principal User:Jane --producer --topic Test- --resource-name-type Prefixed</pre></li>
 
         <li><b>List Acls</b><br>
                 We can list acls for any resource by specifying the --list option with the resource. To list all acls for Test-topic we can execute the CLI with following options:
                 <pre class="brush: bash;">bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --list --topic Test-topic</pre></li>
+                However, this will only return the acls that have been added to this exact resource. Other acls can exist that affect access to the topic,
+                e.g. any acls on the topic wildcard '*', or any acls on resources matching a certain prefix. To list all acls affecting a topic we can use the '--resource-name-type any' option, e.g.
+                <pre class="brush: bash;">bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --list --topic Test-topic --resource-name-type any</pre></li>
 
         <li><b>Adding or removing a principal as producer or consumer</b><br>
                 The most common use case for acl management are adding/removing a principal as producer or consumer so we added convenience options to handle these cases. In order to add User:Bob as a producer of  Test-topic we can execute the following command:

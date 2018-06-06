@@ -18,24 +18,29 @@
 package kafka.admin
 
 import joptsimple._
+import joptsimple.util.EnumConverter
 import kafka.security.auth._
 import kafka.server.KafkaConfig
 import kafka.utils._
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.resource.{ResourceFilter, ResourceNameType => JResourceNameType, ResourceType => JResourceType, Resource => JResource}
 
 import scala.collection.JavaConverters._
 
 object AclCommand extends Logging {
 
-  val Newline = scala.util.Properties.lineSeparator
-  val ResourceTypeToValidOperations = Map[ResourceType, Set[Operation]] (
-    Topic -> Set(Read, Write, Create, Describe, Delete, DescribeConfigs, AlterConfigs, All),
-    Group -> Set(Read, Describe, Delete, All),
-    Cluster -> Set(Create, ClusterAction, DescribeConfigs, AlterConfigs, IdempotentWrite, Alter, Describe, All),
-    TransactionalId -> Set(Describe, Write, All),
-    DelegationToken -> Set(Describe, All)
+  val ClusterResourceFilter = new ResourceFilter(JResourceType.CLUSTER, JResource.CLUSTER_NAME, JResourceNameType.LITERAL)
+
+  private val Newline = scala.util.Properties.lineSeparator
+
+  val ResourceTypeToValidOperations: Map[JResourceType, Set[Operation]] = Map[JResourceType, Set[Operation]](
+    JResourceType.TOPIC -> Set(Read, Write, Create, Describe, Delete, DescribeConfigs, AlterConfigs, All),
+    JResourceType.GROUP -> Set(Read, Describe, Delete, All),
+    JResourceType.CLUSTER -> Set(Create, ClusterAction, DescribeConfigs, AlterConfigs, IdempotentWrite, Alter, Describe, All),
+    JResourceType.TRANSACTIONAL_ID -> Set(Describe, Write, All),
+    JResourceType.DELEGATION_TOKEN -> Set(Describe, All)
   )
 
   def main(args: Array[String]) {
@@ -82,8 +87,14 @@ object AclCommand extends Logging {
   }
 
   private def addAcl(opts: AclCommandOptions) {
+    if (opts.options.valueOf(opts.resourceNameType) == JResourceNameType.ANY)
+      CommandLineUtils.printUsageAndDie(opts.parser, "A '--resource-name-type' value of 'Any' is not valid when adding acls.")
+
     withAuthorizer(opts) { authorizer =>
-      val resourceToAcl = getResourceToAcls(opts)
+      val resourceToAcl = getResourceFilterToAcls(opts).map {
+        case (filter, acls) =>
+          Resource(ResourceType.fromJava(filter.resourceType()), filter.name(), ResourceNameType.fromJava(filter.nameType())) -> acls
+      }
 
       if (resourceToAcl.values.exists(_.isEmpty))
         CommandLineUtils.printUsageAndDie(opts.parser, "You must specify one of: --allow-principal, --deny-principal when trying to add ACLs.")
@@ -99,15 +110,15 @@ object AclCommand extends Logging {
 
   private def removeAcl(opts: AclCommandOptions) {
     withAuthorizer(opts) { authorizer =>
-      val resourceToAcl = getResourceToAcls(opts)
+      val filterToAcl = getResourceFilterToAcls(opts)
 
-      for ((resource, acls) <- resourceToAcl) {
+      for ((filter, acls) <- filterToAcl) {
         if (acls.isEmpty) {
-          if (confirmAction(opts, s"Are you sure you want to delete all ACLs for resource `$resource`? (y/n)"))
-            authorizer.removeAcls(resource)
+          if (confirmAction(opts, s"Are you sure you want to delete all ACLs for resource filter `$filter`? (y/n)"))
+            removeAcls(authorizer, acls, filter)
         } else {
-          if (confirmAction(opts, s"Are you sure you want to remove ACLs: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline from resource `$resource`? (y/n)"))
-            authorizer.removeAcls(acls, resource)
+          if (confirmAction(opts, s"Are you sure you want to remove ACLs: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline from resource filter `$filter`? (y/n)"))
+            removeAcls(authorizer, acls, filter)
         }
       }
 
@@ -115,42 +126,57 @@ object AclCommand extends Logging {
     }
   }
 
+  private def removeAcls(authorizer: Authorizer, acls: Set[Acl], filter: ResourceFilter) {
+    getAcls(authorizer, filter)
+      .keys
+      .foreach(resource =>
+        if (acls.isEmpty) authorizer.removeAcls(resource)
+        else authorizer.removeAcls(acls, resource)
+      )
+  }
+
   private def listAcl(opts: AclCommandOptions) {
     withAuthorizer(opts) { authorizer =>
-      val resources = getResource(opts, dieIfNoResourceFound = false)
+      val filters = getResourceFilter(opts, dieIfNoResourceFound = false)
 
       val resourceToAcls: Iterable[(Resource, Set[Acl])] =
-        if (resources.isEmpty) authorizer.getAcls()
-        else resources.map(resource => resource -> authorizer.getAcls(resource))
+        if (filters.isEmpty) authorizer.getAcls()
+        else filters.flatMap(filter => getAcls(authorizer, filter))
 
       for ((resource, acls) <- resourceToAcls)
         println(s"Current ACLs for resource `$resource`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
     }
   }
 
-  private def getResourceToAcls(opts: AclCommandOptions): Map[Resource, Set[Acl]] = {
-    var resourceToAcls = Map.empty[Resource, Set[Acl]]
+  private def getAcls(authorizer: Authorizer, filter: ResourceFilter): Map[Resource, Set[Acl]] =
+    authorizer.getAcls()
+      .filter { case (resource, acl) => filter.matches(resource.toJava) }
+
+  private def getResourceFilterToAcls(opts: AclCommandOptions): Map[ResourceFilter, Set[Acl]] = {
+    var resourceToAcls = Map.empty[ResourceFilter, Set[Acl]]
 
     //if none of the --producer or --consumer options are specified , just construct ACLs from CLI options.
     if (!opts.options.has(opts.producerOpt) && !opts.options.has(opts.consumerOpt)) {
-      resourceToAcls ++= getCliResourceToAcls(opts)
+      resourceToAcls ++= getCliResourceFilterToAcls(opts)
     }
 
     //users are allowed to specify both --producer and --consumer options in a single command.
     if (opts.options.has(opts.producerOpt))
-      resourceToAcls ++= getProducerResourceToAcls(opts)
+      resourceToAcls ++= getProducerResourceFilterToAcls(opts)
 
     if (opts.options.has(opts.consumerOpt))
-      resourceToAcls ++= getConsumerResourceToAcls(opts).map { case (k, v) => k -> (v ++ resourceToAcls.getOrElse(k, Set.empty[Acl])) }
+      resourceToAcls ++= getConsumerResourceFilterToAcls(opts).map { case (k, v) => k -> (v ++ resourceToAcls.getOrElse(k, Set.empty[Acl])) }
 
     validateOperation(opts, resourceToAcls)
 
     resourceToAcls
   }
 
-  private def getProducerResourceToAcls(opts: AclCommandOptions): Map[Resource, Set[Acl]] = {
-    val topics: Set[Resource] = getResource(opts).filter(_.resourceType == Topic)
-    val transactionalIds: Set[Resource] = getResource(opts).filter(_.resourceType == TransactionalId)
+  private def getProducerResourceFilterToAcls(opts: AclCommandOptions): Map[ResourceFilter, Set[Acl]] = {
+    val filters = getResourceFilter(opts)
+
+    val topics: Set[ResourceFilter] = filters.filter(_.resourceType == JResourceType.TOPIC)
+    val transactionalIds: Set[ResourceFilter] = filters.filter(_.resourceType == JResourceType.TRANSACTIONAL_ID)
     val enableIdempotence = opts.options.has(opts.idempotentOpt)
 
     val topicAcls = getAcl(opts, Set(Write, Describe, Create))
@@ -160,29 +186,29 @@ object AclCommand extends Logging {
     topics.map(_ -> topicAcls).toMap ++
       transactionalIds.map(_ -> transactionalIdAcls).toMap ++
         (if (enableIdempotence) 
-          Map(Resource.ClusterResource -> getAcl(opts, Set(IdempotentWrite))) 
+          Map(ClusterResourceFilter -> getAcl(opts, Set(IdempotentWrite)))
         else
           Map.empty)
   }
 
-  private def getConsumerResourceToAcls(opts: AclCommandOptions): Map[Resource, Set[Acl]] = {
-    val resources = getResource(opts)
+  private def getConsumerResourceFilterToAcls(opts: AclCommandOptions): Map[ResourceFilter, Set[Acl]] = {
+    val filters = getResourceFilter(opts)
 
-    val topics: Set[Resource] = getResource(opts).filter(_.resourceType == Topic)
-    val groups: Set[Resource] = resources.filter(_.resourceType == Group)
+    val topics: Set[ResourceFilter] = filters.filter(_.resourceType == JResourceType.TOPIC)
+    val groups: Set[ResourceFilter] = filters.filter(_.resourceType == JResourceType.GROUP)
 
     //Read, Describe on topic, Read on consumerGroup
 
     val acls = getAcl(opts, Set(Read, Describe))
 
-    topics.map(_ -> acls).toMap ++
-      groups.map(_ -> getAcl(opts, Set(Read))).toMap
+    topics.map(_ -> acls).toMap[ResourceFilter, Set[Acl]] ++
+      groups.map(_ -> getAcl(opts, Set(Read))).toMap[ResourceFilter, Set[Acl]]
   }
 
-  private def getCliResourceToAcls(opts: AclCommandOptions): Map[Resource, Set[Acl]] = {
+  private def getCliResourceFilterToAcls(opts: AclCommandOptions): Map[ResourceFilter, Set[Acl]] = {
     val acls = getAcl(opts)
-    val resources = getResource(opts)
-    resources.map(_ -> acls).toMap
+    val filters = getResourceFilter(opts)
+    filters.map(_ -> acls).toMap
   }
 
   private def getAcl(opts: AclCommandOptions, operations: Set[Operation]): Set[Acl] = {
@@ -235,28 +261,30 @@ object AclCommand extends Logging {
       Set.empty[KafkaPrincipal]
   }
 
-  private def getResource(opts: AclCommandOptions, dieIfNoResourceFound: Boolean = true): Set[Resource] = {
-    var resources = Set.empty[Resource]
-    if (opts.options.has(opts.topicOpt))
-      opts.options.valuesOf(opts.topicOpt).asScala.foreach(topic => resources += new Resource(Topic, topic.trim))
+  private def getResourceFilter(opts: AclCommandOptions, dieIfNoResourceFound: Boolean = true): Set[ResourceFilter] = {
+    val resourceNameType: JResourceNameType = opts.options.valueOf(opts.resourceNameType)
 
-    if (opts.options.has(opts.clusterOpt) || opts.options.has(opts.idempotentOpt))
-      resources += Resource.ClusterResource
+    var resourceFilters = Set.empty[ResourceFilter]
+    if (opts.options.has(opts.topicOpt))
+      opts.options.valuesOf(opts.topicOpt).asScala.foreach(topic => resourceFilters += new ResourceFilter(JResourceType.TOPIC, topic.trim, resourceNameType))
+
+    if (resourceNameType == JResourceNameType.LITERAL && (opts.options.has(opts.clusterOpt) || opts.options.has(opts.idempotentOpt)))
+      resourceFilters += ClusterResourceFilter
 
     if (opts.options.has(opts.groupOpt))
-      opts.options.valuesOf(opts.groupOpt).asScala.foreach(group => resources += new Resource(Group, group.trim))
+      opts.options.valuesOf(opts.groupOpt).asScala.foreach(group => resourceFilters += new ResourceFilter(JResourceType.GROUP, group.trim, resourceNameType))
 
     if (opts.options.has(opts.transactionalIdOpt))
       opts.options.valuesOf(opts.transactionalIdOpt).asScala.foreach(transactionalId =>
-        resources += new Resource(TransactionalId, transactionalId))
+        resourceFilters += new ResourceFilter(JResourceType.TRANSACTIONAL_ID, transactionalId, resourceNameType))
 
     if (opts.options.has(opts.delegationTokenOpt))
-      opts.options.valuesOf(opts.delegationTokenOpt).asScala.foreach(token => resources += new Resource(DelegationToken, token.trim))
+      opts.options.valuesOf(opts.delegationTokenOpt).asScala.foreach(token => resourceFilters += new ResourceFilter(JResourceType.DELEGATION_TOKEN, token.trim, resourceNameType))
 
-    if (resources.isEmpty && dieIfNoResourceFound)
+    if (resourceFilters.isEmpty && dieIfNoResourceFound)
       CommandLineUtils.printUsageAndDie(opts.parser, "You must provide at least one resource: --topic <topic> or --cluster or --group <group> or --delegation-token <Delegation Token ID>")
 
-    resources
+    resourceFilters
   }
 
   private def confirmAction(opts: AclCommandOptions, msg: String): Boolean = {
@@ -266,7 +294,7 @@ object AclCommand extends Logging {
     Console.readLine().equalsIgnoreCase("y")
   }
 
-  private def validateOperation(opts: AclCommandOptions, resourceToAcls: Map[Resource, Set[Acl]]) = {
+  private def validateOperation(opts: AclCommandOptions, resourceToAcls: Map[ResourceFilter, Set[Acl]]): Unit = {
     for ((resource, acls) <- resourceToAcls) {
       val validOps = ResourceTypeToValidOperations(resource.resourceType)
       if ((acls.map(_.operation) -- validOps).nonEmpty)
@@ -316,6 +344,12 @@ object AclCommand extends Logging {
       .withRequiredArg
       .describedAs("delegation-token")
       .ofType(classOf[String])
+
+    val resourceNameType = parser.accepts("resource-name-type", "The type of the resource name, or any.")
+      .withRequiredArg()
+      .ofType(classOf[String])
+      .withValuesConvertedBy(new ResourceNameTypeConverter())
+      .defaultsTo(JResourceNameType.LITERAL)
 
     val addOpt = parser.accepts("add", "Indicates you are trying to add ACLs.")
     val removeOpt = parser.accepts("remove", "Indicates you are trying to remove ACLs.")
@@ -393,4 +427,19 @@ object AclCommand extends Logging {
     }
   }
 
+}
+
+class ResourceNameTypeConverter extends EnumConverter[JResourceNameType](classOf[JResourceNameType]) {
+
+  override def convert(value: String): JResourceNameType = {
+    val nameType = super.convert(value)
+    if (nameType.isUnknown)
+      throw new ValueConversionException("Unknown resourceNameType: " + value)
+
+    nameType
+  }
+
+  override def valuePattern: String = JResourceNameType.values
+    .filter(_ != JResourceNameType.UNKNOWN)
+    .mkString("|")
 }

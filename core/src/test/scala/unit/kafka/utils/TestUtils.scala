@@ -1142,8 +1142,11 @@ object TestUtils extends Logging {
   }
 
   def waitAndVerifyAcls(expected: Set[Acl], authorizer: Authorizer, resource: Resource) = {
+    val newLine = scala.util.Properties.lineSeparator
+
     TestUtils.waitUntilTrue(() => authorizer.getAcls(resource) == expected,
-      s"expected acls $expected but got ${authorizer.getAcls(resource)}", waitTime = JTestUtils.DEFAULT_MAX_WAIT_MS)
+      s"expected acls:${expected.mkString(newLine + "\t", newLine + "\t", newLine)}" +
+        s"but got:${authorizer.getAcls(resource).mkString(newLine + "\t", newLine + "\t", newLine)}", waitTime = JTestUtils.DEFAULT_MAX_WAIT_MS)
   }
 
   /**
