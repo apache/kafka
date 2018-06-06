@@ -861,6 +861,25 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     }, "Expected topic was not created")
   }
 
+  @Test
+  def testCreatePermissionMetadataRequestAutoCreate() {
+    // existing topic
+    val readAcls = topicReadAcl.get(topicResource).get
+    addAndVerifyAcls(readAcls, topicResource)
+
+    // non-existing topic
+    val newTopicPartition = new TopicPartition(createTopic, 0)
+    val newTopicResource = new Resource(Topic, createTopic)
+    addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Read)), newTopicResource)
+
+    val metadataRequest = new requests.MetadataRequest.Builder(List(topic, createTopic).asJava, true).build()
+    val response = connectAndSend(metadataRequest, ApiKeys.METADATA)
+    val metadataResponse = MetadataResponse.parse(response, ApiKeys.METADATA.latestVersion)
+
+    assertEquals(Set(topic).asJava, metadataResponse.topicsByError(Errors.NONE));
+    assertEquals(Set(createTopic).asJava, metadataResponse.topicsByError(Errors.TOPIC_AUTHORIZATION_FAILED));
+  }
+
   @Test(expected = classOf[AuthorizationException])
   def testCommitWithNoAccess() {
     this.consumers.head.commitSync(Map(tp -> new OffsetAndMetadata(5)).asJava)
