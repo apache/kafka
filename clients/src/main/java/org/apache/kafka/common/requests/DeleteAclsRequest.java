@@ -18,12 +18,14 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.acl.AccessControlEntryFilter;
 import org.apache.kafka.common.acl.AclBindingFilter;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.resource.ResourceFilter;
+import org.apache.kafka.common.resource.ResourceNameType;
 import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
@@ -37,6 +39,7 @@ import static org.apache.kafka.common.protocol.CommonFields.OPERATION;
 import static org.apache.kafka.common.protocol.CommonFields.PERMISSION_TYPE;
 import static org.apache.kafka.common.protocol.CommonFields.PRINCIPAL_FILTER;
 import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_NAME_FILTER;
+import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_NAME_TYPE_FILTER;
 import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_TYPE;
 
 public class DeleteAclsRequest extends AbstractRequest {
@@ -52,9 +55,20 @@ public class DeleteAclsRequest extends AbstractRequest {
                     PERMISSION_TYPE))));
 
     /**
-     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     * V1 sees a new `RESOURCE_NAME_TYPE_FILTER` that controls how the filter handles different resource name types.
+     * Also, when the quota is violated, brokers will respond to a version 1 or later request before throttling.
+     *
+     * For more info, see {@link org.apache.kafka.common.resource.ResourceNameType}.
      */
-    private static final Schema DELETE_ACLS_REQUEST_V1 = DELETE_ACLS_REQUEST_V0;
+    private static final Schema DELETE_ACLS_REQUEST_V1 = new Schema(
+            new Field(FILTERS, new ArrayOf(new Schema(
+                    RESOURCE_TYPE,
+                    RESOURCE_NAME_FILTER,
+                    RESOURCE_NAME_TYPE_FILTER,
+                    PRINCIPAL_FILTER,
+                    HOST_FILTER,
+                    OPERATION,
+                    PERMISSION_TYPE))));
 
     public static Schema[] schemaVersions() {
         return new Schema[]{DELETE_ACLS_REQUEST_V0, DELETE_ACLS_REQUEST_V1};
@@ -84,6 +98,8 @@ public class DeleteAclsRequest extends AbstractRequest {
     DeleteAclsRequest(short version, List<AclBindingFilter> filters) {
         super(version);
         this.filters = filters;
+
+        validate(version, filters);
     }
 
     public DeleteAclsRequest(Struct struct, short version) {
@@ -135,5 +151,17 @@ public class DeleteAclsRequest extends AbstractRequest {
 
     public static DeleteAclsRequest parse(ByteBuffer buffer, short version) {
         return new DeleteAclsRequest(DELETE_ACLS.parseRequest(version, buffer), version);
+    }
+
+    private void validate(short version, List<AclBindingFilter> filters) {
+        if (version == 0) {
+            final boolean unsupported = filters.stream()
+                .map(AclBindingFilter::resourceFilter)
+                .map(ResourceFilter::nameType)
+                .anyMatch(nameType -> nameType != ResourceNameType.LITERAL);
+            if (unsupported) {
+                throw new UnsupportedVersionException("Version 0 only supports literal resource name types");
+            }
+        }
     }
 }

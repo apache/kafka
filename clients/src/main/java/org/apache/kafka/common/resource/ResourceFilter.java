@@ -21,6 +21,8 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Objects;
 
+import static org.apache.kafka.common.resource.Resource.WILDCARD_RESOURCE;
+
 /**
  * A filter which matches Resource objects.
  *
@@ -30,22 +32,54 @@ import java.util.Objects;
 public class ResourceFilter {
     private final ResourceType resourceType;
     private final String name;
+    private final ResourceNameType nameType;
 
     /**
      * Matches any resource.
      */
-    public static final ResourceFilter ANY = new ResourceFilter(ResourceType.ANY, null);
+    public static final ResourceFilter ANY = new ResourceFilter(ResourceType.ANY, null, ResourceNameType.ANY);
 
     /**
-     * Create an instance of this class with the provided parameters.
+     * Create a filter that matches {@link ResourceNameType#LITERAL literal} resources of the
+     * supplied {@code resourceType} and {@code name}.
      *
      * @param resourceType non-null resource type
-     * @param name resource name or null
+     * @param name resource name or {@code null}.
+     *             If {@code null}, the filter will ignore the name of resources.
+     * @deprecated Since 2.0. Use {@link #ResourceFilter(ResourceType, String, ResourceNameType)}
      */
+    @Deprecated
     public ResourceFilter(ResourceType resourceType, String name) {
-        Objects.requireNonNull(resourceType);
-        this.resourceType = resourceType;
+        this(resourceType, name, ResourceNameType.LITERAL);
+    }
+
+    /**
+     * Create a filter that matches resources of the supplied {@code resourceType}, {@code name} and
+     * {@code nameType}.
+     * <p>
+     * If the filter has each three parameters fully supplied, then it will only match a resource that has exactly
+     * the same values, e.g. a filter of {@code new ResourceFilter(ResourceType.GROUP, "one", ResourceTypeName.PREFIXED)}
+     * will only match the resource {@code new Resource(ResourceType.GROUP, "one", ResourceTypeName.PREFIXED)}.
+     * <p>
+     * Any of the three parameters can be set to be ignored by the filter:
+     * <ul>
+     *     <li><b>{@code resourceType}</b> can be set to {@link ResourceType#ANY},
+     *     meaning it will match a resource of any resource type</li>
+     *     <li><b>{@code name}</b> can be set to {@code null}, meaning it will match a resource of any name.</li>
+     *     <li><b>{@code nameType}</b> can be set to {@link ResourceNameType#ANY},
+     *     meaning it will match a resource with any resource name type, including the
+     *     {@link Resource#WILDCARD_RESOURCE wildcard resource}</li>
+     * </ul>
+     *
+     * @param resourceType non-null resource type to filter by.
+     * @param name resource name to filter by, or {@code null}.
+     *             If {@code null}, the filter will ignore the name of resources.
+     * @param nameType non-null resource name type to filter by.
+     */
+    public ResourceFilter(ResourceType resourceType, String name, ResourceNameType nameType) {
+        this.resourceType = Objects.requireNonNull(resourceType, "resourceType");
         this.name = name;
+        this.nameType = Objects.requireNonNull(nameType, "nameType");
     }
 
     /**
@@ -62,40 +96,76 @@ public class ResourceFilter {
         return name;
     }
 
+    /**
+     * Return the resource name type.
+     */
+    public ResourceNameType nameType() {
+        return nameType;
+    }
+
     @Override
     public String toString() {
-        return "(resourceType=" + resourceType + ", name=" + ((name == null) ? "<any>" : name) + ")";
+        return "(resourceType=" + resourceType + ", name=" + ((name == null) ? "<any>" : name) + ", nameType=" + nameType + ")";
     }
 
     /**
      * Return true if this ResourceFilter has any UNKNOWN components.
      */
     public boolean isUnknown() {
-        return resourceType.isUnknown();
+        return resourceType.isUnknown() || nameType.isUnknown();
     }
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof ResourceFilter))
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
             return false;
-        ResourceFilter other = (ResourceFilter) o;
-        return resourceType.equals(other.resourceType) && Objects.equals(name, other.name);
+
+        final ResourceFilter that = (ResourceFilter) o;
+        return resourceType == that.resourceType &&
+            Objects.equals(name, that.name) &&
+            nameType == that.nameType;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(resourceType, name);
+        return Objects.hash(resourceType, name, nameType);
     }
 
     /**
      * Return true if this filter matches the given Resource.
+     * @param other the resource path under which ACLs are stored.
      */
-    public boolean matches(Resource other) {
-        if ((name != null) && (!name.equals(other.name())))
+    public boolean matches(final Resource other) {
+        throwOnInvalidParams(other);
+
+        if (!resourceType().equals(ResourceType.ANY) && !resourceType().equals(other.resourceType())) {
             return false;
-        if ((resourceType != ResourceType.ANY) && (!resourceType.equals(other.resourceType())))
+        }
+
+        if (!nameType().equals(ResourceNameType.ANY) && !nameType().equals(other.nameType())) {
             return false;
-        return true;
+        }
+
+        if (name() == null) {
+            return true;
+        }
+
+        if (nameType().equals(other.nameType())) {
+            return other.name().equals(name());
+        }
+
+        switch (other.nameType()) {
+            case LITERAL:
+                return other.name().equals(name()) || other.name().equals(WILDCARD_RESOURCE);
+
+            case PREFIXED:
+                return name().startsWith(other.name());
+
+            default:
+                throw new IllegalArgumentException("Unsupported ResourceNameType: " + other.nameType());
+        }
     }
 
     /**
@@ -115,6 +185,20 @@ public class ResourceFilter {
             return "Resource type is UNKNOWN.";
         if (name == null)
             return "Resource name is NULL.";
+        if (nameType == ResourceNameType.ANY)
+            return "Resource name type is ANY.";
+        if (nameType == ResourceNameType.UNKNOWN)
+            return "Resource name type is UNKNOWN.";
         return null;
+    }
+
+    private static void throwOnInvalidParams(final Resource aclPath) {
+        if (aclPath.resourceType().equals(ResourceType.ANY) || aclPath.resourceType().equals(ResourceType.UNKNOWN)) {
+            throw new IllegalArgumentException("Only concrete resource types are supported. Got: " + aclPath.resourceType());
+        }
+
+        if (aclPath.nameType().equals(ResourceNameType.ANY) || aclPath.nameType().equals(ResourceNameType.UNKNOWN)) {
+            throw new IllegalArgumentException("Only concrete resource name types are supported. Got: " + aclPath.nameType());
+        }
     }
 }

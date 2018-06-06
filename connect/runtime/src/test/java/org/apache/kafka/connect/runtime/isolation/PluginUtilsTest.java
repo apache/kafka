@@ -149,6 +149,16 @@ public class PluginUtilsTest {
     }
 
     @Test
+    public void testClientConfigProvider() throws Exception {
+        assertTrue(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.common.config.FileConfigProvider")
+        );
+        assertTrue(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.common.config.FutureConfigProvider")
+        );
+    }
+
+    @Test
     public void testEmptyPluginUrls() throws Exception {
         assertEquals(Collections.<Path>emptyList(), PluginUtils.pluginUrls(pluginPath));
     }

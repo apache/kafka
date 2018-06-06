@@ -16,12 +16,10 @@
  */
 package org.apache.kafka.connect.runtime.errors;
 
-import org.apache.kafka.common.Configurable;
-
 /**
  * Report an error using the information contained in the {@link ProcessingContext}.
  */
-public interface ErrorReporter extends Configurable {
+public interface ErrorReporter {
 
     /**
      * Report an error.

@@ -123,13 +123,13 @@ public class PluginUtils {
             + "|org\\.slf4j"
             + ")\\..*$");
 
-    private static final Pattern WHITELIST = Pattern.compile("^org\\.apache\\.kafka\\.connect\\.(?:"
+    private static final Pattern WHITELIST = Pattern.compile("^org\\.apache\\.kafka\\.(?:common.config..*ConfigProvider|connect\\.(?:"
             + "transforms\\.(?!Transformation$).*"
             + "|json\\..*"
             + "|file\\..*"
             + "|converters\\..*"
             + "|storage\\.StringConverter"
-            + ")$");
+            + "))$");
 
     private static final DirectoryStream.Filter<Path> PLUGIN_PATH_FILTER = new DirectoryStream
             .Filter<Path>() {

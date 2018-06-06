@@ -29,7 +29,7 @@ import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.plain.PlainLoginModule;
 import org.apache.kafka.common.security.scram.ScramLoginModule;
-import org.apache.kafka.common.security.scram.internal.ScramMechanism;
+import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 
 public class TestJaasConfig extends Configuration {
 

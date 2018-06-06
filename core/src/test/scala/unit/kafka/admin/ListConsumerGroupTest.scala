@@ -18,6 +18,7 @@ package kafka.admin
 
 import java.util.Properties
 
+import joptsimple.OptionException
 import org.junit.Test
 import kafka.admin.ConsumerGroupCommand.ConsumerGroupCommandOptions
 import kafka.admin.ConsumerGroupCommand.ZkConsumerGroupService
@@ -86,4 +87,9 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
     }, s"Expected --list to show groups $expectedGroups, but found $foundGroups.")
   }
 
+  @Test(expected = classOf[OptionException])
+  def testListWithUnrecognizedNewConsumerOption() {
+    val cgcArgs = Array("--new-consumer", "--bootstrap-server", brokerList, "--list")
+    getConsumerGroupService(cgcArgs)
+  }
 }
