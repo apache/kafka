@@ -17,11 +17,11 @@
 package kafka.security.auth
 
 import java.util.Objects
-import org.apache.kafka.common.resource.{Resource => JResource}
+import org.apache.kafka.common.resource.{ResourceNameType, Resource => JResource}
 
 object Resource {
   val ClusterResourceName = "kafka-cluster"
-  val ClusterResource = new Resource(Cluster, Resource.ClusterResourceName, Literal)
+  val ClusterResource = Resource(Cluster, Resource.ClusterResourceName, ResourceNameType.LITERAL)
   val ProducerIdResourceName = "producer-id"
   val WildCardResource = "*"
 }
@@ -31,13 +31,17 @@ object Resource {
  * @param resourceType non-null type of resource.
  * @param name non-null name of the resource, for topic this will be topic name , for group it will be group name. For cluster type
  *             it will be a constant string kafka-cluster.
- * @param resourceNameType non-null type of resource name: literal, prefixed, etc.
+ * @param nameType non-null type of resource name: literal, prefixed, etc.
  */
-case class Resource(resourceType: ResourceType, name: String, resourceNameType: ResourceNameType) {
+case class Resource(resourceType: ResourceType, name: String, nameType: ResourceNameType) {
 
   Objects.requireNonNull(resourceType, "resourceType")
   Objects.requireNonNull(name, "name")
-  Objects.requireNonNull(resourceNameType, "resourceNameType")
+  Objects.requireNonNull(nameType, "nameType")
+
+  if (nameType.isNotSpecific) {
+    throw new IllegalArgumentException("nameType must be a specific type, not: " + nameType)
+  }
 
   /**
     * Create an instance of this class with the provided parameters.
@@ -49,11 +53,11 @@ case class Resource(resourceType: ResourceType, name: String, resourceNameType: 
     */
   @deprecated("Use Resource(ResourceType, String, ResourceNameType")
   def this(resourceType: ResourceType, name: String) {
-    this(resourceType, name, Literal)
+    this(resourceType, name, ResourceNameType.LITERAL)
   }
 
   def toJava: JResource = {
-    new JResource(resourceType.toJava, name, resourceNameType.toJava)
+    new JResource(resourceType.toJava, name, nameType)
   }
 }
 

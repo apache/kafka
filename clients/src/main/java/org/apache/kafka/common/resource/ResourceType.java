@@ -118,4 +118,13 @@ public enum ResourceType {
     public boolean isUnknown() {
         return this == UNKNOWN;
     }
+
+    /**
+     * Return whether this resource name type is ANY or UNKNOWN.
+     *
+     * i.e. it is not a specific resource type.
+     */
+    public boolean isNotSpecific() {
+        return this == ANY || this == UNKNOWN;
+    }
 }

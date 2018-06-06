@@ -39,10 +39,16 @@ public class AclBinding {
      * @param entry non-null entry
      */
     public AclBinding(Resource resource, AccessControlEntry entry) {
-        Objects.requireNonNull(resource);
-        this.resource = resource;
-        Objects.requireNonNull(entry);
-        this.entry = entry;
+        this.resource = Objects.requireNonNull(resource);
+        this.entry = Objects.requireNonNull(entry);
+
+        if (resource.resourceType().isNotSpecific()) {
+            throw new IllegalArgumentException("Resource type must be specific, not: " + resource.resourceType());
+        }
+
+        if (resource.nameType().isNotSpecific()) {
+            throw new IllegalArgumentException("Resource name type must be specific, not: " + resource.nameType());
+        }
     }
 
     /**
