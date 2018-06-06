@@ -17,6 +17,7 @@ import java.util
 import java.util.concurrent.ExecutionException
 import java.util.regex.Pattern
 import java.util.{ArrayList, Collections, Properties}
+import java.time.Duration
 
 import kafka.admin.AdminClient
 import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, KafkaConsumerGroupService}
@@ -73,6 +74,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   val groupResource = new Resource(Group, group)
   val deleteTopicResource = new Resource(Topic, deleteTopic)
   val transactionalIdResource = new Resource(TransactionalId, transactionalId)
+  val createTopicResource = new Resource(Topic, createTopic)
 
   val groupReadAcl = Map(groupResource -> Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Read)))
   val groupDescribeAcl = Map(groupResource -> Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Describe)))
@@ -82,6 +84,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   val clusterAlterAcl = Map(Resource.ClusterResource -> Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Alter)))
   val clusterDescribeAcl = Map(Resource.ClusterResource -> Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Describe)))
   val clusterIdempotentWriteAcl = Map(Resource.ClusterResource -> Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, IdempotentWrite)))
+  val topicCreateAcl = Map(createTopicResource -> Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Create)))
   val topicReadAcl = Map(topicResource -> Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Read)))
   val topicWriteAcl = Map(topicResource -> Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Write)))
   val topicDescribeAcl = Map(topicResource -> Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Describe)))
@@ -207,7 +210,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     ApiKeys.LEADER_AND_ISR -> clusterAcl,
     ApiKeys.STOP_REPLICA -> clusterAcl,
     ApiKeys.CONTROLLED_SHUTDOWN -> clusterAcl,
-    ApiKeys.CREATE_TOPICS -> clusterCreateAcl,
+    ApiKeys.CREATE_TOPICS -> topicCreateAcl,
     ApiKeys.DELETE_TOPICS -> topicDeleteAcl,
     ApiKeys.DELETE_RECORDS -> topicDeleteAcl,
     ApiKeys.OFFSET_FOR_LEADER_EPOCH -> clusterAcl,
@@ -493,6 +496,18 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
+  def testCreateTopicAuthorizationWithClusterCreate() {
+    removeAllAcls()
+    val resources = Set[ResourceType](Topic)
+
+    sendRequestAndVerifyResponseError(ApiKeys.CREATE_TOPICS, createTopicsRequest, resources, isAuthorized = false)
+
+    for ((resource, acls) <- clusterCreateAcl)
+      addAndVerifyAcls(acls, resource)
+    sendRequestAndVerifyResponseError(ApiKeys.CREATE_TOPICS, createTopicsRequest, resources, isAuthorized = true)
+  }
+
+  @Test
   def testFetchFollowerRequest() {
     val key = ApiKeys.FETCH
     val request = createFetchFollowerRequest
@@ -551,18 +566,30 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
-  def testCreatePermissionNeededForWritingToNonExistentTopic() {
-    val newTopic = "newTopic"
-    val topicPartition = new TopicPartition(newTopic, 0)
-    addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Write)), new Resource(Topic, newTopic))
+  def testCreatePermissionOnTopicToWriteToNonExistentTopic() {
+    testCreatePermissionNeededToWriteToNonExistentTopic(Topic)
+  }
+
+  @Test
+  def testCreatePermissionOnClusterToWriteToNonExistentTopic() {
+    testCreatePermissionNeededToWriteToNonExistentTopic(Cluster)
+  }
+
+  private def testCreatePermissionNeededToWriteToNonExistentTopic(resType: ResourceType) {
+    val topicPartition = new TopicPartition(createTopic, 0)
+    val newTopicResource = new Resource(Topic, createTopic)
+    addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Write)), newTopicResource)
     try {
       sendRecords(numRecords, topicPartition)
       Assert.fail("should have thrown exception")
     } catch {
-      case e: TopicAuthorizationException => assertEquals(Collections.singleton(newTopic), e.unauthorizedTopics())
+      case e: TopicAuthorizationException => 
+        assertEquals(Collections.singleton(createTopic), e.unauthorizedTopics())
     }
 
-    addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Create)), Resource.ClusterResource)
+    val resource = if (resType == Topic) newTopicResource else Resource.ClusterResource
+    addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Create)), resource)
+
     sendRecords(numRecords, topicPartition)
   }
 
@@ -800,27 +827,37 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 }
 
   @Test
-  def testCreatePermissionNeededToReadFromNonExistentTopic() {
-    val newTopic = "newTopic"
+  def testCreatePermissionOnTopicToReadFromNonExistentTopic() {
+    testCreatePermissionNeededToReadFromNonExistentTopic("newTopic",
+      Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Create)),
+      Topic)
+  }
+
+  @Test
+  def testCreatePermissionOnClusterToReadFromNonExistentTopic() {
+    testCreatePermissionNeededToReadFromNonExistentTopic("newTopic",
+      Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Create)), 
+      Cluster)
+  }
+
+  private def testCreatePermissionNeededToReadFromNonExistentTopic(newTopic: String, acls: Set[Acl], resType: ResourceType) {
     val topicPartition = new TopicPartition(newTopic, 0)
     val newTopicResource = new Resource(Topic, newTopic)
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Read)), newTopicResource)
     addAndVerifyAcls(groupReadAcl(groupResource), groupResource)
-    addAndVerifyAcls(clusterAcl(Resource.ClusterResource), Resource.ClusterResource)
-    try {
-      this.consumers.head.assign(List(topicPartition).asJava)
-      consumeRecords(this.consumers.head)
-      Assert.fail("should have thrown exception")
-    } catch {
-      case e: TopicAuthorizationException =>
-        assertEquals(Collections.singleton(newTopic), e.unauthorizedTopics())
-    }
+    this.consumers.head.assign(List(topicPartition).asJava)
+    val unauthorizedTopics = intercept[TopicAuthorizationException] {
+      (0 until 10).foreach(_ => consumers.head.poll(Duration.ofMillis(50L)))
+    }.unauthorizedTopics
+    assertEquals(Collections.singleton(newTopic), unauthorizedTopics)
 
-    addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Write)), newTopicResource)
-    addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Create)), Resource.ClusterResource)
+    val resource = if (resType == Topic) newTopicResource else Resource.ClusterResource
+    addAndVerifyAcls(acls, resource)
 
-    sendRecords(numRecords, topicPartition)
-    consumeRecords(this.consumers.head, topic = newTopic, part = 0)
+    TestUtils.waitUntilTrue(() => {
+      this.consumers.head.poll(Duration.ofMillis(50L))
+      this.zkClient.topicExists(newTopic)
+    }, "Expected topic was not created")
   }
 
   @Test(expected = classOf[AuthorizationException])

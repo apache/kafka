@@ -98,13 +98,10 @@
         will be removed in a future version.</li>
     <li>The internal method <code>kafka.admin.AdminClient.deleteRecordsBefore</code> has been removed. Users are encouraged to migrate to <code>org.apache.kafka.clients.admin.AdminClient.deleteRecords</code>.</li>
     <li>The tool kafka.tools.ReplayLogProducer has been removed.</li>
-    <li><a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-176%3A+Remove+deprecated+new-consumer+option+for+tools">KIP-176</a> finally removes
-        the <code>--new-consumer</code> option for all consumer based tools as <code>kafka-console-consumer</code>, <code>kafka-consumer-perf-test</code>
-        and <code>kafka-consumer-groups</code>.
-        The new consumer is automatically used if the bootstrap servers list is provided on the command line
-        otherwise, when the zookeeper connection is provided, the old consumer is used.
-        The <code>--new-consumer</code> option had already been ignored as the way of selecting the consumer since Kafka 1.0.0,
-        this KIP just removes the option.
+    <li>The AclCommand tool <code>--producer</code> convenience option uses the <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-277+-+Fine+Grained+ACL+for+CreateTopics+API">KIP-277</a> finer grained ACL on the given topic. </li>
+    <li><a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-176%3A+Remove+deprecated+new-consumer+option+for+tools">KIP-176</a> removes
+        the <code>--new-consumer</code> option for all consumer based tools. This option is redundant since the new consumer is automatically
+        used if --bootstrap-server is defined.
     </li>
 </ul>
 

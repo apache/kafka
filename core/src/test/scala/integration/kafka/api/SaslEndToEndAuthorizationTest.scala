@@ -56,7 +56,7 @@ abstract class SaslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
     */
   @Test(timeout = 15000)
   def testTwoConsumersWithDifferentSaslCredentials(): Unit = {
-    setAclsAndProduce()
+    setAclsAndProduce(tp)
     val consumer1 = consumers.head
 
     val consumer2Config = new Properties

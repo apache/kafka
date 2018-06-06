@@ -31,7 +31,7 @@ object AclCommand extends Logging {
 
   val Newline = scala.util.Properties.lineSeparator
   val ResourceTypeToValidOperations = Map[ResourceType, Set[Operation]] (
-    Topic -> Set(Read, Write, Describe, Delete, DescribeConfigs, AlterConfigs, All),
+    Topic -> Set(Read, Write, Create, Describe, Delete, DescribeConfigs, AlterConfigs, All),
     Group -> Set(Read, Describe, Delete, All),
     Cluster -> Set(Create, ClusterAction, DescribeConfigs, AlterConfigs, IdempotentWrite, Alter, Describe, All),
     TransactionalId -> Set(Describe, Write, All),
@@ -153,13 +153,16 @@ object AclCommand extends Logging {
     val transactionalIds: Set[Resource] = getResource(opts).filter(_.resourceType == TransactionalId)
     val enableIdempotence = opts.options.has(opts.idempotentOpt)
 
-    val acls = getAcl(opts, Set(Write, Describe))
+    val topicAcls = getAcl(opts, Set(Write, Describe, Create))
+    val transactionalIdAcls = getAcl(opts, Set(Write, Describe))
 
-    //Write, Describe permission on topics, Create permission on cluster, Write, Describe on transactionalIds
-    topics.map(_ -> acls).toMap[Resource, Set[Acl]] ++
-      transactionalIds.map(_ -> acls).toMap[Resource, Set[Acl]] +
-      (Resource.ClusterResource -> (getAcl(opts, Set(Create)) ++
-        (if (enableIdempotence) getAcl(opts, Set(IdempotentWrite)) else Set.empty[Acl])))
+    //Write, Describe, Create permission on topics, Write, Describe on transactionalIds
+    topics.map(_ -> topicAcls).toMap ++
+      transactionalIds.map(_ -> transactionalIdAcls).toMap ++
+        (if (enableIdempotence) 
+          Map(Resource.ClusterResource -> getAcl(opts, Set(IdempotentWrite))) 
+        else
+          Map.empty)
   }
 
   private def getConsumerResourceToAcls(opts: AclCommandOptions): Map[Resource, Set[Acl]] = {
@@ -168,12 +171,12 @@ object AclCommand extends Logging {
     val topics: Set[Resource] = getResource(opts).filter(_.resourceType == Topic)
     val groups: Set[Resource] = resources.filter(_.resourceType == Group)
 
-    //Read,Describe on topic, Read on consumerGroup + Create on cluster
+    //Read, Describe on topic, Read on consumerGroup
 
     val acls = getAcl(opts, Set(Read, Describe))
 
-    topics.map(_ -> acls).toMap[Resource, Set[Acl]] ++
-      groups.map(_ -> getAcl(opts, Set(Read))).toMap[Resource, Set[Acl]]
+    topics.map(_ -> acls).toMap ++
+      groups.map(_ -> getAcl(opts, Set(Read))).toMap
   }
 
   private def getCliResourceToAcls(opts: AclCommandOptions): Map[Resource, Set[Acl]] = {
@@ -355,7 +358,7 @@ object AclCommand extends Logging {
       .ofType(classOf[String])
 
     val producerOpt = parser.accepts("producer", "Convenience option to add/remove ACLs for producer role. " +
-      "This will generate ACLs that allows WRITE,DESCRIBE on topic and CREATE on cluster. ")
+      "This will generate ACLs that allows WRITE,DESCRIBE and CREATE on topic.")
 
     val consumerOpt = parser.accepts("consumer", "Convenience option to add/remove ACLs for consumer role. " +
       "This will generate ACLs that allows READ,DESCRIBE on topic and READ on group.")
