@@ -144,7 +144,13 @@ public class ResourceFilterTest {
     }
 
     @Test
-    public void shouldNotMatchPrefixedIfNamePrefixedAndFilterTypeIsPrefixed() {
+    public void shouldNotMatchIfBothPrefixedAndFilterIsPrefixOfResource() {
+        assertFalse(new ResourceFilter(TOPIC, "Name-something", PREFIXED)
+            .matches(new Resource(TOPIC, "Name", PREFIXED)));
+    }
+
+    @Test
+    public void shouldNotMatchIfBothPrefixedAndResourceIsPrefixOfFilter() {
         assertFalse(new ResourceFilter(TOPIC, "Name-something", PREFIXED)
             .matches(new Resource(TOPIC, "Name", PREFIXED)));
     }
