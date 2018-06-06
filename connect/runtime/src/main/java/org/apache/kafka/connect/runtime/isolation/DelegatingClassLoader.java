@@ -57,6 +57,7 @@ import java.util.SortedMap;
 import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.stream.Collectors;
 
 public class DelegatingClassLoader extends URLClassLoader {
     private static final Logger log = LoggerFactory.getLogger(DelegatingClassLoader.class);
@@ -72,6 +73,12 @@ public class DelegatingClassLoader extends URLClassLoader {
     private final SortedSet<PluginDesc<ConnectRestExtension>> restExtensions;
     private final List<String> pluginPaths;
     private final Map<Path, PluginClassLoader> activePaths;
+
+    private static final String MANIFEST_PREFIX = "META-INF/services/";
+    private static final Class[] SERVICE_LOADER_PLUGINS = new Class[] {ConnectRestExtension.class, ConfigProvider.class};
+    private static final Set<String> PLUGIN_MANIFEST_FILES =
+        Arrays.stream(SERVICE_LOADER_PLUGINS).map(serviceLoaderPlugin -> MANIFEST_PREFIX + serviceLoaderPlugin.getName())
+            .collect(Collectors.toSet());
 
     public DelegatingClassLoader(List<String> pluginPaths, ClassLoader parent) {
         super(new URL[0], parent);
@@ -410,15 +417,28 @@ public class DelegatingClassLoader extends URLClassLoader {
 
     @Override
     public URL getResource(String name) {
-        // Default implementation of getResource searches the parent class loader and if not available/found, its own URL paths.
-        // This will enable thePluginClassLoader to limit its resource search only to its own URL paths.
-        return null;
+        if (serviceLoaderManifestForPlugin(name)) {
+            // Default implementation of getResource searches the parent class loader and if not available/found, its own URL paths.
+            // This will enable thePluginClassLoader to limit its resource search only to its own URL paths.
+            return null;
+        } else {
+            return super.getResource(name);
+        }
     }
 
     @Override
     public Enumeration<URL> getResources(String name) throws IOException {
-        // Default implementation of getResources searches the parent class loader and and also its own URL paths. This will enable the
-        // PluginClassLoader to limit its resource search to only its own URL paths.
-        return null;
+        if (serviceLoaderManifestForPlugin(name)) {
+            // Default implementation of getResources searches the parent class loader and and also its own URL paths. This will enable the
+            // PluginClassLoader to limit its resource search to only its own URL paths.
+            return null;
+        } else {
+            return super.getResources(name);
+        }
+    }
+
+    //Visible for testing
+    static boolean serviceLoaderManifestForPlugin(String name) {
+        return PLUGIN_MANIFEST_FILES.contains(name);
     }
 }
