@@ -39,7 +39,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.protocol.types.Type._
 import org.apache.kafka.common.protocol.types._
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.requests.{IsolationLevel, OffsetCommitRequest, OffsetFetchResponse}
+import org.apache.kafka.common.requests.{IsolationLevel, OffsetFetchResponse}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.{Time, Utils}
 
@@ -1008,7 +1008,6 @@ object GroupMetadataManager {
     0 -> OFFSET_COMMIT_VALUE_SCHEMA_V0,
     1 -> OFFSET_COMMIT_VALUE_SCHEMA_V1,
     2 -> OFFSET_COMMIT_VALUE_SCHEMA_V2)
-  private val CURRENT_OFFSET_VALUE_SCHEMA_VERSION = 2.toShort
 
   // map of version of group metadata value schemas
   private val GROUP_VALUE_SCHEMAS = Map(
@@ -1020,7 +1019,7 @@ object GroupMetadataManager {
   private val CURRENT_OFFSET_KEY_SCHEMA = schemaForKey(CURRENT_OFFSET_KEY_SCHEMA_VERSION)
   private val CURRENT_GROUP_KEY_SCHEMA = schemaForKey(CURRENT_GROUP_KEY_SCHEMA_VERSION)
 
-  private val CURRENT_OFFSET_VALUE_SCHEMA = schemaForOffset(CURRENT_OFFSET_VALUE_SCHEMA_VERSION)
+  private val CURRENT_OFFSET_VALUE_SCHEMA = schemaForOffset(2)
   private val CURRENT_GROUP_VALUE_SCHEMA = schemaForGroup(CURRENT_GROUP_VALUE_SCHEMA_VERSION)
 
   private def schemaForKey(version: Int) = {
@@ -1094,7 +1093,7 @@ object GroupMetadataManager {
       if (apiVersion < KAFKA_2_0_IV2)
         (1.toShort, new Struct(OFFSET_COMMIT_VALUE_SCHEMA_V1))
       else
-        (CURRENT_OFFSET_VALUE_SCHEMA_VERSION, new Struct(OFFSET_COMMIT_VALUE_SCHEMA_V2))
+        (2.toShort, new Struct(OFFSET_COMMIT_VALUE_SCHEMA_V2))
     }
 
     if (version == 2) {
@@ -1134,7 +1133,7 @@ object GroupMetadataManager {
       else if (apiVersion < KAFKA_2_0_IV2)
         (1.toShort, new Struct(GROUP_METADATA_VALUE_SCHEMA_V1))
       else
-        (CURRENT_OFFSET_VALUE_SCHEMA_VERSION, new Struct(CURRENT_GROUP_VALUE_SCHEMA))
+        (2.toShort, new Struct(CURRENT_GROUP_VALUE_SCHEMA))
     }
 
     value.set(PROTOCOL_TYPE_KEY, groupMetadata.protocolType.getOrElse(""))
@@ -1269,13 +1268,13 @@ object GroupMetadataManager {
         val leaderId = value.get(LEADER_KEY).asInstanceOf[String]
         val memberMetadataArray = value.getArray(MEMBERS_KEY)
         val initialState = if (memberMetadataArray.isEmpty) Empty else Stable
-        val rawCurrentStateTimestamp = value.getLong(CURRENT_STATE_TIMESTAMP_KEY)
         val currentStateTimestamp: Option[Long] = version match {
-          case version if version >= 2 =>
-            if (rawCurrentStateTimestamp == -1)
+          case version if version == 2 =>
+            if (value.hasField(CURRENT_STATE_TIMESTAMP_KEY)) {
+              val timestamp = value.getLong(CURRENT_STATE_TIMESTAMP_KEY)
+              if (timestamp == -1) None else Some(timestamp)
+            } else
               None
-            else
-              Some(rawCurrentStateTimestamp)
           case _ =>
             None
         }
