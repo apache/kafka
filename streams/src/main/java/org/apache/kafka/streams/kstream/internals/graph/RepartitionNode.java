@@ -18,15 +18,18 @@
 package org.apache.kafka.streams.kstream.internals.graph;
 
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
-public class RepartitionNode<K, V> extends StatelessProcessorNode<K, V> {
+public class RepartitionNode<K, V> extends StreamsGraphNode {
 
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
     private final String sinkName;
     private final String sourceName;
     private final String repartitionTopic;
+    private final ProcessorParameters processorParameters;
+    private final MaterializedInternal materializedInternal;
 
 
     RepartitionNode(final String nodeName,
@@ -35,39 +38,19 @@ public class RepartitionNode<K, V> extends StatelessProcessorNode<K, V> {
                     final Serde<K> keySerde,
                     final Serde<V> valueSerde,
                     final String sinkName,
-                    final String repartitionTopic) {
+                    final String repartitionTopic, MaterializedInternal materializedInternal) {
 
-        super(nodeName,
-              processorParameters,
-              false);
+        super(nodeName, false);
 
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
         this.sinkName = sinkName;
         this.sourceName = sourceName;
         this.repartitionTopic = repartitionTopic;
-    }
+        this.processorParameters = processorParameters;
+        this.materializedInternal = materializedInternal;
 
-    Serde<K> keySerde() {
-        return keySerde;
     }
-
-    Serde<V> valueSerde() {
-        return valueSerde;
-    }
-
-    String sinkName() {
-        return sinkName;
-    }
-
-    String sourceName() {
-        return sourceName;
-    }
-
-    String repartitionTopic() {
-        return repartitionTopic;
-    }
-
 
     @Override
     public void writeToTopology(InternalTopologyBuilder topologyBuilder) {
@@ -88,6 +71,7 @@ public class RepartitionNode<K, V> extends StatelessProcessorNode<K, V> {
         private String sinkName;
         private String sourceName;
         private String repartitionTopic;
+        private MaterializedInternal materializedInternal;
 
         private RepartitionNodeBuilder() {
         }
@@ -128,6 +112,11 @@ public class RepartitionNode<K, V> extends StatelessProcessorNode<K, V> {
             return this;
         }
 
+        public RepartitionNodeBuilder<K, V> withMaterializedInternal(final MaterializedInternal materializedInternal) {
+            this.materializedInternal = materializedInternal;
+            return this;
+        }
+
         public RepartitionNode<K, V> build() {
 
             return new RepartitionNode<>(nodeName,
@@ -136,8 +125,8 @@ public class RepartitionNode<K, V> extends StatelessProcessorNode<K, V> {
                                          keySerde,
                                          valueSerde,
                                          sinkName,
-                                         repartitionTopic
-            );
+                                         repartitionTopic,
+                                         materializedInternal);
 
         }
     }

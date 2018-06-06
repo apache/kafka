@@ -25,15 +25,18 @@ public class TableProcessorNode<K, V, S extends StateStore> extends StreamsGraph
 
     private final MaterializedInternal<K, V, S> materializedInternal;
     private final ProcessorParameters<K, V> processorParameters;
+    private final String[] storeNames;
 
     public TableProcessorNode(final String nodeName,
-                       final ProcessorParameters<K, V> processorParameters,
-                       final MaterializedInternal<K, V, S> materializedInternal) {
+                              final ProcessorParameters<K, V> processorParameters,
+                              final MaterializedInternal<K, V, S> materializedInternal,
+                              final String[] storeNames) {
 
         super(nodeName,
               false);
         this.processorParameters = processorParameters;
         this.materializedInternal = materializedInternal;
+        this.storeNames = storeNames != null ? storeNames : new String[]{};
     }
 
 

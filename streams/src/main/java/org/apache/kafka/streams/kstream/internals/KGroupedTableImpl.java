@@ -28,7 +28,7 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
-import org.apache.kafka.streams.kstream.internals.graph.StatefulRepartitionNode;
+import org.apache.kafka.streams.kstream.internals.graph.RepartitionNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
@@ -116,7 +116,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
         final String funcName = builder.newProcessorName(functionName);
         final String topic = materialized.storeName() + KStreamImpl.REPARTITION_TOPIC_SUFFIX;
 
-        StatefulRepartitionNode.StatefulRepartitionNodeBuilder<K, V, T> statefulRepartitionNodeBuilder = StatefulRepartitionNode.statefulRepartitionNodeBuilder();
+        RepartitionNode.RepartitionNodeBuilder<K, V> repartitionNodeBuilder = RepartitionNode.repartitionNodeBuilder();
 
         buildAggregate(aggregateSupplier,
                        topic,
@@ -130,18 +130,17 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
 
         ProcessorParameters processorParameters = new ProcessorParameters<>(aggregateSupplier, funcName);
 
-        statefulRepartitionNodeBuilder.withRepartitionTopic(topic)
+        repartitionNodeBuilder.withRepartitionTopic(topic)
             .withSinkName(sinkName)
             .withSourceName(sourceName)
             .withProcessorParameters(processorParameters)
             .withKeySerde(keySerde)
-            .withValueSerde(valSerde);
-
-        statefulRepartitionNodeBuilder.withMaterialized(materialized)
+            .withValueSerde(valSerde)
+            .withMaterializedInternal(materialized)
             .withNodeName(funcName);
 
-        StatefulRepartitionNode statefulRepartitionNode = statefulRepartitionNodeBuilder.build();
-        addGraphNode(statefulRepartitionNode);
+        RepartitionNode repartitionNode = repartitionNodeBuilder.build();
+        addGraphNode(repartitionNode);
 
         // return the KTable representation with the intermediate topic as the sources
         return new KTableImpl<>(builder,
@@ -150,7 +149,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
                                 Collections.singleton(sourceName),
                                 materialized.storeName(),
                                 materialized.isQueryable(),
-                                statefulRepartitionNode);
+                                repartitionNode);
     }
 
     @Override

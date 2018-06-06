@@ -31,11 +31,11 @@ public class StatefulProcessorNode<K, V> extends StatelessProcessorNode<K, V> {
 
 
     public StatefulProcessorNode(final String nodeName,
-                          final ProcessorParameters processorParameters,
-                          final String[] storeNames,
-                          final String maybeRepartitionedSourceName,
-                          final StoreBuilder<KeyValueStore<K, V>> materializedKTableStoreBuilder,
-                          final boolean repartitionRequired) {
+                                 final ProcessorParameters processorParameters,
+                                 final String[] storeNames,
+                                 final String maybeRepartitionedSourceName,
+                                 final StoreBuilder<KeyValueStore<K, V>> materializedKTableStoreBuilder,
+                                 final boolean repartitionRequired) {
         super(nodeName,
               processorParameters,
               repartitionRequired);

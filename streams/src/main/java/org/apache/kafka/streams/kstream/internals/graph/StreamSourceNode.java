@@ -51,6 +51,17 @@ public class StreamSourceNode<K, V> extends StreamsGraphNode {
         this.consumedInternal = consumedInternal;
     }
 
+    public Collection<String> getTopicNames() {
+        return topicNames;
+    }
+
+    public Pattern getTopicPattern() {
+        return topicPattern;
+    }
+
+    public ConsumedInternal<K, V> getConsumedInternal() {
+        return consumedInternal;
+    }
 
     @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {

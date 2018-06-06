@@ -22,22 +22,16 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.kstream.internals.graph.StatefulSourceNode;
-import org.apache.kafka.streams.kstream.internals.graph.StreamSinkNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamSourceNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 
@@ -46,12 +40,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     final InternalTopologyBuilder internalTopologyBuilder;
     private final AtomicInteger index = new AtomicInteger(0);
 
-    private final AtomicInteger nodeIdCounter = new AtomicInteger(0);
-    private final Map<StreamsGraphNode, Set<StreamsGraphNode>> repartitioningNodeToRepartitioned = new HashMap<>();
-    private final Map<StreamsGraphNode, StreamSinkNode> stateStoreNodeToSinkNodes = new HashMap<>();
-
     private static final String TOPOLOGY_ROOT = "root";
-    private static final Logger LOG = LoggerFactory.getLogger(InternalStreamsBuilder.class);
 
     protected final StreamsGraphNode root = new StreamsGraphNode(TOPOLOGY_ROOT, false) {
         @Override
@@ -243,30 +232,5 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
     public StreamsGraphNode root() {
         return root;
-    }
-
-    /**
-     * Used for hints when a node in the topology triggers a repartition and the repartition flag
-     * is propagated down through the descendant nodes of the topology.  This can be used to help make an
-     * optimization where the triggering node does an eager "through" operation and the child nodes can ignore
-     * the need to repartition.
-     *
-     * @return Map&lt;StreamGraphNode, Set&lt;StreamGraphNode&gt;&gt;
-     */
-    public Map<StreamsGraphNode, Set<StreamsGraphNode>> getRepartitioningNodeToRepartitioned() {
-        Map<StreamsGraphNode, Set<StreamsGraphNode>> copy = new HashMap<>(repartitioningNodeToRepartitioned);
-        return Collections.unmodifiableMap(copy);
-    }
-
-    /**
-     * Used for hints when an Aggregation operation is directly output to a Sink topic.
-     * This map can be used to help optimize this case and use the Sink topic as the changelog topic
-     * for the state store of the aggregation.
-     *
-     * @return Map&lt;StreamGraphNode, StreamSinkNode&gt;
-     */
-    public Map<StreamsGraphNode, StreamSinkNode> getStateStoreNodeToSinkNodes() {
-        Map<StreamsGraphNode, StreamSinkNode> copy = new HashMap<>(stateStoreNodeToSinkNodes);
-        return Collections.unmodifiableMap(copy);
     }
 }

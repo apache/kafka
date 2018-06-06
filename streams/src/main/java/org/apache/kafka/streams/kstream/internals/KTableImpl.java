@@ -32,9 +32,9 @@ import org.apache.kafka.streams.kstream.ValueMapperWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.kstream.internals.graph.KTableKTableJoinNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
-import org.apache.kafka.streams.kstream.internals.graph.StatefulProcessorNode;
 import org.apache.kafka.streams.kstream.internals.graph.StatelessProcessorNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
+import org.apache.kafka.streams.kstream.internals.graph.TableProcessorNode;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -136,10 +136,12 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                 shouldMaterialize ? materializedInternal.storeName() : null);
 
         ProcessorParameters processorParameters = new ProcessorParameters<>(processorSupplier, name);
+        StreamsGraphNode tableNode = new TableProcessorNode<>(name,
+                                                              processorParameters,
+                                                              materializedInternal,
+                                                              null);
 
-        StreamsGraphNode graphNode = createStreamsGraphNode(materializedInternal, name, shouldMaterialize, processorParameters, null);
-
-        addGraphNode(graphNode);
+        addGraphNode(tableNode);
 
         builder.internalTopologyBuilder.addProcessor(name, processorSupplier, this.name);
 
@@ -155,7 +157,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                                 sourceNodes,
                                 shouldMaterialize ? materializedInternal.storeName() : this.queryableStoreName,
                                 shouldMaterialize,
-                                graphNode);
+                                tableNode);
     }
 
     @Override
@@ -211,10 +213,12 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         }
 
         ProcessorParameters processorParameters = new ProcessorParameters<>(processorSupplier, name);
+        StreamsGraphNode tableNode = new TableProcessorNode<>(name,
+                                                              processorParameters,
+                                                              materializedInternal,
+                                                              null);
 
-        StreamsGraphNode graphNode = createStreamsGraphNode(materializedInternal, name, shouldMaterialize, processorParameters, null);
-
-        addGraphNode(graphNode);
+        addGraphNode(tableNode);
 
         return new KTableImpl<>(builder,
                                 name,
@@ -222,7 +226,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                                 sourceNodes,
                                 shouldMaterialize ? materializedInternal.storeName() : this.queryableStoreName,
                                 shouldMaterialize,
-                                graphNode);
+                                tableNode);
     }
 
     @Override
@@ -293,10 +297,12 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
             shouldMaterialize ? materialized.storeName() : null);
 
         ProcessorParameters processorParameters = new ProcessorParameters<>(processorSupplier, name);
+        StreamsGraphNode tableNode = new TableProcessorNode<>(name,
+                                                              processorParameters,
+                                                              materialized,
+                                                              stateStoreNames);
 
-        StreamsGraphNode graphNode = createStreamsGraphNode(materialized, name, shouldMaterialize, processorParameters, stateStoreNames);
-
-        addGraphNode(graphNode);
+        addGraphNode(tableNode);
 
         builder.internalTopologyBuilder.addProcessor(name, processorSupplier, this.name);
 
@@ -317,7 +323,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
             sourceNodes,
             shouldMaterialize ? materialized.storeName() : this.queryableStoreName,
             shouldMaterialize,
-            graphNode);
+            tableNode);
     }
 
     @Override
@@ -574,29 +580,4 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         return sendOldValues;
     }
 
-    private <VR> StreamsGraphNode createStreamsGraphNode(final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal,
-                                                         final String name,
-                                                         final boolean shouldMaterialize,
-                                                         final ProcessorParameters processorParameters,
-                                                         String[] stateStoreNames) {
-        StreamsGraphNode graphNode;
-
-        if (stateStoreNames == null) {
-            stateStoreNames = new String[]{};
-        }
-
-        if (shouldMaterialize || stateStoreNames.length > 0) {
-            graphNode = new StatefulProcessorNode<>(name,
-                                                    processorParameters,
-                                                    stateStoreNames,
-                                                    null,
-                                                    shouldMaterialize ? new KeyValueStoreMaterializer<>(materializedInternal).materialize() : null,
-                                                    false);
-        } else {
-            graphNode = new StatelessProcessorNode<>(name,
-                                                     processorParameters,
-                                                     false);
-        }
-        return graphNode;
-    }
 }
