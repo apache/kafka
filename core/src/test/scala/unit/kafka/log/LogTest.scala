@@ -1925,12 +1925,15 @@ class LogTest {
     assertEquals(7L, log.logEndOffset)
 
     val firstOffset = 5L
-    val batch = singletonRecordsWithLeaderEpoch(value = "random".getBytes, leaderEpoch = 1, offset = firstOffset)
-
-    val actualFirstOffset = intercept[UnexpectedAppendOffsetException] {
-      log.appendAsFollower(records = batch)
-    }.firstOffset
-    assertEquals("UnexpectedAppendOffsetException#firstOffset", Some(firstOffset), actualFirstOffset)
+    val magicVals = Seq(RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1, RecordBatch.MAGIC_VALUE_V2)
+    for (magic <- magicVals) {
+      val batch = singletonRecordsWithLeaderEpoch(value = "random".getBytes, leaderEpoch = 1,
+                                                  offset = firstOffset, codec = CompressionType.LZ4, magicValue = magic)
+      val actualFirstOffset = intercept[UnexpectedAppendOffsetException] {
+        log.appendAsFollower(records = batch)
+      }.firstOffset
+      assertEquals(s"Magic $magic. UnexpectedAppendOffsetException#firstOffset", firstOffset, actualFirstOffset)
+    }
   }
 
   @Test

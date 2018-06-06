@@ -117,14 +117,14 @@ class ReplicaFetcherThread(name: String,
       partition.appendRecordsToFollower(records)
     } catch {
       case e: UnexpectedAppendOffsetException =>
-        if (e.firstOffset.isDefined && replica.logEndOffset.messageOffset == replica.logStartOffset) {
+        if (replica.logEndOffset.messageOffset == replica.logStartOffset) {
           // This may happen if the log start offset on the leader falls in the middle of the
           // batch due to delete records request and the follower tries to fetch its first offset
           // from the leader. We will truncate fully again, so that the log segment starts from
           // the base offset that is the base offset of the batch, and try to append records again.
-          info(s"Unexpected offset in append to $topicPartition. First offset ${e.firstOffset.get} is less than log start offset ${replica.logStartOffset}." +
-               s" Since this is the first record to be appended to the log, will start the log from offset ${e.firstOffset.get}.")
-          partition.truncateFullyAndStartAt(e.firstOffset.get, isFuture = false)
+          info(s"Unexpected offset in append to $topicPartition. First offset ${e.firstOffset} is less than log start offset ${replica.logStartOffset}." +
+               s" Since this is the first record to be appended to the log, will start the log from offset ${e.firstOffset}.")
+          partition.truncateFullyAndStartAt(e.firstOffset, isFuture = false)
           partition.appendRecordsToFollower(records)
         } else
           throw e

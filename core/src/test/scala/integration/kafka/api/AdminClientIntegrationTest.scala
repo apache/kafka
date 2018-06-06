@@ -23,7 +23,6 @@ import java.util.concurrent.{ExecutionException, TimeUnit}
 import java.io.File
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 
-import kafka.api.Request
 import org.apache.kafka.clients.admin.KafkaAdminClientTest
 import org.apache.kafka.common.utils.{Time, Utils}
 import kafka.log.LogConfig

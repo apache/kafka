@@ -20,6 +20,7 @@ package kafka.common
 /**
  * Indicates the follower or the future replica received an unexpected offset from the leader (or
  * current replica)
+ * @param firstOffset The first offset of the records to append
  */
-class UnexpectedAppendOffsetException(val message: String, val firstOffset: Option[Long]) extends RuntimeException(message) {
+class UnexpectedAppendOffsetException(val message: String, val firstOffset: Long) extends RuntimeException(message) {
 }

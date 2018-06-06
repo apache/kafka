@@ -803,13 +803,20 @@ class Log(@volatile var dir: File,
                                                  records.records.asScala.map(_.offset))
 
           if (appendInfo.firstOrLastOffset < nextOffsetMetadata.messageOffset) {
-            // we may still be able to recover in some situations
+            // we may still be able to recover if the log is empty
+            // one example: fetching from log start offset on the leader which is not batch aligned,
+            // which may happen as a result of AdminClient#deleteRecords()
+            val firstOffset = appendInfo.firstOffset match {
+              case Some(offset) => offset
+              case None => records.batches.asScala.head.baseOffset()
+            }
+
             val firstOrLast = if (appendInfo.firstOffset.isDefined) "First" else "Last"
             throw new UnexpectedAppendOffsetException(
               s"Unexpected offset in append to $topicPartition. $firstOrLast " +
               s"offset ${appendInfo.firstOrLastOffset} is less than the next offset ${nextOffsetMetadata.messageOffset}. " +
               s"First 10 offsets in append: ${records.records.asScala.take(10).map(_.offset)}, last offset in" +
-              s" append: ${appendInfo.lastOffset}", appendInfo.firstOffset)
+              s" append: ${appendInfo.lastOffset}", firstOffset)
           }
         }
 
