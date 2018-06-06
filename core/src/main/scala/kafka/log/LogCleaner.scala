@@ -19,7 +19,6 @@ package kafka.log
 
 import java.io.{File, IOException}
 import java.nio._
-import java.nio.file.Files
 import java.util.Date
 import java.util.concurrent.TimeUnit
 
@@ -28,16 +27,16 @@ import kafka.common._
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.{BrokerReconfigurable, KafkaConfig, LogDirFailureChannel}
 import kafka.utils._
-import org.apache.kafka.common.record._
-import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.errors.{CorruptRecordException, KafkaStorageException}
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention
+import org.apache.kafka.common.record._
+import org.apache.kafka.common.utils.Time
 
-import scala.collection.{Set, mutable}
 import scala.collection.JavaConverters._
+import scala.collection.{Set, mutable}
 
 /**
  * The cleaner is responsible for removing obsolete records from logs which have the "compact" retention strategy.
@@ -511,10 +510,10 @@ private[log] class Cleaner(val id: Int,
           cleanInto(log.topicPartition, currentSegment.log, cleaned, map, retainDeletes, log.config.maxMessageSize,
             transactionMetadata, log.activeProducersWithLastSequence, stats)
         } catch {
-          case e: IndexOffsetOverflowException =>
-            // KAFKA-6264: if we got an IndexOffsetOverflowException, split the current segment. It's also safest to abort
+          case e: LogSegmentOffsetOverflowException =>
+            // KAFKA-6264: if we got a LogSegmentOverflowException, split the current segment. It's also safest to abort
             // the current cleaning process, so that we retry from scratch once the split is complete.
-            info(s"Caught IndexOffsetOverflowException during log cleaning $e")
+            info(s"Caught LogSegmentOverflowException during log cleaning $e")
             Log.splitSegmentOnOffsetOverflow(log, currentSegment)
             throw new LogCleaningAbortedException()
         }

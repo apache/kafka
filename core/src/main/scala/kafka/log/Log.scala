@@ -29,14 +29,14 @@ import java.util.regex.Pattern
 
 import com.yammer.metrics.core.Gauge
 import kafka.api.KAFKA_0_10_0_IV0
-import kafka.common.{IndexOffsetOverflowException, InvalidOffsetException, KafkaException, LongRef}
+import kafka.common.{InvalidOffsetException, KafkaException, LogSegmentOffsetOverflowException, LongRef}
 import kafka.message.{BrokerCompressionCodec, CompressionCodec, NoCompressionCodec}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.checkpoints.{LeaderEpochCheckpointFile, LeaderEpochFile}
 import kafka.server.epoch.{LeaderEpochCache, LeaderEpochFileCache}
 import kafka.server.{BrokerTopicStats, FetchDataInfo, LogDirFailureChannel, LogOffsetMetadata}
 import kafka.utils._
-import org.apache.kafka.common.{TopicPartition, errors}
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{CorruptRecordException, KafkaStorageException, OffsetOutOfRangeException, RecordBatchTooLargeException, RecordTooLargeException, UnsupportedForMessageFormatException}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
@@ -366,7 +366,7 @@ class Log(@volatile var dir: File,
    * This method does not need to convert IOException to KafkaStorageException because it is only called before all logs are loaded
    * It is possible that we encounter a segment with index offset overflow. In that case, the segment will be split appropriately
    * but loadSegmentFiles itself would fail and must be retried.
-   * @throws IndexOffsetOverflowException if the log directory contains a segment with messages that overflow the index offset
+   * @throws LogSegmentOffsetOverflowException if the log directory contains a segment with messages that overflow the index offset
    */
   private def loadSegmentFiles(): Unit = {
     // load segments in ascending order because transactional data from one segment may depend on the
@@ -406,31 +406,25 @@ class Log(@volatile var dir: File,
         if (doSegmentRecovery) {
           try recoverSegment(segment)
           catch {
-            case e: IndexOffsetOverflowException =>
-              // Split the segment
-              Log.splitSegmentOnOffsetOverflow(this, segment)
-              // Close all segments that were opened, including the current segment we were working on. Throw the exception
-              // up for callers to retry if needed.
-              segment.close()
-              close()
+            case e: LogSegmentOffsetOverflowException =>
+              // Close all segments that were opened and throw the exception up. Note that we cannot close the current
+              // segment because the caller will use it to drive the split logic.
+              logSegments.foreach(_.close())
+              segments.clear()
               throw e
           }
         }
-
         addSegment(segment)
       }
     }
   }
 
   /**
-   * Recover the given segment. It is possible we encounter a legacy segment with index offset overflow. In that case,
-   * recovery will fail and an IndexOffsetOverflowException will be thrown. To enable retry, callers must catch this
-   * exception, invoke Log.splitSegmentOnOffsetOverflow to split the segment and then retry recovery on the split out
-   * segments if required.
+   * Recover the given segment.
    * @param segment Segment to recover
    * @param leaderEpochCache Optional cache for updating the leader epoch during recovery
    * @return The number of bytes truncated from the segment
-   * @throws IndexOffsetOverflowException if the segment contains messages that cause index offset overflow
+   * @throws LogSegmentOffsetOverflowException if the segment contains messages that cause index offset overflow
    */
   private def recoverSegment(segment: LogSegment, leaderEpochCache: Option[LeaderEpochCache] = None): Int = lock synchronized {
     val stateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs)
@@ -454,8 +448,16 @@ class Log(@volatile var dir: File,
     bytesTruncated
   }
 
-  // This method does not need to convert IOException to KafkaStorageException because it is only called before all logs are loaded
-  @throws(classOf[IndexOffsetOverflowException])
+  /**
+   * This method does not need to convert IOException to KafkaStorageException because it is only called before all logs
+   * are loaded.
+   * @throws LogSegmentOffsetOverflowException if the swap file contains messages that cause the log segment offset to
+   *                                           overflow (KAFKA-6264). Note that this is currently a fatal exception as we
+   *                                           do not have a way to deal with it. The exception is propagated all the way
+   *                                           up to KafkaServer#startup which will cause the broker to shut down if we are
+   *                                           in this situation. This is expected to be an extremely rare scenario in
+   *                                           practice, and manual intervention might be required to get out of it.
+   */
   private def completeSwapOperations(swapFiles: Set[File]): Unit = {
     for (swapFile <- swapFiles) {
       val logFile = new File(CoreUtils.replaceSuffix(swapFile.getPath, SwapFileSuffix, ""))
@@ -466,12 +468,6 @@ class Log(@volatile var dir: File,
         time = time,
         fileSuffix = SwapFileSuffix)
       info(s"Found log file ${swapFile.getPath} from interrupted swap operation, repairing.")
-
-      // Recover this swap segment. If this swap segment contains offsets that overflow the index (KAFKA-6264),
-      // recoverSegment wil throw an IndexOffsetOverflowException. We currently do not have a good way of dealing with
-      // this situation so we let this exception propagate all the way up to KafkaServer#startup which will log
-      // this as a fatal exception and will cause the broker to shut down. This scenario is expected to be extremely rare
-      // in practice, and manual intervention might be required to get out of the situation.
       recoverSegment(swapSegment)
 
       var oldSegments = logSegments(swapSegment.baseOffset, swapSegment.readNextOffset)
@@ -497,8 +493,8 @@ class Log(@volatile var dir: File,
    * Load the log segments from the log files on disk and return the next offset.
    * This method does not need to convert IOException to KafkaStorageException because it is only called before all logs
    * are loaded.
-   * @throws IndexOffsetOverflowException if we encounter a .swap file with messages that overflow index offset; or when
-   *                                      we find an unexpected number of .log files with overflow
+   * @throws LogSegmentOffsetOverflowException if we encounter a .swap file with messages that overflow index offset; or when
+   *                                           we find an unexpected number of .log files with overflow
    */
   private def loadSegments(): Long = {
     // first do a pass through the files in the log directory and remove any temporary files
@@ -506,14 +502,14 @@ class Log(@volatile var dir: File,
     val swapFiles = removeTempFilesAndCollectSwapFiles()
 
     // Now do a second pass and load all the log and index files.
-    // We might encounter legacy log segments with offset overflow (KAFKA-6264). Such segments would be split by
-    // Log#recoverSegment operation. When this happens, restart loading segment files from scratch. Theoretically, it is
-    // possible that we see IndexOffsetOverflowException as many times as the number of log segments.
+    // We might encounter legacy log segments with offset overflow (KAFKA-6264). We need to split such segments. Whe
+    // this happens, restart loading segment files from scratch. Theoretically, it is possible that we see
+    // LogOffsetOverflowException as many times as the number of log segments.
     var maxTries = 1
     for (file <- dir.listFiles)
       if (isLogFile(file))
         maxTries += 1
-    Log.maybeRetryOnOffsetOverflow(maxTries) {
+    maybeRetryOnOffsetOverflow(maxTries) {
       loadSegmentFiles()
     }
 
@@ -533,7 +529,7 @@ class Log(@volatile var dir: File,
         preallocate = config.preallocate))
       0
     } else if (!dir.getAbsolutePath.endsWith(Log.DeleteDirSuffix)) {
-      val nextOffset = Log.maybeRetryOnOffsetOverflow(maxTries) {
+      val nextOffset = maybeRetryOnOffsetOverflow(maxTries) {
         recoverLog()
       }
 
@@ -549,12 +545,9 @@ class Log(@volatile var dir: File,
 
   /**
    * Recover the log segments and return the next offset after recovery.
-   * <p>This method does not need to convert IOException to KafkaStorageException because it is only called before all
-   * logs are loaded.</p>
-   * <p>This method is expected to be called only when the log is being instantiated.</p>
-   * @throws IndexOffsetOverflowException if we ecountered a legacy segment with offset overflow (KAFKA-6264). The segment
-   *                                      will be split appropriately underneath but callers of this method must retry
-   *                                      recovery.
+   * This method does not need to convert IOException to KafkaStorageException because it is only called before all
+   * logs are loaded.
+   * @throws LogSegmentOffsetOverflowException if we encountered a legacy segment with offset overflow (KAFKA-6264)
    */
   private def recoverLog(): Long = {
     // if we have the clean shutdown marker, skip recovery
@@ -573,10 +566,6 @@ class Log(@volatile var dir: File,
               warn("Found invalid offset during recovery. Deleting the corrupt segment and " +
                 s"creating an empty one with starting offset $startOffset")
               segment.truncateTo(startOffset)
-            case e: IndexOffsetOverflowException =>
-              Log.splitSegmentOnOffsetOverflow(this, segment)
-              segment.close()
-              throw e
           }
         if (truncatedBytes > 0) {
           // we had an invalid message, delete all remaining log
@@ -1835,6 +1824,26 @@ class Log(@volatile var dir: File,
     }
   }
 
+  /**
+   * @throws LogSegmentOffsetOverflowException if we encounter segments with index overflow for more than maxTries
+   */
+  private[log] def maybeRetryOnOffsetOverflow[T](maxTries: Int = 1)(fn: => T): T = {
+    var triesSoFar = 0
+    while (triesSoFar < maxTries) {
+      try {
+        return fn
+      }
+      catch {
+        case e: LogSegmentOffsetOverflowException =>
+          triesSoFar += 1
+          if (triesSoFar == maxTries)
+            throw e
+          info(s"Caught LogOffsetOverflowException ${e.getMessage}. Split segment and retry (${triesSoFar}/${maxTries}).")
+          Log.splitSegmentOnOffsetOverflow(this, e.logSegment)
+      }
+    }
+    throw new IllegalStateException()
+  }
 }
 
 /**
@@ -2059,27 +2068,6 @@ object Log extends Logging {
     file.getPath.endsWith(LogFileSuffix)
 
   /**
-   * @throws IndexOffsetOverflowException if we encounter segments with index overflow for more than maxTries
-   */
-  private[log] def maybeRetryOnOffsetOverflow[T](maxTries: Int = 1)(fn: => T): T = {
-    var triesSoFar = 0
-    while (triesSoFar < maxTries) {
-      try {
-        return fn
-      }
-      catch {
-        case e: IndexOffsetOverflowException => {
-          info(s"Caught IndexOffsetOverflowException ${e.getMessage}. Retrying operation (${triesSoFar}/${maxTries}).")
-          triesSoFar += 1
-          if (triesSoFar == maxTries)
-            throw e
-        }
-      }
-    }
-    throw new IllegalStateException()
-  }
-
-  /**
    * Split the given log segment into multiple such that there is no offset overflow in the resulting segments. The
    * resulting segments will contain the exact same messages that are present in the input segment. On successful
    * completion of this method, the input segment will be deleted and will be replaced by the resulting new segments.
@@ -2106,7 +2094,6 @@ object Log extends Logging {
 
     // Helper method to copy `records` into `segment`. Makes sure records being appended do not result in offset overflow.
     def copyRecordsToSegment(records: FileRecords, segment: LogSegment, readBuffer: ByteBuffer): CopyResult = {
-      val baseOffset = segment.baseOffset
       var bytesRead = 0
       var maxTimestamp = Long.MinValue
       var offsetOfMaxTimestamp = Long.MinValue
@@ -2131,7 +2118,6 @@ object Log extends Logging {
           maxTimestamp = batch.maxTimestamp
           offsetOfMaxTimestamp = batch.lastOffset
         }
-
         maxOffset = batch.lastOffset
         bytesRead += batch.sizeInBytes
       }
