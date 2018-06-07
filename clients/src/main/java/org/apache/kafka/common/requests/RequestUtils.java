@@ -20,11 +20,11 @@ import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AccessControlEntryFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
+import org.apache.kafka.common.resource.ResourcePattern;
+import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.resource.Resource;
-import org.apache.kafka.common.resource.ResourceFilter;
-import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.resource.ResourceNameType;
+import org.apache.kafka.common.resource.ResourceType;
 
 import static org.apache.kafka.common.protocol.CommonFields.HOST;
 import static org.apache.kafka.common.protocol.CommonFields.HOST_FILTER;
@@ -42,39 +42,39 @@ final class RequestUtils {
 
     private RequestUtils() {}
 
-    static Resource resourceFromStructFields(Struct struct) {
+    static ResourcePattern resourcePatternromStructFields(Struct struct) {
         byte resourceType = struct.get(RESOURCE_TYPE);
         String name = struct.get(RESOURCE_NAME);
         ResourceNameType resourceNameType = ResourceNameType.LITERAL;
         if (struct.hasField(RESOURCE_NAME_TYPE)) {
             resourceNameType = ResourceNameType.fromCode(struct.get(RESOURCE_NAME_TYPE));
         }
-        return new Resource(ResourceType.fromCode(resourceType), name, resourceNameType);
+        return new ResourcePattern(ResourceType.fromCode(resourceType), name, resourceNameType);
     }
 
-    static void resourceSetStructFields(Resource resource, Struct struct) {
-        struct.set(RESOURCE_TYPE, resource.resourceType().code());
-        struct.set(RESOURCE_NAME, resource.name());
+    static void resourcePatternSetStructFields(ResourcePattern pattern, Struct struct) {
+        struct.set(RESOURCE_TYPE, pattern.resourceType().code());
+        struct.set(RESOURCE_NAME, pattern.name());
         if (struct.hasField(RESOURCE_NAME_TYPE)) {
-            struct.set(RESOURCE_NAME_TYPE, resource.nameType().code());
+            struct.set(RESOURCE_NAME_TYPE, pattern.nameType().code());
         }
     }
 
-    static ResourceFilter resourceFilterFromStructFields(Struct struct) {
+    static ResourcePatternFilter resourcePatternFilterFromStructFields(Struct struct) {
         byte resourceType = struct.get(RESOURCE_TYPE);
         String name = struct.get(RESOURCE_NAME_FILTER);
         ResourceNameType resourceNameType = ResourceNameType.LITERAL;
         if (struct.hasField(RESOURCE_NAME_TYPE_FILTER)) {
             resourceNameType = ResourceNameType.fromCode(struct.get(RESOURCE_NAME_TYPE_FILTER));
         }
-        return new ResourceFilter(ResourceType.fromCode(resourceType), name, resourceNameType);
+        return new ResourcePatternFilter(ResourceType.fromCode(resourceType), name, resourceNameType);
     }
 
-    static void resourceFilterSetStructFields(ResourceFilter resourceFilter, Struct struct) {
-        struct.set(RESOURCE_TYPE, resourceFilter.resourceType().code());
-        struct.set(RESOURCE_NAME_FILTER, resourceFilter.name());
+    static void resourcePatternFilterSetStructFields(ResourcePatternFilter patternFilter, Struct struct) {
+        struct.set(RESOURCE_TYPE, patternFilter.resourceType().code());
+        struct.set(RESOURCE_NAME_FILTER, patternFilter.name());
         if (struct.hasField(RESOURCE_NAME_TYPE_FILTER)) {
-            struct.set(RESOURCE_NAME_TYPE_FILTER, resourceFilter.nameType().code());
+            struct.set(RESOURCE_NAME_TYPE_FILTER, patternFilter.nameType().code());
         }
     }
 

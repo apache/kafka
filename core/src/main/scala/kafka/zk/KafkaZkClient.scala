@@ -1008,7 +1008,7 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
    * @param resource resource name
    */
   def createAclChangeNotification(resource: Resource): Unit = {
-    val store = ZkAclStore(resource.resourceNameType)
+    val store = ZkAclStore(resource.nameType)
     val path = store.changeSequenceZNode.createPath
     val createRequest = CreateRequest(path, AclChangeNotificationSequenceZNode.encode(resource), acls(path), CreateMode.PERSISTENT_SEQUENTIAL)
     val createResponse = retryRequestUntilConnected(createRequest)
