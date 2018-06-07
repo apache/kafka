@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.connect.rest.basic.auth.extenstion;
+package org.apache.kafka.connect.rest.basic.auth.extension;
 
 import org.apache.kafka.common.config.ConfigException;
 import org.slf4j.Logger;
