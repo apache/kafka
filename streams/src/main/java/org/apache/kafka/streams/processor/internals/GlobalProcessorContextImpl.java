@@ -97,7 +97,7 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
     }
 
     @Override
-    public Long streamTime() {
+    public long streamTime() {
         throw new RuntimeException("Stream time is not implemented for the global processor context.");
     }
 }

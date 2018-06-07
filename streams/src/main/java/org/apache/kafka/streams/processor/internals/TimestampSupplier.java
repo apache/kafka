@@ -14,21 +14,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.kstream.internals;
+package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.streams.kstream.Reducer;
-import org.apache.kafka.streams.kstream.Window;
-import org.apache.kafka.streams.kstream.Windows;
-
-class KStreamWindowReduce<K, V, W extends Window> extends KStreamWindowAggregate<K, V, V, W> {
-    KStreamWindowReduce(final Windows<W> windows,
-                        final String storeName,
-                        final Reducer<V> reducer) {
-        super(
-            windows,
-            storeName,
-            () -> null,
-            (key, newValue, oldValue) -> oldValue == null ? newValue : reducer.apply(oldValue, newValue)
-        );
-    }
+public interface TimestampSupplier {
+    long get();
 }
