@@ -91,6 +91,7 @@ public abstract class AbstractTask implements Task {
                 changelogReader,
                 eosEnabled,
                 logContext);
+            stateMgr.setApplicationId(applicationId);
         } catch (final IOException e) {
             throw new ProcessorStateException(String.format("%sError while creating the state manager", logPrefix), e);
         }
