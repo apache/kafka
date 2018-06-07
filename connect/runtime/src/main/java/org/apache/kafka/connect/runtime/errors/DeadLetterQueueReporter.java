@@ -54,16 +54,16 @@ public class DeadLetterQueueReporter implements ErrorReporter {
     private static final int DLQ_NUM_DESIRED_PARTITIONS = 1;
 
     public static final String ERROR_HEADER_PREFIX = HEADER_PREFIX + ".errors";
-    public static final String ERROR_HEADER_ORIG_TOPIC = "topic";
-    public static final String ERROR_HEADER_ORIG_PARTITION = "partition";
-    public static final String ERROR_HEADER_ORIG_OFFSET = "offset";
-    public static final String ERROR_HEADER_CONNECTOR_NAME = "connector.name";
-    public static final String ERROR_HEADER_TASK_ID = "task.id";
-    public static final String ERROR_HEADER_STAGE = "stage";
-    public static final String ERROR_HEADER_EXECUTING_CLASS = "class.name";
-    public static final String ERROR_HEADER_EXECPTION = "exception.class.name";
-    public static final String ERROR_HEADER_EXECPTION_MESSAGE = "exception.message";
-    public static final String ERROR_HEADER_EXECPTION_STACK_TRACE = "exception.stacktrace";
+    public static final String ERROR_HEADER_ORIG_TOPIC = ERROR_HEADER_PREFIX + "." + "topic";
+    public static final String ERROR_HEADER_ORIG_PARTITION = ERROR_HEADER_PREFIX + "." + "partition";
+    public static final String ERROR_HEADER_ORIG_OFFSET = ERROR_HEADER_PREFIX + "." + "offset";
+    public static final String ERROR_HEADER_CONNECTOR_NAME = ERROR_HEADER_PREFIX + "." + "connector.name";
+    public static final String ERROR_HEADER_TASK_ID = ERROR_HEADER_PREFIX + "." + "task.id";
+    public static final String ERROR_HEADER_STAGE = ERROR_HEADER_PREFIX + "." + "stage";
+    public static final String ERROR_HEADER_EXECUTING_CLASS = ERROR_HEADER_PREFIX + "." + "class.name";
+    public static final String ERROR_HEADER_EXECPTION = ERROR_HEADER_PREFIX + "." + "exception.class.name";
+    public static final String ERROR_HEADER_EXECPTION_MESSAGE = ERROR_HEADER_PREFIX + "." + "exception.message";
+    public static final String ERROR_HEADER_EXECPTION_STACK_TRACE = ERROR_HEADER_PREFIX + "." + "exception.stacktrace";
 
     private final SinkConnectorConfig connConfig;
     private final ConnectorTaskId connectorTaskId;
@@ -153,28 +153,23 @@ public class DeadLetterQueueReporter implements ErrorReporter {
 
     // Visible for testing
     void populateContextHeaders(ProducerRecord<byte[], byte[]> producerRecord, ProcessingContext context) {
-        String topic = "";
-        int partition = -1;
-        long offset = -1;
+        Headers headers = producerRecord.headers();
         if (context.consumerRecord() != null) {
-            topic = context.consumerRecord().topic();
-            partition = context.consumerRecord().partition();
-            offset = context.consumerRecord().offset();
+            headers.add(ERROR_HEADER_ORIG_TOPIC, toBytes(context.consumerRecord().topic()));
+            headers.add(ERROR_HEADER_ORIG_PARTITION, toBytes(context.consumerRecord().partition()));
+            headers.add(ERROR_HEADER_ORIG_OFFSET, toBytes(context.consumerRecord().offset()));
         }
 
-        add(producerRecord.headers(), prefix(ERROR_HEADER_ORIG_TOPIC), topic);
-        add(producerRecord.headers(), prefix(ERROR_HEADER_ORIG_PARTITION), String.valueOf(partition));
-        add(producerRecord.headers(), prefix(ERROR_HEADER_ORIG_OFFSET), String.valueOf(offset));
-        add(producerRecord.headers(), prefix(ERROR_HEADER_CONNECTOR_NAME), connectorTaskId.connector());
-        add(producerRecord.headers(), prefix(ERROR_HEADER_TASK_ID), String.valueOf(connectorTaskId.task()));
-        add(producerRecord.headers(), prefix(ERROR_HEADER_STAGE), context.stage().name());
-        add(producerRecord.headers(), prefix(ERROR_HEADER_EXECUTING_CLASS), context.executingClass().getName());
+        headers.add(ERROR_HEADER_CONNECTOR_NAME, toBytes(connectorTaskId.connector()));
+        headers.add(ERROR_HEADER_TASK_ID, toBytes(String.valueOf(connectorTaskId.task())));
+        headers.add(ERROR_HEADER_STAGE, toBytes(context.stage().name()));
+        headers.add(ERROR_HEADER_EXECUTING_CLASS, toBytes(context.executingClass().getName()));
         if (context.error() != null) {
-            add(producerRecord.headers(), prefix(ERROR_HEADER_EXECPTION), context.error().getClass().getName());
-            add(producerRecord.headers(), prefix(ERROR_HEADER_EXECPTION_MESSAGE), context.error().getMessage());
+            headers.add(ERROR_HEADER_EXECPTION, toBytes(context.error().getClass().getName()));
+            headers.add(ERROR_HEADER_EXECPTION_MESSAGE, toBytes(context.error().getMessage()));
             byte[] trace;
             if ((trace = stacktrace(context.error())) != null) {
-                add(producerRecord.headers(), prefix(ERROR_HEADER_EXECPTION_STACK_TRACE), trace);
+                headers.add(ERROR_HEADER_EXECPTION_STACK_TRACE, trace);
             }
         }
     }
@@ -192,20 +187,15 @@ public class DeadLetterQueueReporter implements ErrorReporter {
         return null;
     }
 
-    private void add(Headers headers, String key, String value) {
-        add(headers, key, value.getBytes(Charset.forName("UTF-8")));
+    private byte[] toBytes(int value) {
+        return toBytes(String.valueOf(value));
     }
 
-    private void add(Headers headers, String key, byte[] value) {
-        if (headers.lastHeader(key) == null) {
-            headers.add(key, value);
-        } else {
-            log.error("Header already contains the '" + key + "' key.");
-        }
+    private byte[] toBytes(long value) {
+        return toBytes(String.valueOf(value));
     }
 
-    private String prefix(String errorHeaderName) {
-        return ERROR_HEADER_PREFIX + "." + errorHeaderName;
+    private byte[] toBytes(String value) {
+        return value.getBytes(Charset.forName("UTF-8"));
     }
-
 }

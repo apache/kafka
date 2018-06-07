@@ -60,7 +60,8 @@ public class SinkConnectorConfig extends ConnectorConfig {
 
     public static final String DLQ_CONTEXT_HEADERS_ENABLE_CONFIG = DLQ_PREFIX + "context.headers.enable";
     public static final boolean DLQ_CONTEXT_HEADERS_ENABLE_DEFAULT = false;
-    public static final String DLQ_CONTEXT_HEADERS_ENABLE_DOC = "If true, add headers containing error context to the messages written to the dead letter queue.";
+    public static final String DLQ_CONTEXT_HEADERS_ENABLE_DOC = "If true, add headers containing error context to the messages " +
+            "written to the dead letter queue. All error context headers will be prefixed with \"__connect.errors\".";
     private static final String DLQ_CONTEXT_HEADERS_ENABLE_DISPLAY = "Enable Error Context Headers";
 
 

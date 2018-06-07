@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.header.Header;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.runtime.ConnectMetrics;
@@ -54,7 +55,6 @@ import static org.apache.kafka.connect.runtime.errors.DeadLetterQueueReporter.ER
 import static org.apache.kafka.connect.runtime.errors.DeadLetterQueueReporter.ERROR_HEADER_ORIG_OFFSET;
 import static org.apache.kafka.connect.runtime.errors.DeadLetterQueueReporter.ERROR_HEADER_ORIG_PARTITION;
 import static org.apache.kafka.connect.runtime.errors.DeadLetterQueueReporter.ERROR_HEADER_ORIG_TOPIC;
-import static org.apache.kafka.connect.runtime.errors.DeadLetterQueueReporter.ERROR_HEADER_PREFIX;
 import static org.apache.kafka.connect.runtime.errors.DeadLetterQueueReporter.ERROR_HEADER_STAGE;
 import static org.apache.kafka.connect.runtime.errors.DeadLetterQueueReporter.ERROR_HEADER_TASK_ID;
 import static org.easymock.EasyMock.replay;
@@ -232,7 +232,7 @@ public class ErrorReporterTest {
     }
 
     @Test
-    public void testDlqHeaderIsNotOverWritten() {
+    public void testDlqHeaderIsAppended() {
         Map<String, String> props = new HashMap<>();
         props.put(SinkConnectorConfig.DLQ_TOPIC_NAME_CONFIG, DLQ_TOPIC);
         props.put(SinkConnectorConfig.DLQ_CONTEXT_HEADERS_ENABLE_CONFIG, "true");
@@ -244,14 +244,22 @@ public class ErrorReporterTest {
         context.error(new ConnectException("Test Exception"));
 
         ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(DLQ_TOPIC, "source-key".getBytes(), "source-value".getBytes());
-        producerRecord.headers().add(ERROR_HEADER_PREFIX + "." + ERROR_HEADER_ORIG_TOPIC, "dummy".getBytes());
+        producerRecord.headers().add(ERROR_HEADER_ORIG_TOPIC, "dummy".getBytes());
 
         deadLetterQueueReporter.populateContextHeaders(producerRecord, context);
-        assertEquals("dummy", headerValue(producerRecord, ERROR_HEADER_ORIG_TOPIC));
+        int appearances = 0;
+        for (Header header: producerRecord.headers()) {
+            if (ERROR_HEADER_ORIG_TOPIC.equalsIgnoreCase(header.key())) {
+                appearances++;
+            }
+        }
+
+        assertEquals("source-topic", headerValue(producerRecord, ERROR_HEADER_ORIG_TOPIC));
+        assertEquals(2, appearances);
     }
 
     private String headerValue(ProducerRecord<byte[], byte[]> producerRecord, String headerSuffix) {
-        return new String(producerRecord.headers().lastHeader(ERROR_HEADER_PREFIX + "." + headerSuffix).value());
+        return new String(producerRecord.headers().lastHeader(headerSuffix).value());
     }
 
     private ProcessingContext processingContext() {
