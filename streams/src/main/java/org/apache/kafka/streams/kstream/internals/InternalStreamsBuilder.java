@@ -21,9 +21,9 @@ import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
-import org.apache.kafka.streams.kstream.internals.graph.StatefulSourceNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamSourceNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
+import org.apache.kafka.streams.kstream.internals.graph.TableSourceNode;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -108,10 +108,10 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         final ProcessorSupplier<K, V> processorSupplier = new KTableSource<>(storeBuilder.name());
         final ProcessorParameters processorParameters = new ProcessorParameters<>(processorSupplier, name);
 
-        StatefulSourceNode.StatefulSourceNodeBuilder<K, V> statefulSourceNodeBuilder = StatefulSourceNode.statefulSourceNodeBuilder();
+        TableSourceNode.TableSourceNodeBuilder<K, V> tableSourceNodeBuilder = TableSourceNode.tableSourceNodeBuilder();
 
 
-        StatefulSourceNode<K, V> statefulSourceNode = statefulSourceNodeBuilder.withNodeName(name)
+        TableSourceNode<K, V> tableSourceNode = tableSourceNodeBuilder.withNodeName(name)
                                                                                .withSourceName(source)
                                                                                .withStoreBuilder(storeBuilder)
                                                                                .withConsumedInternal(consumed)
@@ -119,7 +119,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                                                                .withTopic(topic)
                                                                                .build();
 
-        root.addChildNode(statefulSourceNode);
+        root.addChildNode(tableSourceNode);
 
         
         internalTopologyBuilder.addStateStore(storeBuilder, name);
@@ -141,7 +141,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                 Collections.singleton(source),
                                 storeBuilder.name(),
                                 materialized.isQueryable(),
-                                statefulSourceNode);
+                                tableSourceNode);
     }
 
     @SuppressWarnings("unchecked")
@@ -159,7 +159,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
         final ProcessorParameters processorParameters = new ProcessorParameters(tableSource, processorName);
 
-        StatefulSourceNode<K, V> statefulSourceNode = StatefulSourceNode.statefulSourceNodeBuilder().withStoreBuilder(storeBuilder)
+        TableSourceNode<K, V> tableSourceNode = TableSourceNode.tableSourceNodeBuilder().withStoreBuilder(storeBuilder)
                                                                                                     .withSourceName(sourceName)
                                                                                                     .withConsumedInternal(consumed)
                                                                                                     .withTopic(topic)
@@ -167,7 +167,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                                                                                     .isGlobalKTable(true)
                                                                                                     .build();
 
-        root.addChildNode(statefulSourceNode);
+        root.addChildNode(tableSourceNode);
 
         internalTopologyBuilder.addGlobalStore(storeBuilder,
                                                sourceName,
