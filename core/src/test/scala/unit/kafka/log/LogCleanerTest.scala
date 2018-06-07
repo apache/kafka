@@ -34,7 +34,7 @@ import org.junit.{After, Test}
 import org.scalatest.junit.JUnitSuite
 
 import scala.collection.JavaConverters._
-import scala.collection.{mutable, _}
+import scala.collection._
 
 /**
  * Unit tests for the log cleaning logic

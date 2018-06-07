@@ -514,7 +514,7 @@ private[log] class Cleaner(val id: Int,
             // Split the current segment. It's also safest to abort the current cleaning process, so that we retry from
             // scratch once the split is complete.
             info(s"Caught LogSegmentOverflowException during log cleaning $e")
-            log.splitSegmentOnOffsetOverflow(currentSegment)
+            log.splitOverflowedSegment(currentSegment)
             throw new LogCleaningAbortedException()
         }
         currentSegmentOpt = nextSegmentOpt

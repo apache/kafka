@@ -2061,7 +2061,7 @@ class LogTest {
     assertTrue("At least one segment must have offset overflow", LogTest.hasOffsetOverflow(log))
 
     // split the segment with overflow
-    log.splitSegmentOnOffsetOverflow(segmentWithOverflow)
+    log.splitOverflowedSegment(segmentWithOverflow)
 
     // assert we were successfully able to split the segment
     assertEquals(log.numberOfSegments, 4)
@@ -2085,7 +2085,7 @@ class LogTest {
     // Running split again would throw an error
     for (segment <- log.logSegments) {
       try {
-        log.splitSegmentOnOffsetOverflow(segment)
+        log.splitOverflowedSegment(segment)
         fail()
       } catch {
         case _: IllegalArgumentException =>
@@ -2101,7 +2101,7 @@ class LogTest {
     val numSegmentsInitial = log.logSegments.size
 
     // Split the segment
-    val newSegments = log.splitSegmentOnOffsetOverflow(segmentWithOverflow)
+    val newSegments = log.splitOverflowedSegment(segmentWithOverflow)
 
     // Simulate recovery just after .cleaned file is created, before rename to .swap. On recovery, existing split
     // operation is aborted but the recovery process itself kicks off split which should complete.
@@ -2125,7 +2125,7 @@ class LogTest {
     val numSegmentsInitial = log.logSegments.size
 
     // Split the segment
-    val newSegments = log.splitSegmentOnOffsetOverflow(segmentWithOverflow)
+    val newSegments = log.splitOverflowedSegment(segmentWithOverflow)
 
     // Simulate recovery just after one of the new segments has been renamed to .swap. On recovery, existing split
     // operation is aborted but the recovery process itself kicks off split which should complete.
@@ -2152,7 +2152,7 @@ class LogTest {
     val numSegmentsInitial = log.logSegments.size
 
     // Split the segment
-    val newSegments = log.splitSegmentOnOffsetOverflow(segmentWithOverflow)
+    val newSegments = log.splitOverflowedSegment(segmentWithOverflow)
 
     // Simulate recovery right after all new segments have been renamed to .swap. On recovery, existing split operation
     // is completed and the old segment must be deleted.
@@ -2179,7 +2179,7 @@ class LogTest {
     val numSegmentsInitial = log.logSegments.size
 
     // Split the segment
-    val newSegments = log.splitSegmentOnOffsetOverflow(segmentWithOverflow)
+    val newSegments = log.splitOverflowedSegment(segmentWithOverflow)
 
     // Simulate recovery right after all new segments have been renamed to .swap and old segment has been deleted. On
     // recovery, existing split operation is completed.
@@ -2206,7 +2206,7 @@ class LogTest {
     val numSegmentsInitial = log.logSegments.size
 
     // Split the segment
-    val newSegments = log.splitSegmentOnOffsetOverflow(segmentWithOverflow)
+    val newSegments = log.splitOverflowedSegment(segmentWithOverflow)
 
     // Simulate recovery right after one of the new segment has been renamed to .swap and the other to .log. On
     // recovery, existing split operation is completed.

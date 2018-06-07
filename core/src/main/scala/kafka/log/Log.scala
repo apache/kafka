@@ -343,7 +343,7 @@ class Log(@volatile var dir: File,
     }
 
     // KAFKA-6264: Delete all .swap files whose base offset is greater than the minimum .cleaned segment offset. Such .swap
-    // files could be part of an incomplete split operation that could not complete. See Log#splitSegmentOnOffsetOverflow
+    // files could be part of an incomplete split operation that could not complete. See Log#splitOverflowedSegment
     // for more details about the split operation.
     val (invalidSwapFiles, validSwapFiles) = swapFiles.partition(file => offsetFromFile(file) >= minCleanedFileOffset)
     invalidSwapFiles.foreach { file =>
@@ -1824,7 +1824,7 @@ class Log(@volatile var dir: File,
         case e: LogSegmentOffsetOverflowException =>
           triesSoFar += 1
           info(s"Caught LogOffsetOverflowException ${e.getMessage}. Split segment and retry. retry#: $triesSoFar.")
-          splitSegmentOnOffsetOverflow(e.logSegment)
+          splitOverflowedSegment(e.logSegment)
       }
     }
     throw new IllegalStateException()
@@ -1843,7 +1843,7 @@ class Log(@volatile var dir: File,
    * @param segment Segment to split
    * @return List of new segments that replace the input segment
    */
-  private[log] def splitSegmentOnOffsetOverflow(segment: LogSegment): List[LogSegment] = {
+  private[log] def splitOverflowedSegment(segment: LogSegment): List[LogSegment] = {
     require(isLogFile(segment.log.file), s"Cannot split file ${segment.log.file.getAbsoluteFile}")
     info(s"Attempting to split segment ${segment.log.file.getAbsolutePath}")
 
@@ -1863,10 +1863,10 @@ class Log(@volatile var dir: File,
 
       // find all batches that are valid to be appended to the current log segment
       val (validBatches, overflowBatches) = records.batches.asScala.span(batch => segment.offsetIndex.canAppendOffset(batch.lastOffset))
-      val overflowOffset = overflowBatches.headOption.map(firstBatch => {
-        info(s"Found overflow at offset ${firstBatch.baseOffset} in segment $segment of log $this")
+      val overflowOffset = overflowBatches.headOption.map { firstBatch =>
+        info(s"Found overflow at offset ${firstBatch.baseOffset} in segment $segment")
         firstBatch.baseOffset
-      })
+      }
 
       // return early if no valid batches were found
       if (validBatches.isEmpty) {
@@ -1900,7 +1900,7 @@ class Log(@volatile var dir: File,
     }
 
     try {
-      info(s"Splitting segment $segment in log $this")
+      info(s"Splitting segment $segment")
       newSegments += LogCleaner.createNewCleanedSegment(this, segment.baseOffset)
       while (position < sourceRecords.sizeInBytes) {
         val currentSegment = newSegments.last
@@ -1918,11 +1918,11 @@ class Log(@volatile var dir: File,
         // create a new segment if there was an overflow
         copyResult.overflowOffset.foreach(overflowOffset => newSegments += LogCleaner.createNewCleanedSegment(this, overflowOffset))
       }
-      require(newSegments.length > 1, s"No offset overflow found for $segment in $this")
+      require(newSegments.length > 1, s"No offset overflow found for $segment")
 
       // prepare new segments
       var totalSizeOfNewSegments = 0
-      info(s"Split messages from $segment of $this into ${newSegments.length} new segments")
+      info(s"Split messages from $segment into ${newSegments.length} new segments")
       newSegments.foreach { splitSegment =>
         splitSegment.onBecomeInactiveSegment()
         splitSegment.flush()
