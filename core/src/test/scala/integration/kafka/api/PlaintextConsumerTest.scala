@@ -181,7 +181,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumers += consumer0
 
     var commitCompleted = false
-    var committedPosition: Long = -1
 
     val listener = new TestConsumerReassignmentListener {
       override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]): Unit = {
@@ -190,8 +189,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
           // than session timeout and then try a commit. We should still be in the group,
           // so the commit should succeed
           Utils.sleep(1500)
-          committedPosition = consumer0.position(tp)
-          consumer0.commitSync(Map(tp -> new OffsetAndMetadata(committedPosition)).asJava)
+          consumer0.commitSync(Map(tp -> new OffsetAndMetadata(0)).asJava)
           commitCompleted = true
         }
         super.onPartitionsRevoked(partitions)
@@ -207,7 +205,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumer0.subscribe(List("otherTopic").asJava, listener)
     consumer0.poll(0)
 
-    assertEquals(0, committedPosition)
     assertTrue(commitCompleted)
   }
 
