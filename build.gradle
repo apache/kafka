@@ -28,7 +28,7 @@ buildscript {
     classpath 'com.github.ben-manes:gradle-versions-plugin:0.17.0'
     classpath 'org.scoverage:gradle-scoverage:2.3.0'
     classpath 'com.github.jengelman.gradle.plugins:shadow:2.0.4'
-    classpath 'org.owasp:dependency-check-gradle:3.1.2'
+    classpath 'org.owasp:dependency-check-gradle:3.2.1'
   }
 }
 
@@ -76,7 +76,7 @@ allprojects {
 }
 
 ext {
-  gradleVersion = "4.7"
+  gradleVersion = "4.8"
   minJavaVersion = "8"
   buildVersionFileName = "kafka-version.properties"
 
