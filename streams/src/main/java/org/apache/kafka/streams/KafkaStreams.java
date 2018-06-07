@@ -535,7 +535,7 @@ public class KafkaStreams {
      */
     public KafkaStreams(final Topology topology,
                         final Properties props) {
-        this(topology.internalTopologyBuilder, new StreamsConfig(props), new DefaultKafkaClientSupplier());
+        this(topology.adjust(new StreamsConfig(props)).internalTopologyBuilder, new StreamsConfig(props), new DefaultKafkaClientSupplier());
     }
 
     /**
@@ -553,7 +553,7 @@ public class KafkaStreams {
     public KafkaStreams(final Topology topology,
                         final Properties props,
                         final KafkaClientSupplier clientSupplier) {
-        this(topology.internalTopologyBuilder, new StreamsConfig(props), clientSupplier, Time.SYSTEM);
+        this(topology.adjust(new StreamsConfig(props)).internalTopologyBuilder, new StreamsConfig(props), clientSupplier, Time.SYSTEM);
     }
 
     /**
@@ -570,7 +570,7 @@ public class KafkaStreams {
     public KafkaStreams(final Topology topology,
                         final Properties props,
                         final Time time) {
-        this(topology.internalTopologyBuilder, new StreamsConfig(props), new DefaultKafkaClientSupplier(), time);
+        this(topology.adjust(new StreamsConfig(props)).internalTopologyBuilder, new StreamsConfig(props), new DefaultKafkaClientSupplier(), time);
     }
 
     /**
@@ -590,7 +590,7 @@ public class KafkaStreams {
                         final Properties props,
                         final KafkaClientSupplier clientSupplier,
                         final Time time) {
-        this(topology.internalTopologyBuilder, new StreamsConfig(props), clientSupplier, time);
+        this(topology.adjust(new StreamsConfig(props)).internalTopologyBuilder, new StreamsConfig(props), clientSupplier, time);
     }
 
     /**
@@ -599,7 +599,7 @@ public class KafkaStreams {
     @Deprecated
     public KafkaStreams(final Topology topology,
                         final StreamsConfig config) {
-        this(topology.internalTopologyBuilder, config, new DefaultKafkaClientSupplier());
+        this(topology.adjust(config).internalTopologyBuilder, config, new DefaultKafkaClientSupplier());
     }
 
     /**
@@ -609,7 +609,7 @@ public class KafkaStreams {
     public KafkaStreams(final Topology topology,
                         final StreamsConfig config,
                         final KafkaClientSupplier clientSupplier) {
-        this(topology.internalTopologyBuilder, config, clientSupplier);
+        this(topology.adjust(config).internalTopologyBuilder, config, clientSupplier);
     }
 
     /**
@@ -619,7 +619,7 @@ public class KafkaStreams {
     public KafkaStreams(final Topology topology,
                         final StreamsConfig config,
                         final Time time) {
-        this(topology.internalTopologyBuilder, config, new DefaultKafkaClientSupplier(), time);
+        this(topology.adjust(config).internalTopologyBuilder, config, new DefaultKafkaClientSupplier(), time);
     }
 
     private KafkaStreams(final InternalTopologyBuilder internalTopologyBuilder,

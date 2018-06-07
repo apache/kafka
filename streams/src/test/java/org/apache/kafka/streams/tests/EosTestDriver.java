@@ -254,7 +254,6 @@ public class EosTestDriver extends SmokeTestUtil {
                 topics.add("repartition");
             }
             consumer.subscribe(topics);
-            consumer.poll(0);
 
             final Set<TopicPartition> partitions = new HashSet<>();
             for (final String topic : topics) {

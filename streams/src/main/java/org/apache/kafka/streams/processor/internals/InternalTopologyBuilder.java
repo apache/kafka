@@ -121,6 +121,9 @@ public class InternalTopologyBuilder {
 
     private Map<Integer, Set<String>> nodeGroups = null;
 
+    // this is only temporary for 2.0 and should be removed
+    public final Map<StoreBuilder, String> storeToSourceChangelogTopic = new HashMap<>();
+
     public interface StateStoreFactory {
         Set<String> users();
         boolean loggingEnabled();
@@ -498,8 +501,14 @@ public class InternalTopologyBuilder {
 
     public final void addStateStore(final StoreBuilder storeBuilder,
                                     final String... processorNames) {
+        addStateStore(storeBuilder, false, processorNames);
+    }
+
+    public final void addStateStore(final StoreBuilder storeBuilder,
+                                    final boolean allowOverride,
+                                    final String... processorNames) {
         Objects.requireNonNull(storeBuilder, "storeBuilder can't be null");
-        if (stateFactories.containsKey(storeBuilder.name())) {
+        if (!allowOverride && stateFactories.containsKey(storeBuilder.name())) {
             throw new TopologyException("StateStore " + storeBuilder.name() + " is already added.");
         }
 
@@ -566,16 +575,22 @@ public class InternalTopologyBuilder {
         }
     }
 
-    // TODO: this method is only used by DSL and we might want to refactor this part
     public final void connectSourceStoreAndTopic(final String sourceStoreName,
-                                                  final String topic) {
+                                                 final String topic) {
         if (storeToChangelogTopic.containsKey(sourceStoreName)) {
             throw new TopologyException("Source store " + sourceStoreName + " is already added.");
         }
         storeToChangelogTopic.put(sourceStoreName, topic);
     }
 
-    // TODO: this method is only used by DSL and we might want to refactor this part
+    public final void markSourceStoreAndTopic(final StoreBuilder storeBuilder,
+                                              final String topic) {
+        if (storeToSourceChangelogTopic.containsKey(storeBuilder)) {
+            throw new TopologyException("Source store " + storeBuilder.name() + " is already used.");
+        }
+        storeToSourceChangelogTopic.put(storeBuilder, topic);
+    }
+
     public final void connectProcessors(final String... processorNames) {
         if (processorNames.length < 2) {
             throw new TopologyException("At least two processors need to participate in the connection.");
@@ -591,13 +606,11 @@ public class InternalTopologyBuilder {
         nodeGrouper.unite(processorNames[0], Arrays.copyOfRange(processorNames, 1, processorNames.length));
     }
 
-    // TODO: this method is only used by DSL and we might want to refactor this part
     public final void addInternalTopic(final String topicName) {
         Objects.requireNonNull(topicName, "topicName can't be null");
         internalTopicNames.add(topicName);
     }
 
-    // TODO: this method is only used by DSL and we might want to refactor this part
     public final void copartitionSources(final Collection<String> sourceNodes) {
         copartitionSourceGroups.add(Collections.unmodifiableSet(new HashSet<>(sourceNodes)));
     }
