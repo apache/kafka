@@ -224,7 +224,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         try {
             return this.db.get(rawKey);
         } catch (final RocksDBException e) {
-            throw new ProcessorStateException("Error while getting value for key from store " + this.name, e);
+            // String format is happening in wrapping stores. So formatted message is thrown from wrapping stores.
+            throw new ProcessorStateException("Error while getting value for key %s from store " + this.name, e);
         }
     }
 
@@ -300,13 +301,15 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
             try {
                 db.delete(wOptions, rawKey);
             } catch (final RocksDBException e) {
-                throw new ProcessorStateException("Error while removing key from store " + this.name, e);
+                // String format is happening in wrapping stores. So formatted message is thrown from wrapping stores.
+                throw new ProcessorStateException("Error while removing key %s from store " + this.name, e);
             }
         } else {
             try {
                 db.put(wOptions, rawKey, rawValue);
             } catch (final RocksDBException e) {
-                throw new ProcessorStateException("Error while executing putting key/value into store " + this.name, e);
+                // String format is happening in wrapping stores. So formatted message is thrown from wrapping stores.
+                throw new ProcessorStateException("Error while putting key %s value %s into store " + this.name, e);
             }
         }
     }
