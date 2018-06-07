@@ -26,7 +26,7 @@ import kafka.security.auth.SimpleAclAuthorizer.VersionedAcls
 import kafka.server.KafkaConfig
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
-import kafka.zk.{AclChangeNotificationSequenceZNode, KafkaZkClient, ZkAclStore}
+import kafka.zk.{AclChangeNotificationSequenceZNode, AclChangeNotificationZNode, KafkaZkClient, ZkAclStore}
 import org.apache.kafka.common.resource.{ResourceFilter, ResourceNameType => JResourceNameType}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{SecurityUtils, Time}
@@ -55,7 +55,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   private var superUsers = Set.empty[KafkaPrincipal]
   private var shouldAllowEveryoneIfNoAclIsFound = false
   private var zkClient: KafkaZkClient = _
-  private var aclChangeListeners: Seq[ZkNodeChangeNotificationListener] = List()
+  private var aclChangeListener: ZkNodeChangeNotificationListener = _
 
   @volatile
   private var aclCache = new scala.collection.immutable.TreeMap[Resource, VersionedAcls]()(ResourceOrdering)
@@ -98,7 +98,8 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
     loadCache()
 
-    startZkChangeListeners()
+    aclChangeListener = new ZkNodeChangeNotificationListener(zkClient, AclChangeNotificationZNode.path, AclChangeNotificationSequenceZNode.SequenceNumberPrefix, AclChangedNotificationHandler)
+    aclChangeListener.init()
   }
 
   override def authorize(session: Session, operation: Operation, resource: Resource): Boolean = {
@@ -230,7 +231,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   }
 
   def close() {
-    aclChangeListeners.foreach(listener => listener.close())
+    if (aclChangeListener != null) aclChangeListener.close()
     if (zkClient != null) zkClient.close()
   }
 
@@ -248,16 +249,6 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
         }
       })
     }
-  }
-
-  private def startZkChangeListeners(): Unit = {
-    aclChangeListeners = ZkAclStore.stores.map(store => {
-      val aclChangeListener = new ZkNodeChangeNotificationListener(
-        zkClient, store.aclChangePath, AclChangeNotificationSequenceZNode.SequenceNumberPrefix, new AclChangedNotificationHandler(store))
-
-      aclChangeListener.init()
-      aclChangeListener
-    })
   }
 
   private def logAuditMessage(principal: KafkaPrincipal, authorized: Boolean, operation: Operation, resource: Resource, host: String) {
@@ -349,9 +340,9 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     retryBackoffMs + Random.nextInt(retryBackoffJitterMs)
   }
 
-  class AclChangedNotificationHandler(store: ZkAclStore) extends NotificationHandler {
+  object AclChangedNotificationHandler extends NotificationHandler {
     override def processNotification(notificationMessage: Array[Byte]) {
-      val resource: Resource = store.decode(notificationMessage)
+      val resource: Resource = AclChangeNotificationSequenceZNode.decode(notificationMessage)
 
       inWriteLock(lock) {
         val versionedAcls = getAclsFromZk(resource)

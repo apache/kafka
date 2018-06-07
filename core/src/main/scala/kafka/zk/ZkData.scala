@@ -30,6 +30,7 @@ import kafka.security.auth.{Acl, Literal, Prefixed, Resource, ResourceNameType, 
 import kafka.server.{ConfigType, DelegationTokenManager}
 import kafka.utils.Json
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.errors.UnsupportedVersionException
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
@@ -41,6 +42,7 @@ import scala.beans.BeanProperty
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Seq, breakOut}
+import scala.util.{Failure, Success, Try}
 
 // This file contains objects for encoding/decoding data stored in ZooKeeper nodes (znodes).
 
@@ -460,22 +462,12 @@ case class ZkAclStore(nameType: ResourceNameType) {
   val aclPath: String = nameType match {
     case Literal => "/kafka-acl"
     case Prefixed => "/kafka-prefixed-acl"
-    case _ => throw new IllegalArgumentException("Unknown name type:" + nameType)
-  }
-
-  val aclChangePath: String = nameType match {
-    case Literal => "/kafka-acl-changes"
-    case Prefixed => "/kafka-prefixed-acl-changes"
-    case _ => throw new IllegalArgumentException("Unknown name type:" + nameType)
+    case _ => throw new IllegalArgumentException("Invalid name type:" + nameType)
   }
 
   def path(resourceType: ResourceType) = s"$aclPath/$resourceType"
 
   def path(resourceType: ResourceType, resourceName: String): String = s"$aclPath/$resourceType/$resourceName"
-
-  def changeSequenceZNode: AclChangeNotificationSequenceZNode = AclChangeNotificationSequenceZNode(this)
-
-  def decode(notificationMessage: Array[Byte]): Resource = AclChangeNotificationSequenceZNode.decode(nameType, notificationMessage)
 }
 
 object ZkAclStore {
@@ -483,7 +475,17 @@ object ZkAclStore {
     .map(nameType => ZkAclStore(nameType))
 
   val securePaths: Seq[String] = stores
-    .flatMap(store => List(store.aclPath, store.aclChangePath))
+    .flatMap(store => List(store.aclPath)) ++ Seq(AclChangeNotificationZNode.path)
+}
+
+@deprecated("There are now multiple roots for ACLs within ZK. Use ZkAclStore", "2.0")
+object AclZNode {
+  def path = "/kafka-acl"
+}
+
+@deprecated("There are now multiple roots for ACLs within ZK. Use ZkAclStore", "2.0")
+object ResourceTypeZNode {
+  def path(resourceType: String) = s"${AclZNode.path}/$resourceType"
 }
 
 object ResourceZNode {
@@ -493,26 +495,54 @@ object ResourceZNode {
   def decode(bytes: Array[Byte], stat: Stat): VersionedAcls = VersionedAcls(Acl.fromBytes(bytes), stat.getVersion)
 }
 
-object AclChangeNotificationSequenceZNode {
-  val Separator = ":"
-  def SequenceNumberPrefix = "acl_changes_"
+object AclChangeNotificationZNode {
+  def path = "/kafka-acl-changes"
+}
 
-  def encode(resource: Resource): Array[Byte] = {
-    (resource.resourceType.name + Separator + resource.name).getBytes(UTF_8)
-  }
+case class AclChangeEvent(@BeanProperty @JsonProperty("version") version: Int,
+                          @BeanProperty @JsonProperty("resourceType") resourceType: String,
+                          @BeanProperty @JsonProperty("name") name: String,
+                          @BeanProperty @JsonProperty("resourceNameType") resourceNameType: String) {
+  if (version > AclChangeEvent.currentVersion)
+    throw new UnsupportedVersionException(s"Acl change event received for unsupported version: $version")
 
-  def decode(nameType: ResourceNameType, bytes: Array[Byte]): Resource = {
-    val str = new String(bytes, UTF_8)
-    str.split(Separator, 2) match {
-      case Array(resourceType, name, _*) => Resource(ResourceType.fromString(resourceType), name, nameType)
-      case _ => throw new IllegalArgumentException("expected a string in format ResourceType:ResourceName but got " + str)
-    }
+  def toResource : Try[Resource] = {
+    for {
+      resType <- Try(ResourceType.fromString(resourceType))
+      nameType <- Try(ResourceNameType.fromString(resourceNameType))
+      resource = Resource(resType, name, nameType)
+    } yield resource
   }
 }
 
-case class AclChangeNotificationSequenceZNode(store: ZkAclStore) {
-  def createPath = s"${store.aclChangePath}/${AclChangeNotificationSequenceZNode.SequenceNumberPrefix}"
-  def deletePath(sequenceNode: String) = s"${store.aclChangePath}/$sequenceNode"
+object AclChangeEvent {
+  val currentVersion: Int = 1
+}
+
+object AclChangeNotificationSequenceZNode {
+  def SequenceNumberPrefix = "acl_changes_"
+
+  def createPath = s"${AclChangeNotificationZNode.path}/$SequenceNumberPrefix"
+  def deletePath(sequenceNode: String) = s"${AclChangeNotificationZNode.path}/$sequenceNode"
+
+  def encode(resource: Resource): Array[Byte] =
+    Json.encodeAsBytes(AclChangeEvent(
+      AclChangeEvent.currentVersion,
+      resource.resourceType.name,
+      resource.name,
+      resource.resourceNameType.name))
+
+  def decode(bytes: Array[Byte]): Resource = {
+    val changeEvent = Json.parseBytesAs[AclChangeEvent](bytes) match {
+      case Right(event) => event
+      case Left(e) => throw new IllegalArgumentException("Failed to parse ACL change event", e)
+    }
+
+    changeEvent.toResource match {
+      case Success(r) => r
+      case Failure(e) => throw new IllegalArgumentException("Failed to parse ACL change event", e)
+    }
+  }
 }
 
 object ClusterZNode {

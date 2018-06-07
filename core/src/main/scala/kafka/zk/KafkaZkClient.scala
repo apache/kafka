@@ -943,9 +943,10 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
    * Creates the required zk nodes for Acl storage
    */
   def createAclPaths(): Unit = {
+    createRecursive(AclChangeNotificationZNode.path, throwIfPathExists = false)
+
     ZkAclStore.stores.foreach(store => {
       createRecursive(store.aclPath, throwIfPathExists = false)
-      createRecursive(store.aclChangePath, throwIfPathExists = false)
       ResourceType.values.foreach(resourceType => createRecursive(store.path(resourceType), throwIfPathExists = false))
     })
   }
@@ -1008,8 +1009,7 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
    * @param resource resource name
    */
   def createAclChangeNotification(resource: Resource): Unit = {
-    val store = ZkAclStore(resource.resourceNameType)
-    val path = store.changeSequenceZNode.createPath
+    val path = AclChangeNotificationSequenceZNode.createPath
     val createRequest = CreateRequest(path, AclChangeNotificationSequenceZNode.encode(resource), acls(path), CreateMode.PERSISTENT_SEQUENTIAL)
     val createResponse = retryRequestUntilConnected(createRequest)
     createResponse.maybeThrow
@@ -1033,24 +1033,21 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
    * @throws KeeperException if there is an error while deleting Acl change notifications
    */
   def deleteAclChangeNotifications(): Unit = {
-    ZkAclStore.stores.foreach(store => {
-      val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(store.aclChangePath))
-      if (getChildrenResponse.resultCode == Code.OK) {
-        deleteAclChangeNotifications(store, getChildrenResponse.children)
-      } else if (getChildrenResponse.resultCode != Code.NONODE) {
-        getChildrenResponse.maybeThrow
-      }
-    })
+    val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(AclChangeNotificationZNode.path))
+    if (getChildrenResponse.resultCode == Code.OK) {
+      deleteAclChangeNotifications(getChildrenResponse.children)
+    } else if (getChildrenResponse.resultCode != Code.NONODE) {
+      getChildrenResponse.maybeThrow
+    }
   }
 
   /**
    * Deletes the Acl change notifications associated with the given sequence nodes
    * @param sequenceNodes
    */
-  private def deleteAclChangeNotifications(store: ZkAclStore, sequenceNodes: Seq[String]): Unit = {
-    val aclChangeNotificationSequenceZNode = store.changeSequenceZNode
+  private def deleteAclChangeNotifications(sequenceNodes: Seq[String]): Unit = {
     val deleteRequests = sequenceNodes.map { sequenceNode =>
-      DeleteRequest(aclChangeNotificationSequenceZNode.deletePath(sequenceNode), ZkVersion.NoVersion)
+      DeleteRequest(AclChangeNotificationSequenceZNode.deletePath(sequenceNode), ZkVersion.NoVersion)
     }
 
     val deleteResponses = retryRequestsUntilConnected(deleteRequests)

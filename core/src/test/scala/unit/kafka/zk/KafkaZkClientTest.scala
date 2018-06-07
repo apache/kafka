@@ -426,19 +426,19 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
 
   @Test
   def testAclManagementMethods() {
-
+    assertFalse(zkClient.pathExists(AclChangeNotificationZNode.path))
     ZkAclStore.stores.foreach(store => {
       assertFalse(zkClient.pathExists(store.aclPath))
-      assertFalse(zkClient.pathExists(store.aclChangePath))
       ResourceType.values.foreach(resource => assertFalse(zkClient.pathExists(store.path(resource))))
     })
 
     // create acl paths
     zkClient.createAclPaths
 
+    assertTrue(zkClient.pathExists(AclChangeNotificationZNode.path))
+
     ZkAclStore.stores.foreach(store => {
       assertTrue(zkClient.pathExists(store.aclPath))
-      assertTrue(zkClient.pathExists(store.aclChangePath))
       ResourceType.values.foreach(resource => assertTrue(zkClient.pathExists(store.path(resource))))
 
       val resource1 = new Resource(Topic, UUID.randomUUID().toString, store.nameType)
@@ -488,15 +488,15 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
       //delete with valid expected zk version
       assertTrue(zkClient.conditionalDelete(resource2, 0))
 
-
       zkClient.createAclChangeNotification(Resource(Group, "resource1", store.nameType))
       zkClient.createAclChangeNotification(Resource(Topic, "resource2", store.nameType))
-
-      assertEquals(2, zkClient.getChildren(store.aclChangePath).size)
-
-      zkClient.deleteAclChangeNotifications()
-      assertTrue(zkClient.getChildren(store.aclChangePath).isEmpty)
     })
+
+    val expectedChangeEvents = ResourceNameType.values.size * 2
+    assertEquals(expectedChangeEvents, zkClient.getChildren(AclChangeNotificationZNode.path).size)
+
+    zkClient.deleteAclChangeNotifications()
+    assertTrue(zkClient.getChildren(AclChangeNotificationZNode.path).isEmpty)
   }
 
   @Test
