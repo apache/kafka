@@ -481,7 +481,7 @@ case class ZkAclStore(nameType: ResourceNameType) {
 
 object ZkAclStore {
   val stores: Seq[ZkAclStore] = ResourceNameType.values
-    .filter(nameType => !nameType.isNotSpecific)
+    .filter(nameType => nameType != ResourceNameType.ANY && nameType != ResourceNameType.UNKNOWN)
     .map(nameType => ZkAclStore(nameType))
 
   val securePaths: Seq[String] = stores

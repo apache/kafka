@@ -19,6 +19,8 @@ package org.apache.kafka.common.acl;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.resource.Resource;
+import org.apache.kafka.common.resource.ResourceNameType;
+import org.apache.kafka.common.resource.ResourceType;
 
 import java.util.Objects;
 
@@ -42,12 +44,12 @@ public class AclBinding {
         this.resource = Objects.requireNonNull(resource);
         this.entry = Objects.requireNonNull(entry);
 
-        if (resource.resourceType().isNotSpecific()) {
-            throw new IllegalArgumentException("Resource type must be specific, not: " + resource.resourceType());
+        if (resource.resourceType() == ResourceType.ANY) {
+            throw new IllegalArgumentException("Resource type can not be ANY");
         }
 
-        if (resource.nameType().isNotSpecific()) {
-            throw new IllegalArgumentException("Resource name type must be specific, not: " + resource.nameType());
+        if (resource.nameType() == ResourceNameType.ANY) {
+            throw new IllegalArgumentException("Resource name type can not be ANY");
         }
     }
 

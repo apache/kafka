@@ -83,15 +83,6 @@ public enum ResourceNameType {
     }
 
     /**
-     * Return whether this resource name type is ANY or UKNOWN.
-     *
-     * i.e. it is not a specific resource name type.
-     */
-    public boolean isNotSpecific() {
-        return this == ANY || this == UNKNOWN;
-    }
-
-    /**
      * Return the ResourceNameType with the provided code or {@link #UNKNOWN} if one cannot be found.
      */
     public static ResourceNameType fromCode(byte code) {

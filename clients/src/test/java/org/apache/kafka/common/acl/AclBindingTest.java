@@ -114,23 +114,23 @@ public class AclBindingTest {
         assertFalse(ANY_MYTOPIC.matchesAtMostOne());
     }
 
-    @Test(expected = IllegalArgumentException.class)
-    public void testThrowsOnUnknownResourceNameType() {
+    @Test
+    public void shouldNotThrowOnUnknownResourceNameType() {
         new AclBinding(new Resource(ResourceType.TOPIC, "foo", ResourceNameType.UNKNOWN), ACL1.entry());
     }
 
-    @Test(expected = IllegalArgumentException.class)
-    public void testThrowsOnAnyResourceNameType() {
-        new AclBinding(new Resource(ResourceType.TOPIC, "foo", ResourceNameType.ANY), ACL1.entry());
-    }
-
-    @Test(expected = IllegalArgumentException.class)
-    public void testThrowsOnUnknownResourceType() {
+    @Test
+    public void shouldNotThrowOnUnknownResourceType() {
         new AclBinding(new Resource(ResourceType.UNKNOWN, "foo", ResourceNameType.LITERAL), ACL1.entry());
     }
 
     @Test(expected = IllegalArgumentException.class)
-    public void testThrowsOnAnyResourceType() {
+    public void shouldThrowOnAnyResourceNameType() {
+        new AclBinding(new Resource(ResourceType.TOPIC, "foo", ResourceNameType.ANY), ACL1.entry());
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void shouldThrowOnAnyResourceType() {
         new AclBinding(new Resource(ResourceType.ANY, "foo", ResourceNameType.LITERAL), ACL1.entry());
     }
 }

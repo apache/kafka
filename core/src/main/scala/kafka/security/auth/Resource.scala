@@ -39,9 +39,11 @@ case class Resource(resourceType: ResourceType, name: String, nameType: Resource
   Objects.requireNonNull(name, "name")
   Objects.requireNonNull(nameType, "nameType")
 
-  if (nameType.isNotSpecific) {
-    throw new IllegalArgumentException("nameType must be a specific type, not: " + nameType)
-  }
+  if (nameType == ResourceNameType.ANY)
+    throw new IllegalArgumentException("nameType must not be ANY")
+
+  if (nameType == ResourceNameType.UNKNOWN)
+    throw new IllegalArgumentException("nameType must not be UNKNOWN")
 
   /**
     * Create an instance of this class with the provided parameters.
