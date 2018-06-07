@@ -35,7 +35,7 @@ import org.apache.kafka.streams.processor.To;
  * Note that the key is read-only and should not be modified, as this can lead to corrupt partitioning.
  * If {@code ValueTransformerWithKey} is applied to a {@link KeyValue} pair record the record's key is preserved.
  * <p>
- * Use {@link ValueTransformerWithKeySupplier} to provide new instances of {@code {@link ValueTransformerWithKey} to
+ * Use {@link ValueTransformerWithKeySupplier} to provide new instances of {@link ValueTransformerWithKey} to
  * Kafka Stream's runtime.
  * <p>
  * If a record's key and value should be modified {@link Transformer} can be used.
