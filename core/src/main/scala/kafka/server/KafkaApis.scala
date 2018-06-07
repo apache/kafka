@@ -350,11 +350,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             },
             expireTimestamp = offsetCommitRequest.retentionTime match {
               case OffsetCommitRequest.DEFAULT_RETENTION_TIME => None
-              case retentionTime =>
-                partitionData.timestamp match {
-                  case OffsetCommitRequest.DEFAULT_TIMESTAMP => None
-                  case commitTimestamp => Some(commitTimestamp + retentionTime)
-                }
+              case retentionTime => Some(currentTimestamp + retentionTime)
             }
           )
         }

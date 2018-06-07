@@ -214,6 +214,9 @@ public class RequestResponseTest {
         checkRequest(createOffsetCommitRequest(4));
         checkErrorResponse(createOffsetCommitRequest(4), new UnknownServerException());
         checkResponse(createOffsetCommitResponse(), 4);
+        checkRequest(createOffsetCommitRequest(5));
+        checkErrorResponse(createOffsetCommitRequest(5), new UnknownServerException());
+        checkResponse(createOffsetCommitResponse(), 5);
         checkRequest(createJoinGroupRequest(0));
         checkRequest(createUpdateMetadataRequest(0, null));
         checkErrorResponse(createUpdateMetadataRequest(0, null), new UnknownServerException());
