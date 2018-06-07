@@ -21,7 +21,6 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.clients.consumer.MockConsumer;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.Cluster;
@@ -831,7 +830,7 @@ public class StreamThreadTest {
         final String changelogName1 = applicationId + "-" + storeName1 + "-changelog";
         final String changelogName2 = applicationId + "-" + storeName2 + "-changelog";
         final TopicPartition partition1 = new TopicPartition(changelogName1, 1);
-        final TopicPartition partition2 = new TopicPartition(changelogName2, 1);;
+        final TopicPartition partition2 = new TopicPartition(changelogName2, 1);
         internalStreamsBuilder.stream(Collections.singleton(topic1), consumed)
             .groupByKey().count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>as(storeName1));
         final MaterializedInternal materialized = new MaterializedInternal(Materialized.as(storeName2));
