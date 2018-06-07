@@ -146,6 +146,9 @@ public class PluginUtilsTest {
         assertTrue(PluginUtils.shouldLoadInIsolation(
                 "org.apache.kafka.connect.storage.StringConverter")
         );
+        assertTrue(PluginUtils.shouldLoadInIsolation(
+            "org.apache.kafka.connect.rest.basic.auth.extension.BasicAuthSecurityRestExtension"
+        ));
     }
 
     @Test
