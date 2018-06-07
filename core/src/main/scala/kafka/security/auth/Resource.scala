@@ -16,14 +16,29 @@
  */
 package kafka.security.auth
 
-import java.util.Objects
 import org.apache.kafka.common.resource.ResourcePattern
 
 object Resource {
+  val Separator = ":"
   val ClusterResourceName = "kafka-cluster"
   val ClusterResource = new Resource(Cluster, Resource.ClusterResourceName, Literal)
   val ProducerIdResourceName = "producer-id"
   val WildCardResource = "*"
+
+  def fromString(str: String): Resource = {
+    ResourceNameType.values.find(nameType => str.startsWith(nameType.name)) match {
+      case Some(nameType) =>
+        str.split(Separator, 3) match {
+          case Array(_, resourceType, name, _*) => new Resource(ResourceType.fromString(resourceType), name, nameType)
+          case _ => throw new IllegalArgumentException("expected a string in format ResourceType:ResourceName but got " + str)
+        }
+      case _ =>
+        str.split(Separator, 2) match {
+          case Array(resourceType, name, _*) => new Resource(ResourceType.fromString(resourceType), name, Literal)
+          case _ => throw new IllegalArgumentException("expected a string in format ResourceType:ResourceName but got " + str)
+        }
+    }
+  }
 }
 
 /**
@@ -34,10 +49,6 @@ object Resource {
  * @param nameType non-null type of resource name: literal, prefixed, etc.
  */
 case class Resource(resourceType: ResourceType, name: String, nameType: ResourceNameType) {
-
-  Objects.requireNonNull(resourceType, "resourceType")
-  Objects.requireNonNull(name, "name")
-  Objects.requireNonNull(nameType, "resourceNameType")
 
   /**
     * Create an instance of this class with the provided parameters.
@@ -54,6 +65,10 @@ case class Resource(resourceType: ResourceType, name: String, nameType: Resource
 
   def toPattern: ResourcePattern = {
     new ResourcePattern(resourceType.toJava, name, nameType.toJava)
+  }
+
+  override def toString: String = {
+    nameType + Resource.Separator + resourceType.name + Resource.Separator + name
   }
 }
 
