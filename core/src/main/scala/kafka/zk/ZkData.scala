@@ -487,7 +487,7 @@ object ZkAclStore {
 }
 
 object ResourceZNode {
-  def path(resource: Resource): String = ZkAclStore(resource.resourceNameType).path(resource.resourceType, resource.name)
+  def path(resource: Resource): String = ZkAclStore(resource.nameType).path(resource.resourceType, resource.name)
 
   def encode(acls: Set[Acl]): Array[Byte] = Json.encodeAsBytes(Acl.toJsonCompatibleMap(acls).asJava)
   def decode(bytes: Array[Byte], stat: Stat): VersionedAcls = VersionedAcls(Acl.fromBytes(bytes), stat.getVersion)

@@ -18,6 +18,7 @@
 package kafka.security.auth
 
 import kafka.utils.Json
+import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.SecurityUtils
 
@@ -26,7 +27,7 @@ import scala.collection.JavaConverters._
 object Acl {
   val WildCardPrincipal: KafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "*")
   val WildCardHost: String = "*"
-  val WildCardResource: String = org.apache.kafka.common.resource.Resource.WILDCARD_RESOURCE
+  val WildCardResource: String = ResourcePattern.WILDCARD_RESOURCE
   val AllowAllAcl = new Acl(WildCardPrincipal, Allow, WildCardHost, All)
   val PrincipalKey = "principal"
   val PermissionTypeKey = "permissionType"

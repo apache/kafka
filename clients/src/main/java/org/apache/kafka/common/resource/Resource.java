@@ -22,20 +22,14 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import java.util.Objects;
 
 /**
- * Represents a cluster resource with a tuple of (type, name, nameType).
+ * Represents a cluster resource with a tuple of (type, name).
  *
  * The API for this class is still evolving and we may break compatibility in minor releases, if necessary.
  */
 @InterfaceStability.Evolving
 public class Resource {
-    /**
-     * A special literal resource name that corresponds to 'all resources of a certain type'.
-     */
-    public static final String WILDCARD_RESOURCE = "*";
-
     private final ResourceType resourceType;
     private final String name;
-    private final ResourceNameType nameType;
 
     /**
      * The name of the CLUSTER resource.
@@ -45,32 +39,19 @@ public class Resource {
     /**
      * A resource representing the whole cluster.
      */
-    public final static Resource CLUSTER = new Resource(ResourceType.CLUSTER, CLUSTER_NAME, ResourceNameType.LITERAL);
+    public final static Resource CLUSTER = new Resource(ResourceType.CLUSTER, CLUSTER_NAME);
 
     /**
      * Create an instance of this class with the provided parameters.
      *
      * @param resourceType non-null resource type
      * @param name non-null resource name
-     * @param nameType non-null resource name type
      */
-    public Resource(ResourceType resourceType, String name, ResourceNameType nameType) {
-        this.resourceType = Objects.requireNonNull(resourceType, "resourceType");
-        this.name = Objects.requireNonNull(name, "name");
-        this.nameType = Objects.requireNonNull(nameType, "nameType");
-    }
-
-    /**
-     * Create an instance of this class with the provided parameters.
-     * Resource name type would default to ResourceNameType.LITERAL.
-     *
-     * @param resourceType non-null resource type
-     * @param name non-null resource name
-     * @deprecated Since 2.0. Use {@link #Resource(ResourceType, String, ResourceNameType)}
-     */
-    @Deprecated
     public Resource(ResourceType resourceType, String name) {
-        this(resourceType, name, ResourceNameType.LITERAL);
+        Objects.requireNonNull(resourceType);
+        this.resourceType = resourceType;
+        Objects.requireNonNull(name);
+        this.name = name;
     }
 
     /**
@@ -78,13 +59,6 @@ public class Resource {
      */
     public ResourceType resourceType() {
         return resourceType;
-    }
-
-    /**
-     * Return the resource name type.
-     */
-    public ResourceNameType nameType() {
-        return nameType;
     }
 
     /**
@@ -98,36 +72,31 @@ public class Resource {
      * Create a filter which matches only this Resource.
      */
     public ResourceFilter toFilter() {
-        return new ResourceFilter(resourceType, name, nameType);
+        return new ResourceFilter(resourceType, name);
     }
 
     @Override
     public String toString() {
-        return "(resourceType=" + resourceType + ", name=" + ((name == null) ? "<any>" : name) + ", nameType=" + nameType + ")";
+        return "(resourceType=" + resourceType + ", name=" + ((name == null) ? "<any>" : name) + ")";
     }
 
     /**
      * Return true if this Resource has any UNKNOWN components.
      */
     public boolean isUnknown() {
-        return resourceType.isUnknown() || nameType.isUnknown();
+        return resourceType.isUnknown();
     }
 
     @Override
     public boolean equals(Object o) {
-        if (this == o)
-            return true;
-        if (o == null || getClass() != o.getClass())
+        if (!(o instanceof Resource))
             return false;
-
-        final Resource resource = (Resource) o;
-        return resourceType == resource.resourceType &&
-            Objects.equals(name, resource.name) &&
-            nameType == resource.nameType;
+        Resource other = (Resource) o;
+        return resourceType.equals(other.resourceType) && Objects.equals(name, other.name);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(resourceType, name, nameType);
+        return Objects.hash(resourceType, name);
     }
 }

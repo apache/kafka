@@ -27,7 +27,6 @@ import kafka.server.KafkaConfig
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
 import kafka.zk.{AclChangeNotificationSequenceZNode, KafkaZkClient, ZkAclStore}
-import org.apache.kafka.common.resource.{ResourceFilter, ResourceNameType => JResourceNameType}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{SecurityUtils, Time}
 
@@ -102,8 +101,8 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   }
 
   override def authorize(session: Session, operation: Operation, resource: Resource): Boolean = {
-    if (resource.resourceNameType != Literal) {
-      throw new IllegalArgumentException("Only literal resources are supported. Got: " + resource.resourceNameType)
+    if (resource.nameType != Literal) {
+      throw new IllegalArgumentException("Only literal resources are supported. Got: " + resource.nameType)
     }
 
     val principal = session.principal
@@ -203,8 +202,6 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   }
 
   def getMatchingAcls(resourceType: ResourceType, resourceName: String): Set[Acl] = {
-    val filter = new ResourceFilter(resourceType.toJava, resourceName, JResourceNameType.ANY)
-
     inReadLock(lock) {
       val wildcard = aclCache.get(Resource(resourceType, Acl.WildCardResource, Literal))
         .map(_.acls)
@@ -368,7 +365,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
       if (rt != 0)
         rt
       else {
-        val rnt = a.resourceNameType compare b.resourceNameType
+        val rnt = a.nameType compare b.nameType
         if (rnt != 0)
           rnt
         else
