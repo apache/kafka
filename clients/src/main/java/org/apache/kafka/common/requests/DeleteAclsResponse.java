@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
+import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -25,7 +26,6 @@ import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.resource.Resource;
 import org.apache.kafka.common.resource.ResourceNameType;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
@@ -180,7 +180,7 @@ public class DeleteAclsResponse extends AbstractResponse {
                 Struct matchingAclStruct = (Struct) matchingAclStructObj;
                 ApiError matchError = new ApiError(matchingAclStruct);
                 AccessControlEntry entry = RequestUtils.aceFromStructFields(matchingAclStruct);
-                Resource resource = RequestUtils.resourceFromStructFields(matchingAclStruct);
+                ResourcePattern resource = RequestUtils.resourcePatternromStructFields(matchingAclStruct);
                 deletions.add(new AclDeletionResult(matchError, new AclBinding(resource, entry)));
             }
             this.responses.add(new AclFilterResponse(error, deletions));
@@ -201,7 +201,7 @@ public class DeleteAclsResponse extends AbstractResponse {
             for (AclDeletionResult deletion : response.deletions()) {
                 Struct deletionStruct = responseStruct.instance(MATCHING_ACLS_KEY_NAME);
                 deletion.error.write(deletionStruct);
-                RequestUtils.resourceSetStructFields(deletion.acl().resource(), deletionStruct);
+                RequestUtils.resourcePatternSetStructFields(deletion.acl().pattern(), deletionStruct);
                 RequestUtils.aceSetStructFields(deletion.acl().entry(), deletionStruct);
                 deletionStructs.add(deletionStruct);
             }
@@ -247,12 +247,20 @@ public class DeleteAclsResponse extends AbstractResponse {
             final boolean unsupported = responses.stream()
                 .flatMap(r -> r.deletions.stream())
                 .map(AclDeletionResult::acl)
-                .map(AclBinding::resource)
-                .map(Resource::nameType)
+                .map(AclBinding::pattern)
+                .map(ResourcePattern::nameType)
                 .anyMatch(nameType -> nameType != ResourceNameType.LITERAL);
             if (unsupported) {
                 throw new UnsupportedVersionException("Version 0 only supports literal resource name types");
             }
+        }
+
+        final boolean unknown = responses.stream()
+            .flatMap(r -> r.deletions.stream())
+            .map(AclDeletionResult::acl)
+            .anyMatch(AclBinding::isUnknown);
+        if (unknown) {
+            throw new IllegalArgumentException("Response contains UNKNOWN elements");
         }
     }
 }
