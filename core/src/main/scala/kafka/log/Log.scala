@@ -19,7 +19,6 @@ package kafka.log
 
 import java.io.{File, IOException}
 import java.lang.{Long => JLong}
-import java.nio.ByteBuffer
 import java.nio.file.{Files, NoSuchFileException}
 import java.text.NumberFormat
 import java.util.Map.{Entry => JEntry}
@@ -494,7 +493,7 @@ class Log(@volatile var dir: File,
     val swapFiles = removeTempFilesAndCollectSwapFiles()
 
     // Now do a second pass and load all the log and index files.
-    // We might encounter legacy log segments with offset overflow (KAFKA-6264). We need to split such segments. Whe
+    // We might encounter legacy log segments with offset overflow (KAFKA-6264). We need to split such segments. When
     // this happens, restart loading segment files from scratch.
     retryOnOffsetOverflow {
       // In case we encounter a segment with offset overflow, the retry logic will split it after which we need to retry
@@ -1838,9 +1837,6 @@ class Log(@volatile var dir: File,
     }
   }
 
-  /**
-   * @throws LogSegmentOffsetOverflowException if we encounter segments with index overflow for more than maxTries
-   */
   private[log] def retryOnOffsetOverflow[T](fn: => T): T = {
     var triesSoFar = 0
     while (true) {
@@ -1874,75 +1870,21 @@ class Log(@volatile var dir: File,
     info(s"Attempting to split segment ${segment.log.file.getAbsolutePath}")
 
     val newSegments = ListBuffer[LogSegment]()
-    var position = 0
-    val sourceRecords = segment.log
-    var readBuffer = ByteBuffer.allocate(1024 * 1024)
-
-    class CopyResult(val bytesRead: Int, val overflowOffset: Option[Long])
-
-    // Helper method to copy `records` into `segment`. Makes sure records being appended do not result in offset overflow.
-    def copyRecordsToSegment(records: FileRecords, segment: LogSegment, readBuffer: ByteBuffer): CopyResult = {
-      var bytesRead = 0
-      var maxTimestamp = Long.MinValue
-      var offsetOfMaxTimestamp = Long.MinValue
-      var maxOffset = Long.MinValue
-
-      // find all batches that are valid to be appended to the current log segment
-      val (validBatches, overflowBatches) = records.batches.asScala.span(batch => segment.offsetIndex.canAppendOffset(batch.lastOffset))
-      val overflowOffset = overflowBatches.headOption.map { firstBatch =>
-        info(s"Found overflow at offset ${firstBatch.baseOffset} in segment $segment")
-        firstBatch.baseOffset
-      }
-
-      // return early if no valid batches were found
-      if (validBatches.isEmpty) {
-        require(overflowOffset.isDefined, "No batches found during split")
-        return new CopyResult(0, overflowOffset)
-      }
-
-      // determine the maximum offset and timestamp in batches
-      for (batch <- validBatches) {
-        if (batch.maxTimestamp > maxTimestamp) {
-          maxTimestamp = batch.maxTimestamp
-          offsetOfMaxTimestamp = batch.lastOffset
-        }
-        maxOffset = batch.lastOffset
-        bytesRead += batch.sizeInBytes
-      }
-
-      // read all valid batches into memory
-      val validRecords = records.slice(0, bytesRead)
-      require(readBuffer.capacity >= validRecords.sizeInBytes)
-      readBuffer.clear()
-      readBuffer.limit(validRecords.sizeInBytes)
-      validRecords.readInto(readBuffer, 0)
-
-      // append valid batches into the segment
-      segment.append(maxOffset, maxTimestamp, offsetOfMaxTimestamp, MemoryRecords.readableRecords(readBuffer))
-      readBuffer.clear()
-      info(s"Appended messages till $maxOffset to segment $segment during split")
-
-      new CopyResult(bytesRead, overflowOffset)
-    }
-
     try {
+      var position = 0
+      val sourceRecords = segment.log
+
       info(s"Splitting segment $segment")
-      newSegments += LogCleaner.createNewCleanedSegment(this, segment.baseOffset)
       while (position < sourceRecords.sizeInBytes) {
-        val currentSegment = newSegments.last
-
-        // grow buffers if needed
         val firstBatch = sourceRecords.batchesFrom(position).asScala.head
-        if (firstBatch.sizeInBytes > readBuffer.capacity)
-          readBuffer = ByteBuffer.allocate(firstBatch.sizeInBytes)
+        val newSegment = LogCleaner.createNewCleanedSegment(this, firstBatch.baseOffset)
+        newSegments += newSegment
 
-        // get records we want to copy and copy them into the new segment
-        val recordsToCopy = sourceRecords.slice(position, readBuffer.capacity)
-        val copyResult = copyRecordsToSegment(recordsToCopy, currentSegment, readBuffer)
-        position += copyResult.bytesRead
+        val bytesAppended = newSegment.appendFromFile(sourceRecords, position)
+        if (bytesAppended == 0)
+          throw new IllegalStateException(s"Failed to append records from position $position in $segment")
 
-        // create a new segment if there was an overflow
-        copyResult.overflowOffset.foreach(overflowOffset => newSegments += LogCleaner.createNewCleanedSegment(this, overflowOffset))
+        position += bytesAppended
       }
       require(newSegments.length > 1, s"No offset overflow found for $segment")
 
@@ -1959,6 +1901,10 @@ class Log(@volatile var dir: File,
       // size of all the new segments combined must equal size of the original segment
       require(totalSizeOfNewSegments == segment.log.sizeInBytes, "Inconsistent segment sizes after split" +
         s" before: ${segment.log.sizeInBytes} after: $totalSizeOfNewSegments")
+
+      // replace old segment with new ones
+      replaceSegments(newSegments.toList, List(segment), isRecoveredSwapFile = false)
+      newSegments.toList
     } catch {
       case e: Exception =>
         newSegments.foreach { splitSegment =>
@@ -1967,10 +1913,6 @@ class Log(@volatile var dir: File,
         }
         throw e
     }
-
-    // replace old segment with new ones
-    replaceSegments(newSegments.toList, List(segment), isRecoveredSwapFile = false)
-    newSegments.toList
   }
 }
 
