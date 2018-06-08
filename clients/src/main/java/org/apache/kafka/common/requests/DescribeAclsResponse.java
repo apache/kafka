@@ -19,6 +19,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
+import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -26,7 +27,6 @@ import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.resource.Resource;
 import org.apache.kafka.common.resource.ResourceNameType;
 
 import java.nio.ByteBuffer;
@@ -113,11 +113,11 @@ public class DescribeAclsResponse extends AbstractResponse {
         this.acls = new ArrayList<>();
         for (Object resourceStructObj : struct.getArray(RESOURCES_KEY_NAME)) {
             Struct resourceStruct = (Struct) resourceStructObj;
-            Resource resource = RequestUtils.resourceFromStructFields(resourceStruct);
+            ResourcePattern pattern = RequestUtils.resourcePatternromStructFields(resourceStruct);
             for (Object aclDataStructObj : resourceStruct.getArray(ACLS_KEY_NAME)) {
                 Struct aclDataStruct = (Struct) aclDataStructObj;
                 AccessControlEntry entry = RequestUtils.aceFromStructFields(aclDataStruct);
-                this.acls.add(new AclBinding(resource, entry));
+                this.acls.add(new AclBinding(pattern, entry));
             }
         }
     }
@@ -130,21 +130,18 @@ public class DescribeAclsResponse extends AbstractResponse {
         struct.set(THROTTLE_TIME_MS, throttleTimeMs);
         error.write(struct);
 
-        Map<Resource, List<AccessControlEntry>> resourceToData = new HashMap<>();
+        Map<ResourcePattern, List<AccessControlEntry>> resourceToData = new HashMap<>();
         for (AclBinding acl : acls) {
-            List<AccessControlEntry> entry = resourceToData.get(acl.resource());
-            if (entry == null) {
-                entry = new ArrayList<>();
-                resourceToData.put(acl.resource(), entry);
-            }
-            entry.add(acl.entry());
+            resourceToData
+                .computeIfAbsent(acl.pattern(), k -> new ArrayList<>())
+                .add(acl.entry());
         }
 
         List<Struct> resourceStructs = new ArrayList<>();
-        for (Map.Entry<Resource, List<AccessControlEntry>> tuple : resourceToData.entrySet()) {
-            Resource resource = tuple.getKey();
+        for (Map.Entry<ResourcePattern, List<AccessControlEntry>> tuple : resourceToData.entrySet()) {
+            ResourcePattern resource = tuple.getKey();
             Struct resourceStruct = struct.instance(RESOURCES_KEY_NAME);
-            RequestUtils.resourceSetStructFields(resource, resourceStruct);
+            RequestUtils.resourcePatternSetStructFields(resource, resourceStruct);
             List<Struct> dataStructs = new ArrayList<>();
             for (AccessControlEntry entry : tuple.getValue()) {
                 Struct dataStruct = resourceStruct.instance(ACLS_KEY_NAME);
@@ -188,12 +185,17 @@ public class DescribeAclsResponse extends AbstractResponse {
     private void validate(short version) {
         if (version == 0) {
             final boolean unsupported = acls.stream()
-                .map(AclBinding::resource)
-                .map(Resource::nameType)
+                .map(AclBinding::pattern)
+                .map(ResourcePattern::nameType)
                 .anyMatch(nameType -> nameType != ResourceNameType.LITERAL);
             if (unsupported) {
                 throw new UnsupportedVersionException("Version 0 only supports literal resource name types");
             }
+        }
+
+        final boolean unknown = acls.stream().anyMatch(AclBinding::isUnknown);
+        if (unknown) {
+            throw new IllegalArgumentException("Contain UNKNOWN elements");
         }
     }
 }

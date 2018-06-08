@@ -16,14 +16,29 @@
  */
 package kafka.security.auth
 
-import java.util.Objects
-import org.apache.kafka.common.resource.{Resource => JResource}
+import org.apache.kafka.common.resource.{ResourceNameType, ResourcePattern}
 
 object Resource {
+  val Separator = ":"
   val ClusterResourceName = "kafka-cluster"
-  val ClusterResource = new Resource(Cluster, Resource.ClusterResourceName, Literal)
+  val ClusterResource = Resource(Cluster, Resource.ClusterResourceName, ResourceNameType.LITERAL)
   val ProducerIdResourceName = "producer-id"
   val WildCardResource = "*"
+
+  def fromString(str: String): Resource = {
+    ResourceNameType.values.find(nameType => str.startsWith(nameType.name)) match {
+      case Some(nameType) =>
+        str.split(Separator, 3) match {
+          case Array(_, resourceType, name, _*) => new Resource(ResourceType.fromString(resourceType), name, nameType)
+          case _ => throw new IllegalArgumentException("expected a string in format ResourceType:ResourceName but got " + str)
+        }
+      case _ =>
+        str.split(Separator, 2) match {
+          case Array(resourceType, name, _*) => new Resource(ResourceType.fromString(resourceType), name, ResourceNameType.LITERAL)
+          case _ => throw new IllegalArgumentException("expected a string in format ResourceType:ResourceName but got " + str)
+        }
+    }
+  }
 }
 
 /**
@@ -31,13 +46,15 @@ object Resource {
  * @param resourceType non-null type of resource.
  * @param name non-null name of the resource, for topic this will be topic name , for group it will be group name. For cluster type
  *             it will be a constant string kafka-cluster.
- * @param resourceNameType non-null type of resource name: literal, prefixed, etc.
+ * @param nameType non-null type of resource name: literal, prefixed, etc.
  */
-case class Resource(resourceType: ResourceType, name: String, resourceNameType: ResourceNameType) {
+case class Resource(resourceType: ResourceType, name: String, nameType: ResourceNameType) {
 
-  Objects.requireNonNull(resourceType, "resourceType")
-  Objects.requireNonNull(name, "name")
-  Objects.requireNonNull(resourceNameType, "resourceNameType")
+  if (nameType == ResourceNameType.ANY)
+    throw new IllegalArgumentException("nameType must not be ANY")
+
+  if (nameType == ResourceNameType.UNKNOWN)
+    throw new IllegalArgumentException("nameType must not be UNKNOWN")
 
   /**
     * Create an instance of this class with the provided parameters.
@@ -49,11 +66,15 @@ case class Resource(resourceType: ResourceType, name: String, resourceNameType: 
     */
   @deprecated("Use Resource(ResourceType, String, ResourceNameType")
   def this(resourceType: ResourceType, name: String) {
-    this(resourceType, name, Literal)
+    this(resourceType, name, ResourceNameType.LITERAL)
   }
 
-  def toJava: JResource = {
-    new JResource(resourceType.toJava, name, resourceNameType.toJava)
+  def toPattern: ResourcePattern = {
+    new ResourcePattern(resourceType.toJava, name, nameType)
+  }
+
+  override def toString: String = {
+    nameType + Resource.Separator + resourceType.name + Resource.Separator + name
   }
 }
 

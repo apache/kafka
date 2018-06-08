@@ -38,6 +38,7 @@ import org.slf4j.Logger;
 
 import java.io.File;
 import java.io.IOException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -60,6 +61,7 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
     private InternalProcessorContext processorContext;
     private final int retries;
     private final long retryBackoffMs;
+    private final Duration pollTime;
 
     public GlobalStateManagerImpl(final LogContext logContext,
                                   final ProcessorTopology topology,
@@ -76,6 +78,7 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
         this.stateRestoreListener = stateRestoreListener;
         this.retries = config.getInt(StreamsConfig.RETRIES_CONFIG);
         this.retryBackoffMs = config.getLong(StreamsConfig.RETRY_BACKOFF_MS_CONFIG);
+        this.pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
     }
 
     @Override
@@ -262,7 +265,7 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
 
             while (offset < highWatermark) {
                 try {
-                    final ConsumerRecords<byte[], byte[]> records = globalConsumer.poll(100);
+                    final ConsumerRecords<byte[], byte[]> records = globalConsumer.poll(pollTime);
                     final List<KeyValue<byte[], byte[]>> restoreRecords = new ArrayList<>();
                     for (ConsumerRecord<byte[], byte[]> record : records) {
                         if (record.key() != null) {

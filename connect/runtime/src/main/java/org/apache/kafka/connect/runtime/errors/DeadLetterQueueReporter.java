@@ -44,7 +44,6 @@ public class DeadLetterQueueReporter implements ErrorReporter {
 
     private static final Logger log = LoggerFactory.getLogger(DeadLetterQueueReporter.class);
 
-    private static final short DLQ_MAX_DESIRED_REPLICATION_FACTOR = 3;
     private static final int DLQ_NUM_DESIRED_PARTITIONS = 1;
 
     private final SinkConnectorConfig connConfig;
@@ -53,13 +52,13 @@ public class DeadLetterQueueReporter implements ErrorReporter {
     private ErrorHandlingMetrics errorHandlingMetrics;
 
     public static DeadLetterQueueReporter createAndSetup(WorkerConfig workerConfig,
-                                                         SinkConnectorConfig connConfig, Map<String, Object> producerProps) {
-        String topic = connConfig.dlqTopicName();
+                                                         SinkConnectorConfig sinkConfig, Map<String, Object> producerProps) {
+        String topic = sinkConfig.dlqTopicName();
 
         try (AdminClient admin = AdminClient.create(workerConfig.originals())) {
             if (!admin.listTopics().names().get().contains(topic)) {
                 log.error("Topic {} doesn't exist. Will attempt to create topic.", topic);
-                NewTopic schemaTopicRequest = new NewTopic(topic, DLQ_NUM_DESIRED_PARTITIONS, DLQ_MAX_DESIRED_REPLICATION_FACTOR);
+                NewTopic schemaTopicRequest = new NewTopic(topic, DLQ_NUM_DESIRED_PARTITIONS, sinkConfig.dlqTopicReplicationFactor());
                 admin.createTopics(singleton(schemaTopicRequest)).all().get();
             }
         } catch (InterruptedException e) {
@@ -71,7 +70,7 @@ public class DeadLetterQueueReporter implements ErrorReporter {
         }
 
         KafkaProducer<byte[], byte[]> dlqProducer = new KafkaProducer<>(producerProps);
-        return new DeadLetterQueueReporter(dlqProducer, connConfig);
+        return new DeadLetterQueueReporter(dlqProducer, sinkConfig);
     }
 
     /**

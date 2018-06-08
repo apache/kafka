@@ -40,7 +40,7 @@ import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors._
 import org.junit.{After, Before, Rule, Test}
 import org.apache.kafka.common.requests.{DeleteRecordsRequest, MetadataResponse}
-import org.apache.kafka.common.resource.{Resource, ResourceNameType, ResourceType}
+import org.apache.kafka.common.resource.{ResourceNameType, ResourcePattern, ResourceType}
 import org.junit.rules.Timeout
 import org.junit.Assert._
 
@@ -933,7 +933,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     checkInvalidAlterConfigs(zkClient, servers, client)
   }
 
-  val ACL1 = new AclBinding(new Resource(ResourceType.TOPIC, "mytopic3", ResourceNameType.LITERAL),
+  val ACL1 = new AclBinding(new ResourcePattern(ResourceType.TOPIC, "mytopic3", ResourceNameType.LITERAL),
       new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.DESCRIBE, AclPermissionType.ALLOW))
 
   /**
