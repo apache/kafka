@@ -19,48 +19,60 @@ package org.apache.kafka.common.acl;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.resource.Resource;
+import org.apache.kafka.common.resource.ResourceNameType;
+import org.apache.kafka.common.resource.ResourcePattern;
 
 import java.util.Objects;
 
 /**
- * Represents a binding between a resource and an access control entry.
+ * Represents a binding between a resource pattern and an access control entry.
  *
  * The API for this class is still evolving and we may break compatibility in minor releases, if necessary.
  */
 @InterfaceStability.Evolving
 public class AclBinding {
-    private final Resource resource;
+    private final ResourcePattern pattern;
     private final AccessControlEntry entry;
+
+    /**
+     * Create an instance of this class with the provided parameters.
+     *
+     * @param pattern non-null resource pattern.
+     * @param entry non-null entry
+     */
+    public AclBinding(ResourcePattern pattern, AccessControlEntry entry) {
+        this.pattern = Objects.requireNonNull(pattern, "pattern");
+        this.entry = Objects.requireNonNull(entry, "entry");
+    }
 
     /**
      * Create an instance of this class with the provided parameters.
      *
      * @param resource non-null resource
      * @param entry non-null entry
+     * @deprecated Since 2.0. Use {@link #AclBinding(ResourcePattern, AccessControlEntry)}
      */
+    @Deprecated
     public AclBinding(Resource resource, AccessControlEntry entry) {
-        Objects.requireNonNull(resource);
-        this.resource = resource;
-        Objects.requireNonNull(entry);
-        this.entry = entry;
+        this(new ResourcePattern(resource.resourceType(), resource.name(), ResourceNameType.LITERAL), entry);
     }
 
     /**
-     * Return true if this binding has any UNKNOWN components.
+     * @return true if this binding has any UNKNOWN components.
      */
     public boolean isUnknown() {
-        return resource.isUnknown() || entry.isUnknown();
+        return pattern.isUnknown() || entry.isUnknown();
     }
 
     /**
-     * Return the resource for this binding.
+     * @return the resource pattern for this binding.
      */
-    public Resource resource() {
-        return resource;
+    public ResourcePattern pattern() {
+        return pattern;
     }
 
     /**
-     * Return the access control entry for this binding.
+     * @return the access control entry for this binding.
      */
     public final AccessControlEntry entry() {
         return entry;
@@ -70,24 +82,25 @@ public class AclBinding {
      * Create a filter which matches only this AclBinding.
      */
     public AclBindingFilter toFilter() {
-        return new AclBindingFilter(resource.toFilter(), entry.toFilter());
+        return new AclBindingFilter(pattern.toFilter(), entry.toFilter());
     }
 
     @Override
     public String toString() {
-        return "(resource=" + resource + ", entry=" + entry + ")";
+        return "(pattern=" + pattern + ", entry=" + entry + ")";
     }
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof AclBinding))
-            return false;
-        AclBinding other = (AclBinding) o;
-        return resource.equals(other.resource) && entry.equals(other.entry);
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        AclBinding that = (AclBinding) o;
+        return Objects.equals(pattern, that.pattern) &&
+            Objects.equals(entry, that.entry);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(resource, entry);
+        return Objects.hash(pattern, entry);
     }
 }

@@ -19,6 +19,8 @@ package org.apache.kafka.common.acl;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.resource.ResourceFilter;
+import org.apache.kafka.common.resource.ResourceNameType;
+import org.apache.kafka.common.resource.ResourcePatternFilter;
 
 import java.util.Objects;
 
@@ -29,43 +31,53 @@ import java.util.Objects;
  */
 @InterfaceStability.Evolving
 public class AclBindingFilter {
-    private final ResourceFilter resourceFilter;
+    private final ResourcePatternFilter patternFilter;
     private final AccessControlEntryFilter entryFilter;
 
     /**
      * A filter which matches any ACL binding.
      */
-    public static final AclBindingFilter ANY = new AclBindingFilter(ResourceFilter.ANY, AccessControlEntryFilter.ANY);
+    public static final AclBindingFilter ANY = new AclBindingFilter(ResourcePatternFilter.ANY, AccessControlEntryFilter.ANY);
+
+    /**
+     * Create an instance of this filter with the provided parameters.
+     *
+     * @param patternFilter non-null pattern filter
+     * @param entryFilter non-null access control entry filter
+     */
+    public AclBindingFilter(ResourcePatternFilter patternFilter, AccessControlEntryFilter entryFilter) {
+        this.patternFilter = Objects.requireNonNull(patternFilter, "patternFilter");
+        this.entryFilter = Objects.requireNonNull(entryFilter, "entryFilter");
+    }
 
     /**
      * Create an instance of this filter with the provided parameters.
      *
      * @param resourceFilter non-null resource filter
      * @param entryFilter non-null access control entry filter
+     * @deprecated Since 2.0. Use {@link #AclBindingFilter(ResourcePatternFilter, AccessControlEntryFilter)}
      */
+    @Deprecated
     public AclBindingFilter(ResourceFilter resourceFilter, AccessControlEntryFilter entryFilter) {
-        Objects.requireNonNull(resourceFilter);
-        this.resourceFilter = resourceFilter;
-        Objects.requireNonNull(entryFilter);
-        this.entryFilter = entryFilter;
+        this(new ResourcePatternFilter(resourceFilter.resourceType(), resourceFilter.name(), ResourceNameType.LITERAL), entryFilter);
     }
 
     /**
-     * Return true if this filter has any UNKNOWN components.
+     * @return {@code true} if this filter has any UNKNOWN components.
      */
     public boolean isUnknown() {
-        return resourceFilter.isUnknown() || entryFilter.isUnknown();
+        return patternFilter.isUnknown() || entryFilter.isUnknown();
     }
 
     /**
-     * Return the resource filter.
+     * @return the resource pattern filter.
      */
-    public ResourceFilter resourceFilter() {
-        return resourceFilter;
+    public ResourcePatternFilter patternFilter() {
+        return patternFilter;
     }
 
     /**
-     * Return the access control entry filter.
+     * @return the access control entry filter.
      */
     public final AccessControlEntryFilter entryFilter() {
         return entryFilter;
@@ -73,15 +85,16 @@ public class AclBindingFilter {
 
     @Override
     public String toString() {
-        return "(resourceFilter=" + resourceFilter + ", entryFilter=" + entryFilter + ")";
+        return "(patternFilter=" + patternFilter + ", entryFilter=" + entryFilter + ")";
     }
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof AclBindingFilter))
-            return false;
-        AclBindingFilter other = (AclBindingFilter) o;
-        return resourceFilter.equals(other.resourceFilter) && entryFilter.equals(other.entryFilter);
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        AclBindingFilter that = (AclBindingFilter) o;
+        return Objects.equals(patternFilter, that.patternFilter) &&
+            Objects.equals(entryFilter, that.entryFilter);
     }
 
     /**
@@ -89,14 +102,14 @@ public class AclBindingFilter {
      * there are no ANY or UNKNOWN fields.
      */
     public boolean matchesAtMostOne() {
-        return resourceFilter.matchesAtMostOne() && entryFilter.matchesAtMostOne();
+        return patternFilter.matchesAtMostOne() && entryFilter.matchesAtMostOne();
     }
 
     /**
      * Return a string describing an ANY or UNKNOWN field, or null if there is no such field.
      */
     public String findIndefiniteField() {
-        String indefinite = resourceFilter.findIndefiniteField();
+        String indefinite = patternFilter.findIndefiniteField();
         if (indefinite != null)
             return indefinite;
         return entryFilter.findIndefiniteField();
@@ -106,11 +119,11 @@ public class AclBindingFilter {
      * Return true if the resource filter matches the binding's resource and the entry filter matches binding's entry.
      */
     public boolean matches(AclBinding binding) {
-        return resourceFilter.matches(binding.resource()) && entryFilter.matches(binding.entry());
+        return patternFilter.matches(binding.pattern()) && entryFilter.matches(binding.entry());
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(resourceFilter, entryFilter);
+        return Objects.hash(patternFilter, entryFilter);
     }
 }

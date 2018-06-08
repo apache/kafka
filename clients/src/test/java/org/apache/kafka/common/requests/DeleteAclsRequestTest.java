@@ -21,9 +21,9 @@ import org.apache.kafka.common.acl.AccessControlEntryFilter;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
+import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.resource.ResourceFilter;
 import org.apache.kafka.common.resource.ResourceNameType;
 import org.apache.kafka.common.resource.ResourceType;
 import org.junit.Test;
@@ -37,18 +37,26 @@ public class DeleteAclsRequestTest {
     private static final short V0 = 0;
     private static final short V1 = 1;
 
-    private static final AclBindingFilter LITERAL_FILTER = new AclBindingFilter(new ResourceFilter(ResourceType.TOPIC, "foo", ResourceNameType.LITERAL),
+    private static final AclBindingFilter LITERAL_FILTER = new AclBindingFilter(new ResourcePatternFilter(ResourceType.TOPIC, "foo", ResourceNameType.LITERAL),
         new AccessControlEntryFilter("User:ANONYMOUS", "127.0.0.1", AclOperation.READ, AclPermissionType.DENY));
 
-    private static final AclBindingFilter PREFIXED_FILTER = new AclBindingFilter(new ResourceFilter(ResourceType.GROUP, "prefix", ResourceNameType.PREFIXED),
+    private static final AclBindingFilter PREFIXED_FILTER = new AclBindingFilter(new ResourcePatternFilter(ResourceType.GROUP, "prefix", ResourceNameType.PREFIXED),
         new AccessControlEntryFilter("User:*", "127.0.0.1", AclOperation.CREATE, AclPermissionType.ALLOW));
 
-    private static final AclBindingFilter ANY_FILTER = new AclBindingFilter(new ResourceFilter(ResourceType.GROUP, "prefix", ResourceNameType.PREFIXED),
+    private static final AclBindingFilter ANY_FILTER = new AclBindingFilter(new ResourcePatternFilter(ResourceType.GROUP, "prefix", ResourceNameType.PREFIXED),
+        new AccessControlEntryFilter("User:*", "127.0.0.1", AclOperation.CREATE, AclPermissionType.ALLOW));
+
+    private static final AclBindingFilter UNKNOWN_FILTER = new AclBindingFilter(new ResourcePatternFilter(ResourceType.UNKNOWN, "prefix", ResourceNameType.PREFIXED),
         new AccessControlEntryFilter("User:*", "127.0.0.1", AclOperation.CREATE, AclPermissionType.ALLOW));
 
     @Test(expected = UnsupportedVersionException.class)
     public void shouldThrowOnV0IfNotLiteral() {
         new DeleteAclsRequest(V0, aclFilters(PREFIXED_FILTER));
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void shouldThrowOnUnknownElements() {
+        new DeleteAclsRequest(V1, aclFilters(UNKNOWN_FILTER));
     }
 
     @Test

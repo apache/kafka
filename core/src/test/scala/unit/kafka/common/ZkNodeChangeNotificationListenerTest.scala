@@ -16,9 +16,10 @@
  */
 package kafka.common
 
-import kafka.security.auth.{Group, Literal, Resource}
+import kafka.security.auth.{Group, Resource}
 import kafka.utils.TestUtils
 import kafka.zk.{AclChangeNotificationSequenceZNode, ZkAclStore, ZooKeeperTestHarness}
+import org.apache.kafka.common.resource.ResourceNameType.LITERAL
 import org.junit.{After, Test}
 
 class ZkNodeChangeNotificationListenerTest extends ZooKeeperTestHarness {
@@ -38,17 +39,17 @@ class ZkNodeChangeNotificationListenerTest extends ZooKeeperTestHarness {
     @volatile var invocationCount = 0
     val notificationHandler = new NotificationHandler {
       override def processNotification(notificationMessage: Array[Byte]): Unit = {
-        notification = AclChangeNotificationSequenceZNode.decode(Literal, notificationMessage)
+        notification = AclChangeNotificationSequenceZNode.decode(LITERAL, notificationMessage)
         invocationCount += 1
       }
     }
 
     zkClient.createAclPaths()
-    val notificationMessage1 = Resource(Group, "messageA", Literal)
-    val notificationMessage2 = Resource(Group, "messageB", Literal)
+    val notificationMessage1 = Resource(Group, "messageA", LITERAL)
+    val notificationMessage2 = Resource(Group, "messageB", LITERAL)
     val changeExpirationMs = 1000
 
-    notificationListener = new ZkNodeChangeNotificationListener(zkClient,  ZkAclStore(Literal).aclChangePath,
+    notificationListener = new ZkNodeChangeNotificationListener(zkClient,  ZkAclStore(LITERAL).aclChangePath,
       AclChangeNotificationSequenceZNode.SequenceNumberPrefix, notificationHandler, changeExpirationMs)
     notificationListener.init()
 
@@ -68,7 +69,7 @@ class ZkNodeChangeNotificationListenerTest extends ZooKeeperTestHarness {
     TestUtils.waitUntilTrue(() => invocationCount == 2 && notification == notificationMessage2,
       "Failed to send/process notification message in the timeout period.")
 
-    (3 to 10).foreach(i => zkClient.createAclChangeNotification(Resource(Group, "message" + i, Literal)))
+    (3 to 10).foreach(i => zkClient.createAclChangeNotification(Resource(Group, "message" + i, LITERAL)))
 
     TestUtils.waitUntilTrue(() => invocationCount == 10 ,
       s"Expected 10 invocations of processNotifications, but there were $invocationCount")

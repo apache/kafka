@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.connect.rest.basic.auth.extenstion;
+package org.apache.kafka.connect.rest.basic.auth.extension;
 
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.rest.ConnectRestExtension;
@@ -33,13 +33,13 @@ import java.util.Map;
  *
  * <p>To use this extension, one needs to add the following config in the {@code worker.properties}
  * <pre>
- *     rest.extension.classes = org.apache.kafka.connect.rest.basic.auth.extenstion.BasicAuthSecurityRestExtension
+ *     rest.extension.classes = org.apache.kafka.connect.rest.basic.auth.extension.BasicAuthSecurityRestExtension
  * </pre>
  *
  * <p> An example JAAS config would look as below
  * <Pre>
  *         KafkaConnect {
- *              org.apache.kafka.connect.rest.basic.auth.extenstion.PropertyFileLoginModule required
+ *              org.apache.kafka.connect.rest.basic.auth.extension.PropertyFileLoginModule required
  *              file="/mnt/secret/credentials.properties";
  *         };
  *</Pre>

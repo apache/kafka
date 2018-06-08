@@ -131,7 +131,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * @param size The number of bytes after the start position to include
      * @return A sliced wrapper on this message set limited based on the given position and size
      */
-    public FileRecords read(int position, int size) throws IOException {
+    public FileRecords slice(int position, int size) throws IOException {
         if (position < 0)
             throw new IllegalArgumentException("Invalid position: " + position + " in read from " + file);
         if (size < 0)
@@ -356,7 +356,14 @@ public class FileRecords extends AbstractRecords implements Closeable {
                 ")";
     }
 
-    private Iterable<FileChannelRecordBatch> batchesFrom(final int start) {
+    /**
+     * Get an iterator over the record batches in the file, starting at a specific position. This is similar to
+     * {@link #batches()} except that callers specify a particular position to start reading the batches from. This
+     * method must be used with caution: the start position passed in must be a known start of a batch.
+     * @param start The position to start record iteration from; must be a known position for start of a batch
+     * @return An iterator over batches starting from {@code start}
+     */
+    public Iterable<FileChannelRecordBatch> batchesFrom(final int start) {
         return new Iterable<FileChannelRecordBatch>() {
             @Override
             public Iterator<FileChannelRecordBatch> iterator() {

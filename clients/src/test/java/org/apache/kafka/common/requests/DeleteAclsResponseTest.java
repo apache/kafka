@@ -21,11 +21,11 @@ import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
+import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.requests.DeleteAclsResponse.AclDeletionResult;
 import org.apache.kafka.common.requests.DeleteAclsResponse.AclFilterResponse;
-import org.apache.kafka.common.resource.Resource;
 import org.apache.kafka.common.resource.ResourceNameType;
 import org.apache.kafka.common.resource.ResourceType;
 import org.junit.Test;
@@ -41,22 +41,32 @@ public class DeleteAclsResponseTest {
     private static final short V0 = 0;
     private static final short V1 = 1;
 
-    private static final AclBinding LITERAL_ACL1 = new AclBinding(new org.apache.kafka.common.resource.Resource(ResourceType.TOPIC, "foo", ResourceNameType.LITERAL),
+    private static final AclBinding LITERAL_ACL1 = new AclBinding(new ResourcePattern(ResourceType.TOPIC, "foo", ResourceNameType.LITERAL),
         new AccessControlEntry("User:ANONYMOUS", "127.0.0.1", AclOperation.READ, AclPermissionType.DENY));
 
-    private static final AclBinding LITERAL_ACL2 = new AclBinding(new org.apache.kafka.common.resource.Resource(ResourceType.GROUP, "group", ResourceNameType.LITERAL),
+    private static final AclBinding LITERAL_ACL2 = new AclBinding(new ResourcePattern(ResourceType.GROUP, "group", ResourceNameType.LITERAL),
         new AccessControlEntry("User:*", "127.0.0.1", AclOperation.WRITE, AclPermissionType.ALLOW));
 
-    private static final AclBinding PREFIXED_ACL1 = new AclBinding(new Resource(ResourceType.GROUP, "prefix", ResourceNameType.PREFIXED),
+    private static final AclBinding PREFIXED_ACL1 = new AclBinding(new ResourcePattern(ResourceType.GROUP, "prefix", ResourceNameType.PREFIXED),
         new AccessControlEntry("User:*", "127.0.0.1", AclOperation.CREATE, AclPermissionType.ALLOW));
+
+    private static final AclBinding UNKNOWN_ACL = new AclBinding(new ResourcePattern(ResourceType.UNKNOWN, "group", ResourceNameType.LITERAL),
+        new AccessControlEntry("User:*", "127.0.0.1", AclOperation.WRITE, AclPermissionType.ALLOW));
 
     private static final AclFilterResponse LITERAL_RESPONSE = new AclFilterResponse(aclDeletions(LITERAL_ACL1, LITERAL_ACL2));
 
     private static final AclFilterResponse PREFIXED_RESPONSE = new AclFilterResponse(aclDeletions(LITERAL_ACL1, PREFIXED_ACL1));
 
+    private static final AclFilterResponse UNKNOWN_RESPONSE = new AclFilterResponse(aclDeletions(UNKNOWN_ACL));
+
     @Test(expected = UnsupportedVersionException.class)
     public void shouldThrowOnV0IfNotLiteral() {
         new DeleteAclsResponse(10, aclResponses(PREFIXED_RESPONSE)).toStruct(V0);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void shouldThrowOnIfUnknown() {
+        new DeleteAclsResponse(10, aclResponses(UNKNOWN_RESPONSE)).toStruct(V1);
     }
 
     @Test

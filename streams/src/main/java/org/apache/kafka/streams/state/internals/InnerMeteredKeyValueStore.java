@@ -19,6 +19,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -173,30 +174,40 @@ class InnerMeteredKeyValueStore<K, IK, V, IV> extends WrappedStateStore.Abstract
 
     @Override
     public V get(final K key) {
-        if (getTime.shouldRecord()) {
-            return measureLatency(new Action<V>() {
-                @Override
-                public V execute() {
-                    return typeConverter.outerValue(inner.get(typeConverter.innerKey(key)));
-                }
-            }, getTime);
-        } else {
-            return typeConverter.outerValue(inner.get(typeConverter.innerKey(key)));
+        try {
+            if (getTime.shouldRecord()) {
+                return measureLatency(new Action<V>() {
+                    @Override
+                    public V execute() {
+                        return typeConverter.outerValue(inner.get(typeConverter.innerKey(key)));
+                    }
+                }, getTime);
+            } else {
+                return typeConverter.outerValue(inner.get(typeConverter.innerKey(key)));
+            }
+        } catch (final ProcessorStateException e) {
+            final String message = String.format(e.getMessage(), key);
+            throw new ProcessorStateException(message, e);
         }
     }
 
     @Override
     public void put(final K key, final V value) {
-        if (putTime.shouldRecord()) {
-            measureLatency(new Action<V>() {
-                @Override
-                public V execute() {
-                    inner.put(typeConverter.innerKey(key), typeConverter.innerValue(value));
-                    return null;
-                }
-            }, putTime);
-        } else {
-            inner.put(typeConverter.innerKey(key), typeConverter.innerValue(value));
+        try {
+            if (putTime.shouldRecord()) {
+                measureLatency(new Action<V>() {
+                    @Override
+                    public V execute() {
+                        inner.put(typeConverter.innerKey(key), typeConverter.innerValue(value));
+                        return null;
+                    }
+                }, putTime);
+            } else {
+                inner.put(typeConverter.innerKey(key), typeConverter.innerValue(value));
+            }
+        } catch (final ProcessorStateException e) {
+            final String message = String.format(e.getMessage(), key, value);
+            throw new ProcessorStateException(message, e);
         }
     }
 
@@ -232,15 +243,20 @@ class InnerMeteredKeyValueStore<K, IK, V, IV> extends WrappedStateStore.Abstract
 
     @Override
     public V delete(final K key) {
-        if (deleteTime.shouldRecord()) {
-            return measureLatency(new Action<V>() {
-                @Override
-                public V execute() {
-                    return typeConverter.outerValue(inner.delete(typeConverter.innerKey(key)));
-                }
-            }, deleteTime);
-        } else {
-            return typeConverter.outerValue(inner.delete(typeConverter.innerKey(key)));
+        try {
+            if (deleteTime.shouldRecord()) {
+                return measureLatency(new Action<V>() {
+                    @Override
+                    public V execute() {
+                        return typeConverter.outerValue(inner.delete(typeConverter.innerKey(key)));
+                    }
+                }, deleteTime);
+            } else {
+                return typeConverter.outerValue(inner.delete(typeConverter.innerKey(key)));
+            }
+        } catch (final ProcessorStateException e) {
+            final String message = String.format(e.getMessage(), key);
+            throw new ProcessorStateException(message, e);
         }
     }
 

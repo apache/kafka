@@ -23,8 +23,9 @@ import kafka.security.auth._
 import kafka.server.KafkaConfig
 import kafka.utils.{Logging, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
+import org.apache.kafka.common.resource.ResourceNameType.{LITERAL, PREFIXED}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.junit.{After, Before, Test}
+import org.junit.{Before, Test}
 
 class AclCommandTest extends ZooKeeperTestHarness with Logging {
 
@@ -36,10 +37,10 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
   private val AllowHostCommand = Array("--allow-host", "host1", "--allow-host", "host2")
   private val DenyHostCommand = Array("--deny-host", "host1", "--deny-host", "host2")
 
-  private val TopicResources = Set(Resource(Topic, "test-1", Literal), Resource(Topic, "test-2", Literal))
-  private val GroupResources = Set(Resource(Group, "testGroup-1", Literal), Resource(Group, "testGroup-2", Literal))
-  private val TransactionalIdResources = Set(Resource(TransactionalId, "t0", Literal), Resource(TransactionalId, "t1", Literal))
-  private val TokenResources = Set(Resource(DelegationToken, "token1", Literal), Resource(DelegationToken, "token2", Literal))
+  private val TopicResources = Set(Resource(Topic, "test-1", LITERAL), Resource(Topic, "test-2", LITERAL))
+  private val GroupResources = Set(Resource(Group, "testGroup-1", LITERAL), Resource(Group, "testGroup-2", LITERAL))
+  private val TransactionalIdResources = Set(Resource(TransactionalId, "t0", LITERAL), Resource(TransactionalId, "t1", LITERAL))
+  private val TokenResources = Set(Resource(DelegationToken, "token1", LITERAL), Resource(DelegationToken, "token2", LITERAL))
 
   private val ResourceToCommand = Map[Set[Resource], Array[String]](
     TopicResources -> Array("--topic", "test-1", "--topic", "test-2"),
@@ -64,7 +65,7 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
   private def ProducerResourceToAcls(enableIdempotence: Boolean = false) = Map[Set[Resource], Set[Acl]](
     TopicResources -> AclCommand.getAcls(Users, Allow, Set(Write, Describe, Create), Hosts),
     TransactionalIdResources -> AclCommand.getAcls(Users, Allow, Set(Write, Describe), Hosts),
-    Set(Resource.ClusterResource) -> AclCommand.getAcls(Users, Allow, 
+    Set(Resource.ClusterResource) -> AclCommand.getAcls(Users, Allow,
       Set(if (enableIdempotence) Some(IdempotentWrite) else None).flatten, Hosts)
   )
 
@@ -140,14 +141,14 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
       val writeAcl = Acl(principal, Allow, Acl.WildCardHost, Write)
       val describeAcl = Acl(principal, Allow, Acl.WildCardHost, Describe)
       val createAcl = Acl(principal, Allow, Acl.WildCardHost, Create)
-      TestUtils.waitAndVerifyAcls(Set(writeAcl, describeAcl, createAcl), authorizer, Resource(Topic, "Test-", Prefixed))
+      TestUtils.waitAndVerifyAcls(Set(writeAcl, describeAcl, createAcl), authorizer, Resource(Topic, "Test-", PREFIXED))
     }
 
     AclCommand.main(zkArgs ++ cmd :+ "--remove" :+ "--force")
 
     withAuthorizer() { authorizer =>
-      TestUtils.waitAndVerifyAcls(Set.empty[Acl], authorizer, Resource(Cluster, "kafka-cluster", Literal))
-      TestUtils.waitAndVerifyAcls(Set.empty[Acl], authorizer, Resource(Topic, "Test-", Prefixed))
+      TestUtils.waitAndVerifyAcls(Set.empty[Acl], authorizer, Resource(Cluster, "kafka-cluster", LITERAL))
+      TestUtils.waitAndVerifyAcls(Set.empty[Acl], authorizer, Resource(Topic, "Test-", PREFIXED))
     }
   }
 
