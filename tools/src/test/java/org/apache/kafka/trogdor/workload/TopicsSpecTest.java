@@ -40,13 +40,13 @@ public class TopicsSpecTest {
     static {
         FOO = new TopicsSpec();
 
-        PARTSA = new PartitionsSpec(3, (short) 3, null);
+        PARTSA = new PartitionsSpec(3, (short) 3, null, null);
         FOO.set("topicA[0-2]", PARTSA);
 
         Map<Integer, List<Integer>> assignmentsB = new HashMap<>();
         assignmentsB.put(0, Arrays.asList(0, 1, 2));
         assignmentsB.put(1, Arrays.asList(2, 3, 4));
-        PARTSB = new PartitionsSpec(0, (short) 0, assignmentsB);
+        PARTSB = new PartitionsSpec(0, (short) 0, assignmentsB, null);
         FOO.set("topicB", PARTSB);
     }
 
