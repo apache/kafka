@@ -29,6 +29,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.slf4j.Logger;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -49,11 +50,14 @@ public class StoreChangelogReader implements ChangelogReader {
     private final Map<TopicPartition, StateRestorer> stateRestorers = new HashMap<>();
     private final Map<TopicPartition, StateRestorer> needsRestoring = new HashMap<>();
     private final Map<TopicPartition, StateRestorer> needsInitializing = new HashMap<>();
+    private final Duration pollTime;
 
     public StoreChangelogReader(final Consumer<byte[], byte[]> restoreConsumer,
+                                final Duration pollTime,
                                 final StateRestoreListener userStateRestoreListener,
                                 final LogContext logContext) {
         this.restoreConsumer = restoreConsumer;
+        this.pollTime = pollTime;
         this.log = logContext.logger(getClass());
         this.userStateRestoreListener = userStateRestoreListener;
     }
@@ -76,7 +80,7 @@ public class StoreChangelogReader implements ChangelogReader {
         }
 
         try {
-            final ConsumerRecords<byte[], byte[]> records = restoreConsumer.poll(10);
+            final ConsumerRecords<byte[], byte[]> records = restoreConsumer.poll(pollTime);
             final Iterator<TopicPartition> iterator = needsRestoring.keySet().iterator();
             while (iterator.hasNext()) {
                 final TopicPartition partition = iterator.next();
@@ -295,6 +299,7 @@ public class StoreChangelogReader implements ChangelogReader {
                 return true;
             }
         }
+
         return false;
     }
 }

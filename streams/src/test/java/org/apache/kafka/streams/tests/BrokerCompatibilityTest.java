@@ -37,6 +37,7 @@ import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.ValueMapper;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.Collections;
 import java.util.Locale;
 import java.util.Properties;
@@ -153,7 +154,7 @@ public class BrokerCompatibilityTest {
             consumer.subscribe(Collections.singletonList(SINK_TOPIC));
 
             while (true) {
-                final ConsumerRecords<String, String> records = consumer.poll(100);
+                final ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(100));
                 for (final ConsumerRecord<String, String> record : records) {
                     if (record.key().equals("key") && record.value().equals("1")) {
                         return;
