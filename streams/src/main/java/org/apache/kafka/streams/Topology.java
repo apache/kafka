@@ -34,7 +34,6 @@ import org.apache.kafka.streams.processor.internals.SinkNode;
 import org.apache.kafka.streams.processor.internals.SourceNode;
 import org.apache.kafka.streams.state.StoreBuilder;
 
-import java.util.Map;
 import java.util.regex.Pattern;
 
 /**
