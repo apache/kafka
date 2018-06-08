@@ -777,24 +777,4 @@ public class Topology {
     public synchronized TopologyDescription describe() {
         return internalTopologyBuilder.describe();
     }
-
-    // Adjust the generated topology based on the configs.
-    // Not exposed as public API and should be removed post 2.0
-    Topology adjust(final StreamsConfig config) {
-        final boolean enableOptimization20 = config.getString(StreamsConfig.TOPOLOGY_OPTIMIZATION).equals(StreamsConfig.OPTIMIZE_AT_20);
-
-        if (enableOptimization20) {
-            for (Map.Entry<StoreBuilder, String> entry : internalTopologyBuilder.storeToSourceChangelogTopic.entrySet()) {
-                final StoreBuilder storeBuilder = entry.getKey();
-                final String topicName = entry.getValue();
-
-                // update store map to disable logging for this store
-                storeBuilder.withLoggingDisabled();
-                internalTopologyBuilder.addStateStore(storeBuilder, true);
-                internalTopologyBuilder.connectSourceStoreAndTopic(storeBuilder.name(), topicName);
-            }
-        }
-
-        return this;
-    }
 }

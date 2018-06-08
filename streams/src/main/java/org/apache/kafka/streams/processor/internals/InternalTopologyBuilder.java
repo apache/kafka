@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
@@ -121,7 +122,7 @@ public class InternalTopologyBuilder {
 
     private Map<Integer, Set<String>> nodeGroups = null;
 
-    // this is only temporary for 2.0 and should be removed
+    // TODO: this is only temporary for 2.0 and should be removed
     public final Map<StoreBuilder, String> storeToSourceChangelogTopic = new HashMap<>();
 
     public interface StateStoreFactory {
@@ -1070,6 +1071,24 @@ public class InternalTopologyBuilder {
         }
 
         return Collections.unmodifiableMap(topicGroups);
+    }
+
+    // Adjust the generated topology based on the configs.
+    // Not exposed as public API and should be removed post 2.0
+    public void adjust(final StreamsConfig config) {
+        final boolean enableOptimization20 = config.getString(StreamsConfig.TOPOLOGY_OPTIMIZATION).equals(StreamsConfig.OPTIMIZE);
+
+        if (enableOptimization20) {
+            for (final Map.Entry<StoreBuilder, String> entry : storeToSourceChangelogTopic.entrySet()) {
+                final StoreBuilder storeBuilder = entry.getKey();
+                final String topicName = entry.getValue();
+
+                // update store map to disable logging for this store
+                storeBuilder.withLoggingDisabled();
+                addStateStore(storeBuilder, true);
+                connectSourceStoreAndTopic(storeBuilder.name(), topicName);
+            }
+        }
     }
 
     private void setRegexMatchedTopicsToSourceNodes() {

@@ -213,11 +213,6 @@ public class StreamsConfig extends AbstractConfig {
     public static final String OPTIMIZE = "all";
 
     /**
-     * Config value for parameter (@link #TOPOLOGY_OPTIMIZATION "topology.optimization" for enabling topology optimization
-     */
-    public static final String OPTIMIZE_AT_20 = "2.0";
-
-    /**
      * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 0.10.0.x}.
      */
     @SuppressWarnings("WeakerAccess")
@@ -556,7 +551,7 @@ public class StreamsConfig extends AbstractConfig {
             .define(TOPOLOGY_OPTIMIZATION,
                     Type.STRING,
                     NO_OPTIMIZATION,
-                    in(NO_OPTIMIZATION, OPTIMIZE, OPTIMIZE_AT_20),
+                    in(NO_OPTIMIZATION, OPTIMIZE),
                     Importance.MEDIUM,
                     TOPOLOGY_OPTIMIZATION_DOC)
 

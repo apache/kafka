@@ -121,12 +121,12 @@ public class RestoreIntegrationTest {
     }
 
     @Test
-    public void shouldRestoreStateFromSourceTopic() throws InterruptedException, IOException {
+    public void shouldRestoreStateFromSourceTopic() throws Exception {
         final AtomicInteger numReceived = new AtomicInteger(0);
         final StreamsBuilder builder = new StreamsBuilder();
 
         final Properties props = props(APPID);
-        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE_AT_20);
+        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);
 
         // restoring from 1000 to 4000 (committed), and then process from 4000 to 5000 on each of the two partitions
         final int offsetLimitDelta = 1000;
@@ -190,7 +190,7 @@ public class RestoreIntegrationTest {
     }
 
     @Test
-    public void shouldRestoreStateFromChangelogTopic() throws InterruptedException, IOException {
+    public void shouldRestoreStateFromChangelogTopic() throws Exception {
         final AtomicInteger numReceived = new AtomicInteger(0);
         final StreamsBuilder builder = new StreamsBuilder();
 

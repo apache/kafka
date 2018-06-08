@@ -278,10 +278,10 @@ public class StreamsBuilderTest {
         builder.table(topic, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("store"));
         final Topology topology = builder.build();
         final Properties props = StreamsTestUtils.minimalStreamsConfig();
-        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE_AT_20);
-        topology.adjust(new StreamsConfig(props));
+        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);
 
         final InternalTopologyBuilder internalTopologyBuilder = TopologyWrapper.getInternalTopologyBuilder(topology);
+        internalTopologyBuilder.adjust(new StreamsConfig(props));
 
         assertThat(internalTopologyBuilder.build().storeToChangelogTopic(), equalTo(Collections.singletonMap("store", "topic")));
 
