@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.connect.rest.basic.auth.extenstion;
+package org.apache.kafka.connect.rest.basic.auth.extension;
 
 import org.apache.kafka.common.security.JaasUtils;
 import org.easymock.EasyMock;
@@ -155,7 +155,7 @@ public class JaasBasicAuthFilterTest {
 
         List<String> lines;
         lines = new ArrayList<>();
-        lines.add(loginModule + " { org.apache.kafka.connect.rest.basic.auth.extenstion.PropertyFileLoginModule required ");
+        lines.add(loginModule + " { org.apache.kafka.connect.rest.basic.auth.extension.PropertyFileLoginModule required ");
         if (includeFileOptions) {
             lines.add("file=\"" + credentialFilePath + "\"");
         }

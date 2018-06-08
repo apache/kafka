@@ -146,6 +146,19 @@ public class PluginUtilsTest {
         assertTrue(PluginUtils.shouldLoadInIsolation(
                 "org.apache.kafka.connect.storage.StringConverter")
         );
+        assertTrue(PluginUtils.shouldLoadInIsolation(
+            "org.apache.kafka.connect.rest.basic.auth.extension.BasicAuthSecurityRestExtension"
+        ));
+    }
+
+    @Test
+    public void testClientConfigProvider() throws Exception {
+        assertTrue(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.common.config.FileConfigProvider")
+        );
+        assertTrue(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.common.config.FutureConfigProvider")
+        );
     }
 
     @Test

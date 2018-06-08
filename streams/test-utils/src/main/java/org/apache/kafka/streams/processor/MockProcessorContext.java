@@ -86,23 +86,27 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
             this.punctuator = punctuator;
         }
 
+        @SuppressWarnings({"WeakerAccess", "unused"})
         public long getIntervalMs() {
             return intervalMs;
         }
 
+        @SuppressWarnings({"WeakerAccess", "unused"})
         public PunctuationType getType() {
             return type;
         }
 
+        @SuppressWarnings({"WeakerAccess", "unused"})
         public Punctuator getPunctuator() {
             return punctuator;
         }
 
-        @SuppressWarnings("WeakerAccess")
+        @SuppressWarnings({"WeakerAccess", "unused"})
         public void cancel() {
             cancelled = true;
         }
 
+        @SuppressWarnings({"WeakerAccess", "unused"})
         public boolean cancelled() {
             return cancelled;
         }
@@ -127,6 +131,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
          *
          * @return The child name, or {@code null} if it was broadcast.
          */
+        @SuppressWarnings({"WeakerAccess", "unused"})
         public String childName() {
             return childName;
         }
@@ -136,6 +141,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
          *
          * @return A timestamp, or {@code -1} if none was forwarded.
          */
+        @SuppressWarnings({"WeakerAccess", "unused"})
         public long timestamp() {
             return timestamp;
         }
@@ -145,6 +151,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
          *
          * @return A key/value pair. Not null.
          */
+        @SuppressWarnings({"WeakerAccess", "unused"})
         public KeyValue keyValue() {
             return keyValue;
         }
@@ -158,6 +165,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      * and most unit tests should be able to get by with the
      * {@link InMemoryKeyValueStore}, so the stateDir won't matter.
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public MockProcessorContext() {
         //noinspection DoubleBraceInitialization
         this(
@@ -179,6 +187,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      *
      * @param config a Properties object, used to configure the context and the processor.
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public MockProcessorContext(final Properties config) {
         this(config, new TaskId(0, 0), null);
     }
@@ -190,6 +199,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      * @param taskId   a {@link TaskId}, which the context makes available via {@link MockProcessorContext#taskId()}.
      * @param stateDir a {@link File}, which the context makes available viw {@link MockProcessorContext#stateDir()}.
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public MockProcessorContext(final Properties config, final TaskId taskId, final File stateDir) {
         final StreamsConfig streamsConfig = new StreamsConfig(config);
         this.taskId = taskId;
@@ -252,6 +262,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      * @param offset    A record offset
      * @param timestamp A record timestamp
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public void setRecordMetadata(final String topic, final int partition, final long offset, final Headers headers, final long timestamp) {
         this.topic = topic;
         this.partition = partition;
@@ -260,13 +271,13 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         this.timestamp = timestamp;
     }
 
-
     /**
      * The context exposes this metadata for use in the processor. Normally, they are set by the Kafka Streams framework,
      * but for the purpose of driving unit tests, you can set it directly. Setting this attribute doesn't affect the others.
      *
      * @param topic A topic name
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public void setTopic(final String topic) {
         this.topic = topic;
     }
@@ -277,10 +288,10 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      *
      * @param partition A partition number
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public void setPartition(final int partition) {
         this.partition = partition;
     }
-
 
     /**
      * The context exposes this metadata for use in the processor. Normally, they are set by the Kafka Streams framework,
@@ -288,10 +299,18 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      *
      * @param offset A record offset
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public void setOffset(final long offset) {
         this.offset = offset;
     }
 
+    /**
+     * The context exposes this metadata for use in the processor. Normally, they are set by the Kafka Streams framework,
+     * but for the purpose of driving unit tests, you can set it directly. Setting this attribute doesn't affect the others.
+     *
+     * @param headers Record headers
+     */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public void setHeaders(final Headers headers) {
         this.headers = headers;
     }
@@ -302,6 +321,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      *
      * @param timestamp A record timestamp
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public void setTimestamp(final long timestamp) {
         this.timestamp = timestamp;
     }
@@ -345,7 +365,6 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
 
     // mocks ================================================
 
-
     @Override
     public void register(final StateStore store,
                          final StateRestoreCallback stateRestoreCallbackIsIgnoredInMock) {
@@ -376,6 +395,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      *
      * @return A list of captured punctuators.
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public List<CapturedPunctuator> scheduledPunctuators() {
         final LinkedList<CapturedPunctuator> capturedPunctuators = new LinkedList<>();
         capturedPunctuators.addAll(punctuators);
@@ -394,6 +414,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         capturedForwards.add(new CapturedForward(to, new KeyValue(key, value)));
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public <K, V> void forward(final K key, final V value, final int childIndex) {
         throw new UnsupportedOperationException(
@@ -402,6 +423,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         );
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public <K, V> void forward(final K key, final V value, final String childName) {
         throw new UnsupportedOperationException(
@@ -417,6 +439,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      *
      * @return A list of key/value pairs that were previously passed to the context.
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public List<CapturedForward> forwarded() {
         final LinkedList<CapturedForward> result = new LinkedList<>();
         result.addAll(capturedForwards);
@@ -431,6 +454,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      * @param childName The child name to retrieve forwards for
      * @return A list of key/value pairs that were previously passed to the context.
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public List<CapturedForward> forwarded(final String childName) {
         final LinkedList<CapturedForward> result = new LinkedList<>();
         for (final CapturedForward capture : capturedForwards) {
@@ -444,6 +468,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     /**
      * Clear the captured forwarded data.
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public void resetForwards() {
         capturedForwards.clear();
     }
@@ -458,6 +483,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      *
      * @return {@code true} iff {@link ProcessorContext#commit()} has been called in this context since construction or reset.
      */
+    @SuppressWarnings("WeakerAccess")
     public boolean committed() {
         return committed;
     }
@@ -465,6 +491,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     /**
      * Reset the commit capture to {@code false} (whether or not it was previously {@code true}).
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public void resetCommit() {
         committed = false;
     }

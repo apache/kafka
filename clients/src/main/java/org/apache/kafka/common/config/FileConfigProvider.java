@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.config;
 
+import java.io.BufferedReader;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -93,7 +94,7 @@ public class FileConfigProvider implements ConfigProvider {
 
     // visible for testing
     protected Reader reader(String path) throws IOException {
-        return new InputStreamReader(new FileInputStream(path), StandardCharsets.UTF_8);
+        return new BufferedReader(new InputStreamReader(new FileInputStream(path), StandardCharsets.UTF_8));
     }
 
     public void close() {

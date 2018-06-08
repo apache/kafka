@@ -24,8 +24,8 @@ import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.resource.ResourceFilter;
 import org.apache.kafka.common.resource.ResourceNameType;
+import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
@@ -107,7 +107,7 @@ public class DeleteAclsRequest extends AbstractRequest {
         this.filters = new ArrayList<>();
         for (Object filterStructObj : struct.getArray(FILTERS)) {
             Struct filterStruct = (Struct) filterStructObj;
-            ResourceFilter resourceFilter = RequestUtils.resourceFilterFromStructFields(filterStruct);
+            ResourcePatternFilter resourceFilter = RequestUtils.resourcePatternFilterFromStructFields(filterStruct);
             AccessControlEntryFilter aceFilter = RequestUtils.aceFilterFromStructFields(filterStruct);
             this.filters.add(new AclBindingFilter(resourceFilter, aceFilter));
         }
@@ -123,7 +123,7 @@ public class DeleteAclsRequest extends AbstractRequest {
         List<Struct> filterStructs = new ArrayList<>();
         for (AclBindingFilter filter : filters) {
             Struct filterStruct = struct.instance(FILTERS);
-            RequestUtils.resourceFilterSetStructFields(filter.resourceFilter(), filterStruct);
+            RequestUtils.resourcePatternFilterSetStructFields(filter.patternFilter(), filterStruct);
             RequestUtils.aceFilterSetStructFields(filter.entryFilter(), filterStruct);
             filterStructs.add(filterStruct);
         }
@@ -156,12 +156,17 @@ public class DeleteAclsRequest extends AbstractRequest {
     private void validate(short version, List<AclBindingFilter> filters) {
         if (version == 0) {
             final boolean unsupported = filters.stream()
-                .map(AclBindingFilter::resourceFilter)
-                .map(ResourceFilter::nameType)
+                .map(AclBindingFilter::patternFilter)
+                .map(ResourcePatternFilter::nameType)
                 .anyMatch(nameType -> nameType != ResourceNameType.LITERAL);
             if (unsupported) {
                 throw new UnsupportedVersionException("Version 0 only supports literal resource name types");
             }
+        }
+
+        final boolean unknown = filters.stream().anyMatch(AclBindingFilter::isUnknown);
+        if (unknown) {
+            throw new IllegalArgumentException("Filters contain UNKNOWN elements");
         }
     }
 }

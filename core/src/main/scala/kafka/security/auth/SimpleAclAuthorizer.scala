@@ -27,7 +27,7 @@ import kafka.server.KafkaConfig
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
 import kafka.zk.{AclChangeNotificationSequenceZNode, KafkaZkClient, ZkAclStore}
-import org.apache.kafka.common.resource.{ResourceFilter, ResourceNameType}
+import org.apache.kafka.common.resource.ResourceNameType
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{SecurityUtils, Time}
 
@@ -203,8 +203,6 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   }
 
   def getMatchingAcls(resourceType: ResourceType, resourceName: String): Set[Acl] = {
-    val filter = new ResourceFilter(resourceType.toJava, resourceName, ResourceNameType.ANY)
-
     inReadLock(lock) {
       val wildcard = aclCache.get(Resource(resourceType, Acl.WildCardResource, ResourceNameType.LITERAL))
         .map(_.acls)

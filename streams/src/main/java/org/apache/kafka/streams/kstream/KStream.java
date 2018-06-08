@@ -417,8 +417,8 @@ public interface KStream<K, V> {
     KStream<K, V> merge(final KStream<K, V> stream);
 
     /**
-     * Materialize this stream to a topic and creates a new {@code KStream} from the topic using default serializers and
-     * deserializers and producer's {@link DefaultPartitioner}.
+     * Materialize this stream to a topic and creates a new {@code KStream} from the topic using default serializers,
+     * deserializers, and producer's {@link DefaultPartitioner}.
      * The specified topic should be manually created before it is used (i.e., before the Kafka Streams application is
      * started).
      * <p>
@@ -947,8 +947,9 @@ public interface KStream<K, V> {
                                  final JoinWindows windows);
 
     /**
-     * Join records of this stream with another {@code KStream}'s records using windowed inner equi join with default
-     * serializers and deserializers.
+     * Join records of this stream with another {@code KStream}'s records using windowed inner equi join using the
+     * {@link Joined} instance for configuration of the {@link Serde key serde}, {@link Serde this stream's value serde},
+     * and {@link Serde the other stream's value serde}.
      * The join is computed on the records' key with join attribute {@code thisKStream.key == otherKStream.key}.
      * Furthermore, two records are only joined if their timestamps are close to each other as defined by the given
      * {@link JoinWindows}, i.e., the window defines an additional join predicate on the record timestamps.
@@ -1106,8 +1107,9 @@ public interface KStream<K, V> {
                                      final JoinWindows windows);
 
     /**
-     * Join records of this stream with another {@code KStream}'s records using windowed left equi join with default
-     * serializers and deserializers.
+     * Join records of this stream with another {@code KStream}'s records using windowed left equi join using the
+     * {@link Joined} instance for configuration of the {@link Serde key serde}, {@link Serde this stream's value serde},
+     * and {@link Serde the other stream's value serde}.
      * In contrast to {@link #join(KStream, ValueJoiner, JoinWindows) inner-join}, all records from this stream will
      * produce at least one output record (cf. below).
      * The join is computed on the records' key with join attribute {@code thisKStream.key == otherKStream.key}.
@@ -1270,8 +1272,9 @@ public interface KStream<K, V> {
                                       final JoinWindows windows);
 
     /**
-     * Join records of this stream with another {@code KStream}'s records using windowed outer equi join with default
-     * serializers and deserializers.
+     * Join records of this stream with another {@code KStream}'s records using windowed outer equi join using the
+     * {@link Joined} instance for configuration of the {@link Serde key serde}, {@link Serde this stream's value serde},
+     * and {@link Serde the other stream's value serde}.
      * In contrast to {@link #join(KStream, ValueJoiner, JoinWindows) inner-join} or
      * {@link #leftJoin(KStream, ValueJoiner, JoinWindows) left-join}, all records from both streams will produce at
      * least one output record (cf. below).

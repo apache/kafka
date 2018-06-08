@@ -19,13 +19,13 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
+import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.resource.Resource;
 import org.apache.kafka.common.resource.ResourceNameType;
 import org.apache.kafka.common.utils.Utils;
 
@@ -81,9 +81,9 @@ public class CreateAclsRequest extends AbstractRequest {
         }
 
         static AclCreation fromStruct(Struct struct) {
-            Resource resource = RequestUtils.resourceFromStructFields(struct);
+            ResourcePattern pattern = RequestUtils.resourcePatternromStructFields(struct);
             AccessControlEntry entry = RequestUtils.aceFromStructFields(struct);
-            return new AclCreation(new AclBinding(resource, entry));
+            return new AclCreation(new AclBinding(pattern, entry));
         }
 
         public AclBinding acl() {
@@ -91,7 +91,7 @@ public class CreateAclsRequest extends AbstractRequest {
         }
 
         void setStructFields(Struct struct) {
-            RequestUtils.resourceSetStructFields(acl.resource(), struct);
+            RequestUtils.resourcePatternSetStructFields(acl.pattern(), struct);
             RequestUtils.aceSetStructFields(acl.entry(), struct);
         }
 
@@ -179,12 +179,19 @@ public class CreateAclsRequest extends AbstractRequest {
         if (version() == 0) {
             final boolean unsupported = aclCreations.stream()
                 .map(AclCreation::acl)
-                .map(AclBinding::resource)
-                .map(Resource::nameType)
+                .map(AclBinding::pattern)
+                .map(ResourcePattern::nameType)
                 .anyMatch(nameType -> nameType != ResourceNameType.LITERAL);
             if (unsupported) {
                 throw new UnsupportedVersionException("Version 0 only supports literal resource name types");
             }
+        }
+
+        final boolean unknown = aclCreations.stream()
+            .map(AclCreation::acl)
+            .anyMatch(AclBinding::isUnknown);
+        if (unknown) {
+            throw new IllegalArgumentException("You can not create ACL bindings with unknown elements");
         }
     }
 }
