@@ -122,13 +122,14 @@ public class PluginUtils {
             + "|org\\.slf4j"
             + ")\\..*$";
 
-    private static final String WHITELIST = "^org\\.apache\\.kafka\\.connect\\.(?:"
+    private static final String WHITELIST = "^org\\.apache\\.kafka\\.(?:common.config..*ConfigProvider|connect\\.(?:"
             + "transforms\\.(?!Transformation$).*"
             + "|json\\..*"
             + "|file\\..*"
             + "|converters\\..*"
             + "|storage\\.StringConverter"
-            + ")$";
+            + "|rest\\.basic\\.auth\\.extension\\.BasicAuthSecurityRestExtension"
+            + "))$";
 
     private static final DirectoryStream.Filter<Path> PLUGIN_PATH_FILTER = new DirectoryStream
             .Filter<Path>() {

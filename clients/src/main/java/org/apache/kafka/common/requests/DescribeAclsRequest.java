@@ -19,10 +19,12 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.acl.AccessControlEntryFilter;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.resource.ResourceFilter;
+import org.apache.kafka.common.resource.ResourceNameType;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
@@ -32,6 +34,7 @@ import static org.apache.kafka.common.protocol.CommonFields.OPERATION;
 import static org.apache.kafka.common.protocol.CommonFields.PERMISSION_TYPE;
 import static org.apache.kafka.common.protocol.CommonFields.PRINCIPAL_FILTER;
 import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_NAME_FILTER;
+import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_NAME_TYPE_FILTER;
 import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_TYPE;
 
 public class DescribeAclsRequest extends AbstractRequest {
@@ -44,9 +47,19 @@ public class DescribeAclsRequest extends AbstractRequest {
             PERMISSION_TYPE);
 
     /**
-     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     * V1 sees a new `RESOURCE_NAME_TYPE_FILTER` that controls how the filter handles different resource name types.
+     * Also, when the quota is violated, brokers will respond to a version 1 or later request before throttling.
+     *
+     * For more info, see {@link org.apache.kafka.common.resource.ResourceNameType}.
      */
-    private static final Schema DESCRIBE_ACLS_REQUEST_V1 = DESCRIBE_ACLS_REQUEST_V0;
+    private static final Schema DESCRIBE_ACLS_REQUEST_V1 = new Schema(
+            RESOURCE_TYPE,
+            RESOURCE_NAME_FILTER,
+            RESOURCE_NAME_TYPE_FILTER,
+            PRINCIPAL_FILTER,
+            HOST_FILTER,
+            OPERATION,
+            PERMISSION_TYPE);
 
     public static Schema[] schemaVersions() {
         return new Schema[]{DESCRIBE_ACLS_REQUEST_V0, DESCRIBE_ACLS_REQUEST_V1};
@@ -76,6 +89,8 @@ public class DescribeAclsRequest extends AbstractRequest {
     DescribeAclsRequest(AclBindingFilter filter, short version) {
         super(version);
         this.filter = filter;
+
+        validate(filter, version);
     }
 
     public DescribeAclsRequest(Struct struct, short version) {
@@ -113,5 +128,11 @@ public class DescribeAclsRequest extends AbstractRequest {
 
     public AclBindingFilter filter() {
         return filter;
+    }
+
+    private void validate(AclBindingFilter filter, short version) {
+        if (version == 0 && filter.resourceFilter().nameType() != ResourceNameType.LITERAL) {
+            throw new UnsupportedVersionException("Version 0 only supports literal resource name types");
+        }
     }
 }

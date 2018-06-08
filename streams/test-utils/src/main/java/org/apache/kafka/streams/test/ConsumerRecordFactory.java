@@ -44,7 +44,7 @@ public class ConsumerRecordFactory<K, V> {
     private final Serializer<K> keySerializer;
     private final Serializer<V> valueSerializer;
     private long timeMs;
-    private long advanceMs;
+    private final long advanceMs;
 
     /**
      * Create a new factory for the given topic.
@@ -54,6 +54,7 @@ public class ConsumerRecordFactory<K, V> {
      * @param keySerializer the key serializer
      * @param valueSerializer the value serializer
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public ConsumerRecordFactory(final Serializer<K> keySerializer,
                                  final Serializer<V> valueSerializer) {
         this(null, keySerializer, valueSerializer, System.currentTimeMillis());
@@ -68,6 +69,7 @@ public class ConsumerRecordFactory<K, V> {
      * @param keySerializer the key serializer
      * @param valueSerializer the value serializer
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public ConsumerRecordFactory(final String defaultTopicName,
                                  final Serializer<K> keySerializer,
                                  final Serializer<V> valueSerializer) {
@@ -82,6 +84,7 @@ public class ConsumerRecordFactory<K, V> {
      * @param valueSerializer the value serializer
      * @param startTimestampMs the initial timestamp for generated records
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public ConsumerRecordFactory(final Serializer<K> keySerializer,
                                  final Serializer<V> valueSerializer,
                                  final long startTimestampMs) {
@@ -97,6 +100,7 @@ public class ConsumerRecordFactory<K, V> {
      * @param valueSerializer the value serializer
      * @param startTimestampMs the initial timestamp for generated records
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public ConsumerRecordFactory(final String defaultTopicName,
                                  final Serializer<K> keySerializer,
                                  final Serializer<V> valueSerializer,
@@ -112,6 +116,7 @@ public class ConsumerRecordFactory<K, V> {
      * @param startTimestampMs the initial timestamp for generated records
      * @param autoAdvanceMs the time increment pre generated record
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public ConsumerRecordFactory(final Serializer<K> keySerializer,
                                  final Serializer<V> valueSerializer,
                                  final long startTimestampMs,
@@ -128,6 +133,7 @@ public class ConsumerRecordFactory<K, V> {
      * @param startTimestampMs the initial timestamp for generated records
      * @param autoAdvanceMs the time increment pre generated record
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public ConsumerRecordFactory(final String defaultTopicName,
                                  final Serializer<K> keySerializer,
                                  final Serializer<V> valueSerializer,
@@ -147,6 +153,7 @@ public class ConsumerRecordFactory<K, V> {
      *
      * @param advanceMs the amount of time to advance
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public void advanceTimeMs(final long advanceMs) {
         if (advanceMs < 0) {
             throw new IllegalArgumentException("advanceMs must be positive");
@@ -165,6 +172,7 @@ public class ConsumerRecordFactory<K, V> {
      * @param timestampMs the record timestamp
      * @return the generated {@link ConsumerRecord}
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public ConsumerRecord<byte[], byte[]> create(final String topicName,
                                                  final K key,
                                                  final V value,
@@ -198,6 +206,7 @@ public class ConsumerRecordFactory<K, V> {
      * @param timestampMs the record timestamp
      * @return the generated {@link ConsumerRecord}
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public ConsumerRecord<byte[], byte[]> create(final String topicName,
                                                  final K key,
                                                  final V value,
@@ -214,6 +223,7 @@ public class ConsumerRecordFactory<K, V> {
      * @param timestampMs the record timestamp
      * @return the generated {@link ConsumerRecord}
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public ConsumerRecord<byte[], byte[]> create(final K key,
                                                  final V value,
                                                  final long timestampMs) {
@@ -230,6 +240,7 @@ public class ConsumerRecordFactory<K, V> {
      * @param timestampMs the record timestamp
      * @return the generated {@link ConsumerRecord}
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public ConsumerRecord<byte[], byte[]> create(final K key,
                                                  final V value,
                                                  final Headers headers,
@@ -250,6 +261,7 @@ public class ConsumerRecordFactory<K, V> {
      * @param value the record value
      * @return the generated {@link ConsumerRecord}
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public ConsumerRecord<byte[], byte[]> create(final String topicName,
                                                  final K key,
                                                  final V value) {
@@ -268,6 +280,7 @@ public class ConsumerRecordFactory<K, V> {
      * @param headers the record headers
      * @return the generated {@link ConsumerRecord}
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public ConsumerRecord<byte[], byte[]> create(final String topicName,
                                                  final K key,
                                                  final V value,
@@ -285,6 +298,7 @@ public class ConsumerRecordFactory<K, V> {
      * @param value the record value
      * @return the generated {@link ConsumerRecord}
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public ConsumerRecord<byte[], byte[]> create(final K key,
                                                  final V value) {
         return create(key, value, new RecordHeaders());
@@ -299,6 +313,7 @@ public class ConsumerRecordFactory<K, V> {
      * @param headers the record headers
      * @return the generated {@link ConsumerRecord}
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public ConsumerRecord<byte[], byte[]> create(final K key,
                                                  final V value,
                                                  final Headers headers) {
@@ -318,6 +333,7 @@ public class ConsumerRecordFactory<K, V> {
      * @param timestampMs the record timestamp
      * @return the generated {@link ConsumerRecord}
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public ConsumerRecord<byte[], byte[]> create(final String topicName,
                                                  final V value,
                                                  final long timestampMs) {
@@ -334,6 +350,7 @@ public class ConsumerRecordFactory<K, V> {
      * @param timestampMs the record timestamp
      * @return the generated {@link ConsumerRecord}
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public ConsumerRecord<byte[], byte[]> create(final String topicName,
                                                  final V value,
                                                  final Headers headers,
@@ -349,6 +366,7 @@ public class ConsumerRecordFactory<K, V> {
      * @param timestampMs the record timestamp
      * @return the generated {@link ConsumerRecord}
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public ConsumerRecord<byte[], byte[]> create(final V value,
                                                  final long timestampMs) {
         return create(value, new RecordHeaders(), timestampMs);
@@ -363,6 +381,7 @@ public class ConsumerRecordFactory<K, V> {
      * @param timestampMs the record timestamp
      * @return the generated {@link ConsumerRecord}
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public ConsumerRecord<byte[], byte[]> create(final V value,
                                                  final Headers headers,
                                                  final long timestampMs) {
@@ -382,6 +401,7 @@ public class ConsumerRecordFactory<K, V> {
      * @param headers the record headers
      * @return the generated {@link ConsumerRecord}
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public ConsumerRecord<byte[], byte[]> create(final String topicName,
                                                  final V value,
                                                  final Headers headers) {
@@ -396,6 +416,7 @@ public class ConsumerRecordFactory<K, V> {
      * @param value the record value
      * @return the generated {@link ConsumerRecord}
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public ConsumerRecord<byte[], byte[]> create(final String topicName,
                                                  final V value) {
         return create(topicName, null, value, new RecordHeaders());
@@ -408,6 +429,7 @@ public class ConsumerRecordFactory<K, V> {
      * @param value the record value
      * @return the generated {@link ConsumerRecord}
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public ConsumerRecord<byte[], byte[]> create(final V value) {
         return create(value, new RecordHeaders());
     }
@@ -420,6 +442,7 @@ public class ConsumerRecordFactory<K, V> {
      * @param headers the record headers
      * @return the generated {@link ConsumerRecord}
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public ConsumerRecord<byte[], byte[]> create(final V value,
                                                  final Headers headers) {
         if (topicName == null) {
@@ -437,6 +460,7 @@ public class ConsumerRecordFactory<K, V> {
      * @param keyValues the record keys and values
      * @return the generated {@link ConsumerRecord consumer records}
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public List<ConsumerRecord<byte[], byte[]>> create(final String topicName,
                                                        final List<KeyValue<K, V>> keyValues) {
         final List<ConsumerRecord<byte[], byte[]>> records = new ArrayList<>(keyValues.size());
@@ -455,6 +479,7 @@ public class ConsumerRecordFactory<K, V> {
      * @param keyValues the record keys and values
      * @return the generated {@link ConsumerRecord consumer records}
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public List<ConsumerRecord<byte[], byte[]>> create(final List<KeyValue<K, V>> keyValues) {
         if (topicName == null) {
             throw new IllegalStateException("ConsumerRecordFactory was created without defaultTopicName. " +
@@ -474,6 +499,7 @@ public class ConsumerRecordFactory<K, V> {
      * @param advanceMs the time difference between two consecutive generated records
      * @return the generated {@link ConsumerRecord consumer records}
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public List<ConsumerRecord<byte[], byte[]>> create(final String topicName,
                                                        final List<KeyValue<K, V>> keyValues,
                                                        final long startTimestamp,
@@ -502,6 +528,7 @@ public class ConsumerRecordFactory<K, V> {
      * @param advanceMs the time difference between two consecutive generated records
      * @return the generated {@link ConsumerRecord consumer records}
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public List<ConsumerRecord<byte[], byte[]>> create(final List<KeyValue<K, V>> keyValues,
                                                        final long startTimestamp,
                                                        final long advanceMs) {
@@ -523,6 +550,7 @@ public class ConsumerRecordFactory<K, V> {
      * @param startTimestamp the timestamp for the first generated record
      * @return the generated {@link ConsumerRecord consumer records}
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public List<ConsumerRecord<byte[], byte[]>> create(final String topicName,
                                                        final List<KeyValue<K, V>> keyValues,
                                                        final long startTimestamp) {
@@ -538,6 +566,7 @@ public class ConsumerRecordFactory<K, V> {
      * @param startTimestamp the timestamp for the first generated record
      * @return the generated {@link ConsumerRecord consumer records}
      */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public List<ConsumerRecord<byte[], byte[]>> create(final List<KeyValue<K, V>> keyValues,
                                                        final long startTimestamp) {
         if (topicName == null) {

@@ -17,37 +17,31 @@
 package org.apache.kafka.connect.runtime.errors;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.common.config.AbstractConfig;
-import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.RetriableException;
+import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
-
-import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
-import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 
 /**
  * Attempt to recover a failed operation with retries and tolerance limits.
  * <p>
  *
  * A retry is attempted if the operation throws a {@link RetriableException}. Retries are accompanied by exponential backoffs, starting with
- * {@link #RETRIES_DELAY_MIN_MS}, up to what is specified with {@link RetryWithToleranceOperatorConfig#retryDelayMax()}.
+ * {@link #RETRIES_DELAY_MIN_MS}, up to what is specified with {@link ConnectorConfig#errorMaxDelayInMillis()}.
  * Including the first attempt and future retries, the total time taken to evaluate the operation should be within
- * {@link RetryWithToleranceOperatorConfig#retryDelayMax()} millis.
+ * {@link ConnectorConfig#errorMaxDelayInMillis()} millis.
  * <p>
  *
- * This executor will tolerate failures, as specified by {@link RetryWithToleranceOperatorConfig#toleranceLimit()}.
+ * This executor will tolerate failures, as specified by {@link ConnectorConfig#errorToleranceType()}.
  * For transformations and converters, all exceptions are tolerated. For others operations, only {@link RetriableException} are tolerated.
  * <p>
  *
@@ -61,26 +55,7 @@ public class RetryWithToleranceOperator {
 
     private static final Logger log = LoggerFactory.getLogger(RetryWithToleranceOperator.class);
 
-    public static final String RETRY_TIMEOUT = "retry.timeout";
-    public static final String RETRY_TIMEOUT_DOC = "The total duration in milliseconds a failed operation will be retried for.";
-    public static final long RETRY_TIMEOUT_DEFAULT = 0;
-
-    public static final String RETRY_DELAY_MAX_MS = "retry.delay.max.ms";
-    public static final String RETRY_DELAY_MAX_MS_DOC = "The maximum duration between two consecutive retries (in milliseconds).";
-    public static final long RETRY_DELAY_MAX_MS_DEFAULT = 60000;
-
     public static final long RETRIES_DELAY_MIN_MS = 300;
-
-    public static final String TOLERANCE_LIMIT = "allowed.max";
-    public static final String TOLERANCE_LIMIT_DOC = "Fail the task if we exceed specified number of errors overall.";
-    public static final String TOLERANCE_LIMIT_DEFAULT = "none";
-
-    // for testing only
-    public static final RetryWithToleranceOperator NOOP_OPERATOR = new RetryWithToleranceOperator();
-    static {
-        NOOP_OPERATOR.configure(Collections.emptyMap());
-        NOOP_OPERATOR.metrics(new ErrorHandlingMetrics());
-    }
 
     private static final Map<Stage, Class<? extends Exception>> TOLERABLE_EXCEPTIONS = new HashMap<>();
     static {
@@ -90,27 +65,22 @@ public class RetryWithToleranceOperator {
         TOLERABLE_EXCEPTIONS.put(Stage.VALUE_CONVERTER, Exception.class);
     }
 
+    private final long errorRetryTimeout;
+    private final long errorMaxDelayInMillis;
+    private final ToleranceType errorToleranceType;
+
     private long totalFailures = 0;
     private final Time time;
-    private RetryWithToleranceOperatorConfig config;
     private ErrorHandlingMetrics errorHandlingMetrics;
 
     protected ProcessingContext context = new ProcessingContext();
 
-    public RetryWithToleranceOperator() {
-        this(new SystemTime());
-    }
-
-    // Visible for testing
-    public RetryWithToleranceOperator(Time time) {
+    public RetryWithToleranceOperator(long errorRetryTimeout, long errorMaxDelayInMillis,
+                                      ToleranceType toleranceType, Time time) {
+        this.errorRetryTimeout = errorRetryTimeout;
+        this.errorMaxDelayInMillis = errorMaxDelayInMillis;
+        this.errorToleranceType = toleranceType;
         this.time = time;
-    }
-
-    static ConfigDef getConfigDef() {
-        return new ConfigDef()
-                .define(RETRY_TIMEOUT, ConfigDef.Type.LONG, RETRY_TIMEOUT_DEFAULT, ConfigDef.Importance.HIGH, RETRY_TIMEOUT_DOC)
-                .define(RETRY_DELAY_MAX_MS, ConfigDef.Type.LONG, RETRY_DELAY_MAX_MS_DEFAULT, atLeast(1), ConfigDef.Importance.MEDIUM, RETRY_DELAY_MAX_MS_DOC)
-                .define(TOLERANCE_LIMIT, ConfigDef.Type.STRING, TOLERANCE_LIMIT_DEFAULT, in("none", "all"), ConfigDef.Importance.HIGH, TOLERANCE_LIMIT_DOC);
     }
 
     /**
@@ -151,7 +121,7 @@ public class RetryWithToleranceOperator {
     protected <V> V execAndRetry(Operation<V> operation) throws Exception {
         int attempt = 0;
         long startTime = time.milliseconds();
-        long deadline = startTime + config.retryTimeout();
+        long deadline = startTime + errorRetryTimeout;
         do {
             try {
                 attempt++;
@@ -221,27 +191,27 @@ public class RetryWithToleranceOperator {
 
     // Visible for testing
     boolean withinToleranceLimits() {
-        switch (config.toleranceLimit()) {
+        switch (errorToleranceType) {
             case NONE:
                 if (totalFailures > 0) return false;
             case ALL:
                 return true;
             default:
-                throw new ConfigException("Unknown tolerance type: {}", config.toleranceLimit());
+                throw new ConfigException("Unknown tolerance type: {}", errorToleranceType);
         }
     }
 
     // Visible for testing
     boolean checkRetry(long startTime) {
-        return (time.milliseconds() - startTime) < config.retryTimeout();
+        return (time.milliseconds() - startTime) < errorRetryTimeout;
     }
 
     // Visible for testing
     void backoff(int attempt, long deadline) {
         int numRetry = attempt - 1;
         long delay = RETRIES_DELAY_MIN_MS << numRetry;
-        if (delay > config.retryDelayMax()) {
-            delay = ThreadLocalRandom.current().nextLong(config.retryDelayMax());
+        if (delay > errorMaxDelayInMillis) {
+            delay = ThreadLocalRandom.current().nextLong(errorMaxDelayInMillis);
         }
         if (delay + time.milliseconds() > deadline) {
             delay = deadline - time.milliseconds();
@@ -250,45 +220,19 @@ public class RetryWithToleranceOperator {
         time.sleep(delay);
     }
 
-    public void configure(Map<String, ?> configs) {
-        config = new RetryWithToleranceOperatorConfig(configs);
-    }
-
     public void metrics(ErrorHandlingMetrics errorHandlingMetrics) {
         this.errorHandlingMetrics = errorHandlingMetrics;
-    }
-
-    static class RetryWithToleranceOperatorConfig extends AbstractConfig {
-        public RetryWithToleranceOperatorConfig(Map<?, ?> originals) {
-            super(getConfigDef(), originals, true);
-        }
-
-        /**
-         * @return the total time an operation can take to succeed (including the first attempt and retries).
-         */
-        public long retryTimeout() {
-            return getLong(RETRY_TIMEOUT);
-        }
-
-        /**
-         * @return the maximum delay between two subsequent retries in milliseconds.
-         */
-        public long retryDelayMax() {
-            return getLong(RETRY_DELAY_MAX_MS);
-        }
-
-        /**
-         * @return determine how many errors to tolerate.
-         */
-        public ToleranceType toleranceLimit() {
-            return ToleranceType.fromString(getString(TOLERANCE_LIMIT));
-        }
     }
 
     @Override
     public String toString() {
         return "RetryWithToleranceOperator{" +
-                "config=" + config +
+                "errorRetryTimeout=" + errorRetryTimeout +
+                ", errorMaxDelayInMillis=" + errorMaxDelayInMillis +
+                ", errorToleranceType=" + errorToleranceType +
+                ", totalFailures=" + totalFailures +
+                ", time=" + time +
+                ", context=" + context +
                 '}';
     }
 

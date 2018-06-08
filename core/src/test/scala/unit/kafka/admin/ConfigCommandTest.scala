@@ -28,7 +28,7 @@ import org.apache.kafka.clients.admin._
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.internals.KafkaFutureImpl
 import org.apache.kafka.common.Node
-import org.apache.kafka.common.security.scram.internal.ScramCredentialUtils
+import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils
 import org.apache.kafka.common.utils.Sanitizer
 import org.easymock.EasyMock
 import org.junit.Assert._

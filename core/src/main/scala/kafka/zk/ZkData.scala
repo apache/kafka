@@ -26,7 +26,7 @@ import kafka.cluster.{Broker, EndPoint}
 import kafka.common.KafkaException
 import kafka.controller.{IsrChangeNotificationHandler, LeaderIsrAndControllerEpoch}
 import kafka.security.auth.SimpleAclAuthorizer.VersionedAcls
-import kafka.security.auth.{Acl, Resource}
+import kafka.security.auth.{Acl, Literal, Prefixed, Resource, ResourceNameType, ResourceType}
 import kafka.server.{ConfigType, DelegationTokenManager}
 import kafka.utils.Json
 import org.apache.kafka.common.TopicPartition
@@ -445,42 +445,74 @@ object StateChangeHandlers {
 }
 
 /**
- * The root acl storage node. Under this node there will be one child node per resource type (Topic, Cluster, Group).
- * under each resourceType there will be a unique child for each resource instance and the data for that child will contain
- * list of its acls as a json object. Following gives an example:
- *
- * <pre>
- * /kafka-acl/Topic/topic-1 => {"version": 1, "acls": [ { "host":"host1", "permissionType": "Allow","operation": "Read","principal": "User:alice"}]}
- * /kafka-acl/Cluster/kafka-cluster => {"version": 1, "acls": [ { "host":"host1", "permissionType": "Allow","operation": "Read","principal": "User:alice"}]}
- * /kafka-acl/Group/group-1 => {"version": 1, "acls": [ { "host":"host1", "permissionType": "Allow","operation": "Read","principal": "User:alice"}]}
- * </pre>
- */
-object AclZNode {
-  def path = "/kafka-acl"
+  * Acls for resources are stored in ZK under a root node that is determined by the [[ResourceNameType]].
+  * Under each [[ResourceNameType]] node there will be one child node per resource type (Topic, Cluster, Group, etc).
+  * Under each resourceType there will be a unique child for each resource path and the data for that child will contain
+  * list of its acls as a json object. Following gives an example:
+  *
+  * <pre>
+  * /kafka-acl/Topic/topic-1 => {"version": 1, "acls": [ { "host":"host1", "permissionType": "Allow","operation": "Read","principal": "User:alice"}]}
+  * /kafka-acl/Cluster/kafka-cluster => {"version": 1, "acls": [ { "host":"host1", "permissionType": "Allow","operation": "Read","principal": "User:alice"}]}
+  * /kafka-prefixed-acl/Group/group-1 => {"version": 1, "acls": [ { "host":"host1", "permissionType": "Allow","operation": "Read","principal": "User:alice"}]}
+  * </pre>
+  */
+case class ZkAclStore(nameType: ResourceNameType) {
+  val aclPath: String = nameType match {
+    case Literal => "/kafka-acl"
+    case Prefixed => "/kafka-prefixed-acl"
+    case _ => throw new IllegalArgumentException("Unknown name type:" + nameType)
+  }
+
+  val aclChangePath: String = nameType match {
+    case Literal => "/kafka-acl-changes"
+    case Prefixed => "/kafka-prefixed-acl-changes"
+    case _ => throw new IllegalArgumentException("Unknown name type:" + nameType)
+  }
+
+  def path(resourceType: ResourceType) = s"$aclPath/$resourceType"
+
+  def path(resourceType: ResourceType, resourceName: String): String = s"$aclPath/$resourceType/$resourceName"
+
+  def changeSequenceZNode: AclChangeNotificationSequenceZNode = AclChangeNotificationSequenceZNode(this)
+
+  def decode(notificationMessage: Array[Byte]): Resource = AclChangeNotificationSequenceZNode.decode(nameType, notificationMessage)
 }
 
-object ResourceTypeZNode {
-  def path(resourceType: String) = s"${AclZNode.path}/$resourceType"
+object ZkAclStore {
+  val stores: Seq[ZkAclStore] = ResourceNameType.values
+    .map(nameType => ZkAclStore(nameType))
+
+  val securePaths: Seq[String] = stores
+    .flatMap(store => List(store.aclPath, store.aclChangePath))
 }
 
 object ResourceZNode {
-  def path(resource: Resource) = s"${AclZNode.path}/${resource.resourceType}/${resource.name}"
-  def encode(acls: Set[Acl]): Array[Byte] = {
-    Json.encodeAsBytes(Acl.toJsonCompatibleMap(acls).asJava)
-  }
+  def path(resource: Resource): String = ZkAclStore(resource.resourceNameType).path(resource.resourceType, resource.name)
+
+  def encode(acls: Set[Acl]): Array[Byte] = Json.encodeAsBytes(Acl.toJsonCompatibleMap(acls).asJava)
   def decode(bytes: Array[Byte], stat: Stat): VersionedAcls = VersionedAcls(Acl.fromBytes(bytes), stat.getVersion)
 }
 
-object AclChangeNotificationZNode {
-  def path = "/kafka-acl-changes"
+object AclChangeNotificationSequenceZNode {
+  val Separator = ":"
+  def SequenceNumberPrefix = "acl_changes_"
+
+  def encode(resource: Resource): Array[Byte] = {
+    (resource.resourceType.name + Separator + resource.name).getBytes(UTF_8)
+  }
+
+  def decode(nameType: ResourceNameType, bytes: Array[Byte]): Resource = {
+    val str = new String(bytes, UTF_8)
+    str.split(Separator, 2) match {
+      case Array(resourceType, name, _*) => Resource(ResourceType.fromString(resourceType), name, nameType)
+      case _ => throw new IllegalArgumentException("expected a string in format ResourceType:ResourceName but got " + str)
+    }
+  }
 }
 
-object AclChangeNotificationSequenceZNode {
-  val SequenceNumberPrefix = "acl_changes_"
-  def createPath = s"${AclChangeNotificationZNode.path}/$SequenceNumberPrefix"
-  def deletePath(sequenceNode: String) = s"${AclChangeNotificationZNode.path}/${sequenceNode}"
-  def encode(resourceName : String): Array[Byte] = resourceName.getBytes(UTF_8)
-  def decode(bytes: Array[Byte]): String = new String(bytes, UTF_8)
+case class AclChangeNotificationSequenceZNode(store: ZkAclStore) {
+  def createPath = s"${store.aclChangePath}/${AclChangeNotificationSequenceZNode.SequenceNumberPrefix}"
+  def deletePath(sequenceNode: String) = s"${store.aclChangePath}/$sequenceNode"
 }
 
 object ClusterZNode {
@@ -545,11 +577,9 @@ object ZkData {
     ControllerZNode.path,
     ControllerEpochZNode.path,
     IsrChangeNotificationZNode.path,
-    AclZNode.path,
-    AclChangeNotificationZNode.path,
     ProducerIdBlockZNode.path,
     LogDirEventNotificationZNode.path,
-    DelegationTokenAuthZNode.path)
+    DelegationTokenAuthZNode.path) ++ ZkAclStore.securePaths
 
   // These are persistent ZK paths that should exist on kafka broker startup.
   val PersistentZkPaths = Seq(

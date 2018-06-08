@@ -27,7 +27,6 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.test.MockRestoreCallback;
 import org.apache.kafka.test.MockStateRestoreListener;
@@ -377,46 +376,6 @@ public class StoreChangelogReaderTest {
         assertThat(callbackTwo.restored.size(), equalTo(3));
     }
 
-    @Test
-    public void shouldThrowTaskMigratedExceptionIfEndOffsetGetsExceededDuringRestoreForChangelogTopic() {
-        final int messages = 10;
-        setupConsumer(messages, topicPartition);
-        consumer.updateEndOffsets(Collections.singletonMap(topicPartition, 5L));
-        changelogReader.register(new StateRestorer(topicPartition, restoreListener, null, Long.MAX_VALUE, true, "storeName"));
-
-        expect(active.restoringTaskFor(topicPartition)).andReturn(task);
-        replay(active);
-
-        try {
-            changelogReader.restore(active);
-            fail("Should have thrown TaskMigratedException");
-        } catch (final TaskMigratedException expected) {
-            /* ignore */
-        }
-    }
-
-
-    @Test
-    public void shouldThrowTaskMigratedExceptionIfChangelogTopicUpdatedDuringRestoreProcessFoundInSecondCheck() {
-        final int messages = 10;
-        setupConsumer(messages, topicPartition);
-        // in this case first call to endOffsets returns correct value, but a second thread has updated the changelog topic
-        // so a subsequent call to endOffsets returns a value exceeding the expected end value
-        consumer.addEndOffsets(Collections.singletonMap(topicPartition, 15L));
-        changelogReader.register(new StateRestorer(topicPartition, restoreListener, null, Long.MAX_VALUE, true, "storeName"));
-
-        expect(active.restoringTaskFor(topicPartition)).andReturn(task);
-        replay(active);
-
-        try {
-            changelogReader.restore(active);
-            fail("Should have thrown TaskMigratedException");
-        } catch (final TaskMigratedException expected) {
-            // verifies second block threw exception with updated end offset
-            assertTrue(expected.getMessage().contains("end offset 15, current offset 10"));
-        }
-    }
-
 
     @Test
     public void shouldNotThrowTaskMigratedExceptionIfSourceTopicUpdatedDuringRestoreProcess() {
@@ -433,30 +392,6 @@ public class StoreChangelogReaderTest {
         changelogReader.restore(active);
     }
 
-
-    @Test
-    public void shouldThrowTaskMigratedExceptionIfEndOffsetGetsExceededDuringRestoreForChangelogTopicEOSEnabled() {
-        final int totalMessages = 10;
-        assignPartition(totalMessages, topicPartition);
-        // records 0..4
-        addRecords(5, topicPartition, 0);
-        //EOS enabled commit marker at offset 5 so rest of records 6..10
-        addRecords(5, topicPartition, 6);
-        consumer.assign(Collections.<TopicPartition>emptyList());
-
-        // end offsets should start after commit marker of 5 from above
-        consumer.updateEndOffsets(Collections.singletonMap(topicPartition, 6L));
-        changelogReader.register(new StateRestorer(topicPartition, restoreListener, null, Long.MAX_VALUE, true, "storeName"));
-
-        expect(active.restoringTaskFor(topicPartition)).andReturn(task);
-        replay(active);
-        try {
-            changelogReader.restore(active);
-            fail("Should have thrown task migrated exception");
-        } catch (final TaskMigratedException expected) {
-            /* ignore */
-        }
-    }
 
     @Test
     public void shouldNotThrowTaskMigratedExceptionDuringRestoreForChangelogTopicWhenEndOffsetNotExceededEOSEnabled() {
