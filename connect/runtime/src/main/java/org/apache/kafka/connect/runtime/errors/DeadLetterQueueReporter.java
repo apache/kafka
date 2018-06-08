@@ -60,9 +60,9 @@ public class DeadLetterQueueReporter implements ErrorReporter {
     public static final String ERROR_HEADER_TASK_ID = HEADER_PREFIX + "task.id";
     public static final String ERROR_HEADER_STAGE = HEADER_PREFIX + "stage";
     public static final String ERROR_HEADER_EXECUTING_CLASS = HEADER_PREFIX + "class.name";
-    public static final String ERROR_HEADER_EXECPTION = HEADER_PREFIX + "exception.class.name";
-    public static final String ERROR_HEADER_EXECPTION_MESSAGE = HEADER_PREFIX + "exception.message";
-    public static final String ERROR_HEADER_EXECPTION_STACK_TRACE = HEADER_PREFIX + "exception.stacktrace";
+    public static final String ERROR_HEADER_EXCEPTION = HEADER_PREFIX + "exception.class.name";
+    public static final String ERROR_HEADER_EXCEPTION_MESSAGE = HEADER_PREFIX + "exception.message";
+    public static final String ERROR_HEADER_EXCEPTION_STACK_TRACE = HEADER_PREFIX + "exception.stacktrace";
 
     private final SinkConnectorConfig connConfig;
     private final ConnectorTaskId connectorTaskId;
@@ -164,11 +164,11 @@ public class DeadLetterQueueReporter implements ErrorReporter {
         headers.add(ERROR_HEADER_STAGE, toBytes(context.stage().name()));
         headers.add(ERROR_HEADER_EXECUTING_CLASS, toBytes(context.executingClass().getName()));
         if (context.error() != null) {
-            headers.add(ERROR_HEADER_EXECPTION, toBytes(context.error().getClass().getName()));
-            headers.add(ERROR_HEADER_EXECPTION_MESSAGE, toBytes(context.error().getMessage()));
+            headers.add(ERROR_HEADER_EXCEPTION, toBytes(context.error().getClass().getName()));
+            headers.add(ERROR_HEADER_EXCEPTION_MESSAGE, toBytes(context.error().getMessage()));
             byte[] trace;
             if ((trace = stacktrace(context.error())) != null) {
-                headers.add(ERROR_HEADER_EXECPTION_STACK_TRACE, trace);
+                headers.add(ERROR_HEADER_EXCEPTION_STACK_TRACE, trace);
             }
         }
     }
