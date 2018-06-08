@@ -44,7 +44,7 @@ object SecurityUtils {
   }
 
   def convertToAclBinding(resource: Resource, acl: Acl): AclBinding = {
-    val resourcePattern = new ResourcePattern(resource.resourceType.toJava, resource.name, resource.nameType.toJava)
+    val resourcePattern = new ResourcePattern(resource.resourceType.toJava, resource.name, resource.nameType)
     val entry = new AccessControlEntry(acl.principal.toString, acl.host.toString,
       acl.operation.toJava, acl.permissionType.toJava)
     new AclBinding(resourcePattern, entry)

@@ -34,7 +34,7 @@ object Resource {
         }
       case _ =>
         str.split(Separator, 2) match {
-          case Array(resourceType, name, _*) => new Resource(ResourceType.fromString(resourceType), name, Literal)
+          case Array(resourceType, name, _*) => new Resource(ResourceType.fromString(resourceType), name, ResourceNameType.LITERAL)
           case _ => throw new IllegalArgumentException("expected a string in format ResourceType:ResourceName but got " + str)
         }
     }

@@ -384,7 +384,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
   private def deleteAclsRequest = new DeleteAclsRequest.Builder(
     Collections.singletonList(new AclBindingFilter(
-      new ResourcePatternFilter(AdminResourceType.TOPIC, null, resource.ResourceNameType.LITERAL),
+      new ResourcePatternFilter(AdminResourceType.TOPIC, null, LITERAL),
       new AccessControlEntryFilter(userPrincipal.toString, "*", AclOperation.ANY, AclPermissionType.DENY)))).build()
 
   private def alterReplicaLogDirsRequest = new AlterReplicaLogDirsRequest.Builder(Collections.singletonMap(tp, logDir)).build()

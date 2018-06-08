@@ -116,21 +116,21 @@ public class AclBindingTest {
 
     @Test
     public void shouldNotThrowOnUnknownResourceNameType() {
-        new AclBinding(new Resource(ResourceType.TOPIC, "foo", ResourceNameType.UNKNOWN), ACL1.entry());
+        new AclBinding(new ResourcePattern(ResourceType.TOPIC, "foo", ResourceNameType.UNKNOWN), ACL1.entry());
     }
 
     @Test
     public void shouldNotThrowOnUnknownResourceType() {
-        new AclBinding(new Resource(ResourceType.UNKNOWN, "foo", ResourceNameType.LITERAL), ACL1.entry());
+        new AclBinding(new ResourcePattern(ResourceType.UNKNOWN, "foo", ResourceNameType.LITERAL), ACL1.entry());
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void shouldThrowOnAnyResourceNameType() {
-        new AclBinding(new Resource(ResourceType.TOPIC, "foo", ResourceNameType.ANY), ACL1.entry());
+        new AclBinding(new ResourcePattern(ResourceType.TOPIC, "foo", ResourceNameType.ANY), ACL1.entry());
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void shouldThrowOnAnyResourceType() {
-        new AclBinding(new Resource(ResourceType.ANY, "foo", ResourceNameType.LITERAL), ACL1.entry());
+        new AclBinding(new ResourcePattern(ResourceType.ANY, "foo", ResourceNameType.LITERAL), ACL1.entry());
     }
 }
