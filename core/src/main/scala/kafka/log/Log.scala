@@ -736,6 +736,8 @@ class Log(@volatile var dir: File,
    * @param assignOffsets Should the log assign offsets to this message set or blindly apply what it is given
    * @param leaderEpoch The partition's leader epoch which will be applied to messages when offsets are assigned on the leader
    * @throws KafkaStorageException If the append fails due to an I/O error.
+   * @throws OffsetsOutOfOrderException If out of order offsets found in 'records'
+   * @throws UnexpectedAppendOffsetException If the first or last offset in append is less than next offset
    * @return Information about the appended messages including the first and last offset.
    */
   private def append(records: MemoryRecords, isFromClient: Boolean, assignOffsets: Boolean, leaderEpoch: Int): LogAppendInfo = {
@@ -816,7 +818,7 @@ class Log(@volatile var dir: File,
               s"Unexpected offset in append to $topicPartition. $firstOrLast " +
               s"offset ${appendInfo.firstOrLastOffset} is less than the next offset ${nextOffsetMetadata.messageOffset}. " +
               s"First 10 offsets in append: ${records.records.asScala.take(10).map(_.offset)}, last offset in" +
-              s" append: ${appendInfo.lastOffset}", firstOffset)
+              s" append: ${appendInfo.lastOffset}. Log start offset = $logStartOffset", firstOffset)
           }
         }
 

@@ -22,7 +22,6 @@ import java.util
 
 import kafka.api.Request
 import kafka.cluster.BrokerEndPoint
-import kafka.common.UnexpectedAppendOffsetException
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import kafka.server.QuotaFactory.UnboundedQuota
 import kafka.server.ReplicaAlterLogDirsThread.{FetchRequest, PartitionData}
@@ -99,23 +98,7 @@ class ReplicaAlterLogDirsThread(name: String,
       throw new IllegalStateException("Offset mismatch for the future replica %s: fetched offset = %d, log end offset = %d.".format(
         topicPartition, fetchOffset, futureReplica.logEndOffset.messageOffset))
 
-    try {
-      partition.appendRecordsToFutureReplica(records)
-    } catch {
-      case e: UnexpectedAppendOffsetException =>
-        if (futureReplica.logEndOffset.messageOffset == futureReplica.logStartOffset) {
-          // This may happen if the log start offset on the current replica falls in the middle of the
-          // batch due to delete records request and the future replica tries to fetch its first offset
-          // from the current replica. We will truncate fully again, so that the log segment starts from
-          // the base offset that is the base offset of the batch, and try to append records again.
-          info(s"Unexpected offset in append to $topicPartition. First offset ${e.firstOffset} is less than log start offset ${futureReplica.logStartOffset}." +
-               s" Since this is the first record to be appended to the future replica's log, will start the log from offset ${e.firstOffset}.")
-          partition.truncateFullyAndStartAt(e.firstOffset, isFuture = true)
-          partition.appendRecordsToFutureReplica(records)
-        } else
-          throw e
-    }
-
+    partition.appendRecordsToFollower(records, isFuture = true)
     val futureReplicaHighWatermark = futureReplica.logEndOffset.messageOffset.min(partitionData.highWatermark)
     futureReplica.highWatermark = new LogOffsetMetadata(futureReplicaHighWatermark)
     futureReplica.maybeIncrementLogStartOffset(partitionData.logStartOffset)
