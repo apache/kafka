@@ -33,7 +33,7 @@ import java.util.Map;
 import java.util.Set;
 
 abstract class AbstractStateManager implements StateManager {
-    public static final String CHECKPOINT_FILE_NAME = ".checkpoint";
+    static final String CHECKPOINT_FILE_NAME = ".checkpoint";
 
     final File baseDir;
     final Map<TopicPartition, Long> checkpointableOffsets = new HashMap<>();
