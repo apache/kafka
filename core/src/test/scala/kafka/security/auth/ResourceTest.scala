@@ -18,6 +18,7 @@
 package kafka.security.auth
 
 import kafka.common.KafkaException
+import org.apache.kafka.common.resource.ResourceNameType.{LITERAL, PREFIXED}
 import org.junit.Test
 import org.junit.Assert._
 
@@ -29,30 +30,30 @@ class ResourceTest {
 
   @Test
   def shouldParseOldTwoPartString(): Unit = {
-    assertEquals(Resource(Group, "fred", Literal), Resource.fromString("Group:fred"))
-    assertEquals(Resource(Topic, "t", Literal), Resource.fromString("Topic:t"))
+    assertEquals(Resource(Group, "fred", LITERAL), Resource.fromString("Group:fred"))
+    assertEquals(Resource(Topic, "t", LITERAL), Resource.fromString("Topic:t"))
   }
 
   @Test
   def shouldParseOldTwoPartWithEmbeddedSeparators(): Unit = {
-    assertEquals(Resource(Group, ":This:is:a:weird:group:name:", Literal), Resource.fromString("Group::This:is:a:weird:group:name:"))
+    assertEquals(Resource(Group, ":This:is:a:weird:group:name:", LITERAL), Resource.fromString("Group::This:is:a:weird:group:name:"))
   }
 
   @Test
   def shouldParseThreePartString(): Unit = {
-    assertEquals(Resource(Group, "fred", Prefixed), Resource.fromString("Prefixed:Group:fred"))
-    assertEquals(Resource(Topic, "t", Literal), Resource.fromString("Literal:Topic:t"))
+    assertEquals(Resource(Group, "fred", PREFIXED), Resource.fromString("PREFIXED:Group:fred"))
+    assertEquals(Resource(Topic, "t", LITERAL), Resource.fromString("LITERAL:Topic:t"))
   }
 
   @Test
   def shouldParseThreePartWithEmbeddedSeparators(): Unit = {
-    assertEquals(Resource(Group, ":This:is:a:weird:group:name:", Prefixed), Resource.fromString("Prefixed:Group::This:is:a:weird:group:name:"))
-    assertEquals(Resource(Group, ":This:is:a:weird:group:name:", Literal), Resource.fromString("Literal:Group::This:is:a:weird:group:name:"))
+    assertEquals(Resource(Group, ":This:is:a:weird:group:name:", PREFIXED), Resource.fromString("PREFIXED:Group::This:is:a:weird:group:name:"))
+    assertEquals(Resource(Group, ":This:is:a:weird:group:name:", LITERAL), Resource.fromString("LITERAL:Group::This:is:a:weird:group:name:"))
   }
 
   @Test
   def shouldRoundTripViaString(): Unit = {
-    val expected = Resource(Group, "fred", Prefixed)
+    val expected = Resource(Group, "fred", PREFIXED)
 
     val actual = Resource.fromString(expected.toString)
 

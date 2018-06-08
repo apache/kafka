@@ -26,11 +26,12 @@ import kafka.cluster.{Broker, EndPoint}
 import kafka.common.KafkaException
 import kafka.controller.{IsrChangeNotificationHandler, LeaderIsrAndControllerEpoch}
 import kafka.security.auth.SimpleAclAuthorizer.VersionedAcls
-import kafka.security.auth.{Acl, Literal, Prefixed, Resource, ResourceNameType, ResourceType}
+import kafka.security.auth.{Acl, Resource, ResourceType}
 import kafka.server.{ConfigType, DelegationTokenManager}
 import kafka.utils.Json
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.resource.ResourceNameType
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.Time
@@ -458,14 +459,14 @@ object StateChangeHandlers {
   */
 case class ZkAclStore(nameType: ResourceNameType) {
   val aclPath: String = nameType match {
-    case Literal => "/kafka-acl"
-    case Prefixed => "/kafka-prefixed-acl"
+    case ResourceNameType.LITERAL => "/kafka-acl"
+    case ResourceNameType.PREFIXED => "/kafka-prefixed-acl"
     case _ => throw new IllegalArgumentException("Unknown name type:" + nameType)
   }
 
   val aclChangePath: String = nameType match {
-    case Literal => "/kafka-acl-changes"
-    case Prefixed => "/kafka-prefixed-acl-changes"
+    case ResourceNameType.LITERAL => "/kafka-acl-changes"
+    case ResourceNameType.PREFIXED => "/kafka-prefixed-acl-changes"
     case _ => throw new IllegalArgumentException("Unknown name type:" + nameType)
   }
 
@@ -480,6 +481,7 @@ case class ZkAclStore(nameType: ResourceNameType) {
 
 object ZkAclStore {
   val stores: Seq[ZkAclStore] = ResourceNameType.values
+    .filter(nameType => nameType != ResourceNameType.ANY && nameType != ResourceNameType.UNKNOWN)
     .map(nameType => ZkAclStore(nameType))
 
   val securePaths: Seq[String] = stores

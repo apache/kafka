@@ -25,13 +25,13 @@ import kafka.utils._
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.common.resource.{ResourcePatternFilter, ResourceNameType => JResourceNameType, ResourceType => JResourceType, Resource => JResource}
+import org.apache.kafka.common.resource.{ResourcePatternFilter, ResourceNameType, ResourceType => JResourceType, Resource => JResource}
 
 import scala.collection.JavaConverters._
 
 object AclCommand extends Logging {
 
-  val ClusterResourceFilter = new ResourcePatternFilter(JResourceType.CLUSTER, JResource.CLUSTER_NAME, JResourceNameType.LITERAL)
+  val ClusterResourceFilter = new ResourcePatternFilter(JResourceType.CLUSTER, JResource.CLUSTER_NAME, ResourceNameType.LITERAL)
 
   private val Newline = scala.util.Properties.lineSeparator
 
@@ -87,13 +87,13 @@ object AclCommand extends Logging {
   }
 
   private def addAcl(opts: AclCommandOptions) {
-    if (opts.options.valueOf(opts.resourceNameType) == JResourceNameType.ANY)
+    if (opts.options.valueOf(opts.resourceNameType) == ResourceNameType.ANY)
       CommandLineUtils.printUsageAndDie(opts.parser, "A '--resource-name-type' value of 'Any' is not valid when adding acls.")
 
     withAuthorizer(opts) { authorizer =>
       val resourceToAcl = getResourceFilterToAcls(opts).map {
         case (filter, acls) =>
-          Resource(ResourceType.fromJava(filter.resourceType()), filter.name(), ResourceNameType.fromJava(filter.nameType())) -> acls
+          Resource(ResourceType.fromJava(filter.resourceType()), filter.name(), filter.nameType()) -> acls
       }
 
       if (resourceToAcl.values.exists(_.isEmpty))
@@ -262,13 +262,13 @@ object AclCommand extends Logging {
   }
 
   private def getResourceFilter(opts: AclCommandOptions, dieIfNoResourceFound: Boolean = true): Set[ResourcePatternFilter] = {
-    val resourceNameType: JResourceNameType = opts.options.valueOf(opts.resourceNameType)
+    val resourceNameType: ResourceNameType = opts.options.valueOf(opts.resourceNameType)
 
     var resourceFilters = Set.empty[ResourcePatternFilter]
     if (opts.options.has(opts.topicOpt))
       opts.options.valuesOf(opts.topicOpt).asScala.foreach(topic => resourceFilters += new ResourcePatternFilter(JResourceType.TOPIC, topic.trim, resourceNameType))
 
-    if (resourceNameType == JResourceNameType.LITERAL && (opts.options.has(opts.clusterOpt) || opts.options.has(opts.idempotentOpt)))
+    if (resourceNameType == ResourceNameType.LITERAL && (opts.options.has(opts.clusterOpt) || opts.options.has(opts.idempotentOpt)))
       resourceFilters += ClusterResourceFilter
 
     if (opts.options.has(opts.groupOpt))
@@ -349,7 +349,7 @@ object AclCommand extends Logging {
       .withRequiredArg()
       .ofType(classOf[String])
       .withValuesConvertedBy(new ResourceNameTypeConverter())
-      .defaultsTo(JResourceNameType.LITERAL)
+      .defaultsTo(ResourceNameType.LITERAL)
 
     val addOpt = parser.accepts("add", "Indicates you are trying to add ACLs.")
     val removeOpt = parser.accepts("remove", "Indicates you are trying to remove ACLs.")
@@ -429,9 +429,9 @@ object AclCommand extends Logging {
 
 }
 
-class ResourceNameTypeConverter extends EnumConverter[JResourceNameType](classOf[JResourceNameType]) {
+class ResourceNameTypeConverter extends EnumConverter[ResourceNameType](classOf[ResourceNameType]) {
 
-  override def convert(value: String): JResourceNameType = {
+  override def convert(value: String): ResourceNameType = {
     val nameType = super.convert(value)
     if (nameType.isUnknown)
       throw new ValueConversionException("Unknown resourceNameType: " + value)
@@ -439,7 +439,7 @@ class ResourceNameTypeConverter extends EnumConverter[JResourceNameType](classOf
     nameType
   }
 
-  override def valuePattern: String = JResourceNameType.values
-    .filter(_ != JResourceNameType.UNKNOWN)
+  override def valuePattern: String = ResourceNameType.values
+    .filter(_ != ResourceNameType.UNKNOWN)
     .mkString("|")
 }

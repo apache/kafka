@@ -28,6 +28,7 @@ import kafka.server.{CreateTokenResult, Defaults, DelegationTokenManager, KafkaC
 import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.resource.ResourceNameType.LITERAL
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
@@ -242,7 +243,7 @@ class DelegationTokenManagerTest extends ZooKeeperTestHarness  {
 
     //get all tokens for multiple owners (owner1, renewer4) and with permission
     var acl = new Acl(owner1, Allow, WildCardHost, Describe)
-    simpleAclAuthorizer.addAcls(Set(acl), new Resource(kafka.security.auth.DelegationToken, tokenId3, Literal))
+    simpleAclAuthorizer.addAcls(Set(acl), Resource(kafka.security.auth.DelegationToken, tokenId3, LITERAL))
     tokens = getTokens(tokenManager, simpleAclAuthorizer, hostSession, owner1, List(owner1, renewer4))
     assert(tokens.size == 3)
 
@@ -257,7 +258,7 @@ class DelegationTokenManagerTest extends ZooKeeperTestHarness  {
     //get all tokens for multiple owners (renewer2, renewer3) which are token renewers principals and with permissions
     hostSession = new Session(renewer2, InetAddress.getByName("192.168.1.1"))
     acl = new Acl(renewer2, Allow, WildCardHost, Describe)
-    simpleAclAuthorizer.addAcls(Set(acl), new Resource(kafka.security.auth.DelegationToken, tokenId2, Literal))
+    simpleAclAuthorizer.addAcls(Set(acl), Resource(kafka.security.auth.DelegationToken, tokenId2, LITERAL))
     tokens = getTokens(tokenManager, simpleAclAuthorizer, hostSession,  renewer2, List(renewer2, renewer3))
     assert(tokens.size == 2)
 
@@ -271,7 +272,7 @@ class DelegationTokenManagerTest extends ZooKeeperTestHarness  {
       List()
     }
     else {
-      def authorizeToken(tokenId: String) = simpleAclAuthorizer.authorize(hostSession, Describe, new Resource(kafka.security.auth.DelegationToken, tokenId, Literal))
+      def authorizeToken(tokenId: String) = simpleAclAuthorizer.authorize(hostSession, Describe, Resource(kafka.security.auth.DelegationToken, tokenId, LITERAL))
       def eligible(token: TokenInformation) = DelegationTokenManager.filterToken(requestPrincipal, Option(requestedOwners), token, authorizeToken)
       tokenManager.getTokens(eligible)
     }

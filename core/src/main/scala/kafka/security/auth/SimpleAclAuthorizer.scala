@@ -27,6 +27,7 @@ import kafka.server.KafkaConfig
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
 import kafka.zk.{AclChangeNotificationSequenceZNode, KafkaZkClient, ZkAclStore}
+import org.apache.kafka.common.resource.ResourceNameType
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{SecurityUtils, Time}
 
@@ -101,7 +102,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   }
 
   override def authorize(session: Session, operation: Operation, resource: Resource): Boolean = {
-    if (resource.nameType != Literal) {
+    if (resource.nameType != ResourceNameType.LITERAL) {
       throw new IllegalArgumentException("Only literal resources are supported. Got: " + resource.nameType)
     }
 
@@ -203,15 +204,18 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
   def getMatchingAcls(resourceType: ResourceType, resourceName: String): Set[Acl] = {
     inReadLock(lock) {
-      val wildcard = aclCache.get(Resource(resourceType, Acl.WildCardResource, Literal))
+      val wildcard = aclCache.get(Resource(resourceType, Acl.WildCardResource, ResourceNameType.LITERAL))
         .map(_.acls)
         .getOrElse(Set.empty[Acl])
 
-      val literal = aclCache.get(Resource(resourceType, resourceName, Literal))
+      val literal = aclCache.get(Resource(resourceType, resourceName, ResourceNameType.LITERAL))
         .map(_.acls)
         .getOrElse(Set.empty[Acl])
 
-      val prefixed = aclCache.range(Resource(resourceType, resourceName, Prefixed), Resource(resourceType, resourceName.substring(0, 1), Prefixed))
+      val prefixed = aclCache.range(
+        Resource(resourceType, resourceName, ResourceNameType.PREFIXED),
+        Resource(resourceType, resourceName.substring(0, 1), ResourceNameType.PREFIXED)
+      )
         .filterKeys(resource => resourceName.startsWith(resource.name))
         .flatMap { case (resource, versionedAcls) => versionedAcls.acls }
         .toSet
@@ -222,7 +226,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
   override def getAcls(): Map[Resource, Set[Acl]] = {
     inReadLock(lock) {
-      aclCache.mapValues(_.acls).toMap
+      aclCache.mapValues(_.acls)
     }
   }
 
@@ -365,7 +369,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
       if (rt != 0)
         rt
       else {
-        val rnt = a.nameType compare b.nameType
+        val rnt = a.nameType compareTo b.nameType
         if (rnt != 0)
           rnt
         else

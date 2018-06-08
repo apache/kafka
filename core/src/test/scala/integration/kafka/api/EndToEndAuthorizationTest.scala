@@ -31,6 +31,7 @@ import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.{GroupAuthorizationException, TimeoutException, TopicAuthorizationException}
+import org.apache.kafka.common.resource.ResourceNameType.{LITERAL, PREFIXED}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
@@ -78,13 +79,13 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
 
   override protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
 
-  val topicResource = new Resource(Topic, topic, Literal)
-  val groupResource = new Resource(Group, group, Literal)
+  val topicResource = Resource(Topic, topic, LITERAL)
+  val groupResource = Resource(Group, group, LITERAL)
   val clusterResource = Resource.ClusterResource
-  val prefixedTopicResource = new Resource(Topic, topicPrefix, Prefixed)
-  val prefixedGroupResource = new Resource(Group, groupPrefix, Prefixed)
-  val wildcardTopicResource = new Resource(Topic, wildcard, Literal)
-  val wildcardGroupResource = new Resource(Group, wildcard, Literal)
+  val prefixedTopicResource = Resource(Topic, topicPrefix, PREFIXED)
+  val prefixedGroupResource = Resource(Group, groupPrefix, PREFIXED)
+  val wildcardTopicResource = Resource(Topic, wildcard, LITERAL)
+  val wildcardGroupResource = Resource(Group, wildcard, LITERAL)
 
   // Arguments to AclCommand to set ACLs.
   def clusterActionArgs: Array[String] = Array("--authorizer-properties",
@@ -182,7 +183,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     super.setUp()
     servers.foreach { s =>
       TestUtils.waitAndVerifyAcls(ClusterActionAcl, s.apis.authorizer.get, Resource.ClusterResource)
-      TestUtils.waitAndVerifyAcls(TopicBrokerReadAcl, s.apis.authorizer.get, new Resource(Topic, "*", Literal))
+      TestUtils.waitAndVerifyAcls(TopicBrokerReadAcl, s.apis.authorizer.get, Resource(Topic, "*", LITERAL))
     }
     // create the test topic with all the brokers as replicas
     createTopic(topic, 1, 3)
