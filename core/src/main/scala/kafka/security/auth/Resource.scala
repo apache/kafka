@@ -16,12 +16,12 @@
  */
 package kafka.security.auth
 
-import org.apache.kafka.common.resource.ResourcePattern
+import org.apache.kafka.common.resource.{ResourceNameType, ResourcePattern}
 
 object Resource {
   val Separator = ":"
   val ClusterResourceName = "kafka-cluster"
-  val ClusterResource = new Resource(Cluster, Resource.ClusterResourceName, Literal)
+  val ClusterResource = Resource(Cluster, Resource.ClusterResourceName, ResourceNameType.LITERAL)
   val ProducerIdResourceName = "producer-id"
   val WildCardResource = "*"
 
@@ -34,7 +34,7 @@ object Resource {
         }
       case _ =>
         str.split(Separator, 2) match {
-          case Array(resourceType, name, _*) => new Resource(ResourceType.fromString(resourceType), name, Literal)
+          case Array(resourceType, name, _*) => new Resource(ResourceType.fromString(resourceType), name, ResourceNameType.LITERAL)
           case _ => throw new IllegalArgumentException("expected a string in format ResourceType:ResourceName but got " + str)
         }
     }
@@ -50,6 +50,12 @@ object Resource {
  */
 case class Resource(resourceType: ResourceType, name: String, nameType: ResourceNameType) {
 
+  if (nameType == ResourceNameType.ANY)
+    throw new IllegalArgumentException("nameType must not be ANY")
+
+  if (nameType == ResourceNameType.UNKNOWN)
+    throw new IllegalArgumentException("nameType must not be UNKNOWN")
+
   /**
     * Create an instance of this class with the provided parameters.
     * Resource name type would default to ResourceNameType.LITERAL.
@@ -60,11 +66,11 @@ case class Resource(resourceType: ResourceType, name: String, nameType: Resource
     */
   @deprecated("Use Resource(ResourceType, String, ResourceNameType")
   def this(resourceType: ResourceType, name: String) {
-    this(resourceType, name, Literal)
+    this(resourceType, name, ResourceNameType.LITERAL)
   }
 
   def toPattern: ResourcePattern = {
-    new ResourcePattern(resourceType.toJava, name, nameType.toJava)
+    new ResourcePattern(resourceType.toJava, name, nameType)
   }
 
   override def toString: String = {
