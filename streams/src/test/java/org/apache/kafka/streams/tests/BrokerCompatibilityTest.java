@@ -153,7 +153,7 @@ public class BrokerCompatibilityTest {
 
         try (final KafkaConsumer<String, String> consumer = new KafkaConsumer<>(consumerProperties)) {
             consumer.subscribe(Collections.singletonList(SINK_TOPIC));
-            consumer.seekToBeginning(Collections.singleton(new TopicPartition(SINK_TOPIC, 0)));
+            consumer.seek(new TopicPartition(SINK_TOPIC, 0), 0L);
 
             while (true) {
                 final ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(100));
