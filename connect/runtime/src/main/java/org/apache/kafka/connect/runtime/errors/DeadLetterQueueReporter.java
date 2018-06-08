@@ -34,12 +34,11 @@ import org.slf4j.LoggerFactory;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
-import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
 import static java.util.Collections.singleton;
-import static org.apache.kafka.connect.header.ConnectHeaders.HEADER_PREFIX;
 
 /**
  * Write the original consumed record into a dead letter queue. The dead letter queue is a Kafka topic located
@@ -53,17 +52,17 @@ public class DeadLetterQueueReporter implements ErrorReporter {
 
     private static final int DLQ_NUM_DESIRED_PARTITIONS = 1;
 
-    public static final String ERROR_HEADER_PREFIX = HEADER_PREFIX + ".errors";
-    public static final String ERROR_HEADER_ORIG_TOPIC = ERROR_HEADER_PREFIX + ".topic";
-    public static final String ERROR_HEADER_ORIG_PARTITION = ERROR_HEADER_PREFIX + ".partition";
-    public static final String ERROR_HEADER_ORIG_OFFSET = ERROR_HEADER_PREFIX + ".offset";
-    public static final String ERROR_HEADER_CONNECTOR_NAME = ERROR_HEADER_PREFIX + ".connector.name";
-    public static final String ERROR_HEADER_TASK_ID = ERROR_HEADER_PREFIX + ".task.id";
-    public static final String ERROR_HEADER_STAGE = ERROR_HEADER_PREFIX + ".stage";
-    public static final String ERROR_HEADER_EXECUTING_CLASS = ERROR_HEADER_PREFIX + ".class.name";
-    public static final String ERROR_HEADER_EXECPTION = ERROR_HEADER_PREFIX + ".exception.class.name";
-    public static final String ERROR_HEADER_EXECPTION_MESSAGE = ERROR_HEADER_PREFIX + ".exception.message";
-    public static final String ERROR_HEADER_EXECPTION_STACK_TRACE = ERROR_HEADER_PREFIX + ".exception.stacktrace";
+    public static final String HEADER_PREFIX = "__connect.errors.";
+    public static final String ERROR_HEADER_ORIG_TOPIC = HEADER_PREFIX + "topic";
+    public static final String ERROR_HEADER_ORIG_PARTITION = HEADER_PREFIX + "partition";
+    public static final String ERROR_HEADER_ORIG_OFFSET = HEADER_PREFIX + "offset";
+    public static final String ERROR_HEADER_CONNECTOR_NAME = HEADER_PREFIX + "connector.name";
+    public static final String ERROR_HEADER_TASK_ID = HEADER_PREFIX + "task.id";
+    public static final String ERROR_HEADER_STAGE = HEADER_PREFIX + "stage";
+    public static final String ERROR_HEADER_EXECUTING_CLASS = HEADER_PREFIX + "class.name";
+    public static final String ERROR_HEADER_EXECPTION = HEADER_PREFIX + "exception.class.name";
+    public static final String ERROR_HEADER_EXECPTION_MESSAGE = HEADER_PREFIX + "exception.message";
+    public static final String ERROR_HEADER_EXECPTION_STACK_TRACE = HEADER_PREFIX + "exception.stacktrace";
 
     private final SinkConnectorConfig connConfig;
     private final ConnectorTaskId connectorTaskId;
@@ -196,6 +195,6 @@ public class DeadLetterQueueReporter implements ErrorReporter {
     }
 
     private byte[] toBytes(String value) {
-        return value.getBytes(Charset.forName("UTF-8"));
+        return value.getBytes(StandardCharsets.UTF_8);
     }
 }

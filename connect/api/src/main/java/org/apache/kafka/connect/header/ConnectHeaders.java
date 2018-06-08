@@ -44,8 +44,6 @@ import java.util.Set;
  */
 public class ConnectHeaders implements Headers {
 
-    public static final String HEADER_PREFIX = "__connect";
-
     private static final int EMPTY_HASH = Objects.hash(new LinkedList<>());
 
     /**
