@@ -35,6 +35,7 @@ import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.HashMap;
+import java.util.regex.Pattern;
 
 /**
  * Manages the directories where the state of Tasks owned by a {@link StreamThread} are
@@ -42,6 +43,9 @@ import java.util.HashMap;
  * thread-safe.
  */
 public class StateDirectory {
+
+    /** Statically compiled pattern for finding an underscore surrounded by at least 1 number before and also after. */
+    private static final Pattern MATCHER_NAME = Pattern.compile("\\d+_\\d+");
 
     static final String LOCK_FILE_NAME = ".lock";
     private static final Logger log = LoggerFactory.getLogger(StateDirectory.class);
@@ -320,8 +324,7 @@ public class StateDirectory {
         return stateDir.listFiles(new FileFilter() {
             @Override
             public boolean accept(final File pathname) {
-                final String name = pathname.getName();
-                return pathname.isDirectory() && name.matches("\\d+_\\d+");
+                return pathname.isDirectory() && MATCHER_NAME.matcher(pathname.getName()).matches();
             }
         });
     }
