@@ -21,7 +21,7 @@ import java.io.File
 import java.nio.ByteBuffer
 
 import kafka.utils.CoreUtils.inLock
-import kafka.common.InvalidOffsetException
+import kafka.common.{IndexOffsetOverflowException, InvalidOffsetException}
 
 /**
  * An index that maps offsets to physical file locations for a particular log segment. This index may be sparse:
@@ -134,13 +134,14 @@ class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writabl
 
   /**
    * Append an entry for the given offset/location pair to the index. This entry must have a larger offset than all subsequent entries.
+   * @throws IndexOffsetOverflowException if the offset causes index offset to overflow
    */
   def append(offset: Long, position: Int) {
     inLock(lock) {
       require(!isFull, "Attempt to append to a full index (size = " + _entries + ").")
       if (_entries == 0 || offset > _lastOffset) {
         debug("Adding index entry %d => %d to %s.".format(offset, position, file.getName))
-        mmap.putInt((offset - baseOffset).toInt)
+        mmap.putInt(relativeOffset(offset))
         mmap.putInt(position)
         _entries += 1
         _lastOffset = offset
