@@ -54,16 +54,16 @@ public class DeadLetterQueueReporter implements ErrorReporter {
     private static final int DLQ_NUM_DESIRED_PARTITIONS = 1;
 
     public static final String ERROR_HEADER_PREFIX = HEADER_PREFIX + ".errors";
-    public static final String ERROR_HEADER_ORIG_TOPIC = ERROR_HEADER_PREFIX + "." + "topic";
-    public static final String ERROR_HEADER_ORIG_PARTITION = ERROR_HEADER_PREFIX + "." + "partition";
-    public static final String ERROR_HEADER_ORIG_OFFSET = ERROR_HEADER_PREFIX + "." + "offset";
-    public static final String ERROR_HEADER_CONNECTOR_NAME = ERROR_HEADER_PREFIX + "." + "connector.name";
-    public static final String ERROR_HEADER_TASK_ID = ERROR_HEADER_PREFIX + "." + "task.id";
-    public static final String ERROR_HEADER_STAGE = ERROR_HEADER_PREFIX + "." + "stage";
-    public static final String ERROR_HEADER_EXECUTING_CLASS = ERROR_HEADER_PREFIX + "." + "class.name";
-    public static final String ERROR_HEADER_EXECPTION = ERROR_HEADER_PREFIX + "." + "exception.class.name";
-    public static final String ERROR_HEADER_EXECPTION_MESSAGE = ERROR_HEADER_PREFIX + "." + "exception.message";
-    public static final String ERROR_HEADER_EXECPTION_STACK_TRACE = ERROR_HEADER_PREFIX + "." + "exception.stacktrace";
+    public static final String ERROR_HEADER_ORIG_TOPIC = ERROR_HEADER_PREFIX + ".topic";
+    public static final String ERROR_HEADER_ORIG_PARTITION = ERROR_HEADER_PREFIX + ".partition";
+    public static final String ERROR_HEADER_ORIG_OFFSET = ERROR_HEADER_PREFIX + ".offset";
+    public static final String ERROR_HEADER_CONNECTOR_NAME = ERROR_HEADER_PREFIX + ".connector.name";
+    public static final String ERROR_HEADER_TASK_ID = ERROR_HEADER_PREFIX + ".task.id";
+    public static final String ERROR_HEADER_STAGE = ERROR_HEADER_PREFIX + ".stage";
+    public static final String ERROR_HEADER_EXECUTING_CLASS = ERROR_HEADER_PREFIX + ".class.name";
+    public static final String ERROR_HEADER_EXECPTION = ERROR_HEADER_PREFIX + ".exception.class.name";
+    public static final String ERROR_HEADER_EXECPTION_MESSAGE = ERROR_HEADER_PREFIX + ".exception.message";
+    public static final String ERROR_HEADER_EXECPTION_STACK_TRACE = ERROR_HEADER_PREFIX + ".exception.stacktrace";
 
     private final SinkConnectorConfig connConfig;
     private final ConnectorTaskId connectorTaskId;

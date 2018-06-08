@@ -52,7 +52,6 @@ public class SinkConnectorConfig extends ConnectorConfig {
     public static final String DLQ_TOPIC_DEFAULT = "";
     private static final String DLQ_TOPIC_DISPLAY = "Dead Letter Queue Topic Name";
 
-
     public static final String DLQ_TOPIC_REPLICATION_FACTOR_CONFIG = DLQ_PREFIX + "topic.replication.factor";
     private static final String DLQ_TOPIC_REPLICATION_FACTOR_CONFIG_DOC = "Replication factor used to create the dead letter queue topic when it doesn't already exist.";
     public static final short DLQ_TOPIC_REPLICATION_FACTOR_CONFIG_DEFAULT = 3;
@@ -63,7 +62,6 @@ public class SinkConnectorConfig extends ConnectorConfig {
     public static final String DLQ_CONTEXT_HEADERS_ENABLE_DOC = "If true, add headers containing error context to the messages " +
             "written to the dead letter queue. All error context headers will be prefixed with \"__connect.errors\".";
     private static final String DLQ_CONTEXT_HEADERS_ENABLE_DISPLAY = "Enable Error Context Headers";
-
 
     static ConfigDef config = ConnectorConfig.configDef()
         .define(TOPICS_CONFIG, ConfigDef.Type.LIST, TOPICS_DEFAULT, ConfigDef.Importance.HIGH, TOPICS_DOC, COMMON_GROUP, 4, ConfigDef.Width.LONG, TOPICS_DISPLAY)
