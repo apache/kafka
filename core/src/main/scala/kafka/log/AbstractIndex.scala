@@ -143,8 +143,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
    * @throws IOException if rename fails
    */
   def renameTo(f: File) {
-
-    try {
+    try{
       closeHandler()
       Utils.atomicMoveWithFallback(file.toPath, f.toPath)
     }
@@ -241,8 +240,10 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
    * Forcefully free the buffer's mmap.
    */
   protected[log] def forceUnmap() {
-    try MappedByteBuffers.unmap(file.getAbsolutePath, mmap)
-    finally mmap = null // Accessing unmapped mmap crashes JVM by SEGV so we null it out to be safe
+    if(mmap != null){
+      try MappedByteBuffers.unmap(file.getAbsolutePath, mmap)
+      finally mmap = null // Accessing unmapped mmap crashes JVM by SEGV so we null it out to be safe
+    }
   }
 
   /**
