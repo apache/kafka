@@ -96,9 +96,6 @@ object ZkUtils {
     (zkClient, zkConnection)
   }
 
-  @deprecated("This is deprecated, use defaultAcls(isSecure, path) which doesn't make sensitive data world readable", since = "0.10.2.1")
-  def DefaultAcls(isSecure: Boolean): java.util.List[ACL] = defaultAcls(isSecure, "")
-
   def sensitivePath(path: String): Boolean = ZkData.sensitivePath(path)
 
   def defaultAcls(isSecure: Boolean, path: String): java.util.List[ACL] = ZkData.defaultAcls(isSecure, path).asJava
@@ -200,9 +197,6 @@ class ZkUtils(val zkClient: ZkClient,
 
   // Visible for testing
   val zkPath = new ZkPath(zkClient)
-
-  @deprecated("This is deprecated, use defaultAcls(path) which doesn't make sensitive data world readable", since = "0.10.2.1")
-  val DefaultAcls: java.util.List[ACL] = ZkUtils.defaultAcls(isSecure, "")
 
   def defaultAcls(path: String): java.util.List[ACL] = ZkUtils.defaultAcls(isSecure, path)
 
