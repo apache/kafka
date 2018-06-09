@@ -70,6 +70,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     private final int maxBufferedSize;
 
     private boolean commitRequested = false;
+    private boolean commitOffsetNeeded = false;
     private boolean transactionInFlight = false;
     private final Time time;
     private final TaskMetrics taskMetrics;
@@ -290,6 +291,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
             // update the consumed offset map after processing is done
             consumedOffsets.put(partition, record.offset());
+            commitOffsetNeeded = true;
 
             // after processing this record, if its partition queue's buffered size has been
             // decreased to the threshold, we can then resume the consumption on this partition
@@ -410,24 +412,29 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      */
     private void commitOffsets(final boolean startNewTransaction) {
         try {
-            log.trace("Committing offsets");
-            final Map<TopicPartition, OffsetAndMetadata> consumedOffsetsAndMetadata = new HashMap<>(consumedOffsets.size());
-            for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
-                final TopicPartition partition = entry.getKey();
-                final long offset = entry.getValue() + 1;
-                consumedOffsetsAndMetadata.put(partition, new OffsetAndMetadata(offset));
-                stateMgr.putOffsetLimit(partition, offset);
+            if (commitOffsetNeeded) {
+                log.trace("Committing offsets");
+                final Map<TopicPartition, OffsetAndMetadata> consumedOffsetsAndMetadata = new HashMap<>(consumedOffsets.size());
+                for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
+                    final TopicPartition partition = entry.getKey();
+                    final long offset = entry.getValue() + 1;
+                    consumedOffsetsAndMetadata.put(partition, new OffsetAndMetadata(offset));
+                    stateMgr.putOffsetLimit(partition, offset);
+                }
+                if (eosEnabled) {
+                    producer.sendOffsetsToTransaction(consumedOffsetsAndMetadata, applicationId);
+                } else {
+                    consumer.commitSync(consumedOffsetsAndMetadata);
+                }
+                commitOffsetNeeded = false;
             }
             if (eosEnabled) {
-                producer.sendOffsetsToTransaction(consumedOffsetsAndMetadata, applicationId);
                 producer.commitTransaction();
                 transactionInFlight = false;
                 if (startNewTransaction) {
                     producer.beginTransaction();
                     transactionInFlight = true;
                 }
-            } else {
-                consumer.commitSync(consumedOffsetsAndMetadata);
             }
             if (eosEnabled && !startNewTransaction && transactionInFlight) { // need to make sure to commit txn for suspend case
                 producer.commitTransaction();
