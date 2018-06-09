@@ -1006,8 +1006,24 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
   }
 
   /**
-   * Creates Acl change notification message
-   * @param resource resource name
+    * Creates colon separated Acl change notification message.
+    *
+    * Kafka 2.0 saw the format of the ACL change event change from a 'colon separated' string, to a JSON message.
+    * This method will create a message in the old format, which is still needed while a cluster has
+    * 'inter.broker.protocol.version' < 2.0.
+    *
+    * @param resource resource pattern that has changed
+    */
+  def createLegacyAclChangeNotification(resource: Resource): Unit = {
+    val path = AclChangeNotificationSequenceZNode.createPath
+    val createRequest = CreateRequest(path, AclChangeNotificationSequenceZNode.encodeLegacy(resource), acls(path), CreateMode.PERSISTENT_SEQUENTIAL)
+    val createResponse = retryRequestUntilConnected(createRequest)
+    createResponse.maybeThrow
+  }
+
+  /**
+   * Creates JSON Acl change notification message.
+   * @param resource resource pattern that has changed
    */
   def createAclChangeNotification(resource: Resource): Unit = {
     val path = AclChangeNotificationSequenceZNode.createPath

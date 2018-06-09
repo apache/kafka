@@ -20,6 +20,7 @@ import java.util
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
 import com.typesafe.scalalogging.Logger
+import kafka.api.KAFKA_2_0_IV1
 import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
 import kafka.network.RequestChannel.Session
 import kafka.security.auth.SimpleAclAuthorizer.VersionedAcls
@@ -27,6 +28,7 @@ import kafka.server.KafkaConfig
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
 import kafka.zk.{AclChangeNotificationSequenceZNode, AclChangeNotificationZNode, KafkaZkClient, ZkAclStore}
+import org.apache.kafka.common.errors.UnsupportedVersionException
 import org.apache.kafka.common.resource.ResourceNameType
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{SecurityUtils, Time}
@@ -56,6 +58,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   private var shouldAllowEveryoneIfNoAclIsFound = false
   private var zkClient: KafkaZkClient = _
   private var aclChangeListener: ZkNodeChangeNotificationListener = _
+  private var legacyChangeEvent: Boolean = _
 
   @volatile
   private var aclCache = new scala.collection.immutable.TreeMap[Resource, VersionedAcls]()(ResourceOrdering)
@@ -95,6 +98,8 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     zkClient = KafkaZkClient(zkUrl, kafkaConfig.zkEnableSecureAcls, zkSessionTimeOutMs, zkConnectionTimeoutMs,
       zkMaxInFlightRequests, time, "kafka.security", "SimpleAclAuthorizer")
     zkClient.createAclPaths()
+
+    legacyChangeEvent = kafkaConfig.interBrokerProtocolVersion < KAFKA_2_0_IV1
 
     loadCache()
 
@@ -162,6 +167,11 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
   override def addAcls(acls: Set[Acl], resource: Resource) {
     if (acls != null && acls.nonEmpty) {
+      if (legacyChangeEvent && resource.nameType == ResourceNameType.PREFIXED) {
+        throw new UnsupportedVersionException(s"Adding ACLs on prefixed resource patterns requires " +
+          s"${KafkaConfig.InterBrokerProtocolVersionProp} of $KAFKA_2_0_IV1 or greater")
+      }
+
       inWriteLock(lock) {
         updateResourceAcls(resource) { currentAcls =>
           currentAcls ++ acls
@@ -334,7 +344,10 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   }
 
   private def updateAclChangedFlag(resource: Resource) {
-    zkClient.createAclChangeNotification(resource)
+    if (legacyChangeEvent)
+      zkClient.createLegacyAclChangeNotification(resource)
+    else
+      zkClient.createAclChangeNotification(resource)
   }
 
   private def backoffTime = {

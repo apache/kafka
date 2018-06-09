@@ -517,6 +517,14 @@ object AclChangeNotificationSequenceZNode {
   def createPath = s"${AclChangeNotificationZNode.path}/$SequenceNumberPrefix"
   def deletePath(sequenceNode: String) = s"${AclChangeNotificationZNode.path}/$sequenceNode"
 
+  def encodeLegacy(resource: Resource): Array[Byte] = {
+    if (resource.nameType != ResourceNameType.LITERAL)
+      throw new IllegalArgumentException("Only literal resource patterns can be encoded")
+
+    val legacyName = resource.resourceType + Resource.Separator + resource.name
+    legacyName.getBytes(UTF_8)
+  }
+
   def encode(resource: Resource): Array[Byte] =
     Json.encodeAsBytes(AclChangeEvent(
       AclChangeEvent.currentVersion,
@@ -525,7 +533,15 @@ object AclChangeNotificationSequenceZNode {
       resource.nameType.name))
 
   def decode(bytes: Array[Byte]): Resource = {
-    val changeEvent = Json.parseBytesAs[AclChangeEvent](bytes) match {
+    val string = new String(bytes, UTF_8)
+    if (string.startsWith("{"))
+      decode(string)
+    else
+      Resource.fromString(string)
+  }
+
+  private def decode(string: String): Resource = {
+    val changeEvent = Json.parseStringAs[AclChangeEvent](string) match {
       case Right(event) => event
       case Left(e) => throw new IllegalArgumentException("Failed to parse ACL change event", e)
     }

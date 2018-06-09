@@ -42,7 +42,6 @@
             <li>inter.broker.protocol.version=CURRENT_KAFKA_VERSION (0.11.0, 1.0, 1.1, 1.2).</li>
         </ul>
     </li>
-    <li> IMPORTANT: Do not change any ACLs during the upgrade. (The format of the ACL change event has changed and is not compatible with old brokers).</li>
     <li> Upgrade the brokers one at a time: shut down the broker, update the code, and restart it. </li>
     <li> Once the entire cluster is upgraded, bump the protocol version by editing <code>inter.broker.protocol.version</code> and setting it to 2.0.
     <li> Restart the brokers one by one for the new protocol version to take effect.</li>
@@ -62,10 +61,15 @@
         Similarly for the message format version.</li>
     <li>If you are using Java8 method references in your Kafka Streams code you might need to update your code to resolve method ambiguities.
         Hot-swapping the jar-file only might not work.</li>
-    <li>ACLs should not be added during the upgrade process.
-        <p><b>NOTE:</b> Any ACLs added to prefixed resources,
+    <li>Do not use the 2.0 AclCommand tool, a.k.a kafka-acl script, until all brokers are upgraded to 2.0.
+        You can continue to use the previous version of the tool while the cluster is upgrading.
+        (This is to avoid issues with the new JSON format for ACL change events introduced as part of
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-290%3A+Support+for+Prefixed+ACLs">KIP-290</a>)
+    </li>
+    <li>ACLs should not be added to prefixed resources,
         (added in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-290%3A+Support+for+Prefixed+ACLs">KIP-290</a>),
-        will be ignored should the cluster be downgraded again.
+        until all brokers in the cluster have been updated.
+        <p><b>NOTE:</b> any prefixed ACLs added to a cluster will be ignored should the cluster be downgraded again.
     </li>
 </ol>
 
