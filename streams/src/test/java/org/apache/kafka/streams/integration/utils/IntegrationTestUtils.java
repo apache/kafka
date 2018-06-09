@@ -44,6 +44,7 @@ import scala.Option;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Paths;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -464,7 +465,7 @@ public class IntegrationTestUtils {
         while (totalPollTimeMs < waitTime &&
             continueConsuming(consumerRecords.size(), maxMessages)) {
             totalPollTimeMs += pollIntervalMs;
-            final ConsumerRecords<K, V> records = consumer.poll(pollIntervalMs);
+            final ConsumerRecords<K, V> records = consumer.poll(Duration.ofMillis(pollIntervalMs));
 
             for (final ConsumerRecord<K, V> record : records) {
                 consumerRecords.add(record);

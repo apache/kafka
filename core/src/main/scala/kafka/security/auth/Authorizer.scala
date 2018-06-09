@@ -48,17 +48,19 @@ trait Authorizer extends Configurable {
    *
    * {code}
    * // The following will add ACLs to the literal resource path 'foo', which will only affect the topic named 'foo':
-   * authorizer.addAcls(Set(acl1, acl2), Resource(Topic, "foo", Literal))
+   * authorizer.addAcls(Set(acl1, acl2), Resource(Topic, "foo", LITERAL))
    *
    * // The following will add ACLs to the special literal topic resource path '*', which affects all topics:
-   * authorizer.addAcls(Set(acl1, acl2), Resource(Topic, "*", Literal))
+   * authorizer.addAcls(Set(acl1, acl2), Resource(Topic, "*", LITERAL))
    *
    * // The following will add ACLs to the prefixed resource path 'foo', which affects all topics whose name begins with 'foo':
-   * authorizer.addAcls(Set(acl1, acl2), Resource(Topic, "foo", Prefixed))
+   * authorizer.addAcls(Set(acl1, acl2), Resource(Topic, "foo", PREFIXED))
    * {code}
    *
    * @param acls set of acls to add to existing acls
-   * @param resource the resource path to which these acls should be attached
+   * @param resource the resource path to which these acls should be attached.
+   *                the supplied resource will have a specific resource name type,
+   *                i.e. the resource name type will not be ``ResourceNameType.ANY`` or ``ResourceNameType.UNKNOWN``.
    */
   def addAcls(acls: Set[Acl], resource: Resource): Unit
 
@@ -67,17 +69,19 @@ trait Authorizer extends Configurable {
    *
    * {code}
    * // The following will remove ACLs from the literal resource path 'foo', which will only affect the topic named 'foo':
-   * authorizer.removeAcls(Set(acl1, acl2), Resource(Topic, "foo", Literal))
+   * authorizer.removeAcls(Set(acl1, acl2), Resource(Topic, "foo", LITERAL))
    *
    * // The following will remove ACLs from the special literal topic resource path '*', which affects all topics:
-   * authorizer.removeAcls(Set(acl1, acl2), Resource(Topic, "*", Literal))
+   * authorizer.removeAcls(Set(acl1, acl2), Resource(Topic, "*", LITERAL))
    *
    * // The following will remove ACLs from the prefixed resource path 'foo', which affects all topics whose name begins with 'foo':
-   * authorizer.removeAcls(Set(acl1, acl2), Resource(Topic, "foo", Prefixed))
+   * authorizer.removeAcls(Set(acl1, acl2), Resource(Topic, "foo", PREFIXED))
    * {code}
    *
    * @param acls set of acls to be removed.
    * @param resource resource path from which the acls should be removed.
+   *                 the supplied resource will have a specific resource name type,
+   *                 i.e. the resource name type will not be ``ResourceNameType.ANY`` or ``ResourceNameType.UNKNOWN``.
    * @return true if some acl got removed, false if no acl was removed.
    */
   def removeAcls(acls: Set[Acl], resource: Resource): Boolean
@@ -87,16 +91,18 @@ trait Authorizer extends Configurable {
    *
    * {code}
    * // The following will remove all ACLs from the literal resource path 'foo', which will only affect the topic named 'foo':
-   * authorizer.removeAcls(Resource(Topic, "foo", Literal))
+   * authorizer.removeAcls(Resource(Topic, "foo", LITERAL))
    *
    * // The following will remove all ACLs from the special literal topic resource path '*', which affects all topics:
-   * authorizer.removeAcls(Resource(Topic, "*", Literal))
+   * authorizer.removeAcls(Resource(Topic, "*", LITERAL))
    *
    * // The following will remove all ACLs from the prefixed resource path 'foo', which affects all topics whose name begins with 'foo':
-   * authorizer.removeAcls(Resource(Topic, "foo", Prefixed))
+   * authorizer.removeAcls(Resource(Topic, "foo", PREFIXED))
    * {code}
    *
    * @param resource the resource path from which these acls should be removed.
+   *                 the supplied resource will have a specific resource name type,
+   *                 i.e. the resource name type will not be ``ResourceNameType.ANY`` or ``ResourceNameType.UNKNOWN``.
    * @return
    */
   def removeAcls(resource: Resource): Boolean
@@ -106,16 +112,18 @@ trait Authorizer extends Configurable {
    *
    * {code}
    * // The following will get all ACLs from the literal resource path 'foo', which will only affect the topic named 'foo':
-   * authorizer.removeAcls(Resource(Topic, "foo", Literal))
+   * authorizer.removeAcls(Resource(Topic, "foo", LITERAL))
    *
    * // The following will get all ACLs from the special literal topic resource path '*', which affects all topics:
-   * authorizer.removeAcls(Resource(Topic, "*", Literal))
+   * authorizer.removeAcls(Resource(Topic, "*", LITERAL))
    *
    * // The following will get all ACLs from the prefixed resource path 'foo', which affects all topics whose name begins with 'foo':
-   * authorizer.removeAcls(Resource(Topic, "foo", Prefixed))
+   * authorizer.removeAcls(Resource(Topic, "foo", PREFIXED))
    * {code}
    *
    * @param resource the resource path to which the acls belong.
+   *                 the supplied resource will have a specific resource name type,
+   *                 i.e. the resource name type will not be ``ResourceNameType.ANY`` or ``ResourceNameType.UNKNOWN``.
    * @return empty set if no acls are found, otherwise the acls for the resource.
    */
   def getAcls(resource: Resource): Set[Acl]

@@ -18,33 +18,34 @@
 package kafka.log
 
 import java.io.{File, IOException}
+import java.lang.{Long => JLong}
+import java.nio.ByteBuffer
 import java.nio.file.{Files, NoSuchFileException}
 import java.text.NumberFormat
+import java.util.Map.{Entry => JEntry}
 import java.util.concurrent.atomic._
 import java.util.concurrent.{ConcurrentNavigableMap, ConcurrentSkipListMap, TimeUnit}
+import java.util.regex.Pattern
 
+import com.yammer.metrics.core.Gauge
 import kafka.api.KAFKA_0_10_0_IV0
-import kafka.common.{InvalidOffsetException, KafkaException, LongRef}
+import kafka.common.{InvalidOffsetException, KafkaException, LogSegmentOffsetOverflowException, LongRef}
+import kafka.message.{BrokerCompressionCodec, CompressionCodec, NoCompressionCodec}
 import kafka.metrics.KafkaMetricsGroup
+import kafka.server.checkpoints.{LeaderEpochCheckpointFile, LeaderEpochFile}
+import kafka.server.epoch.{LeaderEpochCache, LeaderEpochFileCache}
 import kafka.server.{BrokerTopicStats, FetchDataInfo, LogDirFailureChannel, LogOffsetMetadata}
 import kafka.utils._
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{CorruptRecordException, KafkaStorageException, OffsetOutOfRangeException, RecordBatchTooLargeException, RecordTooLargeException, UnsupportedForMessageFormatException}
 import org.apache.kafka.common.record._
+import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import org.apache.kafka.common.requests.{IsolationLevel, ListOffsetRequest}
+import org.apache.kafka.common.utils.{Time, Utils}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.collection.{Seq, Set, mutable}
-import com.yammer.metrics.core.Gauge
-import org.apache.kafka.common.utils.{Time, Utils}
-import kafka.message.{BrokerCompressionCodec, CompressionCodec, NoCompressionCodec}
-import kafka.server.checkpoints.{LeaderEpochCheckpointFile, LeaderEpochFile}
-import kafka.server.epoch.{LeaderEpochCache, LeaderEpochFileCache}
-import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
-import java.util.Map.{Entry => JEntry}
-import java.lang.{Long => JLong}
-import java.util.regex.Pattern
 
 object LogAppendInfo {
   val UnknownLogAppendInfo = LogAppendInfo(None, -1, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, -1L,
@@ -85,15 +86,15 @@ case class LogAppendInfo(var firstOffset: Option[Long],
                          validBytes: Int,
                          offsetsMonotonic: Boolean) {
   /**
-    * Get the first offset if it exists, else get the last offset.
-    * @return The offset of first message if it exists; else offset of the last message.
-    */
+   * Get the first offset if it exists, else get the last offset.
+   * @return The offset of first message if it exists; else offset of the last message.
+   */
   def firstOrLastOffset: Long = firstOffset.getOrElse(lastOffset)
 
   /**
-    * Get the (maximum) number of messages described by LogAppendInfo
-    * @return Maximum possible number of messages described by LogAppendInfo
-    */
+   * Get the (maximum) number of messages described by LogAppendInfo
+   * @return Maximum possible number of messages described by LogAppendInfo
+   */
   def numMessages: Long = {
     firstOffset match {
       case Some(firstOffsetVal) if (firstOffsetVal >= 0 && lastOffset >= 0) => (lastOffset - firstOffsetVal + 1)
@@ -157,7 +158,7 @@ class Log(@volatile var dir: File,
           @volatile var recoveryPoint: Long,
           scheduler: Scheduler,
           brokerTopicStats: BrokerTopicStats,
-          time: Time,
+          val time: Time,
           val maxProducerIdExpirationMs: Int,
           val producerIdExpirationCheckIntervalMs: Int,
           val topicPartition: TopicPartition,
@@ -295,42 +296,79 @@ class Log(@volatile var dir: File,
       new LeaderEpochCheckpointFile(LeaderEpochFile.newFile(dir), logDirFailureChannel))
   }
 
+  /**
+   * Removes any temporary files found in log directory, and creates a list of all .swap files which could be swapped
+   * in place of existing segment(s). For log splitting, we know that any .swap file whose base offset is higher than
+   * the smallest offset .clean file could be part of an incomplete split operation. Such .swap files are also deleted
+   * by this method.
+   * @return Set of .swap files that are valid to be swapped in as segment files
+   */
   private def removeTempFilesAndCollectSwapFiles(): Set[File] = {
 
-    def deleteIndicesIfExist(baseFile: File, swapFile: File, fileType: String): Unit = {
-      info(s"Found $fileType file ${swapFile.getAbsolutePath} from interrupted swap operation. Deleting index files (if they exist).")
+    def deleteIndicesIfExist(baseFile: File, suffix: String = ""): Unit = {
+      info(s"Deleting index files with suffix $suffix for baseFile $baseFile")
       val offset = offsetFromFile(baseFile)
-      Files.deleteIfExists(Log.offsetIndexFile(dir, offset).toPath)
-      Files.deleteIfExists(Log.timeIndexFile(dir, offset).toPath)
-      Files.deleteIfExists(Log.transactionIndexFile(dir, offset).toPath)
+      Files.deleteIfExists(Log.offsetIndexFile(dir, offset, suffix).toPath)
+      Files.deleteIfExists(Log.timeIndexFile(dir, offset, suffix).toPath)
+      Files.deleteIfExists(Log.transactionIndexFile(dir, offset, suffix).toPath)
     }
 
     var swapFiles = Set[File]()
+    var cleanFiles = Set[File]()
+    var minCleanedFileOffset = Long.MaxValue
 
     for (file <- dir.listFiles if file.isFile) {
       if (!file.canRead)
         throw new IOException(s"Could not read file $file")
       val filename = file.getName
-      if (filename.endsWith(DeletedFileSuffix) || filename.endsWith(CleanedFileSuffix)) {
+      if (filename.endsWith(DeletedFileSuffix)) {
         debug(s"Deleting stray temporary file ${file.getAbsolutePath}")
         Files.deleteIfExists(file.toPath)
+      } else if (filename.endsWith(CleanedFileSuffix)) {
+        minCleanedFileOffset = Math.min(offsetFromFileName(filename), minCleanedFileOffset)
+        cleanFiles += file
       } else if (filename.endsWith(SwapFileSuffix)) {
         // we crashed in the middle of a swap operation, to recover:
         // if a log, delete the index files, complete the swap operation later
         // if an index just delete the index files, they will be rebuilt
         val baseFile = new File(CoreUtils.replaceSuffix(file.getPath, SwapFileSuffix, ""))
+        info(s"Found file ${file.getAbsolutePath} from interrupted swap operation.")
         if (isIndexFile(baseFile)) {
-          deleteIndicesIfExist(baseFile, file, "index")
+          deleteIndicesIfExist(baseFile)
         } else if (isLogFile(baseFile)) {
-          deleteIndicesIfExist(baseFile, file, "log")
+          deleteIndicesIfExist(baseFile)
           swapFiles += file
         }
       }
     }
-    swapFiles
+
+    // KAFKA-6264: Delete all .swap files whose base offset is greater than the minimum .cleaned segment offset. Such .swap
+    // files could be part of an incomplete split operation that could not complete. See Log#splitOverflowedSegment
+    // for more details about the split operation.
+    val (invalidSwapFiles, validSwapFiles) = swapFiles.partition(file => offsetFromFile(file) >= minCleanedFileOffset)
+    invalidSwapFiles.foreach { file =>
+      debug(s"Deleting invalid swap file ${file.getAbsoluteFile} minCleanedFileOffset: $minCleanedFileOffset")
+      val baseFile = new File(CoreUtils.replaceSuffix(file.getPath, SwapFileSuffix, ""))
+      deleteIndicesIfExist(baseFile, SwapFileSuffix)
+      Files.deleteIfExists(file.toPath)
+    }
+
+    // Now that we have deleted all .swap files that constitute an incomplete split operation, let's delete all .clean files
+    cleanFiles.foreach { file =>
+      debug(s"Deleting stray .clean file ${file.getAbsolutePath}")
+      Files.deleteIfExists(file.toPath)
+    }
+
+    validSwapFiles
   }
 
-  // This method does not need to convert IOException to KafkaStorageException because it is only called before all logs are loaded
+  /**
+   * This method does not need to convert IOException to KafkaStorageException because it is only called before all logs are loaded
+   * It is possible that we encounter a segment with index offset overflow in which case the LogSegmentOffsetOverflowException
+   * will be thrown. Note that any segments that were opened before we encountered the exception will remain open and the
+   * caller is responsible for closing them appropriately, if needed.
+   * @throws LogSegmentOffsetOverflowException if the log directory contains a segment with messages that overflow the index offset
+   */
   private def loadSegmentFiles(): Unit = {
     // load segments in ascending order because transactional data from one segment may depend on the
     // segments that come before it
@@ -369,6 +407,13 @@ class Log(@volatile var dir: File,
     }
   }
 
+  /**
+   * Recover the given segment.
+   * @param segment Segment to recover
+   * @param leaderEpochCache Optional cache for updating the leader epoch during recovery
+   * @return The number of bytes truncated from the segment
+   * @throws LogSegmentOffsetOverflowException if the segment contains messages that cause index offset overflow
+   */
   private def recoverSegment(segment: LogSegment, leaderEpochCache: Option[LeaderEpochCache] = None): Int = lock synchronized {
     val stateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs)
     stateManager.truncateAndReload(logStartOffset, segment.baseOffset, time.milliseconds)
@@ -383,7 +428,6 @@ class Log(@volatile var dir: File,
     // take a snapshot for the first recovered segment to avoid reloading all the segments if we shutdown before we
     // checkpoint the recovery point
     stateManager.takeSnapshot()
-
     val bytesTruncated = segment.recover(stateManager, leaderEpochCache)
 
     // once we have recovered the segment's data, take a snapshot to ensure that we won't
@@ -392,7 +436,16 @@ class Log(@volatile var dir: File,
     bytesTruncated
   }
 
-  // This method does not need to convert IOException to KafkaStorageException because it is only called before all logs are loaded
+  /**
+   * This method does not need to convert IOException to KafkaStorageException because it is only called before all logs
+   * are loaded.
+   * @throws LogSegmentOffsetOverflowException if the swap file contains messages that cause the log segment offset to
+   *                                           overflow. Note that this is currently a fatal exception as we do not have
+   *                                           a way to deal with it. The exception is propagated all the way up to
+   *                                           KafkaServer#startup which will cause the broker to shut down if we are in
+   *                                           this situation. This is expected to be an extremely rare scenario in practice,
+   *                                           and manual intervention might be required to get out of it.
+   */
   private def completeSwapOperations(swapFiles: Set[File]): Unit = {
     for (swapFile <- swapFiles) {
       val logFile = new File(CoreUtils.replaceSuffix(swapFile.getPath, SwapFileSuffix, ""))
@@ -404,20 +457,49 @@ class Log(@volatile var dir: File,
         fileSuffix = SwapFileSuffix)
       info(s"Found log file ${swapFile.getPath} from interrupted swap operation, repairing.")
       recoverSegment(swapSegment)
-      val oldSegments = logSegments(swapSegment.baseOffset, swapSegment.readNextOffset)
-      replaceSegments(swapSegment, oldSegments.toSeq, isRecoveredSwapFile = true)
+
+      var oldSegments = logSegments(swapSegment.baseOffset, swapSegment.readNextOffset)
+
+      // We create swap files for two cases: (1) Log cleaning where multiple segments are merged into one, and
+      // (2) Log splitting where one segment is split into multiple.
+      // Both of these mean that the resultant swap segments be composed of the original set, i.e. the swap segment
+      // must fall within the range of existing segment(s). If we cannot find such a segment, it means the deletion
+      // of that segment was successful. In such an event, we should simply rename the .swap to .log without having to
+      // do a replace with an existing segment.
+      if (oldSegments.nonEmpty) {
+        val start = oldSegments.head.baseOffset
+        val end = oldSegments.last.readNextOffset
+        if (!(swapSegment.baseOffset >= start && swapSegment.baseOffset <= end))
+          oldSegments = List()
+      }
+
+      replaceSegments(Seq(swapSegment), oldSegments.toSeq, isRecoveredSwapFile = true)
     }
   }
 
-  // Load the log segments from the log files on disk and return the next offset
-  // This method does not need to convert IOException to KafkaStorageException because it is only called before all logs are loaded
+  /**
+   * Load the log segments from the log files on disk and return the next offset.
+   * This method does not need to convert IOException to KafkaStorageException because it is only called before all logs
+   * are loaded.
+   * @throws LogSegmentOffsetOverflowException if we encounter a .swap file with messages that overflow index offset; or when
+   *                                           we find an unexpected number of .log files with overflow
+   */
   private def loadSegments(): Long = {
     // first do a pass through the files in the log directory and remove any temporary files
     // and find any interrupted swap operations
     val swapFiles = removeTempFilesAndCollectSwapFiles()
 
-    // now do a second pass and load all the log and index files
-    loadSegmentFiles()
+    // Now do a second pass and load all the log and index files.
+    // We might encounter legacy log segments with offset overflow (KAFKA-6264). We need to split such segments. Whe
+    // this happens, restart loading segment files from scratch.
+    retryOnOffsetOverflow {
+      // In case we encounter a segment with offset overflow, the retry logic will split it after which we need to retry
+      // loading of segments. In that case, we also need to close all segments that could have been left open in previous
+      // call to loadSegmentFiles().
+      logSegments.foreach(_.close())
+      segments.clear()
+      loadSegmentFiles()
+    }
 
     // Finally, complete any interrupted swap operations. To be crash-safe,
     // log files that are replaced by the swap segment should be renamed to .deleted
@@ -435,7 +517,10 @@ class Log(@volatile var dir: File,
         preallocate = config.preallocate))
       0
     } else if (!dir.getAbsolutePath.endsWith(Log.DeleteDirSuffix)) {
-      val nextOffset = recoverLog()
+      val nextOffset = retryOnOffsetOverflow {
+        recoverLog()
+      }
+
       // reset the index size of the currently active log segment to allow more entries
       activeSegment.resizeIndexes(config.maxIndexSize)
       nextOffset
@@ -448,9 +533,9 @@ class Log(@volatile var dir: File,
 
   /**
    * Recover the log segments and return the next offset after recovery.
-   *
    * This method does not need to convert IOException to KafkaStorageException because it is only called before all
    * logs are loaded.
+   * @throws LogSegmentOffsetOverflowException if we encountered a legacy segment with offset overflow
    */
   private def recoverLog(): Long = {
     // if we have the clean shutdown marker, skip recovery
@@ -585,10 +670,10 @@ class Log(@volatile var dir: File,
   }
 
   /**
-    * Rename the directory of the log
-    *
-    * @throws KafkaStorageException if rename fails
-    */
+   * Rename the directory of the log
+   *
+   * @throws KafkaStorageException if rename fails
+   */
   def renameDir(name: String) {
     lock synchronized {
       maybeHandleIOException(s"Error while renaming dir for $topicPartition in log dir ${dir.getParent}") {
@@ -1315,9 +1400,9 @@ class Log(@volatile var dir: File,
 
     if (segment.shouldRoll(messagesSize, maxTimestampInMessages, maxOffsetInMessages, now)) {
       debug(s"Rolling new log segment (log_size = ${segment.size}/${config.segmentSize}}, " +
-          s"offset_index_size = ${segment.offsetIndex.entries}/${segment.offsetIndex.maxEntries}, " +
-          s"time_index_size = ${segment.timeIndex.entries}/${segment.timeIndex.maxEntries}, " +
-          s"inactive_time_ms = ${segment.timeWaitedForRoll(now, maxTimestampInMessages)}/${config.segmentMs - segment.rollJitterMs}).")
+        s"offset_index_size = ${segment.offsetIndex.entries}/${segment.offsetIndex.maxEntries}, " +
+        s"time_index_size = ${segment.timeIndex.entries}/${segment.timeIndex.maxEntries}, " +
+        s"inactive_time_ms = ${segment.timeWaitedForRoll(now, maxTimestampInMessages)}/${config.segmentMs - segment.rollJitterMs}).")
 
       /*
         maxOffsetInMessages - Integer.MAX_VALUE is a heuristic value for the first offset in the set of messages.
@@ -1644,51 +1729,59 @@ class Log(@volatile var dir: File,
   }
 
   /**
-   * Swap a new segment in place and delete one or more existing segments in a crash-safe manner. The old segments will
-   * be asynchronously deleted.
+   * Swap one or more new segment in place and delete one or more existing segments in a crash-safe manner. The old
+   * segments will be asynchronously deleted.
    *
    * This method does not need to convert IOException to KafkaStorageException because it is either called before all logs are loaded
    * or the caller will catch and handle IOException
    *
    * The sequence of operations is:
    * <ol>
-   *   <li> Cleaner creates new segment with suffix .cleaned and invokes replaceSegments().
+   *   <li> Cleaner creates one or more new segments with suffix .cleaned and invokes replaceSegments().
    *        If broker crashes at this point, the clean-and-swap operation is aborted and
-   *        the .cleaned file is deleted on recovery in loadSegments().
-   *   <li> New segment is renamed .swap. If the broker crashes after this point before the whole
-   *        operation is completed, the swap operation is resumed on recovery as described in the next step.
+   *        the .cleaned files are deleted on recovery in loadSegments().
+   *   <li> New segments are renamed .swap. If the broker crashes before all segments were renamed to .swap, the
+   *        clean-and-swap operation is aborted - .cleaned as well as .swap files are deleted on recovery in
+   *        loadSegments(). We detect this situation by maintaining a specific order in which files are renamed from
+   *        .cleaned to .swap. Basically, files are renamed in descending order of offsets. On recovery, all .swap files
+   *        whose offset is greater than the minimum-offset .clean file are deleted.
+   *   <li> If the broker crashes after all new segments were renamed to .swap, the operation is completed, the swap
+   *        operation is resumed on recovery as described in the next step.
    *   <li> Old segment files are renamed to .deleted and asynchronous delete is scheduled.
    *        If the broker crashes, any .deleted files left behind are deleted on recovery in loadSegments().
    *        replaceSegments() is then invoked to complete the swap with newSegment recreated from
    *        the .swap file and oldSegments containing segments which were not renamed before the crash.
-   *   <li> Swap segment is renamed to replace the existing segment, completing this operation.
+   *   <li> Swap segment(s) are renamed to replace the existing segments, completing this operation.
    *        If the broker crashes, any .deleted files which may be left behind are deleted
    *        on recovery in loadSegments().
    * </ol>
    *
-   * @param newSegment The new log segment to add to the log
+   * @param newSegments The new log segment to add to the log
    * @param oldSegments The old log segments to delete from the log
    * @param isRecoveredSwapFile true if the new segment was created from a swap file during recovery after a crash
    */
-  private[log] def replaceSegments(newSegment: LogSegment, oldSegments: Seq[LogSegment], isRecoveredSwapFile: Boolean = false) {
+  private[log] def replaceSegments(newSegments: Seq[LogSegment], oldSegments: Seq[LogSegment], isRecoveredSwapFile: Boolean = false) {
+    val sortedNewSegments = newSegments.sortBy(_.baseOffset)
+    val sortedOldSegments = oldSegments.sortBy(_.baseOffset)
+
     lock synchronized {
       checkIfMemoryMappedBufferClosed()
       // need to do this in two phases to be crash safe AND do the delete asynchronously
       // if we crash in the middle of this we complete the swap in loadSegments()
       if (!isRecoveredSwapFile)
-        newSegment.changeFileSuffixes(Log.CleanedFileSuffix, Log.SwapFileSuffix)
-      addSegment(newSegment)
+        sortedNewSegments.reverse.foreach(_.changeFileSuffixes(Log.CleanedFileSuffix, Log.SwapFileSuffix))
+      sortedNewSegments.reverse.foreach(addSegment(_))
 
       // delete the old files
-      for (seg <- oldSegments) {
+      for (seg <- sortedOldSegments) {
         // remove the index entry
-        if (seg.baseOffset != newSegment.baseOffset)
+        if (seg.baseOffset != sortedNewSegments.head.baseOffset)
           segments.remove(seg.baseOffset)
         // delete segment
         asyncDeleteSegment(seg)
       }
       // okay we are safe now, remove the swap suffix
-      newSegment.changeFileSuffixes(Log.SwapFileSuffix, "")
+      sortedNewSegments.foreach(_.changeFileSuffixes(Log.SwapFileSuffix, ""))
     }
   }
 
@@ -1701,12 +1794,13 @@ class Log(@volatile var dir: File,
     removeMetric("LogEndOffset", tags)
     removeMetric("Size", tags)
   }
+
   /**
    * Add the given segment to the segments in this log. If this segment replaces an existing segment, delete it.
-   *
    * @param segment The segment to add
    */
-  def addSegment(segment: LogSegment) = this.segments.put(segment.baseOffset, segment)
+  @threadsafe
+  def addSegment(segment: LogSegment): LogSegment = this.segments.put(segment.baseOffset, segment)
 
   private def maybeHandleIOException[T](msg: => String)(fun: => T): T = {
     try {
@@ -1718,6 +1812,140 @@ class Log(@volatile var dir: File,
     }
   }
 
+  /**
+   * @throws LogSegmentOffsetOverflowException if we encounter segments with index overflow for more than maxTries
+   */
+  private[log] def retryOnOffsetOverflow[T](fn: => T): T = {
+    var triesSoFar = 0
+    while (true) {
+      try {
+        return fn
+      } catch {
+        case e: LogSegmentOffsetOverflowException =>
+          triesSoFar += 1
+          info(s"Caught LogOffsetOverflowException ${e.getMessage}. Split segment and retry. retry#: $triesSoFar.")
+          splitOverflowedSegment(e.logSegment)
+      }
+    }
+    throw new IllegalStateException()
+  }
+
+  /**
+   * Split the given log segment into multiple such that there is no offset overflow in the resulting segments. The
+   * resulting segments will contain the exact same messages that are present in the input segment. On successful
+   * completion of this method, the input segment will be deleted and will be replaced by the resulting new segments.
+   * See replaceSegments for recovery logic, in case the broker dies in the middle of this operation.
+   * <p>Note that this method assumes we have already determined that the segment passed in contains records that cause
+   * offset overflow.</p>
+   * <p>The split logic overloads the use of .clean files that LogCleaner typically uses to make the process of replacing
+   * the input segment with multiple new segments atomic and recoverable in the event of a crash. See replaceSegments
+   * and completeSwapOperations for the implementation to make this operation recoverable on crashes.</p>
+   * @param segment Segment to split
+   * @return List of new segments that replace the input segment
+   */
+  private[log] def splitOverflowedSegment(segment: LogSegment): List[LogSegment] = {
+    require(isLogFile(segment.log.file), s"Cannot split file ${segment.log.file.getAbsoluteFile}")
+    info(s"Attempting to split segment ${segment.log.file.getAbsolutePath}")
+
+    val newSegments = ListBuffer[LogSegment]()
+    var position = 0
+    val sourceRecords = segment.log
+    var readBuffer = ByteBuffer.allocate(1024 * 1024)
+
+    class CopyResult(val bytesRead: Int, val overflowOffset: Option[Long])
+
+    // Helper method to copy `records` into `segment`. Makes sure records being appended do not result in offset overflow.
+    def copyRecordsToSegment(records: FileRecords, segment: LogSegment, readBuffer: ByteBuffer): CopyResult = {
+      var bytesRead = 0
+      var maxTimestamp = Long.MinValue
+      var offsetOfMaxTimestamp = Long.MinValue
+      var maxOffset = Long.MinValue
+
+      // find all batches that are valid to be appended to the current log segment
+      val (validBatches, overflowBatches) = records.batches.asScala.span(batch => segment.offsetIndex.canAppendOffset(batch.lastOffset))
+      val overflowOffset = overflowBatches.headOption.map { firstBatch =>
+        info(s"Found overflow at offset ${firstBatch.baseOffset} in segment $segment")
+        firstBatch.baseOffset
+      }
+
+      // return early if no valid batches were found
+      if (validBatches.isEmpty) {
+        require(overflowOffset.isDefined, "No batches found during split")
+        return new CopyResult(0, overflowOffset)
+      }
+
+      // determine the maximum offset and timestamp in batches
+      for (batch <- validBatches) {
+        if (batch.maxTimestamp > maxTimestamp) {
+          maxTimestamp = batch.maxTimestamp
+          offsetOfMaxTimestamp = batch.lastOffset
+        }
+        maxOffset = batch.lastOffset
+        bytesRead += batch.sizeInBytes
+      }
+
+      // read all valid batches into memory
+      val validRecords = records.slice(0, bytesRead)
+      require(readBuffer.capacity >= validRecords.sizeInBytes)
+      readBuffer.clear()
+      readBuffer.limit(validRecords.sizeInBytes)
+      validRecords.readInto(readBuffer, 0)
+
+      // append valid batches into the segment
+      segment.append(maxOffset, maxTimestamp, offsetOfMaxTimestamp, MemoryRecords.readableRecords(readBuffer))
+      readBuffer.clear()
+      info(s"Appended messages till $maxOffset to segment $segment during split")
+
+      new CopyResult(bytesRead, overflowOffset)
+    }
+
+    try {
+      info(s"Splitting segment $segment")
+      newSegments += LogCleaner.createNewCleanedSegment(this, segment.baseOffset)
+      while (position < sourceRecords.sizeInBytes) {
+        val currentSegment = newSegments.last
+
+        // grow buffers if needed
+        val firstBatch = sourceRecords.batchesFrom(position).asScala.head
+        if (firstBatch.sizeInBytes > readBuffer.capacity)
+          readBuffer = ByteBuffer.allocate(firstBatch.sizeInBytes)
+
+        // get records we want to copy and copy them into the new segment
+        val recordsToCopy = sourceRecords.slice(position, readBuffer.capacity)
+        val copyResult = copyRecordsToSegment(recordsToCopy, currentSegment, readBuffer)
+        position += copyResult.bytesRead
+
+        // create a new segment if there was an overflow
+        copyResult.overflowOffset.foreach(overflowOffset => newSegments += LogCleaner.createNewCleanedSegment(this, overflowOffset))
+      }
+      require(newSegments.length > 1, s"No offset overflow found for $segment")
+
+      // prepare new segments
+      var totalSizeOfNewSegments = 0
+      info(s"Split messages from $segment into ${newSegments.length} new segments")
+      newSegments.foreach { splitSegment =>
+        splitSegment.onBecomeInactiveSegment()
+        splitSegment.flush()
+        splitSegment.lastModified = segment.lastModified
+        totalSizeOfNewSegments += splitSegment.log.sizeInBytes
+        info(s"New segment: $splitSegment")
+      }
+      // size of all the new segments combined must equal size of the original segment
+      require(totalSizeOfNewSegments == segment.log.sizeInBytes, "Inconsistent segment sizes after split" +
+        s" before: ${segment.log.sizeInBytes} after: $totalSizeOfNewSegments")
+    } catch {
+      case e: Exception =>
+        newSegments.foreach { splitSegment =>
+          splitSegment.close()
+          splitSegment.deleteIfExists()
+        }
+        throw e
+    }
+
+    // replace old segment with new ones
+    replaceSegments(newSegments.toList, List(segment), isRecoveredSwapFile = false)
+    newSegments.toList
+  }
 }
 
 /**
@@ -1809,17 +2037,17 @@ object Log {
     new File(dir, filenamePrefixFromOffset(offset) + LogFileSuffix + suffix)
 
   /**
-    * Return a directory name to rename the log directory to for async deletion. The name will be in the following
-    * format: topic-partition.uniqueId-delete where topic, partition and uniqueId are variables.
-    */
+   * Return a directory name to rename the log directory to for async deletion. The name will be in the following
+   * format: topic-partition.uniqueId-delete where topic, partition and uniqueId are variables.
+   */
   def logDeleteDirName(topicPartition: TopicPartition): String = {
     logDirNameWithSuffix(topicPartition, DeleteDirSuffix)
   }
 
   /**
-    * Return a future directory name for the given topic partition. The name will be in the following
-    * format: topic-partition.uniqueId-future where topic, partition and uniqueId are variables.
-    */
+   * Return a future directory name for the given topic partition. The name will be in the following
+   * format: topic-partition.uniqueId-future where topic, partition and uniqueId are variables.
+   */
   def logFutureDirName(topicPartition: TopicPartition): String = {
     logDirNameWithSuffix(topicPartition, FutureDirSuffix)
   }
@@ -1830,9 +2058,9 @@ object Log {
   }
 
   /**
-    * Return a directory name for the given topic partition. The name will be in the following
-    * format: topic-partition where topic, partition are variables.
-    */
+   * Return a directory name for the given topic partition. The name will be in the following
+   * format: topic-partition where topic, partition are variables.
+   */
   def logDirName(topicPartition: TopicPartition): String = {
     s"${topicPartition.topic}-${topicPartition.partition}"
   }
@@ -1857,6 +2085,9 @@ object Log {
   def timeIndexFile(dir: File, offset: Long, suffix: String = ""): File =
     new File(dir, filenamePrefixFromOffset(offset) + TimeIndexFileSuffix + suffix)
 
+  def deleteFileIfExists(file: File, suffix: String = ""): Unit =
+    Files.deleteIfExists(new File(file.getPath + suffix).toPath)
+
   /**
    * Construct a producer id snapshot file using the given offset.
    *
@@ -1876,17 +2107,20 @@ object Log {
   def transactionIndexFile(dir: File, offset: Long, suffix: String = ""): File =
     new File(dir, filenamePrefixFromOffset(offset) + TxnIndexFileSuffix + suffix)
 
-  def offsetFromFile(file: File): Long = {
-    val filename = file.getName
+  def offsetFromFileName(filename: String): Long = {
     filename.substring(0, filename.indexOf('.')).toLong
   }
 
+  def offsetFromFile(file: File): Long = {
+    offsetFromFileName(file.getName)
+  }
+
   /**
-    * Calculate a log's size (in bytes) based on its log segments
-    *
-    * @param segments The log segments to calculate the size of
-    * @return Sum of the log segments' sizes (in bytes)
-    */
+   * Calculate a log's size (in bytes) based on its log segments
+   *
+   * @param segments The log segments to calculate the size of
+   * @return Sum of the log segments' sizes (in bytes)
+   */
   def sizeInBytes(segments: Iterable[LogSegment]): Long =
     segments.map(_.size.toLong).sum
 
