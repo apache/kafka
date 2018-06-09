@@ -17,14 +17,13 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.acl.AccessControlEntryFilter;
-import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.resource.ResourceFilter;
 import org.apache.kafka.common.resource.ResourceNameType;
+import org.apache.kafka.common.resource.ResourcePatternFilter;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
@@ -95,7 +94,7 @@ public class DescribeAclsRequest extends AbstractRequest {
 
     public DescribeAclsRequest(Struct struct, short version) {
         super(version);
-        ResourceFilter resourceFilter = RequestUtils.resourceFilterFromStructFields(struct);
+        ResourcePatternFilter resourceFilter = RequestUtils.resourcePatternFilterFromStructFields(struct);
         AccessControlEntryFilter entryFilter = RequestUtils.aceFilterFromStructFields(struct);
         this.filter = new AclBindingFilter(resourceFilter, entryFilter);
     }
@@ -103,7 +102,7 @@ public class DescribeAclsRequest extends AbstractRequest {
     @Override
     protected Struct toStruct() {
         Struct struct = new Struct(ApiKeys.DESCRIBE_ACLS.requestSchema(version()));
-        RequestUtils.resourceFilterSetStructFields(filter.resourceFilter(), struct);
+        RequestUtils.resourcePatternFilterSetStructFields(filter.patternFilter(), struct);
         RequestUtils.aceFilterSetStructFields(filter.entryFilter(), struct);
         return struct;
     }
@@ -115,7 +114,7 @@ public class DescribeAclsRequest extends AbstractRequest {
             case 0:
             case 1:
                 return new DescribeAclsResponse(throttleTimeMs, ApiError.fromThrowable(throwable),
-                        Collections.<AclBinding>emptySet());
+                        Collections.emptySet());
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
                         versionId, this.getClass().getSimpleName(), ApiKeys.DESCRIBE_ACLS.latestVersion()));
@@ -131,8 +130,12 @@ public class DescribeAclsRequest extends AbstractRequest {
     }
 
     private void validate(AclBindingFilter filter, short version) {
-        if (version == 0 && filter.resourceFilter().nameType() != ResourceNameType.LITERAL) {
+        if (version == 0 && filter.patternFilter().nameType() != ResourceNameType.LITERAL) {
             throw new UnsupportedVersionException("Version 0 only supports literal resource name types");
+        }
+
+        if (filter.isUnknown()) {
+            throw new IllegalArgumentException("Filter contain UNKNOWN elements");
         }
     }
 }

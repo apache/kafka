@@ -40,9 +40,9 @@ import org.apache.kafka.common.record.{CompressionType, MemoryRecords, Records, 
 import org.apache.kafka.common.requests.CreateAclsRequest.AclCreation
 import org.apache.kafka.common.requests.CreateTopicsRequest.TopicDetails
 import org.apache.kafka.common.requests.{Resource => RResource, ResourceType => RResourceType, _}
-import org.apache.kafka.common.resource.{ResourceFilter, ResourceNameType, Resource => AdminResource, ResourceType => AdminResourceType}
+import org.apache.kafka.common.resource.{ResourcePattern, ResourcePatternFilter, ResourceType => AdminResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
-import org.apache.kafka.common.{KafkaException, Node, TopicPartition, requests}
+import org.apache.kafka.common.{KafkaException, Node, TopicPartition, acl, requests, resource}
 import org.junit.Assert._
 import org.junit.{After, Assert, Before, Test}
 
@@ -378,12 +378,12 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
   private def createAclsRequest = new CreateAclsRequest.Builder(
     Collections.singletonList(new AclCreation(new AclBinding(
-      new AdminResource(AdminResourceType.TOPIC, "mytopic"),
+      new ResourcePattern(AdminResourceType.TOPIC, "mytopic", resource.ResourceNameType.LITERAL),
       new AccessControlEntry(userPrincipal.toString, "*", AclOperation.WRITE, AclPermissionType.DENY))))).build()
 
   private def deleteAclsRequest = new DeleteAclsRequest.Builder(
     Collections.singletonList(new AclBindingFilter(
-      new ResourceFilter(AdminResourceType.TOPIC, null, ResourceNameType.LITERAL),
+      new ResourcePatternFilter(AdminResourceType.TOPIC, null, resource.ResourceNameType.LITERAL),
       new AccessControlEntryFilter(userPrincipal.toString, "*", AclOperation.ANY, AclPermissionType.DENY)))).build()
 
   private def alterReplicaLogDirsRequest = new AlterReplicaLogDirsRequest.Builder(Collections.singletonMap(tp, logDir)).build()

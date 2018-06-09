@@ -52,7 +52,6 @@ import org.apache.kafka.common.requests.DeleteAclsResponse.{AclDeletionResult, A
 import org.apache.kafka.common.requests.DescribeLogDirsResponse.LogDirInfo
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.{Resource => RResource, ResourceType => RResourceType, _}
-import org.apache.kafka.common.resource.{Resource => AdminResource}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.{Time, Utils}
@@ -63,6 +62,7 @@ import scala.collection._
 import scala.collection.mutable.ArrayBuffer
 import scala.util.{Failure, Success, Try}
 import org.apache.kafka.common.requests.CreateTopicsRequest.TopicDetails
+import org.apache.kafka.common.resource.ResourcePattern
 
 /**
  * Logic to handle the various Kafka requests
@@ -1920,7 +1920,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         val filter = describeAclsRequest.filter()
         val returnedAcls = auth.getAcls.toSeq.flatMap { case (resource, acls) =>
           acls.flatMap { acl =>
-            val fixture = new AclBinding(new AdminResource(resource.resourceType.toJava, resource.name, resource.resourceNameType.toJava),
+            val fixture = new AclBinding(new ResourcePattern(resource.resourceType.toJava, resource.name, resource.nameType.toJava),
                 new AccessControlEntry(acl.principal.toString, acl.host.toString, acl.operation.toJava, acl.permissionType.toJava))
             if (filter.matches(fixture)) Some(fixture)
             else None
@@ -1994,7 +1994,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           val filtersWithIndex = filters.zipWithIndex
           for ((resource, acls) <- aclMap; acl <- acls) {
             val binding = new AclBinding(
-              new AdminResource(resource.resourceType.toJava, resource.name, resource.resourceNameType.toJava),
+              new ResourcePattern(resource.resourceType.toJava, resource.name, resource.nameType.toJava),
               new AccessControlEntry(acl.principal.toString, acl.host.toString, acl.operation.toJava,
                 acl.permissionType.toJava))
 

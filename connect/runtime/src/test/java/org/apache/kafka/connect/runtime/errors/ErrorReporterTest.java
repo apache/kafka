@@ -180,6 +180,15 @@ public class ErrorReporterTest {
                 "partition=5, offset=100}.", msg);
     }
 
+    @Test
+    public void testSetDLQConfigs() {
+        SinkConnectorConfig configuration = config(singletonMap(SinkConnectorConfig.DLQ_TOPIC_NAME_CONFIG, DLQ_TOPIC));
+        assertEquals(configuration.dlqTopicName(), DLQ_TOPIC);
+
+        configuration = config(singletonMap(SinkConnectorConfig.DLQ_TOPIC_REPLICATION_FACTOR_CONFIG, "7"));
+        assertEquals(configuration.dlqTopicReplicationFactor(), 7);
+    }
+
     private ProcessingContext processingContext() {
         ProcessingContext context = new ProcessingContext();
         context.consumerRecord(new ConsumerRecord<>(TOPIC, 5, 100, new byte[]{'a', 'b'}, new byte[]{'x'}));
