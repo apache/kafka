@@ -478,16 +478,6 @@ object ZkAclStore {
     .flatMap(store => List(store.aclPath)) ++ Seq(AclChangeNotificationZNode.path)
 }
 
-@deprecated("There are now multiple roots for ACLs within ZK. Use ZkAclStore", "2.0")
-object AclZNode {
-  def path = "/kafka-acl"
-}
-
-@deprecated("There are now multiple roots for ACLs within ZK. Use ZkAclStore", "2.0")
-object ResourceTypeZNode {
-  def path(resourceType: String) = s"${AclZNode.path}/$resourceType"
-}
-
 object ResourceZNode {
   def path(resource: Resource): String = ZkAclStore(resource.nameType).path(resource.resourceType, resource.name)
 
@@ -530,7 +520,7 @@ object AclChangeNotificationSequenceZNode {
       AclChangeEvent.currentVersion,
       resource.resourceType.name,
       resource.name,
-      resource.resourceNameType.name))
+      resource.nameType.name))
 
   def decode(bytes: Array[Byte]): Resource = {
     val changeEvent = Json.parseBytesAs[AclChangeEvent](bytes) match {

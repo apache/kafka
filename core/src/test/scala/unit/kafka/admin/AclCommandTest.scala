@@ -24,7 +24,7 @@ import kafka.server.KafkaConfig
 import kafka.utils.{Logging, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.junit.{After, Before, Test}
+import org.junit.{Before, Test}
 
 class AclCommandTest extends ZooKeeperTestHarness with Logging {
 
