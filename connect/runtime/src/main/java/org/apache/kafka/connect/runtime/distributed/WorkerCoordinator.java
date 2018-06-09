@@ -83,7 +83,10 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
               metricGrpPrefix,
               time,
               retryBackoffMs,
-              true);
+              true,
+              "",
+              "",
+              false);
         this.log = logContext.logger(WorkerCoordinator.class);
         this.restUrl = restUrl;
         this.configStorage = configStorage;

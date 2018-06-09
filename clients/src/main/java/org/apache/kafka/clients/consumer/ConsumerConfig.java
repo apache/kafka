@@ -246,6 +246,18 @@ public class ConsumerConfig extends AbstractConfig {
      */
     static final String LEAVE_GROUP_ON_CLOSE_CONFIG = "internal.leave.group.on.close";
 
+    /**
+     * <code>internal.generation.dir.name</code>
+     * The directory path for persisting consumer generation cross service restart.
+     */
+    static final String GENERATION_DIR_NAME = "internal.generation.dir.name";
+
+    /**
+     * <code>internal.record.generation</code>
+     * The internal config deciding whether we should save generation info for consumer cross service restart.
+     */
+    static final String RECORD_GENERATION = "internal.record.generation";
+
     /** <code>isolation.level</code> */
     public static final String ISOLATION_LEVEL_CONFIG = "isolation.level";
     public static final String ISOLATION_LEVEL_DOC = "<p>Controls how to read messages written transactionally. If set to <code>read_committed</code>, consumer.poll() will only return" +
@@ -446,6 +458,14 @@ public class ConsumerConfig extends AbstractConfig {
                                                 Type.BOOLEAN,
                                                 true,
                                                 Importance.LOW)
+                                .defineInternal(GENERATION_DIR_NAME,
+                                        Type.STRING,
+                                        "/tmp",
+                                        Importance.LOW)
+                                .defineInternal(RECORD_GENERATION,
+                                        Type.BOOLEAN,
+                                        false,
+                                        Importance.LOW)
                                 .define(ISOLATION_LEVEL_CONFIG,
                                         Type.STRING,
                                         DEFAULT_ISOLATION_LEVEL,

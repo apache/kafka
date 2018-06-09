@@ -51,6 +51,7 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.slf4j.Logger;
 
 import java.time.Duration;
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -663,6 +664,21 @@ public class StreamThread extends Thread {
         if (!builder.latestResetTopicsPattern().pattern().equals("") || !builder.earliestResetTopicsPattern().pattern().equals("")) {
             originalReset = (String) consumerConfigs.get(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG);
             consumerConfigs.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none");
+        }
+
+        // If user has not set the client id, the client id will change during restart, which
+        // means we shouldn't save generation info.
+        // Otherwise, we should enable generation recording.
+        final boolean clientIdFixed = config.getString(StreamsConfig.CLIENT_ID_CONFIG).length() > 0;
+        if (clientIdFixed) {
+            // Set up generation dir to save consumer generation info.
+            File consumerStateDirectory = stateDirectory.consumerGenerationStateDir();
+            String generationDirPath = "/tmp";
+            if (consumerStateDirectory != null) {
+                generationDirPath = consumerStateDirectory.getPath();
+            }
+            consumerConfigs.put("internal.generation.dir.name", generationDirPath);
+            consumerConfigs.put("internal.record.generation", true);
         }
         final Consumer<byte[], byte[]> consumer = clientSupplier.getConsumer(consumerConfigs);
         taskManager.setConsumer(consumer);

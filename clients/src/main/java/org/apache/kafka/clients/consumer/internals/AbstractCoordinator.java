@@ -54,6 +54,12 @@ import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 
 import java.io.Closeable;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.List;
@@ -117,7 +123,10 @@ public abstract class AbstractCoordinator implements Closeable {
     private MemberState state = MemberState.UNJOINED;
     private RequestFuture<ByteBuffer> joinFuture = null;
     private Node coordinator = null;
-    private Generation generation = Generation.NO_GENERATION;
+    protected Generation generation = Generation.NO_GENERATION;
+    private String clientId;
+    private File generationDir;
+    private final boolean recordGeneration;
 
     private RequestFuture<Void> findCoordinatorFuture = null;
     
@@ -134,7 +143,10 @@ public abstract class AbstractCoordinator implements Closeable {
                                String metricGrpPrefix,
                                Time time,
                                long retryBackoffMs,
-                               boolean leaveGroupOnClose) {
+                               boolean leaveGroupOnClose,
+                               String clientId,
+                               String generationDirName,
+                               boolean recordGeneration) {
         this.log = logContext.logger(AbstractCoordinator.class);
         this.client = client;
         this.time = time;
@@ -145,6 +157,28 @@ public abstract class AbstractCoordinator implements Closeable {
         this.heartbeat = heartbeat;
         this.sensors = new GroupCoordinatorMetrics(metrics, metricGrpPrefix);
         this.retryBackoffMs = retryBackoffMs;
+        this.clientId = clientId;
+
+        // We should only materialize main consumer member generation.
+        boolean isMainConsumer = !clientId.endsWith("restore-consumer");
+        this.recordGeneration = recordGeneration && isMainConsumer;
+
+        // load generation directory
+        this.generationDir = new File(generationDirName);
+
+        if (this.recordGeneration) {
+            if (generationDir.exists()) {
+                // try to load previous round generation info so that we could trigger less rebalance.
+                loadPreviousGenerationFromLocal(clientId);
+                return;
+            }
+
+            // If folder doesn't exist and we need to record generation, create a new one.
+            log.info("Local generation dir not found. Creating a new one...");
+            if (!generationDir.mkdirs()) {
+                log.error(String.format("stream consumer state directory [%s] doesn't exist and couldn't be created", generationDir.getPath()));
+            }
+        }
     }
 
     public AbstractCoordinator(LogContext logContext,
@@ -157,10 +191,13 @@ public abstract class AbstractCoordinator implements Closeable {
                                String metricGrpPrefix,
                                Time time,
                                long retryBackoffMs,
-                               boolean leaveGroupOnClose) {
+                               boolean leaveGroupOnClose,
+                               String clientId,
+                               String generationDirName,
+                               boolean recordGeneration) {
         this(logContext, client, groupId, rebalanceTimeoutMs, sessionTimeoutMs,
                 new Heartbeat(sessionTimeoutMs, heartbeatIntervalMs, rebalanceTimeoutMs, retryBackoffMs),
-                metrics, metricGrpPrefix, time, retryBackoffMs, leaveGroupOnClose);
+                metrics, metricGrpPrefix, time, retryBackoffMs, leaveGroupOnClose, clientId, generationDirName, recordGeneration);
     }
 
     /**
@@ -543,6 +580,11 @@ public abstract class AbstractCoordinator implements Closeable {
                             onJoinLeader(joinResponse).chain(future);
                         } else {
                             onJoinFollower().chain(future);
+                        }
+
+                        // save the generation data to local for restarting reference.
+                        if (recordGeneration) {
+                            saveGenerationToLocal(clientId, generation);
                         }
                     }
                 }
@@ -1091,7 +1133,38 @@ public abstract class AbstractCoordinator implements Closeable {
 
     }
 
-    protected static class Generation {
+    protected void loadPreviousGenerationFromLocal(String clientId) {
+        File generationFile = new File(generationDir, clientId);
+        if (!generationFile.exists()) {
+            log.error("generation file failed to load at: {}", generationFile.getAbsolutePath());
+            return;
+        }
+        try {
+            ObjectInputStream generationIn = new ObjectInputStream(new FileInputStream(generationFile));
+            generation = (Generation) generationIn.readObject();
+            log.debug("Successfully loaded previous generation with client id: {}, and generation info: {}", clientId, generation.toString());
+            generationIn.close();
+            if (!generationFile.delete()) {
+                log.error("generation file delete failed.");
+            }
+        } catch (Exception e) {
+            log.error(String.format("Exception when reading generation file at [%s]: [%s]", generationFile.getPath(), e.toString()));
+        }
+    }
+
+    protected void saveGenerationToLocal(String clientId, Generation generation) {
+        File generationFile = new File(generationDir, clientId);
+        try {
+            ObjectOutputStream generationOut = new ObjectOutputStream(new FileOutputStream(generationFile));
+            generationOut.writeObject(generation);
+            log.debug("Successfully logged generation info to local: {}", generation.toString());
+            generationOut.close();
+        } catch (Exception e) {
+            log.error(String.format("Exception when saving generation to local file at [%s]: [%s]", generationFile.getPath(), e.toString()));
+        }
+    }
+
+    protected static class Generation implements Serializable {
         public static final Generation NO_GENERATION = new Generation(
                 OffsetCommitRequest.DEFAULT_GENERATION_ID,
                 JoinGroupRequest.UNKNOWN_MEMBER_ID,
@@ -1120,6 +1193,11 @@ public abstract class AbstractCoordinator implements Closeable {
         @Override
         public int hashCode() {
             return Objects.hash(generationId, memberId, protocol);
+        }
+
+        @Override
+        public String toString() {
+            return "[Generation: " + generationId + ", memberId: " + memberId + ", protocol: " + protocol + "]";
         }
     }
 

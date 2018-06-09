@@ -766,7 +766,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     config.getInt(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG),
                     this.interceptors,
                     config.getBoolean(ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_CONFIG),
-                    config.getBoolean(ConsumerConfig.LEAVE_GROUP_ON_CLOSE_CONFIG));
+                    config.getBoolean(ConsumerConfig.LEAVE_GROUP_ON_CLOSE_CONFIG),
+                    clientId,
+                    config.getString(ConsumerConfig.GENERATION_DIR_NAME),
+                    config.getBoolean(ConsumerConfig.RECORD_GENERATION));
             this.fetcher = new Fetcher<>(
                     logContext,
                     this.client,

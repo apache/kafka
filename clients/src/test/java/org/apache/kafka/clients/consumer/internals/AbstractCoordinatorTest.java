@@ -37,8 +37,11 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
+import org.junit.AfterClass;
 import org.junit.Test;
 
+import java.io.File;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.HashMap;
@@ -69,6 +72,9 @@ public class AbstractCoordinatorTest {
     private static final int REQUEST_TIMEOUT_MS = 40000;
     private static final String GROUP_ID = "dummy-group";
     private static final String METRIC_GROUP_PREFIX = "consumer";
+    private static final String GENERATION_DIR_NAME = "/tmp/dummy-generation";
+    private static final String MOCK_CLIENT_ID = "mock-client-id";
+    private static final String MOCK_PROTOCOL = "dummy-subprotocol";
 
     private MockClient mockClient;
     private MockTime mockTime;
@@ -101,6 +107,14 @@ public class AbstractCoordinatorTest {
 
         this.coordinatorNode = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
         this.coordinator = new DummyCoordinator(consumerClient, metrics, mockTime, rebalanceTimeoutMs, retryBackoffMs);
+    }
+
+    @AfterClass
+    public static void cleanUp() throws IOException {
+        File generationFile = new File(GENERATION_DIR_NAME, MOCK_CLIENT_ID);
+        generationFile.delete();
+        File generationDir = new File(GENERATION_DIR_NAME);
+        generationDir.delete();
     }
 
     @Test
@@ -607,6 +621,25 @@ public class AbstractCoordinatorTest {
         }
     }
 
+    @Test
+    public void testCoordinatorSetGenerationDirectory() {
+        setupCoordinator();
+        File generationDir = new File(GENERATION_DIR_NAME);
+        assertTrue(generationDir.exists());
+        File generationFile = new File(GENERATION_DIR_NAME, MOCK_CLIENT_ID);
+        assertFalse(generationFile.exists());
+
+        int mockGenerationId = 10;
+        String mockMemberId = "mock-member-id";
+        AbstractCoordinator.Generation expectedGeneration = new AbstractCoordinator.Generation(
+                mockGenerationId, mockMemberId, MOCK_PROTOCOL);
+        coordinator.saveGenerationToLocal(MOCK_CLIENT_ID, expectedGeneration);
+        coordinator.loadPreviousGenerationFromLocal(MOCK_CLIENT_ID);
+        assertFalse(generationFile.exists());
+        AbstractCoordinator.Generation generation = coordinator.generation();
+        assertEquals(expectedGeneration, generation);
+    }
+
     private AtomicBoolean prepareFirstHeartbeat() {
         final AtomicBoolean heartbeatReceived = new AtomicBoolean(false);
         mockClient.prepareResponse(new MockClient.RequestMatcher() {
@@ -640,7 +673,7 @@ public class AbstractCoordinatorTest {
     }
 
     private JoinGroupResponse joinGroupFollowerResponse(int generationId, String memberId, String leaderId, Errors error) {
-        return new JoinGroupResponse(error, generationId, "dummy-subprotocol", memberId, leaderId,
+        return new JoinGroupResponse(error, generationId, MOCK_PROTOCOL, memberId, leaderId,
                 Collections.<String, ByteBuffer>emptyMap());
     }
 
@@ -660,7 +693,7 @@ public class AbstractCoordinatorTest {
                                 int rebalanceTimeoutMs,
                                 int retryBackoffMs) {
             super(new LogContext(), client, GROUP_ID, rebalanceTimeoutMs, SESSION_TIMEOUT_MS,
-                    HEARTBEAT_INTERVAL_MS, metrics, METRIC_GROUP_PREFIX, time, retryBackoffMs, false);
+                    HEARTBEAT_INTERVAL_MS, metrics, METRIC_GROUP_PREFIX, time, retryBackoffMs, false, MOCK_CLIENT_ID, GENERATION_DIR_NAME, true);
         }
 
         @Override
@@ -691,6 +724,11 @@ public class AbstractCoordinatorTest {
             if (wakeupOnJoinComplete)
                 throw new WakeupException();
             onJoinCompleteInvokes++;
+        }
+
+        @Override
+        protected Generation generation() {
+            return generation;
         }
     }
 

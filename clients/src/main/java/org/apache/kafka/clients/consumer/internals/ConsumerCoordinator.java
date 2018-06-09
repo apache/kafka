@@ -130,7 +130,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                int autoCommitIntervalMs,
                                ConsumerInterceptors<?, ?> interceptors,
                                boolean excludeInternalTopics,
-                               final boolean leaveGroupOnClose) {
+                               final boolean leaveGroupOnClose,
+                               String clientId,
+                               String generationDir,
+                               boolean recordGeneration) {
         super(logContext,
               client,
               groupId,
@@ -141,7 +144,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
               metricGrpPrefix,
               time,
               retryBackoffMs,
-              leaveGroupOnClose);
+              leaveGroupOnClose,
+              clientId,
+              generationDir,
+              recordGeneration);
         this.log = logContext.logger(ConsumerCoordinator.class);
         this.metadata = metadata;
         this.metadataSnapshot = new MetadataSnapshot(subscriptions, metadata.fetch());

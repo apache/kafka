@@ -32,6 +32,8 @@
     <suppress checks="ParameterNumber"
               files="ConsumerCoordinator.java"/>
     <suppress checks="ParameterNumber"
+              files="AbstractCoordinator.java"/>
+    <suppress checks="ParameterNumber"
               files="Fetcher.java"/>
     <suppress checks="ParameterNumber"
               files="Sender.java"/>

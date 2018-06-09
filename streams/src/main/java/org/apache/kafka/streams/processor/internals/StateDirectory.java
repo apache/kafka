@@ -114,6 +114,19 @@ public class StateDirectory {
         return dir;
     }
 
+    /**
+     * Get or create the directory for the consumer generation recovery.
+     * @return directory for consumer generation data
+     */
+    File consumerGenerationStateDir() {
+        final File dir = new File(stateDir, "consumer-generation");
+        if (!dir.exists() && !dir.mkdir()) {
+            log.error(String.format("consumer generation state directory [%s] doesn't exist and couldn't be created", dir.getPath()));
+            return null;
+        }
+        return dir;
+    }
+
     private String logPrefix() {
         return String.format("stream-thread [%s]", Thread.currentThread().getName());
     }
