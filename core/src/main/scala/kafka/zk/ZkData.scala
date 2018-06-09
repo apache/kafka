@@ -19,25 +19,29 @@ package kafka.zk
 import java.nio.charset.StandardCharsets.UTF_8
 import java.util.Properties
 
+import com.fasterxml.jackson.annotation.JsonProperty
+import com.fasterxml.jackson.core.JsonProcessingException
 import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, LeaderAndIsr}
 import kafka.cluster.{Broker, EndPoint}
 import kafka.common.KafkaException
 import kafka.controller.{IsrChangeNotificationHandler, LeaderIsrAndControllerEpoch}
 import kafka.security.auth.SimpleAclAuthorizer.VersionedAcls
-import kafka.security.auth.{Acl, Resource}
+import kafka.security.auth.{Acl, Resource, ResourceType}
 import kafka.server.{ConfigType, DelegationTokenManager}
 import kafka.utils.Json
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.resource.ResourceNameType
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.Time
 import org.apache.zookeeper.ZooDefs
 import org.apache.zookeeper.data.{ACL, Stat}
 
+import scala.beans.BeanProperty
 import scala.collection.JavaConverters._
-import scala.collection.Seq
 import scala.collection.mutable.ArrayBuffer
+import scala.collection.{Seq, breakOut}
 
 // This file contains objects for encoding/decoding data stored in ZooKeeper nodes (znodes).
 
@@ -367,26 +371,41 @@ object DeleteTopicsTopicZNode {
 }
 
 object ReassignPartitionsZNode {
+
+  /**
+    * The assignment of brokers for a `TopicPartition`.
+    *
+    * A replica assignment consists of a `topic`, `partition` and a list of `replicas`, which
+    * represent the broker ids that the `TopicPartition` is assigned to.
+    */
+  case class ReplicaAssignment(@BeanProperty @JsonProperty("topic") topic: String,
+                               @BeanProperty @JsonProperty("partition") partition: Int,
+                               @BeanProperty @JsonProperty("replicas") replicas: java.util.List[Int])
+
+  /**
+    * An assignment consists of a `version` and a list of `partitions`, which represent the
+    * assignment of topic-partitions to brokers.
+    */
+  case class PartitionAssignment(@BeanProperty @JsonProperty("version") version: Int,
+                                 @BeanProperty @JsonProperty("partitions") partitions: java.util.List[ReplicaAssignment])
+
   def path = s"${AdminZNode.path}/reassign_partitions"
-  def encode(reassignment: collection.Map[TopicPartition, Seq[Int]]): Array[Byte] = {
-    val reassignmentJson = reassignment.map { case (tp, replicas) =>
-      Map("topic" -> tp.topic, "partition" -> tp.partition, "replicas" -> replicas.asJava).asJava
-    }.asJava
-    Json.encodeAsBytes(Map("version" -> 1, "partitions" -> reassignmentJson).asJava)
+
+  def encode(reassignmentMap: collection.Map[TopicPartition, Seq[Int]]): Array[Byte] = {
+    val reassignment = PartitionAssignment(1,
+      reassignmentMap.toSeq.map { case (tp, replicas) =>
+        ReplicaAssignment(tp.topic, tp.partition, replicas.asJava)
+      }.asJava
+    )
+    Json.encodeAsBytes(reassignment)
   }
-  def decode(bytes: Array[Byte]): Map[TopicPartition, Seq[Int]] = Json.parseBytes(bytes).flatMap { js =>
-    val reassignmentJson = js.asJsonObject
-    val partitionsJsonOpt = reassignmentJson.get("partitions")
-    partitionsJsonOpt.map { partitionsJson =>
-      partitionsJson.asJsonArray.iterator.map { partitionFieldsJs =>
-        val partitionFields = partitionFieldsJs.asJsonObject
-        val topic = partitionFields("topic").to[String]
-        val partition = partitionFields("partition").to[Int]
-        val replicas = partitionFields("replicas").to[Seq[Int]]
-        new TopicPartition(topic, partition) -> replicas
-      }
+
+  def decode(bytes: Array[Byte]): Either[JsonProcessingException, collection.Map[TopicPartition, Seq[Int]]] =
+    Json.parseBytesAs[PartitionAssignment](bytes).right.map { partitionAssignment =>
+      partitionAssignment.partitions.asScala.map { replicaAssignment =>
+        new TopicPartition(replicaAssignment.topic, replicaAssignment.partition) -> replicaAssignment.replicas.asScala
+      }(breakOut)
     }
-  }.map(_.toMap).getOrElse(Map.empty)
 }
 
 object PreferredReplicaElectionZNode {
@@ -408,7 +427,7 @@ object PreferredReplicaElectionZNode {
 }
 
 object ConsumerOffset {
-  def path(group: String, topic: String, partition: Integer) = s"/consumers/${group}/offset/${topic}/${partition}"
+  def path(group: String, topic: String, partition: Integer) = s"/consumers/${group}/offsets/${topic}/${partition}"
   def encode(offset: Long): Array[Byte] = offset.toString.getBytes(UTF_8)
   def decode(bytes: Array[Byte]): Option[Long] = Option(bytes).map(new String(_, UTF_8).toLong)
 }
@@ -427,42 +446,75 @@ object StateChangeHandlers {
 }
 
 /**
- * The root acl storage node. Under this node there will be one child node per resource type (Topic, Cluster, Group).
- * under each resourceType there will be a unique child for each resource instance and the data for that child will contain
- * list of its acls as a json object. Following gives an example:
- *
- * <pre>
- * /kafka-acl/Topic/topic-1 => {"version": 1, "acls": [ { "host":"host1", "permissionType": "Allow","operation": "Read","principal": "User:alice"}]}
- * /kafka-acl/Cluster/kafka-cluster => {"version": 1, "acls": [ { "host":"host1", "permissionType": "Allow","operation": "Read","principal": "User:alice"}]}
- * /kafka-acl/Group/group-1 => {"version": 1, "acls": [ { "host":"host1", "permissionType": "Allow","operation": "Read","principal": "User:alice"}]}
- * </pre>
- */
-object AclZNode {
-  def path = "/kafka-acl"
+  * Acls for resources are stored in ZK under a root node that is determined by the [[ResourceNameType]].
+  * Under each [[ResourceNameType]] node there will be one child node per resource type (Topic, Cluster, Group, etc).
+  * Under each resourceType there will be a unique child for each resource path and the data for that child will contain
+  * list of its acls as a json object. Following gives an example:
+  *
+  * <pre>
+  * /kafka-acl/Topic/topic-1 => {"version": 1, "acls": [ { "host":"host1", "permissionType": "Allow","operation": "Read","principal": "User:alice"}]}
+  * /kafka-acl/Cluster/kafka-cluster => {"version": 1, "acls": [ { "host":"host1", "permissionType": "Allow","operation": "Read","principal": "User:alice"}]}
+  * /kafka-prefixed-acl/Group/group-1 => {"version": 1, "acls": [ { "host":"host1", "permissionType": "Allow","operation": "Read","principal": "User:alice"}]}
+  * </pre>
+  */
+case class ZkAclStore(nameType: ResourceNameType) {
+  val aclPath: String = nameType match {
+    case ResourceNameType.LITERAL => "/kafka-acl"
+    case ResourceNameType.PREFIXED => "/kafka-prefixed-acl"
+    case _ => throw new IllegalArgumentException("Unknown name type:" + nameType)
+  }
+
+  val aclChangePath: String = nameType match {
+    case ResourceNameType.LITERAL => "/kafka-acl-changes"
+    case ResourceNameType.PREFIXED => "/kafka-prefixed-acl-changes"
+    case _ => throw new IllegalArgumentException("Unknown name type:" + nameType)
+  }
+
+  def path(resourceType: ResourceType) = s"$aclPath/$resourceType"
+
+  def path(resourceType: ResourceType, resourceName: String): String = s"$aclPath/$resourceType/$resourceName"
+
+  def changeSequenceZNode: AclChangeNotificationSequenceZNode = AclChangeNotificationSequenceZNode(this)
+
+  def decode(notificationMessage: Array[Byte]): Resource = AclChangeNotificationSequenceZNode.decode(nameType, notificationMessage)
 }
 
-object ResourceTypeZNode {
-  def path(resourceType: String) = s"${AclZNode.path}/$resourceType"
+object ZkAclStore {
+  val stores: Seq[ZkAclStore] = ResourceNameType.values
+    .filter(nameType => nameType != ResourceNameType.ANY && nameType != ResourceNameType.UNKNOWN)
+    .map(nameType => ZkAclStore(nameType))
+
+  val securePaths: Seq[String] = stores
+    .flatMap(store => List(store.aclPath, store.aclChangePath))
 }
 
 object ResourceZNode {
-  def path(resource: Resource) = s"${AclZNode.path}/${resource.resourceType}/${resource.name}"
-  def encode(acls: Set[Acl]): Array[Byte] = {
-    Json.encodeAsBytes(Acl.toJsonCompatibleMap(acls).asJava)
-  }
+  def path(resource: Resource): String = ZkAclStore(resource.nameType).path(resource.resourceType, resource.name)
+
+  def encode(acls: Set[Acl]): Array[Byte] = Json.encodeAsBytes(Acl.toJsonCompatibleMap(acls).asJava)
   def decode(bytes: Array[Byte], stat: Stat): VersionedAcls = VersionedAcls(Acl.fromBytes(bytes), stat.getVersion)
 }
 
-object AclChangeNotificationZNode {
-  def path = "/kafka-acl-changes"
+object AclChangeNotificationSequenceZNode {
+  val Separator = ":"
+  def SequenceNumberPrefix = "acl_changes_"
+
+  def encode(resource: Resource): Array[Byte] = {
+    (resource.resourceType.name + Separator + resource.name).getBytes(UTF_8)
+  }
+
+  def decode(nameType: ResourceNameType, bytes: Array[Byte]): Resource = {
+    val str = new String(bytes, UTF_8)
+    str.split(Separator, 2) match {
+      case Array(resourceType, name, _*) => Resource(ResourceType.fromString(resourceType), name, nameType)
+      case _ => throw new IllegalArgumentException("expected a string in format ResourceType:ResourceName but got " + str)
+    }
+  }
 }
 
-object AclChangeNotificationSequenceZNode {
-  val SequenceNumberPrefix = "acl_changes_"
-  def createPath = s"${AclChangeNotificationZNode.path}/$SequenceNumberPrefix"
-  def deletePath(sequenceNode: String) = s"${AclChangeNotificationZNode.path}/${sequenceNode}"
-  def encode(resourceName : String): Array[Byte] = resourceName.getBytes(UTF_8)
-  def decode(bytes: Array[Byte]): String = new String(bytes, UTF_8)
+case class AclChangeNotificationSequenceZNode(store: ZkAclStore) {
+  def createPath = s"${store.aclChangePath}/${AclChangeNotificationSequenceZNode.SequenceNumberPrefix}"
+  def deletePath(sequenceNode: String) = s"${store.aclChangePath}/$sequenceNode"
 }
 
 object ClusterZNode {
@@ -527,11 +579,9 @@ object ZkData {
     ControllerZNode.path,
     ControllerEpochZNode.path,
     IsrChangeNotificationZNode.path,
-    AclZNode.path,
-    AclChangeNotificationZNode.path,
     ProducerIdBlockZNode.path,
     LogDirEventNotificationZNode.path,
-    DelegationTokenAuthZNode.path)
+    DelegationTokenAuthZNode.path) ++ ZkAclStore.securePaths
 
   // These are persistent ZK paths that should exist on kafka broker startup.
   val PersistentZkPaths = Seq(

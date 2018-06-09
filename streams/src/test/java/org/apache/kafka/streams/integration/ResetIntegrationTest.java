@@ -23,17 +23,16 @@ import org.apache.kafka.test.IntegrationTest;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
+import java.util.Map;
 import java.util.Properties;
 
 
 /**
  * Tests local state store and global application cleanup.
  */
-@Ignore
 @Category({IntegrationTest.class})
 public class ResetIntegrationTest extends AbstractResetIntegrationTest {
 
@@ -49,6 +48,11 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         // very long sleep times
         brokerProps.put(KafkaConfig$.MODULE$.ConnectionsMaxIdleMsProp(), -1L);
         CLUSTER = new EmbeddedKafkaCluster(1, brokerProps);
+    }
+
+    @Override
+    Map<String, Object> getClientSslConfig() {
+        return null;
     }
 
     @Before

@@ -49,7 +49,7 @@ import java.util.concurrent.CountDownLatch;
  */
 public class WordCountProcessorDemo {
 
-    private static class MyProcessorSupplier implements ProcessorSupplier<String, String> {
+    static class MyProcessorSupplier implements ProcessorSupplier<String, String> {
 
         @Override
         public Processor<String, String> get() {
@@ -96,10 +96,6 @@ public class WordCountProcessorDemo {
 
                     context.commit();
                 }
-
-                @Override
-                @Deprecated
-                public void punctuate(long timestamp) {}
 
                 @Override
                 public void close() {}

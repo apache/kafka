@@ -31,10 +31,10 @@ import kafka.message._
 import kafka.metrics.KafkaMetricsReporter
 import kafka.utils._
 import kafka.utils.Implicits._
-import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord}
+import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord, KafkaConsumer}
 import org.apache.kafka.common.errors.{AuthenticationException, WakeupException}
 import org.apache.kafka.common.record.TimestampType
-import org.apache.kafka.common.serialization.Deserializer
+import org.apache.kafka.common.serialization.{ByteArrayDeserializer, Deserializer}
 import org.apache.kafka.common.utils.Utils
 
 import scala.collection.JavaConverters._
@@ -72,10 +72,11 @@ object ConsoleConsumer extends Logging {
         new OldConsumer(conf.filterSpec, props)
       } else {
         val timeoutMs = if (conf.timeoutMs >= 0) conf.timeoutMs else Long.MaxValue
+        val consumer = new KafkaConsumer(getNewConsumerProps(conf), new ByteArrayDeserializer, new ByteArrayDeserializer)
         if (conf.partitionArg.isDefined)
-          new NewShinyConsumer(Option(conf.topicArg), conf.partitionArg, Option(conf.offsetArg), None, getNewConsumerProps(conf), timeoutMs)
+          new NewShinyConsumer(Option(conf.topicArg), conf.partitionArg, Option(conf.offsetArg), None, consumer, timeoutMs)
         else
-          new NewShinyConsumer(Option(conf.topicArg), None, None, Option(conf.whitelistArg), getNewConsumerProps(conf), timeoutMs)
+          new NewShinyConsumer(Option(conf.topicArg), None, None, Option(conf.whitelistArg), consumer, timeoutMs)
       }
 
     addShutdownHook(consumer, conf)
@@ -168,7 +169,7 @@ object ConsoleConsumer extends Logging {
   def checkErr(output: PrintStream, formatter: MessageFormatter): Boolean = {
     val gotError = output.checkError()
     if (gotError) {
-      // This means no one is listening to our output stream any more, time to shutdown
+      // This means no one is listening to our output stream anymore, time to shutdown
       System.err.println("Unable to write to standard out, closing consumer.")
     }
     gotError
@@ -202,15 +203,12 @@ object ConsoleConsumer extends Logging {
     }
   }
 
-  def getNewConsumerProps(config: ConsumerConfig): Properties = {
+  private[tools] def getNewConsumerProps(config: ConsumerConfig): Properties = {
     val props = new Properties
-
     props ++= config.consumerProps
     props ++= config.extraConsumerProps
     setAutoOffsetResetValue(config, props)
     props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapServer)
-    props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer")
-    props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer")
     props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, config.isolationLevel)
     props
   }
@@ -293,7 +291,17 @@ object ConsoleConsumer extends Logging {
       .describedAs("class")
       .ofType(classOf[String])
       .defaultsTo(classOf[DefaultMessageFormatter].getName)
-    val messageFormatterArgOpt = parser.accepts("property", "The properties to initialize the message formatter.")
+    val messageFormatterArgOpt = parser.accepts("property",
+      "The properties to initialize the message formatter. Default properties include:\n" +
+        "\tprint.timestamp=true|false\n" +
+        "\tprint.key=true|false\n" +
+        "\tprint.value=true|false\n" +
+        "\tkey.separator=<key.separator>\n" +
+        "\tline.separator=<line.separator>\n" +
+        "\tkey.deserializer=<key.deserializer>\n" +
+        "\tvalue.deserializer=<value.deserializer>\n" +
+        "\nUsers can also pass in customized properties for their formatter; more specifically, users " +
+        "can pass in properties keyed with \'key.deserializer.\' and \'value.deserializer.\' prefixes to configure their deserializers.")
       .withRequiredArg
       .describedAs("prop")
       .ofType(classOf[String])
@@ -316,8 +324,6 @@ object ConsoleConsumer extends Logging {
       .withRequiredArg
       .describedAs("metrics directory")
       .ofType(classOf[java.lang.String])
-    val newConsumerOpt = parser.accepts("new-consumer", "Use the new consumer implementation. This is the default, so " +
-      "this option is deprecated and will be removed in a future release.")
     val bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED (unless old consumer is used): The server to connect to.")
       .withRequiredArg
       .describedAs("server to connect to")
@@ -383,13 +389,12 @@ object ConsoleConsumer extends Logging {
     if (valueDeserializer != null && !valueDeserializer.isEmpty) {
       formatterArgs.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer)
     }
+
     formatter.init(formatterArgs)
 
     if (useOldConsumer) {
       if (options.has(bootstrapServerOpt))
         CommandLineUtils.printUsageAndDie(parser, s"Option $bootstrapServerOpt is not valid with $zkConnectOpt.")
-      else if (options.has(newConsumerOpt))
-        CommandLineUtils.printUsageAndDie(parser, s"Option $newConsumerOpt is not valid with $zkConnectOpt.")
       val topicOrFilterOpt = List(topicIdOpt, whitelistOpt, blacklistOpt).filter(options.has)
       if (topicOrFilterOpt.size != 1)
         CommandLineUtils.printUsageAndDie(parser, "Exactly one of whitelist/blacklist/topic is required.")
@@ -440,11 +445,6 @@ object ConsoleConsumer extends Logging {
 
     if (!useOldConsumer) {
       CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt)
-
-      if (options.has(newConsumerOpt)) {
-        Console.err.println("The --new-consumer option is deprecated and will be removed in a future major release." +
-          "The new consumer is used by default if the --bootstrap-server option is provided.")
-      }
     }
 
     if (options.has(csvMetricsReporterEnabledOpt)) {
@@ -523,11 +523,24 @@ class DefaultMessageFormatter extends MessageFormatter {
     if (props.containsKey("line.separator"))
       lineSeparator = props.getProperty("line.separator").getBytes(StandardCharsets.UTF_8)
     // Note that `toString` will be called on the instance returned by `Deserializer.deserialize`
-    if (props.containsKey("key.deserializer"))
+    if (props.containsKey("key.deserializer")) {
       keyDeserializer = Some(Class.forName(props.getProperty("key.deserializer")).newInstance().asInstanceOf[Deserializer[_]])
+      keyDeserializer.get.configure(propertiesWithKeyPrefixStripped("key.deserializer.", props).asScala.asJava, true)
+    }
     // Note that `toString` will be called on the instance returned by `Deserializer.deserialize`
-    if (props.containsKey("value.deserializer"))
+    if (props.containsKey("value.deserializer")) {
       valueDeserializer = Some(Class.forName(props.getProperty("value.deserializer")).newInstance().asInstanceOf[Deserializer[_]])
+      valueDeserializer.get.configure(propertiesWithKeyPrefixStripped("value.deserializer.", props).asScala.asJava, false)
+    }
+  }
+
+  private def propertiesWithKeyPrefixStripped(prefix: String, props: Properties): Properties = {
+    val newProps = new Properties()
+    props.asScala.foreach { case (key, value) =>
+      if (key.startsWith(prefix) && key.length > prefix.length)
+        newProps.put(key.substring(prefix.length), value)
+    }
+    newProps
   }
 
   def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream) {

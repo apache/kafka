@@ -18,22 +18,37 @@ package org.apache.kafka.streams;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.serialization.LongDeserializer;
+import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.SystemTime;
+import org.apache.kafka.streams.errors.TopologyException;
+import org.apache.kafka.streams.kstream.Consumed;
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.streams.test.OutputVerifier;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
+import org.junit.Assert;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -46,9 +61,11 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -63,10 +80,12 @@ public class TopologyTestDriverTest {
         new ByteArraySerializer(),
         new ByteArraySerializer());
 
+    private final Headers headers = new RecordHeaders(new Header[]{new RecordHeader("key", "value".getBytes())});
+
     private final byte[] key1 = new byte[0];
     private final byte[] value1 = new byte[0];
     private final long timestamp1 = 42L;
-    private final ConsumerRecord<byte[], byte[]> consumerRecord1 = consumerRecordFactory.create(SOURCE_TOPIC_1, key1, value1, timestamp1);
+    private final ConsumerRecord<byte[], byte[]> consumerRecord1 = consumerRecordFactory.create(SOURCE_TOPIC_1, key1, value1, headers, timestamp1);
 
     private final byte[] key2 = new byte[0];
     private final byte[] value2 = new byte[0];
@@ -81,29 +100,42 @@ public class TopologyTestDriverTest {
             put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
         }
     };
+    private KeyValueStore<String, Long> store;
+
+    private final StringDeserializer stringDeserializer = new StringDeserializer();
+    private final LongDeserializer longDeserializer = new LongDeserializer();
+    private final ConsumerRecordFactory<String, Long> recordFactory = new ConsumerRecordFactory<>(
+        new StringSerializer(),
+        new LongSerializer());
+
 
     private final static class Record {
-        private Object key;
-        private Object value;
-        private long timestamp;
-        private long offset;
-        private String topic;
+        private final Object key;
+        private final Object value;
+        private final long timestamp;
+        private final long offset;
+        private final String topic;
+        private final Headers headers;
 
-        Record(final ConsumerRecord consumerRecord) {
+        Record(final ConsumerRecord consumerRecord,
+               final long newOffset) {
             key = consumerRecord.key();
             value = consumerRecord.value();
             timestamp = consumerRecord.timestamp();
-            offset = consumerRecord.offset();
+            offset = newOffset;
             topic = consumerRecord.topic();
+            headers = consumerRecord.headers();
         }
 
         Record(final Object key,
                final Object value,
+               final Headers headers,
                final long timestamp,
                final long offset,
                final String topic) {
             this.key = key;
             this.value = value;
+            this.headers = headers;
             this.timestamp = timestamp;
             this.offset = offset;
             this.topic = topic;
@@ -127,12 +159,13 @@ public class TopologyTestDriverTest {
                 offset == record.offset &&
                 Objects.equals(key, record.key) &&
                 Objects.equals(value, record.value) &&
-                Objects.equals(topic, record.topic);
+                Objects.equals(topic, record.topic) &&
+                Objects.equals(headers, record.headers);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(key, value, timestamp, offset, topic);
+            return Objects.hash(key, value, headers, timestamp, offset, topic);
         }
     }
 
@@ -154,7 +187,7 @@ public class TopologyTestDriverTest {
         private final List<Long> punctuatedAt = new LinkedList<>();
 
         @Override
-        public void punctuate(long timestamp) {
+        public void punctuate(final long timestamp) {
             punctuatedAt.add(timestamp);
         }
     }
@@ -167,16 +200,12 @@ public class TopologyTestDriverTest {
         private boolean closed = false;
         private final List<Record> processedRecords = new ArrayList<>();
 
-        MockProcessor() {
-            this(Collections.<Punctuation>emptySet());
-        }
-
         MockProcessor(final Collection<Punctuation> punctuations) {
             this.punctuations = punctuations;
         }
 
         @Override
-        public void init(ProcessorContext context) {
+        public void init(final ProcessorContext context) {
             initialized = true;
             this.context = context;
             for (final Punctuation punctuation : punctuations) {
@@ -185,13 +214,10 @@ public class TopologyTestDriverTest {
         }
 
         @Override
-        public void process(Object key, Object value) {
-            processedRecords.add(new Record(key, value, context.timestamp(), context.offset(), context.topic()));
+        public void process(final Object key, final Object value) {
+            processedRecords.add(new Record(key, value, context.headers(), context.timestamp(), context.offset(), context.topic()));
             context.forward(key, value);
         }
-
-        @Override
-        public void punctuate(long timestamp) {} // deprecated
 
         @Override
         public void close() {
@@ -205,7 +231,7 @@ public class TopologyTestDriverTest {
         private final Collection<Punctuation> punctuations;
 
         private MockProcessorSupplier() {
-            this(Collections.<Punctuation>emptySet());
+            this(Collections.emptySet());
         }
 
         private MockProcessorSupplier(final Collection<Punctuation> punctuations) {
@@ -222,7 +248,9 @@ public class TopologyTestDriverTest {
 
     @After
     public void tearDown() {
-        testDriver.close();
+        if (testDriver != null) {
+            testDriver.close();
+        }
     }
 
     private Topology setupSourceSinkTopology() {
@@ -366,8 +394,7 @@ public class TopologyTestDriverTest {
         assertEquals(1, processedRecords.size());
 
         final Record record = processedRecords.get(0);
-        final Record expectedResult = new Record(consumerRecord1);
-        expectedResult.offset = 0L;
+        final Record expectedResult = new Record(consumerRecord1, 0L);
 
         assertThat(record, equalTo(expectedResult));
     }
@@ -385,8 +412,7 @@ public class TopologyTestDriverTest {
         assertEquals(0, processedRecords2.size());
 
         Record record = processedRecords1.get(0);
-        Record expectedResult = new Record(consumerRecord1);
-        expectedResult.offset = 0L;
+        Record expectedResult = new Record(consumerRecord1, 0L);
         assertThat(record, equalTo(expectedResult));
 
         testDriver.pipeInput(consumerRecord2);
@@ -395,8 +421,7 @@ public class TopologyTestDriverTest {
         assertEquals(1, processedRecords2.size());
 
         record = processedRecords2.get(0);
-        expectedResult = new Record(consumerRecord2);
-        expectedResult.offset = 0L;
+        expectedResult = new Record(consumerRecord2, 0L);
         assertThat(record, equalTo(expectedResult));
     }
 
@@ -414,9 +439,9 @@ public class TopologyTestDriverTest {
         topology.addSink(
             "sink",
             SINK_TOPIC_1,
-            new Serializer() {
+            new Serializer<Object>() {
                 @Override
-                public byte[] serialize(String topic, Object data) {
+                public byte[] serialize(final String topic, final Object data) {
                     if (data instanceof Long) {
                         return Serdes.Long().serializer().serialize(topic, (Long) data);
                     }
@@ -425,11 +450,11 @@ public class TopologyTestDriverTest {
                 @Override
                 public void close() {}
                 @Override
-                public void configure(Map configs, boolean isKey) {}
+                public void configure(final Map configs, final boolean isKey) {}
             },
-            new Serializer() {
+            new Serializer<Object>() {
                 @Override
-                public byte[] serialize(String topic, Object data) {
+                public byte[] serialize(final String topic, final Object data) {
                     if (data instanceof String) {
                         return Serdes.String().serializer().serialize(topic, (String) data);
                     }
@@ -438,7 +463,7 @@ public class TopologyTestDriverTest {
                 @Override
                 public void close() {}
                 @Override
-                public void configure(Map configs, boolean isKey) {}
+                public void configure(final Map configs, final boolean isKey) {}
             },
             processor);
 
@@ -475,7 +500,7 @@ public class TopologyTestDriverTest {
     }
 
     @Test
-    public void shouldUseSinkeSpecificSerializers() {
+    public void shouldUseSinkSpecificSerializers() {
         final Topology topology = new Topology();
 
         final String sourceName1 = "source-1";
@@ -535,13 +560,11 @@ public class TopologyTestDriverTest {
         assertEquals(1, processedRecords2.size());
 
         Record record = processedRecords1.get(0);
-        Record expectedResult = new Record(consumerRecord1);
-        expectedResult.offset = 0L;
+        Record expectedResult = new Record(consumerRecord1, 0L);
         assertThat(record, equalTo(expectedResult));
 
         record = processedRecords2.get(0);
-        expectedResult = new Record(consumerRecord2);
-        expectedResult.offset = 0L;
+        expectedResult = new Record(consumerRecord2, 0L);
         assertThat(record, equalTo(expectedResult));
     }
 
@@ -566,14 +589,17 @@ public class TopologyTestDriverTest {
     public void shouldPopulateGlobalStore() {
         testDriver = new TopologyTestDriver(setupGlobalStoreTopology(SOURCE_TOPIC_1), config);
 
+        final KeyValueStore<byte[], byte[]> globalStore = testDriver.getKeyValueStore(SOURCE_TOPIC_1 + "-globalStore");
+        Assert.assertNotNull(globalStore);
+        Assert.assertNotNull(testDriver.getAllStateStores().get(SOURCE_TOPIC_1 + "-globalStore"));
+
         testDriver.pipeInput(consumerRecord1);
 
         final List<Record> processedRecords = mockProcessors.get(0).processedRecords;
         assertEquals(1, processedRecords.size());
 
         final Record record = processedRecords.get(0);
-        final Record expectedResult = new Record(consumerRecord1);
-        expectedResult.offset = 0L;
+        final Record expectedResult = new Record(consumerRecord1, 0L);
         assertThat(record, equalTo(expectedResult));
     }
 
@@ -658,13 +684,14 @@ public class TopologyTestDriverTest {
     @Test
     public void shouldReturnAllStores() {
         final Topology topology = setupSourceSinkTopology();
+        topology.addProcessor("processor", () -> null);
         topology.addStateStore(
             new KeyValueStoreBuilder<>(
                 Stores.inMemoryKeyValueStore("store"),
                 Serdes.ByteArray(),
                 Serdes.ByteArray(),
-                new SystemTime())
-                .withLoggingDisabled());
+                new SystemTime()),
+            "processor");
         topology.addGlobalStore(
             new KeyValueStoreBuilder<>(
                 Stores.inMemoryKeyValueStore("globalStore"),
@@ -676,12 +703,41 @@ public class TopologyTestDriverTest {
             Serdes.ByteArray().deserializer(),
             "globalTopicName",
             "globalProcessorName",
-            new ProcessorSupplier() {
-                @Override
-                public Processor get() {
-                    return null;
-                }
-            });
+            () -> null);
+
+        testDriver = new TopologyTestDriver(topology, config);
+
+        final Set<String> expectedStoreNames = new HashSet<>();
+        expectedStoreNames.add("store");
+        expectedStoreNames.add("globalStore");
+        final Map<String, StateStore> allStores = testDriver.getAllStateStores();
+        assertThat(allStores.keySet(), equalTo(expectedStoreNames));
+        for (final StateStore store : allStores.values()) {
+            assertNotNull(store);
+        }
+    }
+
+    @Test
+    public void shouldReturnAllStoresNames() {
+        final Topology topology = setupSourceSinkTopology();
+        topology.addStateStore(
+            new KeyValueStoreBuilder<>(
+                Stores.inMemoryKeyValueStore("store"),
+                Serdes.ByteArray(),
+                Serdes.ByteArray(),
+                new SystemTime()));
+        topology.addGlobalStore(
+            new KeyValueStoreBuilder<>(
+                Stores.inMemoryKeyValueStore("globalStore"),
+                Serdes.ByteArray(),
+                Serdes.ByteArray(),
+                new SystemTime()).withLoggingDisabled(),
+            "sourceProcessorName",
+            Serdes.ByteArray().deserializer(),
+            Serdes.ByteArray().deserializer(),
+            "globalTopicName",
+            "globalProcessorName",
+            () -> null);
 
         testDriver = new TopologyTestDriver(topology, config);
 
@@ -689,5 +745,287 @@ public class TopologyTestDriverTest {
         expectedStoreNames.add("store");
         expectedStoreNames.add("globalStore");
         assertThat(testDriver.getAllStateStores().keySet(), equalTo(expectedStoreNames));
+    }
+
+    private void setup() {
+        final Topology topology = new Topology();
+        topology.addSource("sourceProcessor", "input-topic");
+        topology.addProcessor("aggregator", new CustomMaxAggregatorSupplier(), "sourceProcessor");
+        topology.addStateStore(Stores.keyValueStoreBuilder(
+            Stores.inMemoryKeyValueStore("aggStore"),
+            Serdes.String(),
+            Serdes.Long()),
+            "aggregator");
+        topology.addSink("sinkProcessor", "result-topic", "aggregator");
+
+        config.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+        config.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Long().getClass().getName());
+        testDriver = new TopologyTestDriver(topology, config);
+
+        store = testDriver.getKeyValueStore("aggStore");
+        store.put("a", 21L);
+    }
+
+    @Test
+    public void shouldFlushStoreForFirstInput() {
+        setup();
+        testDriver.pipeInput(recordFactory.create("input-topic", "a", 1L, 9999L));
+        OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "a", 21L);
+        Assert.assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
+    }
+
+    @Test
+    public void shouldNotUpdateStoreForSmallerValue() {
+        setup();
+        testDriver.pipeInput(recordFactory.create("input-topic", "a", 1L, 9999L));
+        Assert.assertThat(store.get("a"), equalTo(21L));
+        OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "a", 21L);
+        Assert.assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
+    }
+
+    @Test
+    public void shouldNotUpdateStoreForLargerValue() {
+        setup();
+        testDriver.pipeInput(recordFactory.create("input-topic", "a", 42L, 9999L));
+        Assert.assertThat(store.get("a"), equalTo(42L));
+        OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "a", 42L);
+        Assert.assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
+    }
+
+    @Test
+    public void shouldUpdateStoreForNewKey() {
+        setup();
+        testDriver.pipeInput(recordFactory.create("input-topic", "b", 21L, 9999L));
+        Assert.assertThat(store.get("b"), equalTo(21L));
+        OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "a", 21L);
+        OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "b", 21L);
+        Assert.assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
+    }
+
+    @Test
+    public void shouldPunctuateIfEvenTimeAdvances() {
+        setup();
+        testDriver.pipeInput(recordFactory.create("input-topic", "a", 1L, 9999L));
+        OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "a", 21L);
+
+        testDriver.pipeInput(recordFactory.create("input-topic", "a", 1L, 9999L));
+        Assert.assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
+
+        testDriver.pipeInput(recordFactory.create("input-topic", "a", 1L, 10000L));
+        OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "a", 21L);
+        Assert.assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
+    }
+
+    @Test
+    public void shouldPunctuateIfWallClockTimeAdvances() {
+        setup();
+        testDriver.advanceWallClockTime(60000);
+        OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "a", 21L);
+        Assert.assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
+    }
+
+    private class CustomMaxAggregatorSupplier implements ProcessorSupplier<String, Long> {
+        @Override
+        public Processor<String, Long> get() {
+            return new CustomMaxAggregator();
+        }
+    }
+
+    private class CustomMaxAggregator implements Processor<String, Long> {
+        ProcessorContext context;
+        private KeyValueStore<String, Long> store;
+
+        @SuppressWarnings("unchecked")
+        @Override
+        public void init(final ProcessorContext context) {
+            this.context = context;
+            context.schedule(60000, PunctuationType.WALL_CLOCK_TIME, timestamp -> flushStore());
+            context.schedule(10000, PunctuationType.STREAM_TIME, timestamp -> flushStore());
+            store = (KeyValueStore<String, Long>) context.getStateStore("aggStore");
+        }
+
+        @Override
+        public void process(final String key, final Long value) {
+            final Long oldValue = store.get(key);
+            if (oldValue == null || value > oldValue) {
+                store.put(key, value);
+            }
+        }
+
+        private void flushStore() {
+            final KeyValueIterator<String, Long> it = store.all();
+            while (it.hasNext()) {
+                final KeyValue<String, Long> next = it.next();
+                context.forward(next.key, next.value);
+            }
+        }
+
+        @Override
+        public void close() {}
+    }
+
+    @Test
+    public void shouldCleanUpPersistentStateStoresOnClose() {
+        final Topology topology = new Topology();
+        topology.addSource("sourceProcessor", "input-topic");
+        topology.addProcessor(
+            "storeProcessor",
+            new ProcessorSupplier() {
+                @Override
+                public Processor get() {
+                    return new Processor<String, Long>() {
+                        private KeyValueStore<String, Long> store;
+
+                        @Override
+                        public void init(final ProcessorContext context) {
+                            //noinspection unchecked
+                            this.store = (KeyValueStore<String, Long>) context.getStateStore("storeProcessorStore");
+                        }
+
+                        @Override
+                        public void process(final String key, final Long value) {
+                            store.put(key, value);
+                        }
+
+                        @Override
+                        public void close() {}
+                    };
+                }
+            },
+            "sourceProcessor"
+        );
+        topology.addStateStore(Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("storeProcessorStore"), Serdes.String(), Serdes.Long()), "storeProcessor");
+
+        final Properties config = new Properties();
+        config.put(StreamsConfig.APPLICATION_ID_CONFIG, "test-TopologyTestDriver-cleanup");
+        config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
+        config.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
+        config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+        config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Long().getClass().getName());
+
+        {
+            final TopologyTestDriver testDriver = new TopologyTestDriver(topology, config);
+            Assert.assertNull(testDriver.getKeyValueStore("storeProcessorStore").get("a"));
+            testDriver.pipeInput(recordFactory.create("input-topic", "a", 1L));
+            Assert.assertEquals(1L, testDriver.getKeyValueStore("storeProcessorStore").get("a"));
+            testDriver.close();
+        }
+
+        {
+            final TopologyTestDriver testDriver = new TopologyTestDriver(topology, config);
+            Assert.assertNull(
+                "Closing the prior test driver should have cleaned up this store and value.",
+                testDriver.getKeyValueStore("storeProcessorStore").get("a")
+            );
+        }
+    }
+
+    @Test
+    public void shouldFeedStoreFromGlobalKTable() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.globalTable("topic",
+            Consumed.with(Serdes.String(), Serdes.String()),
+            Materialized.as("globalStore"));
+        try (final TopologyTestDriver testDriver = new TopologyTestDriver(builder.build(), config)) {
+            final KeyValueStore<String, String> globalStore = testDriver.getKeyValueStore("globalStore");
+            Assert.assertNotNull(globalStore);
+            Assert.assertNotNull(testDriver.getAllStateStores().get("globalStore"));
+            final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
+            testDriver.pipeInput(recordFactory.create("topic", "k1", "value1"));
+            // we expect to have both in the global store, the one from pipeInput and the one from the producer
+            Assert.assertEquals("value1", globalStore.get("k1"));
+        }
+    }
+
+    private Topology setupMultipleSourcesPatternTopology(final Pattern... sourceTopicPatternNames) {
+        final Topology topology = new Topology();
+
+        final String[] processorNames = new String[sourceTopicPatternNames.length];
+        int i = 0;
+        for (final Pattern sourceTopicPatternName : sourceTopicPatternNames) {
+            final String sourceName = sourceTopicPatternName + "-source";
+            final String processorName = sourceTopicPatternName + "-processor";
+            topology.addSource(sourceName, sourceTopicPatternName);
+            processorNames[i++] = processorName;
+            topology.addProcessor(processorName, new MockProcessorSupplier(), sourceName);
+        }
+        topology.addSink("sink-topic", SINK_TOPIC_1, processorNames);
+        return topology;
+    }
+
+    @Test
+    public void shouldProcessFromSourcesThatMatchMultiplePattern() {
+
+        final  Pattern pattern2Source1 = Pattern.compile("source-topic-\\d");
+        final  Pattern pattern2Source2 = Pattern.compile("source-topic-[A-Z]");
+        final  String consumerTopic2 = "source-topic-Z";
+
+        final ConsumerRecord<byte[], byte[]> consumerRecord2 = consumerRecordFactory.create(consumerTopic2, key2, value2, timestamp2);
+
+        testDriver = new TopologyTestDriver(setupMultipleSourcesPatternTopology(pattern2Source1, pattern2Source2), config);
+
+        final List<Record> processedRecords1 = mockProcessors.get(0).processedRecords;
+        final List<Record> processedRecords2 = mockProcessors.get(1).processedRecords;
+
+        testDriver.pipeInput(consumerRecord1);
+
+        assertEquals(1, processedRecords1.size());
+        assertEquals(0, processedRecords2.size());
+
+        final Record record1 = processedRecords1.get(0);
+        final Record expectedResult1 = new Record(consumerRecord1, 0L);
+        assertThat(record1, equalTo(expectedResult1));
+
+        testDriver.pipeInput(consumerRecord2);
+
+        assertEquals(1, processedRecords1.size());
+        assertEquals(1, processedRecords2.size());
+
+        final Record record2 = processedRecords2.get(0);
+        final Record expectedResult2 = new Record(consumerRecord2, 0L);
+        assertThat(record2, equalTo(expectedResult2));
+    }
+
+    @Test
+    public void shouldProcessFromSourceThatMatchPattern() {
+        final String sourceName = "source";
+        final Pattern pattern2Source1 = Pattern.compile("source-topic-\\d");
+
+        final Topology topology = new Topology();
+
+        topology.addSource(sourceName, pattern2Source1);
+        topology.addSink("sink", SINK_TOPIC_1, sourceName);
+
+        testDriver = new TopologyTestDriver(topology, config);
+        testDriver.pipeInput(consumerRecord1);
+
+        final ProducerRecord outputRecord = testDriver.readOutput(SINK_TOPIC_1);
+        assertEquals(key1, outputRecord.key());
+        assertEquals(value1, outputRecord.value());
+        assertEquals(SINK_TOPIC_1, outputRecord.topic());
+    }
+
+    @Test
+    public void shouldThrowPatternNotValidForTopicNameException() {
+        final String sourceName = "source";
+        final String pattern2Source1 = "source-topic-\\d";
+
+        final Topology topology = new Topology();
+
+        topology.addSource(sourceName, pattern2Source1);
+        topology.addSink("sink", SINK_TOPIC_1, sourceName);
+
+        testDriver = new TopologyTestDriver(topology, config);
+        try {
+            testDriver.pipeInput(consumerRecord1);
+        } catch (final TopologyException exception) {
+            final String str =
+                    String.format(
+                            "Invalid topology: Topology add source of type String for topic: %s cannot contain regex pattern for " +
+                                    "input record topic: %s and hence cannot process the message.",
+                            pattern2Source1,
+                            SOURCE_TOPIC_1);
+            assertEquals(str, exception.getMessage());
+        }
     }
 }

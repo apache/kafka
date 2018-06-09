@@ -36,16 +36,14 @@ import javax.net.ssl.SSLPeerUnverifiedException;
 
 import org.apache.kafka.common.errors.SslAuthenticationException;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /*
  * Transport layer for SSL communication
  */
 public class SslTransportLayer implements TransportLayer {
-    private static final Logger log = LoggerFactory.getLogger(SslTransportLayer.class);
-
     private enum State {
         HANDSHAKE,
         HANDSHAKE_FAILED,
@@ -57,6 +55,7 @@ public class SslTransportLayer implements TransportLayer {
     private final SSLEngine sslEngine;
     private final SelectionKey key;
     private final SocketChannel socketChannel;
+    private final Logger log;
 
     private HandshakeStatus handshakeStatus;
     private SSLEngineResult handshakeResult;
@@ -79,6 +78,9 @@ public class SslTransportLayer implements TransportLayer {
         this.key = key;
         this.socketChannel = (SocketChannel) key.channel();
         this.sslEngine = sslEngine;
+
+        final LogContext logContext = new LogContext(String.format("[SslTransportLayer channelId=%s key=%s] ", channelId, key));
+        this.log = logContext.logger(getClass());
     }
 
     // Visible for testing
@@ -172,7 +174,7 @@ public class SslTransportLayer implements TransportLayer {
                 flush(netWriteBuffer);
             }
         } catch (IOException ie) {
-            log.warn("Failed to send SSL Close message ", ie);
+            log.warn("Failed to send SSL Close message", ie);
         } finally {
             socketChannel.socket().close();
             socketChannel.close();

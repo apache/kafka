@@ -237,23 +237,41 @@ public class SslTransportLayerTest {
     }
 
     /**
-     * Tests that server certificate with invalid IP address is accepted by
+     * Tests that server certificate with invalid host name is accepted by
      * a client that has disabled endpoint validation
      */
     @Test
     public void testEndpointIdentificationDisabled() throws Exception {
-        String node = "0";
-        String serverHost = InetAddress.getLocalHost().getHostAddress();
-        SecurityProtocol securityProtocol = SecurityProtocol.SSL;
-        server = new NioEchoServer(ListenerName.forSecurityProtocol(securityProtocol), securityProtocol,
-                new TestSecurityConfig(sslServerConfigs), serverHost, null, null);
-        server.start();
-        sslClientConfigs.remove(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG);
-        createSelector(sslClientConfigs);
-        InetSocketAddress addr = new InetSocketAddress(serverHost, server.port());
-        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+        serverCertStores = new CertStores(true, "server", "notahost");
+        clientCertStores = new CertStores(false, "client", "localhost");
+        sslServerConfigs = serverCertStores.getTrustingConfig(clientCertStores);
+        sslClientConfigs = clientCertStores.getTrustingConfig(serverCertStores);
 
+        SecurityProtocol securityProtocol = SecurityProtocol.SSL;
+        server = createEchoServer(SecurityProtocol.SSL);
+        InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
+
+        // Disable endpoint validation, connection should succeed
+        String node = "1";
+        sslClientConfigs.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "");
+        createSelector(sslClientConfigs);
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
         NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
+
+        // Disable endpoint validation using null value, connection should succeed
+        String node2 = "2";
+        sslClientConfigs.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, null);
+        createSelector(sslClientConfigs);
+        selector.connect(node2, addr, BUFFER_SIZE, BUFFER_SIZE);
+        NetworkTestUtils.checkClientConnection(selector, node2, 100, 10);
+
+        // Connection should fail with endpoint validation enabled
+        String node3 = "3";
+        sslClientConfigs.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "HTTPS");
+        createSelector(sslClientConfigs);
+        selector.connect(node3, addr, BUFFER_SIZE, BUFFER_SIZE);
+        NetworkTestUtils.waitForChannelClose(selector, node3, ChannelState.State.AUTHENTICATION_FAILED);
+        selector.close();
     }
 
     /**
@@ -429,8 +447,7 @@ public class SslTransportLayerTest {
      */
     @Test
     public void testInvalidSecureRandomImplementation() throws Exception {
-        SslChannelBuilder channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false);
-        try {
+        try (SslChannelBuilder channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false)) {
             sslClientConfigs.put(SslConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG, "invalid");
             channelBuilder.configure(sslClientConfigs);
             fail("SSL channel configured with invalid SecureRandom implementation");
@@ -444,8 +461,7 @@ public class SslTransportLayerTest {
      */
     @Test
     public void testInvalidTruststorePassword() throws Exception {
-        SslChannelBuilder channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false);
-        try {
+        try (SslChannelBuilder channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false)) {
             sslClientConfigs.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, "invalid");
             channelBuilder.configure(sslClientConfigs);
             fail("SSL channel configured with invalid truststore password");
@@ -459,8 +475,7 @@ public class SslTransportLayerTest {
      */
     @Test
     public void testInvalidKeystorePassword() throws Exception {
-        SslChannelBuilder channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false);
-        try {
+        try (SslChannelBuilder channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false)) {
             sslClientConfigs.put(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, "invalid");
             channelBuilder.configure(sslClientConfigs);
             fail("SSL channel configured with invalid keystore password");
@@ -635,7 +650,7 @@ public class SslTransportLayerTest {
     @Test
     public void testNetworkThreadTimeRecorded() throws Exception {
         selector.close();
-        this.selector = new Selector(NetworkReceive.UNLIMITED, 5000, new Metrics(), Time.SYSTEM,
+        this.selector = new Selector(NetworkReceive.UNLIMITED, Selector.NO_IDLE_TIMEOUT_MS, new Metrics(), Time.SYSTEM,
                 "MetricGroup", new HashMap<String, String>(), false, true, channelBuilder, MemoryPool.NONE, new LogContext());
 
         String node = "0";
@@ -645,7 +660,7 @@ public class SslTransportLayerTest {
 
         String message = TestUtils.randomString(1024 * 1024);
         NetworkTestUtils.waitForChannelReady(selector, node);
-        KafkaChannel channel = selector.channel(node);
+        final KafkaChannel channel = selector.channel(node);
         assertTrue("SSL handshake time not recorded", channel.getAndResetNetworkThreadTimeNanos() > 0);
         assertEquals("Time not reset", 0, channel.getAndResetNetworkThreadTimeNanos());
 
@@ -661,10 +676,20 @@ public class SslTransportLayerTest {
         assertEquals(0, selector.completedReceives().size());
 
         selector.unmute(node);
-        while (selector.completedReceives().isEmpty()) {
-            selector.poll(100L);
-            assertEquals(0, selector.numStagedReceives(channel));
-        }
+        // Wait for echo server to send the message back
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                try {
+                    selector.poll(100L);
+                    assertEquals(0, selector.numStagedReceives(channel));
+                } catch (IOException e) {
+                    return false;
+                }
+                return !selector.completedReceives().isEmpty();
+            }
+        }, "Timed out waiting for a message to receive from echo server");
+
         long receiveTimeNanos = channel.getAndResetNetworkThreadTimeNanos();
         assertTrue("Receive time not recorded: " + receiveTimeNanos, receiveTimeNanos > 0);
     }
@@ -757,7 +782,7 @@ public class SslTransportLayerTest {
 
     @Test
     public void testClosePlaintext() throws Exception {
-        testClose(SecurityProtocol.PLAINTEXT, new PlaintextChannelBuilder());
+        testClose(SecurityProtocol.PLAINTEXT, new PlaintextChannelBuilder(null));
     }
 
     private void testClose(SecurityProtocol securityProtocol, ChannelBuilder clientChannelBuilder) throws Exception {
@@ -815,12 +840,12 @@ public class SslTransportLayerTest {
         NetworkTestUtils.checkClientConnection(selector, oldNode, 100, 10);
 
         CertStores newServerCertStores = new CertStores(true, "server", "localhost");
-        sslServerConfigs = newServerCertStores.getTrustingConfig(clientCertStores);
+        Map<String, Object> newKeystoreConfigs = newServerCertStores.keyStoreProps();
         assertTrue("SslChannelBuilder not reconfigurable", serverChannelBuilder instanceof ListenerReconfigurable);
         ListenerReconfigurable reconfigurableBuilder = (ListenerReconfigurable) serverChannelBuilder;
         assertEquals(listenerName, reconfigurableBuilder.listenerName());
-        reconfigurableBuilder.validateReconfiguration(sslServerConfigs);
-        reconfigurableBuilder.reconfigure(sslServerConfigs);
+        reconfigurableBuilder.validateReconfiguration(newKeystoreConfigs);
+        reconfigurableBuilder.reconfigure(newKeystoreConfigs);
 
         // Verify that new client with old truststore fails
         oldClientSelector.connect("1", addr, BUFFER_SIZE, BUFFER_SIZE);
@@ -837,22 +862,93 @@ public class SslTransportLayerTest {
 
         CertStores invalidCertStores = new CertStores(true, "server", "127.0.0.1");
         Map<String, Object>  invalidConfigs = invalidCertStores.getTrustingConfig(clientCertStores);
-        try {
-            reconfigurableBuilder.validateReconfiguration(invalidConfigs);
-            fail("Should have failed validation with an exception with different SubjectAltName");
-        } catch (KafkaException e) {
-            // expected exception
-        }
-        try {
-            reconfigurableBuilder.reconfigure(invalidConfigs);
-            fail("Should have failed to reconfigure with different SubjectAltName");
-        } catch (KafkaException e) {
-            // expected exception
-        }
+        verifyInvalidReconfigure(reconfigurableBuilder, invalidConfigs, "keystore with different SubjectAltName");
+
+        Map<String, Object>  missingStoreConfigs = new HashMap<>();
+        missingStoreConfigs.put(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG, "PKCS12");
+        missingStoreConfigs.put(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, "some.keystore.path");
+        missingStoreConfigs.put(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, new Password("some.keystore.password"));
+        missingStoreConfigs.put(SslConfigs.SSL_KEY_PASSWORD_CONFIG, new Password("some.key.password"));
+        verifyInvalidReconfigure(reconfigurableBuilder, missingStoreConfigs, "keystore not found");
 
         // Verify that new connections continue to work with the server with previously configured keystore after failed reconfiguration
         newClientSelector.connect("3", addr, BUFFER_SIZE, BUFFER_SIZE);
         NetworkTestUtils.checkClientConnection(newClientSelector, "3", 100, 10);
+    }
+
+    /**
+     * Tests reconfiguration of server truststore. Verifies that existing connections continue
+     * to work with old truststore and new connections work with new truststore.
+     */
+    @Test
+    public void testServerTruststoreDynamicUpdate() throws Exception {
+        SecurityProtocol securityProtocol = SecurityProtocol.SSL;
+        sslServerConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required");
+        TestSecurityConfig config = new TestSecurityConfig(sslServerConfigs);
+        ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
+        ChannelBuilder serverChannelBuilder = ChannelBuilders.serverChannelBuilder(listenerName,
+                false, securityProtocol, config, null, null);
+        server = new NioEchoServer(listenerName, securityProtocol, config,
+                "localhost", serverChannelBuilder, null);
+        server.start();
+        InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
+
+        // Verify that client with matching keystore can authenticate, send and receive
+        String oldNode = "0";
+        Selector oldClientSelector = createSelector(sslClientConfigs);
+        oldClientSelector.connect(oldNode, addr, BUFFER_SIZE, BUFFER_SIZE);
+        NetworkTestUtils.checkClientConnection(selector, oldNode, 100, 10);
+
+        CertStores newClientCertStores = new CertStores(true, "client", "localhost");
+        sslClientConfigs = newClientCertStores.getTrustingConfig(serverCertStores);
+        Map<String, Object> newTruststoreConfigs = newClientCertStores.trustStoreProps();
+        assertTrue("SslChannelBuilder not reconfigurable", serverChannelBuilder instanceof ListenerReconfigurable);
+        ListenerReconfigurable reconfigurableBuilder = (ListenerReconfigurable) serverChannelBuilder;
+        assertEquals(listenerName, reconfigurableBuilder.listenerName());
+        reconfigurableBuilder.validateReconfiguration(newTruststoreConfigs);
+        reconfigurableBuilder.reconfigure(newTruststoreConfigs);
+
+        // Verify that new client with old truststore fails
+        oldClientSelector.connect("1", addr, BUFFER_SIZE, BUFFER_SIZE);
+        NetworkTestUtils.waitForChannelClose(oldClientSelector, "1", ChannelState.State.AUTHENTICATION_FAILED);
+
+        // Verify that new client with new truststore can authenticate, send and receive
+        Selector newClientSelector = createSelector(sslClientConfigs);
+        newClientSelector.connect("2", addr, BUFFER_SIZE, BUFFER_SIZE);
+        NetworkTestUtils.checkClientConnection(newClientSelector, "2", 100, 10);
+
+        // Verify that old client continues to work
+        NetworkTestUtils.checkClientConnection(oldClientSelector, oldNode, 100, 10);
+
+        Map<String, Object>  invalidConfigs = new HashMap<>(newTruststoreConfigs);
+        invalidConfigs.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, "INVALID_TYPE");
+        verifyInvalidReconfigure(reconfigurableBuilder, invalidConfigs, "invalid truststore type");
+
+        Map<String, Object>  missingStoreConfigs = new HashMap<>();
+        missingStoreConfigs.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, "PKCS12");
+        missingStoreConfigs.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, "some.truststore.path");
+        missingStoreConfigs.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, new Password("some.truststore.password"));
+        verifyInvalidReconfigure(reconfigurableBuilder, missingStoreConfigs, "truststore not found");
+
+        // Verify that new connections continue to work with the server with previously configured keystore after failed reconfiguration
+        newClientSelector.connect("3", addr, BUFFER_SIZE, BUFFER_SIZE);
+        NetworkTestUtils.checkClientConnection(newClientSelector, "3", 100, 10);
+    }
+
+    private void verifyInvalidReconfigure(ListenerReconfigurable reconfigurable,
+                                          Map<String, Object>  invalidConfigs, String errorMessage) {
+        try {
+            reconfigurable.validateReconfiguration(invalidConfigs);
+            fail("Should have failed validation with an exception: " + errorMessage);
+        } catch (KafkaException e) {
+            // expected exception
+        }
+        try {
+            reconfigurable.reconfigure(invalidConfigs);
+            fail("Should have failed to reconfigure: " + errorMessage);
+        } catch (KafkaException e) {
+            // expected exception
+        }
     }
 
     private Selector createSelector(Map<String, Object> sslClientConfigs) {

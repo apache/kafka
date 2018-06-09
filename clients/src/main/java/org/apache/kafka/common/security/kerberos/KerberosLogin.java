@@ -18,6 +18,7 @@ package org.apache.kafka.common.security.kerberos;
 
 import javax.security.auth.kerberos.KerberosPrincipal;
 import javax.security.auth.login.AppConfigurationEntry;
+import javax.security.auth.login.Configuration;
 import javax.security.auth.login.LoginContext;
 import javax.security.auth.login.LoginException;
 import javax.security.auth.kerberos.KerberosTicket;
@@ -25,6 +26,7 @@ import javax.security.auth.Subject;
 
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.JaasUtils;
+import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.authenticator.AbstractLogin;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.utils.KafkaThread;
@@ -33,11 +35,12 @@ import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.Set;
-import java.util.Map;
 
 /**
  * This class is responsible for refreshing Kerberos credentials for
@@ -78,13 +81,15 @@ public class KerberosLogin extends AbstractLogin {
     private String serviceName;
     private long lastLogin;
 
-    public void configure(Map<String, ?> configs, JaasContext jaasContext) {
-        super.configure(configs, jaasContext);
+    @Override
+    public void configure(Map<String, ?> configs, String contextName, Configuration configuration,
+                          AuthenticateCallbackHandler callbackHandler) {
+        super.configure(configs, contextName, configuration, callbackHandler);
         this.ticketRenewWindowFactor = (Double) configs.get(SaslConfigs.SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR);
         this.ticketRenewJitter = (Double) configs.get(SaslConfigs.SASL_KERBEROS_TICKET_RENEW_JITTER);
         this.minTimeBeforeRelogin = (Long) configs.get(SaslConfigs.SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN);
         this.kinitCmd = (String) configs.get(SaslConfigs.SASL_KERBEROS_KINIT_CMD);
-        this.serviceName = getServiceName(configs, jaasContext);
+        this.serviceName = getServiceName(configs, contextName, configuration);
     }
 
     /**
@@ -99,13 +104,13 @@ public class KerberosLogin extends AbstractLogin {
         subject = loginContext.getSubject();
         isKrbTicket = !subject.getPrivateCredentials(KerberosTicket.class).isEmpty();
 
-        List<AppConfigurationEntry> entries = jaasContext().configurationEntries();
-        if (entries.isEmpty()) {
+        AppConfigurationEntry[] entries = configuration().getAppConfigurationEntry(contextName());
+        if (entries.length == 0) {
             isUsingTicketCache = false;
             principal = null;
         } else {
             // there will only be a single entry
-            AppConfigurationEntry entry = entries.get(0);
+            AppConfigurationEntry entry = entries[0];
             if (entry.getOptions().get("useTicketCache") != null) {
                 String val = (String) entry.getOptions().get("useTicketCache");
                 isUsingTicketCache = val.equals("true");
@@ -280,8 +285,9 @@ public class KerberosLogin extends AbstractLogin {
         return serviceName;
     }
 
-    private static String getServiceName(Map<String, ?> configs, JaasContext jaasContext) {
-        String jaasServiceName = jaasContext.configEntryOption(JaasUtils.SERVICE_NAME, null);
+    private static String getServiceName(Map<String, ?> configs, String contextName, Configuration configuration) {
+        List<AppConfigurationEntry> configEntries = Arrays.asList(configuration.getAppConfigurationEntry(contextName));
+        String jaasServiceName = JaasContext.configEntryOption(configEntries, JaasUtils.SERVICE_NAME, null);
         String configServiceName = (String) configs.get(SaslConfigs.SASL_KERBEROS_SERVICE_NAME);
         if (jaasServiceName != null && configServiceName != null && !jaasServiceName.equals(configServiceName)) {
             String message = String.format("Conflicting serviceName values found in JAAS and Kafka configs " +
@@ -360,7 +366,7 @@ public class KerberosLogin extends AbstractLogin {
             loginContext.logout();
             //login and also update the subject field of this instance to
             //have the new credentials (pass it to the LoginContext constructor)
-            loginContext = new LoginContext(jaasContext().name(), subject, null, jaasContext().configuration());
+            loginContext = new LoginContext(contextName(), subject, null, configuration());
             log.info("Initiating re-login for {}", principal);
             loginContext.login();
         }

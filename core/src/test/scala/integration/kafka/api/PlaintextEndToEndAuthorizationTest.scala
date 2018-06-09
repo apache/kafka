@@ -19,13 +19,20 @@ package kafka.api
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth._
-import org.junit.Before
+import org.junit.{Before, Test}
+import org.junit.Assert._
+import org.apache.kafka.common.errors.TopicAuthorizationException
 
 // This test case uses a separate listener for client and inter-broker communication, from
 // which we derive corresponding principals
 object PlaintextEndToEndAuthorizationTest {
+  @volatile
+  private var clientListenerName = None: Option[String]
+  @volatile
+  private var serverListenerName = None: Option[String]
   class TestClientPrincipalBuilder extends KafkaPrincipalBuilder {
     override def build(context: AuthenticationContext): KafkaPrincipal = {
+      clientListenerName = Some(context.listenerName)
       context match {
         case ctx: PlaintextAuthenticationContext if ctx.clientAddress != null =>
           new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "client")
@@ -37,6 +44,7 @@ object PlaintextEndToEndAuthorizationTest {
 
   class TestServerPrincipalBuilder extends KafkaPrincipalBuilder {
     override def build(context: AuthenticationContext): KafkaPrincipal = {
+      serverListenerName = Some(context.listenerName)
       context match {
         case ctx: PlaintextAuthenticationContext =>
           new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "server")
@@ -65,6 +73,15 @@ class PlaintextEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
   override def setUp() {
     startSasl(jaasSections(List.empty, None, ZkSasl))
     super.setUp()
+  }
+
+  @Test
+  def testListenerName() {
+    // To check the client listener name, establish a session on the server by sending any request eg sendRecords
+    intercept[TopicAuthorizationException](sendRecords(1, tp))
+
+    assertEquals(Some("CLIENT"), PlaintextEndToEndAuthorizationTest.clientListenerName)
+    assertEquals(Some("SERVER"), PlaintextEndToEndAuthorizationTest.serverListenerName)
   }
 
 }

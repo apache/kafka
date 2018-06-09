@@ -25,16 +25,15 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
+import java.util.Map;
 import java.util.Properties;
 
 /**
  * Tests command line SSL setup for reset tool.
  */
-@Ignore
 @Category({IntegrationTest.class})
 public class ResetIntegrationWithSslTest extends AbstractResetIntegrationTest {
 
@@ -42,6 +41,8 @@ public class ResetIntegrationWithSslTest extends AbstractResetIntegrationTest {
     public static final EmbeddedKafkaCluster CLUSTER;
 
     private static final String TEST_ID = "reset-with-ssl-integration-test";
+
+    private static Map<String, Object> sslConfig;
 
     static {
         final Properties brokerProps = new Properties();
@@ -61,6 +62,11 @@ public class ResetIntegrationWithSslTest extends AbstractResetIntegrationTest {
         }
 
         CLUSTER = new EmbeddedKafkaCluster(1, brokerProps);
+    }
+
+    @Override
+    Map<String, Object> getClientSslConfig() {
+        return sslConfig;
     }
 
     @Before

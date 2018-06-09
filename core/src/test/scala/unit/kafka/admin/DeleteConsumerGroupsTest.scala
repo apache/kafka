@@ -16,6 +16,7 @@
  */
 package unit.kafka.admin
 
+import joptsimple.OptionException
 import kafka.admin.ConsumerGroupCommandTest
 import kafka.utils.TestUtils
 import org.apache.kafka.common.protocol.Errors
@@ -24,12 +25,11 @@ import org.junit.Test
 
 class DeleteConsumerGroupTest extends ConsumerGroupCommandTest {
 
-  @Test(expected = classOf[joptsimple.OptionException])
+  @Test(expected = classOf[OptionException])
   def testDeleteWithTopicOption() {
     TestUtils.createOffsetsTopic(zkClient, servers)
     val cgcArgs = Array("--bootstrap-server", brokerList, "--delete", "--group", group, "--topic")
     getConsumerGroupService(cgcArgs)
-    fail("Expected an error due to presence of mutually exclusive options")
   }
 
   @Test
@@ -57,32 +57,6 @@ class DeleteConsumerGroupTest extends ConsumerGroupCommandTest {
     val result = service.deleteGroups()
     assertTrue(s"The expected error (${Errors.GROUP_ID_NOT_FOUND}) was not detected while deleting consumer group",
       result.size == 1 && result.keySet.contains(missingGroup) && result.get(missingGroup).contains(Errors.GROUP_ID_NOT_FOUND))
-  }
-
-  @Test
-  def testDeleteCmdInvalidGroupId() {
-    TestUtils.createOffsetsTopic(zkClient, servers)
-    val invalidGroupId = ""
-
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--delete", "--group", invalidGroupId)
-    val service = getConsumerGroupService(cgcArgs)
-
-    val output = TestUtils.grabConsoleOutput(service.deleteGroups())
-    assertTrue(s"The expected error (${Errors.INVALID_GROUP_ID}) was not detected while deleting consumer group",
-      output.contains(s"Group '$invalidGroupId' could not be deleted due to: ${Errors.INVALID_GROUP_ID.toString}"))
-  }
-
-  @Test
-  def testDeleteInvalidGroupId() {
-    TestUtils.createOffsetsTopic(zkClient, servers)
-    val invalidGroupId = ""
-
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--delete", "--group", invalidGroupId)
-    val service = getConsumerGroupService(cgcArgs)
-
-    val result = service.deleteGroups()
-    assertTrue(s"The expected error (${Errors.INVALID_GROUP_ID}) was not detected while deleting consumer group",
-      result.size == 1 && result.keySet.contains(invalidGroupId) && result.get(invalidGroupId).contains(Errors.INVALID_GROUP_ID))
   }
 
   @Test
@@ -227,7 +201,7 @@ class DeleteConsumerGroupTest extends ConsumerGroupCommandTest {
   @Test
   def testDeleteCmdWithShortInitialization() {
     // run one consumer in the group
-    val executor = addConsumerGroupExecutor(numConsumers = 1)
+    addConsumerGroupExecutor(numConsumers = 1)
     val cgcArgs = Array("--bootstrap-server", brokerList, "--delete", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
 
@@ -239,7 +213,7 @@ class DeleteConsumerGroupTest extends ConsumerGroupCommandTest {
   @Test
   def testDeleteWithShortInitialization() {
     // run one consumer in the group
-    val executor = addConsumerGroupExecutor(numConsumers = 1)
+    addConsumerGroupExecutor(numConsumers = 1)
     val cgcArgs = Array("--bootstrap-server", brokerList, "--delete", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
 
@@ -247,5 +221,11 @@ class DeleteConsumerGroupTest extends ConsumerGroupCommandTest {
     assertTrue(s"The consumer group deletion did not work as expected",
       result.size == 1 &&
         result.keySet.contains(group) && result.get(group).contains(Errors.COORDINATOR_NOT_AVAILABLE))
+  }
+
+  @Test(expected = classOf[OptionException])
+  def testDeleteWithUnrecognizedNewConsumerOption() {
+    val cgcArgs = Array("--new-consumer", "--bootstrap-server", brokerList, "--delete", "--group", group)
+    getConsumerGroupService(cgcArgs)
   }
 }

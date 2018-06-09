@@ -38,6 +38,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -56,6 +57,7 @@ public class ClientAuthenticationFailureTest {
 
     @Before
     public void setup() throws Exception {
+        LoginManager.closeAll();
         SecurityProtocol securityProtocol = SecurityProtocol.SASL_PLAINTEXT;
 
         saslServerConfigs = new HashMap<>();
@@ -84,12 +86,12 @@ public class ClientAuthenticationFailureTest {
 
         try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props, deserializer, deserializer)) {
             consumer.subscribe(Arrays.asList(topic));
-            consumer.poll(100);
+            consumer.poll(Duration.ofSeconds(10));
             fail("Expected an authentication error!");
         } catch (SaslAuthenticationException e) {
             // OK
         } catch (Exception e) {
-            fail("Expected only an authentication error, but another error occurred: " + e.getMessage());
+            throw new AssertionError("Expected only an authentication error, but another error occurred.", e);
         }
     }
 

@@ -252,6 +252,9 @@ public class Sender implements Runnable {
             // and request metadata update, since there are messages to send to the topic.
             for (String topic : result.unknownLeaderTopics)
                 this.metadata.add(topic);
+
+            log.debug("Requesting metadata update due to unknown leader topics from the batched records: {}", result.unknownLeaderTopics);
+
             this.metadata.requestUpdate();
         }
 
@@ -262,7 +265,7 @@ public class Sender implements Runnable {
             Node node = iter.next();
             if (!this.client.ready(node, now)) {
                 iter.remove();
-                notReadyTimeout = Math.min(notReadyTimeout, this.client.connectionDelay(node, now));
+                notReadyTimeout = Math.min(notReadyTimeout, this.client.pollDelayMs(node, now));
             }
         }
 
@@ -329,7 +332,7 @@ public class Sender implements Runnable {
             return false;
 
         AbstractRequest.Builder<?> requestBuilder = nextRequestHandler.requestBuilder();
-        while (true) {
+        while (!forceClose) {
             Node targetNode = null;
             try {
                 if (nextRequestHandler.needsCoordinator()) {
@@ -458,17 +461,18 @@ public class Sender implements Runnable {
      */
     private void handleProduceResponse(ClientResponse response, Map<TopicPartition, ProducerBatch> batches, long now) {
         RequestHeader requestHeader = response.requestHeader();
+        long receivedTimeMs = response.receivedTimeMs();
         int correlationId = requestHeader.correlationId();
         if (response.wasDisconnected()) {
             log.trace("Cancelled request with header {} due to node {} being disconnected",
                     requestHeader, response.destination());
             for (ProducerBatch batch : batches.values())
-                completeBatch(batch, new ProduceResponse.PartitionResponse(Errors.NETWORK_EXCEPTION), correlationId, now);
+                completeBatch(batch, new ProduceResponse.PartitionResponse(Errors.NETWORK_EXCEPTION), correlationId, now, 0L);
         } else if (response.versionMismatch() != null) {
             log.warn("Cancelled request {} due to a version mismatch with node {}",
                     response, response.destination(), response.versionMismatch());
             for (ProducerBatch batch : batches.values())
-                completeBatch(batch, new ProduceResponse.PartitionResponse(Errors.UNSUPPORTED_VERSION), correlationId, now);
+                completeBatch(batch, new ProduceResponse.PartitionResponse(Errors.UNSUPPORTED_VERSION), correlationId, now, 0L);
         } else {
             log.trace("Received produce response from node {} with correlation id {}", response.destination(), correlationId);
             // if we have a response, parse it
@@ -478,13 +482,13 @@ public class Sender implements Runnable {
                     TopicPartition tp = entry.getKey();
                     ProduceResponse.PartitionResponse partResp = entry.getValue();
                     ProducerBatch batch = batches.get(tp);
-                    completeBatch(batch, partResp, correlationId, now);
+                    completeBatch(batch, partResp, correlationId, now, receivedTimeMs + produceResponse.throttleTimeMs());
                 }
                 this.sensors.recordLatency(response.destination(), response.requestLatencyMs());
             } else {
                 // this is the acks = 0 case, just complete all requests
                 for (ProducerBatch batch : batches.values()) {
-                    completeBatch(batch, new ProduceResponse.PartitionResponse(Errors.NONE), correlationId, now);
+                    completeBatch(batch, new ProduceResponse.PartitionResponse(Errors.NONE), correlationId, now, 0L);
                 }
             }
         }
@@ -499,7 +503,7 @@ public class Sender implements Runnable {
      * @param now The current POSIX timestamp in milliseconds
      */
     private void completeBatch(ProducerBatch batch, ProduceResponse.PartitionResponse response, long correlationId,
-                               long now) {
+                               long now, long throttleUntilTimeMs) {
         Errors error = response.error;
 
         if (error == Errors.MESSAGE_TOO_LARGE && batch.recordCount > 1 &&
@@ -557,9 +561,13 @@ public class Sender implements Runnable {
                 failBatch(batch, response, exception, batch.attempts() < this.retries);
             }
             if (error.exception() instanceof InvalidMetadataException) {
-                if (error.exception() instanceof UnknownTopicOrPartitionException)
+                if (error.exception() instanceof UnknownTopicOrPartitionException) {
                     log.warn("Received unknown topic or partition error in produce request on partition {}. The " +
                             "topic/partition may not exist or the user may not have Describe access to it", batch.topicPartition);
+                } else {
+                    log.warn("Received invalid metadata error in produce request on partition {} due to {}. Going " +
+                            "to request metadata update now", batch.topicPartition, error.exception().toString());
+                }
                 metadata.requestUpdate();
             }
 
@@ -569,7 +577,7 @@ public class Sender implements Runnable {
 
         // Unmute the completed partition.
         if (guaranteeMessageOrder)
-            this.accumulator.unmutePartition(batch.topicPartition);
+            this.accumulator.unmutePartition(batch.topicPartition, throttleUntilTimeMs);
     }
 
     private void reenqueueBatch(ProducerBatch batch, long currentTimeMs) {

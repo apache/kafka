@@ -74,6 +74,25 @@ class ConsumerGroupCommandTest extends KafkaServerTestHarness {
     oldConsumers += new OldConsumer(Whitelist(topic), consumerProps)
   }
 
+  def committedOffsets(topic: String = topic, group: String = group): Map[TopicPartition, Long] = {
+    val props = new Properties
+    props.put("bootstrap.servers", brokerList)
+    props.put("group.id", group)
+    val consumer = new KafkaConsumer(props, new StringDeserializer, new StringDeserializer)
+    try {
+      consumer.partitionsFor(topic).asScala.flatMap { partitionInfo =>
+        val tp = new TopicPartition(partitionInfo.topic, partitionInfo.partition)
+        val committed = consumer.committed(tp)
+        if (committed == null)
+          None
+        else
+          Some(tp -> committed.offset)
+      }.toMap
+    } finally {
+      consumer.close()
+    }
+  }
+
   def stopRandomOldConsumer(): Unit = {
     oldConsumers.head.stop()
   }

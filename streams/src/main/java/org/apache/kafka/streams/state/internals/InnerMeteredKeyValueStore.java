@@ -19,9 +19,10 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.StreamsMetrics;
+import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 
@@ -49,7 +50,7 @@ class InnerMeteredKeyValueStore<K, IK, V, IV> extends WrappedStateStore.Abstract
     private Sensor allTime;
     private Sensor rangeTime;
     private Sensor flushTime;
-    private StreamsMetrics metrics;
+    private StreamsMetricsImpl metrics;
     private ProcessorContext context;
     private StateStore root;
 
@@ -75,9 +76,9 @@ class InnerMeteredKeyValueStore<K, IK, V, IV> extends WrappedStateStore.Abstract
 
     // always wrap the store with the metered store
     InnerMeteredKeyValueStore(final KeyValueStore<IK, IV> inner,
-                                     final String metricScope,
-                                     final TypeConverter<K, IK, V, IV> typeConverter,
-                                     final Time time) {
+                              final String metricScope,
+                              final TypeConverter<K, IK, V, IV> typeConverter,
+                              final Time time) {
         super(inner);
         this.inner = inner;
         this.metricScope = metricScope;
@@ -89,63 +90,64 @@ class InnerMeteredKeyValueStore<K, IK, V, IV> extends WrappedStateStore.Abstract
     public void init(ProcessorContext context, StateStore root) {
         final String name = name();
         final String tagKey = "task-id";
-        final String tagValue = context.taskId().toString();
+        final String taskName = context.taskId().toString();
         this.context = context;
         this.root = root;
-        this.metrics = context.metrics();
-        this.putTime = this.metrics.addLatencyAndThroughputSensor(metricScope,
+        this.metrics = (StreamsMetricsImpl) context.metrics();
+        this.putTime = this.metrics.addLatencyAndThroughputSensor(taskName,
+                                                                  metricScope,
                                                                   name,
                                                                   "put",
                                                                   Sensor.RecordingLevel.DEBUG,
-                                                                  tagKey, tagValue);
-        this.putIfAbsentTime = this.metrics.addLatencyAndThroughputSensor(metricScope,
+                                                                  tagKey, taskName);
+        this.putIfAbsentTime = this.metrics.addLatencyAndThroughputSensor(taskName,
+                                                                          metricScope,
                                                                           name,
                                                                           "put-if-absent",
                                                                           Sensor.RecordingLevel.DEBUG,
-                                                                          tagKey,
-                                                                          tagValue);
-        this.getTime = this.metrics.addLatencyAndThroughputSensor(metricScope,
+                                                                          tagKey, taskName);
+        this.getTime = this.metrics.addLatencyAndThroughputSensor(taskName,
+                                                                  metricScope,
                                                                   name,
                                                                   "get",
                                                                   Sensor.RecordingLevel.DEBUG,
-                                                                  tagKey,
-                                                                  tagValue);
-        this.deleteTime = this.metrics.addLatencyAndThroughputSensor(metricScope,
+                                                                  tagKey, taskName);
+        this.deleteTime = this.metrics.addLatencyAndThroughputSensor(taskName,
+                                                                     metricScope,
                                                                      name,
                                                                      "delete",
                                                                      Sensor.RecordingLevel.DEBUG,
-                                                                     tagKey,
-                                                                     tagValue);
-        this.putAllTime = this.metrics.addLatencyAndThroughputSensor(metricScope,
+                                                                     tagKey, taskName);
+        this.putAllTime = this.metrics.addLatencyAndThroughputSensor(taskName,
+                                                                     metricScope,
                                                                      name,
                                                                      "put-all",
                                                                      Sensor.RecordingLevel.DEBUG,
-                                                                     tagKey,
-                                                                     tagValue);
-        this.allTime = this.metrics.addLatencyAndThroughputSensor(metricScope,
+                                                                     tagKey, taskName);
+        this.allTime = this.metrics.addLatencyAndThroughputSensor(taskName,
+                                                                  metricScope,
                                                                   name,
                                                                   "all",
                                                                   Sensor.RecordingLevel.DEBUG,
-                                                                  tagKey,
-                                                                  tagValue);
-        this.rangeTime = this.metrics.addLatencyAndThroughputSensor(metricScope,
+                                                                  tagKey, taskName);
+        this.rangeTime = this.metrics.addLatencyAndThroughputSensor(taskName,
+                                                                    metricScope,
                                                                     name,
                                                                     "range",
                                                                     Sensor.RecordingLevel.DEBUG,
-                                                                    tagKey,
-                                                                    tagValue);
-        this.flushTime = this.metrics.addLatencyAndThroughputSensor(metricScope,
+                                                                    tagKey, taskName);
+        this.flushTime = this.metrics.addLatencyAndThroughputSensor(taskName,
+                                                                    metricScope,
                                                                     name,
                                                                     "flush",
                                                                     Sensor.RecordingLevel.DEBUG,
-                                                                    tagKey,
-                                                                    tagValue);
-        final Sensor restoreTime = this.metrics.addLatencyAndThroughputSensor(metricScope,
+                                                                    tagKey, taskName);
+        final Sensor restoreTime = this.metrics.addLatencyAndThroughputSensor(taskName,
+                                                                              metricScope,
                                                                               name,
                                                                               "restore",
                                                                               Sensor.RecordingLevel.DEBUG,
-                                                                              tagKey,
-                                                                              tagValue);
+                                                                              tagKey, taskName);
 
         // register and possibly restore the state from the logs
         if (restoreTime.shouldRecord()) {
@@ -172,30 +174,40 @@ class InnerMeteredKeyValueStore<K, IK, V, IV> extends WrappedStateStore.Abstract
 
     @Override
     public V get(final K key) {
-        if (getTime.shouldRecord()) {
-            return measureLatency(new Action<V>() {
-                @Override
-                public V execute() {
-                    return typeConverter.outerValue(inner.get(typeConverter.innerKey(key)));
-                }
-            }, getTime);
-        } else {
-            return typeConverter.outerValue(inner.get(typeConverter.innerKey(key)));
+        try {
+            if (getTime.shouldRecord()) {
+                return measureLatency(new Action<V>() {
+                    @Override
+                    public V execute() {
+                        return typeConverter.outerValue(inner.get(typeConverter.innerKey(key)));
+                    }
+                }, getTime);
+            } else {
+                return typeConverter.outerValue(inner.get(typeConverter.innerKey(key)));
+            }
+        } catch (final ProcessorStateException e) {
+            final String message = String.format(e.getMessage(), key);
+            throw new ProcessorStateException(message, e);
         }
     }
 
     @Override
     public void put(final K key, final V value) {
-        if (putTime.shouldRecord()) {
-            measureLatency(new Action<V>() {
-                @Override
-                public V execute() {
-                    inner.put(typeConverter.innerKey(key), typeConverter.innerValue(value));
-                    return null;
-                }
-            }, putTime);
-        } else {
-            inner.put(typeConverter.innerKey(key), typeConverter.innerValue(value));
+        try {
+            if (putTime.shouldRecord()) {
+                measureLatency(new Action<V>() {
+                    @Override
+                    public V execute() {
+                        inner.put(typeConverter.innerKey(key), typeConverter.innerValue(value));
+                        return null;
+                    }
+                }, putTime);
+            } else {
+                inner.put(typeConverter.innerKey(key), typeConverter.innerValue(value));
+            }
+        } catch (final ProcessorStateException e) {
+            final String message = String.format(e.getMessage(), key, value);
+            throw new ProcessorStateException(message, e);
         }
     }
 
@@ -231,15 +243,20 @@ class InnerMeteredKeyValueStore<K, IK, V, IV> extends WrappedStateStore.Abstract
 
     @Override
     public V delete(final K key) {
-        if (deleteTime.shouldRecord()) {
-            return measureLatency(new Action<V>() {
-                @Override
-                public V execute() {
-                    return typeConverter.outerValue(inner.delete(typeConverter.innerKey(key)));
-                }
-            }, deleteTime);
-        } else {
-            return typeConverter.outerValue(inner.delete(typeConverter.innerKey(key)));
+        try {
+            if (deleteTime.shouldRecord()) {
+                return measureLatency(new Action<V>() {
+                    @Override
+                    public V execute() {
+                        return typeConverter.outerValue(inner.delete(typeConverter.innerKey(key)));
+                    }
+                }, deleteTime);
+            } else {
+                return typeConverter.outerValue(inner.delete(typeConverter.innerKey(key)));
+            }
+        } catch (final ProcessorStateException e) {
+            final String message = String.format(e.getMessage(), key);
+            throw new ProcessorStateException(message, e);
         }
     }
 

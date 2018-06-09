@@ -32,13 +32,6 @@ public class MemoryNavigableLRUCache<K, V> extends MemoryLRUCache<K, V> {
     }
 
     @Override
-    public MemoryNavigableLRUCache<K, V> whenEldestRemoved(EldestEntryRemovalListener<K, V> listener) {
-        this.listener = listener;
-
-        return this;
-    }
-
-    @Override
     public KeyValueIterator<K, V> range(K from, K to) {
         final TreeMap<K, V> treeMap = toTreeMap();
         return new DelegatingPeekingKeyValueIterator<>(name(), new MemoryNavigableLRUCache.CacheIterator<>(treeMap.navigableKeySet().subSet(from, true, to, true).iterator(), treeMap));

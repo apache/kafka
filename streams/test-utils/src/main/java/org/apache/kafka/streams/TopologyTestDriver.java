@@ -23,9 +23,12 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
@@ -34,6 +37,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
+import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
@@ -41,6 +45,7 @@ import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.GlobalProcessorContextImpl;
+import org.apache.kafka.streams.processor.internals.GlobalStateManager;
 import org.apache.kafka.streams.processor.internals.GlobalStateManagerImpl;
 import org.apache.kafka.streams.processor.internals.GlobalStateUpdateTask;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
@@ -51,7 +56,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StoreChangelogReader;
 import org.apache.kafka.streams.processor.internals.StreamTask;
-import org.apache.kafka.streams.processor.internals.StreamsMetricsImpl;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.WindowStore;
@@ -59,7 +64,9 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.streams.test.OutputVerifier;
 
+import java.io.Closeable;
 import java.io.IOException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -73,6 +80,7 @@ import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.regex.Pattern;
 
 /**
  * This class makes it easier to write tests to verify the behavior of topologies created with {@link Topology} or
@@ -162,17 +170,23 @@ import java.util.concurrent.atomic.AtomicLong;
  * @see OutputVerifier
  */
 @InterfaceStability.Evolving
-public class TopologyTestDriver {
+public class TopologyTestDriver implements Closeable {
 
-    private final Time mockTime;
+    private final Time mockWallClockTime;
     private final InternalTopologyBuilder internalTopologyBuilder;
 
     private final static int PARTITION_ID = 0;
     private final static TaskId TASK_ID = new TaskId(0, PARTITION_ID);
-    private StreamTask task;
-    private GlobalStateUpdateTask globalStateTask;
+    private final StreamTask task;
+    private final GlobalStateUpdateTask globalStateTask;
+    private final GlobalStateManager globalStateManager;
 
+    private final InternalProcessorContext context;
+
+    private final StateDirectory stateDirectory;
+    private final Metrics metrics;
     private final ProcessorTopology processorTopology;
+
     private final MockProducer<byte[], byte[]> producer;
 
     private final Set<String> internalTopics = new HashSet<>();
@@ -187,30 +201,46 @@ public class TopologyTestDriver {
      * Initialized the internally mocked wall-clock time with {@link System#currentTimeMillis() current system time}.
      *
      * @param topology the topology to be tested
-     * @param config the configuration for the topology
+     * @param config   the configuration for the topology
      */
+    @SuppressWarnings("WeakerAccess")
     public TopologyTestDriver(final Topology topology,
                               final Properties config) {
         this(topology, config, System.currentTimeMillis());
     }
+
     /**
      * Create a new test diver instance.
      *
-     * @param topology the topology to be tested
-     * @param config the configuration for the topology
+     * @param topology               the topology to be tested
+     * @param config                 the configuration for the topology
      * @param initialWallClockTimeMs the initial value of internally mocked wall-clock time
      */
+    @SuppressWarnings("WeakerAccess")
     public TopologyTestDriver(final Topology topology,
                               final Properties config,
                               final long initialWallClockTimeMs) {
-        final StreamsConfig streamsConfig = new StreamsConfig(config);
-        mockTime = new MockTime(initialWallClockTimeMs);
+        this(topology.internalTopologyBuilder, config, initialWallClockTimeMs);
+    }
 
-        internalTopologyBuilder = topology.internalTopologyBuilder;
+    /**
+     * Create a new test diver instance.
+     *
+     * @param builder builder for the topology to be tested
+     * @param config the configuration for the topology
+     * @param initialWallClockTimeMs the initial value of internally mocked wall-clock time
+     */
+    private TopologyTestDriver(final InternalTopologyBuilder builder,
+                               final Properties config,
+                               final long initialWallClockTimeMs) {
+        final StreamsConfig streamsConfig = new StreamsConfig(config);
+        mockWallClockTime = new MockTime(initialWallClockTimeMs);
+
+        internalTopologyBuilder = builder;
         internalTopologyBuilder.setApplicationId(streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG));
 
         processorTopology = internalTopologyBuilder.build(null);
-        final ProcessorTopology globalTopology  = internalTopologyBuilder.buildGlobalStateTopology();
+        final ProcessorTopology globalTopology = internalTopologyBuilder.buildGlobalStateTopology();
 
         final Serializer<byte[]> bytesSerializer = new ByteArraySerializer();
         producer = new MockProducer<byte[], byte[]>(true, bytesSerializer, bytesSerializer) {
@@ -221,24 +251,25 @@ public class TopologyTestDriver {
         };
 
         final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
-        final StateDirectory stateDirectory = new StateDirectory(streamsConfig, mockTime);
-        final StreamsMetrics streamsMetrics = new StreamsMetricsImpl(
-            new Metrics(),
-            "topology-test-driver-stream-metrics",
-            Collections.<String, String>emptyMap());
+        stateDirectory = new StateDirectory(streamsConfig, mockWallClockTime);
+        metrics = new Metrics();
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(
+            metrics,
+            "topology-test-driver-virtual-thread"
+        );
         final ThreadCache cache = new ThreadCache(
             new LogContext("topology-test-driver "),
             Math.max(0, streamsConfig.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG)),
             streamsMetrics);
         final StateRestoreListener stateRestoreListener = new StateRestoreListener() {
             @Override
-            public void onRestoreStart(TopicPartition topicPartition, String storeName, long startingOffset, long endingOffset) {}
+            public void onRestoreStart(final TopicPartition topicPartition, final String storeName, final long startingOffset, final long endingOffset) {}
 
             @Override
-            public void onBatchRestored(TopicPartition topicPartition, String storeName, long batchEndOffset, long numRestored) {}
+            public void onBatchRestored(final TopicPartition topicPartition, final String storeName, final long batchEndOffset, final long numRestored) {}
 
             @Override
-            public void onRestoreEnd(TopicPartition topicPartition, String storeName, long totalRestored) {}
+            public void onRestoreEnd(final TopicPartition topicPartition, final String storeName, final long totalRestored) {}
         };
 
         for (final InternalTopologyBuilder.TopicsInfo topicsInfo : internalTopologyBuilder.topicGroups().values()) {
@@ -263,7 +294,7 @@ public class TopologyTestDriver {
                 consumer.updateEndOffsets(Collections.singletonMap(partition, 0L));
             }
 
-            final GlobalStateManagerImpl stateManager = new GlobalStateManagerImpl(
+            globalStateManager = new GlobalStateManagerImpl(
                 new LogContext("mock "),
                 globalTopology,
                 consumer,
@@ -272,16 +303,21 @@ public class TopologyTestDriver {
                 streamsConfig);
 
             final GlobalProcessorContextImpl globalProcessorContext
-                = new GlobalProcessorContextImpl(streamsConfig, stateManager, streamsMetrics, cache);
-            stateManager.setGlobalProcessorContext(globalProcessorContext);
+                = new GlobalProcessorContextImpl(streamsConfig, globalStateManager, streamsMetrics, cache);
+            globalStateManager.setGlobalProcessorContext(globalProcessorContext);
 
             globalStateTask = new GlobalStateUpdateTask(
                 globalTopology,
                 globalProcessorContext,
-                stateManager,
+                globalStateManager,
                 new LogAndContinueExceptionHandler(),
-                new LogContext());
+                new LogContext()
+            );
             globalStateTask.initialize();
+            globalProcessorContext.setRecordContext(new ProcessorRecordContext(0L, -1L, -1, null, new RecordHeaders()));
+        } else {
+            globalStateManager = null;
+            globalStateTask = null;
         }
 
         if (!partitionsByTopic.isEmpty()) {
@@ -292,17 +328,33 @@ public class TopologyTestDriver {
                 consumer,
                 new StoreChangelogReader(
                     createRestoreConsumer(processorTopology.storeToChangelogTopic()),
+                    Duration.ZERO,
                     stateRestoreListener,
                     new LogContext("topology-test-driver ")),
                 streamsConfig,
                 streamsMetrics,
                 stateDirectory,
                 cache,
-                mockTime,
+                mockWallClockTime,
                 producer);
             task.initializeStateStores();
             task.initializeTopology();
+            context = (InternalProcessorContext) task.context();
+            context.setRecordContext(new ProcessorRecordContext(0L, -1L, -1, null, new RecordHeaders()));
+        } else {
+            task = null;
+            context = null;
         }
+    }
+
+    /**
+     * Get read-only handle on global metrics registry.
+     *
+     * @return Map of all metrics.
+     */
+    @SuppressWarnings("WeakerAccess")
+    public Map<MetricName, ? extends Metric> metrics() {
+        return Collections.unmodifiableMap(metrics.metrics());
     }
 
     /**
@@ -311,10 +363,14 @@ public class TopologyTestDriver {
      *
      * @param consumerRecord the record to be processed
      */
+    @SuppressWarnings("WeakerAccess")
     public void pipeInput(final ConsumerRecord<byte[], byte[]> consumerRecord) {
         final String topicName = consumerRecord.topic();
 
-        final TopicPartition topicPartition = partitionsByTopic.get(topicName);
+        if (!internalTopologyBuilder.getSourceTopicNames().isEmpty()) {
+            validateSourceTopicNameRegexPattern(consumerRecord.topic());
+        }
+        final TopicPartition topicPartition = getTopicPartition(topicName);
         if (topicPartition != null) {
             final long offset = offsetsByTopicPartition.get(topicPartition).incrementAndGet() - 1;
             task.addRecords(topicPartition, Collections.singleton(new ConsumerRecord<>(
@@ -323,47 +379,18 @@ public class TopologyTestDriver {
                 offset,
                 consumerRecord.timestamp(),
                 consumerRecord.timestampType(),
-                consumerRecord.checksum(),
+                (long) ConsumerRecord.NULL_CHECKSUM,
                 consumerRecord.serializedKeySize(),
                 consumerRecord.serializedValueSize(),
                 consumerRecord.key(),
-                consumerRecord.value())));
-            producer.clear();
+                consumerRecord.value(),
+                consumerRecord.headers())));
 
             // Process the record ...
-            ((InternalProcessorContext) task.context()).setRecordContext(new ProcessorRecordContext(consumerRecord.timestamp(), offset, topicPartition.partition(), topicName));
             task.process();
             task.maybePunctuateStreamTime();
             task.commit();
-
-            // Capture all the records sent to the producer ...
-            for (final ProducerRecord<byte[], byte[]> record : producer.history()) {
-                Queue<ProducerRecord<byte[], byte[]>> outputRecords = outputRecordsByTopic.get(record.topic());
-                if (outputRecords == null) {
-                    outputRecords = new LinkedList<>();
-                    outputRecordsByTopic.put(record.topic(), outputRecords);
-                }
-                outputRecords.add(record);
-
-                // Forward back into the topology if the produced record is to an internal or a source topic ...
-                final String outputTopicName = record.topic();
-                if (internalTopics.contains(outputTopicName) || processorTopology.sourceTopics().contains(outputTopicName)) {
-                    final byte[] serializedKey = record.key();
-                    final byte[] serializedValue = record.value();
-
-                    pipeInput(new ConsumerRecord<>(
-                        outputTopicName,
-                        -1,
-                        -1L,
-                        record.timestamp(),
-                        TimestampType.CREATE_TIME,
-                        0L,
-                        serializedKey == null ? 0 : serializedKey.length,
-                        serializedValue == null ? 0 : serializedValue.length,
-                        serializedKey,
-                        serializedValue));
-                }
-            }
+            captureOutputRecords();
         } else {
             final TopicPartition globalTopicPartition = globalPartitionsByTopic.get(topicName);
             if (globalTopicPartition == null) {
@@ -376,12 +403,65 @@ public class TopologyTestDriver {
                 offset,
                 consumerRecord.timestamp(),
                 consumerRecord.timestampType(),
-                consumerRecord.checksum(),
+                (long) ConsumerRecord.NULL_CHECKSUM,
                 consumerRecord.serializedKeySize(),
                 consumerRecord.serializedValueSize(),
                 consumerRecord.key(),
-                consumerRecord.value()));
+                consumerRecord.value(),
+                consumerRecord.headers()));
             globalStateTask.flushState();
+        }
+    }
+
+    private void validateSourceTopicNameRegexPattern(final String inputRecordTopic) {
+        for (final String sourceTopicName : internalTopologyBuilder.getSourceTopicNames()) {
+            if (!sourceTopicName.equals(inputRecordTopic) && Pattern.compile(sourceTopicName).matcher(inputRecordTopic).matches()) {
+                throw new TopologyException("Topology add source of type String for topic: " + sourceTopicName +
+                        " cannot contain regex pattern for input record topic: " + inputRecordTopic +
+                        " and hence cannot process the message.");
+            }
+        }
+    }
+
+    private TopicPartition getTopicPartition(final String topicName) {
+        final TopicPartition topicPartition = partitionsByTopic.get(topicName);
+        if (topicPartition == null) {
+            for (final Map.Entry<String, TopicPartition> entry : partitionsByTopic.entrySet()) {
+                if (Pattern.compile(entry.getKey()).matcher(topicName).matches()) {
+                    return entry.getValue();
+                }
+            }
+        }
+        return topicPartition;
+    }
+
+    private void captureOutputRecords() {
+        // Capture all the records sent to the producer ...
+        final List<ProducerRecord<byte[], byte[]>> output = producer.history();
+        producer.clear();
+        for (final ProducerRecord<byte[], byte[]> record : output) {
+            outputRecordsByTopic.computeIfAbsent(record.topic(), k -> new LinkedList<>()).add(record);
+
+            // Forward back into the topology if the produced record is to an internal or a source topic ...
+            final String outputTopicName = record.topic();
+            if (internalTopics.contains(outputTopicName) || processorTopology.sourceTopics().contains(outputTopicName)
+                    || globalPartitionsByTopic.containsKey(outputTopicName)) {
+                final byte[] serializedKey = record.key();
+                final byte[] serializedValue = record.value();
+
+                pipeInput(new ConsumerRecord<>(
+                    outputTopicName,
+                    -1,
+                    -1L,
+                    record.timestamp(),
+                    TimestampType.CREATE_TIME,
+                    0L,
+                    serializedKey == null ? 0 : serializedKey.length,
+                    serializedValue == null ? 0 : serializedValue.length,
+                    serializedKey,
+                    serializedValue,
+                    record.headers()));
+            }
         }
     }
 
@@ -390,6 +470,7 @@ public class TopologyTestDriver {
      *
      * @param records a list of records to be processed
      */
+    @SuppressWarnings("WeakerAccess")
     public void pipeInput(final List<ConsumerRecord<byte[], byte[]>> records) {
         for (final ConsumerRecord<byte[], byte[]> record : records) {
             pipeInput(record);
@@ -403,10 +484,14 @@ public class TopologyTestDriver {
      *
      * @param advanceMs the amount of time to advance wall-clock time in milliseconds
      */
+    @SuppressWarnings("WeakerAccess")
     public void advanceWallClockTime(final long advanceMs) {
-        mockTime.sleep(advanceMs);
-        task.maybePunctuateSystemTime();
-        task.commit();
+        mockWallClockTime.sleep(advanceMs);
+        if (task != null) {
+            task.maybePunctuateSystemTime();
+            task.commit();
+        }
+        captureOutputRecords();
     }
 
     /**
@@ -416,6 +501,7 @@ public class TopologyTestDriver {
      * @param topic the name of the topic
      * @return the next record on that topic, or {@code null} if there is no record available
      */
+    @SuppressWarnings("WeakerAccess")
     public ProducerRecord<byte[], byte[]> readOutput(final String topic) {
         final Queue<ProducerRecord<byte[], byte[]>> outputRecords = outputRecordsByTopic.get(topic);
         if (outputRecords == null) {
@@ -428,11 +514,12 @@ public class TopologyTestDriver {
      * Read the next record from the given topic.
      * These records were output by the topology during the previous calls to {@link #pipeInput(ConsumerRecord)}.
      *
-     * @param topic the name of the topic
-     * @param keyDeserializer the deserializer for the key type
+     * @param topic             the name of the topic
+     * @param keyDeserializer   the deserializer for the key type
      * @param valueDeserializer the deserializer for the value type
      * @return the next record on that topic, or {@code null} if there is no record available
      */
+    @SuppressWarnings("WeakerAccess")
     public <K, V> ProducerRecord<K, V> readOutput(final String topic,
                                                   final Deserializer<K> keyDeserializer,
                                                   final Deserializer<V> valueDeserializer) {
@@ -442,7 +529,7 @@ public class TopologyTestDriver {
         }
         final K key = keyDeserializer.deserialize(record.topic(), record.key());
         final V value = valueDeserializer.deserialize(record.topic(), record.value());
-        return new ProducerRecord<>(record.topic(), record.partition(), record.timestamp(), key, value);
+        return new ProducerRecord<>(record.topic(), record.partition(), record.timestamp(), key, value, record.headers());
     }
 
     /**
@@ -451,6 +538,8 @@ public class TopologyTestDriver {
      * <p>
      * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
      * {@link #pipeInput(ConsumerRecord) process an input message}, and/or to check the store afterward.
+     * <p>
+     * Note, that {@code StateStore} might be {@code null} if a store is added but not connected to any processor.
      *
      * @return all stores my name
      * @see #getStateStore(String)
@@ -458,10 +547,11 @@ public class TopologyTestDriver {
      * @see #getWindowStore(String)
      * @see #getSessionStore(String)
      */
+    @SuppressWarnings("WeakerAccess")
     public Map<String, StateStore> getAllStateStores() {
         final Map<String, StateStore> allStores = new HashMap<>();
         for (final String storeName : internalTopologyBuilder.allStateStoreName()) {
-            allStores.put(storeName, ((ProcessorContextImpl) task.context()).getStateMgr().getStore(storeName));
+            allStores.put(storeName, getStateStore(storeName));
         }
         return allStores;
     }
@@ -480,8 +570,24 @@ public class TopologyTestDriver {
      * @see #getWindowStore(String)
      * @see #getSessionStore(String)
      */
+    @SuppressWarnings("WeakerAccess")
     public StateStore getStateStore(final String name) {
-        return ((ProcessorContextImpl) task.context()).getStateMgr().getStore(name);
+        if (task != null) {
+            final StateStore stateStore = ((ProcessorContextImpl) task.context()).getStateMgr().getStore(name);
+            if (stateStore != null) {
+                return stateStore;
+            }
+        }
+
+        if (globalStateManager != null) {
+            final StateStore stateStore = globalStateManager.getGlobalStore(name);
+            if (stateStore != null) {
+                return stateStore;
+            }
+
+        }
+
+        return null;
     }
 
     /**
@@ -498,7 +604,7 @@ public class TopologyTestDriver {
      * @see #getWindowStore(String)
      * @see #getSessionStore(String)
      */
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "WeakerAccess"})
     public <K, V> KeyValueStore<K, V> getKeyValueStore(final String name) {
         final StateStore store = getStateStore(name);
         return store instanceof KeyValueStore ? (KeyValueStore<K, V>) store : null;
@@ -518,7 +624,7 @@ public class TopologyTestDriver {
      * @see #getKeyValueStore(String)
      * @see #getSessionStore(String) (String)
      */
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "WeakerAccess", "unused"})
     public <K, V> WindowStore<K, V> getWindowStore(final String name) {
         final StateStore store = getStateStore(name);
         return store instanceof WindowStore ? (WindowStore<K, V>) store : null;
@@ -538,7 +644,7 @@ public class TopologyTestDriver {
      * @see #getKeyValueStore(String)
      * @see #getWindowStore(String)
      */
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "WeakerAccess", "unused"})
     public <K, V> SessionStore<K, V> getSessionStore(final String name) {
         final StateStore store = getStateStore(name);
         return store instanceof SessionStore ? (SessionStore<K, V>) store : null;
@@ -547,6 +653,7 @@ public class TopologyTestDriver {
     /**
      * Close the driver, its topology, and all processors.
      */
+    @SuppressWarnings("WeakerAccess")
     public void close() {
         if (task != null) {
             task.close(true, false);
@@ -558,6 +665,8 @@ public class TopologyTestDriver {
                 // ignore
             }
         }
+        captureOutputRecords();
+        stateDirectory.clean();
     }
 
     static class MockTime implements Time {
@@ -609,7 +718,7 @@ public class TopologyTestDriver {
         };
 
         // for each store
-        for (final Map.Entry<String, String> storeAndTopic: storeToChangelogTopic.entrySet()) {
+        for (final Map.Entry<String, String> storeAndTopic : storeToChangelogTopic.entrySet()) {
             final String topicName = storeAndTopic.getValue();
             // Set up the restore-state topic ...
             // consumer.subscribe(new TopicPartition(topicName, 0));

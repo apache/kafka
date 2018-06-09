@@ -54,9 +54,13 @@ public class DescribeConfigsRequest extends AbstractRequest {
             new Field(RESOURCES_KEY_NAME, new ArrayOf(DESCRIBE_CONFIGS_REQUEST_RESOURCE_V0), "An array of config resources to be returned."),
             new Field(INCLUDE_SYNONYMS, BOOLEAN));
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema DESCRIBE_CONFIGS_REQUEST_V2 = DESCRIBE_CONFIGS_REQUEST_V1;
 
     public static Schema[] schemaVersions() {
-        return new Schema[]{DESCRIBE_CONFIGS_REQUEST_V0, DESCRIBE_CONFIGS_REQUEST_V1};
+        return new Schema[]{DESCRIBE_CONFIGS_REQUEST_V0, DESCRIBE_CONFIGS_REQUEST_V1, DESCRIBE_CONFIGS_REQUEST_V2};
     }
 
     public static class Builder extends AbstractRequest.Builder {
@@ -162,6 +166,7 @@ public class DescribeConfigsRequest extends AbstractRequest {
         switch (version) {
             case 0:
             case 1:
+            case 2:
                 ApiError error = ApiError.fromThrowable(e);
                 Map<Resource, DescribeConfigsResponse.Config> errors = new HashMap<>(resources().size());
                 DescribeConfigsResponse.Config config = new DescribeConfigsResponse.Config(error,

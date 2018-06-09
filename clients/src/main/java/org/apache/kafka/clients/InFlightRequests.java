@@ -20,11 +20,11 @@ import java.util.ArrayDeque;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
-
 
 /**
  * The set of requests which have been sent or are being sent but haven't yet received a response
@@ -151,9 +151,14 @@ final class InFlightRequests {
         if (reqs == null) {
             return Collections.emptyList();
         } else {
-            Deque<NetworkClient.InFlightRequest> clearedRequests = requests.remove(node);
+            final Deque<NetworkClient.InFlightRequest> clearedRequests = requests.remove(node);
             inFlightRequestCount.getAndAdd(-clearedRequests.size());
-            return clearedRequests;
+            return new Iterable<NetworkClient.InFlightRequest>() {
+                @Override
+                public Iterator<NetworkClient.InFlightRequest> iterator() {
+                    return clearedRequests.descendingIterator();
+                }
+            };
         }
     }
 

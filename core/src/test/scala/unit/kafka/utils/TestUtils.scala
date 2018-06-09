@@ -28,22 +28,21 @@ import javax.net.ssl.X509TrustManager
 
 import kafka.api._
 import kafka.cluster.{Broker, EndPoint}
-import kafka.common.TopicAndPartition
 import kafka.consumer.{ConsumerConfig, ConsumerTimeoutException, KafkaStream}
 import kafka.log._
 import kafka.message._
-import kafka.producer._
 import kafka.security.auth.{Acl, Authorizer, Resource}
-import kafka.serializer.{DefaultEncoder, Encoder, StringEncoder}
 import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpointFile
 import Implicits._
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.zk.{AdminZkClient, BrokerIdsZNode, BrokerInfo, KafkaZkClient}
 import org.apache.kafka.clients.CommonClientConfigs
+import org.apache.kafka.clients.admin.{AdminClient, AlterConfigsResult, Config, ConfigEntry}
 import org.apache.kafka.clients.consumer.{ConsumerRecord, KafkaConsumer, OffsetAndMetadata, RangeAssignor}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.header.Header
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.{ListenerName, Mode}
@@ -505,28 +504,6 @@ object TestUtils extends Logging {
     builder.toString
   }
 
-  /**
-   * Create a producer with a few pre-configured properties.
-   * If certain properties need to be overridden, they can be provided in producerProps.
-   */
-  @deprecated("This method has been deprecated and it will be removed in a future release.", "0.10.0.0")
-  def createProducer[K, V](brokerList: String,
-                           encoder: String = classOf[DefaultEncoder].getName,
-                           keyEncoder: String = classOf[DefaultEncoder].getName,
-                           partitioner: String = classOf[DefaultPartitioner].getName,
-                           producerProps: Properties = null): Producer[K, V] = {
-    val props: Properties = getProducerConfig(brokerList)
-
-    //override any explicitly specified properties
-    if (producerProps != null)
-      props ++= producerProps
-
-    props.put("serializer.class", encoder)
-    props.put("key.serializer.class", keyEncoder)
-    props.put("partitioner.class", partitioner)
-    new Producer[K, V](new kafka.producer.ProducerConfig(props))
-  }
-
   def securityConfigs(mode: Mode,
                               securityProtocol: SecurityProtocol,
                               trustStoreFile: Option[File],
@@ -555,7 +532,7 @@ object TestUtils extends Logging {
                         bufferSize: Long = 1024L * 1024L,
                         retries: Int = 0,
                         lingerMs: Long = 0,
-                        requestTimeoutMs: Long = 10 * 1024L,
+                        requestTimeoutMs: Long = 30 * 1000L,
                         securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT,
                         trustStoreFile: Option[File] = None,
                         saslProperties: Option[Properties] = None,
@@ -670,18 +647,6 @@ object TestUtils extends Logging {
     props
   }
 
-  @deprecated("This method has been deprecated and will be removed in a future release", "0.11.0.0")
-  def getSyncProducerConfig(port: Int): Properties = {
-    val props = new Properties()
-    props.put("host", "localhost")
-    props.put("port", port.toString)
-    props.put("request.timeout.ms", "10000")
-    props.put("request.required.acks", "1")
-    props.put("serializer.class", classOf[StringEncoder].getName)
-    props
-  }
-
-
   @deprecated("This method has been deprecated and will be removed in a future release.", "0.11.0.0")
   def updateConsumerOffset(config : ConsumerConfig, path : String, offset : Long) = {
     val zkUtils = ZkUtils(config.zkConnect, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs, false)
@@ -727,34 +692,6 @@ object TestUtils extends Logging {
     for (i <- 0 until  n)
       buffer += ("msg" + i)
     buffer
-  }
-
-  /**
-   * Create a wired format request based on simple basic information
-   */
-  @deprecated("This method has been deprecated and it will be removed in a future release", "0.10.0.0")
-  def produceRequest(topic: String,
-                     partition: Int,
-                     message: ByteBufferMessageSet,
-                     acks: Int,
-                     timeout: Int,
-                     correlationId: Int = 0,
-                     clientId: String): ProducerRequest = {
-    produceRequestWithAcks(Seq(topic), Seq(partition), message, acks, timeout, correlationId, clientId)
-  }
-
-  @deprecated("This method has been deprecated and it will be removed in a future release", "0.10.0.0")
-  def produceRequestWithAcks(topics: Seq[String],
-                             partitions: Seq[Int],
-                             message: ByteBufferMessageSet,
-                             acks: Int,
-                             timeout: Int,
-                             correlationId: Int = 0,
-                             clientId: String): ProducerRequest = {
-    val data = topics.flatMap(topic =>
-      partitions.map(partition => (TopicAndPartition(topic,  partition), message))
-    )
-    new ProducerRequest(correlationId, clientId, acks.toShort, timeout, collection.mutable.Map(data:_*))
   }
 
   def makeLeaderForPartition(zkClient: KafkaZkClient,
@@ -977,24 +914,25 @@ object TestUtils extends Logging {
     file.close()
   }
 
-  def checkForPhantomInSyncReplicas(zkUtils: ZkUtils, topic: String, partitionToBeReassigned: Int, assignedReplicas: Seq[Int]) {
-    val inSyncReplicas = zkUtils.getInSyncReplicasForPartition(topic, partitionToBeReassigned)
+  def checkForPhantomInSyncReplicas(zkClient: KafkaZkClient, topic: String, partitionToBeReassigned: Int, assignedReplicas: Seq[Int]) {
+    val inSyncReplicas = zkClient.getInSyncReplicasForPartition(new TopicPartition(topic, partitionToBeReassigned))
     // in sync replicas should not have any replica that is not in the new assigned replicas
-    val phantomInSyncReplicas = inSyncReplicas.toSet -- assignedReplicas.toSet
+    val phantomInSyncReplicas = inSyncReplicas.get.toSet -- assignedReplicas.toSet
     assertTrue("All in sync replicas %s must be in the assigned replica list %s".format(inSyncReplicas, assignedReplicas),
       phantomInSyncReplicas.isEmpty)
   }
 
-  def ensureNoUnderReplicatedPartitions(zkUtils: ZkUtils, topic: String, partitionToBeReassigned: Int, assignedReplicas: Seq[Int],
+  def ensureNoUnderReplicatedPartitions(zkClient: KafkaZkClient, topic: String, partitionToBeReassigned: Int, assignedReplicas: Seq[Int],
                                                 servers: Seq[KafkaServer]) {
+    val topicPartition = new TopicPartition(topic, partitionToBeReassigned)
     TestUtils.waitUntilTrue(() => {
-        val inSyncReplicas = zkUtils.getInSyncReplicasForPartition(topic, partitionToBeReassigned)
-        inSyncReplicas.size == assignedReplicas.size
+        val inSyncReplicas = zkClient.getInSyncReplicasForPartition(topicPartition)
+        inSyncReplicas.get.size == assignedReplicas.size
       },
       "Reassigned partition [%s,%d] is under replicated".format(topic, partitionToBeReassigned))
     var leader: Option[Int] = None
     TestUtils.waitUntilTrue(() => {
-        leader = zkUtils.getLeaderForPartition(topic, partitionToBeReassigned)
+        leader = zkClient.getLeaderForPartition(topicPartition)
         leader.isDefined
       },
       "Reassigned partition [%s,%d] is unavailable".format(topic, partitionToBeReassigned))
@@ -1037,79 +975,39 @@ object TestUtils extends Logging {
                    logDirFailureChannel = new LogDirFailureChannel(logDirs.size))
   }
 
-  @deprecated("This method has been deprecated and it will be removed in a future release.", "0.10.0.0")
-  def sendMessages(servers: Seq[KafkaServer],
-                   topic: String,
-                   numMessages: Int,
-                   partition: Int = -1,
-                   compression: CompressionCodec = NoCompressionCodec): List[String] = {
-    val header = "test-%d".format(partition)
+  def produceMessages(servers: Seq[KafkaServer],
+                      records: Seq[ProducerRecord[Array[Byte], Array[Byte]]],
+                      acks: Int = -1,
+                      compressionType: CompressionType = CompressionType.NONE): Unit = {
     val props = new Properties()
-    props.put("compression.codec", compression.codec.toString)
-    val ms = 0.until(numMessages).map(x => header + "-" + x)
-
-    // Specific Partition
-    if (partition >= 0) {
-      val producer: Producer[Int, String] =
-        createProducer(TestUtils.getBrokerListStrFromServers(servers),
-          encoder = classOf[StringEncoder].getName,
-          keyEncoder = classOf[IntEncoder].getName,
-          partitioner = classOf[FixedValuePartitioner].getName,
-          producerProps = props)
-
-      producer.send(ms.map(m => new KeyedMessage[Int, String](topic, partition, m)): _*)
-      debug("Sent %d messages for partition [%s,%d]".format(ms.size, topic, partition))
+    props.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, compressionType.name)
+    val producer = createNewProducer(TestUtils.getBrokerListStrFromServers(servers), retries = 5, acks = acks)
+    try {
+      val futures = records.map(producer.send)
+      futures.foreach(_.get)
+    } finally {
       producer.close()
-      ms.toList
-    } else {
-      // Use topic as the key to determine partition
-      val producer: Producer[String, String] = createProducer(
-        TestUtils.getBrokerListStrFromServers(servers),
-        encoder = classOf[StringEncoder].getName,
-        keyEncoder = classOf[StringEncoder].getName,
-        partitioner = classOf[DefaultPartitioner].getName,
-        producerProps = props)
-      producer.send(ms.map(m => new KeyedMessage[String, String](topic, topic, m)): _*)
-      producer.close()
-      debug("Sent %d messages for topic [%s]".format(ms.size, topic))
-      ms.toList
     }
+
+    val topics = records.map(_.topic).distinct
+    debug(s"Sent ${records.size} messages for topics ${topics.mkString(",")}")
   }
 
-  def produceMessages(servers: Seq[KafkaServer],
-                      topic: String,
-                      numMessages: Int,
-                      acks: Int = -1,
-                      valueBytes: Int = -1): Seq[Array[Byte]] = {
-
-    val producer = createNewProducer(
-      TestUtils.getBrokerListStrFromServers(servers),
-      retries = 5,
-      requestTimeoutMs = 2000,
-      acks = acks
-    )
-
-    val values = (0 until numMessages).map(x => valueBytes match {
-      case -1 => s"test-$x".getBytes
-      case _ => new Array[Byte](valueBytes)
-    })
-
-    val futures = values.map { value =>
-      producer.send(new ProducerRecord(topic, value))
-    }
-    futures.foreach(_.get)
-    producer.close()
-
-    debug(s"Sent ${values.size} messages for topic [$topic]")
-
+  def generateAndProduceMessages(servers: Seq[KafkaServer],
+                                 topic: String,
+                                 numMessages: Int,
+                                 acks: Int = -1,
+                                 compressionType: CompressionType = CompressionType.NONE): Seq[String] = {
+    val values = (0 until numMessages).map(x =>  s"test-$x")
+    val records = values.map(v => new ProducerRecord[Array[Byte], Array[Byte]](topic, v.getBytes))
+    produceMessages(servers, records, acks, compressionType)
     values
   }
 
   def produceMessage(servers: Seq[KafkaServer], topic: String, message: String) {
     val producer = createNewProducer(
       TestUtils.getBrokerListStrFromServers(servers),
-      retries = 5,
-      requestTimeoutMs = 2000
+      retries = 5
     )
     producer.send(new ProducerRecord(topic, topic.getBytes, message.getBytes)).get
     producer.close()
@@ -1126,7 +1024,7 @@ object TestUtils extends Logging {
    */
   @deprecated("This method has been deprecated and will be removed in a future release.", "0.11.0.0")
   def getMessages(topicMessageStreams: Map[String, List[KafkaStream[String, String]]],
-                     nMessagesPerThread: Int = -1): List[String] = {
+                  nMessagesPerThread: Int = -1): List[String] = {
 
     var messages: List[String] = Nil
     val shouldGetAllMessages = nMessagesPerThread < 0
@@ -1244,8 +1142,11 @@ object TestUtils extends Logging {
   }
 
   def waitAndVerifyAcls(expected: Set[Acl], authorizer: Authorizer, resource: Resource) = {
+    val newLine = scala.util.Properties.lineSeparator
+
     TestUtils.waitUntilTrue(() => authorizer.getAcls(resource) == expected,
-      s"expected acls $expected but got ${authorizer.getAcls(resource)}", waitTime = JTestUtils.DEFAULT_MAX_WAIT_MS)
+      s"expected acls:${expected.mkString(newLine + "\t", newLine + "\t", newLine)}" +
+        s"but got:${authorizer.getAcls(resource).mkString(newLine + "\t", newLine + "\t", newLine)}", waitTime = JTestUtils.DEFAULT_MAX_WAIT_MS)
   }
 
   /**
@@ -1490,6 +1391,21 @@ object TestUtils extends Logging {
     }
   }
 
+  def alterConfigs(servers: Seq[KafkaServer], adminClient: AdminClient, props: Properties,
+                   perBrokerConfig: Boolean): AlterConfigsResult = {
+    val configEntries = props.asScala.map { case (k, v) => new ConfigEntry(k, v) }.toList.asJava
+    val newConfig = new Config(configEntries)
+    val configs = if (perBrokerConfig) {
+      servers.map { server =>
+        val resource = new ConfigResource(ConfigResource.Type.BROKER, server.config.brokerId.toString)
+        (resource, newConfig)
+      }.toMap.asJava
+    } else {
+      Map(new ConfigResource(ConfigResource.Type.BROKER, "") -> newConfig).asJava
+    }
+    adminClient.alterConfigs(configs)
+  }
+
   /**
    * Capture the console output during the execution of the provided function.
    */
@@ -1524,20 +1440,4 @@ object TestUtils extends Logging {
     (out.toString, err.toString)
   }
 
-}
-
-class IntEncoder(props: VerifiableProperties = null) extends Encoder[Int] {
-  override def toBytes(n: Int) = n.toString.getBytes
-}
-
-@deprecated("This class is deprecated and it will be removed in a future release.", "0.10.0.0")
-class StaticPartitioner(props: VerifiableProperties = null) extends Partitioner {
-  def partition(data: Any, numPartitions: Int): Int = {
-    data.asInstanceOf[String].length % numPartitions
-  }
-}
-
-@deprecated("This class has been deprecated and it will be removed in a future release.", "0.10.0.0")
-class FixedValuePartitioner(props: VerifiableProperties = null) extends Partitioner {
-  def partition(data: Any, numPartitions: Int): Int = data.asInstanceOf[Int]
 }

@@ -30,7 +30,6 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.state.KeyValueStore;
 
-import java.io.File;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -38,18 +37,16 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class EosTestClient extends SmokeTestUtil {
 
     static final String APP_ID = "EosTest";
-    private final String kafka;
-    private final File stateDir;
+    private final Properties properties;
     private final boolean withRepartitioning;
     private final AtomicBoolean notRunningCallbackReceived = new AtomicBoolean(false);
 
     private KafkaStreams streams;
     private boolean uncaughtException;
 
-    EosTestClient(final String kafka, final File stateDir, final boolean withRepartitioning) {
+    EosTestClient(final Properties properties, final boolean withRepartitioning) {
         super();
-        this.kafka = kafka;
-        this.stateDir = stateDir;
+        this.properties = properties;
         this.withRepartitioning = withRepartitioning;
     }
 
@@ -80,7 +77,7 @@ public class EosTestClient extends SmokeTestUtil {
             if (streams == null) {
                 uncaughtException = false;
 
-                streams = createKafkaStreams(stateDir, kafka);
+                streams = createKafkaStreams(properties);
                 streams.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
                     @Override
                     public void uncaughtException(final Thread t, final Throwable e) {
@@ -113,12 +110,8 @@ public class EosTestClient extends SmokeTestUtil {
         }
     }
 
-    private KafkaStreams createKafkaStreams(final File stateDir,
-                                            final String kafka) {
-        final Properties props = new Properties();
+    private KafkaStreams createKafkaStreams(final Properties props) {
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID);
-        props.put(StreamsConfig.STATE_DIR_CONFIG, stateDir.toString());
-        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
         props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 2);
         props.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 3);
@@ -128,7 +121,6 @@ public class EosTestClient extends SmokeTestUtil {
         props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         //TODO remove this config or set to smaller value when KIP-91 is merged
         props.put(StreamsConfig.producerPrefix(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG), 60000);
-
 
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, Integer> data = builder.stream("data");

@@ -17,6 +17,7 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention;
 import org.apache.kafka.common.utils.Utils;
@@ -791,6 +792,47 @@ public class MemoryRecordsTest {
                 assertEquals(TimestampType.LOG_APPEND_TIME, batch.timestampType());
                 assertEquals(logAppendTime, batch.maxTimestamp());
             }
+        }
+    }
+
+    @Test
+    public void testNextBatchSize() {
+        ByteBuffer buffer = ByteBuffer.allocate(2048);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression,
+                TimestampType.LOG_APPEND_TIME, 0L, logAppendTime, pid, epoch, firstSequence);
+        builder.append(10L, null, "abc".getBytes());
+        builder.close();
+
+        buffer.flip();
+        int size = buffer.remaining();
+        MemoryRecords records = MemoryRecords.readableRecords(buffer);
+        assertEquals(size, records.firstBatchSize().intValue());
+        assertEquals(0, buffer.position());
+
+        buffer.limit(1); // size not in buffer
+        assertEquals(null, records.firstBatchSize());
+        buffer.limit(Records.LOG_OVERHEAD); // magic not in buffer
+        assertEquals(null, records.firstBatchSize());
+        buffer.limit(Records.HEADER_SIZE_UP_TO_MAGIC); // payload not in buffer
+        assertEquals(size, records.firstBatchSize().intValue());
+
+        buffer.limit(size);
+        byte magic = buffer.get(Records.MAGIC_OFFSET);
+        buffer.put(Records.MAGIC_OFFSET, (byte) 10);
+        try {
+            records.firstBatchSize();
+            fail("Did not fail with corrupt magic");
+        } catch (CorruptRecordException e) {
+            // Expected exception
+        }
+        buffer.put(Records.MAGIC_OFFSET, magic);
+
+        buffer.put(Records.SIZE_OFFSET + 3, (byte) 0);
+        try {
+            records.firstBatchSize();
+            fail("Did not fail with corrupt size");
+        } catch (CorruptRecordException e) {
+            // Expected exception
         }
     }
 

@@ -40,6 +40,7 @@ public final class ConnectUtils {
     }
 
     public static String lookupKafkaClusterId(WorkerConfig config) {
+        log.info("Creating Kafka admin client");
         try (AdminClient adminClient = AdminClient.create(config.originals())) {
             return lookupKafkaClusterId(adminClient);
         }
@@ -53,13 +54,15 @@ public final class ConnectUtils {
                 log.info("Kafka cluster version is too old to return cluster ID");
                 return null;
             }
+            log.debug("Fetching Kafka cluster ID");
             String kafkaClusterId = clusterIdFuture.get();
             log.info("Kafka cluster ID: {}", kafkaClusterId);
             return kafkaClusterId;
         } catch (InterruptedException e) {
             throw new ConnectException("Unexpectedly interrupted when looking up Kafka cluster info", e);
         } catch (ExecutionException e) {
-            throw new ConnectException("Failed to connect to and describe Kafka cluster", e);
+            throw new ConnectException("Failed to connect to and describe Kafka cluster. "
+                                       + "Check worker's broker connection and security properties.", e);
         }
     }
 }

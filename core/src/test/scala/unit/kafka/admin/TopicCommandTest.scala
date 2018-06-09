@@ -80,9 +80,9 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     // delete the NormalTopic
     val deleteOpts = new TopicCommandOptions(Array("--topic", normalTopic))
     val deletePath = getDeleteTopicPath(normalTopic)
-    assertFalse("Delete path for topic shouldn't exist before deletion.", zkUtils.pathExists(deletePath))
+    assertFalse("Delete path for topic shouldn't exist before deletion.", zkClient.pathExists(deletePath))
     TopicCommand.deleteTopic(zkClient, deleteOpts)
-    assertTrue("Delete path for topic should exist after deletion.", zkUtils.pathExists(deletePath))
+    assertTrue("Delete path for topic should exist after deletion.", zkClient.pathExists(deletePath))
 
     // create the offset topic
     val createOffsetTopicOpts = new TopicCommandOptions(Array("--partitions", numPartitionsOriginal.toString,
@@ -93,11 +93,11 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     // try to delete the Topic.GROUP_METADATA_TOPIC_NAME and make sure it doesn't
     val deleteOffsetTopicOpts = new TopicCommandOptions(Array("--topic", Topic.GROUP_METADATA_TOPIC_NAME))
     val deleteOffsetTopicPath = getDeleteTopicPath(Topic.GROUP_METADATA_TOPIC_NAME)
-    assertFalse("Delete path for topic shouldn't exist before deletion.", zkUtils.pathExists(deleteOffsetTopicPath))
+    assertFalse("Delete path for topic shouldn't exist before deletion.", zkClient.pathExists(deleteOffsetTopicPath))
     intercept[AdminOperationException] {
       TopicCommand.deleteTopic(zkClient, deleteOffsetTopicOpts)
     }
-    assertFalse("Delete path for topic shouldn't exist after deletion.", zkUtils.pathExists(deleteOffsetTopicPath))
+    assertFalse("Delete path for topic shouldn't exist after deletion.", zkClient.pathExists(deleteOffsetTopicPath))
   }
 
   @Test
@@ -223,6 +223,23 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     }
     val output = TestUtils.grabConsoleOutput(listTopics)
     assertTrue(output.contains(topic) && output.contains(markedForDeletionList))
+  }
+
+  @Test
+  def testInvalidTopicLevelConfig(): Unit = {
+    val brokers = List(0)
+    TestUtils.createBrokersInZk(zkClient, brokers)
+
+    // create the topic
+    try {
+      val createOpts = new TopicCommandOptions(
+        Array("--partitions", "1", "--replication-factor", "1", "--topic", "test",
+          "--config", "message.timestamp.type=boom"))
+      TopicCommand.createTopic(zkClient, createOpts)
+      fail("Expected exception on invalid topic-level config.")
+    } catch {
+      case _: Exception => // topic creation should fail due to the invalid config
+    }
   }
 
 }

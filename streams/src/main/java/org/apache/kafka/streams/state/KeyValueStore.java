@@ -33,7 +33,8 @@ public interface KeyValueStore<K, V> extends StateStore, ReadOnlyKeyValueStore<K
      * Update the value associated with this key
      *
      * @param key The key to associate the value to
-     * @param value The value, it can be null.
+     * @param value The value to update, it can be null;
+     *              if the serialized bytes are also null it is interpreted as deletes
      * @throws NullPointerException If null is used for key.
      */
     void put(K key, V value);
@@ -43,7 +44,8 @@ public interface KeyValueStore<K, V> extends StateStore, ReadOnlyKeyValueStore<K
      * is already associated with the key
      *
      * @param key The key to associate the value to
-     * @param value The value, it can be null
+     * @param value The value to update, it can be null;
+     *              if the serialized bytes are also null it is interpreted as deletes
      * @return The old value or null if there is no such key.
      * @throws NullPointerException If null is used for key.
      */
@@ -52,7 +54,8 @@ public interface KeyValueStore<K, V> extends StateStore, ReadOnlyKeyValueStore<K
     /**
      * Update all the given key/value pairs
      *
-     * @param entries A list of entries to put into the store.
+     * @param entries A list of entries to put into the store;
+     *              if the serialized bytes are also null it is interpreted as deletes
      * @throws NullPointerException If null is used for key.
      */
     void putAll(List<KeyValue<K, V>> entries);

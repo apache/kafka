@@ -36,13 +36,12 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilder;
 import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilderTest;
-import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.MockRestoreConsumer;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.MockStateStore;
-import org.apache.kafka.test.MockStateStoreSupplier;
+import org.apache.kafka.test.MockStoreBuilder;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -51,6 +50,7 @@ import org.junit.Test;
 
 import java.io.File;
 import java.io.IOException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -89,7 +89,7 @@ public class StandbyTaskTest {
 
     private final Set<TopicPartition> topicPartitions = Collections.emptySet();
     private final ProcessorTopology topology = ProcessorTopology.withLocalStores(
-            Utils.mkList(new MockStateStoreSupplier(storeName1, false).get(), new MockStateStoreSupplier(storeName2, true).get()),
+            Utils.mkList(new MockStoreBuilder(storeName1, false).build(), new MockStoreBuilder(storeName2, true).build()),
             new HashMap<String, String>() {
                 {
                     put(storeName1, storeChangelogTopicName1);
@@ -99,7 +99,7 @@ public class StandbyTaskTest {
     private final TopicPartition globalTopicPartition = new TopicPartition(globalStoreName, 0);
     private final Set<TopicPartition> ktablePartitions = Utils.mkSet(globalTopicPartition);
     private final ProcessorTopology ktableTopology = ProcessorTopology.withLocalStores(
-            Collections.<StateStore>singletonList(new MockStateStoreSupplier(globalTopicPartition.topic(), true, false).get()),
+            Collections.singletonList(new MockStoreBuilder(globalTopicPartition.topic(), true).withLoggingDisabled().build()),
             new HashMap<String, String>() {
                 {
                     put(globalStoreName, globalTopicPartition.topic());
@@ -123,7 +123,12 @@ public class StandbyTaskTest {
 
     private final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
     private final MockRestoreConsumer restoreStateConsumer = new MockRestoreConsumer();
-    private final StoreChangelogReader changelogReader = new StoreChangelogReader(restoreStateConsumer, stateRestoreListener, new LogContext("standby-task-test "));
+    private final StoreChangelogReader changelogReader = new StoreChangelogReader(
+        restoreStateConsumer,
+        Duration.ZERO,
+        stateRestoreListener,
+        new LogContext("standby-task-test ")
+    );
 
     private final byte[] recordValue = intSerializer.serialize(null, 10);
     private final byte[] recordKey = intSerializer.serialize(null, 1);
@@ -189,7 +194,7 @@ public class StandbyTaskTest {
         }
 
         restoreStateConsumer.seekToBeginning(partition);
-        task.update(partition2, restoreStateConsumer.poll(100).records(partition2));
+        task.update(partition2, restoreStateConsumer.poll(Duration.ofMillis(100)).records(partition2));
 
         StandbyContextImpl context = (StandbyContextImpl) task.context();
         MockStateStore store1 = (MockStateStore) context.getStateMgr().getStore(storeName1);
@@ -246,7 +251,7 @@ public class StandbyTaskTest {
         }
 
         // The commit offset is at 0L. Records should not be processed
-        List<ConsumerRecord<byte[], byte[]>> remaining = task.update(globalTopicPartition, restoreStateConsumer.poll(100).records(globalTopicPartition));
+        List<ConsumerRecord<byte[], byte[]>> remaining = task.update(globalTopicPartition, restoreStateConsumer.poll(Duration.ofMillis(100)).records(globalTopicPartition));
         assertEquals(5, remaining.size());
 
         committedOffsets.put(new TopicPartition(globalTopicPartition.topic(), globalTopicPartition.partition()), new OffsetAndMetadata(10L));
@@ -345,7 +350,6 @@ public class StandbyTaskTest {
                                                  stateDirectory
         );
         task.initializeStateStores();
-
 
         restoreStateConsumer.assign(new ArrayList<>(task.checkpointedOffsets().keySet()));
 

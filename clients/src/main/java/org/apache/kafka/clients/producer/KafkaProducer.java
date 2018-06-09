@@ -256,6 +256,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private final ProducerInterceptors<K, V> interceptors;
     private final ApiVersions apiVersions;
     private final TransactionManager transactionManager;
+    private TransactionalRequestResult initTransactionsResult;
 
     /**
      * A producer is instantiated by providing a set of key-value pairs as configuration. Valid configuration strings
@@ -555,18 +556,36 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      *   2. Gets the internal producer id and epoch, used in all future transactional
      *      messages issued by the producer.
      *
+     * Note that this method will raise {@link TimeoutException} if the transactional state cannot
+     * be initialized before expiration of {@code max.block.ms}. Additionally, it will raise {@link InterruptException}
+     * if interrupted. It is safe to retry in either case, but once the transactional state has been successfully
+     * initialized, this method should no longer be used.
+     *
      * @throws IllegalStateException if no transactional.id has been configured
      * @throws org.apache.kafka.common.errors.UnsupportedVersionException fatal error indicating the broker
      *         does not support transactions (i.e. if its version is lower than 0.11.0.0)
      * @throws org.apache.kafka.common.errors.AuthorizationException fatal error indicating that the configured
      *         transactional.id is not authorized. See the exception for more details
      * @throws KafkaException if the producer has encountered a previous fatal error or for any other unexpected error
+     * @throws TimeoutException if the time taken for initialize the transaction has surpassed <code>max.block.ms</code>.
+     * @throws InterruptException if the thread is interrupted while blocked
      */
     public void initTransactions() {
         throwIfNoTransactionManager();
-        TransactionalRequestResult result = transactionManager.initializeTransactions();
-        sender.wakeup();
-        result.await();
+        if (initTransactionsResult == null) {
+            initTransactionsResult = transactionManager.initializeTransactions();
+            sender.wakeup();
+        }
+
+        try {
+            if (initTransactionsResult.await(maxBlockTimeMs, TimeUnit.MILLISECONDS)) {
+                initTransactionsResult = null;
+            } else {
+                throw new TimeoutException("Timeout expired while initializing transactional state in " + maxBlockTimeMs + "ms.");
+            }
+        } catch (InterruptedException e) {
+            throw new InterruptException("Initialize transactions interrupted.", e);
+        }
     }
 
     /**

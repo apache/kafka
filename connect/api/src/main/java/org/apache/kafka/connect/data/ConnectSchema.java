@@ -180,6 +180,7 @@ public class ConnectSchema implements Schema {
         return fields;
     }
 
+    @Override
     public Field field(String fieldName) {
         if (type != Type.STRUCT)
             throw new DataException("Cannot look up fields on non-struct type");

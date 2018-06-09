@@ -35,8 +35,13 @@ public class AddOffsetsToTxnRequest extends AbstractRequest {
             PRODUCER_EPOCH,
             GROUP_ID);
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema ADD_OFFSETS_TO_TXN_REQUEST_V1 = ADD_OFFSETS_TO_TXN_REQUEST_V0;
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{ADD_OFFSETS_TO_TXN_REQUEST_V0};
+        return new Schema[]{ADD_OFFSETS_TO_TXN_REQUEST_V0, ADD_OFFSETS_TO_TXN_REQUEST_V1};
     }
 
     public static class Builder extends AbstractRequest.Builder<AddOffsetsToTxnRequest> {

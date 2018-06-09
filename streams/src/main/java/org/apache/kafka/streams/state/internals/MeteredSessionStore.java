@@ -20,11 +20,12 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.StreamsMetrics;
+import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StateSerdes;
@@ -38,7 +39,7 @@ public class MeteredSessionStore<K, V> extends WrappedStateStore.AbstractStateSt
     private final Serde<V> valueSerde;
     private final Time time;
     private StateSerdes<K, V> serdes;
-    private StreamsMetrics metrics;
+    private StreamsMetricsImpl metrics;
     private Sensor putTime;
     private Sensor fetchTime;
     private Sensor flushTime;
@@ -65,19 +66,19 @@ public class MeteredSessionStore<K, V> extends WrappedStateStore.AbstractStateSt
                                         keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
                                         valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
         final String tagKey = "task-id";
-        final String tagValue = context.taskId().toString();
-        this.metrics = context.metrics();
-        this.putTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name(), "put",
-                                                                  Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
-        this.fetchTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name(), "fetch",
-                                                                    Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
-        this.flushTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name(), "flush",
-                                                                    Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
-        this.removeTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name(), "remove",
-                                                                     Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
+        final String taskName = context.taskId().toString();
+        this.metrics = (StreamsMetricsImpl) context.metrics();
+        this.putTime = this.metrics.addLatencyAndThroughputSensor(taskName, metricScope, name(), "put",
+                                                                  Sensor.RecordingLevel.DEBUG, tagKey, taskName);
+        this.fetchTime = this.metrics.addLatencyAndThroughputSensor(taskName, metricScope, name(), "fetch",
+                                                                    Sensor.RecordingLevel.DEBUG, tagKey, taskName);
+        this.flushTime = this.metrics.addLatencyAndThroughputSensor(taskName, metricScope, name(), "flush",
+                                                                    Sensor.RecordingLevel.DEBUG, tagKey, taskName);
+        this.removeTime = this.metrics.addLatencyAndThroughputSensor(taskName, metricScope, name(), "remove",
+                                                                     Sensor.RecordingLevel.DEBUG, tagKey, taskName);
 
-        final Sensor restoreTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name(), "restore",
-                                                                              Sensor.RecordingLevel.DEBUG, tagKey, tagValue);
+        final Sensor restoreTime = this.metrics.addLatencyAndThroughputSensor(taskName, metricScope, name(), "restore",
+                                                                              Sensor.RecordingLevel.DEBUG, tagKey, taskName);
         // register and possibly restore the state from the logs
         final long startNs = time.nanoseconds();
         try {
@@ -92,7 +93,7 @@ public class MeteredSessionStore<K, V> extends WrappedStateStore.AbstractStateSt
                                                          final long earliestSessionEndTime,
                                                          final long latestSessionStartTime) {
         Objects.requireNonNull(key, "key cannot be null");
-        final Bytes bytesKey = Bytes.wrap(serdes.rawKey(key));
+        final Bytes bytesKey = keyBytes(key);
         return new MeteredWindowedKeyValueIterator<>(inner.findSessions(bytesKey,
                                                                         earliestSessionEndTime,
                                                                         latestSessionStartTime),
@@ -109,8 +110,8 @@ public class MeteredSessionStore<K, V> extends WrappedStateStore.AbstractStateSt
                                                          final long latestSessionStartTime) {
         Objects.requireNonNull(keyFrom, "keyFrom cannot be null");
         Objects.requireNonNull(keyTo, "keyTo cannot be null");
-        final Bytes bytesKeyFrom = Bytes.wrap(serdes.rawKey(keyFrom));
-        final Bytes bytesKeyTo = Bytes.wrap(serdes.rawKey(keyTo));
+        final Bytes bytesKeyFrom = keyBytes(keyFrom);
+        final Bytes bytesKeyTo = keyBytes(keyTo);
         return new MeteredWindowedKeyValueIterator<>(inner.findSessions(bytesKeyFrom,
                                                                         bytesKeyTo,
                                                                         earliestSessionEndTime,
@@ -126,8 +127,11 @@ public class MeteredSessionStore<K, V> extends WrappedStateStore.AbstractStateSt
         Objects.requireNonNull(sessionKey, "sessionKey can't be null");
         final long startNs = time.nanoseconds();
         try {
-            final Bytes key = Bytes.wrap(serdes.rawKey(sessionKey.key()));
+            final Bytes key = keyBytes(sessionKey.key());
             inner.remove(new Windowed<>(key, sessionKey.window()));
+        } catch (final ProcessorStateException e) {
+            final String message = String.format(e.getMessage(), sessionKey.key());
+            throw new ProcessorStateException(message, e);
         } finally {
             this.metrics.recordLatency(removeTime, startNs, time.nanoseconds());
         }
@@ -138,11 +142,18 @@ public class MeteredSessionStore<K, V> extends WrappedStateStore.AbstractStateSt
         Objects.requireNonNull(sessionKey, "sessionKey can't be null");
         long startNs = time.nanoseconds();
         try {
-            final Bytes key = Bytes.wrap(serdes.rawKey(sessionKey.key()));
+            final Bytes key = keyBytes(sessionKey.key());
             this.inner.put(new Windowed<>(key, sessionKey.window()), serdes.rawValue(aggregate));
+        } catch (final ProcessorStateException e) {
+            final String message = String.format(e.getMessage(), sessionKey.key(), aggregate);
+            throw new ProcessorStateException(message, e);
         } finally {
             this.metrics.recordLatency(this.putTime, startNs, time.nanoseconds());
         }
+    }
+
+    private Bytes keyBytes(final K key) {
+        return Bytes.wrap(serdes.rawKey(key));
     }
 
     @Override

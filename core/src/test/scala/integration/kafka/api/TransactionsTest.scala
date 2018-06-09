@@ -19,7 +19,7 @@ package kafka.api
 
 import java.lang.{Long => JLong}
 import java.util.Properties
-import java.util.concurrent.{ExecutionException, TimeUnit}
+import java.util.concurrent.TimeUnit
 
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
@@ -27,7 +27,7 @@ import kafka.utils.TestUtils
 import kafka.utils.TestUtils.consumeRecords
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer, OffsetAndMetadata}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.ProducerFencedException
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.{After, Before, Test}
@@ -529,6 +529,19 @@ class TransactionsTest extends KafkaServerTestHarness {
     val expectedValues = Range(0, 11000).map(_.toString).toSet
     allRecords.foreach { record =>
       assertTrue(expectedValues.contains(TestUtils.recordValueAsString(record)))
+    }
+  }
+
+  @Test(expected = classOf[KafkaException])
+  def testConsecutivelyRunInitTransactions(): Unit = {
+    val producer = createTransactionalProducer(transactionalId = "normalProducer")
+
+    try {
+      producer.initTransactions()
+      producer.initTransactions()
+      fail("Should have raised a KafkaException")
+    } finally {
+      producer.close()
     }
   }
 

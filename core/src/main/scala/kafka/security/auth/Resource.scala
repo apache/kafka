@@ -16,31 +16,65 @@
  */
 package kafka.security.auth
 
+import org.apache.kafka.common.resource.{ResourceNameType, ResourcePattern}
+
 object Resource {
   val Separator = ":"
   val ClusterResourceName = "kafka-cluster"
-  val ClusterResource = new Resource(Cluster, Resource.ClusterResourceName)
+  val ClusterResource = Resource(Cluster, Resource.ClusterResourceName, ResourceNameType.LITERAL)
   val ProducerIdResourceName = "producer-id"
   val WildCardResource = "*"
 
   def fromString(str: String): Resource = {
-    str.split(Separator, 2) match {
-      case Array(resourceType, name, _*) => new Resource(ResourceType.fromString(resourceType), name)
-      case _ => throw new IllegalArgumentException("expected a string in format ResourceType:ResourceName but got " + str)
+    ResourceNameType.values.find(nameType => str.startsWith(nameType.name)) match {
+      case Some(nameType) =>
+        str.split(Separator, 3) match {
+          case Array(_, resourceType, name, _*) => new Resource(ResourceType.fromString(resourceType), name, nameType)
+          case _ => throw new IllegalArgumentException("expected a string in format ResourceType:ResourceName but got " + str)
+        }
+      case _ =>
+        str.split(Separator, 2) match {
+          case Array(resourceType, name, _*) => new Resource(ResourceType.fromString(resourceType), name, ResourceNameType.LITERAL)
+          case _ => throw new IllegalArgumentException("expected a string in format ResourceType:ResourceName but got " + str)
+        }
     }
   }
 }
 
 /**
  *
- * @param resourceType type of resource.
- * @param name name of the resource, for topic this will be topic name , for group it will be group name. For cluster type
+ * @param resourceType non-null type of resource.
+ * @param name non-null name of the resource, for topic this will be topic name , for group it will be group name. For cluster type
  *             it will be a constant string kafka-cluster.
+ * @param nameType non-null type of resource name: literal, prefixed, etc.
  */
-case class Resource(resourceType: ResourceType, name: String) {
+case class Resource(resourceType: ResourceType, name: String, nameType: ResourceNameType) {
+
+  if (nameType == ResourceNameType.ANY)
+    throw new IllegalArgumentException("nameType must not be ANY")
+
+  if (nameType == ResourceNameType.UNKNOWN)
+    throw new IllegalArgumentException("nameType must not be UNKNOWN")
+
+  /**
+    * Create an instance of this class with the provided parameters.
+    * Resource name type would default to ResourceNameType.LITERAL.
+    *
+    * @param resourceType non-null resource type
+    * @param name         non-null resource name
+    * @deprecated Since 2.0, use [[kafka.security.auth.Resource(ResourceType, String, ResourceNameType)]]
+    */
+  @deprecated("Use Resource(ResourceType, String, ResourceNameType")
+  def this(resourceType: ResourceType, name: String) {
+    this(resourceType, name, ResourceNameType.LITERAL)
+  }
+
+  def toPattern: ResourcePattern = {
+    new ResourcePattern(resourceType.toJava, name, nameType)
+  }
 
   override def toString: String = {
-    resourceType.name + Resource.Separator + name
+    nameType + Resource.Separator + resourceType.name + Resource.Separator + name
   }
 }
 

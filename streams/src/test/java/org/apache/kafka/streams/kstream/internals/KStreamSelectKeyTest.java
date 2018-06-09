@@ -16,20 +16,23 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.streams.Consumed;
+import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
-import org.apache.kafka.test.KStreamTestDriver;
+import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockProcessorSupplier;
-import org.junit.Rule;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Properties;
 
 import static org.junit.Assert.assertEquals;
 
@@ -37,10 +40,8 @@ public class KStreamSelectKeyTest {
 
     private String topicName = "topic_key_select";
 
-    final private Serde<Integer> integerSerde = Serdes.Integer();
-    final private Serde<String> stringSerde = Serdes.String();
-    @Rule
-    public final KStreamTestDriver driver = new KStreamTestDriver();
+    private final ConsumerRecordFactory<String, Integer> recordFactory = new ConsumerRecordFactory<>(topicName, new StringSerializer(), new IntegerSerializer());
+    private final Properties props = StreamsTestUtils.topologyTestConfig(Serdes.String(), Serdes.Integer());
 
     @Test
     public void testSelectKey() {
@@ -62,22 +63,22 @@ public class KStreamSelectKeyTest {
         final String[] expected = new String[]{"ONE:1", "TWO:2", "THREE:3"};
         final int[] expectedValues = new int[]{1, 2, 3};
 
-        KStream<String, Integer>  stream = builder.stream(topicName, Consumed.with(stringSerde, integerSerde));
+        KStream<String, Integer>  stream = builder.stream(topicName, Consumed.with(Serdes.String(), Serdes.Integer()));
 
-        MockProcessorSupplier<String, Integer> processor = new MockProcessorSupplier<>();
+        MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
 
-        stream.selectKey(selector).process(processor);
+        stream.selectKey(selector).process(supplier);
 
-        driver.setUp(builder);
-
-        for (int expectedValue : expectedValues) {
-            driver.process(topicName, null, expectedValue);
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            for (int expectedValue : expectedValues) {
+                driver.pipeInput(recordFactory.create(expectedValue));
+            }
         }
 
-        assertEquals(3, processor.processed.size());
+        assertEquals(3, supplier.theCapturedProcessor().processed.size());
 
         for (int i = 0; i < expected.length; i++) {
-            assertEquals(expected[i], processor.processed.get(i));
+            assertEquals(expected[i], supplier.theCapturedProcessor().processed.get(i));
         }
 
     }

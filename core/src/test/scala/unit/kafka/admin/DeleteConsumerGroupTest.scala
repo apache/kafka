@@ -20,15 +20,31 @@ import java.nio.charset.StandardCharsets
 
 import kafka.utils._
 import kafka.server.KafkaConfig
-import org.junit.Test
+import org.junit.{After, Before, Test}
 import kafka.consumer._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import kafka.integration.KafkaServerTestHarness
+import org.apache.kafka.common.security.JaasUtils
 
 
 @deprecated("This test has been deprecated and will be removed in a future release.", "0.11.0.0")
 class DeleteConsumerGroupTest extends KafkaServerTestHarness {
   def generateConfigs = TestUtils.createBrokerConfigs(3, zkConnect, false, true).map(KafkaConfig.fromProps)
+  var zkUtils: ZkUtils = null
+
+  @Before
+  override def setUp() {
+    super.setUp()
+    zkUtils = ZkUtils(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled))
+  }
+
+  @After
+  override def tearDown() {
+    if (zkUtils != null)
+     CoreUtils.swallow(zkUtils.close(), this)
+    super.tearDown()
+  }
+
 
   @Test
   def testGroupWideDeleteInZK() {

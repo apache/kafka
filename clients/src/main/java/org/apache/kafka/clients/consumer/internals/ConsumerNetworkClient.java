@@ -28,7 +28,6 @@ import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.requests.AbstractRequest;
-import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
@@ -44,6 +43,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * Higher level consumer access to the network layer with basic support for request futures. This class
@@ -65,9 +65,14 @@ public class ConsumerNetworkClient implements Closeable {
     private final long unsentExpiryMs;
     private final AtomicBoolean wakeupDisabled = new AtomicBoolean();
 
+    // We do not need high throughput, so use a fair lock to try to avoid starvation
+    private final ReentrantLock lock = new ReentrantLock(true);
+
     // when requests complete, they are transferred to this queue prior to invocation. The purpose
     // is to avoid invoking them while holding this object's monitor which can open the door for deadlocks.
     private final ConcurrentLinkedQueue<RequestFutureCompletionHandler> pendingCompletion = new ConcurrentLinkedQueue<>();
+
+    private final ConcurrentLinkedQueue<Node> pendingDisconnects = new ConcurrentLinkedQueue<>();
 
     // this flag allows the client to be safely woken up without waiting on the lock above. It is
     // atomic to avoid the need to acquire the lock above in order to enable it concurrently.
@@ -113,12 +118,22 @@ public class ConsumerNetworkClient implements Closeable {
         return completionHandler.future;
     }
 
-    public synchronized Node leastLoadedNode() {
-        return client.leastLoadedNode(time.milliseconds());
+    public Node leastLoadedNode() {
+        lock.lock();
+        try {
+            return client.leastLoadedNode(time.milliseconds());
+        } finally {
+            lock.unlock();
+        }
     }
 
-    public synchronized boolean hasReadyNodes() {
-        return client.hasReadyNodes();
+    public boolean hasReadyNodes(long now) {
+        lock.lock();
+        try {
+            return client.hasReadyNodes(now);
+        } finally {
+            lock.unlock();
+        }
     }
 
     /**
@@ -149,9 +164,13 @@ public class ConsumerNetworkClient implements Closeable {
      * Ensure our metadata is fresh (if an update is expected, this will block
      * until it has completed).
      */
-    public void ensureFreshMetadata() {
-        if (this.metadata.updateRequested() || this.metadata.timeToNextUpdate(time.milliseconds()) == 0)
-            awaitMetadataUpdate();
+    boolean ensureFreshMetadata(final long timeout) {
+        if (this.metadata.updateRequested() || this.metadata.timeToNextUpdate(time.milliseconds()) == 0) {
+            return awaitMetadataUpdate(timeout);
+        } else {
+            // the metadata is already fresh
+            return true;
+        }
     }
 
     /**
@@ -227,14 +246,19 @@ public class ConsumerNetworkClient implements Closeable {
         // there may be handlers which need to be invoked if we woke up the previous call to poll
         firePendingCompletedRequests();
 
-        synchronized (this) {
+        lock.lock();
+        try {
+            // Handle async disconnects prior to attempting any sends
+            handlePendingDisconnects();
+
             // send all the requests we can send now
-            trySend(now);
+            long pollDelayMs = trySend(now);
+            timeout = Math.min(timeout, pollDelayMs);
 
             // check whether the poll is still needed by the caller. Note that if the expected completion
             // condition becomes satisfied after the call to shouldBlock() (because of a fired completion
             // handler), the client will be woken up.
-            if (pollCondition == null || pollCondition.shouldBlock()) {
+            if (pendingCompletion.isEmpty() && (pollCondition == null || pollCondition.shouldBlock())) {
                 // if there are no requests in flight, do not block longer than the retry backoff
                 if (client.inFlightRequestCount() == 0)
                     timeout = Math.min(timeout, retryBackoffMs);
@@ -265,6 +289,8 @@ public class ConsumerNetworkClient implements Closeable {
 
             // clean unsent requests collection to keep the map from growing indefinitely
             unsent.clean();
+        } finally {
+            lock.unlock();
         }
 
         // called without the lock to avoid deadlock potential if handlers need to acquire locks
@@ -303,8 +329,11 @@ public class ConsumerNetworkClient implements Closeable {
      * @return The number of pending requests
      */
     public int pendingRequestCount(Node node) {
-        synchronized (this) {
+        lock.lock();
+        try {
             return unsent.requestCount(node) + client.inFlightRequestCount(node.idString());
+        } finally {
+            lock.unlock();
         }
     }
 
@@ -317,8 +346,11 @@ public class ConsumerNetworkClient implements Closeable {
     public boolean hasPendingRequests(Node node) {
         if (unsent.hasRequests(node))
             return true;
-        synchronized (this) {
+        lock.lock();
+        try {
             return client.hasInFlightRequests(node.idString());
+        } finally {
+            lock.unlock();
         }
     }
 
@@ -328,8 +360,11 @@ public class ConsumerNetworkClient implements Closeable {
      * @return The total count of pending requests
      */
     public int pendingRequestCount() {
-        synchronized (this) {
+        lock.lock();
+        try {
             return unsent.requestCount() + client.inFlightRequestCount();
+        } finally {
+            lock.unlock();
         }
     }
 
@@ -341,8 +376,11 @@ public class ConsumerNetworkClient implements Closeable {
     public boolean hasPendingRequests() {
         if (unsent.hasRequests())
             return true;
-        synchronized (this) {
+        lock.lock();
+        try {
             return client.hasInFlightRequests();
+        } finally {
+            lock.unlock();
         }
     }
 
@@ -375,26 +413,33 @@ public class ConsumerNetworkClient implements Closeable {
                 for (ClientRequest request : requests) {
                     RequestFutureCompletionHandler handler = (RequestFutureCompletionHandler) request.callback();
                     AuthenticationException authenticationException = client.authenticationException(node);
-                    if (authenticationException != null)
-                        handler.onFailure(authenticationException);
-                    else
-                        handler.onComplete(new ClientResponse(request.makeHeader(request.requestBuilder().latestAllowedVersion()),
+                    handler.onComplete(new ClientResponse(request.makeHeader(request.requestBuilder().latestAllowedVersion()),
                             request.callback(), request.destination(), request.createdTimeMs(), now, true,
-                            null, null));
+                            null, authenticationException, null));
                 }
             }
         }
     }
 
-    public void disconnect(Node node) {
-        failUnsentRequests(node, DisconnectException.INSTANCE);
+    private void handlePendingDisconnects() {
+        lock.lock();
+        try {
+            while (true) {
+                Node node = pendingDisconnects.poll();
+                if (node == null)
+                    break;
 
-        synchronized (this) {
-            client.disconnect(node.idString());
+                failUnsentRequests(node, DisconnectException.INSTANCE);
+                client.disconnect(node.idString());
+            }
+        } finally {
+            lock.unlock();
         }
+    }
 
-        // We need to poll to ensure callbacks from in-flight requests on the disconnected socket are fired
-        pollNoWakeup();
+    public void disconnectAsync(Node node) {
+        pendingDisconnects.offer(node);
+        client.wakeup();
     }
 
     private void failExpiredRequests(long now) {
@@ -408,34 +453,36 @@ public class ConsumerNetworkClient implements Closeable {
 
     private void failUnsentRequests(Node node, RuntimeException e) {
         // clear unsent requests to node and fail their corresponding futures
-        synchronized (this) {
+        lock.lock();
+        try {
             Collection<ClientRequest> unsentRequests = unsent.remove(node);
             for (ClientRequest unsentRequest : unsentRequests) {
                 RequestFutureCompletionHandler handler = (RequestFutureCompletionHandler) unsentRequest.callback();
                 handler.onFailure(e);
             }
+        } finally {
+            lock.unlock();
         }
-
-        // called without the lock to avoid deadlock potential
-        firePendingCompletedRequests();
     }
 
-    private boolean trySend(long now) {
-        // send any requests that can be sent now
-        boolean requestsSent = false;
+    private long trySend(long now) {
+        long pollDelayMs = Long.MAX_VALUE;
 
+        // send any requests that can be sent now
         for (Node node : unsent.nodes()) {
             Iterator<ClientRequest> iterator = unsent.requestIterator(node);
+            if (iterator.hasNext())
+                pollDelayMs = Math.min(pollDelayMs, client.pollDelayMs(node, now));
+
             while (iterator.hasNext()) {
                 ClientRequest request = iterator.next();
                 if (client.ready(node, now)) {
                     client.send(request, now);
                     iterator.remove();
-                    requestsSent = true;
                 }
             }
         }
-        return requestsSent;
+        return pollDelayMs;
     }
 
     public void maybeTriggerWakeup() {
@@ -458,19 +505,39 @@ public class ConsumerNetworkClient implements Closeable {
 
     @Override
     public void close() throws IOException {
-        synchronized (this) {
+        lock.lock();
+        try {
             client.close();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+
+    /**
+     * Check if the code is disconnected and unavailable for immediate reconnection (i.e. if it is in
+     * reconnect backoff window following the disconnect).
+     */
+    public boolean isUnavailable(Node node) {
+        lock.lock();
+        try {
+            return client.connectionFailed(node) && client.connectionDelay(node, time.milliseconds()) > 0;
+        } finally {
+            lock.unlock();
         }
     }
 
     /**
-     * Find whether a previous connection has failed. Note that the failure state will persist until either
-     * {@link #tryConnect(Node)} or {@link #send(Node, AbstractRequest.Builder)} has been called.
-     * @param node Node to connect to if possible
+     * Check for an authentication error on a given node and raise the exception if there is one.
      */
-    public boolean connectionFailed(Node node) {
-        synchronized (this) {
-            return client.connectionFailed(node);
+    public void maybeThrowAuthFailure(Node node) {
+        lock.lock();
+        try {
+            AuthenticationException exception = client.authenticationException(node);
+            if (exception != null)
+                throw exception;
+        } finally {
+            lock.unlock();
         }
     }
 
@@ -481,8 +548,11 @@ public class ConsumerNetworkClient implements Closeable {
      * @param node The node to connect to
      */
     public void tryConnect(Node node) {
-        synchronized (this) {
+        lock.lock();
+        try {
             client.ready(node, time.milliseconds());
+        } finally {
+            lock.unlock();
         }
     }
 
@@ -498,11 +568,11 @@ public class ConsumerNetworkClient implements Closeable {
         public void fireCompletion() {
             if (e != null) {
                 future.raise(e);
+            } else if (response.authenticationException() != null) {
+                future.raise(response.authenticationException());
             } else if (response.wasDisconnected()) {
-                RequestHeader requestHeader = response.requestHeader();
-                int correlation = requestHeader.correlationId();
-                log.debug("Cancelled {} request {} with correlation id {} due to node {} being disconnected",
-                        requestHeader.apiKey(), requestHeader, correlation, response.destination());
+                log.debug("Cancelled request with header {} due to node {} being disconnected",
+                        response.requestHeader(), response.destination());
                 future.raise(DisconnectException.INSTANCE);
             } else if (response.versionMismatch() != null) {
                 future.raise(response.versionMismatch());
@@ -540,7 +610,7 @@ public class ConsumerNetworkClient implements Closeable {
     }
 
     /*
-     * A threadsafe helper class to hold requests per node that have not been sent yet
+     * A thread-safe helper class to hold requests per node that have not been sent yet
      */
     private final static class UnsentRequests {
         private final ConcurrentMap<Node, ConcurrentLinkedQueue<ClientRequest>> unsent;

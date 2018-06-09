@@ -17,17 +17,65 @@
 
 package kafka.tools
 
-import java.io.{PrintStream, FileOutputStream}
+import java.io.{FileOutputStream, PrintStream}
 
 import kafka.common.MessageFormatter
-import kafka.consumer.{BaseConsumer, BaseConsumerRecord}
+import kafka.consumer.{BaseConsumer, BaseConsumerRecord, NewShinyConsumer}
 import kafka.utils.{Exit, TestUtils}
+import org.apache.kafka.clients.consumer.{ConsumerRecord, MockConsumer, OffsetResetStrategy}
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.clients.consumer.ConsumerConfig
+import org.apache.kafka.test.MockDeserializer
 import org.easymock.EasyMock
 import org.junit.Assert._
-import org.junit.Test
+import org.junit.{Before, Test}
+
+import scala.collection.JavaConverters._
 
 class ConsoleConsumerTest {
+
+  @Before
+  def setup(): Unit = {
+    ConsoleConsumer.messageCount = 0
+  }
+
+  @Test
+  def shouldResetUnConsumedOffsetsBeforeExitForNewConsumer() {
+    val topic = "test"
+    val maxMessages: Int = 123
+    val totalMessages: Int = 700
+    val startOffset: java.lang.Long = 0L
+
+    val mockConsumer = new MockConsumer[Array[Byte], Array[Byte]](OffsetResetStrategy.EARLIEST)
+    val tp1 = new TopicPartition(topic, 0)
+    val tp2 = new TopicPartition(topic, 1)
+
+    val consumer = new NewShinyConsumer(Some(topic), None, None, None, mockConsumer)
+
+    mockConsumer.rebalance(List(tp1, tp2).asJava)
+    mockConsumer.updateBeginningOffsets(Map(tp1 -> startOffset, tp2 -> startOffset).asJava)
+
+    0 until totalMessages foreach { i =>
+      // add all records, each partition should have half of `totalMessages`
+      mockConsumer.addRecord(new ConsumerRecord[Array[Byte], Array[Byte]](topic, i % 2, i / 2, "key".getBytes, "value".getBytes))
+    }
+
+    // Mocks
+    val formatter = EasyMock.createNiceMock(classOf[MessageFormatter])
+
+    // Expectations
+    EasyMock.expect(formatter.writeTo(EasyMock.anyObject(), EasyMock.anyObject())).times(maxMessages)
+    EasyMock.replay(formatter)
+
+    // Test
+    ConsoleConsumer.process(maxMessages, formatter, consumer, System.out, skipMessageOnError = false)
+    assertEquals(totalMessages, mockConsumer.position(tp1) + mockConsumer.position(tp2))
+
+    consumer.resetUnconsumedOffsets()
+    assertEquals(maxMessages, mockConsumer.position(tp1) + mockConsumer.position(tp2))
+
+    EasyMock.verify(formatter)
+  }
 
   @Test
   def shouldLimitReadsToMaxMessageLimit() {
@@ -101,8 +149,7 @@ class ConsoleConsumerTest {
     val args: Array[String] = Array(
       "--bootstrap-server", "localhost:9092",
       "--topic", "test",
-      "--from-beginning",
-      "--new-consumer") //new
+      "--from-beginning")
 
     //When
     val config = new ConsoleConsumer.ConsumerConfig(args)
@@ -121,8 +168,7 @@ class ConsoleConsumerTest {
       "--bootstrap-server", "localhost:9092",
       "--topic", "test",
       "--partition", "0",
-      "--offset", "3",
-      "--new-consumer") //new
+      "--offset", "3")
 
     //When
     val config = new ConsoleConsumer.ConsumerConfig(args)
@@ -137,8 +183,42 @@ class ConsoleConsumerTest {
 
   }
 
+  @Test(expected = classOf[IllegalArgumentException])
+  def shouldExitOnUnrecognizedNewConsumerOption(): Unit = {
+    Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
+
+    //Given
+    val args: Array[String] = Array(
+      "--new-consumer",
+      "--bootstrap-server", "localhost:9092",
+      "--topic", "test",
+      "--from-beginning")
+
+    //When
+    try {
+      new ConsoleConsumer.ConsumerConfig(args)
+    } finally {
+      Exit.resetExitProcedure()
+    }
+  }
+
   @Test
   def testDefaultConsumer() {
+    //Given
+    val args: Array[String] = Array(
+      "--bootstrap-server", "localhost:9092",
+      "--topic", "test",
+      "--from-beginning")
+
+    //When
+    val config = new ConsoleConsumer.ConsumerConfig(args)
+
+    //Then
+    assertFalse(config.useOldConsumer)
+  }
+
+  @Test
+  def testNewConsumerRemovedOption() {
     //Given
     val args: Array[String] = Array(
       "--bootstrap-server", "localhost:9092",
@@ -160,7 +240,6 @@ class ConsoleConsumerTest {
       "--topic", "test",
       "--partition", "0",
       "--offset", "LatEst",
-      "--new-consumer", //new
       "--property", "print.value=false")
 
     //When
@@ -318,9 +397,6 @@ class ConsoleConsumerTest {
 
   @Test(expected = classOf[IllegalArgumentException])
   def shouldExitOnInvalidConfigWithAutoOffsetResetAndConflictingFromBeginningNewConsumer() {
-
-    // Override exit procedure to throw an exception instead of exiting, so we can catch the exit
-    // properly for this test case
     Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
 
     //Given
@@ -336,15 +412,10 @@ class ConsoleConsumerTest {
     } finally {
       Exit.resetExitProcedure()
     }
-
-    fail("Expected consumer property construction to fail due to inconsistent reset options")
   }
 
   @Test(expected = classOf[IllegalArgumentException])
   def shouldExitOnInvalidConfigWithAutoOffsetResetAndConflictingFromBeginningOldConsumer() {
-
-    // Override exit procedure to throw an exception instead of exiting, so we can catch the exit
-    // properly for this test case
     Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
 
     //Given
@@ -360,8 +431,6 @@ class ConsoleConsumerTest {
     } finally {
       Exit.resetExitProcedure()
     }
-
-    fail("Expected consumer property construction to fail due to inconsistent reset options")
   }
 
   @Test
@@ -490,4 +559,24 @@ class ConsoleConsumerTest {
 
     Exit.resetExitProcedure()
   }
+
+  @Test
+  def testCustomPropertyShouldBePassedToConfigureMethod(): Unit = {
+    val args = Array(
+      "--bootstrap-server", "localhost:9092",
+      "--topic", "test",
+      "--property", "print.key=true",
+      "--property", "key.deserializer=org.apache.kafka.test.MockDeserializer",
+      "--property", "key.deserializer.my-props=abc"
+    )
+    val config = new ConsoleConsumer.ConsumerConfig(args)
+    assertTrue(config.formatter.isInstanceOf[DefaultMessageFormatter])
+    assertTrue(config.formatterArgs.containsKey("key.deserializer.my-props"))
+    val formatter = config.formatter.asInstanceOf[DefaultMessageFormatter]
+    assertTrue(formatter.keyDeserializer.get.isInstanceOf[MockDeserializer])
+    assertEquals(1, formatter.keyDeserializer.get.asInstanceOf[MockDeserializer].configs.size)
+    assertEquals("abc", formatter.keyDeserializer.get.asInstanceOf[MockDeserializer].configs.get("my-props"))
+    assertTrue(formatter.keyDeserializer.get.asInstanceOf[MockDeserializer].isKey)
+  }
+
 }

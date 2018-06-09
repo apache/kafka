@@ -34,7 +34,7 @@ public class StringDeserializer implements Deserializer<String> {
         Object encodingValue = configs.get(propertyName);
         if (encodingValue == null)
             encodingValue = configs.get("deserializer.encoding");
-        if (encodingValue != null && encodingValue instanceof String)
+        if (encodingValue instanceof String)
             encoding = (String) encodingValue;
     }
 

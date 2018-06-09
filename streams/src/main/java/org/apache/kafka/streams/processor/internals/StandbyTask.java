@@ -22,6 +22,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -53,7 +54,7 @@ public class StandbyTask extends AbstractTask {
                 final Consumer<byte[], byte[]> consumer,
                 final ChangelogReader changelogReader,
                 final StreamsConfig config,
-                final StreamsMetrics metrics,
+                final StreamsMetricsImpl metrics,
                 final StateDirectory stateDirectory) {
         super(id, partitions, topology, consumer, changelogReader, true, stateDirectory, config);
 
@@ -144,6 +145,8 @@ public class StandbyTask extends AbstractTask {
         } finally {
             closeStateManager(committedSuccessfully);
         }
+
+        taskClosed = true;
     }
 
     @Override
@@ -164,7 +167,7 @@ public class StandbyTask extends AbstractTask {
         return stateMgr.updateStandbyStates(partition, records);
     }
 
-    public Map<TopicPartition, Long> checkpointedOffsets() {
+    Map<TopicPartition, Long> checkpointedOffsets() {
         return checkpointedOffsets;
     }
 

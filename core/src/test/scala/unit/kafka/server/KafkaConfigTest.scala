@@ -523,6 +523,30 @@ class KafkaConfigTest {
   }
 
   @Test
+  def testInterBrokerVersionMessageFormatCompatibility(): Unit = {
+    def buildConfig(interBrokerProtocol: ApiVersion, messageFormat: ApiVersion): KafkaConfig = {
+      val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+      props.put(KafkaConfig.InterBrokerProtocolVersionProp, interBrokerProtocol.version)
+      props.put(KafkaConfig.LogMessageFormatVersionProp, messageFormat.version)
+      KafkaConfig.fromProps(props)
+    }
+
+    ApiVersion.allVersions.foreach { interBrokerVersion =>
+      ApiVersion.allVersions.foreach { messageFormatVersion =>
+        if (interBrokerVersion.recordVersion.value >= messageFormatVersion.recordVersion.value) {
+          val config = buildConfig(interBrokerVersion, messageFormatVersion)
+          assertEquals(messageFormatVersion, config.logMessageFormatVersion)
+          assertEquals(interBrokerVersion, config.interBrokerProtocolVersion)
+        } else {
+          intercept[IllegalArgumentException] {
+            buildConfig(interBrokerVersion, messageFormatVersion)
+          }
+        }
+      }
+    }
+  }
+
+  @Test
   def testFromPropsInvalid() {
     def getBaseProperties(): Properties = {
       val validRequiredProperties = new Properties()
@@ -668,6 +692,10 @@ class KafkaConfigTest {
         //Sasl Configs
         case KafkaConfig.SaslMechanismInterBrokerProtocolProp => // ignore
         case KafkaConfig.SaslEnabledMechanismsProp =>
+        case KafkaConfig.SaslClientCallbackHandlerClassProp =>
+        case KafkaConfig.SaslServerCallbackHandlerClassProp =>
+        case KafkaConfig.SaslLoginClassProp =>
+        case KafkaConfig.SaslLoginCallbackHandlerClassProp =>
         case KafkaConfig.SaslKerberosServiceNameProp => // ignore string
         case KafkaConfig.SaslKerberosKinitCmdProp =>
         case KafkaConfig.SaslKerberosTicketRenewWindowFactorProp =>
@@ -675,6 +703,10 @@ class KafkaConfigTest {
         case KafkaConfig.SaslKerberosMinTimeBeforeReloginProp =>
         case KafkaConfig.SaslKerberosPrincipalToLocalRulesProp => // ignore string
         case KafkaConfig.SaslJaasConfigProp =>
+        case KafkaConfig.SaslLoginRefreshWindowFactorProp =>
+        case KafkaConfig.SaslLoginRefreshWindowJitterProp =>
+        case KafkaConfig.SaslLoginRefreshMinPeriodSecondsProp =>
+        case KafkaConfig.SaslLoginRefreshBufferSecondsProp =>
 
         // Password encoder configs
         case KafkaConfig.PasswordEncoderSecretProp =>
@@ -750,6 +782,15 @@ class KafkaConfigTest {
     props.put(KafkaConfig.ZkConnectProp, "127.0.0.1:2181")
     props.put(KafkaConfig.ListenersProp, "PLAINTEXT://0.0.0.0:9092")
     assertFalse(isValidKafkaConfig(props))
+  }
+
+  @Test
+  def testMaxConnectionsPerIpProp() {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    props.put(KafkaConfig.MaxConnectionsPerIpProp, "0")
+    assertFalse(isValidKafkaConfig(props))
+    props.put(KafkaConfig.MaxConnectionsPerIpOverridesProp, "127.0.0.1:100")
+    assertTrue(isValidKafkaConfig(props))
   }
 
   private def assertPropertyInvalid(validRequiredProps: => Properties, name: String, values: Any*) {

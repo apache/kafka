@@ -130,8 +130,7 @@ public class ConnectorsResourceTest {
     }
 
     private static final Map<String, String> getConnectorConfig(Map<String, String> mapToClone) {
-        Map<String, String> result = new HashMap<>();
-        result.putAll(mapToClone);
+        Map<String, String> result = new HashMap<>(mapToClone);
         return result;
     }
 
