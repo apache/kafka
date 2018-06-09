@@ -1030,6 +1030,39 @@ public class StreamTaskTest {
         assertThat(map, equalTo(Collections.singletonMap(repartition, 11L)));
     }
 
+    @Test
+    public void shouldThrowOnCleanCloseTaskWhenEosEnabledIfTransactionInFlight() {
+        task = createStatelessTask(createConfig(true));
+        try {
+            task.close(true, false);
+            fail("should have throw IllegalStateException");
+        } catch (final IllegalStateException expected) {
+            // pass
+        }
+        task = null;
+
+        assertTrue(producer.closed());
+    }
+
+    @Test
+    public void shouldAlwaysCommitIfEosEnabled() {
+        final RecordCollectorImpl recordCollector =  new RecordCollectorImpl(producer, "StreamTask",
+                new LogContext("StreamTaskTest "), new DefaultProductionExceptionHandler(), new Metrics().sensor("skipped-records"));
+
+        task = createStatelessTask(createConfig(true));
+        task.initializeStateStores();
+        task.initializeTopology();
+        task.punctuate(processorSystemTime, 5, PunctuationType.WALL_CLOCK_TIME, new Punctuator() {
+            @Override
+            public void punctuate(final long timestamp) {
+                recordCollector.send("result-topic1", 3, 5, null, 0, time.milliseconds(),
+                        new IntegerSerializer(),  new IntegerSerializer());
+            }
+        });
+        task.commit();
+        assertEquals(1, producer.history().size());
+    }
+
     private StreamTask createStatefulTask(final StreamsConfig config, final boolean logged) {
         final ProcessorTopology topology = ProcessorTopology.with(
             Utils.<ProcessorNode>mkList(source1, source2),
@@ -1145,33 +1178,5 @@ public class StreamTaskTest {
             recordKey,
             recordValue
         );
-    }
-
-    @Test(expected = IllegalStateException.class)
-    public void shouldThrowOnCleanCloseTaskWhenEosEnabledIfTransactionInFlight() {
-        task = createStatelessTask(createConfig(true));
-        task.close(true, false);
-        task = null;
-
-        assertTrue(producer.closed());
-    }
-
-    @Test
-    public void shouldAlwaysCommitIfEosEnabled() {
-        RecordCollectorImpl recordCollector =  new RecordCollectorImpl(producer, "StreamTask",
-                new LogContext("StreamTaskTest "), new DefaultProductionExceptionHandler(), new Metrics().sensor("skipped-records"));
-
-        task = createStatelessTask(createConfig(true));
-        task.initializeStateStores();
-        task.initializeTopology();
-        task.punctuate(processorSystemTime, 5, PunctuationType.WALL_CLOCK_TIME, new Punctuator() {
-            @Override
-            public void punctuate(final long timestamp) {
-                recordCollector.send("result-topic1", 3, 5, null, 0, time.milliseconds(),
-                        new IntegerSerializer(),  new IntegerSerializer());
-            }
-        });
-        task.commit();
-        assertEquals(1, producer.history().size());
     }
 }
