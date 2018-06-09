@@ -21,17 +21,19 @@ import org.apache.kafka.common.config.ConfigException
 import org.junit.{After, Before, Ignore, Test}
 
 import scala.util.Random
+import scala.collection.JavaConverters._
 import org.apache.log4j.{Level, Logger}
 import java.util.Properties
 import java.util.concurrent.ExecutionException
 
-import kafka.consumer.{Consumer, ConsumerConfig}
-import kafka.serializer.StringDecoder
 import kafka.server.{KafkaConfig, KafkaServer}
-import kafka.utils.CoreUtils
+import kafka.utils.{CoreUtils, TestUtils}
 import kafka.utils.TestUtils._
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.errors.TimeoutException
+import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.common.serialization.StringDeserializer
 import org.junit.Assert._
 
 class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
@@ -265,16 +267,14 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
     server.awaitShutdown()
   }
 
-  private def consumeAllMessages(topic: String) : List[String] = {
-    // use a fresh consumer group every time so that we don't need to mess with disabling auto-commit or
-    // resetting the ZK offset
-    val consumerProps = createConsumerProperties(zkConnect, "group" + random.nextLong, "id", 1000)
-    val consumerConnector = Consumer.create(new ConsumerConfig(consumerProps))
-    val messageStream = consumerConnector.createMessageStreams(Map(topic -> 1), new StringDecoder(), new StringDecoder())
-
-    val messages = getMessages(messageStream)
-    consumerConnector.shutdown
-
-    messages
+  private def consumeAllMessages(topic: String): Seq[String] = {
+    val brokerList = TestUtils.bootstrapServers(servers, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))
+    // use a fresh consumer group every time so that we don't need to mess with disabling auto-commit or resetting offsets
+    val consumer = TestUtils.createNewConsumer(brokerList, "group" + random.nextLong,
+      securityProtocol = SecurityProtocol.PLAINTEXT, valueDeserializer = new StringDeserializer)
+    try {
+      consumer.subscribe(Seq(topic).asJava)
+      TestUtils.consumeRecordsFor(consumer).map(_.value)
+    } finally consumer.close()
   }
 }

@@ -16,15 +16,16 @@ package kafka.api
 import java.util.Properties
 import java.util.concurrent.Future
 
-import kafka.consumer.SimpleConsumer
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.{ShutdownableThread, TestUtils}
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
+import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.common.serialization.StringDeserializer
 import org.junit.Assert._
-import org.junit.{Ignore, Test}
+import org.junit.Test
 
 import scala.collection.mutable.ArrayBuffer
 
@@ -60,9 +61,9 @@ class ProducerBounceTest extends KafkaServerTestHarness {
   private val topic1 = "topic-1"
 
   /**
-   * With replication, producer should able to find new leader after it detects broker failure
+   * With replication, producer should able to find new leader after it detects broker failure and consumers should
+   * be able to consume all messages without duplicates.
    */
-  @Ignore // To be re-enabled once we can make it less flaky (KAFKA-2837)
   @Test
   def testBrokerFailure() {
     val numPartitions = 3
@@ -99,20 +100,16 @@ class ProducerBounceTest extends KafkaServerTestHarness {
     assertFalse(scheduler.failed)
 
     // double check that the leader info has been propagated after consecutive bounces
-    val newLeaders = (0 until numPartitions).map(i => TestUtils.waitUntilMetadataIsPropagated(servers, topic1, i))
-    val fetchResponses = newLeaders.zipWithIndex.map { case (leader, partition) =>
-      // Consumers must be instantiated after all the restarts since they use random ports each time they start up
-      val consumer = new SimpleConsumer("localhost", boundPort(servers(leader)), 30000, 1024 * 1024, "")
-      val response = consumer.fetch(new FetchRequestBuilder().addFetch(topic1, partition, 0, Int.MaxValue).build()).messageSet(topic1, partition)
-      consumer.close
-      response
-    }
-    val messages = fetchResponses.flatMap(r => r.iterator.toList.map(_.message))
-    val uniqueMessages = messages.toSet
-    val uniqueMessageSize = uniqueMessages.size
-    info(s"number of unique messages sent: ${uniqueMessageSize}")
-    assertEquals(s"Found ${messages.size - uniqueMessageSize} duplicate messages.", uniqueMessageSize, messages.size)
-    assertEquals("Should have fetched " + scheduler.sent + " unique messages", scheduler.sent, messages.size)
+    (0 until numPartitions).map(i => TestUtils.waitUntilMetadataIsPropagated(servers, topic1, i))
+    val consumer = TestUtils.createNewConsumer(brokerList, securityProtocol = SecurityProtocol.PLAINTEXT,
+      valueDeserializer = new StringDeserializer)
+    val consumerRecords =
+      try TestUtils.consumeRecords(consumer, scheduler.sent)
+      finally consumer.close()
+    val recordValues = consumerRecords.map(_.value)
+    val uniqueRecordValues = recordValues.toSet
+    info(s"number of unique messages sent: ${uniqueRecordValues.size}")
+    assertEquals(s"Found ${recordValues.size - uniqueRecordValues.size} duplicate messages.", uniqueRecordValues.size, recordValues.size)
   }
 
   private class ProducerScheduler extends ShutdownableThread("daemon-producer", false) {
