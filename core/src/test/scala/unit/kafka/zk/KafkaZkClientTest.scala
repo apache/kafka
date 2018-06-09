@@ -34,14 +34,15 @@ import org.apache.kafka.common.utils.{SecurityUtils, Time}
 import org.apache.zookeeper.KeeperException.{Code, NoNodeException, NodeExistsException}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
+
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Seq, mutable}
 import scala.util.Random
-
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
 import kafka.zookeeper._
+import org.apache.kafka.common.resource.ResourceNameType
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.zookeeper.data.Stat
 
@@ -492,7 +493,9 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
       zkClient.createAclChangeNotification(Resource(Topic, "resource2", store.nameType))
     })
 
-    val expectedChangeEvents = ResourceNameType.values.size * 2
+    val expectedChangeEvents = ResourceNameType.values()
+      .count(nameType => nameType != ResourceNameType.ANY && nameType != ResourceNameType.UNKNOWN) * 2
+
     assertEquals(expectedChangeEvents, zkClient.getChildren(AclChangeNotificationZNode.path).size)
 
     zkClient.deleteAclChangeNotifications()
