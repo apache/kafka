@@ -421,6 +421,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                     consumedOffsetsAndMetadata.put(partition, new OffsetAndMetadata(offset));
                     stateMgr.putOffsetLimit(partition, offset);
                 }
+
                 if (eosEnabled) {
                     producer.sendOffsetsToTransaction(consumedOffsetsAndMetadata, applicationId);
                 } else {
@@ -428,6 +429,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                 }
                 commitOffsetNeeded = false;
             }
+
             if (eosEnabled) {
                 producer.commitTransaction();
                 transactionInFlight = false;
@@ -436,6 +438,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                     transactionInFlight = true;
                 }
             }
+
             if (eosEnabled && !startNewTransaction && transactionInFlight) { // need to make sure to commit txn for suspend case
                 producer.commitTransaction();
                 transactionInFlight = false;
