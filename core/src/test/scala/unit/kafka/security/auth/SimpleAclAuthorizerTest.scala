@@ -24,8 +24,8 @@ import kafka.api.{ApiVersion, KAFKA_2_0_IV0, KAFKA_2_0_IV1}
 import kafka.network.RequestChannel.Session
 import kafka.security.auth.Acl.{WildCardHost, WildCardResource}
 import kafka.server.KafkaConfig
-import kafka.utils.{Json, TestUtils}
-import kafka.zk.{AclChangeEvent, AclChangeNotificationZNode, ZooKeeperTestHarness}
+import kafka.utils.TestUtils
+import kafka.zk.{AclChangeNotificationSequenceZNode, AclChangeNotificationZNode, ZooKeeperTestHarness}
 import kafka.zookeeper.{GetChildrenRequest, GetDataRequest, ZooKeeperClient}
 import org.apache.kafka.common.errors.UnsupportedVersionException
 import org.apache.kafka.common.resource.ResourceNameType.{LITERAL, PREFIXED}
@@ -570,46 +570,42 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testWritesAclChangeEventAsJSONIfInterBrokerProtocolNotSet(): Unit = {
+  def testWritesAclChangeEventAsNewFormatIfInterBrokerProtocolNotSet(): Unit = {
     givenAuthorizerWithProtocolVersion(Option.empty)
+    val resource = Resource(Topic, "z_other", PREFIXED)
+    val expected = new String(AclChangeNotificationSequenceZNode.encode(resource), UTF_8)
 
-    simpleAclAuthorizer.addAcls(Set[Acl](denyReadAcl), Resource(Topic, "z_other", PREFIXED))
+    simpleAclAuthorizer.addAcls(Set[Acl](denyReadAcl), resource)
 
-    val string = getAclChangeEventAsString
+    val actual = getAclChangeEventAsString
 
-    val changeEvent = Json.parseStringAs[AclChangeEvent](string) match {
-      case Right(event) => event
-      case Left(e) => fail("Failed to parse ACL change event", e)
-    }
-
-    assertEquals(AclChangeEvent(AclChangeEvent.currentVersion, "Topic", "z_other", "PREFIXED"), changeEvent)
+    assertEquals(expected, actual)
   }
 
   @Test
-  def testWritesAclChangeEventAsJSONWhenInterBrokerProtocolAtLeastKafka20V1(): Unit = {
+  def testWritesAclChangeEventAsNewFormatWhenInterBrokerProtocolAtLeastKafka20V1(): Unit = {
     givenAuthorizerWithProtocolVersion(Option(KAFKA_2_0_IV1))
+    val resource = Resource(Topic, "z_other", PREFIXED)
+    val expected = new String(AclChangeNotificationSequenceZNode.encode(resource), UTF_8)
 
-    simpleAclAuthorizer.addAcls(Set[Acl](denyReadAcl), Resource(Topic, "z_other", PREFIXED))
+    simpleAclAuthorizer.addAcls(Set[Acl](denyReadAcl), resource)
 
-    val string = getAclChangeEventAsString
+    val actual = getAclChangeEventAsString
 
-    val changeEvent = Json.parseStringAs[AclChangeEvent](string) match {
-      case Right(event) => event
-      case Left(e) => fail("Failed to parse ACL change event", e)
-    }
-
-    assertEquals(AclChangeEvent(AclChangeEvent.currentVersion, "Topic", "z_other", "PREFIXED"), changeEvent)
+    assertEquals(expected, actual)
   }
 
   @Test
-  def testWritesAclChangeEventAsLegacyStringWhenInterBrokerProtocolLessThanKafka20V1(): Unit = {
+  def testWritesAclChangeEventAsLegacyFormatWhenInterBrokerProtocolLessThanKafka20V1(): Unit = {
     givenAuthorizerWithProtocolVersion(Option(KAFKA_2_0_IV0))
+    val resource = Resource(Topic, "z_other", LITERAL)
+    val expected = new String(AclChangeNotificationSequenceZNode.encodeLegacy(resource), UTF_8)
 
-    simpleAclAuthorizer.addAcls(Set[Acl](denyReadAcl), Resource(Topic, "z_other", LITERAL))
+    simpleAclAuthorizer.addAcls(Set[Acl](denyReadAcl), resource)
 
-    val string = getAclChangeEventAsString
+    val actual = getAclChangeEventAsString
 
-    assertEquals("Topic" + Resource.Separator + "z_other", string)
+    assertEquals(expected, actual)
   }
 
   private def givenAuthorizerWithProtocolVersion(protocolVersion: Option[ApiVersion]) {

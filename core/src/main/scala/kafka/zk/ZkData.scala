@@ -526,31 +526,10 @@ object AclChangeNotificationSequenceZNode {
   }
 
   def encode(resource: Resource): Array[Byte] =
-    Json.encodeAsBytes(AclChangeEvent(
-      AclChangeEvent.currentVersion,
-      resource.resourceType.name,
-      resource.name,
-      resource.nameType.name))
+    resource.toString.getBytes(UTF_8)
 
-  def decode(bytes: Array[Byte]): Resource = {
-    val string = new String(bytes, UTF_8)
-    if (string.startsWith("{"))
-      decode(string)
-    else
-      Resource.fromString(string)
-  }
-
-  private def decode(string: String): Resource = {
-    val changeEvent = Json.parseStringAs[AclChangeEvent](string) match {
-      case Right(event) => event
-      case Left(e) => throw new IllegalArgumentException("Failed to parse ACL change event", e)
-    }
-
-    changeEvent.toResource match {
-      case Success(r) => r
-      case Failure(e) => throw new IllegalArgumentException("Failed to parse ACL change event", e)
-    }
-  }
+  def decode(bytes: Array[Byte]): Resource =
+    Resource.fromString(new String(bytes, UTF_8))
 }
 
 object ClusterZNode {

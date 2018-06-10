@@ -16,6 +16,7 @@
  */
 package kafka.security.auth
 
+import kafka.common.KafkaException
 import org.apache.kafka.common.resource.{ResourceNameType, ResourcePattern}
 
 object Resource {
@@ -26,16 +27,18 @@ object Resource {
   val WildCardResource = "*"
 
   def fromString(str: String): Resource = {
-    ResourceNameType.values.find(nameType => str.startsWith(nameType.name)) match {
-      case Some(nameType) =>
-        str.split(Separator, 3) match {
-          case Array(_, resourceType, name, _*) => new Resource(ResourceType.fromString(resourceType), name, nameType)
-          case _ => throw new IllegalArgumentException("expected a string in format ResourceType:ResourceName but got " + str)
-        }
-      case _ =>
-        str.split(Separator, 2) match {
-          case Array(resourceType, name, _*) => new Resource(ResourceType.fromString(resourceType), name, ResourceNameType.LITERAL)
-          case _ => throw new IllegalArgumentException("expected a string in format ResourceType:ResourceName but got " + str)
+    ResourceType.values.find(resourceType => str.startsWith(resourceType.name + Separator)) match {
+      case None => throw new KafkaException("Invalid resource string: '" + str + "'")
+      case Some(resourceType) =>
+        val remaining = str.substring(resourceType.name.length + 1)
+
+        ResourceNameType.values.find(nameType => remaining.startsWith(nameType.name + Separator)) match {
+          case Some(nameType) =>
+            val name = remaining.substring(nameType.name.length + 1)
+            Resource(resourceType, name, nameType)
+
+          case None =>
+            Resource(resourceType, remaining, ResourceNameType.LITERAL)
         }
     }
   }
@@ -74,7 +77,7 @@ case class Resource(resourceType: ResourceType, name: String, nameType: Resource
   }
 
   override def toString: String = {
-    nameType + Resource.Separator + resourceType.name + Resource.Separator + name
+    resourceType.name + Resource.Separator + nameType + Resource.Separator + name
   }
 }
 
