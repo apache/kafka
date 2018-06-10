@@ -452,8 +452,6 @@ public final class LegacyRecord {
                               ByteBuffer value) throws IOException {
         if (magic != RecordBatch.MAGIC_VALUE_V0 && magic != RecordBatch.MAGIC_VALUE_V1)
             throw new IllegalArgumentException("Invalid magic value " + magic);
-        if (timestamp < 0 && timestamp != RecordBatch.NO_TIMESTAMP)
-            throw new IllegalArgumentException("Invalid message timestamp " + timestamp);
 
         // write crc
         out.writeInt((int) (crc & 0xffffffffL));

@@ -112,8 +112,8 @@ public class RecordQueue {
             }
             log.trace("Source node {} extracted timestamp {} for record {}", source.name(), timestamp, record);
 
-            // drop message if TS is invalid, i.e., negative
-            if (timestamp < 0) {
+            // drop message if TS is invalid
+            if (timestamp == -1) {
                 log.warn(
                     "Skipping record due to negative extracted timestamp. topic=[{}] partition=[{}] offset=[{}] extractedTimestamp=[{}] extractor=[{}]",
                     record.topic(), record.partition(), record.offset(), timestamp, timestampExtractor.getClass().getCanonicalName()
