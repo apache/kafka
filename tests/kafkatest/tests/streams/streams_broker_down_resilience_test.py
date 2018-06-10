@@ -76,7 +76,7 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
         node = self.kafka.leader(self.inputTopic)
         self.kafka.stop_node(node)
 
-        configs = self.get_configs(extra_configs=",application.id=starting_wo_broker_id")
+        configs = self.get_configs()
 
         # start streams with broker down initially
         processor = StreamsBrokerDownResilienceService(self.test_context, self.kafka, configs)
@@ -117,7 +117,7 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
     def test_streams_should_scale_in_while_brokers_down(self):
         self.kafka.start()
 
-        configs = self.get_configs(extra_configs=",application.id=shutdown_with_broker_down")
+        configs = self.get_configs()
 
         processor = StreamsBrokerDownResilienceService(self.test_context, self.kafka, configs)
         processor.start()
@@ -171,7 +171,7 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
     def test_streams_should_failover_while_brokers_down(self):
         self.kafka.start()
 
-        configs = self.get_configs(extra_configs=",application.id=failover_with_broker_down")
+        configs = self.get_configs()
 
         processor = StreamsBrokerDownResilienceService(self.test_context, self.kafka, configs)
         processor.start()
