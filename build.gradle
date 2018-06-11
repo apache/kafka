@@ -859,9 +859,11 @@ project(':clients') {
     include "**/org/apache/kafka/common/serialization/*"
     include "**/org/apache/kafka/common/config/*"
     include "**/org/apache/kafka/common/security/auth/*"
-    include "**/org/apache/kafka/server/policy/*"
+    include "**/org/apache/kafka/common/security/plain/*"
+    include "**/org/apache/kafka/common/security/scram/*"
     include "**/org/apache/kafka/common/security/token/delegation/*"
     include "**/org/apache/kafka/common/security/oauthbearer/*"
+    include "**/org/apache/kafka/server/policy/*"
   }
 }
 
