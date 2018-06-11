@@ -285,6 +285,8 @@ public class StreamsBuilderTest {
 
         assertThat(internalTopologyBuilder.build().storeToChangelogTopic(), equalTo(Collections.singletonMap("store", "topic")));
 
+        assertThat(internalTopologyBuilder.getStateStores().keySet(), equalTo(Collections.singleton("store")));
+
         assertThat(internalTopologyBuilder.getStateStores().get("store").loggingEnabled(), equalTo(false));
 
         assertThat(internalTopologyBuilder.topicGroups().get(0).stateChangelogTopics.isEmpty(), equalTo(true));

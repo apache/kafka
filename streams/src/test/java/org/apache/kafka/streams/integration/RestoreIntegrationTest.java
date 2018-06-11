@@ -393,13 +393,13 @@ public class RestoreIntegrationTest {
         consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, IntegerDeserializer.class);
 
         final Consumer consumer = new KafkaConsumer(consumerConfig);
-        final List<TopicPartition> partitions = Arrays.asList(new TopicPartition(topic, 0),
-                new TopicPartition(topic, 1));
+        final List<TopicPartition> partitions = Arrays.asList(
+            new TopicPartition(topic, 0),
+            new TopicPartition(topic, 1));
 
         consumer.assign(partitions);
         consumer.seekToEnd(partitions);
 
-        final Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
         for (TopicPartition partition : partitions) {
             final long position = consumer.position(partition);
             consumer.seek(partition, position - limitDelta);
