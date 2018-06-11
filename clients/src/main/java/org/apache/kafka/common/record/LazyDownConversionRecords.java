@@ -62,8 +62,7 @@ public class LazyDownConversionRecords implements BaseRecords {
             sizeInBytes = Math.max(records.sizeInBytes(), firstConvertedBatch.records().sizeInBytes());
         } else {
             // If there are no messages we got after down-conversion, make sure we are able to send at least an overflow
-            // message to the consumer. Typically, the consumer would need to increase the fetch size in such cases so
-            // that we are able to send at least one message batch.
+            // message to the consumer. Typically, the consumer would need to increase the fetch size in such cases.
             firstConvertedBatch = null;
             sizeInBytes = LazyDownConversionRecordsSend.MIN_OVERFLOW_MESSAGE_LENGTH;
         }
