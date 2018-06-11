@@ -44,10 +44,10 @@ import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.TimestampType;
-import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.FetchRequest;
+import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.HeartbeatResponse;
 import org.apache.kafka.common.requests.IsolationLevel;
@@ -1811,7 +1811,7 @@ public class KafkaConsumerTest {
                 requestTimeoutMs,
                 IsolationLevel.READ_UNCOMMITTED);
 
-        return new KafkaConsumer<>(
+        return new KafkaConsumer<String, String>(
                 loggerFactory,
                 clientId,
                 consumerCoordinator,
@@ -1827,7 +1827,13 @@ public class KafkaConsumerTest {
                 retryBackoffMs,
                 requestTimeoutMs,
                 defaultApiTimeoutMs,
-                assignors);
+                assignors) {
+            @Override
+            public void close(Duration duration) {
+                if (spyClose != null) spyClose.accept(duration);
+                super.close(duration);
+            }
+        };
     }
 
     private static class FetchInfo {
@@ -1837,6 +1843,32 @@ public class KafkaConsumerTest {
         FetchInfo(long offset, int count) {
             this.offset = offset;
             this.count = count;
+        }
+    }
+
+    private java.util.function.Consumer<Duration> spyClose = null;
+    @Test
+    public void testCloseWithTimeUnit() {
+        try {
+            Time time = new MockTime();
+            Cluster cluster = TestUtils.singletonCluster(topic, 1);
+            Node node = cluster.nodes().get(0);
+
+            Metadata metadata = createMetadata();
+            metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
+
+            MockClient client = new MockClient(time, metadata);
+            client.setNode(node);
+            PartitionAssignor assignor = new RoundRobinAssignor();
+
+            AtomicReference<Duration> capturedDuration = new AtomicReference();
+            spyClose = (Duration duration) -> capturedDuration.set(duration);
+            KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, true);
+            consumer.close(1, TimeUnit.SECONDS);
+            Assert.assertNotNull(capturedDuration.get());
+            Assert.assertEquals(1, capturedDuration.get().getSeconds());
+        } finally {
+            spyClose = null;
         }
     }
 }
