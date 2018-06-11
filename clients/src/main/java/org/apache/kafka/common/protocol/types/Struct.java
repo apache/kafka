@@ -111,6 +111,12 @@ public class Struct {
         return alternative;
     }
 
+    public Byte getOrElse(Field.Int8 field, byte alternative) {
+        if (hasField(field.name))
+            return getByte(field.name);
+        return alternative;
+    }
+
     public Integer getOrElse(Field.Int32 field, int alternative) {
         if (hasField(field.name))
             return getInt(field.name);
