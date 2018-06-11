@@ -201,25 +201,34 @@ class FetchSessionTest {
     assertEquals(Errors.INVALID_FETCH_SESSION_EPOCH,
       context6.updateAndGenerateResponseData(respData2).error())
 
+    // Test generating a throttled response for the incremental fetch session
+    val reqData7 = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
+    val context7 = fetchManager.newContext(
+      new JFetchMetadata(resp2.sessionId(), 2), reqData7, EMPTY_PART_LIST, false)
+    val resp7 = context7.getThrottledResponse(100)
+    assertEquals(Errors.NONE, resp7.error())
+    assertEquals(resp2.sessionId(), resp7.sessionId())
+    assertEquals(100, resp7.throttleTimeMs())
+
     // Close the incremental fetch session.
     val prevSessionId = resp5.sessionId
     var nextSessionId = prevSessionId
     do {
-      val reqData7 = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
-      reqData7.put(new TopicPartition("bar", 0), new FetchRequest.PartitionData(0, 0, 100))
-      reqData7.put(new TopicPartition("bar", 1), new FetchRequest.PartitionData(10, 0, 100))
-      val context7 = fetchManager.newContext(
-        new JFetchMetadata(prevSessionId, FINAL_EPOCH), reqData7, EMPTY_PART_LIST, false)
-      assertEquals(classOf[SessionlessFetchContext], context7.getClass)
+      val reqData8 = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
+      reqData8.put(new TopicPartition("bar", 0), new FetchRequest.PartitionData(0, 0, 100))
+      reqData8.put(new TopicPartition("bar", 1), new FetchRequest.PartitionData(10, 0, 100))
+      val context8 = fetchManager.newContext(
+        new JFetchMetadata(prevSessionId, FINAL_EPOCH), reqData8, EMPTY_PART_LIST, false)
+      assertEquals(classOf[SessionlessFetchContext], context8.getClass)
       assertEquals(0, cache.size())
-      val respData7 = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]]
-      respData7.put(new TopicPartition("bar", 0),
+      val respData8 = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]]
+      respData8.put(new TopicPartition("bar", 0),
         new FetchResponse.PartitionData(Errors.NONE, 100, 100, 100, null, null))
-      respData7.put(new TopicPartition("bar", 1),
+      respData8.put(new TopicPartition("bar", 1),
         new FetchResponse.PartitionData(Errors.NONE, 100, 100, 100, null, null))
-      val resp7 = context7.updateAndGenerateResponseData(respData7)
-      assertEquals(Errors.NONE, resp7.error())
-      nextSessionId = resp7.sessionId()
+      val resp8 = context8.updateAndGenerateResponseData(respData8)
+      assertEquals(Errors.NONE, resp8.error())
+      nextSessionId = resp8.sessionId()
     } while (nextSessionId == prevSessionId)
   }
 
