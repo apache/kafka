@@ -23,7 +23,6 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.requests.IsolationLevel;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
@@ -153,7 +152,6 @@ public class BrokerCompatibilityTest {
 
         try (final KafkaConsumer<String, String> consumer = new KafkaConsumer<>(consumerProperties)) {
             consumer.subscribe(Collections.singletonList(SINK_TOPIC));
-            consumer.seek(new TopicPartition(SINK_TOPIC, 0), 0L);
 
             while (true) {
                 final ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(100));
