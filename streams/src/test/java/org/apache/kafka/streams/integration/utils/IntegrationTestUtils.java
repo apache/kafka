@@ -198,14 +198,19 @@ public class IntegrationTestUtils {
         }    
     }
 
-    public static <V> void produceValuesSynchronously(
-            final String topic, final Collection<V> records, final Properties producerConfig, final Time time)
-            throws ExecutionException, InterruptedException {
+    public static <V> void produceValuesSynchronously(final String topic,
+                                                      final Collection<V> records,
+                                                      final Properties producerConfig,
+                                                      final Time time)
+        throws ExecutionException, InterruptedException {
         IntegrationTestUtils.produceValuesSynchronously(topic, records, producerConfig, time, false);
     }
 
-    public static <V> void produceValuesSynchronously(
-            final String topic, final Collection<V> records, final Properties producerConfig, final Time time, final boolean enableTransactions)
+    public static <V> void produceValuesSynchronously(final String topic,
+                                                      final Collection<V> records,
+                                                      final Properties producerConfig,
+                                                      final Time time,
+                                                      final boolean enableTransactions)
             throws ExecutionException, InterruptedException {
         final Collection<KeyValue<Object, V>> keyedRecords = new ArrayList<>();
         for (final V value : records) {
@@ -256,8 +261,8 @@ public class IntegrationTestUtils {
     }
 
     public static <K, V> List<KeyValue<K, V>> waitUntilMinKeyValueRecordsReceived(final Properties consumerConfig,
-                                                                                      final String topic,
-                                                                                      final int expectedNumRecords) throws InterruptedException {
+                                                                                  final String topic,
+                                                                                  final int expectedNumRecords) throws InterruptedException {
         return waitUntilMinKeyValueRecordsReceived(consumerConfig, topic, expectedNumRecords, DEFAULT_TIMEOUT);
     }
     

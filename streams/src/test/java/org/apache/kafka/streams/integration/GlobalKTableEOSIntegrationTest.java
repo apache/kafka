@@ -233,7 +233,7 @@ public class GlobalKTableEOSIntegrationTest {
 
     @Test
     public void shouldRestoreTransactionalMessages() throws Exception {
-        produceInitialGlobalTableValues(true);
+        produceInitialGlobalTableValues();
 
         startStreams();
 
@@ -261,13 +261,12 @@ public class GlobalKTableEOSIntegrationTest {
                 return result.equals(expected);
             }
         }, 30000L, "waiting for initial values");
-        System.out.println("no failed test");
     }
     
-    @Test(timeout = 40000)
+    @Test
     public void shouldNotRestoreAbortedMessages() throws Exception {
         produceAbortedMessages();
-        produceInitialGlobalTableValues(true);
+        produceInitialGlobalTableValues();
         produceAbortedMessages();
 
         startStreams();
@@ -347,7 +346,7 @@ public class GlobalKTableEOSIntegrationTest {
     }
 
     private void produceInitialGlobalTableValues() throws Exception {
-        produceInitialGlobalTableValues(false);
+        produceInitialGlobalTableValues(true);
     }
 
     private void produceInitialGlobalTableValues(final boolean enableTransactions) throws Exception {
