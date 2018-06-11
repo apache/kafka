@@ -69,7 +69,7 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
                                   final StateDirectory stateDirectory,
                                   final StateRestoreListener stateRestoreListener,
                                   final StreamsConfig config) {
-        super(stateDirectory.globalStateDir());
+        super(stateDirectory.globalStateDir(), StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)));
 
         this.log = logContext.logger(GlobalStateManagerImpl.class);
         this.topology = topology;
@@ -92,16 +92,16 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
             if (!stateDirectory.lockGlobalState()) {
                 throw new LockException(String.format("Failed to lock the global state directory: %s", baseDir));
             }
-        } catch (IOException e) {
+        } catch (final IOException e) {
             throw new LockException(String.format("Failed to lock the global state directory: %s", baseDir));
         }
 
         try {
             this.checkpointableOffsets.putAll(checkpoint.read());
-        } catch (IOException e) {
+        } catch (final IOException e) {
             try {
                 stateDirectory.unlockGlobalState();
-            } catch (IOException e1) {
+            } catch (final IOException e1) {
                 log.error("Failed to unlock the global state directory", e);
             }
             throw new StreamsException("Failed to read checkpoints for global state globalStores", e);
@@ -232,7 +232,7 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
         }
 
         final List<TopicPartition> topicPartitions = new ArrayList<>();
-        for (PartitionInfo partition : partitionInfos) {
+        for (final PartitionInfo partition : partitionInfos) {
             topicPartitions.add(new TopicPartition(partition.topic(), partition.partition()));
         }
         return topicPartitions;
@@ -253,8 +253,7 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
 
             long offset = globalConsumer.position(topicPartition);
             final Long highWatermark = highWatermarks.get(topicPartition);
-            BatchingStateRestoreCallback
-                stateRestoreAdapter =
+            final BatchingStateRestoreCallback stateRestoreAdapter =
                 (BatchingStateRestoreCallback) ((stateRestoreCallback instanceof
                                                      BatchingStateRestoreCallback)
                                                 ? stateRestoreCallback
@@ -267,7 +266,7 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
                 try {
                     final ConsumerRecords<byte[], byte[]> records = globalConsumer.poll(pollTime);
                     final List<KeyValue<byte[], byte[]>> restoreRecords = new ArrayList<>();
-                    for (ConsumerRecord<byte[], byte[]> record : records) {
+                    for (final ConsumerRecord<byte[], byte[]> record : records) {
                         if (record.key() != null) {
                             restoreRecords.add(KeyValue.pair(record.key(), record.value()));
                         }
@@ -294,11 +293,11 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
     @Override
     public void flush() {
         log.debug("Flushing all global globalStores registered in the state manager");
-        for (StateStore store : this.globalStores.values()) {
+        for (final StateStore store : this.globalStores.values()) {
             try {
                 log.trace("Flushing global store={}", store.name());
                 store.flush();
-            } catch (Exception e) {
+            } catch (final Exception e) {
                 throw new ProcessorStateException(String.format("Failed to flush global state store %s", store.name()), e);
             }
         }
@@ -316,7 +315,7 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
                 log.debug("Closing global storage engine {}", entry.getKey());
                 try {
                     entry.getValue().close();
-                } catch (Exception e) {
+                } catch (final Exception e) {
                     log.error("Failed to close global state store {}", entry.getKey(), e);
                     closeFailed.append("Failed to close global state store:")
                             .append(entry.getKey())
@@ -341,7 +340,7 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
         if (!checkpointableOffsets.isEmpty()) {
             try {
                 checkpoint.write(checkpointableOffsets);
-            } catch (IOException e) {
+            } catch (final IOException e) {
                 log.warn("Failed to write offset checkpoint file to {} for global stores: {}", checkpoint, e);
             }
         }
