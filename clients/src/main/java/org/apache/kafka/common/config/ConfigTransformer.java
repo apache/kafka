@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.config;
 
+import org.apache.kafka.common.config.provider.FileConfigProvider;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
