@@ -915,6 +915,14 @@ public class NetworkClient implements KafkaClient {
         public void handleCompletedMetadataResponse(RequestHeader requestHeader, long now, MetadataResponse response) {
             this.metadataFetchInProgress = false;
             Cluster cluster = response.cluster();
+
+            long missingListenerCount = response.topicMetadata().stream()
+                    .flatMap(topicMetadata -> topicMetadata.partitionMetadata().stream())
+                    .filter(partitionMetadata -> partitionMetadata.error() == Errors.LISTENER_NOT_FOUND_ON_LEADER)
+                    .count();
+            if (missingListenerCount != 0)
+                log.error("{} partitions have leader brokers without a matching listener ", missingListenerCount);
+
             // check if any topics metadata failed to get updated
             Map<String, Errors> errors = response.errors();
             if (!errors.isEmpty())
