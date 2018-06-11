@@ -426,7 +426,7 @@ class FetchRequestTest extends BaseRequestTest {
   }
 
   private def createTopics(numTopics: Int, numPartitions: Int, configs: Map[String, String] = Map.empty): Map[TopicPartition, Int] = {
-    val topics = (0 until numPartitions).map(t => s"topic$t")
+    val topics = (0 until numTopics).map(t => s"topic$t")
     val topicConfig = new Properties
     topicConfig.setProperty(LogConfig.MinInSyncReplicasProp, 2.toString)
     configs.foreach { case (k, v) => topicConfig.setProperty(k, v) }

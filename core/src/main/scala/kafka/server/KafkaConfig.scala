@@ -116,6 +116,7 @@ object Defaults {
   val NumRecoveryThreadsPerDataDir = 1
   val AutoCreateTopicsEnable = true
   val MinInSyncReplicas = 1
+  val MessageDownConversionEnable = true
 
   /** ********* Replication configuration ***********/
   val ControllerSocketTimeoutMs = RequestTimeoutMs
@@ -330,6 +331,7 @@ object KafkaConfig {
   val MinInSyncReplicasProp = "min.insync.replicas"
   val CreateTopicPolicyClassNameProp = "create.topic.policy.class.name"
   val AlterConfigPolicyClassNameProp = "alter.config.policy.class.name"
+  val LogMessageDownConversionEnableProp = LogConfigPrefix + "message.downconversion.enable"
   /** ********* Replication configuration ***********/
   val ControllerSocketTimeoutMsProp = "controller.socket.timeout.ms"
   val DefaultReplicationFactorProp = "default.replication.factor"
@@ -599,6 +601,7 @@ object KafkaConfig {
     "implement the <code>org.apache.kafka.server.policy.CreateTopicPolicy</code> interface."
   val AlterConfigPolicyClassNameDoc = "The alter configs policy class that should be used for validation. The class should " +
     "implement the <code>org.apache.kafka.server.policy.AlterConfigPolicy</code> interface."
+  val LogMessageDownConversionEnableDoc = "This configuration controls whether down-conversion of message formats is enabled to satisfy consume requests."
 
   /** ********* Replication configuration ***********/
   val ControllerSocketTimeoutMsDoc = "The socket timeout for controller-to-broker channels"
@@ -862,6 +865,7 @@ object KafkaConfig {
       .define(LogMessageTimestampDifferenceMaxMsProp, LONG, Defaults.LogMessageTimestampDifferenceMaxMs, MEDIUM, LogMessageTimestampDifferenceMaxMsDoc)
       .define(CreateTopicPolicyClassNameProp, CLASS, null, LOW, CreateTopicPolicyClassNameDoc)
       .define(AlterConfigPolicyClassNameProp, CLASS, null, LOW, AlterConfigPolicyClassNameDoc)
+      .define(LogMessageDownConversionEnableProp, BOOLEAN, Defaults.MessageDownConversionEnable, LOW, LogMessageDownConversionEnableDoc)
 
       /** ********* Replication configuration ***********/
       .define(ControllerSocketTimeoutMsProp, INT, Defaults.ControllerSocketTimeoutMs, MEDIUM, ControllerSocketTimeoutMsDoc)
@@ -1135,6 +1139,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   val logMessageFormatVersion = ApiVersion(logMessageFormatVersionString)
   def logMessageTimestampType = TimestampType.forName(getString(KafkaConfig.LogMessageTimestampTypeProp))
   def logMessageTimestampDifferenceMaxMs: Long = getLong(KafkaConfig.LogMessageTimestampDifferenceMaxMsProp)
+  val logMessageDownConversionEnable = getBoolean(KafkaConfig.LogMessageDownConversionEnableProp)
 
   /** ********* Replication configuration ***********/
   val controllerSocketTimeoutMs: Int = getInt(KafkaConfig.ControllerSocketTimeoutMsProp)
