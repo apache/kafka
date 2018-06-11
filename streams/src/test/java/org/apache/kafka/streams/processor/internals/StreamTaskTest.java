@@ -173,7 +173,14 @@ public class StreamTaskTest {
     public void cleanup() throws IOException {
         try {
             if (task != null) {
-                task.close(true, false);
+                try {
+                    task.close(true, false);
+                } catch (final IllegalStateException canHappen) {
+                    if (!"There is no open transaction.".equals(canHappen.getMessage())) {
+                        throw canHappen;
+                    }
+                    // swallow
+                }
             }
         } finally {
             Utils.delete(baseDir);
@@ -820,6 +827,7 @@ public class StreamTaskTest {
                 };
             }
         };
+        streamTask.initializeTopology();
 
         time.sleep(testConfig.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG));
 
@@ -1070,6 +1078,7 @@ public class StreamTaskTest {
 
         task = new StreamTask(taskId00, applicationId, partitions, topology, consumer,
             changelogReader, eosConfig, streamsMetrics, stateDirectory, null, time, producer);
+        task.initializeTopology();
 
         task.close(true, false);
         task = null;
@@ -1230,6 +1239,45 @@ public class StreamTaskTest {
         assertFalse(task.initializeStateStores());
     }
 
+    @Test
+    public void shouldThrowOnCleanCloseTaskWhenEosEnabledIfTransactionInFlight() {
+        final MockProducer producer = new MockProducer();
+        task = new StreamTask(taskId00, applicationId, partitions, topology, consumer, changelogReader,
+            eosConfig, streamsMetrics, stateDirectory, null, time, producer);
+
+        try {
+            task.close(true, false);
+            fail("should have throw IllegalStateException");
+        } catch (final IllegalStateException expected) {
+            // pass
+        }
+        task = null;
+
+        assertTrue(producer.closed());
+    }
+
+    @Test
+    public void shouldAlwaysCommitIfEosEnabled() {
+        final MockProducer producer = new MockProducer();
+
+        final RecordCollectorImpl recordCollector =  new RecordCollectorImpl(producer, "StreamTask",
+                new LogContext("StreamTaskTest "));
+
+        task = new StreamTask(taskId00, applicationId, partitions, topology, consumer, changelogReader,
+            eosConfig, streamsMetrics, stateDirectory, null, time, producer);
+        task.initializeStateStores();
+        task.initializeTopology();
+        task.punctuate(processorSystemTime, 5, PunctuationType.WALL_CLOCK_TIME, new Punctuator() {
+            @Override
+            public void punctuate(final long timestamp) {
+                recordCollector.send("result-topic1", 3, 5, 0, time.milliseconds(),
+                        new IntegerSerializer(),  new IntegerSerializer());
+            }
+        });
+        task.commit();
+        assertEquals(1, producer.history().size());
+    }
+
     @SuppressWarnings("unchecked")
     private StreamTask createTaskThatThrowsExceptionOnClose() {
         final MockSourceNode processorNode = new MockSourceNode(topic1, intDeserializer, intDeserializer) {
@@ -1259,5 +1307,4 @@ public class StreamTaskTest {
     private Iterable<ConsumerRecord<byte[], byte[]>> records(final ConsumerRecord<byte[], byte[]>... recs) {
         return Arrays.asList(recs);
     }
-
 }
