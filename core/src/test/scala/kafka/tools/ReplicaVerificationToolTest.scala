@@ -17,11 +17,10 @@
 
 package kafka.tools
 
-import kafka.api.FetchResponsePartitionData
 import kafka.common.TopicAndPartition
-import kafka.message.ByteBufferMessageSet
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record.{CompressionType, SimpleRecord, MemoryRecords}
+import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
+import org.apache.kafka.common.requests.FetchResponse
 import org.junit.Test
 import org.junit.Assert.assertTrue
 
@@ -37,7 +36,7 @@ class ReplicaVerificationToolTest {
       TopicAndPartition("b", 0) -> 2
     )
 
-    val replicaBuffer = new ReplicaBuffer(expectedReplicasPerTopicAndPartition, Map.empty, 2, Map.empty, 0, 0)
+    val replicaBuffer = new ReplicaBuffer(expectedReplicasPerTopicAndPartition, Map.empty, 2, 0)
     expectedReplicasPerTopicAndPartition.foreach { case (tp, numReplicas) =>
       (0 until numReplicas).foreach { replicaId =>
         val records = (0 to 5).map { index =>
@@ -45,8 +44,9 @@ class ReplicaVerificationToolTest {
         }
         val initialOffset = 4
         val memoryRecords = MemoryRecords.withRecords(initialOffset, CompressionType.NONE, records: _*)
-        replicaBuffer.addFetchedData(tp, replicaId, new FetchResponsePartitionData(Errors.NONE, hw = 20,
-          new ByteBufferMessageSet(memoryRecords.buffer)))
+        val partitionData = new FetchResponse.PartitionData(Errors.NONE, 20, 20, 0L, null, memoryRecords)
+
+        replicaBuffer.addFetchedData(tp, replicaId, partitionData)
       }
     }
 
