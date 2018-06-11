@@ -1441,7 +1441,6 @@ project(':connect:basic-auth-extension') {
   dependencies {
     compile project(':connect:api')
     compile libs.slf4jApi
-    compile libs.jerseyContainerServlet
 
     testCompile libs.bcpkix
     testCompile libs.easymock
@@ -1451,6 +1450,7 @@ project(':connect:basic-auth-extension') {
     testCompile project(':clients').sourceSets.test.output
 
     testRuntime libs.slf4jlog4j
+    testRuntime libs.jerseyContainerServlet
   }
 
   javadoc {
