@@ -17,7 +17,12 @@
 
 package org.apache.kafka.common.config;
 
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Map;
 import java.util.Objects;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * A class representing resources that have configs.
@@ -28,7 +33,25 @@ public final class ConfigResource {
      * Type of resource.
      */
     public enum Type {
-        BROKER, TOPIC, UNKNOWN;
+        BROKER((byte) 3), TOPIC((byte) 2), UNKNOWN((byte) 0);
+
+        private static final Map<Byte, Type> TYPES = Collections.unmodifiableMap(
+            Arrays.stream(values()).collect(Collectors.toMap(Type::id, Function.identity()))
+        );
+
+        private final byte id;
+
+        Type(final byte id) {
+            this.id = id;
+        }
+
+        public byte id() {
+            return id;
+        }
+
+        public static Type forId(final byte id) {
+            return TYPES.getOrDefault(id, UNKNOWN);
+        }
     }
 
     private final Type type;

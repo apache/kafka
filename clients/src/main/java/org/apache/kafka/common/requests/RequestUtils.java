@@ -45,37 +45,29 @@ final class RequestUtils {
     static ResourcePattern resourcePatternromStructFields(Struct struct) {
         byte resourceType = struct.get(RESOURCE_TYPE);
         String name = struct.get(RESOURCE_NAME);
-        ResourceNameType resourceNameType = ResourceNameType.LITERAL;
-        if (struct.hasField(RESOURCE_NAME_TYPE)) {
-            resourceNameType = ResourceNameType.fromCode(struct.get(RESOURCE_NAME_TYPE));
-        }
+        ResourceNameType resourceNameType = ResourceNameType.fromCode(
+            struct.getOrElse(RESOURCE_NAME_TYPE, ResourceNameType.LITERAL.code()));
         return new ResourcePattern(ResourceType.fromCode(resourceType), name, resourceNameType);
     }
 
     static void resourcePatternSetStructFields(ResourcePattern pattern, Struct struct) {
         struct.set(RESOURCE_TYPE, pattern.resourceType().code());
         struct.set(RESOURCE_NAME, pattern.name());
-        if (struct.hasField(RESOURCE_NAME_TYPE)) {
-            struct.set(RESOURCE_NAME_TYPE, pattern.nameType().code());
-        }
+        struct.setIfExists(RESOURCE_NAME_TYPE, pattern.nameType().code());
     }
 
     static ResourcePatternFilter resourcePatternFilterFromStructFields(Struct struct) {
         byte resourceType = struct.get(RESOURCE_TYPE);
         String name = struct.get(RESOURCE_NAME_FILTER);
-        ResourceNameType resourceNameType = ResourceNameType.LITERAL;
-        if (struct.hasField(RESOURCE_NAME_TYPE_FILTER)) {
-            resourceNameType = ResourceNameType.fromCode(struct.get(RESOURCE_NAME_TYPE_FILTER));
-        }
+        ResourceNameType resourceNameType = ResourceNameType.fromCode(
+            struct.getOrElse(RESOURCE_NAME_TYPE_FILTER, ResourceNameType.LITERAL.code()));
         return new ResourcePatternFilter(ResourceType.fromCode(resourceType), name, resourceNameType);
     }
 
     static void resourcePatternFilterSetStructFields(ResourcePatternFilter patternFilter, Struct struct) {
         struct.set(RESOURCE_TYPE, patternFilter.resourceType().code());
         struct.set(RESOURCE_NAME_FILTER, patternFilter.name());
-        if (struct.hasField(RESOURCE_NAME_TYPE_FILTER)) {
-            struct.set(RESOURCE_NAME_TYPE_FILTER, patternFilter.nameType().code());
-        }
+        struct.setIfExists(RESOURCE_NAME_TYPE_FILTER, patternFilter.nameType().code());
     }
 
     static AccessControlEntry aceFromStructFields(Struct struct) {

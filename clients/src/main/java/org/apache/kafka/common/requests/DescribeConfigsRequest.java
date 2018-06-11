@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
@@ -29,6 +30,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import static org.apache.kafka.common.protocol.types.Type.BOOLEAN;
 import static org.apache.kafka.common.protocol.types.Type.INT8;
@@ -64,12 +66,12 @@ public class DescribeConfigsRequest extends AbstractRequest {
     }
 
     public static class Builder extends AbstractRequest.Builder {
-        private final Map<Resource, Collection<String>> resourceToConfigNames;
+        private final Map<ConfigResource, Collection<String>> resourceToConfigNames;
         private boolean includeSynonyms;
 
-        public Builder(Map<Resource, Collection<String>> resourceToConfigNames) {
+        public Builder(Map<ConfigResource, Collection<String>> resourceToConfigNames) {
             super(ApiKeys.DESCRIBE_CONFIGS);
-            this.resourceToConfigNames = resourceToConfigNames;
+            this.resourceToConfigNames = Objects.requireNonNull(resourceToConfigNames, "resourceToConfigNames");
         }
 
         public Builder includeSynonyms(boolean includeSynonyms) {
@@ -77,13 +79,13 @@ public class DescribeConfigsRequest extends AbstractRequest {
             return this;
         }
 
-        public Builder(Collection<Resource> resources) {
+        public Builder(Collection<ConfigResource> resources) {
             this(toResourceToConfigNames(resources));
         }
 
-        private static Map<Resource, Collection<String>> toResourceToConfigNames(Collection<Resource> resources) {
-            Map<Resource, Collection<String>> result = new HashMap<>(resources.size());
-            for (Resource resource : resources)
+        private static Map<ConfigResource, Collection<String>> toResourceToConfigNames(Collection<ConfigResource> resources) {
+            Map<ConfigResource, Collection<String>> result = new HashMap<>(resources.size());
+            for (ConfigResource resource : resources)
                 result.put(resource, null);
             return result;
         }
@@ -94,12 +96,12 @@ public class DescribeConfigsRequest extends AbstractRequest {
         }
     }
 
-    private final Map<Resource, Collection<String>> resourceToConfigNames;
+    private final Map<ConfigResource, Collection<String>> resourceToConfigNames;
     private final boolean includeSynonyms;
 
-    public DescribeConfigsRequest(short version, Map<Resource, Collection<String>> resourceToConfigNames, boolean includeSynonyms) {
+    public DescribeConfigsRequest(short version, Map<ConfigResource, Collection<String>> resourceToConfigNames, boolean includeSynonyms) {
         super(version);
-        this.resourceToConfigNames = resourceToConfigNames;
+        this.resourceToConfigNames = Objects.requireNonNull(resourceToConfigNames, "resourceToConfigNames");
         this.includeSynonyms = includeSynonyms;
     }
 
@@ -109,7 +111,7 @@ public class DescribeConfigsRequest extends AbstractRequest {
         resourceToConfigNames = new HashMap<>(resourcesArray.length);
         for (Object resourceObj : resourcesArray) {
             Struct resourceStruct = (Struct) resourceObj;
-            ResourceType resourceType = ResourceType.forId(resourceStruct.getByte(RESOURCE_TYPE_KEY_NAME));
+            ConfigResource.Type resourceType = ConfigResource.Type.forId(resourceStruct.getByte(RESOURCE_TYPE_KEY_NAME));
             String resourceName = resourceStruct.getString(RESOURCE_NAME_KEY_NAME);
 
             Object[] configNamesArray = resourceStruct.getArray(CONFIG_NAMES_KEY_NAME);
@@ -120,19 +122,19 @@ public class DescribeConfigsRequest extends AbstractRequest {
                     configNames.add((String) configNameObj);
             }
 
-            resourceToConfigNames.put(new Resource(resourceType, resourceName), configNames);
+            resourceToConfigNames.put(new ConfigResource(resourceType, resourceName), configNames);
         }
         this.includeSynonyms = struct.hasField(INCLUDE_SYNONYMS) ? struct.getBoolean(INCLUDE_SYNONYMS) : false;
     }
 
-    public Collection<Resource> resources() {
+    public Collection<ConfigResource> resources() {
         return resourceToConfigNames.keySet();
     }
 
     /**
      * Return null if all config names should be returned.
      */
-    public Collection<String> configNames(Resource resource) {
+    public Collection<String> configNames(ConfigResource resource) {
         return resourceToConfigNames.get(resource);
     }
 
@@ -144,8 +146,8 @@ public class DescribeConfigsRequest extends AbstractRequest {
     protected Struct toStruct() {
         Struct struct = new Struct(ApiKeys.DESCRIBE_CONFIGS.requestSchema(version()));
         List<Struct> resourceStructs = new ArrayList<>(resources().size());
-        for (Map.Entry<Resource, Collection<String>> entry : resourceToConfigNames.entrySet()) {
-            Resource resource = entry.getKey();
+        for (Map.Entry<ConfigResource, Collection<String>> entry : resourceToConfigNames.entrySet()) {
+            ConfigResource resource = entry.getKey();
             Struct resourceStruct = struct.instance(RESOURCES_KEY_NAME);
             resourceStruct.set(RESOURCE_TYPE_KEY_NAME, resource.type().id());
             resourceStruct.set(RESOURCE_NAME_KEY_NAME, resource.name());
@@ -168,10 +170,10 @@ public class DescribeConfigsRequest extends AbstractRequest {
             case 1:
             case 2:
                 ApiError error = ApiError.fromThrowable(e);
-                Map<Resource, DescribeConfigsResponse.Config> errors = new HashMap<>(resources().size());
+                Map<ConfigResource, DescribeConfigsResponse.Config> errors = new HashMap<>(resources().size());
                 DescribeConfigsResponse.Config config = new DescribeConfigsResponse.Config(error,
-                        Collections.<DescribeConfigsResponse.ConfigEntry>emptyList());
-                for (Resource resource : resources())
+                        Collections.emptyList());
+                for (ConfigResource resource : resources())
                     errors.put(resource, config);
                 return new DescribeConfigsResponse(throttleTimeMs, errors);
             default:

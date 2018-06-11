@@ -112,8 +112,6 @@ import org.apache.kafka.common.requests.OffsetFetchRequest;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
 import org.apache.kafka.common.requests.RenewDelegationTokenRequest;
 import org.apache.kafka.common.requests.RenewDelegationTokenResponse;
-import org.apache.kafka.common.requests.Resource;
-import org.apache.kafka.common.requests.ResourceType;
 import org.apache.kafka.common.security.token.delegation.DelegationToken;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.utils.AppInfoParser;
@@ -1683,19 +1681,19 @@ public class KafkaAdminClient extends AdminClient {
 
         // The BROKER resources which we want to describe.  We must make a separate DescribeConfigs
         // request for every BROKER resource we want to describe.
-        final Collection<Resource> brokerResources = new ArrayList<>();
+        final Collection<ConfigResource> brokerResources = new ArrayList<>();
 
         // The non-BROKER resources which we want to describe.  These resources can be described by a
         // single, unified DescribeConfigs request.
-        final Collection<Resource> unifiedRequestResources = new ArrayList<>(configResources.size());
+        final Collection<ConfigResource> unifiedRequestResources = new ArrayList<>(configResources.size());
 
         for (ConfigResource resource : configResources) {
             if (resource.type() == ConfigResource.Type.BROKER && !resource.isDefault()) {
-                brokerFutures.put(resource, new KafkaFutureImpl<Config>());
-                brokerResources.add(configResourceToResource(resource));
+                brokerFutures.put(resource, new KafkaFutureImpl<>());
+                brokerResources.add(resource);
             } else {
-                unifiedRequestFutures.put(resource, new KafkaFutureImpl<Config>());
-                unifiedRequestResources.add(configResourceToResource(resource));
+                unifiedRequestFutures.put(resource, new KafkaFutureImpl<>());
+                unifiedRequestResources.add(resource);
             }
         }
 
@@ -1716,7 +1714,7 @@ public class KafkaAdminClient extends AdminClient {
                     for (Map.Entry<ConfigResource, KafkaFutureImpl<Config>> entry : unifiedRequestFutures.entrySet()) {
                         ConfigResource configResource = entry.getKey();
                         KafkaFutureImpl<Config> future = entry.getValue();
-                        DescribeConfigsResponse.Config config = response.config(configResourceToResource(configResource));
+                        DescribeConfigsResponse.Config config = response.config(configResource);
                         if (config == null) {
                             future.completeExceptionally(new UnknownServerException(
                                 "Malformed broker response: missing config for " + configResource));
@@ -1746,7 +1744,7 @@ public class KafkaAdminClient extends AdminClient {
 
         for (Map.Entry<ConfigResource, KafkaFutureImpl<Config>> entry : brokerFutures.entrySet()) {
             final KafkaFutureImpl<Config> brokerFuture = entry.getValue();
-            final Resource resource = configResourceToResource(entry.getKey());
+            final ConfigResource resource = entry.getKey();
             final int nodeId = Integer.parseInt(resource.name());
             runnable.call(new Call("describeBrokerConfigs", calcDeadlineMs(now, options.timeoutMs()),
                     new ConstantNodeIdProvider(nodeId)) {
@@ -1790,21 +1788,6 @@ public class KafkaAdminClient extends AdminClient {
         allFutures.putAll(brokerFutures);
         allFutures.putAll(unifiedRequestFutures);
         return new DescribeConfigsResult(allFutures);
-    }
-
-    private Resource configResourceToResource(ConfigResource configResource) {
-        ResourceType resourceType;
-        switch (configResource.type()) {
-            case TOPIC:
-                resourceType = ResourceType.TOPIC;
-                break;
-            case BROKER:
-                resourceType = ResourceType.BROKER;
-                break;
-            default:
-                throw new IllegalArgumentException("Unexpected resource type " + configResource.type());
-        }
-        return new Resource(resourceType, configResource.name());
     }
 
     private List<ConfigEntry.ConfigSynonym> configSynonyms(DescribeConfigsResponse.ConfigEntry configEntry) {
@@ -1856,7 +1839,7 @@ public class KafkaAdminClient extends AdminClient {
         }
         if (!unifiedRequestResources.isEmpty())
           allFutures.putAll(alterConfigs(configs, options, unifiedRequestResources, new LeastLoadedNodeProvider()));
-        return new AlterConfigsResult(new HashMap<ConfigResource, KafkaFuture<Void>>(allFutures));
+        return new AlterConfigsResult(new HashMap<>(allFutures));
     }
 
     private Map<ConfigResource, KafkaFutureImpl<Void>> alterConfigs(Map<ConfigResource, Config> configs,
@@ -1864,13 +1847,13 @@ public class KafkaAdminClient extends AdminClient {
                                                                     Collection<ConfigResource> resources,
                                                                     NodeProvider nodeProvider) {
         final Map<ConfigResource, KafkaFutureImpl<Void>> futures = new HashMap<>();
-        final Map<Resource, AlterConfigsRequest.Config> requestMap = new HashMap<>(resources.size());
+        final Map<ConfigResource, AlterConfigsRequest.Config> requestMap = new HashMap<>(resources.size());
         for (ConfigResource resource : resources) {
             List<AlterConfigsRequest.ConfigEntry> configEntries = new ArrayList<>();
             for (ConfigEntry configEntry: configs.get(resource).entries())
                 configEntries.add(new AlterConfigsRequest.ConfigEntry(configEntry.name(), configEntry.value()));
-            requestMap.put(configResourceToResource(resource), new AlterConfigsRequest.Config(configEntries));
-            futures.put(resource, new KafkaFutureImpl<Void>());
+            requestMap.put(resource, new AlterConfigsRequest.Config(configEntries));
+            futures.put(resource, new KafkaFutureImpl<>());
         }
 
         final long now = time.milliseconds();
@@ -1886,7 +1869,7 @@ public class KafkaAdminClient extends AdminClient {
                 AlterConfigsResponse response = (AlterConfigsResponse) abstractResponse;
                 for (Map.Entry<ConfigResource, KafkaFutureImpl<Void>> entry : futures.entrySet()) {
                     KafkaFutureImpl<Void> future = entry.getValue();
-                    ApiException exception = response.errors().get(configResourceToResource(entry.getKey())).exception();
+                    ApiException exception = response.errors().get(entry.getKey()).exception();
                     if (exception != null) {
                         future.completeExceptionally(exception);
                     } else {

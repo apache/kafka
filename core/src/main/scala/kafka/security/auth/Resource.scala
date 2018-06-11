@@ -64,7 +64,7 @@ case class Resource(resourceType: ResourceType, name: String, nameType: Resource
     * @param name         non-null resource name
     * @deprecated Since 2.0, use [[kafka.security.auth.Resource(ResourceType, String, ResourceNameType)]]
     */
-  @deprecated("Use Resource(ResourceType, String, ResourceNameType")
+  @deprecated("Use Resource(ResourceType, String, ResourceNameType", "Since 2.0")
   def this(resourceType: ResourceType, name: String) {
     this(resourceType, name, ResourceNameType.LITERAL)
   }
