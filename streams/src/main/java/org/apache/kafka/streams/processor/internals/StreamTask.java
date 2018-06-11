@@ -424,17 +424,22 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
                 if (eosEnabled) {
                     producer.sendOffsetsToTransaction(consumedOffsetsAndMetadata, applicationId);
-                    producer.commitTransaction();
-                    transactionInFlight = false;
-                    if (startNewTransaction) {
-                        producer.beginTransaction();
-                        transactionInFlight = true;
-                    }
                 } else {
                     consumer.commitSync(consumedOffsetsAndMetadata);
                 }
                 commitOffsetNeeded = false;
-            } else if (eosEnabled && !startNewTransaction && transactionInFlight) { // need to make sure to commit txn for suspend case
+            }
+
+            if (eosEnabled) {
+                producer.commitTransaction();
+                transactionInFlight = false;
+                if (startNewTransaction) {
+                    producer.beginTransaction();
+                    transactionInFlight = true;
+                }
+            }
+
+            if (eosEnabled && !startNewTransaction && transactionInFlight) { // need to make sure to commit txn for suspend case
                 producer.commitTransaction();
                 transactionInFlight = false;
             }
