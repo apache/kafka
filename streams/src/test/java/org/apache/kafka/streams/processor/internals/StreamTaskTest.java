@@ -1034,7 +1034,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldThrowOnCleanCloseTaskWhenEosEnabledIfTransactionInFlight() {
-        task = createStatelessTask(createConfig(true));
+        task = createStatelessTask(true);
         try {
             task.close(true, false);
             fail("should have throw IllegalStateException");
@@ -1049,15 +1049,15 @@ public class StreamTaskTest {
     @Test
     public void shouldAlwaysCommitIfEosEnabled() {
         final RecordCollectorImpl recordCollector =  new RecordCollectorImpl(producer, "StreamTask",
-                new LogContext("StreamTaskTest "), new DefaultProductionExceptionHandler(), new Metrics().sensor("skipped-records"));
+                new LogContext("StreamTaskTest "), new DefaultProductionExceptionHandler());
 
-        task = createStatelessTask(createConfig(true));
+        task = createStatelessTask(true);
         task.initializeStateStores();
         task.initializeTopology();
         task.punctuate(processorSystemTime, 5, PunctuationType.WALL_CLOCK_TIME, new Punctuator() {
             @Override
             public void punctuate(final long timestamp) {
-                recordCollector.send("result-topic1", 3, 5, null, 0, time.milliseconds(),
+                recordCollector.send("result-topic1", 3, 5, 0, time.milliseconds(),
                         new IntegerSerializer(),  new IntegerSerializer());
             }
         });
