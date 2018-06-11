@@ -321,12 +321,6 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
             if (eosEnabled) {
                 producer.sendOffsetsToTransaction(consumedOffsetsAndMetadata, applicationId);
-                producer.commitTransaction();
-                transactionInFlight = false;
-                if (startNewTransaction) {
-                    producer.beginTransaction();
-                    transactionInFlight = true;
-                }
             } else {
                 try {
                     consumer.commitSync(consumedOffsetsAndMetadata);
@@ -336,9 +330,15 @@ public class StreamTask extends AbstractTask implements Punctuator {
                 }
             }
             commitOffsetNeeded = false;
-        } else if (eosEnabled && !startNewTransaction && transactionInFlight) { // need to make sure to commit txn for suspend case
+        }
+
+        if (eosEnabled) {
             producer.commitTransaction();
             transactionInFlight = false;
+            if (startNewTransaction) {
+                producer.beginTransaction();
+                transactionInFlight = true;
+            }
         }
     }
 
