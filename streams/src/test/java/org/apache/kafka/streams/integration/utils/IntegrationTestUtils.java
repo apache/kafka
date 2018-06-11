@@ -194,7 +194,6 @@ public class IntegrationTestUtils {
                 f.get();
                 producer.abortTransaction();
             }
-            producer.flush();
         }    
     }
 
