@@ -302,11 +302,10 @@ public class StreamsBuilder {
         Objects.requireNonNull(materialized, "materialized can't be null");
         final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
         materializedInternal.generateStoreNameIfNeeded(internalStreamsBuilder, topic + "-");
+        final ConsumedInternal<K, V> consumedInternal =
+                new ConsumedInternal<>(Consumed.with(materializedInternal.keySerde(), materializedInternal.valueSerde()));
 
-        return internalStreamsBuilder.table(topic,
-                                            new ConsumedInternal<>(Consumed.with(materializedInternal.keySerde(),
-                                                                                 materializedInternal.valueSerde())),
-                                            materializedInternal);
+        return internalStreamsBuilder.table(topic, consumedInternal, materializedInternal);
     }
 
     /**
