@@ -34,8 +34,6 @@ import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
-import org.apache.kafka.common.resource.ResourcePattern;
-import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
@@ -68,6 +66,8 @@ import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
 import org.apache.kafka.common.resource.ResourceNameType;
+import org.apache.kafka.common.resource.ResourcePattern;
+import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -98,8 +98,6 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
-import static org.apache.kafka.common.requests.ResourceType.BROKER;
-import static org.apache.kafka.common.requests.ResourceType.TOPIC;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
@@ -680,9 +678,9 @@ public class KafkaAdminClientTest {
             // The next request should succeed.
             time.sleep(5000);
             env.kafkaClient().prepareResponse(new DescribeConfigsResponse(0,
-                Collections.singletonMap(new org.apache.kafka.common.requests.Resource(TOPIC, "foo"),
+                Collections.singletonMap(new ConfigResource(ConfigResource.Type.TOPIC, "foo"),
                     new DescribeConfigsResponse.Config(ApiError.NONE,
-                        Collections.<DescribeConfigsResponse.ConfigEntry>emptySet()))));
+                        Collections.emptySet()))));
             DescribeConfigsResult result2 = env.adminClient().describeConfigs(Collections.singleton(
                 new ConfigResource(ConfigResource.Type.TOPIC, "foo")));
             time.sleep(5000);
@@ -696,9 +694,8 @@ public class KafkaAdminClientTest {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().setNode(env.cluster().controller());
             env.kafkaClient().prepareResponse(new DescribeConfigsResponse(0,
-                Collections.singletonMap(new org.apache.kafka.common.requests.Resource(BROKER, "0"),
-                    new DescribeConfigsResponse.Config(ApiError.NONE,
-                        Collections.<DescribeConfigsResponse.ConfigEntry>emptySet()))));
+                Collections.singletonMap(new ConfigResource(ConfigResource.Type.BROKER, "0"),
+                    new DescribeConfigsResponse.Config(ApiError.NONE, Collections.emptySet()))));
             DescribeConfigsResult result2 = env.adminClient().describeConfigs(Collections.singleton(
                 new ConfigResource(ConfigResource.Type.BROKER, "0")));
             result2.all().get();
