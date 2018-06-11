@@ -18,6 +18,7 @@ package org.apache.kafka.clients;
 
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.metrics.Sensor;
@@ -52,6 +53,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.stream.Collectors;
 
 /**
  * A network client for asynchronous request/response network i/o. This is an internal class used to implement the
@@ -916,12 +918,18 @@ public class NetworkClient implements KafkaClient {
             this.metadataFetchInProgress = false;
             Cluster cluster = response.cluster();
 
-            long missingListenerCount = response.topicMetadata().stream()
-                    .flatMap(topicMetadata -> topicMetadata.partitionMetadata().stream())
+            // If any partition has leader with missing listeners, log a few for diagnosing broker configuration
+            // issues. This could be a transient issue if listeners were added dynamically to brokers.
+            List<TopicPartition> missingListenerPartitions = response.topicMetadata().stream().flatMap(topicMetadata ->
+                topicMetadata.partitionMetadata().stream()
                     .filter(partitionMetadata -> partitionMetadata.error() == Errors.LISTENER_NOT_FOUND_ON_LEADER)
-                    .count();
-            if (missingListenerCount != 0)
-                log.error("{} partitions have leader brokers without a matching listener ", missingListenerCount);
+                    .map(partitionMetadata -> new TopicPartition(topicMetadata.topic(), partitionMetadata.partition())))
+                .collect(Collectors.toList());
+            if (!missingListenerPartitions.isEmpty()) {
+                int count = missingListenerPartitions.size();
+                log.error("{} partitions have leader brokers without a matching listener, including {}",
+                        count, missingListenerPartitions.subList(0, count > 10 ? 10 : count));
+            }
 
             // check if any topics metadata failed to get updated
             Map<String, Errors> errors = response.errors();
