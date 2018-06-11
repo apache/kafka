@@ -98,7 +98,7 @@ object ReplicaVerificationTool extends Logging {
                          .defaultsTo(".*")
     val initialOffsetTimeOpt = parser.accepts("time", "Timestamp for getting the initial offsets.")
                            .withRequiredArg
-                           .describedAs("-1(latest)/-2(earliest)")
+                           .describedAs("timestamp/-1(latest)/-2(earliest)")
                            .ofType(classOf[java.lang.Long])
                            .defaultsTo(-1L)
     val reportIntervalOpt = parser.accepts("report-interval-ms", "The reporting interval.")
@@ -210,11 +210,11 @@ object ReplicaVerificationTool extends Logging {
 
   }
 
-  private def topicsMetadata(adminClient: admin.AdminClient): Seq[TopicDescription] = {
+  private def topicsMetadata(adminClient: admin.AdminClient): List[TopicDescription] = {
     val topics = adminClient.listTopics(new ListTopicsOptions().listInternal(true)).names().get()
     val describeTopicsResult = adminClient.describeTopics(topics)
     val result = for ((k, v) <- describeTopicsResult.values().asScala) yield (k, v.get())
-    result.values.toSeq
+    result.values.toList
   }
 
   private def brokerDetails(adminClient: admin.AdminClient): Map[Int, Node] = {
@@ -228,15 +228,17 @@ object ReplicaVerificationTool extends Logging {
     admin.AdminClient.create(props)
   }
 
-  private def initialOffsets(topicPartitions: Seq[TopicPartition], consumerConfig: Properties, initialOffsetTime: Long): Map[TopicPartition, java.lang.Long] = {
+  private def initialOffsets(topicPartitions: Seq[TopicPartition], consumerConfig: Properties, initialOffsetTime: java.lang.Long): Map[TopicPartition, java.lang.Long] = {
     val consumer = createConsumer(consumerConfig)
     try {
       if (ListOffsetRequest.LATEST_TIMESTAMP == initialOffsetTime)
         consumer.endOffsets(topicPartitions.asJava).asScala.toMap
       else if (ListOffsetRequest.EARLIEST_TIMESTAMP == initialOffsetTime)
         consumer.beginningOffsets(topicPartitions.asJava).asScala.toMap
-      else
-        throw new IllegalArgumentException("Timestamp is not supported :" + initialOffsetTime)
+      else {
+        val timestampsToSearch = topicPartitions.map(tp => tp -> initialOffsetTime).toMap
+        consumer.offsetsForTimes(timestampsToSearch.asJava).asScala.mapValues(v => long2Long(v.offset())).toMap
+      }
     } finally {
       if (consumer != null)
         consumer.close()
