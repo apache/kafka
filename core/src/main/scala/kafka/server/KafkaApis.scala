@@ -656,8 +656,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             quotas.request.throttle(request, requestThrottleTimeMs, sendResponse)
           }
           // If throttling is required, return an empty response.
-          unconvertedFetchResponse = new FetchResponse(Errors.NONE, new util.LinkedHashMap[TopicPartition,
-            FetchResponse.PartitionData[Records]](), maxThrottleTimeMs, INVALID_SESSION_ID)
+          unconvertedFetchResponse = fetchContext.getThrottledResponse(maxThrottleTimeMs)
         } else {
           // Get the actual response. This will update the fetch context.
           unconvertedFetchResponse = fetchContext.updateAndGenerateResponseData(partitions)
