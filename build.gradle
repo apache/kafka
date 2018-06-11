@@ -1210,7 +1210,7 @@ project(':connect:api') {
   dependencies {
     compile project(':clients')
     compile libs.slf4jApi
-    compile libs.jerseyContainerServlet
+    compile libs.jaxrsApi
 
     testCompile libs.junit
 
@@ -1441,6 +1441,7 @@ project(':connect:basic-auth-extension') {
   dependencies {
     compile project(':connect:api')
     compile libs.slf4jApi
+    compile libs.jerseyContainerServlet
 
     testCompile libs.bcpkix
     testCompile libs.easymock
