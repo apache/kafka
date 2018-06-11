@@ -461,21 +461,7 @@ class Log(@volatile var dir: File,
       info(s"Found log file ${swapFile.getPath} from interrupted swap operation, repairing.")
       recoverSegment(swapSegment)
 
-      var oldSegments = logSegments(swapSegment.baseOffset, swapSegment.readNextOffset)
-
-      // We create swap files for two cases: (1) Log cleaning where multiple segments are merged into one, and
-      // (2) Log splitting where one segment is split into multiple.
-      // Both of these mean that the resultant swap segments be composed of the original set, i.e. the swap segment
-      // must fall within the range of existing segment(s). If we cannot find such a segment, it means the deletion
-      // of that segment was successful. In such an event, we should simply rename the .swap to .log without having to
-      // do a replace with an existing segment.
-      if (oldSegments.nonEmpty) {
-        val start = oldSegments.head.baseOffset
-        val end = oldSegments.last.readNextOffset
-        if (!(swapSegment.baseOffset >= start && swapSegment.baseOffset <= end))
-          oldSegments = List()
-      }
-
+      val oldSegments = swapSegmentIntersection(swapSegment)
       replaceSegments(Seq(swapSegment), oldSegments.toSeq, isRecoveredSwapFile = true)
     }
   }
@@ -1709,6 +1695,21 @@ class Log(@volatile var dir: File,
     }
   }
 
+  /**
+   * Get the segments in the log which have a non-empty offset intersection with the
+   * inbound swap segment
+   */
+  private def swapSegmentIntersection(swapSegment: LogSegment): Iterable[LogSegment] = {
+    val swapStartOffset = swapSegment.baseOffset
+    val swapEndOffset = swapSegment.readNextOffset
+
+    lock synchronized {
+      logSegments(swapStartOffset, swapEndOffset).filter { segment =>
+        segment.readNextOffset > swapStartOffset
+      }
+    }
+  }
+
   override def toString = "Log(" + dir + ")"
 
   /**
@@ -1886,7 +1887,11 @@ class Log(@volatile var dir: File,
 
         position += bytesAppended
       }
-      require(newSegments.length > 1, s"No offset overflow found for $segment")
+
+      // It is possible to have only one segment after splitting if all the messages in the segment to split
+      // have offsets that overflow
+      if (newSegments.size == 1 && newSegments.headOption.forall(_.baseOffset == segment.baseOffset))
+        throw new IllegalStateException(s"Failed to split segment $segment. ")
 
       // prepare new segments
       var totalSizeOfNewSegments = 0

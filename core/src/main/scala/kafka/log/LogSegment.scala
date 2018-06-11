@@ -183,7 +183,7 @@ class LogSegment private[log] (val log: FileRecords,
     if (bytesToAppend == 0) {
       0
     } else {
-      // Grow buffer if needed
+      // Grow buffer if needed to ensure we copy at least one batch
       if (readBuffer.capacity < bytesToAppend)
         readBuffer = bufferSupplier.get(bytesToAppend)
 
