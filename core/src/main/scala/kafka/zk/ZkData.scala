@@ -30,7 +30,6 @@ import kafka.security.auth.{Acl, Resource, ResourceType}
 import kafka.server.{ConfigType, DelegationTokenManager}
 import kafka.utils.Json
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.UnsupportedVersionException
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.resource.ResourceNameType
 import org.apache.kafka.common.security.auth.SecurityProtocol
@@ -43,7 +42,6 @@ import scala.beans.BeanProperty
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Seq, breakOut}
-import scala.util.{Failure, Success, Try}
 
 // This file contains objects for encoding/decoding data stored in ZooKeeper nodes (znodes).
 
@@ -489,26 +487,6 @@ object ResourceZNode {
 
 object AclChangeNotificationZNode {
   def path = "/kafka-acl-changes"
-}
-
-case class AclChangeEvent(@BeanProperty @JsonProperty("version") version: Int,
-                          @BeanProperty @JsonProperty("resourceType") resourceType: String,
-                          @BeanProperty @JsonProperty("name") name: String,
-                          @BeanProperty @JsonProperty("resourceNameType") resourceNameType: String) {
-  if (version > AclChangeEvent.currentVersion)
-    throw new UnsupportedVersionException(s"Acl change event received for unsupported version: $version")
-
-  def toResource : Try[Resource] = {
-    for {
-      resType <- Try(ResourceType.fromString(resourceType))
-      nameType <- Try(ResourceNameType.valueOf(resourceNameType))
-      resource = Resource(resType, name, nameType)
-    } yield resource
-  }
-}
-
-object AclChangeEvent {
-  val currentVersion: Int = 1
 }
 
 object AclChangeNotificationSequenceZNode {

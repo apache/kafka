@@ -35,7 +35,7 @@ class AclChangeNotificationSequenceZNodeTest {
   }
 
   @Test
-  def shouldRoundTripLegacyString(): Unit = {
+  def shouldRoundTripLegacyTwoPartString(): Unit = {
     val bytes = AclChangeNotificationSequenceZNode.encodeLegacy(literalResource)
     val actual = AclChangeNotificationSequenceZNode.decode(bytes)
 
@@ -43,7 +43,7 @@ class AclChangeNotificationSequenceZNodeTest {
   }
 
   @Test
-  def shouldRoundTripJSON(): Unit = {
+  def shouldRoundTripThreePartString(): Unit = {
     val bytes = AclChangeNotificationSequenceZNode.encode(prefixedResource)
     val actual = AclChangeNotificationSequenceZNode.decode(bytes)
 

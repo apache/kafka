@@ -1008,7 +1008,7 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
   /**
     * Creates colon separated Acl change notification message.
     *
-    * Kafka 2.0 saw the format of the ACL change event change from a 'colon separated' string, to a JSON message.
+    * Kafka 2.0 saw the format of the ACL change event change from a 2-part to a 3-part colon-separated string.
     * This method will create a message in the old format, which is still needed while a cluster has
     * 'inter.broker.protocol.version' < 2.0.
     *
@@ -1022,7 +1022,7 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
   }
 
   /**
-   * Creates JSON Acl change notification message.
+   * Creates an Acl change notification message.
    * @param resource resource pattern that has changed
    */
   def createAclChangeNotification(resource: Resource): Unit = {
