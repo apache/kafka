@@ -547,27 +547,12 @@
             <ul>
             <li>SASL/PLAIN should be used only with SSL as transport layer to ensure that clear passwords are not transmitted on the wire without encryption.</li>
             <li>The default implementation of SASL/PLAIN in Kafka specifies usernames and passwords in the JAAS configuration file as shown
-                <a href="#security_sasl_plain_brokerconfig">here</a>. To avoid storing passwords on disk, you can plug in your own implementation of
-                <code>javax.security.auth.spi.LoginModule</code> that provides usernames and passwords from an external source. The login module implementation should
-                provide username as the public credential and password as the private credential of the <code>Subject</code>. The default implementation
-                <code>org.apache.kafka.common.security.plain.PlainLoginModule</code> can be used as an example.</li>
-            <li>In production systems, external authentication servers may implement password authentication. Kafka brokers can be integrated with these servers by adding
-                your own implementation of <code>javax.security.sasl.SaslServer</code>. The default implementation included in Kafka in the package
-                <code>org.apache.kafka.common.security.plain</code> can be used as an example to get started.
-                <ul>
-                <li>New providers must be installed and registered in the JVM. Providers can be installed by adding provider classes to
-                the normal <tt>CLASSPATH</tt> or bundled as a jar file and added to <tt><i>JAVA_HOME</i>/lib/ext</tt>.</li>
-                <li>Providers can be registered statically by adding a provider to the security properties file
-                <tt><i>JAVA_HOME</i>/lib/security/java.security</tt>.
-                <pre>    security.provider.n=providerClassName</pre>
-                where <i>providerClassName</i> is the fully qualified name of the new provider and <i>n</i> is the preference order with
-                lower numbers indicating higher preference.</li>
-                <li>Alternatively, you can register providers dynamically at runtime by invoking <code>Security.addProvider</code> at the beginning of the client
-                application or in a static initializer in the login module. For example:
-                <pre>    Security.addProvider(new PlainSaslServerProvider());</pre></li>
-                <li>For more details, see <a href="http://docs.oracle.com/javase/8/docs/technotes/guides/security/crypto/CryptoSpec.html">JCA Reference</a>.</li>
-                </ul>
-            </li>
+                <a href="#security_sasl_plain_brokerconfig">here</a>. From Kafka version 2.0 onwards, you can avoid storing clear passwords on disk
+                by configuring your own callback handlers that obtain username and password from an external source using the configuration options
+                <code>sasl.server.callback.handler.class</code> and <code>sasl.client.callback.handler.class</code>.</li>
+            <li>In production systems, external authentication servers may implement password authentication. From Kafka version 2.0 onwards,
+                you can plug in your own callback handlers that use external authentication servers for password verification by configuring
+                <code>sasl.server.callback.handler.class</code>.</li>
             </ul>
         </li>
         </ol>
@@ -667,8 +652,8 @@
             against brute force attacks if Zookeeper security is compromised.</li>
             <li>SCRAM should be used only with TLS-encryption to prevent interception of SCRAM exchanges. This
             protects against dictionary or brute force attacks and against impersonation if Zookeeper is compromised.</li>
-            <li>The default SASL/SCRAM implementation may be overridden using custom login modules in installations
-            where Zookeeper is not secure. See <a href="#security_sasl_plain_production">here</a> for details.</li>
+            <li>From Kafka version 2.0 onwards, the default SASL/SCRAM credential store may be overridden using custom callback handlers
+            by configuring <code>sasl.server.callback.handler.class</code> in installations where Zookeeper is not secure.</li>
             <li>For more details on security considerations, refer to
             <a href="https://tools.ietf.org/html/rfc5802#section-9">RFC 5802</a>.
             </ul>
