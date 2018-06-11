@@ -18,6 +18,7 @@
 package kafka.admin
 
 import java.util.Properties
+import java.util.regex.Pattern
 
 import joptsimple._
 import kafka.common.AdminCommandFailedException
@@ -84,7 +85,7 @@ object TopicCommand extends Logging {
     val allTopics = zkClient.getAllTopicsInCluster.sorted
     val excludeInternalTopics = opts.options.has(opts.excludeInternalTopicOpt)
     if (opts.options.has(opts.topicOpt)) {
-      val topicsSpec = opts.options.valueOf(opts.topicOpt)
+      val topicsSpec = Pattern.quote(opts.options.valueOf(opts.topicOpt))
       val topicsFilter = new Whitelist(topicsSpec)
       allTopics.filter(topicsFilter.isTopicAllowed(_, excludeInternalTopics))
     } else

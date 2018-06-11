@@ -278,4 +278,34 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     assertTrue(output.contains(topic))
     assertFalse(output.contains(Topic.GROUP_METADATA_TOPIC_NAME))
   }
+
+  @Test
+  def testTopicOperationsWithRegexSymbolInTopicName(): Unit = {
+    val normalTopic = "test"
+    val abnormalTopic = "te+st"
+    val numPartitionsOriginal = 1
+
+    // create brokers
+    val brokers = List(0, 1, 2)
+    TestUtils.createBrokersInZk(zkClient, brokers)
+
+    // create the NormalTopic
+    val createOpts = new TopicCommandOptions(Array("--partitions", numPartitionsOriginal.toString,
+      "--replication-factor", "1",
+      "--topic", normalTopic))
+    TopicCommand.createTopic(zkClient, createOpts)
+
+    val commandOpts = new TopicCommandOptions(Array("--topic", abnormalTopic))
+
+    // delete with special character in name
+    intercept[IllegalArgumentException] {
+      TopicCommand.deleteTopic(zkClient, commandOpts)
+    }
+
+    assertTrue(TestUtils.grabConsoleOutput(TopicCommand.describeTopic(zkClient, commandOpts)).isEmpty)
+
+    intercept[IllegalArgumentException] {
+      TopicCommand.alterTopic(zkClient, commandOpts)
+    }
+  }
 }
