@@ -156,7 +156,7 @@ public class StreamsResetter {
     private void validateNoActiveConsumers(final String groupId,
                                            final AdminClient adminClient) throws ExecutionException, InterruptedException {
         final DescribeConsumerGroupsResult describeResult = adminClient.describeConsumerGroups(Arrays.asList(groupId),
-                (new DescribeConsumerGroupsOptions()).timeoutMs(10 * 1000));
+                (new DescribeConsumerGroupsOptions()).timeoutMs(10 * 1000L));
         final List<MemberDescription> members =
             new ArrayList<MemberDescription>(describeResult.describedGroups().get(groupId).get().members());
         if (!members.isEmpty()) {

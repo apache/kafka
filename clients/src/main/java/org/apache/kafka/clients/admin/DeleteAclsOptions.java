@@ -35,7 +35,7 @@ public class DeleteAclsOptions extends AbstractOptions<DeleteAclsOptions> {
      *
      */
     // This method is retained to keep binary compatibility with 0.11
-    public DeleteAclsOptions timeoutMs(Integer timeoutMs) {
+    public DeleteAclsOptions timeoutMs(Long timeoutMs) {
         this.timeoutMs = timeoutMs;
         return this;
     }

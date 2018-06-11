@@ -228,7 +228,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(new CreateTopicsResponse(Collections.singletonMap("myTopic", new ApiError(Errors.NONE, ""))));
             KafkaFuture<Void> future = env.adminClient().createTopics(
                     Collections.singleton(new NewTopic("myTopic", Collections.singletonMap(0, asList(0, 1, 2)))),
-                    new CreateTopicsOptions().timeoutMs(1000)).all();
+                    new CreateTopicsOptions().timeoutMs(1000L)).all();
             assertFutureError(future, TimeoutException.class);
         }
     }
@@ -254,7 +254,7 @@ public class KafkaAdminClientTest {
 
             KafkaFuture<Void> future = env.adminClient().createTopics(
                     Collections.singleton(new NewTopic("myTopic", Collections.singletonMap(0, asList(0, 1, 2)))),
-                    new CreateTopicsOptions().timeoutMs(10000)).all();
+                    new CreateTopicsOptions().timeoutMs(10000L)).all();
 
             future.get();
         }
@@ -281,7 +281,7 @@ public class KafkaAdminClientTest {
 
             KafkaFuture<Void> future = env.adminClient().createTopics(
                     Collections.singleton(new NewTopic("myTopic", Collections.singletonMap(0, asList(0, 1, 2)))),
-                    new CreateTopicsOptions().timeoutMs(10000)).all();
+                    new CreateTopicsOptions().timeoutMs(10000L)).all();
 
             future.get();
         }
@@ -306,7 +306,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(new CreateTopicsResponse(Collections.singletonMap("myTopic", new ApiError(Errors.NONE, ""))));
             KafkaFuture<Void> future = env.adminClient().createTopics(
                 Collections.singleton(new NewTopic("myTopic", Collections.singletonMap(0, asList(0, 1, 2)))),
-                new CreateTopicsOptions().timeoutMs(1000)).all();
+                new CreateTopicsOptions().timeoutMs(1000L)).all();
             assertFutureError(future, SaslAuthenticationException.class);
         }
     }
@@ -320,7 +320,7 @@ public class KafkaAdminClientTest {
                     new CreateTopicsResponse(Collections.singletonMap("myTopic", new ApiError(Errors.NONE, ""))));
             KafkaFuture<Void> future = env.adminClient().createTopics(
                     Collections.singleton(new NewTopic("myTopic", Collections.singletonMap(0, asList(0, 1, 2)))),
-                    new CreateTopicsOptions().timeoutMs(10000)).all();
+                    new CreateTopicsOptions().timeoutMs(10000L)).all();
             future.get();
         }
     }
@@ -356,7 +356,7 @@ public class KafkaAdminClientTest {
 
             KafkaFuture<Void> future = env.adminClient().createTopics(
                     Collections.singleton(new NewTopic("myTopic", Collections.singletonMap(0, asList(0, 1, 2)))),
-                    new CreateTopicsOptions().timeoutMs(10000)).all();
+                    new CreateTopicsOptions().timeoutMs(10000L)).all();
 
             // Wait until the first attempt has failed, then advance the time
             TestUtils.waitForCondition(() -> mockClient.numAwaitingResponses() == 1,
@@ -388,7 +388,7 @@ public class KafkaAdminClientTest {
                 env.cluster().nodeById(1));
             KafkaFuture<Void> future = env.adminClient().createTopics(
                     Collections.singleton(new NewTopic("myTopic", Collections.singletonMap(0, asList(0, 1, 2)))),
-                    new CreateTopicsOptions().timeoutMs(10000)).all();
+                    new CreateTopicsOptions().timeoutMs(10000L)).all();
             future.get();
         }
     }
@@ -486,7 +486,7 @@ public class KafkaAdminClientTest {
         try {
             env.adminClient().createTopics(
                     Collections.singleton(new NewTopic("myTopic", Collections.singletonMap(0, asList(0, 1, 2)))),
-                    new CreateTopicsOptions().timeoutMs(10000)).all().get();
+                    new CreateTopicsOptions().timeoutMs(10000L)).all().get();
             fail("Expected an authentication error.");
         } catch (ExecutionException e) {
             assertTrue("Expected an authentication error, but got " + Utils.stackTrace(e),
@@ -660,7 +660,7 @@ public class KafkaAdminClientTest {
             // Make a request with an extremely short timeout.
             // Then wait for it to fail by not supplying any response.
             log.info("Starting AdminClient#listTopics...");
-            final ListTopicsResult result = env.adminClient().listTopics(new ListTopicsOptions().timeoutMs(1000));
+            final ListTopicsResult result = env.adminClient().listTopics(new ListTopicsOptions().timeoutMs(1000L));
             TestUtils.waitForCondition(new TestCondition() {
                 @Override
                 public boolean conditionMet() {

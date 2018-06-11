@@ -35,7 +35,7 @@ public class DescribeTopicsOptions extends AbstractOptions<DescribeTopicsOptions
      *
      */
     // This method is retained to keep binary compatibility with 0.11
-    public DescribeTopicsOptions timeoutMs(Integer timeoutMs) {
+    public DescribeTopicsOptions timeoutMs(Long timeoutMs) {
         this.timeoutMs = timeoutMs;
         return this;
     }

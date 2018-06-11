@@ -602,7 +602,7 @@ class ReassignPartitionsCommand(zkClient: KafkaZkClient,
   private def alterReplicaLogDirsIgnoreReplicaNotAvailable(replicaAssignment: Map[TopicPartitionReplica, String],
                                                            adminClient: JAdminClient,
                                                            timeoutMs: Long): Set[TopicPartitionReplica] = {
-    val alterReplicaLogDirsResult = adminClient.alterReplicaLogDirs(replicaAssignment.asJava, new AlterReplicaLogDirsOptions().timeoutMs(timeoutMs.toInt))
+    val alterReplicaLogDirsResult = adminClient.alterReplicaLogDirs(replicaAssignment.asJava, new AlterReplicaLogDirsOptions().timeoutMs(timeoutMs.toLong))
     val replicasAssignedToFutureDir = alterReplicaLogDirsResult.values().asScala.flatMap { case (replica, future) => {
       try {
         future.get()

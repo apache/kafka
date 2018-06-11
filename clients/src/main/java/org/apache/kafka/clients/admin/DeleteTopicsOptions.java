@@ -35,7 +35,7 @@ public class DeleteTopicsOptions extends AbstractOptions<DeleteTopicsOptions> {
      *
      */
     // This method is retained to keep binary compatibility with 0.11
-    public DeleteTopicsOptions timeoutMs(Integer timeoutMs) {
+    public DeleteTopicsOptions timeoutMs(Long timeoutMs) {
         this.timeoutMs = timeoutMs;
         return this;
     }

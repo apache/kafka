@@ -252,7 +252,7 @@ object ConfigCommand extends Config {
       throw new InvalidConfigException(s"All sensitive broker config entries must be specified for --alter, missing entries: ${sensitiveEntries.keySet}")
     val newConfig = new JConfig(newEntries.asJava.values)
 
-    val alterOptions = new AlterConfigsOptions().timeoutMs(30000).validateOnly(false)
+    val alterOptions = new AlterConfigsOptions().timeoutMs(30000L).validateOnly(false)
     adminClient.alterConfigs(Map(configResource -> newConfig).asJava, alterOptions).all().get(60, TimeUnit.SECONDS)
 
     if (entityName.nonEmpty)
