@@ -47,7 +47,9 @@ public class UUIDDeserializer implements Deserializer<UUID> {
             else
                 return UUID.fromString(new String(data, encoding));
         } catch (UnsupportedEncodingException e) {
-            throw new SerializationException("Error when deserializing byte[] to UUID due to unsupported encoding " + encoding);
+            throw new SerializationException("Error when deserializing byte[] to UUID due to unsupported encoding " + encoding, e);
+        } catch (IllegalArgumentException e) {
+            throw new SerializationException("Error parsing data into UUID", e);
         }
     }
 
