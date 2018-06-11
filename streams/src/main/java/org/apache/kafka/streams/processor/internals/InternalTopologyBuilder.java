@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
@@ -120,6 +121,9 @@ public class InternalTopologyBuilder {
     private Pattern topicPattern = null;
 
     private Map<Integer, Set<String>> nodeGroups = null;
+
+    // TODO: this is only temporary for 2.0 and should be removed
+    public final Map<StoreBuilder, String> storeToSourceChangelogTopic = new HashMap<>();
 
     public interface StateStoreFactory {
         Set<String> users();
@@ -498,8 +502,14 @@ public class InternalTopologyBuilder {
 
     public final void addStateStore(final StoreBuilder storeBuilder,
                                     final String... processorNames) {
+        addStateStore(storeBuilder, false, processorNames);
+    }
+
+    public final void addStateStore(final StoreBuilder storeBuilder,
+                                    final boolean allowOverride,
+                                    final String... processorNames) {
         Objects.requireNonNull(storeBuilder, "storeBuilder can't be null");
-        if (stateFactories.containsKey(storeBuilder.name())) {
+        if (!allowOverride && stateFactories.containsKey(storeBuilder.name())) {
             throw new TopologyException("StateStore " + storeBuilder.name() + " is already added.");
         }
 
@@ -566,16 +576,22 @@ public class InternalTopologyBuilder {
         }
     }
 
-    // TODO: this method is only used by DSL and we might want to refactor this part
     public final void connectSourceStoreAndTopic(final String sourceStoreName,
-                                                  final String topic) {
+                                                 final String topic) {
         if (storeToChangelogTopic.containsKey(sourceStoreName)) {
             throw new TopologyException("Source store " + sourceStoreName + " is already added.");
         }
         storeToChangelogTopic.put(sourceStoreName, topic);
     }
 
-    // TODO: this method is only used by DSL and we might want to refactor this part
+    public final void markSourceStoreAndTopic(final StoreBuilder storeBuilder,
+                                              final String topic) {
+        if (storeToSourceChangelogTopic.containsKey(storeBuilder)) {
+            throw new TopologyException("Source store " + storeBuilder.name() + " is already used.");
+        }
+        storeToSourceChangelogTopic.put(storeBuilder, topic);
+    }
+
     public final void connectProcessors(final String... processorNames) {
         if (processorNames.length < 2) {
             throw new TopologyException("At least two processors need to participate in the connection.");
@@ -591,13 +607,11 @@ public class InternalTopologyBuilder {
         nodeGrouper.unite(processorNames[0], Arrays.copyOfRange(processorNames, 1, processorNames.length));
     }
 
-    // TODO: this method is only used by DSL and we might want to refactor this part
     public final void addInternalTopic(final String topicName) {
         Objects.requireNonNull(topicName, "topicName can't be null");
         internalTopicNames.add(topicName);
     }
 
-    // TODO: this method is only used by DSL and we might want to refactor this part
     public final void copartitionSources(final Collection<String> sourceNodes) {
         copartitionSourceGroups.add(Collections.unmodifiableSet(new HashSet<>(sourceNodes)));
     }
@@ -1057,6 +1071,24 @@ public class InternalTopologyBuilder {
         }
 
         return Collections.unmodifiableMap(topicGroups);
+    }
+
+    // Adjust the generated topology based on the configs.
+    // Not exposed as public API and should be removed post 2.0
+    public void adjust(final StreamsConfig config) {
+        final boolean enableOptimization20 = config.getString(StreamsConfig.TOPOLOGY_OPTIMIZATION).equals(StreamsConfig.OPTIMIZE);
+
+        if (enableOptimization20) {
+            for (final Map.Entry<StoreBuilder, String> entry : storeToSourceChangelogTopic.entrySet()) {
+                final StoreBuilder storeBuilder = entry.getKey();
+                final String topicName = entry.getValue();
+
+                // update store map to disable logging for this store
+                storeBuilder.withLoggingDisabled();
+                addStateStore(storeBuilder, true);
+                connectSourceStoreAndTopic(storeBuilder.name(), topicName);
+            }
+        }
     }
 
     private void setRegexMatchedTopicsToSourceNodes() {

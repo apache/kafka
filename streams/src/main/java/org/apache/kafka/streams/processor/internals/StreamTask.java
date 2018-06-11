@@ -380,7 +380,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         flushState();
 
         if (!eosEnabled) {
-            stateMgr.checkpoint(recordCollectorOffsets());
+            stateMgr.checkpoint(activeTaskCheckpointableOffsets());
         }
 
         commitOffsets(startNewTransaction);
@@ -391,8 +391,13 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     }
 
     @Override
-    protected Map<TopicPartition, Long> recordCollectorOffsets() {
-        return recordCollector.offsets();
+    protected Map<TopicPartition, Long> activeTaskCheckpointableOffsets() {
+        final Map<TopicPartition, Long> checkpointableOffsets = recordCollector.offsets();
+        for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
+            checkpointableOffsets.putIfAbsent(entry.getKey(), entry.getValue());
+        }
+
+        return checkpointableOffsets;
     }
 
     @Override
