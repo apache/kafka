@@ -130,10 +130,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         // (this could be a bug in the RocksDB code and their devs have been contacted).
         options.setIncreaseParallelism(Math.max(Runtime.getRuntime().availableProcessors(), 2));
 
-        if (prepareForBulkload) {
-            options.prepareForBulkLoad();
-        }
-
         wOptions = new WriteOptions();
         wOptions.setDisableWAL(true);
 
@@ -148,6 +144,11 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
             final RocksDBConfigSetter configSetter = Utils.newInstance(configSetterClass);
             configSetter.setConfig(name, options, configs);
         }
+
+        if (prepareForBulkload) {
+            options.prepareForBulkLoad();
+        }
+
         this.dbDir = new File(new File(context.stateDir(), parentDir), this.name);
 
         try {
