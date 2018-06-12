@@ -91,9 +91,9 @@
         <code>internal.value.converter=org.apache.kafka.connect.json.JsonConverter</code>
         <code>internal.value.converter.schemas.enable=false</code>
     </li>
-    <li><a href="https://cwiki.apache.org/confluence/x/5kiHB">KIP-266</a> adds a new consumer configuration <code>max.block.ms</code>
-        to control the maximum time <code>KafkaConsumer</code> APIs can block for. The KIP also adds overloads for such blocking
-        APIs to support specifying a specific timeout to use for each of them instead of using the timeout set by <code>max.block.ms</code>.
+    <li><a href="https://cwiki.apache.org/confluence/x/5kiHB">KIP-266</a> adds a new consumer configuration <code>default.api.timeout.ms</code>
+        to specify the default timeout to use for <code>KafkaConsumer</code> APIs that could block. The KIP also adds overloads for such blocking
+        APIs to support specifying a specific timeout to use for each of them instead of using the default timeout set by <code>default.api.timeout.ms</code>.
         In particular, a new <code>poll(Duration)</code> API has been added which does not block for dynamic partition assignment.
         The old <code>poll(long)</code> API has been deprecated and will be removed in a future version. Overloads have also been added
         for other <code>KafkaConsumer</code> methods like <code>partitionsFor</code>, <code>listTopics</code>, <code>offsetsForTimes</code>,
