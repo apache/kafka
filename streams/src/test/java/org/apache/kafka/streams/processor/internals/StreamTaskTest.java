@@ -636,6 +636,16 @@ public class StreamTaskTest {
     }
 
     @Test
+    public void shouldNotThrowOnCloseIfTaskWasNotInitializedWithEosEnabled() throws Exception {
+        final MockProducer producer = new MockProducer();
+        task = new StreamTask(taskId00, applicationId, partitions, topology, consumer, changelogReader,
+            eosConfig, streamsMetrics, stateDirectory, null, time, producer);
+
+        task.close(false, false);
+        task = null;
+    }
+
+    @Test
     public void shouldNotInitOrBeginTransactionOnCreateIfEosDisabled() throws Exception {
         final MockProducer producer = new MockProducer();
         task = new StreamTask(taskId00, applicationId, partitions, topology, consumer, changelogReader,

@@ -176,8 +176,8 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                     if (record.key() != null) {
                         stateRestoreCallback.restore(record.key(), record.value());
                     }
-                    offset = consumer.position(topicPartition);
                 }
+                offset = consumer.position(topicPartition);
             }
             checkpointableOffsets.put(topicPartition, offset);
         }
