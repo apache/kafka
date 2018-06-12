@@ -46,7 +46,7 @@ public class ProcessorStateManager extends AbstractStateManager {
     private final boolean isStandby;
     private final ChangelogReader changelogReader;
     private final Map<TopicPartition, Long> offsetLimits;
-    private final Map<TopicPartition, Long> restoredOffsets;
+    private final Map<TopicPartition, Long> standbyRestoredOffsets;
     private final Map<String, StateRestoreCallback> restoreCallbacks; // used for standby tasks, keyed by state topic name
     private final Map<String, String> storeToChangelogTopic;
     private final List<TopicPartition> changelogPartitions = new ArrayList<>();
@@ -79,7 +79,7 @@ public class ProcessorStateManager extends AbstractStateManager {
             partitionForTopic.put(source.topic(), source);
         }
         offsetLimits = new HashMap<>();
-        restoredOffsets = new HashMap<>();
+        standbyRestoredOffsets = new HashMap<>();
         this.isStandby = isStandby;
         restoreCallbacks = isStandby ? new HashMap<String, StateRestoreCallback>() : null;
         this.storeToChangelogTopic = storeToChangelogTopic;
@@ -212,7 +212,7 @@ public class ProcessorStateManager extends AbstractStateManager {
         }
 
         // record the restored offset for its change log partition
-        restoredOffsets.put(storePartition, lastOffset + 1);
+        standbyRestoredOffsets.put(storePartition, lastOffset + 1);
 
         return remainingRecords;
     }
@@ -293,8 +293,8 @@ public class ProcessorStateManager extends AbstractStateManager {
 
     // write the checkpoint
     @Override
-    public void checkpoint(final Map<TopicPartition, Long> ackedOffsets) {
-        checkpointableOffsets.putAll(changelogReader.restoredOffsets());
+    public void checkpoint(final Map<TopicPartition, Long> checkpointableOffsets) {
+        this.checkpointableOffsets.putAll(changelogReader.restoredOffsets());
         for (final StateStore store : stores.values()) {
             final String storeName = store.name();
             // only checkpoint the offset to the offsets file if
@@ -302,11 +302,11 @@ public class ProcessorStateManager extends AbstractStateManager {
             if (store.persistent() && storeToChangelogTopic.containsKey(storeName)) {
                 final String changelogTopic = storeToChangelogTopic.get(storeName);
                 final TopicPartition topicPartition = new TopicPartition(changelogTopic, getPartition(storeName));
-                if (ackedOffsets.containsKey(topicPartition)) {
+                if (checkpointableOffsets.containsKey(topicPartition)) {
                     // store the last offset + 1 (the log position after restoration)
-                    checkpointableOffsets.put(topicPartition, ackedOffsets.get(topicPartition) + 1);
-                } else if (restoredOffsets.containsKey(topicPartition)) {
-                    checkpointableOffsets.put(topicPartition, restoredOffsets.get(topicPartition));
+                    this.checkpointableOffsets.put(topicPartition, checkpointableOffsets.get(topicPartition) + 1);
+                } else if (standbyRestoredOffsets.containsKey(topicPartition)) {
+                    this.checkpointableOffsets.put(topicPartition, standbyRestoredOffsets.get(topicPartition));
                 }
             }
         }
@@ -315,9 +315,9 @@ public class ProcessorStateManager extends AbstractStateManager {
             checkpoint = new OffsetCheckpoint(new File(baseDir, CHECKPOINT_FILE_NAME));
         }
 
-        log.trace("Writing checkpoint: {}", checkpointableOffsets);
+        log.trace("Writing checkpoint: {}", this.checkpointableOffsets);
         try {
-            checkpoint.write(checkpointableOffsets);
+            checkpoint.write(this.checkpointableOffsets);
         } catch (final IOException e) {
             log.warn("Failed to write offset checkpoint file to {}: {}", checkpoint, e);
         }
