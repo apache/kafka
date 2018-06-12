@@ -104,23 +104,23 @@ class PartitionTest {
                                      new SimpleRecord("k2".getBytes, "v2".getBytes),
                                      new SimpleRecord("k3".getBytes, "v3".getBytes)),
                                 baseOffset = newLogStartOffset)
-    partition.appendRecordsToFollower(records, isFuture = false)
+    partition.appendRecordsToFollowerOrFutureReplica(records, isFuture = false)
     assertEquals(s"Log end offset after append of 3 records with base offset $newLogStartOffset:", 7L, replica.logEndOffset.messageOffset)
-    assertEquals(s"Log end offset after append of 3 records with base offset $newLogStartOffset:", newLogStartOffset, replica.logStartOffset)
+    assertEquals(s"Log start offset after append of 3 records with base offset $newLogStartOffset:", newLogStartOffset, replica.logStartOffset)
 
     // and we can append more records after that
-    partition.appendRecordsToFollower(createRecords(List(new SimpleRecord("k1".getBytes, "v1".getBytes)), baseOffset = 7L), isFuture = false)
+    partition.appendRecordsToFollowerOrFutureReplica(createRecords(List(new SimpleRecord("k1".getBytes, "v1".getBytes)), baseOffset = 7L), isFuture = false)
     assertEquals(s"Log end offset after append of 1 record at offset 7:", 8L, replica.logEndOffset.messageOffset)
     assertEquals(s"Log start offset not expected to change:", newLogStartOffset, replica.logStartOffset)
 
     // but we cannot append to offset < log start if the log is not empty
     assertThrows[UnexpectedAppendOffsetException] {
-      partition.appendRecordsToFollower(createRecords(List(new SimpleRecord("k1".getBytes, "v1".getBytes)), baseOffset = 3L), isFuture = false)
+      partition.appendRecordsToFollowerOrFutureReplica(createRecords(List(new SimpleRecord("k1".getBytes, "v1".getBytes)), baseOffset = 3L), isFuture = false)
     }
     assertEquals(s"Log end offset should not change after failure to append", 8L, replica.logEndOffset.messageOffset)
 
     // we still can append to next offset
-    partition.appendRecordsToFollower(createRecords(List(new SimpleRecord("k1".getBytes, "v1".getBytes)), baseOffset = 8L), isFuture = false)
+    partition.appendRecordsToFollowerOrFutureReplica(createRecords(List(new SimpleRecord("k1".getBytes, "v1".getBytes)), baseOffset = 8L), isFuture = false)
     assertEquals(s"Log end offset after append of 1 record at offset 8:", 9L, replica.logEndOffset.messageOffset)
     assertEquals(s"Log start offset not expected to change:", newLogStartOffset, replica.logStartOffset)
   }

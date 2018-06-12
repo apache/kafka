@@ -49,11 +49,11 @@ import scala.collection.{Seq, Set, mutable}
 
 object LogAppendInfo {
   val UnknownLogAppendInfo = LogAppendInfo(None, -1, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, -1L,
-    RecordConversionStats.EMPTY, NoCompressionCodec, NoCompressionCodec, -1, -1, offsetsMonotonic = false)
+    RecordConversionStats.EMPTY, NoCompressionCodec, NoCompressionCodec, -1, -1, offsetsMonotonic = false, -1L)
 
   def unknownLogAppendInfoWithLogStartOffset(logStartOffset: Long): LogAppendInfo =
     LogAppendInfo(None, -1, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, logStartOffset,
-      RecordConversionStats.EMPTY, NoCompressionCodec, NoCompressionCodec, -1, -1, offsetsMonotonic = false)
+      RecordConversionStats.EMPTY, NoCompressionCodec, NoCompressionCodec, -1, -1, offsetsMonotonic = false, -1L)
 }
 
 /**
@@ -84,12 +84,18 @@ case class LogAppendInfo(var firstOffset: Option[Long],
                          targetCodec: CompressionCodec,
                          shallowCount: Int,
                          validBytes: Int,
-                         offsetsMonotonic: Boolean) {
+                         offsetsMonotonic: Boolean,
+                         lastOffsetOfFirstBatch: Long) {
   /**
    * Get the first offset if it exists, else get the last offset.
    * @return The offset of first message if it exists; else offset of the last message.
    */
   def firstOrLastOffset: Long = firstOffset.getOrElse(lastOffset)
+
+  /**
+   * Get the first offset if it exists, else get the last offset of the first batch
+   */
+  def firstOrLastOfFirstBatchOffset: Long = firstOffset.getOrElse(lastOffsetOfFirstBatch)
 
   /**
    * Get the (maximum) number of messages described by LogAppendInfo
@@ -804,7 +810,7 @@ class Log(@volatile var dir: File,
             throw new OffsetsOutOfOrderException(s"Out of order offsets found in append to $topicPartition: " +
                                                  records.records.asScala.map(_.offset))
 
-          if (appendInfo.firstOrLastOffset < nextOffsetMetadata.messageOffset) {
+          if (appendInfo.firstOrLastOfFirstBatchOffset < nextOffsetMetadata.messageOffset) {
             // we may still be able to recover if the log is empty
             // one example: fetching from log start offset on the leader which is not batch aligned,
             // which may happen as a result of AdminClient#deleteRecords()
@@ -813,10 +819,10 @@ class Log(@volatile var dir: File,
               case None => records.batches.asScala.head.baseOffset()
             }
 
-            val firstOrLast = if (appendInfo.firstOffset.isDefined) "First" else "Last"
+            val firstOrLast = if (appendInfo.firstOffset.isDefined) "First offset" else "Last offset of the first batch"
             throw new UnexpectedAppendOffsetException(
               s"Unexpected offset in append to $topicPartition. $firstOrLast " +
-              s"offset ${appendInfo.firstOrLastOffset} is less than the next offset ${nextOffsetMetadata.messageOffset}. " +
+              s"${appendInfo.firstOrLastOfFirstBatchOffset} is less than the next offset ${nextOffsetMetadata.messageOffset}. " +
               s"First 10 offsets in append: ${records.records.asScala.take(10).map(_.offset)}, last offset in" +
               s" append: ${appendInfo.lastOffset}. Log start offset = $logStartOffset", firstOffset)
           }
@@ -989,6 +995,7 @@ class Log(@volatile var dir: File,
     var maxTimestamp = RecordBatch.NO_TIMESTAMP
     var offsetOfMaxTimestamp = -1L
     var readFirstMessage = false
+    var lastOffsetOfFirstBatch = -1L
 
     for (batch <- records.batches.asScala) {
       // we only validate V2 and higher to avoid potential compatibility issues with older clients
@@ -1005,6 +1012,7 @@ class Log(@volatile var dir: File,
       if (!readFirstMessage) {
         if (batch.magic >= RecordBatch.MAGIC_VALUE_V2)
           firstOffset = Some(batch.baseOffset)
+        lastOffsetOfFirstBatch = batch.lastOffset
         readFirstMessage = true
       }
 
@@ -1043,7 +1051,7 @@ class Log(@volatile var dir: File,
     // Apply broker-side compression if any
     val targetCodec = BrokerCompressionCodec.getTargetCompressionCodec(config.compressionType, sourceCodec)
     LogAppendInfo(firstOffset, lastOffset, maxTimestamp, offsetOfMaxTimestamp, RecordBatch.NO_TIMESTAMP, logStartOffset,
-      RecordConversionStats.EMPTY, sourceCodec, targetCodec, shallowMessageCount, validBytesCount, monotonic)
+      RecordConversionStats.EMPTY, sourceCodec, targetCodec, shallowMessageCount, validBytesCount, monotonic, lastOffsetOfFirstBatch)
   }
 
   private def updateProducers(batch: RecordBatch,

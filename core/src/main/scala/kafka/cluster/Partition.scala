@@ -546,7 +546,7 @@ class Partition(val topic: String,
     laggingReplicas
   }
 
-  private def doAppendRecordsToFollower(records: MemoryRecords, isFuture: Boolean): Unit = {
+  private def doAppendRecordsToFollowerOrFutureReplica(records: MemoryRecords, isFuture: Boolean): Unit = {
       if (isFuture)
         getReplica(Request.FutureLocalReplicaId).get.log.get.appendAsFollower(records)
       else {
@@ -558,9 +558,9 @@ class Partition(val topic: String,
       }
   }
 
-  def appendRecordsToFollower(records: MemoryRecords, isFuture: Boolean) {
+  def appendRecordsToFollowerOrFutureReplica(records: MemoryRecords, isFuture: Boolean) {
     try {
-      doAppendRecordsToFollower(records, isFuture)
+      doAppendRecordsToFollowerOrFutureReplica(records, isFuture)
     } catch {
       case e: UnexpectedAppendOffsetException =>
         val replica = if (isFuture) getReplica(Request.FutureLocalReplicaId).get else getReplica().get
@@ -576,7 +576,7 @@ class Partition(val topic: String,
           info(s"Unexpected offset in append to $topicPartition. First offset ${e.firstOffset} is less than log start offset ${replica.logStartOffset}." +
                s" Since this is the first record to be appended to the $replicaName's log, will start the log from offset ${e.firstOffset}.")
           truncateFullyAndStartAt(e.firstOffset, isFuture)
-          doAppendRecordsToFollower(records, isFuture)
+          doAppendRecordsToFollowerOrFutureReplica(records, isFuture)
         } else
           throw e
     }
