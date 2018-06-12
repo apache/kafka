@@ -94,13 +94,13 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
     producer = createProducer(server)
     val consumer = createConsumer(server)
 
-    val consumerRecords = TestUtils.consumeRecordsFor(consumer)
+    val consumerRecords = TestUtils.consumeRecords(consumer, sent1.size)
     assertEquals(sent1, consumerRecords.map(_.value))
 
     // send some more messages
     sent2.map(value => producer.send(new ProducerRecord(topic, 0, value))).foreach(_.get)
 
-    val consumerRecords2 = TestUtils.consumeRecordsFor(consumer)
+    val consumerRecords2 = TestUtils.consumeRecords(consumer, sent2.size)
     assertEquals(sent2, consumerRecords2.map(_.value))
 
     consumer.close()
