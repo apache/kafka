@@ -30,6 +30,7 @@ import org.apache.kafka.common.serialization.{IntegerDeserializer, IntegerSerial
 import org.junit.{Before, Test}
 import org.junit.Assert._
 
+import scala.collection.JavaConverters._
 import scala.reflect.ClassTag
 
 class ServerShutdownTest extends ZooKeeperTestHarness {
@@ -93,6 +94,7 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
 
     producer = createProducer(server)
     val consumer = createConsumer(server)
+    consumer.subscribe(Seq(topic).asJava)
 
     val consumerRecords = TestUtils.consumeRecords(consumer, sent1.size)
     assertEquals(sent1, consumerRecords.map(_.value))
