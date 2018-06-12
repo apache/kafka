@@ -1748,6 +1748,7 @@ public class KafkaConsumerTest {
         String metricGroupPrefix = "consumer";
         long retryBackoffMs = 100;
         long requestTimeoutMs = 30000;
+        int defaultApiTimeoutMs = 30000;
         boolean excludeInternalTopics = true;
         int minBytes = 1;
         int maxBytes = Integer.MAX_VALUE;
@@ -1825,6 +1826,7 @@ public class KafkaConsumerTest {
                 metadata,
                 retryBackoffMs,
                 requestTimeoutMs,
+                defaultApiTimeoutMs,
                 assignors);
     }
 
