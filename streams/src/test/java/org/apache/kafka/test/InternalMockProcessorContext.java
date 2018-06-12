@@ -78,6 +78,13 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
         this(stateDir, null, null, new StreamsMetricsImpl(new Metrics(), "mock"), config, null, null);
     }
 
+    public InternalMockProcessorContext(final File stateDir,
+                                        final Serde<?> keySerde,
+                                        final Serde<?> valSerde,
+                                        final StreamsConfig config) {
+        this(stateDir, keySerde, valSerde, new StreamsMetricsImpl(new Metrics(), "mock"), config, null, null);
+    }
+
     public InternalMockProcessorContext(final StateSerdes<?, ?> serdes,
                                         final RecordCollector collector) {
         this(null, serdes.keySerde(), serdes.valueSerde(), collector, null);
@@ -293,10 +300,14 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
         return Collections.unmodifiableMap(storeMap);
     }
 
-    public void restore(final String storeName, final Iterable<KeyValue<byte[], byte[]>> changeLog) {
-
+    public StateRestoreListener getRestoreListener(final String storeName) {
         final BatchingStateRestoreCallback restoreCallback = getBatchingRestoreCallback(restoreFuncs.get(storeName));
-        final StateRestoreListener restoreListener = getStateRestoreListener(restoreCallback);
+        return getStateRestoreListener(restoreCallback);
+    }
+
+    public void restore(final String storeName, final Iterable<KeyValue<byte[], byte[]>> changeLog) {
+        final BatchingStateRestoreCallback restoreCallback = getBatchingRestoreCallback(restoreFuncs.get(storeName));
+        final StateRestoreListener restoreListener = getRestoreListener(storeName);
 
         restoreListener.onRestoreStart(null, storeName, 0L, 0L);
 
