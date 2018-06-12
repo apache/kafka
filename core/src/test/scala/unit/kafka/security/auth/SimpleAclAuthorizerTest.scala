@@ -17,15 +17,21 @@
 package kafka.security.auth
 
 import java.net.InetAddress
+import java.nio.charset.StandardCharsets.UTF_8
 import java.util.UUID
 
+import kafka.api.{ApiVersion, KAFKA_2_0_IV0, KAFKA_2_0_IV1}
 import kafka.network.RequestChannel.Session
 import kafka.security.auth.Acl.{WildCardHost, WildCardResource}
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
-import kafka.zk.ZooKeeperTestHarness
+import kafka.zk.{ZkAclStore, ZooKeeperTestHarness}
+import kafka.zookeeper.{GetChildrenRequest, GetDataRequest, ZooKeeperClient}
+import org.apache.kafka.common.errors.UnsupportedVersionException
+import org.apache.kafka.common.resource.ResourceNameType
 import org.apache.kafka.common.resource.ResourceNameType.{LITERAL, PREFIXED}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.apache.kafka.common.utils.Time
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
@@ -47,7 +53,8 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
   val username = "alice"
   val principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
   val session = Session(principal, testHostName)
-  var config: KafkaConfig = null
+  var config: KafkaConfig = _
+  private var zooKeeperClient: ZooKeeperClient = _
 
   @Before
   override def setUp() {
@@ -64,12 +71,16 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
     simpleAclAuthorizer.configure(config.originals)
     simpleAclAuthorizer2.configure(config.originals)
     resource = Resource(Topic, "foo-" + UUID.randomUUID(), LITERAL)
+
+    zooKeeperClient = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkMaxInFlightRequests,
+      Time.SYSTEM, "kafka.test", "SimpleAclAuthorizerTest")
   }
 
   @After
   override def tearDown(): Unit = {
     simpleAclAuthorizer.close()
     simpleAclAuthorizer2.close()
+    zooKeeperClient.close()
     super.tearDown()
   }
 
@@ -551,6 +562,88 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
     val acl3 = new Acl(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, principal.getName.charAt(0) + WildCardResource), Allow, WildCardHost, Write)
     simpleAclAuthorizer.addAcls(Set[Acl](acl1), Resource(Group, Acl.WildCardResource, LITERAL))
     assertEquals(4, simpleAclAuthorizer.getAcls(principal).size)
+  }
+
+  @Test(expected = classOf[UnsupportedVersionException])
+  def testThrowsOnAddPrefixedAclIfInterBrokerProtocolVersionTooLow(): Unit = {
+    givenAuthorizerWithProtocolVersion(Option(KAFKA_2_0_IV0))
+    simpleAclAuthorizer.addAcls(Set[Acl](denyReadAcl), Resource(Topic, "z_other", PREFIXED))
+  }
+
+  @Test
+  def testWritesExtendedAclChangeEventIfInterBrokerProtocolNotSet(): Unit = {
+    givenAuthorizerWithProtocolVersion(Option.empty)
+    val resource = Resource(Topic, "z_other", PREFIXED)
+    val expected = new String(ZkAclStore(PREFIXED).changeStore.createChangeNode(resource).bytes, UTF_8)
+
+    simpleAclAuthorizer.addAcls(Set[Acl](denyReadAcl), resource)
+
+    val actual = getAclChangeEventAsString(PREFIXED)
+
+    assertEquals(expected, actual)
+  }
+
+  @Test
+  def testWritesExtendedAclChangeEventWhenInterBrokerProtocolAtLeastKafkaV2(): Unit = {
+    givenAuthorizerWithProtocolVersion(Option(KAFKA_2_0_IV1))
+    val resource = Resource(Topic, "z_other", PREFIXED)
+    val expected = new String(ZkAclStore(PREFIXED).changeStore.createChangeNode(resource).bytes, UTF_8)
+
+    simpleAclAuthorizer.addAcls(Set[Acl](denyReadAcl), resource)
+
+    val actual = getAclChangeEventAsString(PREFIXED)
+
+    assertEquals(expected, actual)
+  }
+
+  @Test
+  def testWritesLiteralWritesLiteralAclChangeEventWhenInterBrokerProtocolLessThanKafkaV2eralAclChangesForOlderProtocolVersions(): Unit = {
+    givenAuthorizerWithProtocolVersion(Option(KAFKA_2_0_IV0))
+    val resource = Resource(Topic, "z_other", LITERAL)
+    val expected = new String(ZkAclStore(LITERAL).changeStore.createChangeNode(resource).bytes, UTF_8)
+
+    simpleAclAuthorizer.addAcls(Set[Acl](denyReadAcl), resource)
+
+    val actual = getAclChangeEventAsString(LITERAL)
+
+    assertEquals(expected, actual)
+  }
+
+  @Test
+  def testWritesLiteralAclChangeEventWhenInterBrokerProtocolIsKafkaV2(): Unit = {
+    givenAuthorizerWithProtocolVersion(Option(KAFKA_2_0_IV1))
+    val resource = Resource(Topic, "z_other", LITERAL)
+    val expected = new String(ZkAclStore(LITERAL).changeStore.createChangeNode(resource).bytes, UTF_8)
+
+    simpleAclAuthorizer.addAcls(Set[Acl](denyReadAcl), resource)
+
+    val actual = getAclChangeEventAsString(LITERAL)
+
+    assertEquals(expected, actual)
+  }
+
+  private def givenAuthorizerWithProtocolVersion(protocolVersion: Option[ApiVersion]) {
+    simpleAclAuthorizer.close()
+
+    val props = TestUtils.createBrokerConfig(0, zkConnect)
+    props.put(SimpleAclAuthorizer.SuperUsersProp, superUsers)
+    protocolVersion.foreach(version => props.put(KafkaConfig.InterBrokerProtocolVersionProp, version.toString))
+
+    config = KafkaConfig.fromProps(props)
+
+    simpleAclAuthorizer.configure(config.originals)
+  }
+
+  private def getAclChangeEventAsString(patternType: ResourceNameType) = {
+    val store = ZkAclStore(patternType)
+    val children = zooKeeperClient.handleRequest(GetChildrenRequest(store.changeStore.aclChangePath))
+    children.maybeThrow()
+    assertEquals("Expecting 1 change event", 1, children.children.size)
+
+    val data = zooKeeperClient.handleRequest(GetDataRequest(s"${store.changeStore.aclChangePath}/${children.children.head}"))
+    data.maybeThrow()
+
+    new String(data.data, UTF_8)
   }
 
   private def changeAclAndVerify(originalAcls: Set[Acl], addedAcls: Set[Acl], removedAcls: Set[Acl], resource: Resource = resource): Set[Acl] = {

@@ -64,7 +64,7 @@
     <li>ACLs should not be added to prefixed resources,
         (added in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-290%3A+Support+for+Prefixed+ACLs">KIP-290</a>),
         until all brokers in the cluster have been updated.
-        <p><b>NOTE:</b> any prefixed ACLs added to a cluster will be ignored should the cluster be downgraded again.
+        <p><b>NOTE:</b> any prefixed ACLs added to a cluster, even after the cluster is fully upgraded, will be ignored should the cluster be downgraded again.
     </li>
 </ol>
 

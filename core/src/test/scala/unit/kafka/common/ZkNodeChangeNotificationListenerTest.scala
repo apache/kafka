@@ -18,43 +18,44 @@ package kafka.common
 
 import kafka.security.auth.{Group, Resource}
 import kafka.utils.TestUtils
-import kafka.zk.{AclChangeNotificationSequenceZNode, ZkAclStore, ZooKeeperTestHarness}
+import kafka.zk.{LiteralAclChangeStore, LiteralAclStore, ZkAclChangeStore, ZooKeeperTestHarness}
 import org.apache.kafka.common.resource.ResourceNameType.LITERAL
-import org.junit.{After, Test}
+import org.junit.{After, Before, Test}
+
+import scala.collection.mutable.ArrayBuffer
 
 class ZkNodeChangeNotificationListenerTest extends ZooKeeperTestHarness {
 
-  var notificationListener: ZkNodeChangeNotificationListener = _
+  private val changeExpirationMs = 1000
+  private var notificationListener: ZkNodeChangeNotificationListener = _
+  private var notificationHandler: TestNotificationHandler = _
+
+  @Before
+  override def setUp(): Unit = {
+    super.setUp()
+    zkClient.createAclPaths()
+    notificationHandler = new TestNotificationHandler()
+  }
 
   @After
   override def tearDown(): Unit = {
     if (notificationListener != null) {
       notificationListener.close()
     }
+    super.tearDown()
   }
 
   @Test
   def testProcessNotification() {
-    @volatile var notification: Resource = null
-    @volatile var invocationCount = 0
-    val notificationHandler = new NotificationHandler {
-      override def processNotification(notificationMessage: Array[Byte]): Unit = {
-        notification = AclChangeNotificationSequenceZNode.decode(LITERAL, notificationMessage)
-        invocationCount += 1
-      }
-    }
-
-    zkClient.createAclPaths()
     val notificationMessage1 = Resource(Group, "messageA", LITERAL)
     val notificationMessage2 = Resource(Group, "messageB", LITERAL)
-    val changeExpirationMs = 1000
 
-    notificationListener = new ZkNodeChangeNotificationListener(zkClient,  ZkAclStore(LITERAL).aclChangePath,
-      AclChangeNotificationSequenceZNode.SequenceNumberPrefix, notificationHandler, changeExpirationMs)
+    notificationListener = new ZkNodeChangeNotificationListener(zkClient, LiteralAclChangeStore.aclChangePath,
+      ZkAclChangeStore.SequenceNumberPrefix, notificationHandler, changeExpirationMs)
     notificationListener.init()
 
     zkClient.createAclChangeNotification(notificationMessage1)
-    TestUtils.waitUntilTrue(() => invocationCount == 1 && notification == notificationMessage1,
+    TestUtils.waitUntilTrue(() => notificationHandler.received().size == 1 && notificationHandler.received().last == notificationMessage1,
       "Failed to send/process notification message in the timeout period.")
 
     /*
@@ -66,12 +67,43 @@ class ZkNodeChangeNotificationListenerTest extends ZooKeeperTestHarness {
      */
 
     zkClient.createAclChangeNotification(notificationMessage2)
-    TestUtils.waitUntilTrue(() => invocationCount == 2 && notification == notificationMessage2,
+    TestUtils.waitUntilTrue(() => notificationHandler.received().size == 2 && notificationHandler.received().last == notificationMessage2,
       "Failed to send/process notification message in the timeout period.")
 
     (3 to 10).foreach(i => zkClient.createAclChangeNotification(Resource(Group, "message" + i, LITERAL)))
 
-    TestUtils.waitUntilTrue(() => invocationCount == 10 ,
-      s"Expected 10 invocations of processNotifications, but there were $invocationCount")
+    TestUtils.waitUntilTrue(() => notificationHandler.received().size == 10,
+      s"Expected 10 invocations of processNotifications, but there were ${notificationHandler.received()}")
+  }
+
+  @Test
+  def testSwallowsProcessorException() : Unit = {
+    notificationHandler.setThrowSize(2)
+    notificationListener = new ZkNodeChangeNotificationListener(zkClient, LiteralAclChangeStore.aclChangePath,
+      ZkAclChangeStore.SequenceNumberPrefix, notificationHandler, changeExpirationMs)
+    notificationListener.init()
+
+    zkClient.createAclChangeNotification(Resource(Group, "messageA", LITERAL))
+    zkClient.createAclChangeNotification(Resource(Group, "messageB", LITERAL))
+    zkClient.createAclChangeNotification(Resource(Group, "messageC", LITERAL))
+
+    TestUtils.waitUntilTrue(() => notificationHandler.received().size == 3,
+      s"Expected 2 invocations of processNotifications, but there were ${notificationHandler.received()}")
+  }
+
+  private class TestNotificationHandler extends NotificationHandler {
+    private val messages = ArrayBuffer.empty[Resource]
+    @volatile private var throwSize = Option.empty[Int]
+
+    override def processNotification(notificationMessage: Array[Byte]): Unit = {
+      messages += LiteralAclStore.changeStore.decode(notificationMessage)
+
+      if (throwSize.contains(messages.size))
+        throw new RuntimeException("Oh no, my processing failed!")
+    }
+
+    def received(): Seq[Resource] = messages
+
+    def setThrowSize(index: Int): Unit = throwSize = Option(index)
   }
 }
