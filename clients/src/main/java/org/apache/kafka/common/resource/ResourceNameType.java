@@ -62,6 +62,12 @@ public enum ResourceNameType {
                 .collect(Collectors.toMap(ResourceNameType::code, Function.identity()))
         );
 
+    private final static Map<String, ResourceNameType> NAME_TO_VALUE =
+        Collections.unmodifiableMap(
+            Arrays.stream(ResourceNameType.values())
+                .collect(Collectors.toMap(ResourceNameType::name, Function.identity()))
+        );
+
     private final byte code;
 
     ResourceNameType(byte code) {
@@ -87,5 +93,12 @@ public enum ResourceNameType {
      */
     public static ResourceNameType fromCode(byte code) {
         return CODE_TO_VALUE.getOrDefault(code, UNKNOWN);
+    }
+
+    /**
+     * Return the ResourceNameType with the provided name or {@link #UNKNOWN} if one cannot be found.
+     */
+    public static ResourceNameType fromString(String name) {
+        return NAME_TO_VALUE.getOrDefault(name, UNKNOWN);
     }
 }
