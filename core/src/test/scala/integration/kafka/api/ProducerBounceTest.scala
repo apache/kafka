@@ -25,8 +25,9 @@ import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.StringDeserializer
 import org.junit.Assert._
-import org.junit.Test
+import org.junit.{Ignore, Test}
 
+import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
 
 class ProducerBounceTest extends KafkaServerTestHarness {
@@ -36,14 +37,14 @@ class ProducerBounceTest extends KafkaServerTestHarness {
   val numServers = 4
 
   val overridingProps = new Properties()
-  overridingProps.put(KafkaConfig.AutoCreateTopicsEnableProp, false.toString)
+  overridingProps.put(KafkaConfig.AutoCreateTopicsEnableProp, "false")
   overridingProps.put(KafkaConfig.MessageMaxBytesProp, serverMessageMaxBytes.toString)
   // Set a smaller value for the number of partitions for the offset commit topic (__consumer_offset topic)
   // so that the creation of that topic/partition(s) and subsequent leader assignment doesn't take relatively long
-  overridingProps.put(KafkaConfig.OffsetsTopicPartitionsProp, 1.toString)
-  overridingProps.put(KafkaConfig.ControlledShutdownEnableProp, true.toString)
-  overridingProps.put(KafkaConfig.UncleanLeaderElectionEnableProp, false.toString)
-  overridingProps.put(KafkaConfig.AutoLeaderRebalanceEnableProp, false.toString)
+  overridingProps.put(KafkaConfig.OffsetsTopicPartitionsProp, "1")
+  overridingProps.put(KafkaConfig.ControlledShutdownEnableProp, "true")
+  overridingProps.put(KafkaConfig.UncleanLeaderElectionEnableProp, "false")
+  overridingProps.put(KafkaConfig.AutoLeaderRebalanceEnableProp, "false")
   // This is the one of the few tests we currently allow to preallocate ports, despite the fact that this can result in transient
   // failures due to ports getting reused. We can't use random ports because of bad behavior that can result from bouncing
   // brokers too quickly when they get new, random ports. If we're not careful, the client can end up in a situation
@@ -64,6 +65,7 @@ class ProducerBounceTest extends KafkaServerTestHarness {
    * With replication, producer should able to find new leader after it detects broker failure and consumers should
    * be able to consume all messages without duplicates.
    */
+  @Ignore // To be re-enabled once we can make it less flaky (KAFKA-2837)
   @Test
   def testBrokerFailure() {
     val numPartitions = 3
@@ -100,12 +102,14 @@ class ProducerBounceTest extends KafkaServerTestHarness {
     assertFalse(scheduler.failed)
 
     // double check that the leader info has been propagated after consecutive bounces
-    (0 until numPartitions).map(i => TestUtils.waitUntilMetadataIsPropagated(servers, topic1, i))
+    (0 until numPartitions).foreach(i => TestUtils.waitUntilMetadataIsPropagated(servers, topic1, i))
     val consumer = TestUtils.createNewConsumer(brokerList, securityProtocol = SecurityProtocol.PLAINTEXT,
       valueDeserializer = new StringDeserializer)
     val consumerRecords =
-      try TestUtils.consumeRecords(consumer, scheduler.sent)
-      finally consumer.close()
+      try {
+        consumer.subscribe(Seq(topic1).asJava)
+        TestUtils.consumeRecords(consumer, scheduler.sent)
+      } finally consumer.close()
     val recordValues = consumerRecords.map(_.value)
     val uniqueRecordValues = recordValues.toSet
     info(s"number of unique messages sent: ${uniqueRecordValues.size}")

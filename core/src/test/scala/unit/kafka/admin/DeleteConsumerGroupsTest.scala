@@ -22,7 +22,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.junit.Assert._
 import org.junit.Test
 
-class DeleteConsumerGroupTest extends ConsumerGroupCommandTest {
+class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
 
   @Test(expected = classOf[OptionException])
   def testDeleteWithTopicOption() {
