@@ -447,9 +447,6 @@ object StateChangeHandlers {
   def zkNodeChangeListenerHandler(seqNodeRoot: String) = s"change-notification-$seqNodeRoot"
 }
 
-// Todo(ac): Rename ResourceNameType to PatternType (and nameType name-Type etc).
-
-
 /**
   * Acls for resources are stored in ZK under two root paths:
   * <ul>
