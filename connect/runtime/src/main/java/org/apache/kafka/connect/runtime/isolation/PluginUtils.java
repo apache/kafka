@@ -133,7 +133,6 @@ public class PluginUtils {
             + "|storage\\.LongConverter"
             + "|storage\\.ShortConverter"
             + "|storage\\.StringConverter"
-            + "|storage\\.SimpleHeaderConverter"
             + "|rest\\.basic\\.auth\\.extension\\.BasicAuthSecurityRestExtension"
             + "))$";
 
