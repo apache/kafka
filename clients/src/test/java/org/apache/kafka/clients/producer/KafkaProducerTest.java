@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.clients.producer;
 
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.concurrent.ExecutionException;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
@@ -27,6 +31,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
@@ -68,6 +73,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.junit.Assert.assertNull;
 
 @RunWith(PowerMockRunner.class)
 @PowerMockIgnore("javax.management.*")
@@ -607,6 +613,66 @@ public class KafkaProducerTest {
             producer.beginTransaction();
         } finally {
             producer.close(0, TimeUnit.MILLISECONDS);
+        }
+    }
+
+    @Test
+    public void testInvalidTopicName() {
+
+        class SendCallback implements Callback {
+
+            public void onCompletion(RecordMetadata metadata, Exception exception) {
+                assertNull("RecordMetadata expected to be null", metadata);
+                assertTrue("Exception is not of type InvalidTopicException", exception instanceof InvalidTopicException);
+            }
+        }
+
+        Properties props = new Properties();
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+        props.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, "15000");
+
+        Time time = new MockTime();
+        Cluster cluster = TestUtils.singletonCluster();
+        Node node = cluster.nodes().get(0);
+
+        Metadata metadata = new Metadata(0, Long.MAX_VALUE, true);
+        metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
+
+        MockClient client = new MockClient(time, metadata);
+        client.setNode(node);
+
+        Producer<String, String> producer = new KafkaProducer<>(new ProducerConfig(
+            ProducerConfig.addSerializerToConfig(props, new StringSerializer(), new StringSerializer())),
+            new StringSerializer(), new StringSerializer(), metadata, client);
+
+        String topic = "topic 10";
+        ProducerRecord<String, String> record = new ProducerRecord<>(topic, "HelloKafka");
+
+        // Set<String> invalidTopic = new Collections.<String>emptySet();
+        Set<String> invalidTopic = new HashSet<String>();
+        invalidTopic.add(topic);
+        Cluster metaDataUpdateResponseCluster = new Cluster(cluster.clusterResource().clusterId(),
+                                                            cluster.nodes(),
+                                                            new ArrayList<PartitionInfo>(0),
+                                                            Collections.<String>emptySet(),
+                                                            invalidTopic,
+                                                            Collections.<String>emptySet(),
+                                                            cluster.controller());
+        client.prepareMetadataUpdate(metaDataUpdateResponseCluster, Collections.<String>emptySet());
+
+        Future<RecordMetadata> future = producer.send(record, new SendCallback());
+
+        assertEquals("Invalid topic count in cluster is wrong.", 1, cluster.internalTopics().size());
+        assertTrue("Expeced Future status to be completed.", future.isDone());
+        try {
+            future.get();
+            fail("Expected InvalidTopicException to be raised");
+        } catch (ExecutionException e) {
+            // expected
+            assertTrue("Expected ExecutionException message to contain \"InvalidTopicException\"",
+                       e.getMessage().contains("InvalidTopicException"));
+        } catch (Exception e) {
+            fail("Did not expect " + e + " exception to be raised");
         }
     }
 }
