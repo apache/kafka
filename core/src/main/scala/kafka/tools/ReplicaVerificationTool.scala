@@ -115,9 +115,7 @@ object ReplicaVerificationTool extends Logging {
     val regex = options.valueOf(topicWhiteListOpt)
     val topicWhiteListFiler = new Whitelist(regex)
 
-    try {
-      Pattern.compile(regex)
-    }
+    try Pattern.compile(regex)
     catch {
       case _: PatternSyntaxException =>
         throw new RuntimeException(regex + " is an invalid regex.")
@@ -132,10 +130,11 @@ object ReplicaVerificationTool extends Logging {
     val brokerList = options.valueOf(brokerListOpt)
     ToolsUtils.validatePortOrDie(parser, brokerList)
 
-    val adminClient = createAdminClient(brokerList)
-    val (topicsMetadata, brokerInfo) =
+    val (topicsMetadata, brokerInfo) = {
+      val adminClient = createAdminClient(brokerList)
       try ((listTopicsMetadata(adminClient), brokerDetails(adminClient)))
       finally CoreUtils.swallow(adminClient.close(), this)
+    }
 
     val filteredTopicMetadata = topicsMetadata.filter { topicMetaData =>
       topicWhiteListFiler.isTopicAllowed(topicMetaData.name, excludeInternalTopics = false)
@@ -204,16 +203,13 @@ object ReplicaVerificationTool extends Logging {
 
   }
 
-  private def listTopicsMetadata(adminClient: admin.AdminClient): List[TopicDescription] = {
-    val topics = adminClient.listTopics(new ListTopicsOptions().listInternal(true)).names().get()
-    val describeTopicsResult = adminClient.describeTopics(topics)
-    val result = for ((k, v) <- describeTopicsResult.values().asScala) yield (k, v.get())
-    result.values.toList
+  private def listTopicsMetadata(adminClient: admin.AdminClient): Seq[TopicDescription] = {
+    val topics = adminClient.listTopics(new ListTopicsOptions().listInternal(true)).names.get
+    adminClient.describeTopics(topics).all.get.values.asScala.toBuffer
   }
 
   private def brokerDetails(adminClient: admin.AdminClient): Map[Int, Node] = {
-    val describeClusterResult = adminClient.describeCluster()
-    describeClusterResult.nodes().get().asScala.map(n => (n.id(), n)).toMap
+    adminClient.describeCluster.nodes.get.asScala.map(n => (n.id, n)).toMap
   }
 
   private def createAdminClient(brokerUrl: String): admin.AdminClient = {
@@ -222,36 +218,32 @@ object ReplicaVerificationTool extends Logging {
     admin.AdminClient.create(props)
   }
 
-  private def initialOffsets(topicPartitions: Seq[TopicPartition], consumerConfig: Properties, initialOffsetTime: java.lang.Long): Map[TopicPartition, java.lang.Long] = {
+  private def initialOffsets(topicPartitions: Seq[TopicPartition], consumerConfig: Properties,
+                             initialOffsetTime: Long): Map[TopicPartition, Long] = {
     val consumer = createConsumer(consumerConfig)
     try {
       if (ListOffsetRequest.LATEST_TIMESTAMP == initialOffsetTime)
-        consumer.endOffsets(topicPartitions.asJava).asScala.toMap
+        consumer.endOffsets(topicPartitions.asJava).asScala.mapValues(_.longValue).toMap
       else if (ListOffsetRequest.EARLIEST_TIMESTAMP == initialOffsetTime)
-        consumer.beginningOffsets(topicPartitions.asJava).asScala.toMap
+        consumer.beginningOffsets(topicPartitions.asJava).asScala.mapValues(_.longValue).toMap
       else {
-        val timestampsToSearch = topicPartitions.map(tp => tp -> initialOffsetTime).toMap
-        consumer.offsetsForTimes(timestampsToSearch.asJava).asScala.mapValues(v => long2Long(v.offset())).toMap
+        val timestampsToSearch = topicPartitions.map(tp => tp -> (initialOffsetTime: java.lang.Long)).toMap
+        consumer.offsetsForTimes(timestampsToSearch.asJava).asScala.mapValues(v => v.offset).toMap
       }
-    } finally {
-      if (consumer != null)
-        consumer.close()
-    }
+    } finally consumer.close()
   }
 
   private def consumerConfig(brokerUrl: String): Properties = {
     val properties = new Properties()
-    val deserializer = (new StringDeserializer).getClass.getName
     properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerUrl)
     properties.put(ConsumerConfig.GROUP_ID_CONFIG, "ReplicaVerification")
-    properties.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, deserializer)
-    properties.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, deserializer)
+    properties.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, classOf[StringDeserializer])
+    properties.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, classOf[StringDeserializer])
     properties
   }
 
-  private def createConsumer(consumerConfig: Properties): KafkaConsumer[String, String] = {
+  private def createConsumer(consumerConfig: Properties): KafkaConsumer[String, String] =
     new KafkaConsumer(consumerConfig)
-  }
 }
 
 private case class TopicPartitionReplica(topic: String, partitionId: Int, replicaId: Int)
@@ -259,7 +251,7 @@ private case class TopicPartitionReplica(topic: String, partitionId: Int, replic
 private case class MessageInfo(replicaId: Int, offset: Long, nextOffset: Long, checksum: Long)
 
 private class ReplicaBuffer(expectedReplicasPerTopicPartition: Map[TopicPartition, Int],
-                            initialOffsets: Map[TopicPartition, java.lang.Long],
+                            initialOffsets: Map[TopicPartition, Long],
                             expectedNumFetchers: Int,
                             reportInterval: Long) extends Logging {
   private val fetchOffsetMap = new Pool[TopicPartition, Long]
@@ -276,13 +268,13 @@ private class ReplicaBuffer(expectedReplicasPerTopicPartition: Map[TopicPartitio
     fetcherBarrier.set(new CountDownLatch(expectedNumFetchers))
   }
 
-  def getFetcherBarrier() = fetcherBarrier.get()
+  def getFetcherBarrier() = fetcherBarrier.get
 
   def createNewVerificationBarrier() {
     verificationBarrier.set(new CountDownLatch(1))
   }
 
-  def getVerificationBarrier() = verificationBarrier.get()
+  def getVerificationBarrier() = verificationBarrier.get
 
   private def initialize() {
     for (topicPartition <- expectedReplicasPerTopicPartition.keySet)
@@ -414,14 +406,16 @@ private class ReplicaFetcher(name: String, sourceBroker: Node, topicPartitions: 
           throw t
     }
 
-    val emptyResponse = new FetchResponse.PartitionData(Errors.NONE, FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LAST_STABLE_OFFSET, FetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY)
-
     if (fetchResponse != null) {
       fetchResponse.responseData.asScala.foreach { case (tp, partitionData) =>
         replicaBuffer.addFetchedData(tp, sourceBroker.id, partitionData)
       }
-    } else for (topicAndPartition <- topicPartitions)
-      replicaBuffer.addFetchedData(topicAndPartition, sourceBroker.id, emptyResponse)
+    } else {
+      val emptyResponse = new FetchResponse.PartitionData(Errors.NONE, FetchResponse.INVALID_HIGHWATERMARK,
+        FetchResponse.INVALID_LAST_STABLE_OFFSET, FetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY)
+      for (topicAndPartition <- topicPartitions)
+        replicaBuffer.addFetchedData(topicAndPartition, sourceBroker.id, emptyResponse)
+    }
 
     fetcherBarrier.countDown()
     debug("Done fetching")
