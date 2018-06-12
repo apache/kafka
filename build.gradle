@@ -785,11 +785,20 @@ project(':examples') {
 project(':clients') {
   archivesBaseName = "kafka-clients"
 
+  configurations {
+    jacksonDatabindConfig
+  }
+
+  // add jacksonDatabindConfig as provided scope config with high priority (1000)
+  conf2ScopeMappings.addMapping(1000, configurations.jacksonDatabindConfig, "provided")
+
   dependencies {
     compile libs.lz4
     compile libs.snappy
     compile libs.slf4jApi
-    compile libs.jacksonDatabind // for SASL/OAUTHBEARER bearer token parsing
+    compileOnly libs.jacksonDatabind // for SASL/OAUTHBEARER bearer token parsing
+
+    jacksonDatabindConfig libs.jacksonDatabind // to publish as provided scope dependency.
 
     testCompile libs.bcpkix
     testCompile libs.junit
@@ -798,6 +807,7 @@ project(':clients') {
     testCompile libs.powermockEasymock
 
     testRuntime libs.slf4jlog4j
+    testRuntime libs.jacksonDatabind
   }
 
   task determineCommitId {
