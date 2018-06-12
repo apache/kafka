@@ -64,7 +64,7 @@ abstract class AbstractStateManager implements StateManager {
             storeToBeReinitialized.add(changelogTopicToStore.get(topicPartition.topic()));
         }
 
-        if (eosEnabled) {
+        if (!eosEnabled) {
             try {
                 checkpoint.write(checkpointableOffsets);
             } catch (final IOException fatalException) {
