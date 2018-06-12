@@ -147,6 +147,24 @@ public class PluginUtilsTest {
                 "org.apache.kafka.connect.storage.StringConverter")
         );
         assertTrue(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.storage.DoubleConverter")
+        );
+        assertTrue(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.storage.FloatConverter")
+        );
+        assertTrue(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.storage.IntegerConverter")
+        );
+        assertTrue(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.storage.LongConverter")
+        );
+        assertTrue(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.storage.ShortConverter")
+        );
+        assertTrue(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.storage.SimpleHeaderConverter")
+        );
+        assertTrue(PluginUtils.shouldLoadInIsolation(
             "org.apache.kafka.connect.rest.basic.auth.extension.BasicAuthSecurityRestExtension"
         ));
     }

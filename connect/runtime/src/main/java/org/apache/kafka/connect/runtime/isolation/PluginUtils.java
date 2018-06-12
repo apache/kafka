@@ -128,6 +128,12 @@ public class PluginUtils {
             + "|file\\..*"
             + "|converters\\..*"
             + "|storage\\.StringConverter"
+            + "|storage\\.SimpleHeaderConverter"
+            + "|storage\\.DoubleConverter"
+            + "|storage\\.FloatConverter"
+            + "|storage\\.IntegerConverter"
+            + "|storage\\.LongConverter"
+            + "|storage\\.ShortConverter"
             + "|rest\\.basic\\.auth\\.extension\\.BasicAuthSecurityRestExtension"
             + "))$";
 
