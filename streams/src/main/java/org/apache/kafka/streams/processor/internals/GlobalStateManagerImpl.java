@@ -192,8 +192,8 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                     if (record.key() != null) {
                         restoreRecords.add(KeyValue.pair(record.key(), record.value()));
                     }
-                    offset = consumer.position(topicPartition);
                 }
+                offset = consumer.position(topicPartition);
                 stateRestoreAdapter.restoreAll(restoreRecords);
                 stateRestoreListener.onBatchRestored(topicPartition, storeName, offset, restoreRecords.size());
                 restoreCount += restoreRecords.size();

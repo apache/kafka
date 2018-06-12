@@ -905,10 +905,12 @@ public class StreamTaskTest {
 
     @Test
     public void shouldNotThrowOnCloseIfTaskWasNotInitializedWithEosEnabled() {
-        task = createStatelessTask(true);
+        final MockProducer producer = new MockProducer();
+        task = new StreamTask(taskId00, applicationId, partitions, topology, consumer, changelogReader,
+            eosConfig, streamsMetrics, stateDirectory, null, time, producer);
 
-        assertTrue(!producer.transactionInFlight());
         task.close(false, false);
+        task = null;
     }
 
     @Test
