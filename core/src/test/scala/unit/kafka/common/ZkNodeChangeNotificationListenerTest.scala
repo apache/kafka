@@ -18,7 +18,7 @@ package kafka.common
 
 import kafka.security.auth.{Group, Resource}
 import kafka.utils.TestUtils
-import kafka.zk.{AclChangeNotificationSequenceZNode, LiteralZkAclStore, ZooKeeperTestHarness}
+import kafka.zk.{LiteralAclChangeStore, LiteralAclStore, ZkAclChangeStore, ZooKeeperTestHarness}
 import org.apache.kafka.common.resource.ResourceNameType.LITERAL
 import org.junit.{After, Before, Test}
 
@@ -50,8 +50,8 @@ class ZkNodeChangeNotificationListenerTest extends ZooKeeperTestHarness {
     val notificationMessage1 = Resource(Group, "messageA", LITERAL)
     val notificationMessage2 = Resource(Group, "messageB", LITERAL)
 
-    notificationListener = new ZkNodeChangeNotificationListener(zkClient, LiteralZkAclStore.aclChangePath,
-      AclChangeNotificationSequenceZNode.SequenceNumberPrefix, notificationHandler, changeExpirationMs)
+    notificationListener = new ZkNodeChangeNotificationListener(zkClient, LiteralAclChangeStore.aclChangePath,
+      ZkAclChangeStore.SequenceNumberPrefix, notificationHandler, changeExpirationMs)
     notificationListener.init()
 
     zkClient.createAclChangeNotification(notificationMessage1)
@@ -79,8 +79,8 @@ class ZkNodeChangeNotificationListenerTest extends ZooKeeperTestHarness {
   @Test
   def testSwallowsProcessorException() : Unit = {
     notificationHandler.setThrowSize(2)
-    notificationListener = new ZkNodeChangeNotificationListener(zkClient, LiteralZkAclStore.aclChangePath,
-      AclChangeNotificationSequenceZNode.SequenceNumberPrefix, notificationHandler, changeExpirationMs)
+    notificationListener = new ZkNodeChangeNotificationListener(zkClient, LiteralAclChangeStore.aclChangePath,
+      ZkAclChangeStore.SequenceNumberPrefix, notificationHandler, changeExpirationMs)
     notificationListener.init()
 
     zkClient.createAclChangeNotification(Resource(Group, "messageA", LITERAL))
@@ -96,7 +96,7 @@ class ZkNodeChangeNotificationListenerTest extends ZooKeeperTestHarness {
     @volatile private var throwSize = Option.empty[Int]
 
     override def processNotification(notificationMessage: Array[Byte]): Unit = {
-      messages += LiteralZkAclStore.changeNode.decode(notificationMessage)
+      messages += LiteralAclStore.changeStore.decode(notificationMessage)
 
       if (throwSize.contains(messages.size))
         throw new RuntimeException("Oh no, my processing failed!")

@@ -574,7 +574,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
   def testWritesExtendedAclChangeEventIfInterBrokerProtocolNotSet(): Unit = {
     givenAuthorizerWithProtocolVersion(Option.empty)
     val resource = Resource(Topic, "z_other", PREFIXED)
-    val expected = new String(ZkAclStore(PREFIXED).changeNode.createChangeNode(resource).bytes, UTF_8)
+    val expected = new String(ZkAclStore(PREFIXED).changeStore.createChangeNode(resource).bytes, UTF_8)
 
     simpleAclAuthorizer.addAcls(Set[Acl](denyReadAcl), resource)
 
@@ -587,7 +587,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
   def testWritesExtendedAclChangeEventWhenInterBrokerProtocolAtLeastKafkaV2(): Unit = {
     givenAuthorizerWithProtocolVersion(Option(KAFKA_2_0_IV1))
     val resource = Resource(Topic, "z_other", PREFIXED)
-    val expected = new String(ZkAclStore(PREFIXED).changeNode.createChangeNode(resource).bytes, UTF_8)
+    val expected = new String(ZkAclStore(PREFIXED).changeStore.createChangeNode(resource).bytes, UTF_8)
 
     simpleAclAuthorizer.addAcls(Set[Acl](denyReadAcl), resource)
 
@@ -600,7 +600,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
   def testWritesLiteralWritesLiteralAclChangeEventWhenInterBrokerProtocolLessThanKafkaV2eralAclChangesForOlderProtocolVersions(): Unit = {
     givenAuthorizerWithProtocolVersion(Option(KAFKA_2_0_IV0))
     val resource = Resource(Topic, "z_other", LITERAL)
-    val expected = new String(ZkAclStore(LITERAL).changeNode.createChangeNode(resource).bytes, UTF_8)
+    val expected = new String(ZkAclStore(LITERAL).changeStore.createChangeNode(resource).bytes, UTF_8)
 
     simpleAclAuthorizer.addAcls(Set[Acl](denyReadAcl), resource)
 
@@ -613,7 +613,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
   def testWritesLiteralAclChangeEventWhenInterBrokerProtocolIsKafkaV2(): Unit = {
     givenAuthorizerWithProtocolVersion(Option(KAFKA_2_0_IV1))
     val resource = Resource(Topic, "z_other", LITERAL)
-    val expected = new String(ZkAclStore(LITERAL).changeNode.createChangeNode(resource).bytes, UTF_8)
+    val expected = new String(ZkAclStore(LITERAL).changeStore.createChangeNode(resource).bytes, UTF_8)
 
     simpleAclAuthorizer.addAcls(Set[Acl](denyReadAcl), resource)
 
@@ -636,11 +636,11 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
 
   private def getAclChangeEventAsString(patternType: ResourceNameType) = {
     val store = ZkAclStore(patternType)
-    val children = zooKeeperClient.handleRequest(GetChildrenRequest(store.aclChangePath))
+    val children = zooKeeperClient.handleRequest(GetChildrenRequest(store.changeStore.aclChangePath))
     children.maybeThrow()
     assertEquals("Expecting 1 change event", 1, children.children.size)
 
-    val data = zooKeeperClient.handleRequest(GetDataRequest(s"${store.aclChangePath}/${children.children.head}"))
+    val data = zooKeeperClient.handleRequest(GetDataRequest(s"${store.changeStore.aclChangePath}/${children.children.head}"))
     data.maybeThrow()
 
     new String(data.data, UTF_8)

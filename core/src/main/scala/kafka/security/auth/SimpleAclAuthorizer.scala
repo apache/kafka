@@ -26,7 +26,7 @@ import kafka.security.auth.SimpleAclAuthorizer.VersionedAcls
 import kafka.server.KafkaConfig
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
-import kafka.zk.{AclChangeNotificationHandler, AclChangeSubscription, KafkaZkClient, ZkAclStore}
+import kafka.zk.{AclChangeNotificationHandler, AclChangeSubscription, KafkaZkClient, ZkAclChangeStore, ZkAclStore}
 import org.apache.kafka.common.errors.UnsupportedVersionException
 import org.apache.kafka.common.resource.ResourceNameType
 import org.apache.kafka.common.security.auth.KafkaPrincipal
@@ -262,8 +262,8 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   }
 
   private def startZkChangeListeners(): Unit = {
-    aclChangeListeners = ZkAclStore.stores
-      .map(store => store.changeNode.createListener(AclChangedNotificationHandler, zkClient))
+    aclChangeListeners = ZkAclChangeStore.stores
+      .map(store => store.createListener(AclChangedNotificationHandler, zkClient))
   }
 
   private def logAuditMessage(principal: KafkaPrincipal, authorized: Boolean, operation: Operation, resource: Resource, host: String) {

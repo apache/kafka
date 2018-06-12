@@ -477,16 +477,15 @@ object StateChangeHandlers {
   *   The format is JSON, as defined by [[kafka.zk.ExtendedAclChangeEvent]]</li>
   * </ul>
   */
-trait ZkAclStore {
+sealed trait ZkAclStore {
   val patternType: ResourceNameType
   val aclPath: String
-  val aclChangePath: String
 
   def path(resourceType: ResourceType): String = s"$aclPath/$resourceType"
 
   def path(resourceType: ResourceType, resourceName: String): String = s"$aclPath/$resourceType/$resourceName"
 
-  def changeNode: AclChangeNotificationSequenceZNode
+  def changeStore: ZkAclChangeStore
 }
 
 object ZkAclStore {
@@ -498,7 +497,7 @@ object ZkAclStore {
   val stores: Iterable[ZkAclStore] = storesByType.values
 
   val securePaths: Iterable[String] = stores
-    .flatMap(store => List(store.aclPath, store.aclChangePath))
+    .flatMap(store => Set(store.aclPath, store.changeStore.aclChangePath))
 
   def apply(patternType: ResourceNameType): ZkAclStore = {
     storesByType.get(patternType) match {
@@ -509,64 +508,111 @@ object ZkAclStore {
 
   private def create(patternType: ResourceNameType) = {
     patternType match {
-      case ResourceNameType.LITERAL => LiteralZkAclStore
-      case _ => new ExtendedZkAclStore(patternType)
+      case ResourceNameType.LITERAL => LiteralAclStore
+      case _ => new ExtendedAclStore(patternType)
     }
   }
 }
 
-object LiteralZkAclStore extends ZkAclStore {
+object LiteralAclStore extends ZkAclStore {
   val patternType: ResourceNameType = ResourceNameType.LITERAL
   val aclPath: String = "/kafka-acl"
-  val aclChangePath: String = "/kafka-acl-changes"
 
-  def changeNode: AclChangeNotificationSequenceZNode = new AclChangeNotificationSequenceZNode {
-    def path: String = LiteralZkAclStore.aclChangePath
-
-    def encode(resource: Resource): Array[Byte] = {
-      if (resource.nameType != ResourceNameType.LITERAL)
-        throw new IllegalArgumentException("Only literal resource patterns can be encoded")
-
-      val legacyName = resource.resourceType + Resource.Separator + resource.name
-      legacyName.getBytes(UTF_8)
-    }
-
-    def decode(bytes: Array[Byte]): Resource =
-      Resource.fromString(new String(bytes, UTF_8))
-  }
+  def changeStore: ZkAclChangeStore = LiteralAclChangeStore
 }
 
-class ExtendedZkAclStore(val patternType: ResourceNameType) extends ZkAclStore {
+class ExtendedAclStore(val patternType: ResourceNameType) extends ZkAclStore {
   if (patternType == ResourceNameType.LITERAL)
     throw new IllegalArgumentException("Literal pattern types are not supported")
 
   val aclPath: String = s"/kafka-acl-extended/${patternType.name.toLowerCase}"
-  val aclChangePath: String = s"/kafka-acl-extended-changes/${patternType.name.toLowerCase}"
 
-  def changeNode: AclChangeNotificationSequenceZNode = new AclChangeNotificationSequenceZNode {
-    def path: String = aclChangePath
+  def changeStore: ZkAclChangeStore = ExtendedAclChangeStore
+}
 
-    def encode(resource: Resource): Array[Byte] = {
-      if (resource.nameType == ResourceNameType.LITERAL)
-        throw new IllegalArgumentException("Literal pattern types are not supported")
+trait AclChangeNotificationHandler {
+  def processNotification(resource: Resource): Unit
+}
 
-      Json.encodeAsBytes(ExtendedAclChangeEvent(
-        ExtendedAclChangeEvent.currentVersion,
-        resource.resourceType.name,
-        resource.name,
-        resource.nameType.name))
+trait AclChangeSubscription extends AutoCloseable {
+  def close(): Unit
+}
+
+case class AclChangeNode(path: String, bytes: Array[Byte])
+
+sealed trait ZkAclChangeStore {
+  val aclChangePath: String
+  def createPath: String = s"$aclChangePath/${ZkAclChangeStore.SequenceNumberPrefix}"
+
+  def decode(bytes: Array[Byte]): Resource
+
+  protected def encode(resource: Resource): Array[Byte]
+
+  def createChangeNode(resource: Resource): AclChangeNode = AclChangeNode(createPath, encode(resource))
+
+  def createListener(handler: AclChangeNotificationHandler, zkClient: KafkaZkClient): AclChangeSubscription = {
+    val rawHandler: NotificationHandler = new NotificationHandler {
+      def processNotification(bytes: Array[Byte]): Unit =
+        handler.processNotification(decode(bytes))
     }
 
-    def decode(bytes: Array[Byte]): Resource = {
-      val changeEvent = Json.parseBytesAs[ExtendedAclChangeEvent](bytes) match {
-        case Right(event) => event
-        case Left(e) => throw new IllegalArgumentException("Failed to parse ACL change event", e)
-      }
+    val aclChangeListener = new ZkNodeChangeNotificationListener(
+      zkClient, aclChangePath, ZkAclChangeStore.SequenceNumberPrefix, rawHandler)
 
-      changeEvent.toResource match {
-        case Success(r) => r
-        case Failure(e) => throw new IllegalArgumentException("Failed to convert ACL change event to resource", e)
-      }
+    aclChangeListener.init()
+
+    new AclChangeSubscription {
+      def close(): Unit = aclChangeListener.close()
+    }
+  }
+}
+
+object ZkAclChangeStore {
+  val stores: Iterable[ZkAclChangeStore] = List(LiteralAclChangeStore, ExtendedAclChangeStore)
+
+  def SequenceNumberPrefix = "acl_changes_"
+}
+
+case object LiteralAclChangeStore extends ZkAclChangeStore {
+  val name = "LiteralAclChangeStore"
+  val aclChangePath: String = "/kafka-acl-changes"
+
+  def encode(resource: Resource): Array[Byte] = {
+    if (resource.nameType != ResourceNameType.LITERAL)
+      throw new IllegalArgumentException("Only literal resource patterns can be encoded")
+
+    val legacyName = resource.resourceType + Resource.Separator + resource.name
+    legacyName.getBytes(UTF_8)
+  }
+
+  def decode(bytes: Array[Byte]): Resource =
+    Resource.fromString(new String(bytes, UTF_8))
+}
+
+case object ExtendedAclChangeStore extends ZkAclChangeStore {
+  val name = "ExtendedAclChangeStore"
+  val aclChangePath: String = "/kafka-acl-extended-changes"
+
+  def encode(resource: Resource): Array[Byte] = {
+    if (resource.nameType == ResourceNameType.LITERAL)
+      throw new IllegalArgumentException("Literal pattern types are not supported")
+
+    Json.encodeAsBytes(ExtendedAclChangeEvent(
+      ExtendedAclChangeEvent.currentVersion,
+      resource.resourceType.name,
+      resource.name,
+      resource.nameType.name))
+  }
+
+  def decode(bytes: Array[Byte]): Resource = {
+    val changeEvent = Json.parseBytesAs[ExtendedAclChangeEvent](bytes) match {
+      case Right(event) => event
+      case Left(e) => throw new IllegalArgumentException("Failed to parse ACL change event", e)
+    }
+
+    changeEvent.toResource match {
+      case Success(r) => r
+      case Failure(e) => throw new IllegalArgumentException("Failed to convert ACL change event to resource", e)
     }
   }
 }
@@ -595,49 +641,6 @@ case class ExtendedAclChangeEvent(@BeanProperty @JsonProperty("version") version
       nameType <- Try(ResourceNameType.fromString(resourceNameType))
       resource = Resource(resType, name, nameType)
     } yield resource
-  }
-}
-
-trait AclChangeNotificationHandler {
-  def processNotification(resource: Resource): Unit
-}
-
-trait AclChangeSubscription extends AutoCloseable {
-  def close(): Unit
-}
-
-case class AclChangeNode(path: String, bytes: Array[Byte])
-
-object AclChangeNotificationSequenceZNode {
-  def SequenceNumberPrefix = "acl_changes_"
-}
-
-trait AclChangeNotificationSequenceZNode {
-
-  protected def path: String
-
-  def decode(bytes: Array[Byte]): Resource
-
-  protected def encode(resource: Resource): Array[Byte]
-
-  protected def createPath: String = s"$path/${AclChangeNotificationSequenceZNode.SequenceNumberPrefix}"
-
-  def createChangeNode(resource: Resource): AclChangeNode = AclChangeNode(createPath, encode(resource))
-
-  def createListener(handler: AclChangeNotificationHandler, zkClient: KafkaZkClient): AclChangeSubscription = {
-    val rawHandler: NotificationHandler = new NotificationHandler {
-      def processNotification(bytes: Array[Byte]): Unit =
-        handler.processNotification(decode(bytes))
-    }
-
-    val aclChangeListener = new ZkNodeChangeNotificationListener(
-      zkClient, path, AclChangeNotificationSequenceZNode.SequenceNumberPrefix, rawHandler)
-
-    aclChangeListener.init()
-
-    new AclChangeSubscription {
-      def close(): Unit = aclChangeListener.close()
-    }
   }
 }
 

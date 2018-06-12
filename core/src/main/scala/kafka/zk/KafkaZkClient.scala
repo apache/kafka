@@ -946,9 +946,10 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
   def createAclPaths(): Unit = {
     ZkAclStore.stores.foreach(store => {
       createRecursive(store.aclPath, throwIfPathExists = false)
-      createRecursive(store.aclChangePath, throwIfPathExists = false)
       ResourceType.values.foreach(resourceType => createRecursive(store.path(resourceType), throwIfPathExists = false))
     })
+
+    ZkAclChangeStore.stores.foreach(store => createRecursive(store.aclChangePath, throwIfPathExists = false))
   }
 
   /**
@@ -1009,7 +1010,7 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
    * @param resource resource pattern that has changed
    */
   def createAclChangeNotification(resource: Resource): Unit = {
-    val aclChange = ZkAclStore(resource.nameType).changeNode.createChangeNode(resource)
+    val aclChange = ZkAclStore(resource.nameType).changeStore.createChangeNode(resource)
     val createRequest = CreateRequest(aclChange.path, aclChange.bytes, acls(aclChange.path), CreateMode.PERSISTENT_SEQUENTIAL)
     val createResponse = retryRequestUntilConnected(createRequest)
     createResponse.maybeThrow
@@ -1033,7 +1034,7 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
    * @throws KeeperException if there is an error while deleting Acl change notifications
    */
   def deleteAclChangeNotifications(): Unit = {
-    ZkAclStore.stores.foreach(store => {
+    ZkAclChangeStore.stores.foreach(store => {
       val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(store.aclChangePath))
       if (getChildrenResponse.resultCode == Code.OK) {
         deleteAclChangeNotifications(store.aclChangePath, getChildrenResponse.children)

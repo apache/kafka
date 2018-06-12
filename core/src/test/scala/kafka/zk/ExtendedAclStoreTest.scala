@@ -22,41 +22,46 @@ import org.apache.kafka.common.resource.ResourceNameType.{LITERAL, PREFIXED}
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-class LiteralZkAclStoreTest {
+class ExtendedAclStoreTest {
   private val literalResource = Resource(Topic, "some-topic", LITERAL)
   private val prefixedResource = Resource(Topic, "some-topic", PREFIXED)
-  private val store = LiteralZkAclStore
+  private val store = new ExtendedAclStore(PREFIXED)
 
   @Test
   def shouldHaveCorrectPaths(): Unit = {
-    assertEquals("/kafka-acl", store.aclPath)
-    assertEquals("/kafka-acl/Topic", store.path(Topic))
-    assertEquals("/kafka-acl-changes", store.aclChangePath)
+    assertEquals("/kafka-acl-extended/prefixed", store.aclPath)
+    assertEquals("/kafka-acl-extended/prefixed/Topic", store.path(Topic))
+    assertEquals("/kafka-acl-extended-changes", store.changeStore.aclChangePath)
   }
 
   @Test
   def shouldHaveCorrectPatternType(): Unit = {
-    assertEquals(LITERAL, store.patternType)
+    assertEquals(PREFIXED, store.patternType)
   }
 
   @Test(expected = classOf[IllegalArgumentException])
-  def shouldThrowFromEncodeOnNoneLiteral(): Unit = {
-    store.changeNode.createChangeNode(prefixedResource)
+  def shouldThrowIfConstructedWithLiteral(): Unit = {
+    new ExtendedAclStore(LITERAL)
+  }
+
+  @Test(expected = classOf[IllegalArgumentException])
+  def shouldThrowFromEncodeOnLiteral(): Unit = {
+    store.changeStore.createChangeNode(literalResource)
   }
 
   @Test
   def shouldWriteChangesToTheWritePath(): Unit = {
-    val changeNode = store.changeNode.createChangeNode(literalResource)
+    val changeNode = store.changeStore.createChangeNode(prefixedResource)
 
-    assertEquals("/kafka-acl-changes/acl_changes_", changeNode.path)
+    assertEquals("/kafka-acl-extended-changes/acl_changes_", changeNode.path)
   }
 
   @Test
   def shouldRoundTripChangeNode(): Unit = {
-    val changeNode = store.changeNode.createChangeNode(literalResource)
+    val changeNode = store.changeStore.createChangeNode(prefixedResource)
 
-    val actual = store.changeNode.decode(changeNode.bytes)
+    val actual = store.changeStore.decode(changeNode.bytes)
 
-    assertEquals(literalResource, actual)
+    assertEquals(prefixedResource, actual)
   }
 }
