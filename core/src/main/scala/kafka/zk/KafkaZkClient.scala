@@ -941,7 +941,7 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
   //Acl management methods
 
   /**
-   * Creates the required zk nodes for Acl storage
+   * Creates the required zk nodes for Acl storage and Acl change storage.
    */
   def createAclPaths(): Unit = {
     ZkAclStore.stores.foreach(store => {

@@ -25,6 +25,7 @@ import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, LeaderAndIsr}
 import kafka.cluster.{Broker, EndPoint}
 import kafka.common.{KafkaException, NotificationHandler, ZkNodeChangeNotificationListener}
 import kafka.controller.{IsrChangeNotificationHandler, LeaderIsrAndControllerEpoch}
+import kafka.security.auth.Resource.Separator
 import kafka.security.auth.SimpleAclAuthorizer.VersionedAcls
 import kafka.security.auth.{Acl, Resource, ResourceType}
 import kafka.server.{ConfigType, DelegationTokenManager}
@@ -473,7 +474,7 @@ object StateChangeHandlers {
   * <ul>
   *   <li>[[org.apache.kafka.common.resource.ResourceNameType#LITERAL Literal]] patterns are stored under '/kafka-acl-changes'.
   *   The format is a UTF8 string in the form: &lt;resource-type&gt;:&lt;resource-name&gt;</li>
-  *   <li>All other patterns are stored under '/kafka-acl-extended-changes/<i>pattern-type</i>'
+  *   <li>All other patterns are stored under '/kafka-acl-extended-changes'
   *   The format is JSON, as defined by [[kafka.zk.ExtendedAclChangeEvent]]</li>
   * </ul>
   */
@@ -489,7 +490,7 @@ sealed trait ZkAclStore {
 }
 
 object ZkAclStore {
-  private val storesByType = ResourceNameType.values
+  private val storesByType: Map[ResourceNameType, ZkAclStore] = ResourceNameType.values
     .filter(nameType => nameType != ResourceNameType.ANY && nameType != ResourceNameType.UNKNOWN)
     .map(nameType => (nameType, create(nameType)))
     .toMap
@@ -585,8 +586,13 @@ case object LiteralAclChangeStore extends ZkAclChangeStore {
     legacyName.getBytes(UTF_8)
   }
 
-  def decode(bytes: Array[Byte]): Resource =
-    Resource.fromString(new String(bytes, UTF_8))
+  def decode(bytes: Array[Byte]): Resource = {
+    val string = new String(bytes, UTF_8)
+    string.split(Separator, 2) match {
+        case Array(resourceType, resourceName, _*) => new Resource(ResourceType.fromString(resourceType), resourceName, ResourceNameType.LITERAL)
+        case _ => throw new IllegalArgumentException("expected a string in format ResourceType:ResourceName but got " + string)
+      }
+  }
 }
 
 case object ExtendedAclChangeStore extends ZkAclChangeStore {
