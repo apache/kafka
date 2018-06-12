@@ -42,7 +42,6 @@ import scala.util.Random
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
 import kafka.zookeeper._
-import org.apache.kafka.common.resource.ResourceNameType
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.zookeeper.data.Stat
 
@@ -427,23 +426,22 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
 
   @Test
   def testAclManagementMethods() {
-    assertFalse(zkClient.pathExists(AclChangeNotificationZNode.path))
     ZkAclStore.stores.foreach(store => {
       assertFalse(zkClient.pathExists(store.aclPath))
+      assertFalse(zkClient.pathExists(store.aclChangePath))
       ResourceType.values.foreach(resource => assertFalse(zkClient.pathExists(store.path(resource))))
     })
 
     // create acl paths
     zkClient.createAclPaths
 
-    assertTrue(zkClient.pathExists(AclChangeNotificationZNode.path))
-
     ZkAclStore.stores.foreach(store => {
       assertTrue(zkClient.pathExists(store.aclPath))
+      assertTrue(zkClient.pathExists(store.aclChangePath))
       ResourceType.values.foreach(resource => assertTrue(zkClient.pathExists(store.path(resource))))
 
-      val resource1 = new Resource(Topic, UUID.randomUUID().toString, store.nameType)
-      val resource2 = new Resource(Topic, UUID.randomUUID().toString, store.nameType)
+      val resource1 = new Resource(Topic, UUID.randomUUID().toString, store.patternType)
+      val resource2 = new Resource(Topic, UUID.randomUUID().toString, store.patternType)
 
       // try getting acls for non-existing resource
       var versionedAcls = zkClient.getVersionedAclsForResource(resource1)
@@ -473,10 +471,10 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
       assertEquals(1, versionedAcls.zkVersion)
 
       //get resource Types
-      assertTrue(ResourceType.values.map( rt => rt.name).toSet == zkClient.getResourceTypes(store.nameType).toSet)
+      assertTrue(ResourceType.values.map( rt => rt.name).toSet == zkClient.getResourceTypes(store.patternType).toSet)
 
       //get resource name
-      val resourceNames = zkClient.getResourceNames(store.nameType, Topic)
+      val resourceNames = zkClient.getResourceNames(store.patternType, Topic)
       assertEquals(2, resourceNames.size)
       assertTrue(Set(resource1.name,resource2.name) == resourceNames.toSet)
 
@@ -489,17 +487,14 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
       //delete with valid expected zk version
       assertTrue(zkClient.conditionalDelete(resource2, 0))
 
-      zkClient.createAclChangeNotification(Resource(Group, "resource1", store.nameType))
-      zkClient.createAclChangeNotification(Resource(Topic, "resource2", store.nameType))
+      zkClient.createAclChangeNotification(Resource(Group, "resource1", store.patternType))
+      zkClient.createAclChangeNotification(Resource(Topic, "resource2", store.patternType))
+
+      assertEquals(2, zkClient.getChildren(store.aclChangePath).size)
+
+      zkClient.deleteAclChangeNotifications()
+      assertTrue(zkClient.getChildren(store.aclChangePath).isEmpty)
     })
-
-    val expectedChangeEvents = ResourceNameType.values()
-      .count(nameType => nameType != ResourceNameType.ANY && nameType != ResourceNameType.UNKNOWN) * 2
-
-    assertEquals(expectedChangeEvents, zkClient.getChildren(AclChangeNotificationZNode.path).size)
-
-    zkClient.deleteAclChangeNotifications()
-    assertTrue(zkClient.getChildren(AclChangeNotificationZNode.path).isEmpty)
   }
 
   @Test

@@ -944,10 +944,9 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
    * Creates the required zk nodes for Acl storage
    */
   def createAclPaths(): Unit = {
-    createRecursive(AclChangeNotificationZNode.path, throwIfPathExists = false)
-
     ZkAclStore.stores.foreach(store => {
       createRecursive(store.aclPath, throwIfPathExists = false)
+      createRecursive(store.aclChangePath, throwIfPathExists = false)
       ResourceType.values.foreach(resourceType => createRecursive(store.path(resourceType), throwIfPathExists = false))
     })
   }
@@ -1006,28 +1005,12 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
   }
 
   /**
-    * Creates colon separated Acl change notification message.
-    *
-    * Kafka 2.0 saw the format of the ACL change event change from a 2-part to a 3-part colon-separated string.
-    * This method will create a message in the old format, which is still needed while a cluster has
-    * 'inter.broker.protocol.version' < 2.0.
-    *
-    * @param resource resource pattern that has changed
-    */
-  def createLegacyAclChangeNotification(resource: Resource): Unit = {
-    val path = AclChangeNotificationSequenceZNode.createPath
-    val createRequest = CreateRequest(path, AclChangeNotificationSequenceZNode.encodeLegacy(resource), acls(path), CreateMode.PERSISTENT_SEQUENTIAL)
-    val createResponse = retryRequestUntilConnected(createRequest)
-    createResponse.maybeThrow
-  }
-
-  /**
    * Creates an Acl change notification message.
    * @param resource resource pattern that has changed
    */
   def createAclChangeNotification(resource: Resource): Unit = {
-    val path = AclChangeNotificationSequenceZNode.createPath
-    val createRequest = CreateRequest(path, AclChangeNotificationSequenceZNode.encode(resource), acls(path), CreateMode.PERSISTENT_SEQUENTIAL)
+    val aclChange = ZkAclStore(resource.nameType).changeNode.createChangeNode(resource)
+    val createRequest = CreateRequest(aclChange.path, aclChange.bytes, acls(aclChange.path), CreateMode.PERSISTENT_SEQUENTIAL)
     val createResponse = retryRequestUntilConnected(createRequest)
     createResponse.maybeThrow
   }
@@ -1050,21 +1033,25 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
    * @throws KeeperException if there is an error while deleting Acl change notifications
    */
   def deleteAclChangeNotifications(): Unit = {
-    val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(AclChangeNotificationZNode.path))
-    if (getChildrenResponse.resultCode == Code.OK) {
-      deleteAclChangeNotifications(getChildrenResponse.children)
-    } else if (getChildrenResponse.resultCode != Code.NONODE) {
-      getChildrenResponse.maybeThrow
-    }
+    ZkAclStore.stores.foreach(store => {
+      val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(store.aclChangePath))
+      if (getChildrenResponse.resultCode == Code.OK) {
+        deleteAclChangeNotifications(store.aclChangePath, getChildrenResponse.children)
+      } else if (getChildrenResponse.resultCode != Code.NONODE) {
+        getChildrenResponse.maybeThrow
+      }
+    })
   }
 
   /**
-   * Deletes the Acl change notifications associated with the given sequence nodes
-   * @param sequenceNodes
-   */
-  private def deleteAclChangeNotifications(sequenceNodes: Seq[String]): Unit = {
+    * Deletes the Acl change notifications associated with the given sequence nodes
+    *
+    * @param aclChangePath the root path
+    * @param sequenceNodes the name of the node to delete.
+    */
+  private def deleteAclChangeNotifications(aclChangePath: String, sequenceNodes: Seq[String]): Unit = {
     val deleteRequests = sequenceNodes.map { sequenceNode =>
-      DeleteRequest(AclChangeNotificationSequenceZNode.deletePath(sequenceNode), ZkVersion.NoVersion)
+      DeleteRequest(s"$aclChangePath/$sequenceNode", ZkVersion.NoVersion)
     }
 
     val deleteResponses = retryRequestsUntilConnected(deleteRequests)
