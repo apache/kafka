@@ -29,7 +29,7 @@ public class DelegatingClassLoaderTest {
         assertTrue(
             DelegatingClassLoader.serviceLoaderManifestForPlugin("META-INF/services/org.apache.kafka.connect.rest.ConnectRestExtension"));
         assertTrue(
-            DelegatingClassLoader.serviceLoaderManifestForPlugin("META-INF/services/org.apache.kafka.common.config.ConfigProvider"));
+            DelegatingClassLoader.serviceLoaderManifestForPlugin("META-INF/services/org.apache.kafka.common.config.provider.ConfigProvider"));
     }
 
     @Test

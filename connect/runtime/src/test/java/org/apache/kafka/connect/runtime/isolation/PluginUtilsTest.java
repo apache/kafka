@@ -114,6 +114,9 @@ public class PluginUtilsTest {
         assertFalse(PluginUtils.shouldLoadInIsolation(
                 "org.apache.kafka.clients.admin.KafkaAdminClient")
         );
+        assertFalse(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.rest.ConnectRestExtension")
+        );
     }
 
     @Test
@@ -153,11 +156,14 @@ public class PluginUtilsTest {
 
     @Test
     public void testClientConfigProvider() throws Exception {
-        assertTrue(PluginUtils.shouldLoadInIsolation(
-                "org.apache.kafka.common.config.FileConfigProvider")
+        assertFalse(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.common.config.provider.ConfigProvider")
         );
         assertTrue(PluginUtils.shouldLoadInIsolation(
-                "org.apache.kafka.common.config.FutureConfigProvider")
+                "org.apache.kafka.common.config.provider.FileConfigProvider")
+        );
+        assertTrue(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.common.config.provider.FutureConfigProvider")
         );
     }
 

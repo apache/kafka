@@ -18,7 +18,7 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.common.config.ConfigChangeCallback;
 import org.apache.kafka.common.config.ConfigData;
-import org.apache.kafka.common.config.ConfigProvider;
+import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Test;
