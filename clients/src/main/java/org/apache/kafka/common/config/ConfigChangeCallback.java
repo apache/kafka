@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.config;
 
+import org.apache.kafka.common.config.provider.ConfigProvider;
+
 /**
  * A callback passed to {@link ConfigProvider} for subscribing to changes.
  */

@@ -13,4 +13,4 @@
  # See the License for the specific language governing permissions and
  # limitations under the License.
 
-org.apache.kafka.common.config.FileConfigProvider
+org.apache.kafka.common.config.provider.FileConfigProvider
