@@ -21,7 +21,7 @@ import java.io.File
 import java.nio.ByteBuffer
 
 import kafka.utils.CoreUtils.inLock
-import kafka.common.{IndexOffsetOverflowException, InvalidOffsetException}
+import kafka.common.InvalidOffsetException
 
 /**
  * An index that maps offsets to physical file locations for a particular log segment. This index may be sparse:
