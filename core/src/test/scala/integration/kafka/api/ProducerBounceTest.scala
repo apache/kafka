@@ -61,61 +61,6 @@ class ProducerBounceTest extends KafkaServerTestHarness {
 
   private val topic1 = "topic-1"
 
-  /**
-   * With replication, producer should able to find new leader after it detects broker failure and consumers should
-   * be able to consume all messages without duplicates.
-   */
-  @Ignore // To be re-enabled once we can make it less flaky (KAFKA-2837)
-  @Test
-  def testBrokerFailure() {
-    val numPartitions = 3
-    val topicConfig = new Properties()
-    topicConfig.put(KafkaConfig.MinInSyncReplicasProp, 2.toString)
-    createTopic(topic1, numPartitions, numServers, topicConfig)
-
-    val scheduler = new ProducerScheduler()
-    scheduler.start()
-
-    // rolling bounce brokers
-
-    for (_ <- 0 until numServers) {
-      for (server <- servers) {
-        info("Shutting down server : %s".format(server.config.brokerId))
-        server.shutdown()
-        server.awaitShutdown()
-        info("Server %s shut down. Starting it up again.".format(server.config.brokerId))
-        server.startup()
-        info("Restarted server: %s".format(server.config.brokerId))
-      }
-
-      // Make sure the producer do not see any exception in returned metadata due to broker failures
-      assertFalse(scheduler.failed)
-
-      // Make sure the leader still exists after bouncing brokers
-      (0 until numPartitions).foreach(partition => TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic1, partition))
-    }
-
-    scheduler.shutdown()
-
-    // Make sure the producer do not see any exception
-    // when draining the left messages on shutdown
-    assertFalse(scheduler.failed)
-
-    // double check that the leader info has been propagated after consecutive bounces
-    (0 until numPartitions).foreach(i => TestUtils.waitUntilMetadataIsPropagated(servers, topic1, i))
-    val consumer = TestUtils.createNewConsumer(brokerList, securityProtocol = SecurityProtocol.PLAINTEXT,
-      valueDeserializer = new StringDeserializer)
-    val consumerRecords =
-      try {
-        consumer.subscribe(Seq(topic1).asJava)
-        TestUtils.consumeRecords(consumer, scheduler.sent)
-      } finally consumer.close()
-    val recordValues = consumerRecords.map(_.value)
-    val uniqueRecordValues = recordValues.toSet
-    info(s"number of unique messages sent: ${uniqueRecordValues.size}")
-    assertEquals(s"Found ${recordValues.size - uniqueRecordValues.size} duplicate messages.", uniqueRecordValues.size, recordValues.size)
-  }
-
   private class ProducerScheduler extends ShutdownableThread("daemon-producer", false) {
     val numRecords = 1000
     var sent = 0
