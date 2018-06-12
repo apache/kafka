@@ -456,10 +456,10 @@ public class ConsumerNetworkClient implements Closeable {
 
     private void failExpiredRequests(long now) {
         // clear all expired unsent requests and fail their corresponding futures
-        Collection<ClientRequest> expiredRequests = unsent.removeExpiredRequests(now, requestTimeoutMs);
+        Collection<ClientRequest> expiredRequests = unsent.removeExpiredRequests(now);
         for (ClientRequest request : expiredRequests) {
             RequestFutureCompletionHandler handler = (RequestFutureCompletionHandler) request.callback();
-            handler.onFailure(new TimeoutException("Failed to send request after " + requestTimeoutMs + " ms."));
+            handler.onFailure(new TimeoutException("Failed to send request after " + request.requestTimeoutMs() + " ms."));
         }
     }
 
@@ -667,13 +667,13 @@ public class ConsumerNetworkClient implements Closeable {
             return false;
         }
 
-        public Collection<ClientRequest> removeExpiredRequests(long now, long unsentExpiryMs) {
+        private Collection<ClientRequest> removeExpiredRequests(long now) {
             List<ClientRequest> expiredRequests = new ArrayList<>();
             for (ConcurrentLinkedQueue<ClientRequest> requests : unsent.values()) {
                 Iterator<ClientRequest> requestIterator = requests.iterator();
                 while (requestIterator.hasNext()) {
                     ClientRequest request = requestIterator.next();
-                    if (request.createdTimeMs() < now - unsentExpiryMs) {
+                    if (request.createdTimeMs() < now - request.requestTimeoutMs()) {
                         expiredRequests.add(request);
                         requestIterator.remove();
                     } else

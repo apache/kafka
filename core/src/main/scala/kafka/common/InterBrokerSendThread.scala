@@ -119,9 +119,9 @@ abstract class InterBrokerSendThread(name: String,
 
   private def failExpiredRequests(now: Long): Unit = {
     // clear all expired unsent requests
-    val expiredRequests = unsentRequests.removeExpiredRequests(now, requestTimeoutMs)
-    for (request <- expiredRequests.asScala) {
-      debug(s"Failed to send the following request after $requestTimeoutMs ms: $request")
+    val timedOutRequests = unsentRequests.removeAllTimedOut(now)
+    for (request <- timedOutRequests.asScala) {
+      debug(s"Failed to send the following request after ${request.requestTimeoutMs} ms: $request")
       completeWithDisconnect(request, now, null)
     }
   }
@@ -153,14 +153,14 @@ private class UnsentRequests {
     requests.add(request)
   }
 
-  def removeExpiredRequests(now: Long, unsentExpiryMs: Long): Collection[ClientRequest] = {
+  def removeAllTimedOut(now: Long): Collection[ClientRequest] = {
     val expiredRequests = new ArrayList[ClientRequest]
     for (requests <- unsent.values.asScala) {
       val requestIterator = requests.iterator
       var foundExpiredRequest = false
       while (requestIterator.hasNext && !foundExpiredRequest) {
         val request = requestIterator.next
-        if (request.createdTimeMs < now - unsentExpiryMs) {
+        if (request.createdTimeMs < now - request.requestTimeoutMs) {
           expiredRequests.add(request)
           requestIterator.remove()
           foundExpiredRequest = true

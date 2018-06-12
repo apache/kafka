@@ -273,7 +273,7 @@ public class ConsumerNetworkClientTest {
     }
 
     @Test
-    public void sendExpiry() throws InterruptedException {
+    public void sendExpiry() {
         int requestTimeoutMs = 10;
         final AtomicBoolean isReady = new AtomicBoolean();
         final AtomicBoolean disconnected = new AtomicBoolean();

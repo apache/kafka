@@ -297,9 +297,13 @@ public class MockClient implements KafkaClient {
         return copy;
     }
 
+    private long elapsedTimeMs(long currentTimeMs, long startTimeMs) {
+        return Math.max(0, currentTimeMs - startTimeMs);
+    }
+
     private void checkTimeoutOfPendingRequests(long nowMs) {
         ClientRequest request = requests.peek();
-        while (request != null && nowMs - request.createdTimeMs() > request.requestTimeoutMs()) {
+        while (request != null && elapsedTimeMs(nowMs, request.createdTimeMs()) > request.requestTimeoutMs()) {
             disconnect(request.destination());
             requests.poll();
             request = requests.peek();

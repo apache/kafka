@@ -1759,8 +1759,8 @@ public class ConsumerCoordinatorTest {
 
     private void closeVerifyTimeout(final ConsumerCoordinator coordinator,
                                     final long closeTimeoutMs,
-                                    long expectedMinTimeMs,
-                                    long expectedMaxTimeMs) throws Exception {
+                                    final long expectedMinTimeMs,
+                                    final long expectedMaxTimeMs) throws Exception {
         ExecutorService executor = Executors.newSingleThreadExecutor();
         try {
             boolean coordinatorUnknown = coordinator.coordinatorUnknown();
