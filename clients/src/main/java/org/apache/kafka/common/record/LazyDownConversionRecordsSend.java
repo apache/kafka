@@ -63,7 +63,7 @@ public final class LazyDownConversionRecordsSend extends RecordsSend<LazyDownCon
                             " converted_records_size: " + sizeOfFirstConvertedBatch);
 
                 recordConversionStats.add(recordsAndStats.recordConversionStats());
-                log.debug("Got lazy converted records for {" + topicPartition() + "} with length=" + convertedRecords.sizeInBytes());
+                log.debug("Got lazy converted records for partition {} with length={}", topicPartition(), convertedRecords.sizeInBytes());
             } else {
                 if (previouslyWritten == 0)
                     throw new EOFException("Unable to get the first batch of down-converted records");
@@ -75,10 +75,8 @@ public final class LazyDownConversionRecordsSend extends RecordsSend<LazyDownCon
                 //      BaseOffset => Int64
                 //      Length => Int32
                 //      ...
-                // TODO: check if there is a better way to encapsulate this logic, perhaps in DefaultRecordBatch
-                log.debug("Constructing fake message batch for topic-partition {" + topicPartition() + "} for remaining length " + remaining);
-                int minLength = (Long.SIZE / Byte.SIZE) + (Integer.SIZE / Byte.SIZE);
-                ByteBuffer fakeMessageBatch = ByteBuffer.allocate(Math.max(minLength, Math.min(remaining + 1, MAX_READ_SIZE)));
+                log.debug("Constructing fake message batch for partition {} for remaining length={}", topicPartition(), remaining);
+                ByteBuffer fakeMessageBatch = ByteBuffer.allocate(Math.max(Records.LOG_OVERHEAD, Math.min(remaining + 1, MAX_READ_SIZE)));
                 fakeMessageBatch.putLong(-1L);
                 fakeMessageBatch.putInt(remaining + 1);
                 convertedRecords = MemoryRecords.readableRecords(fakeMessageBatch);
