@@ -134,7 +134,7 @@ object ReplicaVerificationTool extends Logging {
 
     val adminClient = createAdminClient(brokerList)
     val (topicsMetadata, brokerInfo) =
-      try (listTopicsMetadata(adminClient), brokerDetails(adminClient))
+      try ((listTopicsMetadata(adminClient), brokerDetails(adminClient)))
       finally CoreUtils.swallow(adminClient.close(), this)
 
     val filteredTopicMetadata = topicsMetadata.filter { topicMetaData =>
@@ -176,10 +176,10 @@ object ReplicaVerificationTool extends Logging {
       brokerToTopicPartitions.size,
       reportInterval)
     // create all replica fetcher threads
-    val verificationBrokerId = brokerToTopicPartitions.head
+    val verificationBrokerId = brokerToTopicPartitions.head._1
     val counter = new AtomicInteger(0)
     val fetcherThreads: Iterable[ReplicaFetcher] = brokerToTopicPartitions.map { case (brokerId, topicPartitions) =>
-      new ReplicaFetcher(name = "ReplicaFetcher-$brokerId",
+      new ReplicaFetcher(name = s"ReplicaFetcher-$brokerId",
         sourceBroker = brokerInfo(brokerId),
         topicPartitions = topicPartitions,
         replicaBuffer = replicaBuffer,

@@ -17,7 +17,7 @@
 
 package kafka.tools
 
-import kafka.common.TopicAndPartition
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.FetchResponse
@@ -31,9 +31,9 @@ class ReplicaVerificationToolTest {
     val sb = new StringBuilder
 
     val expectedReplicasPerTopicAndPartition = Map(
-      TopicAndPartition("a", 0) -> 3,
-      TopicAndPartition("a", 1) -> 3,
-      TopicAndPartition("b", 0) -> 2
+      new TopicPartition("a", 0) -> 3,
+      new TopicPartition("a", 1) -> 3,
+      new TopicPartition("b", 0) -> 2
     )
 
     val replicaBuffer = new ReplicaBuffer(expectedReplicasPerTopicAndPartition, Map.empty, 2, 0)
@@ -55,7 +55,7 @@ class ReplicaVerificationToolTest {
 
     // If you change this assertion, you should verify that the replica_verification_test.py system test still passes
     assertTrue(s"Max lag information should be in output: `$output`",
-      output.endsWith(": max lag is 10 for partition a-0 at offset 10 among 3 partitions"))
+      output.endsWith(": max lag is 10 for partition a-1 at offset 10 among 3 partitions"))
   }
 
 }
