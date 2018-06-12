@@ -128,13 +128,19 @@ public class RocksDBStoreTest {
         assertTrue(MockRocksDbConfigSetter.called);
     }
 
-    @Test(expected = ProcessorStateException.class)
+    @Test
     public void shouldThrowProcessorStateExceptionOnOpeningReadOnlyDir() {
         final File tmpDir = TestUtils.tempDirectory();
         InternalMockProcessorContext tmpContext = new InternalMockProcessorContext(tmpDir, new StreamsConfig(StreamsTestUtils.minimalStreamsConfig()));
-        tmpDir.setReadOnly();
 
-        rocksDBStore.openDB(tmpContext);
+        assertTrue(tmpDir.setReadOnly());
+
+        try {
+            rocksDBStore.openDB(tmpContext);
+            fail("Should have thrown ProcessorStateException");
+        } catch (ProcessorStateException e) {
+            // this is good, do nothing
+        }
     }
 
     @Test
@@ -347,7 +353,9 @@ public class RocksDBStoreTest {
         try {
             rocksDBStore.put(null, stringSerializer.serialize(null, "someVal"));
             fail("Should have thrown NullPointerException on null put()");
-        } catch (NullPointerException e) { }
+        } catch (NullPointerException e) {
+            // this is good
+        }
     }
 
     @Test
@@ -356,7 +364,9 @@ public class RocksDBStoreTest {
         try {
             rocksDBStore.put(null, stringSerializer.serialize(null, "someVal"));
             fail("Should have thrown NullPointerException on null put()");
-        } catch (NullPointerException e) { }
+        } catch (NullPointerException e) {
+            // this is good
+        }
     }
 
     @Test
@@ -365,7 +375,9 @@ public class RocksDBStoreTest {
         try {
             rocksDBStore.get(null);
             fail("Should have thrown NullPointerException on null get()");
-        } catch (NullPointerException e) { }
+        } catch (NullPointerException e) {
+            // this is good
+        }
     }
 
     @Test
@@ -374,7 +386,9 @@ public class RocksDBStoreTest {
         try {
             rocksDBStore.delete(null);
             fail("Should have thrown NullPointerException on deleting null key");
-        } catch (NullPointerException e) { }
+        } catch (NullPointerException e) {
+            // this is good
+        }
     }
 
     @Test
@@ -383,7 +397,9 @@ public class RocksDBStoreTest {
         try {
             rocksDBStore.range(null, new Bytes(stringSerializer.serialize(null, "2")));
             fail("Should have thrown NullPointerException on deleting null key");
-        } catch (NullPointerException e) { }
+        } catch (NullPointerException e) {
+            // this is good
+        }
     }
 
     @Test(expected = ProcessorStateException.class)
