@@ -76,32 +76,33 @@ import static org.junit.Assert.assertTrue;
 @Category({IntegrationTest.class})
 public class RestoreIntegrationTest {
     private static final int NUM_BROKERS = 1;
+    private static final String APPID = "restore-test";
 
     @ClassRule
-    public static final EmbeddedKafkaCluster CLUSTER =
-            new EmbeddedKafkaCluster(NUM_BROKERS);
+    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
     private static final String INPUT_STREAM = "input-stream";
     private static final String INPUT_STREAM_2 = "input-stream-2";
     private final int numberOfKeys = 10000;
     private KafkaStreams kafkaStreams;
-    private String applicationId = "restore-test";
 
 
     @BeforeClass
     public static void createTopics() throws InterruptedException {
         CLUSTER.createTopic(INPUT_STREAM, 2, 1);
         CLUSTER.createTopic(INPUT_STREAM_2, 2, 1);
+        CLUSTER.createTopic(APPID + "-store-changelog", 2, 1);
     }
 
     private Properties props(final String applicationId) {
         Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(applicationId).getPath());
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000);
+        streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         return streamsConfiguration;
     }
 
@@ -112,59 +113,50 @@ public class RestoreIntegrationTest {
         }
     }
 
-
     @Test
-    public void shouldRestoreState() throws ExecutionException, InterruptedException {
+    public void shouldRestoreStateFromChangelogTopic() throws Exception {
         final AtomicInteger numReceived = new AtomicInteger(0);
         final StreamsBuilder builder = new StreamsBuilder();
 
-        createStateForRestoration();
+        final Properties props = props(APPID);
 
-        builder.table(INPUT_STREAM, Consumed.with(Serdes.Integer(), Serdes.Integer()))
+        // restoring from 1000 to 5000, and then process from 5000 to 10000 on each of the two partitions
+        final int offsetCheckpointed = 1000;
+        createStateForRestoration(APPID + "-store-changelog");
+        createStateForRestoration(INPUT_STREAM);
+
+        final StateDirectory stateDirectory = new StateDirectory(new StreamsConfig(props), new MockTime());
+        new OffsetCheckpoint(new File(stateDirectory.directoryForTask(new TaskId(0, 0)), ".checkpoint"))
+                .write(Collections.singletonMap(new TopicPartition(APPID + "-store-changelog", 0), (long) offsetCheckpointed));
+        new OffsetCheckpoint(new File(stateDirectory.directoryForTask(new TaskId(0, 1)), ".checkpoint"))
+                .write(Collections.singletonMap(new TopicPartition(APPID + "-store-changelog", 1), (long) offsetCheckpointed));
+
+        final CountDownLatch startupLatch = new CountDownLatch(1);
+        final CountDownLatch shutdownLatch = new CountDownLatch(1);
+
+        builder.table(INPUT_STREAM, Consumed.with(Serdes.Integer(), Serdes.Integer()), Materialized.as("store"))
                 .toStream()
                 .foreach(new ForeachAction<Integer, Integer>() {
                     @Override
                     public void apply(final Integer key, final Integer value) {
-                        numReceived.incrementAndGet();
+                        if (numReceived.incrementAndGet() == numberOfKeys)
+                            shutdownLatch.countDown();
                     }
                 });
 
-
-        final CountDownLatch startupLatch = new CountDownLatch(1);
-        kafkaStreams = new KafkaStreams(builder.build(), props(applicationId));
+        kafkaStreams = new KafkaStreams(builder.build(), props);
         kafkaStreams.setStateListener(new KafkaStreams.StateListener() {
             @Override
             public void onChange(final KafkaStreams.State newState, final KafkaStreams.State oldState) {
-                if (newState == KafkaStreams.State.RUNNING && oldState == KafkaStreams.State.REBALANCING) {
-                    startupLatch.countDown();
-                }
+                kafkaStreams.start();
+
+                assertTrue(startupLatch.await(30, TimeUnit.SECONDS));
+                assertThat(restored.get(), equalTo((long) numberOfKeys - 2 * offsetCheckpointed));
+                assertTrue(shutdownLatch.await(30, TimeUnit.SECONDS));
+                assertThat(numReceived.get(), equalTo(numberOfKeys));
             }
-        });
-
-        final AtomicLong restored = new AtomicLong(0);
-        kafkaStreams.setGlobalStateRestoreListener(new StateRestoreListener() {
-            @Override
-            public void onRestoreStart(final TopicPartition topicPartition, final String storeName, final long startingOffset, final long endingOffset) {
-
-            }
-
-            @Override
-            public void onBatchRestored(final TopicPartition topicPartition, final String storeName, final long batchEndOffset, final long numRestored) {
-
-            }
-
-            @Override
-            public void onRestoreEnd(final TopicPartition topicPartition, final String storeName, final long totalRestored) {
-                restored.addAndGet(totalRestored);
-            }
-        });
-        kafkaStreams.start();
-
-        assertTrue(startupLatch.await(30, TimeUnit.SECONDS));
-        assertThat(restored.get(), equalTo((long) numberOfKeys));
-        assertThat(numReceived.get(), equalTo(0));
+        }
     }
-
 
     @Test
     public void shouldSuccessfullyStartWhenLoggingDisabled() throws InterruptedException {
@@ -248,6 +240,7 @@ public class RestoreIntegrationTest {
         assertTrue(processorLatch.await(30, TimeUnit.SECONDS));
 
     }
+
 
 
     public static class KeyValueStoreProcessor implements Processor<Integer, Integer> {

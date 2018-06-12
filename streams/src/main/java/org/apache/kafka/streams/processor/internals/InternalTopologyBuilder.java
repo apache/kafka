@@ -1883,4 +1883,10 @@ public class InternalTopologyBuilder {
         subscriptionUpdates.updateTopics(topics);
         updateSubscriptions(subscriptionUpdates, logPrefix);
     }
+
+    // following functions are for test only
+
+    public synchronized Map<String, StateStoreFactory> getStateStores() {
+        return stateFactories;
+    }
 }
