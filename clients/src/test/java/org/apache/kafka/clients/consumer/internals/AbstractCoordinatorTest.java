@@ -53,6 +53,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -62,8 +64,8 @@ public class AbstractCoordinatorTest {
     private static final int REBALANCE_TIMEOUT_MS = 60000;
     private static final int SESSION_TIMEOUT_MS = 10000;
     private static final int HEARTBEAT_INTERVAL_MS = 3000;
-    private static final long RETRY_BACKOFF_MS = 20;
-    private static final long LONG_RETRY_BACKOFF_MS = 10000;
+    private static final int RETRY_BACKOFF_MS = 100;
+    private static final int LONG_RETRY_BACKOFF_MS = 10000;
     private static final int REQUEST_TIMEOUT_MS = 40000;
     private static final String GROUP_ID = "dummy-group";
     private static final String METRIC_GROUP_PREFIX = "consumer";
@@ -75,27 +77,35 @@ public class AbstractCoordinatorTest {
     private ConsumerNetworkClient consumerClient;
     private DummyCoordinator coordinator;
 
-    private void setupCoordinator(long retryBackoffMs) {
+    private void setupCoordinator() {
+        setupCoordinator(RETRY_BACKOFF_MS, REBALANCE_TIMEOUT_MS);
+    }
+
+    private void setupCoordinator(int retryBackoffMs) {
+        setupCoordinator(retryBackoffMs, REBALANCE_TIMEOUT_MS);
+    }
+
+    private void setupCoordinator(int retryBackoffMs, int rebalanceTimeoutMs) {
         this.mockTime = new MockTime();
         this.mockClient = new MockClient(mockTime);
 
-        Metadata metadata = new Metadata(100L, 60 * 60 * 1000L, true);
+        Metadata metadata = new Metadata(retryBackoffMs, 60 * 60 * 1000L, true);
         this.consumerClient = new ConsumerNetworkClient(new LogContext(), mockClient, metadata, mockTime,
                 retryBackoffMs, REQUEST_TIMEOUT_MS, HEARTBEAT_INTERVAL_MS);
         Metrics metrics = new Metrics();
 
         Cluster cluster = TestUtils.singletonCluster("topic", 1);
-        metadata.update(cluster, Collections.<String>emptySet(), mockTime.milliseconds());
+        metadata.update(cluster, Collections.emptySet(), mockTime.milliseconds());
         this.node = cluster.nodes().get(0);
         mockClient.setNode(node);
 
         this.coordinatorNode = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
-        this.coordinator = new DummyCoordinator(consumerClient, metrics, mockTime);
+        this.coordinator = new DummyCoordinator(consumerClient, metrics, mockTime, rebalanceTimeoutMs, retryBackoffMs);
     }
 
     @Test
     public void testCoordinatorDiscoveryBackoff() {
-        setupCoordinator(RETRY_BACKOFF_MS);
+        setupCoordinator();
 
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
@@ -113,7 +123,7 @@ public class AbstractCoordinatorTest {
 
     @Test
     public void testTimeoutAndRetryJoinGroupIfNeeded() throws Exception {
-        setupCoordinator(RETRY_BACKOFF_MS);
+        setupCoordinator();
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(0);
 
@@ -143,7 +153,7 @@ public class AbstractCoordinatorTest {
 
     @Test
     public void testJoinGroupRequestTimeout() {
-        setupCoordinator(RETRY_BACKOFF_MS);
+        setupCoordinator(RETRY_BACKOFF_MS, REBALANCE_TIMEOUT_MS);
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(0);
 
@@ -157,8 +167,23 @@ public class AbstractCoordinatorTest {
     }
 
     @Test
+    public void testJoinGroupRequestMaxTimeout() {
+        // Ensure we can handle the maximum allowed rebalance timeout
+
+        setupCoordinator(RETRY_BACKOFF_MS, Integer.MAX_VALUE);
+        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(0);
+
+        RequestFuture<ByteBuffer> future = coordinator.sendJoinGroupRequest();
+        assertFalse(consumerClient.poll(future, 0));
+
+        mockTime.sleep(Integer.MAX_VALUE + 1L);
+        assertTrue(consumerClient.poll(future, 0));
+    }
+
+    @Test
     public void testUncaughtExceptionInHeartbeatThread() throws Exception {
-        setupCoordinator(RETRY_BACKOFF_MS);
+        setupCoordinator();
 
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         mockClient.prepareResponse(joinGroupFollowerResponse(1, "memberId", "leaderId", Errors.NONE));
@@ -219,7 +244,7 @@ public class AbstractCoordinatorTest {
 
     @Test
     public void testLookupCoordinator() {
-        setupCoordinator(RETRY_BACKOFF_MS);
+        setupCoordinator();
 
         mockClient.setNode(null);
         RequestFuture<Void> noBrokersAvailableFuture = coordinator.lookupCoordinator();
@@ -228,16 +253,16 @@ public class AbstractCoordinatorTest {
         mockClient.setNode(node);
         RequestFuture<Void> future = coordinator.lookupCoordinator();
         assertFalse("Request not sent", future.isDone());
-        assertTrue("New request sent while one is in progress", future == coordinator.lookupCoordinator());
+        assertSame("New request sent while one is in progress", future, coordinator.lookupCoordinator());
 
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(Long.MAX_VALUE);
-        assertTrue("New request not sent after previous completed", future != coordinator.lookupCoordinator());
+        assertNotSame("New request not sent after previous completed", future, coordinator.lookupCoordinator());
     }
 
     @Test
     public void testWakeupAfterJoinGroupSent() throws Exception {
-        setupCoordinator(RETRY_BACKOFF_MS);
+        setupCoordinator();
 
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         mockClient.prepareResponse(new MockClient.RequestMatcher() {
@@ -275,7 +300,7 @@ public class AbstractCoordinatorTest {
 
     @Test
     public void testWakeupAfterJoinGroupSentExternalCompletion() throws Exception {
-        setupCoordinator(RETRY_BACKOFF_MS);
+        setupCoordinator();
 
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         mockClient.prepareResponse(new MockClient.RequestMatcher() {
@@ -315,7 +340,7 @@ public class AbstractCoordinatorTest {
 
     @Test
     public void testWakeupAfterJoinGroupReceived() throws Exception {
-        setupCoordinator(RETRY_BACKOFF_MS);
+        setupCoordinator();
 
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         mockClient.prepareResponse(new MockClient.RequestMatcher() {
@@ -351,7 +376,7 @@ public class AbstractCoordinatorTest {
 
     @Test
     public void testWakeupAfterJoinGroupReceivedExternalCompletion() throws Exception {
-        setupCoordinator(RETRY_BACKOFF_MS);
+        setupCoordinator();
 
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         mockClient.prepareResponse(new MockClient.RequestMatcher() {
@@ -389,7 +414,7 @@ public class AbstractCoordinatorTest {
 
     @Test
     public void testWakeupAfterSyncGroupSent() throws Exception {
-        setupCoordinator(RETRY_BACKOFF_MS);
+        setupCoordinator();
 
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         mockClient.prepareResponse(joinGroupFollowerResponse(1, "memberId", "leaderId", Errors.NONE));
@@ -427,7 +452,7 @@ public class AbstractCoordinatorTest {
 
     @Test
     public void testWakeupAfterSyncGroupSentExternalCompletion() throws Exception {
-        setupCoordinator(RETRY_BACKOFF_MS);
+        setupCoordinator();
 
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         mockClient.prepareResponse(joinGroupFollowerResponse(1, "memberId", "leaderId", Errors.NONE));
@@ -467,7 +492,7 @@ public class AbstractCoordinatorTest {
 
     @Test
     public void testWakeupAfterSyncGroupReceived() throws Exception {
-        setupCoordinator(RETRY_BACKOFF_MS);
+        setupCoordinator();
 
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         mockClient.prepareResponse(joinGroupFollowerResponse(1, "memberId", "leaderId", Errors.NONE));
@@ -503,7 +528,7 @@ public class AbstractCoordinatorTest {
 
     @Test
     public void testWakeupAfterSyncGroupReceivedExternalCompletion() throws Exception {
-        setupCoordinator(RETRY_BACKOFF_MS);
+        setupCoordinator();
 
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         mockClient.prepareResponse(joinGroupFollowerResponse(1, "memberId", "leaderId", Errors.NONE));
@@ -539,7 +564,7 @@ public class AbstractCoordinatorTest {
 
     @Test
     public void testWakeupInOnJoinComplete() throws Exception {
-        setupCoordinator(RETRY_BACKOFF_MS);
+        setupCoordinator();
 
         coordinator.wakeupOnJoinComplete = true;
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
@@ -570,7 +595,7 @@ public class AbstractCoordinatorTest {
 
     @Test
     public void testAuthenticationErrorInEnsureCoordinatorReady() {
-        setupCoordinator(RETRY_BACKOFF_MS);
+        setupCoordinator();
 
         mockClient.createPendingAuthenticationError(node, 300);
 
@@ -631,9 +656,11 @@ public class AbstractCoordinatorTest {
 
         public DummyCoordinator(ConsumerNetworkClient client,
                                 Metrics metrics,
-                                Time time) {
-            super(new LogContext(), client, GROUP_ID, REBALANCE_TIMEOUT_MS, SESSION_TIMEOUT_MS,
-                    HEARTBEAT_INTERVAL_MS, metrics, METRIC_GROUP_PREFIX, time, RETRY_BACKOFF_MS, false);
+                                Time time,
+                                int rebalanceTimeoutMs,
+                                int retryBackoffMs) {
+            super(new LogContext(), client, GROUP_ID, rebalanceTimeoutMs, SESSION_TIMEOUT_MS,
+                    HEARTBEAT_INTERVAL_MS, metrics, METRIC_GROUP_PREFIX, time, retryBackoffMs, false);
         }
 
         @Override
