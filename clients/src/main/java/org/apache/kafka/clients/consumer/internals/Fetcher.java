@@ -1447,16 +1447,6 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 recordsLag.add(this.metrics.metricInstance(metricsRegistry.partitionRecordsLag, metricTags), new Value());
                 recordsLag.add(this.metrics.metricInstance(metricsRegistry.partitionRecordsLagMax, metricTags), new Max());
                 recordsLag.add(this.metrics.metricInstance(metricsRegistry.partitionRecordsLagAvg, metricTags), new Avg());
-
-                recordsLag.add(this.metrics.metricName(name,
-                        metricsRegistry.partitionRecordsLagDeprecated.group(),
-                        metricsRegistry.partitionRecordsLagDeprecated.description()), new Value());
-                recordsLag.add(this.metrics.metricName(name + "-max",
-                        metricsRegistry.partitionRecordsLagMaxDeprecated.group(),
-                        metricsRegistry.partitionRecordsLagMaxDeprecated.description()), new Max());
-                recordsLag.add(this.metrics.metricName(name + "-avg",
-                        metricsRegistry.partitionRecordsLagAvgDeprecated.group(),
-                        metricsRegistry.partitionRecordsLagAvgDeprecated.description()), new Avg());
             }
             recordsLag.record(lag);
         }

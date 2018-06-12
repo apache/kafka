@@ -80,6 +80,7 @@
         JMX monitoring tools that do not automatically aggregate. To get the total count for a specific request type, the tool needs to be
         updated to aggregate across different versions.
     </li>
+    <li><a href="https://cwiki.apache.org/confluence/x/uaBzB">KIP-225</a> changed the metric "records.lag" to use tags for topic and partition. The original version with the name format "{topic}-{partition}.records-lag" has been removed.</li>
     <li>The Scala producers, which have been deprecated since 0.10.0.0, have been removed. The Java producer has been the recommended option
         since 0.9.0.0. Note that the behaviour of the default partitioner in the Java producer differs from the default partitioner
         in the Scala producers. Users migrating should consider configuring a custom partitioner that retains the previous behaviour.</li>
