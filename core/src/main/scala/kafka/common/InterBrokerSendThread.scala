@@ -39,7 +39,7 @@ abstract class InterBrokerSendThread(name: String,
   extends ShutdownableThread(name, isInterruptible) {
 
   def generateRequests(): Iterable[RequestAndCompletionHandler]
-  def unsentExpiryMs: Int
+  def requestTimeoutMs: Int
   private val unsentRequests = new UnsentRequests
 
   def hasUnsentRequests = unsentRequests.iterator().hasNext
@@ -57,7 +57,8 @@ abstract class InterBrokerSendThread(name: String,
     generateRequests().foreach { request =>
       val completionHandler = request.handler
       unsentRequests.put(request.destination,
-        networkClient.newClientRequest(request.destination.idString, request.request, now, true, completionHandler))
+        networkClient.newClientRequest(request.destination.idString, request.request, now, true,
+          requestTimeoutMs, completionHandler))
     }
 
     try {
@@ -118,9 +119,9 @@ abstract class InterBrokerSendThread(name: String,
 
   private def failExpiredRequests(now: Long): Unit = {
     // clear all expired unsent requests
-    val expiredRequests = unsentRequests.removeExpiredRequests(now, unsentExpiryMs)
+    val expiredRequests = unsentRequests.removeExpiredRequests(now, requestTimeoutMs)
     for (request <- expiredRequests.asScala) {
-      debug(s"Failed to send the following request after $unsentExpiryMs ms: $request")
+      debug(s"Failed to send the following request after $requestTimeoutMs ms: $request")
       completeWithDisconnect(request, now, null)
     }
   }

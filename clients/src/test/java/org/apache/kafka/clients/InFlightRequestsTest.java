@@ -92,7 +92,7 @@ public class InFlightRequestsTest {
         this.correlationId += 1;
 
         RequestHeader requestHeader = new RequestHeader(ApiKeys.METADATA, (short) 0, "clientId", correlationId);
-        NetworkClient.InFlightRequest ifr = new NetworkClient.InFlightRequest(requestHeader, 0,
+        NetworkClient.InFlightRequest ifr = new NetworkClient.InFlightRequest(requestHeader, 3000, 0,
                 destination, null, false, false, null, null, 0);
         inFlightRequests.add(ifr);
         return correlationId;

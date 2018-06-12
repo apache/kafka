@@ -166,10 +166,9 @@ final class InFlightRequests {
      * Returns a list of nodes with pending in-flight request, that need to be timed out
      *
      * @param now current time in milliseconds
-     * @param requestTimeoutMs max time to wait for the request to be completed
      * @return list of nodes
      */
-    public List<String> getNodesWithTimedOutRequests(long now, int requestTimeoutMs) {
+    public List<String> getNodesWithTimedOutRequests(long now) {
         List<String> nodeIds = new LinkedList<>();
         for (Map.Entry<String, Deque<NetworkClient.InFlightRequest>> requestEntry : requests.entrySet()) {
             String nodeId = requestEntry.getKey();
@@ -178,7 +177,7 @@ final class InFlightRequests {
             if (!deque.isEmpty()) {
                 NetworkClient.InFlightRequest request = deque.peekLast();
                 long timeSinceSend = now - request.sendTimeMs;
-                if (timeSinceSend > requestTimeoutMs)
+                if (timeSinceSend > request.requestTimeoutMs)
                     nodeIds.add(nodeId);
             }
         }

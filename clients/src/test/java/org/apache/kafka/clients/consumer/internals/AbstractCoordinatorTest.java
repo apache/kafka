@@ -45,6 +45,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -61,7 +64,7 @@ public class AbstractCoordinatorTest {
     private static final int HEARTBEAT_INTERVAL_MS = 3000;
     private static final long RETRY_BACKOFF_MS = 20;
     private static final long LONG_RETRY_BACKOFF_MS = 10000;
-    private static final long REQUEST_TIMEOUT_MS = 40000;
+    private static final int REQUEST_TIMEOUT_MS = 40000;
     private static final String GROUP_ID = "dummy-group";
     private static final String METRIC_GROUP_PREFIX = "consumer";
 
@@ -106,6 +109,51 @@ public class AbstractCoordinatorTest {
         long endTime = mockTime.milliseconds();
 
         assertTrue(endTime - initialTime >= RETRY_BACKOFF_MS);
+    }
+
+    @Test
+    public void testTimeoutAndRetryJoinGroupIfNeeded() throws Exception {
+        setupCoordinator(RETRY_BACKOFF_MS);
+        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(0);
+
+        ExecutorService executor = Executors.newFixedThreadPool(1);
+        try {
+            long firstAttemptStartMs = mockTime.milliseconds();
+            Future<Boolean> firstAttempt = executor.submit(() ->
+                    coordinator.joinGroupIfNeeded(REQUEST_TIMEOUT_MS, firstAttemptStartMs));
+
+            mockTime.sleep(REQUEST_TIMEOUT_MS);
+            assertFalse(firstAttempt.get());
+            assertTrue(consumerClient.hasPendingRequests(coordinatorNode));
+
+            mockClient.respond(joinGroupFollowerResponse(1, "memberId", "leaderId", Errors.NONE));
+            mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
+
+            long secondAttemptMs = mockTime.milliseconds();
+            Future<Boolean> secondAttempt = executor.submit(() ->
+                    coordinator.joinGroupIfNeeded(REQUEST_TIMEOUT_MS, secondAttemptMs));
+
+            assertTrue(secondAttempt.get());
+        } finally {
+            executor.shutdownNow();
+            executor.awaitTermination(1000, TimeUnit.MILLISECONDS);
+        }
+    }
+
+    @Test
+    public void testJoinGroupRequestTimeout() {
+        setupCoordinator(RETRY_BACKOFF_MS);
+        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(0);
+
+        RequestFuture<ByteBuffer> future = coordinator.sendJoinGroupRequest();
+
+        mockTime.sleep(REQUEST_TIMEOUT_MS + 1);
+        assertFalse(consumerClient.poll(future, 0));
+
+        mockTime.sleep(REBALANCE_TIMEOUT_MS - REQUEST_TIMEOUT_MS + 5000);
+        assertTrue(consumerClient.poll(future, 0));
     }
 
     @Test
@@ -170,7 +218,7 @@ public class AbstractCoordinatorTest {
     }
 
     @Test
-    public void testLookupCoordinator() throws Exception {
+    public void testLookupCoordinator() {
         setupCoordinator(RETRY_BACKOFF_MS);
 
         mockClient.setNode(null);

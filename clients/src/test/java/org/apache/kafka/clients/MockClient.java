@@ -267,6 +267,7 @@ public class MockClient implements KafkaClient {
     @Override
     public List<ClientResponse> poll(long timeoutMs, long now) {
         maybeAwaitWakeup();
+        checkTimeoutOfPendingRequests(now);
 
         List<ClientResponse> copy = new ArrayList<>(this.responses);
 
@@ -294,6 +295,15 @@ public class MockClient implements KafkaClient {
         }
 
         return copy;
+    }
+
+    private void checkTimeoutOfPendingRequests(long nowMs) {
+        ClientRequest request = requests.peek();
+        while (request != null && nowMs > request.createdTimeMs() + request.requestTimeoutMs()) {
+            disconnect(request.destination());
+            requests.poll();
+            request = requests.peek();
+        }
     }
 
     public Queue<ClientRequest> requests() {
@@ -493,14 +503,18 @@ public class MockClient implements KafkaClient {
     @Override
     public ClientRequest newClientRequest(String nodeId, AbstractRequest.Builder<?> requestBuilder, long createdTimeMs,
                                           boolean expectResponse) {
-        return newClientRequest(nodeId, requestBuilder, createdTimeMs, expectResponse, null);
+        return newClientRequest(nodeId, requestBuilder, createdTimeMs, expectResponse, 5000, null);
     }
 
     @Override
-    public ClientRequest newClientRequest(String nodeId, AbstractRequest.Builder<?> requestBuilder, long createdTimeMs,
-                                          boolean expectResponse, RequestCompletionHandler callback) {
+    public ClientRequest newClientRequest(String nodeId,
+                                          AbstractRequest.Builder<?> requestBuilder,
+                                          long createdTimeMs,
+                                          boolean expectResponse,
+                                          int requestTimeoutMs,
+                                          RequestCompletionHandler callback) {
         return new ClientRequest(nodeId, requestBuilder, correlation++, "mockClientId", createdTimeMs,
-                expectResponse, callback);
+                expectResponse, requestTimeoutMs, callback);
     }
 
     @Override
