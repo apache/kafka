@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.kstream.internals.graph;
 
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
@@ -61,6 +62,14 @@ public class StreamSourceNode<K, V> extends StreamsGraphNode {
 
     public ConsumedInternal<K, V> getConsumedInternal() {
         return consumedInternal;
+    }
+
+    public Serde<K> keySerde() {
+        return consumedInternal.keySerde();
+    }
+
+    public Serde<V> valueSerde() {
+        return consumedInternal.valueSerde();
     }
 
     @Override

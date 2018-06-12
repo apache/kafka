@@ -20,6 +20,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.kstream.internals.graph.StreamSinkNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamSourceNode;
@@ -38,11 +39,14 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.PriorityQueue;
+import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Predicate;
 import java.util.regex.Pattern;
 
 public class InternalStreamsBuilder implements InternalNameProvider {
@@ -53,8 +57,9 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
     private final AtomicInteger nodeIdCounter = new AtomicInteger(0);
     private final NodeIdComparator nodeIdComparator = new NodeIdComparator();
-    private final Map<StreamsGraphNode, Set<StreamsGraphNode>> repartitioningNodeToRepartitioned = new HashMap<>();
+    private final Map<StreamsGraphNode, Set<OptimizableRepartitionNode>> repartitioningNodeToRepartitioned = new HashMap<>();
     private final Map<StreamsGraphNode, StreamSinkNode> stateStoreNodeToSinkNodes = new HashMap<>();
+    private final Set<TableSourceNode> tableSourceNodes = new LinkedHashSet<>();
 
     private static final String TOPOLOGY_ROOT = "root";
     private static final Logger LOG = LoggerFactory.getLogger(InternalStreamsBuilder.class);
@@ -114,7 +119,6 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         final ProcessorParameters processorParameters = new ProcessorParameters<>(processorSupplier, name);
 
         TableSourceNode.TableSourceNodeBuilder<K, V> tableSourceNodeBuilder = TableSourceNode.tableSourceNodeBuilder();
-
 
         TableSourceNode<K, V> tableSourceNode = tableSourceNodeBuilder.withNodeName(name)
                                                                                .withSourceName(source)
@@ -215,14 +219,18 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                        stateUpdateSupplier);
     }
 
-    public void buildAndOptimizeTopology() {
+    public void buildAndOptimizeTopology(Properties props) {
         if (!topologyBuilt) {
 
+            LOG.debug("BEFORE OPTIMIZATION Root node {} child nodes {}", root, root.children());
+            if (props != null) {
+                optimize();
+            }
+
+            LOG.debug("AFTER OPTIMIZATION Root node {} child nodes {}", root, root.children());
             final PriorityQueue<StreamsGraphNode> graphNodePriorityQueue = new PriorityQueue<>(5, nodeIdComparator);
 
             graphNodePriorityQueue.offer(root);
-
-            LOG.debug("Root node {} child nodes {}", root, root.children());
 
             while (!graphNodePriorityQueue.isEmpty()) {
                 final StreamsGraphNode streamGraphNode = graphNodePriorityQueue.remove();
@@ -242,6 +250,91 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         }
     }
 
+    private void optimize() {
+        final PriorityQueue<StreamsGraphNode> graphNodePriorityQueue = new PriorityQueue<>(5, nodeIdComparator);
+        LOG.debug("Entering optimize");
+        graphNodePriorityQueue.offer(root);
+
+        while (!graphNodePriorityQueue.isEmpty()) {
+            final StreamsGraphNode streamGraphNode = graphNodePriorityQueue.remove();
+
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("{} child nodes {}", streamGraphNode, streamGraphNode.children());
+            }
+
+
+                mayOptimizeRepartitions(streamGraphNode);
+
+
+            for (StreamsGraphNode graphNode : streamGraphNode.children()) {
+                graphNodePriorityQueue.offer(graphNode);
+            }
+        }
+    }
+
+    private void mayOptimizeRepartitions(StreamsGraphNode node) {
+        if (node.triggersRepartitioning() && repartitioningNodeToRepartitioned.containsKey(node)) {
+            LOG.debug("Looking to maybe optimize {}", node);
+            StreamsGraphNode repartitionNode = setRepartitionOnTriggeringOperation(node);
+            LOG.debug("Now created repartition node {}", repartitionNode);
+            for (OptimizableRepartitionNode optimizableRepartitionNode : repartitioningNodeToRepartitioned.get(node)) {
+                StreamsGraphNode reparititionParent = optimizableRepartitionNode.parentNode();
+
+                Collection<StreamsGraphNode> repartitionNodeChildren = optimizableRepartitionNode.children();
+                optimizableRepartitionNode.clearChildren();
+                for (StreamsGraphNode repartitionNodeChild : repartitionNodeChildren) {
+                    reparititionParent.clearChildren();
+                    reparititionParent.addChildNode(repartitionNodeChild);
+                }
+                optimizableRepartitionNode = null;
+                LOG.debug("UPDATED node {}", repartitionNode);
+            }
+        }
+    }
+
+    private StreamsGraphNode setRepartitionOnTriggeringOperation(StreamsGraphNode node) {
+        StreamsGraphNode repartitionNode = createRepartitionNode(node);
+        insertChildNode(node, repartitionNode);
+        return repartitionNode;
+    }
+
+    private StreamsGraphNode createRepartitionNode(StreamsGraphNode node) {
+
+        StreamsGraphNode parentNode = getParentNode(node, n -> n instanceof StreamSourceNode);
+
+        StreamSourceNode sourceNode = (StreamSourceNode) parentNode;
+
+        OptimizableRepartitionNode.OptimizableRepartitionNodeBuilder repartitionNodeBuilder = OptimizableRepartitionNode.optimizableRepartitionNodeBuilder();
+        KStreamImpl.createRepartitionedSource(this,
+                                              sourceNode.keySerde(),
+                                              sourceNode.valueSerde(),
+                                              node.nodeName() + "repartitioned",
+                                              node.nodeName(),
+                                              repartitionNodeBuilder);
+
+        return repartitionNodeBuilder.build();
+
+    }
+
+
+    private void insertChildNode(StreamsGraphNode original, StreamsGraphNode nodeToInsert) {
+
+        Collection<StreamsGraphNode> childNodes = original.children();
+
+        original.clearChildren();
+        for (StreamsGraphNode childNode : childNodes) {
+            nodeToInsert.addChildNode(childNode);
+        }
+        original.addChildNode(nodeToInsert);
+    }
+
+    private StreamsGraphNode getParentNode(StreamsGraphNode original, Predicate<StreamsGraphNode> parentFound) {
+        StreamsGraphNode parent = original.parentNode();
+        while (!parentFound.test(parent)) {
+            parent = parent.parentNode();
+        }
+        return parent;
+    }
 
     void addNode(final StreamsGraphNode node) {
         node.setId(nodeIdCounter.getAndIncrement());
@@ -255,14 +348,16 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                 + node.getClass().getSimpleName());
         }
 
-        if (node.triggersRepartitioning()) {
+        if (node instanceof TableSourceNode && !((TableSourceNode) node).isGlobalKTable()) {
+            tableSourceNodes.add((TableSourceNode) node);
+        } else if (node.triggersRepartitioning() && !repartitioningNodeToRepartitioned.containsKey(node)) {
             repartitioningNodeToRepartitioned.put(node, new HashSet<>());
-        } else if (node.repartitionRequired()) {
+        } else if (node instanceof OptimizableRepartitionNode) {
             StreamsGraphNode currentNode = node;
             while (currentNode != null) {
                 final StreamsGraphNode parentNode = currentNode.parentNode();
-                if (parentNode != null &&  parentNode.triggersRepartitioning()) {
-                    repartitioningNodeToRepartitioned.get(parentNode).add(node);
+                if (parentNode != null && parentNode.triggersRepartitioning()) {
+                    repartitioningNodeToRepartitioned.get(parentNode).add((OptimizableRepartitionNode)node);
                     break;
                 }
                 currentNode = parentNode;

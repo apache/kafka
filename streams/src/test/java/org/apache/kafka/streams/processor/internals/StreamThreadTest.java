@@ -394,7 +394,7 @@ public class StreamThreadTest {
     @Test
     public void shouldInjectSharedProducerForAllTasksUsingClientSupplierOnCreateIfEosDisabled() {
         internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
-        internalStreamsBuilder.buildAndOptimizeTopology();
+        internalStreamsBuilder.buildAndOptimizeTopology(null);
 
         final StreamThread thread = createStreamThread(clientId, config, false);
 
@@ -786,7 +786,7 @@ public class StreamThreadTest {
         internalStreamsBuilder.stream(Collections.singleton(topic1), consumed)
             .groupByKey().count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>as("count-one"));
 
-        internalStreamsBuilder.buildAndOptimizeTopology();
+        internalStreamsBuilder.buildAndOptimizeTopology(null);
         final StreamThread thread = createStreamThread(clientId, config, false);
         final MockConsumer<byte[], byte[]> restoreConsumer = clientSupplier.restoreConsumer;
         restoreConsumer.updatePartitions(
@@ -841,7 +841,7 @@ public class StreamThreadTest {
         materialized.generateStoreNameIfNeeded(internalStreamsBuilder, "");
         internalStreamsBuilder.table(topic2, new ConsumedInternal(), materialized);
 
-        internalStreamsBuilder.buildAndOptimizeTopology();
+        internalStreamsBuilder.buildAndOptimizeTopology(null);
         final StreamThread thread = createStreamThread(clientId, config, false);
         final MockConsumer<byte[], byte[]> restoreConsumer = clientSupplier.restoreConsumer;
         restoreConsumer.updatePartitions(changelogName1,
@@ -930,7 +930,7 @@ public class StreamThreadTest {
         };
 
         internalStreamsBuilder.stream(Collections.singleton(topic1), consumed).process(punctuateProcessor);
-        internalStreamsBuilder.buildAndOptimizeTopology();
+        internalStreamsBuilder.buildAndOptimizeTopology(null);
 
         final StreamThread thread = createStreamThread(clientId, config, false);
 
@@ -990,7 +990,7 @@ public class StreamThreadTest {
     public void shouldAlwaysReturnEmptyTasksMetadataWhileRebalancingStateAndTasksNotRunning() {
         internalStreamsBuilder.stream(Collections.singleton(topic1), consumed)
             .groupByKey().count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>as("count-one"));
-        internalStreamsBuilder.buildAndOptimizeTopology();
+        internalStreamsBuilder.buildAndOptimizeTopology(null);
 
         final StreamThread thread = createStreamThread(clientId, config, false);
         final MockConsumer<byte[], byte[]> restoreConsumer = clientSupplier.restoreConsumer;
@@ -1041,7 +1041,7 @@ public class StreamThreadTest {
     public void shouldRecoverFromInvalidOffsetExceptionOnRestoreAndFinishRestore() throws Exception {
         internalStreamsBuilder.stream(Collections.singleton("topic"), consumed)
             .groupByKey().count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>as("count"));
-        internalStreamsBuilder.buildAndOptimizeTopology();
+        internalStreamsBuilder.buildAndOptimizeTopology(null);
 
         final StreamThread thread = createStreamThread("clientId", config, false);
         final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.consumer;

@@ -22,11 +22,12 @@ import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
 import java.util.Collection;
 import java.util.LinkedHashSet;
+import java.util.Set;
 
 public abstract class StreamsGraphNode {
 
     private StreamsGraphNode parentNode;
-    private final Collection<StreamsGraphNode> childNodes = new LinkedHashSet<>();
+    private LinkedHashSet<StreamsGraphNode> childNodes = new LinkedHashSet<>();
     private final String nodeName;
     private boolean repartitionRequired;
     private boolean triggersRepartitioning;
@@ -49,6 +50,17 @@ public abstract class StreamsGraphNode {
 
     public Collection<StreamsGraphNode> children() {
         return new LinkedHashSet<>(childNodes);
+    }
+
+    public void clearChildren() {
+        childNodes.clear();
+    }
+
+    public void setChildNodes(Set<StreamsGraphNode> streamsGraphNodes) {
+        childNodes.clear();
+        for (StreamsGraphNode streamsGraphNode : streamsGraphNodes) {
+            addChildNode(streamsGraphNode);
+        }
     }
 
     public void addChildNode(final StreamsGraphNode childNode) {

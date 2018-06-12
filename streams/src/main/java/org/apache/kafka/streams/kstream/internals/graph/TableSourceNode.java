@@ -53,6 +53,10 @@ public class TableSourceNode<K, V> extends StreamSourceNode<K, V> {
         this.storeBuilder = storeBuilder;
     }
 
+    public boolean isGlobalKTable() {
+        return isGlobalKTable;
+    }
+
     public static <K, V> TableSourceNodeBuilder<K, V> tableSourceNodeBuilder() {
         return new TableSourceNodeBuilder<>();
     }
