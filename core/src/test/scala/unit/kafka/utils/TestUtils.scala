@@ -22,6 +22,7 @@ import java.nio._
 import java.nio.channels._
 import java.nio.charset.{Charset, StandardCharsets}
 import java.security.cert.X509Certificate
+import java.time.Duration
 import java.util.{Collections, Properties}
 import java.util.concurrent.{Callable, Executors, TimeUnit}
 import javax.net.ssl.X509TrustManager
@@ -1274,7 +1275,7 @@ object TestUtils extends Logging {
                            waitTime: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Seq[ConsumerRecord[K, V]] = {
     val records = new ArrayBuffer[ConsumerRecord[K, V]]()
     waitUntilTrue(() => {
-      records ++= consumer.poll(50).asScala
+      records ++= consumer.poll(Duration.ofMillis(50)).asScala
       records.size >= numMessages
     }, s"Consumed ${records.size} records until timeout instead of the expected $numMessages records", waitTime)
     assertEquals("Consumed more records than expected", numMessages, records.size)
@@ -1293,7 +1294,7 @@ object TestUtils extends Logging {
     val startTime = System.currentTimeMillis()
     val records = new ArrayBuffer[ConsumerRecord[K, V]]()
     waitUntilTrue(() => {
-      records ++= consumer.poll(50).asScala
+      records ++= consumer.poll(Duration.ofMillis(50)).asScala
       System.currentTimeMillis() - startTime > duration
     }, s"The timeout $duration was greater than the maximum wait time.")
     records
