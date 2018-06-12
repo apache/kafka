@@ -24,7 +24,7 @@ import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.resource.ResourceNameType;
+import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.utils.Utils;
 
@@ -39,7 +39,7 @@ import static org.apache.kafka.common.protocol.CommonFields.OPERATION;
 import static org.apache.kafka.common.protocol.CommonFields.PERMISSION_TYPE;
 import static org.apache.kafka.common.protocol.CommonFields.PRINCIPAL_FILTER;
 import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_NAME_FILTER;
-import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_NAME_TYPE_FILTER;
+import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_PATTERN_TYPE_FILTER;
 import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_TYPE;
 
 public class DeleteAclsRequest extends AbstractRequest {
@@ -55,16 +55,16 @@ public class DeleteAclsRequest extends AbstractRequest {
                     PERMISSION_TYPE))));
 
     /**
-     * V1 sees a new `RESOURCE_NAME_TYPE_FILTER` that controls how the filter handles different resource name types.
-     * Also, when the quota is violated, brokers will respond to a version 1 or later request before throttling.
+     * V1 sees a new `RESOURCE_PATTERN_TYPE_FILTER` that controls how the filter handles different resource pattern types.
+     * For more info, see {@link PatternType}.
      *
-     * For more info, see {@link org.apache.kafka.common.resource.ResourceNameType}.
+     * Also, when the quota is violated, brokers will respond to a version 1 or later request before throttling.
      */
     private static final Schema DELETE_ACLS_REQUEST_V1 = new Schema(
             new Field(FILTERS, new ArrayOf(new Schema(
                     RESOURCE_TYPE,
                     RESOURCE_NAME_FILTER,
-                    RESOURCE_NAME_TYPE_FILTER,
+                    RESOURCE_PATTERN_TYPE_FILTER,
                     PRINCIPAL_FILTER,
                     HOST_FILTER,
                     OPERATION,
@@ -157,10 +157,10 @@ public class DeleteAclsRequest extends AbstractRequest {
         if (version == 0) {
             final boolean unsupported = filters.stream()
                 .map(AclBindingFilter::patternFilter)
-                .map(ResourcePatternFilter::nameType)
-                .anyMatch(nameType -> nameType != ResourceNameType.LITERAL);
+                .map(ResourcePatternFilter::patternType)
+                .anyMatch(patternType -> patternType != PatternType.LITERAL);
             if (unsupported) {
-                throw new UnsupportedVersionException("Version 0 only supports literal resource name types");
+                throw new UnsupportedVersionException("Version 0 only supports literal resource pattern types");
             }
         }
 

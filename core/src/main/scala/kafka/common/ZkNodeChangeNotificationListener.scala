@@ -102,7 +102,7 @@ class ZkNodeChangeNotificationListener(private val zkClient: KafkaZkClient,
     val (data, _) = zkClient.getDataAndStat(changeZnode)
     data match {
       case Some(d) => Try(notificationHandler.processNotification(d)) match {
-        case Failure(e) => error(s"error processing change notification from $changeZnode", e)
+        case Failure(e) => error(s"error processing change notification $d from $changeZnode", e)
         case _ =>
       }
       case None => warn(s"read null data from $changeZnode")
