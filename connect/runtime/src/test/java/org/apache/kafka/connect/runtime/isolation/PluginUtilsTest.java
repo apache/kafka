@@ -114,6 +114,9 @@ public class PluginUtilsTest {
         assertFalse(PluginUtils.shouldLoadInIsolation(
                 "org.apache.kafka.clients.admin.KafkaAdminClient")
         );
+        assertFalse(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.rest.ConnectRestExtension"
+        ));
     }
 
     @Test
@@ -153,6 +156,11 @@ public class PluginUtilsTest {
 
     @Test
     public void testClientConfigProvider() throws Exception {
+        // Should not attempt to load the interface in isolation because it will break
+        // initialization of class loading isolation during scanning.
+        assertFalse(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.common.config.ConfigProvider")
+        );
         assertTrue(PluginUtils.shouldLoadInIsolation(
                 "org.apache.kafka.common.config.FileConfigProvider")
         );
