@@ -24,10 +24,12 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyTestDriverWrapper;
+import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Predicate;
+import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockMapper;
@@ -126,20 +128,24 @@ public class KTableFilterTest {
     private void doTestValueGetter(final StreamsBuilder builder,
                                    final KTableImpl<String, Integer, Integer> table2,
                                    final KTableImpl<String, Integer, Integer> table3,
-                                   final String topic1,
-                                   final String procName2,
-                                   final String procName3) {
+                                   final String topic1) {
+
+        final Topology topology = builder.build();
 
         KTableValueGetterSupplier<String, Integer> getterSupplier2 = table2.valueGetterSupplier();
         KTableValueGetterSupplier<String, Integer> getterSupplier3 = table3.valueGetterSupplier();
 
-        try (final TopologyTestDriverWrapper driver = new TopologyTestDriverWrapper(builder.build(), props)) {
+        final InternalTopologyBuilder topologyBuilder = TopologyWrapper.getInternalTopologyBuilder(topology);
+        topologyBuilder.connectProcessorAndStateStores(table2.name, getterSupplier2.storeNames());
+        topologyBuilder.connectProcessorAndStateStores(table3.name, getterSupplier3.storeNames());
+
+        try (final TopologyTestDriverWrapper driver = new TopologyTestDriverWrapper(topology, props)) {
 
             KTableValueGetter<String, Integer> getter2 = getterSupplier2.get();
             KTableValueGetter<String, Integer> getter3 = getterSupplier3.get();
 
-            getter2.init(driver.getProcessorContext(procName2));
-            getter3.init(driver.getProcessorContext(procName3));
+            getter2.init(driver.setCurrentNodeForProcessorContext(table2.name));
+            getter3.init(driver.setCurrentNodeForProcessorContext(table3.name));
 
             driver.pipeInput(recordFactory.create(topic1, "A", 1));
             driver.pipeInput(recordFactory.create(topic1, "B", 1));
@@ -210,7 +216,7 @@ public class KTableFilterTest {
                     }
                 });
 
-        doTestValueGetter(builder, table2, table3, topic1, "KTABLE-SOURCE-0000000002", "KTABLE-SOURCE-0000000002");
+        doTestValueGetter(builder, table2, table3, topic1);
     }
 
     @Test
@@ -239,7 +245,7 @@ public class KTableFilterTest {
         assertEquals("anyStoreNameFilter", table2.queryableStoreName());
         assertNull(table3.queryableStoreName());
 
-        doTestValueGetter(builder, table2, table3, topic1, "KTABLE-FILTER-0000000003", "KTABLE-SOURCE-0000000002");
+        doTestValueGetter(builder, table2, table3, topic1);
     }
 
     private void doTestNotSendingOldValue(final StreamsBuilder builder,

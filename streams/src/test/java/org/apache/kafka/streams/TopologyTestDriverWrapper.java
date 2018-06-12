@@ -37,12 +37,12 @@ public class TopologyTestDriverWrapper extends TopologyTestDriver {
     }
 
     /**
-     * Get the processor context
+     * Get the processor context, setting the processor whose name is given as current node
      *
-     * @param processorName used to search for a processor connected to this StateStore, which is set as current node
+     * @param processorName processor name to set as current node
      * @return the processor context
      */
-    public ProcessorContext getProcessorContext(final String processorName) {
+    public ProcessorContext setCurrentNodeForProcessorContext(final String processorName) {
         final ProcessorContext context = task.context();
         ((ProcessorContextImpl) context).setCurrentNode(getProcessor(processorName));
         return context;
@@ -56,6 +56,11 @@ public class TopologyTestDriverWrapper extends TopologyTestDriver {
      */
     public ProcessorNode getProcessor(final String name) {
         for (final ProcessorNode node : processorTopology.processors()) {
+            if (node.name().equals(name)) {
+                return node;
+            }
+        }
+        for (final ProcessorNode node : globalTopology.processors()) {
             if (node.name().equals(name)) {
                 return node;
             }

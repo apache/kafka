@@ -25,6 +25,7 @@ import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyDescription;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyTestDriverWrapper;
+import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
@@ -34,6 +35,7 @@ import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.ValueMapperWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
+import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.SinkNode;
 import org.apache.kafka.streams.processor.internals.SourceNode;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -150,24 +152,32 @@ public class KTableImplTest {
         table1.toStream().to(topic2, produced);
         final KTableImpl<String, String, String> table4 = (KTableImpl<String, String, String>) builder.table(topic2, consumed);
 
+        final Topology topology = builder.build();
+
         final KTableValueGetterSupplier<String, String> getterSupplier1 = table1.valueGetterSupplier();
         final KTableValueGetterSupplier<String, Integer> getterSupplier2 = table2.valueGetterSupplier();
         final KTableValueGetterSupplier<String, Integer> getterSupplier3 = table3.valueGetterSupplier();
         final KTableValueGetterSupplier<String, String> getterSupplier4 = table4.valueGetterSupplier();
 
-        try (final TopologyTestDriverWrapper driver = new TopologyTestDriverWrapper(builder.build(), props)) {
+        final InternalTopologyBuilder topologyBuilder = TopologyWrapper.getInternalTopologyBuilder(topology);
+        topologyBuilder.connectProcessorAndStateStores(table1.name, getterSupplier1.storeNames());
+        topologyBuilder.connectProcessorAndStateStores(table2.name, getterSupplier2.storeNames());
+        topologyBuilder.connectProcessorAndStateStores(table3.name, getterSupplier3.storeNames());
+        topologyBuilder.connectProcessorAndStateStores(table4.name, getterSupplier4.storeNames());
 
-            // two state stores should be created
+        try (final TopologyTestDriverWrapper driver = new TopologyTestDriverWrapper(topology, props)) {
+
             assertEquals(2, driver.getAllStateStores().size());
 
             final KTableValueGetter<String, String> getter1 = getterSupplier1.get();
-            getter1.init(driver.getProcessorContext("KTABLE-SOURCE-0000000002"));
             final KTableValueGetter<String, Integer> getter2 = getterSupplier2.get();
-            getter2.init(driver.getProcessorContext("KTABLE-SOURCE-0000000002"));
             final KTableValueGetter<String, Integer> getter3 = getterSupplier3.get();
-            getter3.init(driver.getProcessorContext("KTABLE-SOURCE-0000000002"));
             final KTableValueGetter<String, String> getter4 = getterSupplier4.get();
-            getter4.init(driver.getProcessorContext("KTABLE-SOURCE-0000000009"));
+
+            getter1.init(driver.setCurrentNodeForProcessorContext(table1.name));
+            getter2.init(driver.setCurrentNodeForProcessorContext(table2.name));
+            getter3.init(driver.setCurrentNodeForProcessorContext(table3.name));
+            getter4.init(driver.setCurrentNodeForProcessorContext(table4.name));
 
             driver.pipeInput(recordFactory.create(topic1, "A", "01"));
             driver.pipeInput(recordFactory.create(topic1, "B", "01"));
@@ -274,7 +284,6 @@ public class KTableImplTest {
                 });
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            // two state stores should be created
             assertEquals(2, driver.getAllStateStores().size());
         }
     }
@@ -314,28 +323,24 @@ public class KTableImplTest {
                 });
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            // two state stores should be created
             assertEquals(2, driver.getAllStateStores().size());
         }
     }
 
-    private TopologyDescription.Node getProcessor(final Topology topology, final String processorName) {
+    private void assertTopologyContainsProcessor(final Topology topology, final String processorName) {
         for (final TopologyDescription.Subtopology subtopology: topology.describe().subtopologies()) {
             for (final TopologyDescription.Node node: subtopology.nodes()) {
                 if (node.name().equals(processorName)) {
-                    return node;
+                    return;
                 }
             }
         }
-        return null;
-    }
-
-    private void assertTopologyContainsProcessor(final Topology topology, final String processorName) {
-        assertNotNull(getProcessor(topology, processorName));
+        throw new AssertionError("No processor named '" + processorName + "'"
+                + "found in the provided Topology:\n" + topology.describe());
     }
 
     @Test
-    public void testRepartition() throws NoSuchFieldException, IllegalAccessException {
+    public void shouldCreateSourceAndSinkNodesForRepartitioningTopic() throws NoSuchFieldException, IllegalAccessException {
         final String topic1 = "topic1";
         final String storeName1 = "storeName1";
 
@@ -359,10 +364,8 @@ public class KTableImplTest {
         final Topology topology = builder.build();
         try (final TopologyTestDriverWrapper driver = new TopologyTestDriverWrapper(topology, props)) {
 
-            // three state stores should be created, one for source, one for aggregate and one for reduce
             assertEquals(3, driver.getAllStateStores().size());
 
-            // contains the corresponding repartition source / sink nodes
             assertTopologyContainsProcessor(topology, "KSTREAM-SINK-0000000003");
             assertTopologyContainsProcessor(topology, "KSTREAM-SOURCE-0000000004");
             assertTopologyContainsProcessor(topology, "KSTREAM-SINK-0000000007");
