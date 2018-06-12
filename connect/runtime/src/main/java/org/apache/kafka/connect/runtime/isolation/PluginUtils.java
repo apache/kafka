@@ -130,7 +130,7 @@ public class PluginUtils {
             + "|storage\\.StringConverter"
             + "|rest\\.basic\\.auth\\.extension\\.BasicAuthSecurityRestExtension"
             + ")"
-            + "|common\\.config\\.provider\\..*"
+            + "|common\\.config\\.provider\\.(?!ConfigProvider$).*"
             + ")$";
 
     private static final DirectoryStream.Filter<Path> PLUGIN_PATH_FILTER = new DirectoryStream

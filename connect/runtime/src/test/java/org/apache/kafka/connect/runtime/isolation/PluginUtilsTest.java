@@ -157,7 +157,7 @@ public class PluginUtilsTest {
     @Test
     public void testClientConfigProvider() throws Exception {
         assertFalse(PluginUtils.shouldLoadInIsolation(
-                "org.apache.kafka.common.config.ConfigProvider")
+                "org.apache.kafka.common.config.provider.ConfigProvider")
         );
         assertTrue(PluginUtils.shouldLoadInIsolation(
                 "org.apache.kafka.common.config.provider.FileConfigProvider")
