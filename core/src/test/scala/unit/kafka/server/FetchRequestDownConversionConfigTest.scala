@@ -83,7 +83,7 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
     initProducer()
     val topicMap = createTopics(numTopics = 5, numPartitions = 1)
     val topics = topicMap.keySet.toSeq
-    topics.foreach(topic => producer.send(new ProducerRecord(topic.topic(), "key", "value")))
+    topics.foreach(topic => producer.send(new ProducerRecord(topic.topic(), "key", "value")).get())
     val fetchRequest = FetchRequest.Builder.forConsumer(Int.MaxValue, 0, createPartitionMap(1024,
       topics)).build(1)
     val fetchResponse = sendFetchRequest(topicMap.head._2, fetchRequest)
@@ -95,7 +95,7 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
     initProducer()
     val topicMap = createTopics(numTopics = 5, numPartitions = 1)
     val topics = topicMap.keySet.toSeq
-    topics.foreach(topic => producer.send(new ProducerRecord(topic.topic(), "key", "value")))
+    topics.foreach(topic => producer.send(new ProducerRecord(topic.topic(), "key", "value")).get())
     val fetchRequest = FetchRequest.Builder.forConsumer(Int.MaxValue, 0, createPartitionMap(1024,
       topics)).build()
     val fetchResponse = sendFetchRequest(topicMap.head._2, fetchRequest)
@@ -118,7 +118,7 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
     val allTopics = conversionDisabledTopics ++ conversionEnabledTopics
     val leaderId = conversionDisabledTopicsMap.head._2
 
-    allTopics.foreach(topic => producer.send(new ProducerRecord(topic.topic(), "key", "value")))
+    allTopics.foreach(topic => producer.send(new ProducerRecord(topic.topic(), "key", "value")).get())
     val fetchRequest = FetchRequest.Builder.forConsumer(Int.MaxValue, 0, createPartitionMap(1024,
       allTopics)).build(1)
     val fetchResponse = sendFetchRequest(leaderId, fetchRequest)
@@ -143,7 +143,7 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
     val allTopics = conversionDisabledTopics ++ conversionEnabledTopics
     val leaderId = conversionDisabledTopicsMap.head._2
 
-    allTopics.foreach(topic => producer.send(new ProducerRecord(topic.topic(), "key", "value")))
+    allTopics.foreach(topic => producer.send(new ProducerRecord(topic.topic(), "key", "value")).get())
     val fetchRequest = FetchRequest.Builder.forReplica(1, 1, Int.MaxValue, 0, createPartitionMap(1024, allTopics)).build();
     val fetchResponse = sendFetchRequest(leaderId, fetchRequest)
 
