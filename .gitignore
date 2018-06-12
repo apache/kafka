@@ -1,4 +1,5 @@
 dist
+*classes
 *.class
 target/
 build/
