@@ -175,10 +175,19 @@ public class TopologyTest {
     }
 
     @Test
-    public void shouldNotAllowToAddProcessorWithoutAtLeastOneParent() {
+    public void shouldNotAllowToAddProcessorWithEmptyParents() {
         topology.addSource("source", "topic-1");
         try {
             topology.addProcessor("processor", new MockProcessorSupplier());
+            fail("Should throw TopologyException for processor without at least one parent node");
+        } catch (final TopologyException expected) { }
+    }
+
+    @Test
+    public void shouldNotAllowToAddProcessorWithNullParents() {
+        topology.addSource("source", "topic-1");
+        try {
+            topology.addProcessor("processor", new MockProcessorSupplier(), null);
             fail("Should throw TopologyException for processor without at least one parent node");
         } catch (final TopologyException expected) { }
     }
@@ -204,11 +213,21 @@ public class TopologyTest {
     }
 
     @Test
-    public void shouldNotAllowToAddSinkWithoutAtLeastOneParent() {
+    public void shouldNotAllowToAddSinkWithEmptyParents() {
         topology.addSource("source", "topic-1");
         topology.addProcessor("processor", new MockProcessorSupplier(), "source");
         try {
             topology.addSink("sink", "topic-2");
+            fail("Should throw TopologyException for sink without at least one parent node");
+        } catch (final TopologyException expected) { }
+    }
+
+    @Test
+    public void shouldNotAllowToAddSinkWithNullParents() {
+        topology.addSource("source", "topic-1");
+        topology.addProcessor("processor", new MockProcessorSupplier(), "source");
+        try {
+            topology.addSink("sink", "topic-2", null);
             fail("Should throw TopologyException for sink without at least one parent node");
         } catch (final TopologyException expected) { }
     }
