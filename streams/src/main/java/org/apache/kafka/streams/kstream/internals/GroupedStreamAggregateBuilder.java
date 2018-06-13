@@ -115,7 +115,7 @@ class GroupedStreamAggregateBuilder<K, V> {
     /**
      * @return the new sourceName if repartitioned. Otherwise the name of this stream
      */
-    private  String repartitionIfRequired(final String queryableStoreName) {
+    private String repartitionIfRequired(final String queryableStoreName) {
         if (!repartitionRequired) {
             return this.name;
         }
