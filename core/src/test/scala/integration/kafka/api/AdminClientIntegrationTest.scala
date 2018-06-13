@@ -816,7 +816,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     val leaders = createTopic(topic, numPartitions = 1, replicationFactor = serverCount)
     val followerIndex = if (leaders(0) != servers(0).config.brokerId) 0 else 1
 
-    def waitForFollowerLSOandLEOAfterRestart(expectedLSO: Long, expectedLEO: Long): Unit = {
+    def waitForFollowerLogStartOffsetAndLEOAfterRestart(expectedLSO: Long, expectedLEO: Long): Unit = {
       TestUtils.waitUntilTrue(() => servers(followerIndex).replicaManager.getReplica(topicPartition) != None,
                               "Expected follower to create replica for partition")
 
@@ -842,7 +842,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     // start the stopped broker to verify that it will be able to fetch from new log start offset
     restartDeadBrokers()
 
-    waitForFollowerLSOandLEOAfterRestart(expectedLSO=3L, expectedLEO=100L)
+    waitForFollowerLogStartOffsetAndLEOAfterRestart(expectedLSO=3L, expectedLEO=100L)
 
     // after the new replica caught up, all replicas should have same log start offset
     for (i <- 0 until serverCount)
@@ -854,9 +854,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     val result1 = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(117L)).asJava)
     result1.all().get()
     restartDeadBrokers()
-    waitForFollowerLSOandLEOAfterRestart(expectedLSO=117L, expectedLEO=200L)
-
-    client.close()
+    waitForFollowerLogStartOffsetAndLEOAfterRestart(expectedLSO=117L, expectedLEO=200L)
   }
 
   @Test
@@ -888,8 +886,6 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     // once replica moved, its LSO and LEO should match other replicas
     assertEquals(3, servers(0).replicaManager.getReplica(topicPartition).get.logStartOffset)
     assertEquals(expectedLEO, servers(0).replicaManager.getReplica(topicPartition).get.logEndOffset.messageOffset)
-
-    client.close()
   }
 
   @Test
