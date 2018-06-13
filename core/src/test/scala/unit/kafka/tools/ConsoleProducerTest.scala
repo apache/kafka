@@ -40,7 +40,7 @@ class ConsoleProducerTest {
   )
 
   @Test
-  def testValidConfigsNewProducer() {
+  def testValidConfigs() {
     val config = new ConsoleProducer.ProducerConfig(validArgs)
     // New ProducerConfig constructor is package private, so we can't call it directly
     // Creating new Producer to validate instead

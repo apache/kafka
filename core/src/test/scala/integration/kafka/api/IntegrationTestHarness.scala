@@ -79,9 +79,9 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArrayDeserializer])
     consumerConfig ++= consumerSecurityProps
     for (_ <- 0 until producerCount)
-      producers += createNewProducer
+      producers += createProducer
     for (_ <- 0 until consumerCount) {
-      consumers += createNewConsumer
+      consumers += createConsumer
     }
 
     TestUtils.createOffsetsTopic(zkClient, servers)
@@ -92,16 +92,16 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
       clientSaslProperties)
   }
 
-  def createNewProducer: KafkaProducer[Array[Byte], Array[Byte]] = {
-      TestUtils.createNewProducer(brokerList,
+  def createProducer: KafkaProducer[Array[Byte], Array[Byte]] = {
+      TestUtils.createProducer(brokerList,
                                   securityProtocol = this.securityProtocol,
                                   trustStoreFile = this.trustStoreFile,
                                   saslProperties = this.clientSaslProperties,
                                   props = Some(producerConfig))
   }
 
-  def createNewConsumer: KafkaConsumer[Array[Byte], Array[Byte]] = {
-      TestUtils.createNewConsumer(brokerList,
+  def createConsumer: KafkaConsumer[Array[Byte], Array[Byte]] = {
+      TestUtils.createConsumer(brokerList,
                                   securityProtocol = this.securityProtocol,
                                   trustStoreFile = this.trustStoreFile,
                                   saslProperties = this.clientSaslProperties,

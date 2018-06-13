@@ -525,19 +525,19 @@ object TestUtils extends Logging {
   /**
    * Create a (new) producer with a few pre-configured properties.
    */
-  def createNewProducer[K, V](brokerList: String,
-                        acks: Int = -1,
-                        maxBlockMs: Long = 60 * 1000L,
-                        bufferSize: Long = 1024L * 1024L,
-                        retries: Int = 0,
-                        lingerMs: Long = 0,
-                        requestTimeoutMs: Long = 30 * 1000L,
-                        securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT,
-                        trustStoreFile: Option[File] = None,
-                        saslProperties: Option[Properties] = None,
-                        keySerializer: Serializer[K] = new ByteArraySerializer,
-                        valueSerializer: Serializer[V] = new ByteArraySerializer,
-                        props: Option[Properties] = None): KafkaProducer[K, V] = {
+  def createProducer[K, V](brokerList: String,
+                           acks: Int = -1,
+                           maxBlockMs: Long = 60 * 1000L,
+                           bufferSize: Long = 1024L * 1024L,
+                           retries: Int = 0,
+                           lingerMs: Long = 0,
+                           requestTimeoutMs: Long = 30 * 1000L,
+                           securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT,
+                           trustStoreFile: Option[File] = None,
+                           saslProperties: Option[Properties] = None,
+                           keySerializer: Serializer[K] = new ByteArraySerializer,
+                           valueSerializer: Serializer[V] = new ByteArraySerializer,
+                           props: Option[Properties] = None): KafkaProducer[K, V] = {
 
     val producerProps = props.getOrElse(new Properties)
     producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
@@ -587,20 +587,20 @@ object TestUtils extends Logging {
     securityConfigs(Mode.CLIENT, securityProtocol, trustStoreFile, "admin-client", SslCertificateCn, saslProperties)
 
   /**
-   * Create a new consumer with a few pre-configured properties.
+   * Create a consumer with a few pre-configured properties.
    */
-  def createNewConsumer[K, V](brokerList: String,
-                              groupId: String = "group",
-                              autoOffsetReset: String = "earliest",
-                              partitionFetchSize: Long = 4096L,
-                              partitionAssignmentStrategy: String = classOf[RangeAssignor].getName,
-                              sessionTimeout: Int = 30000,
-                              securityProtocol: SecurityProtocol,
-                              trustStoreFile: Option[File] = None,
-                              saslProperties: Option[Properties] = None,
-                              keyDeserializer: Deserializer[K] = new ByteArrayDeserializer,
-                              valueDeserializer: Deserializer[V] =new ByteArrayDeserializer,
-                              props: Option[Properties] = None) : KafkaConsumer[K, V] = {
+  def createConsumer[K, V](brokerList: String,
+                           groupId: String = "group",
+                           autoOffsetReset: String = "earliest",
+                           partitionFetchSize: Long = 4096L,
+                           partitionAssignmentStrategy: String = classOf[RangeAssignor].getName,
+                           sessionTimeout: Int = 30000,
+                           securityProtocol: SecurityProtocol,
+                           trustStoreFile: Option[File] = None,
+                           saslProperties: Option[Properties] = None,
+                           keyDeserializer: Deserializer[K] = new ByteArrayDeserializer,
+                           valueDeserializer: Deserializer[V] = new ByteArrayDeserializer,
+                           props: Option[Properties] = None): KafkaConsumer[K, V] = {
     import org.apache.kafka.clients.consumer.ConsumerConfig
 
     val consumerProps = props.getOrElse(new Properties())
@@ -953,7 +953,7 @@ object TestUtils extends Logging {
                       compressionType: CompressionType = CompressionType.NONE): Unit = {
     val props = new Properties()
     props.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, compressionType.name)
-    val producer = createNewProducer(TestUtils.getBrokerListStrFromServers(servers), retries = 5, acks = acks)
+    val producer = createProducer(TestUtils.getBrokerListStrFromServers(servers), retries = 5, acks = acks)
     try {
       val futures = records.map(producer.send)
       futures.foreach(_.get)
@@ -977,7 +977,7 @@ object TestUtils extends Logging {
   }
 
   def produceMessage(servers: Seq[KafkaServer], topic: String, message: String) {
-    val producer = createNewProducer(
+    val producer = createProducer(
       TestUtils.getBrokerListStrFromServers(servers),
       retries = 5
     )
@@ -1192,7 +1192,7 @@ object TestUtils extends Logging {
                                 securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT,
                                 trustStoreFile: Option[File] = None,
                                 waitTime: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Seq[ConsumerRecord[Array[Byte], Array[Byte]]] = {
-    val consumer = createNewConsumer(TestUtils.getBrokerListStrFromServers(servers, securityProtocol), groupId = groupId,
+    val consumer = createConsumer(TestUtils.getBrokerListStrFromServers(servers, securityProtocol), groupId = groupId,
       securityProtocol = securityProtocol, trustStoreFile = trustStoreFile)
     try {
       consumer.subscribe(Collections.singleton(topic))
@@ -1237,14 +1237,14 @@ object TestUtils extends Logging {
     props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
     props.put(ProducerConfig.BATCH_SIZE_CONFIG, batchSize.toString)
     props.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, transactionTimeoutMs.toString)
-    TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers), retries = Integer.MAX_VALUE, acks = -1, props = Some(props))
+    TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers), retries = Integer.MAX_VALUE, acks = -1, props = Some(props))
   }
 
   // Seeds the given topic with records with keys and values in the range [0..numRecords)
   def seedTopicWithNumberedRecords(topic: String, numRecords: Int, servers: Seq[KafkaServer]): Unit = {
     val props = new Properties()
     props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
-    val producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers),
+    val producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
       retries = Integer.MAX_VALUE, acks = -1, props = Some(props))
     try {
       for (i <- 0 until numRecords) {

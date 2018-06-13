@@ -227,7 +227,7 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
   private def createTransactionalProducer(): KafkaProducer[Array[Byte], Array[Byte]] = {
     producerConfig.setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "txclient-1")
     producerConfig.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
-    val txProducer = TestUtils.createNewProducer(brokerList,
+    val txProducer = TestUtils.createProducer(brokerList,
                                   securityProtocol = this.securityProtocol,
                                   saslProperties = this.clientSaslProperties,
                                   retries = 1000,

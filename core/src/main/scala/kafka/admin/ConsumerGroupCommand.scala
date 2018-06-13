@@ -394,13 +394,13 @@ object ConsumerGroupCommand extends Logging {
       AdminClient.create(props)
     }
 
-    private def getConsumer = {
+    private def getConsumer: KafkaConsumer[String, String] = {
       if (consumer == null)
-        consumer = createNewConsumer()
+        consumer = createConsumer
       consumer
     }
 
-    private def createNewConsumer(): KafkaConsumer[String, String] = {
+    private def createConsumer: KafkaConsumer[String, String] = {
       val properties = new Properties()
       val deserializer = (new StringDeserializer).getClass.getName
       val brokerUrl = opts.options.valueOf(opts.bootstrapServerOpt)

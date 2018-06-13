@@ -189,8 +189,8 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     createTopic(topic, 1, 3)
   }
 
-  override def createNewProducer: KafkaProducer[Array[Byte], Array[Byte]] = {
-    TestUtils.createNewProducer(brokerList,
+  override def createProducer: KafkaProducer[Array[Byte], Array[Byte]] = {
+    TestUtils.createProducer(brokerList,
                                 maxBlockMs = 3000L,
                                 securityProtocol = this.securityProtocol,
                                 trustStoreFile = this.trustStoreFile,

@@ -243,7 +243,7 @@ class ConsoleConsumerTest {
   }
 
   @Test
-  def shouldParseValidNewConsumerConfigWithAutoOffsetResetAndMatchingFromBeginning() {
+  def shouldParseValidConsumerConfigWithAutoOffsetResetAndMatchingFromBeginning() {
     //Given
     val args: Array[String] = Array(
       "--bootstrap-server", "localhost:9092",

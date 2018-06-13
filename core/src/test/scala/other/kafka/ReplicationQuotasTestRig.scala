@@ -126,7 +126,7 @@ object ReplicationQuotasTestRig {
       createTopic(zkClient, topicName, replicas, servers)
 
       println("Writing Data")
-      val producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers), retries = 5, acks = 0)
+      val producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers), retries = 5, acks = 0)
       (0 until config.msgsPerPartition).foreach { x =>
         (0 until config.partitions).foreach { partition =>
           producer.send(new ProducerRecord(topicName, partition, null, new Array[Byte](config.msgSize)))

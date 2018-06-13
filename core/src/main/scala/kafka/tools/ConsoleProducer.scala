@@ -228,7 +228,6 @@ object ConsoleProducer {
     val socketBuffer = options.valueOf(socketBufferSizeOpt)
     val cmdLineProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(propertyOpt).asScala)
     val extraProducerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(producerPropertyOpt).asScala)
-    /* new producer related configs */
     val maxMemoryBytes = options.valueOf(maxMemoryBytesOpt)
     val maxPartitionMemoryBytes = options.valueOf(maxPartitionMemoryBytesOpt)
     val metadataExpiryMs = options.valueOf(metadataExpiryMsOpt)
