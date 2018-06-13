@@ -63,6 +63,7 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
     private final int retries;
     private final long retryBackoffMs;
     private final Duration pollTime;
+    private final Set<String> globalNonPersistentStoresTopics = new HashSet<>();
 
     public GlobalStateManagerImpl(final LogContext logContext,
                                   final ProcessorTopology topology,
@@ -71,6 +72,14 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
                                   final StateRestoreListener stateRestoreListener,
                                   final StreamsConfig config) {
         super(stateDirectory.globalStateDir(), StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)));
+
+        // Find non persistent store's topics
+        final Map<String, String> storeToChangelogTopic = topology.storeToChangelogTopic();
+        for (final StateStore store : topology.globalStateStores()) {
+            if (!store.persistent()) {
+                globalNonPersistentStoresTopics.add(storeToChangelogTopic.get(store.name()));
+            }
+        }
 
         this.log = logContext.logger(GlobalStateManagerImpl.class);
         this.topology = topology;
@@ -246,7 +255,7 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
         for (final TopicPartition topicPartition : topicPartitions) {
             globalConsumer.assign(Collections.singletonList(topicPartition));
             final Long checkpoint = checkpointableOffsets.get(topicPartition);
-            if (checkpoint != null && checkpoint > StateRestorer.NO_CHECKPOINT) {
+            if (checkpoint != null) {
                 globalConsumer.seek(topicPartition, checkpoint);
             } else {
                 globalConsumer.seekToBeginning(Collections.singletonList(topicPartition));
@@ -337,16 +346,6 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
 
     @Override
     public void checkpoint(final Map<TopicPartition, Long> offsets) {
-
-        // Find non persistent store's topics
-        final Map<String, String> storeToChangelogTopic = topology.storeToChangelogTopic();
-        final Set<String> globalNonPersistentStoresTopics = new HashSet<>();
-        for (final StateStore store : topology.globalStateStores()) {
-            if (!store.persistent() && storeToChangelogTopic.containsKey(store.name())) {
-                globalNonPersistentStoresTopics.add(storeToChangelogTopic.get(store.name()));
-            }
-        }
-
         checkpointableOffsets.putAll(offsets);
 
         final Map<TopicPartition, Long> filteredOffsets = new HashMap<>();
@@ -355,7 +354,7 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
         for (final Map.Entry<TopicPartition, Long> topicPartitionOffset : checkpointableOffsets.entrySet()) {
             final String topic = topicPartitionOffset.getKey().topic();
             if (globalNonPersistentStoresTopics.contains(topic)) {
-                filteredOffsets.put(topicPartitionOffset.getKey(), (long) StateRestorer.NO_CHECKPOINT);
+                filteredOffsets.remove(topicPartitionOffset.getKey());
             } else {
                 filteredOffsets.put(topicPartitionOffset.getKey(), topicPartitionOffset.getValue());
             }
