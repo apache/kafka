@@ -121,10 +121,6 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
         root.addChildNode(tableSourceNode);
 
-        
-        internalTopologyBuilder.addStateStore(storeBuilder, name);
-        internalTopologyBuilder.markSourceStoreAndTopic(storeBuilder, topic);
-
         internalTopologyBuilder.addSource(consumed.offsetResetPolicy(),
                                           source,
                                           consumed.timestampExtractor(),
@@ -132,6 +128,9 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                           consumed.valueDeserializer(),
                                           topic);
         internalTopologyBuilder.addProcessor(name, processorSupplier, source);
+
+        internalTopologyBuilder.addStateStore(storeBuilder, name);
+        internalTopologyBuilder.markSourceStoreAndTopic(storeBuilder, topic);
 
         return new KTableImpl<>(this,
                                 name,
