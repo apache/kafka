@@ -103,7 +103,6 @@ class TestMirrorMakerService(ProduceConsumeValidateTest):
                 self.mirror_maker.start_node(node)
 
             # Ensure new messages are once again showing up on the target cluster
-            # new consumer requires higher timeout here
             wait_until(lambda: len(self.consumer.messages_consumed[1]) > num_consumed + 100, timeout_sec=60)
 
     def wait_for_n_messages(self, n_messages=100):
@@ -145,11 +144,10 @@ class TestMirrorMakerService(ProduceConsumeValidateTest):
         self.mirror_maker.stop()
 
     @cluster(num_nodes=7)
-    @matrix(offsets_storage=["kafka", "zookeeper"], new_consumer=[False], clean_shutdown=[True, False])
-    @matrix(new_consumer=[True], clean_shutdown=[True, False], security_protocol=['PLAINTEXT', 'SSL'])
+    @matrix(clean_shutdown=[True, False], security_protocol=['PLAINTEXT', 'SSL'])
     @cluster(num_nodes=8)
-    @matrix(new_consumer=[True], clean_shutdown=[True, False], security_protocol=['SASL_PLAINTEXT', 'SASL_SSL'])
-    def test_bounce(self, offsets_storage="kafka", new_consumer=True, clean_shutdown=True, security_protocol='PLAINTEXT'):
+    @matrix(clean_shutdown=[True, False], security_protocol=['SASL_PLAINTEXT', 'SASL_SSL'])
+    def test_bounce(self, offsets_storage="kafka", clean_shutdown=True, security_protocol='PLAINTEXT'):
         """
         Test end-to-end behavior under failure conditions.
 
@@ -161,26 +159,21 @@ class TestMirrorMakerService(ProduceConsumeValidateTest):
         - Bounce MM process
         - Verify every message acknowledged by the source producer is consumed by the target consumer
         """
-        if new_consumer and not clean_shutdown:
-            # Increase timeout on downstream console consumer; mirror maker with new consumer takes extra time
+        if not clean_shutdown:
+            # Increase timeout on downstream console consumer; mirror maker takes extra time
             # during hard bounce. This is because the restarted mirror maker consumer won't be able to rejoin
             # the group until the previous session times out
             self.consumer.consumer_timeout_ms = 60000
 
         self.start_kafka(security_protocol)
-        self.consumer.new_consumer = new_consumer
 
         self.mirror_maker.offsets_storage = offsets_storage
-        self.mirror_maker.new_consumer = new_consumer
         self.mirror_maker.start()
 
         # Wait until mirror maker has reset fetch offset at least once before continuing with the rest of the test
         mm_node = self.mirror_maker.nodes[0]
         with mm_node.account.monitor_log(self.mirror_maker.LOG_FILE) as monitor:
-            if new_consumer:
-                monitor.wait_until("Resetting offset for partition", timeout_sec=30, err_msg="Mirrormaker did not reset fetch offset in a reasonable amount of time.")
-            else:
-                monitor.wait_until("reset fetch offset", timeout_sec=30, err_msg="Mirrormaker did not reset fetch offset in a reasonable amount of time.")
+            monitor.wait_until("Resetting offset for partition", timeout_sec=30, err_msg="Mirrormaker did not reset fetch offset in a reasonable amount of time.")
 
         self.run_produce_consume_validate(core_test_action=lambda: self.bounce(clean_shutdown=clean_shutdown))
         self.mirror_maker.stop()
