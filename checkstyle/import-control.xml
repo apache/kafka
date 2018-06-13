@@ -345,6 +345,7 @@
       <allow pkg="org.apache.kafka.connect.storage" />
       <allow pkg="org.apache.kafka.connect.util" />
       <allow pkg="org.apache.kafka.common" />
+      <allow pkg="net.sourceforge.argparse4j" />
     </subpackage>
 
     <subpackage name="storage">

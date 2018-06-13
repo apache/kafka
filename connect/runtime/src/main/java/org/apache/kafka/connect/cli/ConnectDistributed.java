@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.connect.cli;
 
+import net.sourceforge.argparse4j.ArgumentParsers;
+import net.sourceforge.argparse4j.inf.ArgumentParser;
+import net.sourceforge.argparse4j.inf.Namespace;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -38,8 +41,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.URI;
-import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+
+import static net.sourceforge.argparse4j.impl.Arguments.append;
+import static net.sourceforge.argparse4j.impl.Arguments.store;
 
 /**
  * <p>
@@ -54,10 +61,7 @@ public class ConnectDistributed {
     private static final Logger log = LoggerFactory.getLogger(ConnectDistributed.class);
 
     public static void main(String[] args) throws Exception {
-        if (args.length < 1) {
-            log.info("Usage: ConnectDistributed worker.properties");
-            Exit.exit(1);
-        }
+        Namespace res = argParser().parseArgsOrFail(args);
 
         try {
             Time time = Time.SYSTEM;
@@ -66,9 +70,15 @@ public class ConnectDistributed {
             WorkerInfo initInfo = new WorkerInfo();
             initInfo.logAll();
 
-            String workerPropsFile = args[0];
-            Map<String, String> workerProps = !workerPropsFile.isEmpty() ?
-                    Utils.propsToStringMap(Utils.loadProps(workerPropsFile)) : Collections.<String, String>emptyMap();
+            Map<String, String> workerProps = new HashMap<>();
+            String workerPropsFile = res.get("worker.properties");
+            if (!workerPropsFile.isEmpty()) {
+                workerProps.putAll(Utils.propsToStringMap(Utils.loadProps(workerPropsFile)));
+            }
+            List<String> overrides = res.get("override");
+            if (overrides != null) {
+                workerProps.putAll(Utils.propsToStringMap(Utils.loadPropOverrides(overrides)));
+            }
 
             log.info("Scanning for plugin classes. This might take a moment ...");
             Plugins plugins = new Plugins(workerProps);
@@ -117,5 +127,21 @@ public class ConnectDistributed {
             log.error("Stopping due to error", t);
             Exit.exit(2);
         }
+    }
+
+    private static ArgumentParser argParser() {
+        ArgumentParser parser = ArgumentParsers
+                .newArgumentParser(ConnectDistributed.class.getSimpleName());
+
+        parser.addArgument("worker.properties")
+                .action(store())
+                .type(String.class);
+
+        parser.addArgument("--override")
+                .action(append())
+                .type(String.class)
+                .required(false);
+
+        return parser;
     }
 }

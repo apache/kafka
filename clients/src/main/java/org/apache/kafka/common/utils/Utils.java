@@ -28,6 +28,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintWriter;
+import java.io.StringReader;
 import java.io.StringWriter;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
@@ -516,6 +517,16 @@ public final class Utils {
             System.out.println("Did not load any properties since the property file is not specified");
         }
 
+        return props;
+    }
+
+    /**
+     * Convert a list of key=value strings into a Properties object.
+     */
+    public static Properties loadPropOverrides(List<String> overrides) throws IOException {
+        Properties props = new Properties();
+        String overridesStr = join(overrides, System.lineSeparator());
+        props.load(new StringReader(overridesStr));
         return props;
     }
 
