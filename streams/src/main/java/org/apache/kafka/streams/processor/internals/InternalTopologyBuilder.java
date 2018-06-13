@@ -602,21 +602,6 @@ public class InternalTopologyBuilder {
         storeToSourceChangelogTopic.put(storeBuilder, topic);
     }
 
-    public final void connectProcessors(final String... processorNames) {
-        if (processorNames.length < 2) {
-            throw new TopologyException("At least two processors need to participate in the connection.");
-        }
-
-        for (final String processorName : processorNames) {
-            Objects.requireNonNull(processorName, "processor name can't be null");
-            if (!nodeFactories.containsKey(processorName)) {
-                throw new TopologyException("Processor " + processorName + " is not added yet.");
-            }
-        }
-
-        nodeGrouper.unite(processorNames[0], Arrays.copyOfRange(processorNames, 1, processorNames.length));
-    }
-
     public final void addInternalTopic(final String topicName) {
         Objects.requireNonNull(topicName, "topicName can't be null");
         internalTopicNames.add(topicName);
