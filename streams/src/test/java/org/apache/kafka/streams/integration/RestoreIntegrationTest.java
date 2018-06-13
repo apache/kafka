@@ -19,7 +19,6 @@ package org.apache.kafka.streams.integration;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -28,6 +27,7 @@ import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
@@ -44,11 +44,14 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateRestoreListener;
+import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
+import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -57,11 +60,11 @@ import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.HashMap;
+import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
@@ -134,7 +137,7 @@ public class RestoreIntegrationTest {
         final CountDownLatch startupLatch = new CountDownLatch(1);
         final CountDownLatch shutdownLatch = new CountDownLatch(1);
 
-        builder.table(INPUT_STREAM, Consumed.with(Serdes.Integer(), Serdes.Integer()), Materialized.as("store"))
+        builder.table(INPUT_STREAM, Consumed.with(Serdes.Integer(), Serdes.Integer()), Materialized.<Integer, Integer, KeyValueStore<Bytes, byte[]>>as("store"))
                 .toStream()
                 .foreach(new ForeachAction<Integer, Integer>() {
                     @Override
@@ -148,14 +151,36 @@ public class RestoreIntegrationTest {
         kafkaStreams.setStateListener(new KafkaStreams.StateListener() {
             @Override
             public void onChange(final KafkaStreams.State newState, final KafkaStreams.State oldState) {
-                kafkaStreams.start();
-
-                assertTrue(startupLatch.await(30, TimeUnit.SECONDS));
-                assertThat(restored.get(), equalTo((long) numberOfKeys - 2 * offsetCheckpointed));
-                assertTrue(shutdownLatch.await(30, TimeUnit.SECONDS));
-                assertThat(numReceived.get(), equalTo(numberOfKeys));
+                if (newState == KafkaStreams.State.RUNNING && oldState == KafkaStreams.State.REBALANCING) {
+                    startupLatch.countDown();
+                }
             }
-        }
+        });
+
+        final AtomicLong restored = new AtomicLong(0);
+        kafkaStreams.setGlobalStateRestoreListener(new StateRestoreListener() {
+            @Override
+            public void onRestoreStart(final TopicPartition topicPartition, final String storeName, final long startingOffset, final long endingOffset) {
+
+            }
+
+            @Override
+            public void onBatchRestored(final TopicPartition topicPartition, final String storeName, final long batchEndOffset, final long numRestored) {
+
+            }
+
+            @Override
+            public void onRestoreEnd(final TopicPartition topicPartition, final String storeName, final long totalRestored) {
+                restored.addAndGet(totalRestored);
+            }
+        });
+        kafkaStreams.start();
+
+        assertTrue(startupLatch.await(30, TimeUnit.SECONDS));
+        assertThat(restored.get(), equalTo((long) numberOfKeys - 2 * offsetCheckpointed));
+
+        assertTrue(shutdownLatch.await(30, TimeUnit.SECONDS));
+        assertThat(numReceived.get(), equalTo(numberOfKeys));
     }
 
     @Test
@@ -172,7 +197,7 @@ public class RestoreIntegrationTest {
                 }, Materialized.<Integer, Integer, KeyValueStore<Bytes, byte[]>>as("reduce-store").withLoggingDisabled());
 
         final CountDownLatch startupLatch = new CountDownLatch(1);
-        kafkaStreams = new KafkaStreams(builder.build(), props(applicationId));
+        kafkaStreams = new KafkaStreams(builder.build(), props(APPID));
         kafkaStreams.setStateListener(new KafkaStreams.StateListener() {
             @Override
             public void onChange(final KafkaStreams.State newState, final KafkaStreams.State oldState) {
@@ -222,7 +247,7 @@ public class RestoreIntegrationTest {
 
         final Topology topology = streamsBuilder.build();
 
-        kafkaStreams = new KafkaStreams(topology, props(applicationId + "-logging-disabled"));
+        kafkaStreams = new KafkaStreams(topology, props(APPID + "-logging-disabled"));
 
         final CountDownLatch latch = new CountDownLatch(1);
         kafkaStreams.setStateListener(new KafkaStreams.StateListener() {
@@ -278,9 +303,8 @@ public class RestoreIntegrationTest {
 
         }
     }
-    
-    private void createStateForRestoration()
-            throws ExecutionException, InterruptedException {
+
+    private void createStateForRestoration(final String changelogTopic) {
         final Properties producerConfig = new Properties();
         producerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
 
@@ -288,31 +312,8 @@ public class RestoreIntegrationTest {
                      new KafkaProducer<>(producerConfig, new IntegerSerializer(), new IntegerSerializer())) {
 
             for (int i = 0; i < numberOfKeys; i++) {
-                producer.send(new ProducerRecord<>(INPUT_STREAM, i, i));
+                producer.send(new ProducerRecord<>(changelogTopic, i, i));
             }
         }
-
-        final Properties consumerConfig = new Properties();
-        consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, applicationId);
-        consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, IntegerDeserializer.class);
-        consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, IntegerDeserializer.class);
-
-        final Consumer consumer = new KafkaConsumer(consumerConfig);
-        final List<TopicPartition> partitions = Arrays.asList(new TopicPartition(INPUT_STREAM, 0),
-                                                              new TopicPartition(INPUT_STREAM, 1));
-
-        consumer.assign(partitions);
-        consumer.seekToEnd(partitions);
-
-        final Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
-        for (TopicPartition partition : partitions) {
-            final long position = consumer.position(partition);
-            offsets.put(partition, new OffsetAndMetadata(position + 1));
-        }
-
-        consumer.commitSync(offsets);
-        consumer.close();
     }
-
 }
