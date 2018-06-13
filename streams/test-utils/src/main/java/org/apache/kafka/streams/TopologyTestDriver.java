@@ -186,6 +186,7 @@ public class TopologyTestDriver implements Closeable {
     private final Map<TopicPartition, AtomicLong> offsetsByTopicPartition = new HashMap<>();
 
     private final Map<String, Queue<ProducerRecord<byte[], byte[]>>> outputRecordsByTopic = new HashMap<>();
+    private final boolean eosEnabled;
 
     /**
      * Create a new test diver instance.
@@ -313,6 +314,7 @@ public class TopologyTestDriver implements Closeable {
         } else {
             task = null;
         }
+        eosEnabled = streamsConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG).equals(StreamsConfig.EXACTLY_ONCE);
     }
 
     /**
@@ -371,6 +373,10 @@ public class TopologyTestDriver implements Closeable {
         // Capture all the records sent to the producer ...
         final List<ProducerRecord<byte[], byte[]>> output = producer.history();
         producer.clear();
+        if (eosEnabled && !producer.closed()) {
+            producer.initTransactions();
+            producer.beginTransaction();
+        }
         for (final ProducerRecord<byte[], byte[]> record : output) {
             Queue<ProducerRecord<byte[], byte[]>> outputRecords = outputRecordsByTopic.get(record.topic());
             if (outputRecords == null) {
@@ -582,6 +588,9 @@ public class TopologyTestDriver implements Closeable {
             }
         }
         captureOutputRecords();
+        if (!eosEnabled) {
+            producer.close();
+        }
         stateDirectory.clean();
     }
 
