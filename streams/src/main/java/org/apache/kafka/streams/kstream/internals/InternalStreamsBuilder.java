@@ -257,7 +257,11 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         for (Map.Entry<StreamsGraphNode, Set<OptimizableRepartitionNode>> streamsGraphNodeSetEntry : repartitioningNodeToRepartitioned.entrySet()) {
             StreamsGraphNode node = streamsGraphNodeSetEntry.getKey();
 
-            StreamsGraphNode repartitionNode = addRepartitionNodeToOperationCausingRepartition(node);
+            StreamsGraphNode repartitionNode = null;
+
+            if (!streamsGraphNodeSetEntry.getValue().isEmpty()) {
+                repartitionNode = addRepartitionNodeToOperationCausingRepartition(node);
+            }
 
             for (OptimizableRepartitionNode optimizableRepartitionNode : streamsGraphNodeSetEntry.getValue()) {
                 StreamsGraphNode repartitionParent = optimizableRepartitionNode.parentNode();
