@@ -94,6 +94,12 @@ For a detailed description of findbugs bug categories, see http://findbugs.sourc
         <Bug pattern="EQ_UNUSUAL"/>
     </Match>
 
+   <Match>
+        <!-- Null is a valid parameter to CompletableFuture.complete(). Exclude false positive. -->
+        <Source name="KafkaAdminClient.java"/>
+        <Bug pattern="NP_NULL_PARAM_DEREF_ALL_TARGETS_DANGEROUS"/>
+    </Match>
+
     <Match>
         <!-- Add a suppression for auto-generated calls to instanceof in kafka.utils.Json -->
         <Source name="Json.scala"/>

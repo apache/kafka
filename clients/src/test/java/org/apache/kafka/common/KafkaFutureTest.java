@@ -24,6 +24,7 @@ import org.junit.rules.Timeout;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -124,6 +125,222 @@ public class KafkaFutureTest {
         assertTrue(futureAppliedFail.isCompletedExceptionally());
     }
 
+    @Test
+    public void testWhenCompleteNormalCompletion() {
+        String value = "Ready to roll out!";
+        KafkaFutureImpl<String> future = new KafkaFutureImpl<>();
+        QueryableBiConsumer consumer = new QueryableBiConsumer();
+        future.whenComplete(consumer);
+        future.complete(value);
+        assertTrue(consumer.getThrowable() == null);
+        assertEquals(value, consumer.getValue());
+    }
+
+    @Test
+    public void testWhenCompleteExceptionalCompletion() {
+        RuntimeException exception = new RuntimeException("I'm in deep!");
+        KafkaFutureImpl<String> future = new KafkaFutureImpl<>();
+        QueryableBiConsumer consumer = new QueryableBiConsumer();
+        future.whenComplete(consumer);
+        future.completeExceptionally(exception);
+        assertTrue(consumer.getValue() == null);
+        assertEquals(exception, consumer.getThrowable());
+    }
+
+    @Test
+    public void testWhenCompleteChained() {
+        String value = "Fueled up, ready to go!";
+        RuntimeException exceptionOnCompletion = new RuntimeException("I'm about to drop the hammer");
+        KafkaFutureImpl<String> future = new KafkaFutureImpl<>();
+        QueryableBiConsumer firstConsumer = new QueryableBiConsumer() {
+            @Override
+            public void accept(String s, Throwable throwable) {
+                super.accept(s, throwable);
+                throw exceptionOnCompletion;
+            }
+        };
+        QueryableBiConsumer secondConsumer = new QueryableBiConsumer();
+        QueryableBiConsumer thirdConsumer = new QueryableBiConsumer();
+        KafkaFuture<String> futureByWhenComplete = future.whenComplete(firstConsumer);
+        future.whenComplete(secondConsumer);
+        futureByWhenComplete.whenComplete(thirdConsumer);
+        future.complete(value);
+        assertTrue(firstConsumer.getThrowable() == null);
+        assertEquals(value, firstConsumer.getValue());
+        assertTrue(secondConsumer.getThrowable() == null);
+        assertEquals(value, secondConsumer.getValue());
+        assertTrue(thirdConsumer.getValue() == null);
+        assertEquals(exceptionOnCompletion, thirdConsumer.getThrowable());
+    }
+
+    @Test
+    public void testWhenCompleteChainedCompletedExceptionally() {
+        RuntimeException exceptionOnCompletion = new RuntimeException("Can I take your order?");
+        RuntimeException exceptionOnCompleteExceptionally = new RuntimeException("In the pipe, five by five");
+
+        KafkaFutureImpl<String> future = new KafkaFutureImpl<>();
+        QueryableBiConsumer firstConsumer = new QueryableBiConsumer() {
+            @Override
+            public void accept(String s, Throwable throwable) {
+                super.accept(s, throwable);
+                throw exceptionOnCompletion;
+            }
+        };
+        QueryableBiConsumer secondConsumer = new QueryableBiConsumer();
+        QueryableBiConsumer thirdConsumer = new QueryableBiConsumer();
+        KafkaFuture<String> futureByWhenComplete = future.whenComplete(firstConsumer);
+        future.whenComplete(secondConsumer);
+        futureByWhenComplete.whenComplete(thirdConsumer);
+
+        future.completeExceptionally(exceptionOnCompleteExceptionally);
+
+        assertTrue(firstConsumer.getThrowable() == exceptionOnCompleteExceptionally);
+        assertEquals(null, firstConsumer.getValue());
+        assertTrue(secondConsumer.getThrowable() == exceptionOnCompleteExceptionally);
+        assertEquals(null, secondConsumer.getValue());
+        assertTrue(thirdConsumer.getValue() == null);
+        assertEquals(exceptionOnCompleteExceptionally, thirdConsumer.getThrowable());
+    }
+
+    @Test
+    public void testWhenCompleteAfterThenApplyThrows() {
+        String value = "What's our target?";
+        RuntimeException exceptionOnApply = new RuntimeException("What is your major malfunction?");
+        KafkaFutureImpl<String> future = new KafkaFutureImpl<>();
+        QueryableBiConsumer consumer = new QueryableBiConsumer();
+        KafkaFuture.BaseFunction<String, String> throwerFunction = s -> {
+            throw exceptionOnApply;
+        };
+
+        KafkaFuture<String> futureByThenApply = future.thenApply(throwerFunction);
+        KafkaFuture<String> futureByWhenComplete = futureByThenApply.whenComplete(consumer);
+        future.complete(value);
+        assertTrue(consumer.getValue() == null);
+        assertEquals(exceptionOnApply, consumer.getThrowable());
+        assertTrue(futureByWhenComplete.isCompletedExceptionally());
+    }
+
+    @Test
+    public void testWhenCompleteAfterCancel() {
+        KafkaFutureImpl<String> future = new KafkaFutureImpl<>();
+        QueryableBiConsumer first = new QueryableBiConsumer();
+        QueryableBiConsumer second = new QueryableBiConsumer();
+        KafkaFuture<String> futureByFirst = future.whenComplete(first);
+        KafkaFuture<String> futureBySecond = futureByFirst.whenComplete(second);
+
+        future.cancel(false);
+
+        assertTrue(futureByFirst.isDone());
+        assertTrue(futureByFirst.isCancelled());
+        assertTrue(first.getThrowable() instanceof CancellationException);
+        assertTrue(futureBySecond.isDone());
+        assertTrue(futureBySecond.isCancelled());
+        assertTrue(second.getThrowable() instanceof CancellationException);
+
+
+    }
+
+    @Test
+    public void testCopyWith() throws Exception {
+        String newValue = "I have returned";
+        KafkaFutureImpl<String> dependee = new KafkaFutureImpl<>();
+        KafkaFutureImpl<Integer> dependent = new KafkaFutureImpl<>();
+        dependent.copyWith(dependee, String::length);
+
+        dependee.complete(newValue);
+
+        assertEquals(newValue, dependee.get());
+        assertEquals(newValue.length(), (int) dependent.get());
+    }
+
+    @Test
+    public void testCopyWithFunctionFails() throws Exception {
+        String newValue = "Orders received";
+        RuntimeException exception = new RuntimeException("I can't build there");
+        KafkaFutureImpl<String> dependee = new KafkaFutureImpl<>();
+        KafkaFutureImpl<String> dependent = new KafkaFutureImpl<>();
+        dependent.copyWith(dependee, s -> {
+            throw exception;
+        });
+        QueryableBiConsumer consumer = new QueryableBiConsumer();
+        dependent.whenComplete(consumer);
+
+        dependee.complete(newValue);
+
+        assertEquals(newValue, dependee.get());
+        assertTrue(consumer.getValue() == null);
+        assertEquals(exception, consumer.getThrowable());
+        assertEquals(newValue, dependee.get());
+
+    }
+
+    @Test
+    public void testCopyWithCompletedExceptionally() throws Exception {
+        String newValue = "Orders received";
+        RuntimeException exception = new RuntimeException("I can't build it.");
+        KafkaFutureImpl<String> dependee = new KafkaFutureImpl<>();
+        KafkaFutureImpl<String> dependent = new KafkaFutureImpl<>();
+        dependent.copyWith(dependee, s -> s + "Something in the way");
+        QueryableBiConsumer consumer = new QueryableBiConsumer();
+        dependent.whenComplete(consumer);
+
+        dependee.completeExceptionally(exception);
+
+        assertTrue(dependent.isCompletedExceptionally());
+        assertTrue(consumer.getValue() == null);
+        assertEquals(exception, consumer.getThrowable());
+        assertTrue(dependee.isCompletedExceptionally());
+    }
+
+    @Test
+    public void testCopyWithCancelled() throws Exception {
+        KafkaFutureImpl<String> dependee = new KafkaFutureImpl<>();
+        KafkaFutureImpl<String> dependent = new KafkaFutureImpl<>();
+        dependent.copyWith(dependee, s -> "Affirmative");
+        QueryableBiConsumer consumer = new QueryableBiConsumer();
+        dependent.whenComplete(consumer);
+
+        dependee.cancel(false);
+
+        assertTrue(dependee.isCompletedExceptionally());
+        assertTrue(dependent.isDone());
+        assertTrue(dependent.isCompletedExceptionally());
+        assertTrue(consumer.getValue() == null);
+        assertTrue(consumer.getThrowable() instanceof CancellationException);
+    }
+
+
+    @Test
+    public void testCancel() {
+        KafkaFutureImpl<String> future = new KafkaFutureImpl<>();
+
+        assertTrue("Must be able to cancel", future.cancel(false));
+
+        assertTrue(future.isCancelled());
+        assertTrue(future.isCompletedExceptionally());
+        assertTrue(future.isDone());
+    }
+
+    private static class QueryableBiConsumer implements KafkaFuture.BiConsumer<String, Throwable> {
+
+        private String value;
+        private Throwable throwable;
+
+        @Override
+        public void accept(String s, Throwable throwable) {
+            this.value = s;
+            this.throwable = throwable;
+        }
+
+        public String getValue() {
+            return value;
+        }
+
+        public Throwable getThrowable() {
+            return throwable;
+        }
+    }
+
     private static class CompleterThread<T> extends Thread {
 
         private final KafkaFutureImpl<T> future;
@@ -221,5 +438,7 @@ public class KafkaFutureTest {
         final KafkaFutureImpl<String> future = new KafkaFutureImpl<>();
         future.get(0, TimeUnit.MILLISECONDS);
     }
+
+
 
 }

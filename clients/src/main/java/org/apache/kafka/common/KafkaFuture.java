@@ -19,14 +19,19 @@ package org.apache.kafka.common;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 /**
- * A flexible future which supports call chaining and other asynchronous programming patterns. This will
- * eventually become a thin shim on top of Java 8's CompletableFuture.
+ * A flexible future which supports call chaining and other asynchronous programming patterns. This
+ * is a thin shim on top of Java 8's CompletableFuture.
+ *
+ * Please note that while this class offers methods similar to CompletableFuture's whenComplete and thenApply,
+ * functions passed to these methods will never be called with CompletionException. If you wish to use
+ * CompletableFuture semantics, use {@link #toCompletableFuture()}.
  *
  * The API for this class is still evolving and we may break compatibility in minor releases, if necessary.
  */
@@ -202,4 +207,13 @@ public abstract class KafkaFuture<T> implements Future<T> {
      */
     @Override
     public abstract boolean isDone();
+
+    /**
+     * Returns a ComletableFuture equivalent to this Future.
+     *
+     * Implemented in {@link KafkaFuture} throws UnsuportedOperationException.
+     */
+    public CompletableFuture<T> toCompletableFuture() {
+        throw new UnsupportedOperationException();
+    }
 }
