@@ -275,7 +275,8 @@ public class InternalTopologyBuilderTest {
 
     @Test
     public void testAddStateStoreWithSink() {
-        builder.addSink("sink-1", "topic-1", null, null, null);
+        builder.addSource(null, "source-1", null, null, null, "topic-1");
+        builder.addSink("sink-1", "topic-1", null, null, null, "source-1");
         try {
             builder.addStateStore(storeBuilder, "sink-1");
             fail("Should throw TopologyException with store cannot be added to sink");
