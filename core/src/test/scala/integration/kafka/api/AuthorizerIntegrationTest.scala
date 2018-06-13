@@ -45,6 +45,8 @@ import org.apache.kafka.common.resource.ResourceNameType.LITERAL
 import org.apache.kafka.common.resource.{ResourcePattern, ResourcePatternFilter, ResourceType => AdminResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.{KafkaException, Node, TopicPartition, requests}
+import org.apache.kafka.test.{TestUtils => JTestUtils}
+
 import org.junit.Assert._
 import org.junit.{After, Assert, Before, Test}
 
@@ -860,6 +862,31 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       this.consumers.head.poll(Duration.ofMillis(50L))
       this.zkClient.topicExists(newTopic)
     }, "Expected topic was not created")
+  }
+
+  @Test
+  def testCreatePermissionMetadataRequestAutoCreate() {
+    val readAcls = topicReadAcl.get(topicResource).get
+    addAndVerifyAcls(readAcls, topicResource)
+    assertTrue(zkClient.topicExists(topicResource.name))
+
+    addAndVerifyAcls(readAcls, createTopicResource)
+    assertFalse(zkClient.topicExists(createTopic))
+
+    val metadataRequest = new MetadataRequest.Builder(List(topic, createTopic).asJava, true).build()
+    val metadataResponse = MetadataResponse.parse(connectAndSend(metadataRequest, ApiKeys.METADATA), ApiKeys.METADATA.latestVersion)
+
+    assertEquals(Set(topic).asJava, metadataResponse.topicsByError(Errors.NONE));
+    assertEquals(Set(createTopic).asJava, metadataResponse.topicsByError(Errors.TOPIC_AUTHORIZATION_FAILED))
+
+    val createAcls = topicCreateAcl.get(createTopicResource).get
+    addAndVerifyAcls(createAcls, createTopicResource)
+
+    // retry as topic being created can have MetadataResponse with Errors.LEADER_NOT_AVAILABLE
+    TestUtils.retry(JTestUtils.DEFAULT_MAX_WAIT_MS)(() => {
+      val metadataResponse = MetadataResponse.parse(connectAndSend(metadataRequest, ApiKeys.METADATA), ApiKeys.METADATA.latestVersion)
+      assertEquals(Set(topic, createTopic).asJava, metadataResponse.topicsByError(Errors.NONE))
+    })
   }
 
   @Test(expected = classOf[AuthorizationException])

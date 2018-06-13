@@ -271,8 +271,8 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
                         if (record.key() != null) {
                             restoreRecords.add(KeyValue.pair(record.key(), record.value()));
                         }
-                        offset = globalConsumer.position(topicPartition);
                     }
+                    offset = globalConsumer.position(topicPartition);
                     stateRestoreAdapter.restoreAll(restoreRecords);
                     stateRestoreListener.onBatchRestored(topicPartition, storeName, offset, restoreRecords.size());
                     restoreCount += restoreRecords.size();

@@ -785,11 +785,20 @@ project(':examples') {
 project(':clients') {
   archivesBaseName = "kafka-clients"
 
+  configurations {
+    jacksonDatabindConfig
+  }
+
+  // add jacksonDatabindConfig as provided scope config with high priority (1000)
+  conf2ScopeMappings.addMapping(1000, configurations.jacksonDatabindConfig, "provided")
+
   dependencies {
     compile libs.lz4
     compile libs.snappy
     compile libs.slf4jApi
-    compile libs.jacksonDatabind // for SASL/OAUTHBEARER bearer token parsing
+    compileOnly libs.jacksonDatabind // for SASL/OAUTHBEARER bearer token parsing
+
+    jacksonDatabindConfig libs.jacksonDatabind // to publish as provided scope dependency.
 
     testCompile libs.bcpkix
     testCompile libs.junit
@@ -798,6 +807,7 @@ project(':clients') {
     testCompile libs.powermockEasymock
 
     testRuntime libs.slf4jlog4j
+    testRuntime libs.jacksonDatabind
   }
 
   task determineCommitId {
@@ -858,6 +868,7 @@ project(':clients') {
     include "**/org/apache/kafka/common/resource/*"
     include "**/org/apache/kafka/common/serialization/*"
     include "**/org/apache/kafka/common/config/*"
+    include "**/org/apache/kafka/common/config/provider/*"
     include "**/org/apache/kafka/common/security/auth/*"
     include "**/org/apache/kafka/common/security/plain/*"
     include "**/org/apache/kafka/common/security/scram/*"
@@ -1212,7 +1223,7 @@ project(':connect:api') {
   dependencies {
     compile project(':clients')
     compile libs.slf4jApi
-    compile libs.jerseyContainerServlet
+    compile libs.jaxrsApi
 
     testCompile libs.junit
 
@@ -1452,6 +1463,7 @@ project(':connect:basic-auth-extension') {
     testCompile project(':clients').sourceSets.test.output
 
     testRuntime libs.slf4jlog4j
+    testRuntime libs.jerseyContainerServlet
   }
 
   javadoc {

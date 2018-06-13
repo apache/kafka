@@ -572,4 +572,9 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
             rocksDBStore.toggleDbForBulkLoading(false);
         }
     }
+
+    // for testing
+    public Options getOptions() {
+        return options;
+    }
 }

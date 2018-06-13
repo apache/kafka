@@ -715,6 +715,8 @@
                 <pre>
     security.protocol=SASL_SSL (or SASL_PLAINTEXT if non-production)
     sasl.mechanism=OAUTHBEARER</pre></li>
+             <li>The default implementation of SASL/OAUTHBEARER depends on the jackson-databind library.
+                 Since it's an optional dependency, users have to configure it as a dependency via their build tool.</li>
             </ol>
         </li>
         <li><h5><a id="security_sasl_oauthbearer_unsecured_retrieval" href="#security_sasl_oauthbearer_unsecured_retrieval">Unsecured Token Creation Options for SASL/OAUTHBEARER</a></h5>

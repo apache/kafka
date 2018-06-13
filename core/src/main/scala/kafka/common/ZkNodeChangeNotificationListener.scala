@@ -24,6 +24,8 @@ import kafka.zk.{KafkaZkClient, StateChangeHandlers}
 import kafka.zookeeper.{StateChangeHandler, ZNodeChildChangeHandler}
 import org.apache.kafka.common.utils.Time
 
+import scala.util.{Failure, Try}
+
 /**
  * Handle the notificationMessage.
  */
@@ -83,12 +85,7 @@ class ZkNodeChangeNotificationListener(private val zkClient: KafkaZkClient,
         for (notification <- notifications) {
           val changeId = changeNumber(notification)
           if (changeId > lastExecutedChange) {
-            val changeZnode = seqNodeRoot + "/" + notification
-            val (data, _) = zkClient.getDataAndStat(changeZnode)
-            data match {
-              case Some(d) => notificationHandler.processNotification(d)
-              case None => warn(s"read null data from $changeZnode when processing notification $notification")
-            }
+            processNotification(notification)
             lastExecutedChange = changeId
           }
         }
@@ -97,6 +94,18 @@ class ZkNodeChangeNotificationListener(private val zkClient: KafkaZkClient,
     } catch {
       case e: InterruptedException => if (!isClosed.get) error(s"Error while processing notification change for path = $seqNodeRoot", e)
       case e: Exception => error(s"Error while processing notification change for path = $seqNodeRoot", e)
+    }
+  }
+
+  private def processNotification(notification: String): Unit = {
+    val changeZnode = seqNodeRoot + "/" + notification
+    val (data, _) = zkClient.getDataAndStat(changeZnode)
+    data match {
+      case Some(d) => Try(notificationHandler.processNotification(d)) match {
+        case Failure(e) => error(s"error processing change notification from $changeZnode", e)
+        case _ =>
+      }
+      case None => warn(s"read null data from $changeZnode")
     }
   }
 

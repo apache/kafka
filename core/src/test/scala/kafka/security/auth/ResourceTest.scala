@@ -24,8 +24,13 @@ import org.junit.Assert._
 
 class ResourceTest {
   @Test(expected = classOf[KafkaException])
-  def shouldThrowTwoPartStringWithUnknownResourceType(): Unit = {
+  def shouldThrowOnTwoPartStringWithUnknownResourceType(): Unit = {
     Resource.fromString("Unknown:fred")
+  }
+
+  @Test(expected = classOf[KafkaException])
+  def shouldThrowOnBadResourceTypeSeparator(): Unit = {
+    Resource.fromString("Topic-fred")
   }
 
   @Test
@@ -41,14 +46,14 @@ class ResourceTest {
 
   @Test
   def shouldParseThreePartString(): Unit = {
-    assertEquals(Resource(Group, "fred", PREFIXED), Resource.fromString("PREFIXED:Group:fred"))
-    assertEquals(Resource(Topic, "t", LITERAL), Resource.fromString("LITERAL:Topic:t"))
+    assertEquals(Resource(Group, "fred", PREFIXED), Resource.fromString("Group:PREFIXED:fred"))
+    assertEquals(Resource(Topic, "t", LITERAL), Resource.fromString("Topic:LITERAL:t"))
   }
 
   @Test
   def shouldParseThreePartWithEmbeddedSeparators(): Unit = {
-    assertEquals(Resource(Group, ":This:is:a:weird:group:name:", PREFIXED), Resource.fromString("PREFIXED:Group::This:is:a:weird:group:name:"))
-    assertEquals(Resource(Group, ":This:is:a:weird:group:name:", LITERAL), Resource.fromString("LITERAL:Group::This:is:a:weird:group:name:"))
+    assertEquals(Resource(Group, ":This:is:a:weird:group:name:", PREFIXED), Resource.fromString("Group:PREFIXED::This:is:a:weird:group:name:"))
+    assertEquals(Resource(Group, ":This:is:a:weird:group:name:", LITERAL), Resource.fromString("Group:LITERAL::This:is:a:weird:group:name:"))
   }
 
   @Test

@@ -102,7 +102,7 @@ object TestLinearWriteSpeed {
     val compressionCodec = CompressionCodec.getCompressionCodec(options.valueOf(compressionCodecOpt))
     val rand = new Random
     rand.nextBytes(buffer.array)
-    val numMessages = bufferSize / (messageSize + MessageSet.LogOverhead)
+    val numMessages = bufferSize / (messageSize + Records.LOG_OVERHEAD)
     val createTime = System.currentTimeMillis
     val messageSet = {
       val compressionType = CompressionType.forId(compressionCodec.codec)

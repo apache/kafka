@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.config;
 
+import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.junit.Before;
 import org.junit.Test;
 
