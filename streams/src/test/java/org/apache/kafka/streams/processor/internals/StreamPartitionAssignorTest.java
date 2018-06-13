@@ -813,7 +813,6 @@ public class StreamPartitionAssignorTest {
             new TopicPartition(applicationId + "-KTABLE-AGGREGATE-STATE-STORE-0000000006-repartition", 1),
             new TopicPartition(applicationId + "-KTABLE-AGGREGATE-STATE-STORE-0000000006-repartition", 2),
             new TopicPartition(applicationId + "-KTABLE-AGGREGATE-STATE-STORE-0000000006-repartition", 3),
-            new TopicPartition(applicationId + "-topic3-STATE-STORE-0000000002-changelog", 4),
             new TopicPartition(applicationId + "-KSTREAM-MAP-0000000001-repartition", 0),
             new TopicPartition(applicationId + "-KSTREAM-MAP-0000000001-repartition", 1),
             new TopicPartition(applicationId + "-KSTREAM-MAP-0000000001-repartition", 2),
