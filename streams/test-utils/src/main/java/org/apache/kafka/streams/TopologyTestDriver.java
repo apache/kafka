@@ -177,7 +177,7 @@ public class TopologyTestDriver implements Closeable {
 
     private final static int PARTITION_ID = 0;
     private final static TaskId TASK_ID = new TaskId(0, PARTITION_ID);
-    private final StreamTask task;
+    final StreamTask task;
     private final GlobalStateUpdateTask globalStateTask;
     private final GlobalStateManager globalStateManager;
 
@@ -185,7 +185,8 @@ public class TopologyTestDriver implements Closeable {
 
     private final StateDirectory stateDirectory;
     private final Metrics metrics;
-    private final ProcessorTopology processorTopology;
+    final ProcessorTopology processorTopology;
+    final ProcessorTopology globalTopology;
 
     private final MockProducer<byte[], byte[]> producer;
 
@@ -240,7 +241,7 @@ public class TopologyTestDriver implements Closeable {
         internalTopologyBuilder.setApplicationId(streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG));
 
         processorTopology = internalTopologyBuilder.build(null);
-        final ProcessorTopology globalTopology = internalTopologyBuilder.buildGlobalStateTopology();
+        globalTopology = internalTopologyBuilder.buildGlobalStateTopology();
 
         final Serializer<byte[]> bytesSerializer = new ByteArraySerializer();
         producer = new MockProducer<byte[], byte[]>(true, bytesSerializer, bytesSerializer) {
