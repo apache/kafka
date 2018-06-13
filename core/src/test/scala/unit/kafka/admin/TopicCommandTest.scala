@@ -281,31 +281,34 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
 
   @Test
   def testTopicOperationsWithRegexSymbolInTopicName(): Unit = {
-    val normalTopic = "test"
-    val abnormalTopic = "te+st"
+    val topic1 = "test.topic"
+    val topic2 = "test-topic"
+    val escapedTopic = "\"test\\.topic\""
+    val unescapedTopic = "test.topic"
     val numPartitionsOriginal = 1
 
     // create brokers
     val brokers = List(0, 1, 2)
     TestUtils.createBrokersInZk(zkClient, brokers)
 
-    // create the NormalTopic
+    // create the topics
     val createOpts = new TopicCommandOptions(Array("--partitions", numPartitionsOriginal.toString,
-      "--replication-factor", "1",
-      "--topic", normalTopic))
+      "--replication-factor", "1", "--topic", topic1))
     TopicCommand.createTopic(zkClient, createOpts)
+    val createOpts2 = new TopicCommandOptions(Array("--partitions", numPartitionsOriginal.toString,
+      "--replication-factor", "1", "--topic", topic2))
+    TopicCommand.createTopic(zkClient, createOpts2)
 
-    val commandOpts = new TopicCommandOptions(Array("--topic", abnormalTopic))
+    val escapedCommandOpts = new TopicCommandOptions(Array("--topic", escapedTopic))
+    val unescapedCommandOpts = new TopicCommandOptions(Array("--topic", unescapedTopic))
 
-    // delete with special character in name
-    intercept[IllegalArgumentException] {
-      TopicCommand.deleteTopic(zkClient, commandOpts)
-    }
+    // topic actions with escaped regex do not affect 'test-topic'
+    // topic actions with unescaped topic affect 'test-topic'
 
-    assertTrue(TestUtils.grabConsoleOutput(TopicCommand.describeTopic(zkClient, commandOpts)).isEmpty)
+    assertFalse(TestUtils.grabConsoleOutput(TopicCommand.describeTopic(zkClient, escapedCommandOpts)).contains(topic2))
+    assertTrue(TestUtils.grabConsoleOutput(TopicCommand.describeTopic(zkClient, unescapedCommandOpts)).contains(topic2))
 
-    intercept[IllegalArgumentException] {
-      TopicCommand.alterTopic(zkClient, commandOpts)
-    }
+    assertFalse(TestUtils.grabConsoleOutput(TopicCommand.deleteTopic(zkClient, escapedCommandOpts)).contains(topic2))
+    assertTrue(TestUtils.grabConsoleOutput(TopicCommand.deleteTopic(zkClient, unescapedCommandOpts)).contains(topic2))
   }
 }

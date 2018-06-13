@@ -18,7 +18,6 @@
 package kafka.admin
 
 import java.util.Properties
-import java.util.regex.Pattern
 
 import joptsimple._
 import kafka.common.AdminCommandFailedException
@@ -85,7 +84,7 @@ object TopicCommand extends Logging {
     val allTopics = zkClient.getAllTopicsInCluster.sorted
     val excludeInternalTopics = opts.options.has(opts.excludeInternalTopicOpt)
     if (opts.options.has(opts.topicOpt)) {
-      val topicsSpec = Pattern.quote(opts.options.valueOf(opts.topicOpt))
+      val topicsSpec = opts.options.valueOf(opts.topicOpt)
       val topicsFilter = new Whitelist(topicsSpec)
       allTopics.filter(topicsFilter.isTopicAllowed(_, excludeInternalTopics))
     } else
@@ -309,8 +308,9 @@ object TopicCommand extends Logging {
     val deleteOpt = parser.accepts("delete", "Delete a topic")
     val alterOpt = parser.accepts("alter", "Alter the number of partitions, replica assignment, and/or configuration for the topic.")
     val describeOpt = parser.accepts("describe", "List details for the given topics.")
-    val topicOpt = parser.accepts("topic", "The topic to be create, alter or describe. Can also accept a regular " +
-                                           "expression except for --create option")
+    val topicOpt = parser.accepts("topic", "The topic to create, alter, describe or delete. It also accepts a regular " +
+                                           "expression, except for --create option. Put topic name in double quotes and use the '\\' prefix " +
+                                           "to escape regular expression symbols; e.g. \"test\\.topic\".")
                          .withRequiredArg
                          .describedAs("topic")
                          .ofType(classOf[String])
