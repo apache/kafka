@@ -1186,4 +1186,8 @@ public class StreamThread extends Thread {
     TaskManager taskManager() {
         return taskManager;
     }
+
+    Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> standbyRecords() {
+        return standbyRecords;
+    }
 }

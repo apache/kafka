@@ -110,11 +110,12 @@ public class StreamThreadTest {
 
     private final TopicPartition t1p1 = new TopicPartition(topic1, 1);
     private final TopicPartition t1p2 = new TopicPartition(topic1, 2);
+    private final TopicPartition t2p1 = new TopicPartition(topic2, 1);
 
     // task0 is unused
     private final TaskId task1 = new TaskId(0, 1);
     private final TaskId task2 = new TaskId(0, 2);
-    private final TaskId task3 = new TaskId(0, 2);
+    private final TaskId task3 = new TaskId(1, 1);
 
     private Properties configProps(final boolean enableEos) {
         return new Properties() {
