@@ -105,6 +105,11 @@
         The old <code>poll(long)</code> API has been deprecated and will be removed in a future version. Overloads have also been added
         for other <code>KafkaConsumer</code> methods like <code>partitionsFor</code>, <code>listTopics</code>, <code>offsetsForTimes</code>,
         <code>beginningOffsets</code>, <code>endOffsets</code> and <code>close</code> that take in a <code>Duration</code>.</li>
+    <li>Also as part of KIP-266, the default value of <code>request.timeout.ms</code> has been changed to 30 seconds.
+        The previous value was a little higher than 5 minutes to account for maximum time that a rebalance would take.
+        Now we treat the JoinGroup request in the rebalance as a special case and use a value derived from 
+        <code>max.poll.interval.ms</code> for the request timeout. All other request types use the timeout defined
+        by <code>request.timeout.ms</code></li> 
     <li>The internal method <code>kafka.admin.AdminClient.deleteRecordsBefore</code> has been removed. Users are encouraged to migrate to <code>org.apache.kafka.clients.admin.AdminClient.deleteRecords</code>.</li>
     <li>The tool kafka.tools.ReplayLogProducer has been removed.</li>
     <li>The AclCommand tool <code>--producer</code> convenience option uses the <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-277+-+Fine+Grained+ACL+for+CreateTopics+API">KIP-277</a> finer grained ACL on the given topic. </li>
