@@ -297,6 +297,9 @@ object LogConfig {
   def validate(props: Properties) {
     validateNames(props)
     configDef.parse(props)
+    val config = LogConfig(props)
+    require(config.segmentSize >= config.maxMessageSize,
+      s"${LogConfig.SegmentBytesProp}=${config.segmentSize} must be larger or equal to ${LogConfig.MaxMessageBytesProp}=${config.maxMessageSize}")
   }
 
   /**

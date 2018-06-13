@@ -17,20 +17,25 @@
 
 package kafka.api
 
-import java.util.concurrent.{ExecutionException, TimeoutException}
+import java.util.concurrent.{ExecutionException, Future, TimeoutException}
 import java.util.Properties
 
+import kafka.admin.ConfigCommand
 import kafka.integration.KafkaServerTestHarness
 import kafka.log.LogConfig
-import kafka.server.KafkaConfig
-import kafka.utils.TestUtils
+import kafka.server.{KafkaConfig, KafkaServer}
+import kafka.utils.{Exit, TestUtils}
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.record.{DefaultRecord, DefaultRecordBatch}
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
+
+import scala.collection.JavaConverters._
 
 class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   private val producerBufferSize = 30000
@@ -44,7 +49,7 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   overridingProps.put(KafkaConfig.AutoCreateTopicsEnableProp, false.toString)
   overridingProps.put(KafkaConfig.MessageMaxBytesProp, serverMessageMaxBytes.toString)
   overridingProps.put(KafkaConfig.ReplicaFetchMaxBytesProp, replicaFetchMaxPartitionBytes.toString)
-  overridingProps.put(KafkaConfig.ReplicaFetchResponseMaxBytesDoc, replicaFetchMaxResponseBytes.toString)
+  overridingProps.put(KafkaConfig.ReplicaFetchResponseMaxBytesProp, replicaFetchMaxResponseBytes.toString)
   // Set a smaller value for the number of partitions for the offset commit topic (__consumer_offset topic)
   // so that the creation of that topic/partition(s) and subsequent leader assignment doesn't take relatively long
   overridingProps.put(KafkaConfig.OffsetsTopicPartitionsProp, 1.toString)
@@ -142,6 +147,85 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   @Test
   def testResponseTooLargeForReplicationWithAckAll() {
     checkTooLargeRecordForReplicationWithAckAll(replicaFetchMaxResponseBytes)
+  }
+
+  @Test
+  def testSegmentSizeTooSmallForReplicationWithAckAll() {
+    val topicConfig = new Properties
+    topicConfig.setProperty(LogConfig.MinInSyncReplicasProp, numServers.toString)
+    val topic = "topic20"
+    val leaders = createTopic(topic, numPartitions = 1, replicationFactor = numServers, topicConfig)
+
+    def replicaFetcherThreads: Int = {
+      Thread.getAllStackTraces.keySet.asScala
+        .map(_.getName)
+        .count(_.contains("ReplicaFetcherThread"))
+    }
+
+    def updateTopicConfig(maxMessageSize: Int, segmentBytes: Int, serversToCheck: Seq[KafkaServer]): Unit = {
+      val alterArgs = Array("--zookeeper", zkConnect,
+        "--entity-name", topic,
+        "--entity-type", "topics",
+        "--alter", "--add-config",
+        s"${LogConfig.MaxMessageBytesProp}=$maxMessageSize,${LogConfig.SegmentBytesProp}=$segmentBytes")
+      ConfigCommand.main(alterArgs)
+      TestUtils.waitUntilTrue(() =>
+        serversToCheck.forall { _.logManager.logsByTopic(topic).head.config.maxMessageSize == maxMessageSize },
+        "Max message size not updated")
+    }
+
+    def updateBrokerConfig(maxMessageSize: Int, segmentBytes: Int, serversToCheck: Seq[KafkaServer]): Unit = {
+      val alterArgs = Array("--bootstrap-server",
+        TestUtils.bootstrapServers(servers, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)),
+        "--entity-name", servers.head.config.brokerId.toString,
+        "--entity-type", "brokers",
+        "--alter", "--add-config",
+        s"${KafkaConfig.MessageMaxBytesProp}=$maxMessageSize,${KafkaConfig.LogSegmentBytesProp}=$segmentBytes")
+      ConfigCommand.main(alterArgs)
+      TestUtils.waitUntilTrue(() => serversToCheck.forall{ _.config.messageMaxBytes == maxMessageSize },
+        "Max message size not updated")
+    }
+
+    def produce(producer: KafkaProducer[Array[Byte], Array[Byte]],
+                           maxMessageSize: Int): Future[RecordMetadata] = {
+      val value = new Array[Byte](maxMessageSize - DefaultRecordBatch.RECORD_BATCH_OVERHEAD - DefaultRecord.MAX_RECORD_OVERHEAD)
+      val record = new ProducerRecord[Array[Byte], Array[Byte]](topic, null, value)
+      producer.send(record)
+    }
+
+    // Produce with acks=all should work with segment.bytes == max.message.bytes
+    val maxMessageSize = replicaFetchMaxResponseBytes + 100
+    updateTopicConfig(maxMessageSize, maxMessageSize, servers)
+    val future1 = produce(producer3, maxMessageSize)
+    assertEquals(0L, future1.get.offset)
+
+    // Topic or broker config update should fail with segment.bytes < max.message.bytes
+    try {
+      Exit.setExitProcedure { (_, _) => throw new RuntimeException }
+      intercept[RuntimeException](updateTopicConfig(maxMessageSize, maxMessageSize - 100, Seq.empty))
+      intercept[RuntimeException](updateBrokerConfig(maxMessageSize, maxMessageSize - 100, Seq.empty))
+    } finally {
+      Exit.resetExitProcedure()
+    }
+
+    // If segment size is reduced after producing larger messages, replication will fail
+    assertEquals(2, producer3.partitionsFor(topic).get(0).inSyncReplicas.length)
+    assertEquals(1, replicaFetcherThreads)
+    val followerNode = if (leaders(0) == servers.head.config.brokerId) servers(1) else servers.head
+    followerNode.shutdown()
+    followerNode.awaitShutdown()
+    produce(producer2, maxMessageSize).get // acks=1 should complete
+    val maxMessageSize2 = maxMessageSize / 2
+    updateTopicConfig(maxMessageSize2, maxMessageSize2, servers.filter(_ != followerNode))
+    TestUtils.waitUntilTrue(() => producer2.partitionsFor(topic).get(0).offlineReplicas.length == 1, "Metadata not propagated")
+    followerNode.startup()
+    produce(producer2, maxMessageSize2).get // acks=1 should complete
+
+    // Wait for replica fetcher to fail and verify that produce with acks=all fails since there aren't enough in-sync replicas
+    TestUtils.waitUntilTrue(() => replicaFetcherThreads == 0, "Replica fetcher running without replicating")
+    val exception = intercept[ExecutionException](produce(producer3, maxMessageSize2).get).getCause
+    assertTrue(s"Unexpected exception $exception",
+      exception.isInstanceOf[NotEnoughReplicasAfterAppendException] || exception.isInstanceOf[NotEnoughReplicasException])
   }
 
   /**

@@ -112,6 +112,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       props.put(KafkaConfig.ZkEnableSecureAclsProp, "true")
       props.put(KafkaConfig.SaslEnabledMechanismsProp, kafkaServerSaslMechanisms.mkString(","))
       props.put(KafkaConfig.LogSegmentBytesProp, "2000") // low value to test log rolling on config update
+      props.put(KafkaConfig.MessageMaxBytesProp, "2000") // match log.segment.bytes
       props.put(KafkaConfig.NumReplicaFetchersProp, "2") // greater than one to test reducing threads
       props.put(KafkaConfig.ProducerQuotaBytesPerSecondDefaultProp, "10000000") // non-default value to trigger a new metric
       props.put(KafkaConfig.PasswordEncoderSecretProp, "dynamic-config-secret")
@@ -313,6 +314,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     props.put(KafkaConfig.LogCleanerDedupeBufferLoadFactorProp, "0.8")
     props.put(KafkaConfig.LogCleanerIoBufferSizeProp, "300000")
     props.put(KafkaConfig.MessageMaxBytesProp, "40000")
+    props.put(KafkaConfig.LogSegmentBytesProp, "40000")
     props.put(KafkaConfig.LogCleanerIoMaxBytesPerSecondProp, "50000000")
     props.put(KafkaConfig.LogCleanerBackoffMsProp, "6000")
     reconfigureServers(props, perBrokerConfig = false, (KafkaConfig.LogCleanerThreadsProp, "2"))
@@ -356,7 +358,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     props.put(KafkaConfig.LogFlushIntervalMsProp, "60000")
     props.put(KafkaConfig.LogRetentionBytesProp, "10000000")
     props.put(KafkaConfig.LogRetentionTimeMillisProp, TimeUnit.DAYS.toMillis(1).toString)
-    props.put(KafkaConfig.MessageMaxBytesProp, "100000")
+    props.put(KafkaConfig.MessageMaxBytesProp, "4000")
     props.put(KafkaConfig.LogIndexIntervalBytesProp, "10000")
     props.put(KafkaConfig.LogCleanerDeleteRetentionMsProp, TimeUnit.DAYS.toMillis(1).toString)
     props.put(KafkaConfig.LogCleanerMinCompactionLagMsProp, "60000")
