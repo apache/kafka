@@ -319,7 +319,11 @@ public abstract class AbstractCoordinator implements Closeable {
      * @return true iff the group is active
      */
     boolean ensureActiveGroup(final long timeoutMs) {
-        final long startTime = time.milliseconds();
+        return ensureActiveGroup(timeoutMs, time.milliseconds());
+    }
+
+    // Visible for testing
+    boolean ensureActiveGroup(long timeoutMs, long startMs) {
         // always ensure that the coordinator is ready because we may have been disconnected
         // when sending heartbeats and does not necessarily require us to rejoin the group.
         if (!ensureCoordinatorReady(timeoutMs)) {
@@ -328,7 +332,9 @@ public abstract class AbstractCoordinator implements Closeable {
 
         startHeartbeatThreadIfNeeded();
 
-        return joinGroupIfNeeded(remainingTimeAtLeastZero(timeoutMs, time.milliseconds() - startTime));
+        long joinStartMs = time.milliseconds();
+        long joinTimeoutMs = remainingTimeAtLeastZero(timeoutMs, joinStartMs - startMs);
+        return joinGroupIfNeeded(joinTimeoutMs, joinStartMs);
     }
 
     private synchronized void startHeartbeatThreadIfNeeded() {
@@ -366,17 +372,17 @@ public abstract class AbstractCoordinator implements Closeable {
      * Visible for testing.
      *
      * @param timeoutMs Time to complete this action
+     * @param startTimeMs Current time when invoked
      * @return true iff the operation succeeded
      */
-    boolean joinGroupIfNeeded(final long timeoutMs) {
-        final long startTime = time.milliseconds();
+    boolean joinGroupIfNeeded(final long timeoutMs, final long startTimeMs) {
         long elapsedTime = 0L;
 
         while (rejoinNeededOrPending()) {
             if (!ensureCoordinatorReady(remainingTimeAtLeastZero(timeoutMs, elapsedTime))) {
                 return false;
             }
-            elapsedTime = time.milliseconds() - startTime;
+            elapsedTime = time.milliseconds() - startTimeMs;
 
             // call onJoinPrepare if needed. We set a flag to make sure that we do not call it a second
             // time if the client is woken up before a pending rebalance completes. This must be called
@@ -415,7 +421,7 @@ public abstract class AbstractCoordinator implements Closeable {
             }
 
             if (rejoinNeededOrPending()) {
-                elapsedTime = time.milliseconds() - startTime;
+                elapsedTime = time.milliseconds() - startTimeMs;
             }
         }
         return true;
@@ -473,9 +479,12 @@ public abstract class AbstractCoordinator implements Closeable {
      * Join the group and return the assignment for the next generation. This function handles both
      * JoinGroup and SyncGroup, delegating to {@link #performAssignment(String, String, Map)} if
      * elected leader by the coordinator.
+     *
+     * NOTE: This is visible only for testing
+     *
      * @return A request future which wraps the assignment returned from the group leader
      */
-    private RequestFuture<ByteBuffer> sendJoinGroupRequest() {
+    RequestFuture<ByteBuffer> sendJoinGroupRequest() {
         if (coordinatorUnknown())
             return RequestFuture.coordinatorNotAvailable();
 
@@ -489,7 +498,12 @@ public abstract class AbstractCoordinator implements Closeable {
                 metadata()).setRebalanceTimeout(this.rebalanceTimeoutMs);
 
         log.debug("Sending JoinGroup ({}) to coordinator {}", requestBuilder, this.coordinator);
-        return client.send(coordinator, requestBuilder)
+
+        // Note that we override the request timeout using the rebalance timeout since that is the
+        // maximum time that it may block on the coordinator. We add an extra 5 seconds for small delays.
+
+        int joinGroupTimeoutMs = Math.max(rebalanceTimeoutMs, rebalanceTimeoutMs + 5000);
+        return client.send(coordinator, requestBuilder, joinGroupTimeoutMs)
                 .compose(new JoinGroupResponseHandler());
     }
 

@@ -17,11 +17,11 @@
 package org.apache.kafka.clients;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -162,25 +162,28 @@ final class InFlightRequests {
         }
     }
 
+    private Boolean hasExpiredRequest(long now, Deque<NetworkClient.InFlightRequest> deque) {
+        for (NetworkClient.InFlightRequest request : deque) {
+            long timeSinceSend = Math.max(0, now - request.sendTimeMs);
+            if (timeSinceSend > request.requestTimeoutMs)
+                return true;
+        }
+        return false;
+    }
+
     /**
      * Returns a list of nodes with pending in-flight request, that need to be timed out
      *
      * @param now current time in milliseconds
-     * @param requestTimeoutMs max time to wait for the request to be completed
      * @return list of nodes
      */
-    public List<String> getNodesWithTimedOutRequests(long now, int requestTimeoutMs) {
-        List<String> nodeIds = new LinkedList<>();
+    public List<String> nodesWithTimedOutRequests(long now) {
+        List<String> nodeIds = new ArrayList<>();
         for (Map.Entry<String, Deque<NetworkClient.InFlightRequest>> requestEntry : requests.entrySet()) {
             String nodeId = requestEntry.getKey();
             Deque<NetworkClient.InFlightRequest> deque = requestEntry.getValue();
-
-            if (!deque.isEmpty()) {
-                NetworkClient.InFlightRequest request = deque.peekLast();
-                long timeSinceSend = now - request.sendTimeMs;
-                if (timeSinceSend > requestTimeoutMs)
-                    nodeIds.add(nodeId);
-            }
+            if (hasExpiredRequest(now, deque))
+                nodeIds.add(nodeId);
         }
         return nodeIds;
     }

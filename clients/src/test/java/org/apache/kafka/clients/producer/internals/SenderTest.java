@@ -263,8 +263,8 @@ public class SenderTest {
         for (int i = 1; i <= 3; i++) {
             int throttleTimeMs = 100 * i;
             ProduceRequest.Builder builder = ProduceRequest.Builder.forCurrentMagic((short) 1, 1000,
-                            Collections.<TopicPartition, MemoryRecords>emptyMap());
-            ClientRequest request = client.newClientRequest(node.idString(), builder, time.milliseconds(), true, null);
+                            Collections.emptyMap());
+            ClientRequest request = client.newClientRequest(node.idString(), builder, time.milliseconds(), true);
             client.send(request, time.milliseconds());
             client.poll(1, time.milliseconds());
             ProduceResponse response = produceResponse(tp0, i, Errors.NONE, throttleTimeMs);
