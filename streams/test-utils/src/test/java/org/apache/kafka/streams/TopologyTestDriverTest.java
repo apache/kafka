@@ -373,9 +373,9 @@ public class TopologyTestDriverTest {
         testDriver = new TopologyTestDriver(setupSingleProcessorTopology(), config);
 
         testDriver.close();
-        if (!eosEnabled) {
-            assertTrue(mockProcessors.get(0).closed);
-        }
+        assertTrue(mockProcessors.get(0).closed);
+        // As testDriver is already closed, bypassing @After tearDown testDriver.close().
+        testDriver = null;
     }
 
     @Test

@@ -441,7 +441,7 @@ public class TopologyTestDriver implements Closeable {
         // Capture all the records sent to the producer ...
         final List<ProducerRecord<byte[], byte[]>> output = producer.history();
         producer.clear();
-        if (eosEnabled) {
+        if (eosEnabled && !producer.closed()) {
             producer.initTransactions();
             producer.beginTransaction();
         }
@@ -661,7 +661,7 @@ public class TopologyTestDriver implements Closeable {
      */
     @SuppressWarnings("WeakerAccess")
     public void close() {
-        if (task != null && !eosEnabled) {
+        if (task != null) {
             task.close(true, false);
         }
         if (globalStateTask != null) {
@@ -672,6 +672,9 @@ public class TopologyTestDriver implements Closeable {
             }
         }
         captureOutputRecords();
+        if (!eosEnabled) {
+            producer.close();
+        }
         stateDirectory.clean();
     }
 
