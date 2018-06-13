@@ -202,6 +202,7 @@ class StreamsBrokerBounceTest(Test):
 
         return self.collect_results(sleep_time_secs)
 
+    @ignore
     @cluster(num_nodes=7)
     @matrix(failure_mode=["clean_shutdown"],
             broker_type=["controller"],

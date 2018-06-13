@@ -54,6 +54,7 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowStore;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -334,7 +335,7 @@ public class SimpleBenchmark {
             consumer.seekToBeginning(partitions);
 
             while (true) {
-                final ConsumerRecords<Integer, byte[]> records = consumer.poll(POLL_MS);
+                final ConsumerRecords<Integer, byte[]> records = consumer.poll(Duration.ofMillis(POLL_MS));
                 if (records.isEmpty()) {
                     if (processedRecords == numRecords) {
                         break;
@@ -372,7 +373,7 @@ public class SimpleBenchmark {
             consumer.seekToBeginning(partitions);
 
             while (true) {
-                final ConsumerRecords<Integer, byte[]> records = consumer.poll(POLL_MS);
+                final ConsumerRecords<Integer, byte[]> records = consumer.poll(Duration.ofMillis(POLL_MS));
                 if (records.isEmpty()) {
                     if (processedRecords == numRecords) {
                         break;

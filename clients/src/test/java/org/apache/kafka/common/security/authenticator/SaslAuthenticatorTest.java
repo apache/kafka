@@ -79,17 +79,18 @@ import org.apache.kafka.common.requests.SaslHandshakeResponse;
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.TestSecurityConfig;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.plain.PlainLoginModule;
 import org.apache.kafka.common.security.scram.ScramCredential;
-import org.apache.kafka.common.security.scram.internal.ScramCredentialUtils;
-import org.apache.kafka.common.security.scram.internal.ScramFormatter;
+import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils;
+import org.apache.kafka.common.security.scram.internals.ScramFormatter;
 import org.apache.kafka.common.security.scram.ScramLoginModule;
-import org.apache.kafka.common.security.scram.internal.ScramMechanism;
+import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.utils.SecurityUtils;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.authenticator.TestDigestLoginModule.DigestServerCallbackHandler;
-import org.apache.kafka.common.security.plain.internal.PlainServerCallbackHandler;
+import org.apache.kafka.common.security.plain.internals.PlainServerCallbackHandler;
 
 import org.junit.After;
 import org.junit.Before;
@@ -471,7 +472,7 @@ public class SaslAuthenticatorTest {
      */
     @Test
     public void testUnauthenticatedApiVersionsRequestOverSslHandshakeVersion1() throws Exception {
-        testUnauthenticatedApiVersionsRequest(SecurityProtocol.SASL_PLAINTEXT, (short) 1);
+        testUnauthenticatedApiVersionsRequest(SecurityProtocol.SASL_SSL, (short) 1);
     }
 
     /**
@@ -1192,6 +1193,37 @@ public class SaslAuthenticatorTest {
         verifySaslAuthenticateHeaderInteropWithFailure(true, false, SecurityProtocol.SASL_SSL, "SCRAM-SHA-512");
     }
 
+    /**
+     * Tests OAUTHBEARER client and server channels.
+     */
+    @Test
+    public void testValidSaslOauthBearerMechanism() throws Exception {
+        String node = "0";
+        SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
+        configureMechanisms("OAUTHBEARER", Arrays.asList("OAUTHBEARER"));
+        server = createEchoServer(securityProtocol);
+        createAndCheckClientConnection(securityProtocol, node);
+    }
+
+    /**
+     * Tests OAUTHBEARER fails the connection when the client presents a token with
+     * insufficient scope .
+     */
+    @Test
+    public void testInsufficientScopeSaslOauthBearerMechanism() throws Exception {
+        SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
+        TestJaasConfig jaasConfig = configureMechanisms("OAUTHBEARER", Arrays.asList("OAUTHBEARER"));
+        // now update the server side to require a scope the client does not provide
+        Map<String, Object> serverJaasConfigOptionsMap = TestJaasConfig.defaultServerOptions("OAUTHBEARER");
+        serverJaasConfigOptionsMap.put("unsecuredValidatorRequiredScope", "LOGIN_TO_KAFKA"); // causes the failure
+        jaasConfig.createOrUpdateEntry("KafkaServer",
+                "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule", serverJaasConfigOptionsMap);
+        server = createEchoServer(securityProtocol);
+        createAndCheckClientAuthenticationFailure(securityProtocol,
+                "node-" + OAuthBearerLoginModule.OAUTHBEARER_MECHANISM, OAuthBearerLoginModule.OAUTHBEARER_MECHANISM,
+                "{\"status\":\"insufficient_scope\", \"scope\":\"[LOGIN_TO_KAFKA]\"}");
+    }
+
     private void verifySaslAuthenticateHeaderInterop(boolean enableHeaderOnServer, boolean enableHeaderOnClient,
             SecurityProtocol securityProtocol, String saslMechanism) throws Exception {
         configureMechanisms(saslMechanism, Arrays.asList(saslMechanism));
@@ -1434,7 +1466,7 @@ public class SaslAuthenticatorTest {
 
     private void createClientConnection(SecurityProtocol securityProtocol, String node) throws Exception {
         createSelector(securityProtocol, saslClientConfigs);
-        InetSocketAddress addr = new InetSocketAddress("127.0.0.1", server.port());
+        InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
     }
 

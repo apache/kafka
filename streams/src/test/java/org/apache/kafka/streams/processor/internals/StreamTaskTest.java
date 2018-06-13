@@ -35,6 +35,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
@@ -56,6 +57,7 @@ import org.junit.Test;
 
 import java.io.File;
 import java.io.IOException;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
@@ -116,7 +118,7 @@ public class StreamTaskTest {
     private final MockProducer<byte[], byte[]> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer);
     private final MockConsumer<byte[], byte[]> restoreStateConsumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
     private final StateRestoreListener stateRestoreListener = new MockStateRestoreListener();
-    private final StoreChangelogReader changelogReader = new StoreChangelogReader(restoreStateConsumer, stateRestoreListener, new LogContext("stream-task-test ")) {
+    private final StoreChangelogReader changelogReader = new StoreChangelogReader(restoreStateConsumer, Duration.ZERO, stateRestoreListener, new LogContext("stream-task-test ")) {
         @Override
         public Map<TopicPartition, Long> restoredOffsets() {
             return Collections.singletonMap(changelogPartition, offset);
@@ -912,6 +914,7 @@ public class StreamTaskTest {
     @Test
     public void shouldCloseProducerOnCloseWhenEosEnabled() {
         task = createStatelessTask(createConfig(true));
+        task.initializeTopology();
         task.close(true, false);
         task = null;
 
@@ -1025,6 +1028,39 @@ public class StreamTaskTest {
         final Map<TopicPartition, Long> map = task.purgableOffsets();
 
         assertThat(map, equalTo(Collections.singletonMap(repartition, 11L)));
+    }
+
+    @Test
+    public void shouldThrowOnCleanCloseTaskWhenEosEnabledIfTransactionInFlight() {
+        task = createStatelessTask(createConfig(true));
+        try {
+            task.close(true, false);
+            fail("should have throw IllegalStateException");
+        } catch (final IllegalStateException expected) {
+            // pass
+        }
+        task = null;
+
+        assertTrue(producer.closed());
+    }
+
+    @Test
+    public void shouldAlwaysCommitIfEosEnabled() {
+        final RecordCollectorImpl recordCollector =  new RecordCollectorImpl(producer, "StreamTask",
+                new LogContext("StreamTaskTest "), new DefaultProductionExceptionHandler(), new Metrics().sensor("skipped-records"));
+
+        task = createStatelessTask(createConfig(true));
+        task.initializeStateStores();
+        task.initializeTopology();
+        task.punctuate(processorSystemTime, 5, PunctuationType.WALL_CLOCK_TIME, new Punctuator() {
+            @Override
+            public void punctuate(final long timestamp) {
+                recordCollector.send("result-topic1", 3, 5, null, 0, time.milliseconds(),
+                        new IntegerSerializer(),  new IntegerSerializer());
+            }
+        });
+        task.commit();
+        assertEquals(1, producer.history().size());
     }
 
     private StreamTask createStatefulTask(final StreamsConfig config, final boolean logged) {
@@ -1143,5 +1179,4 @@ public class StreamTaskTest {
             recordValue
         );
     }
-
 }

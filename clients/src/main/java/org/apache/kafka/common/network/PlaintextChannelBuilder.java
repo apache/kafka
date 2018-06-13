@@ -33,7 +33,16 @@ import java.util.Map;
 
 public class PlaintextChannelBuilder implements ChannelBuilder {
     private static final Logger log = LoggerFactory.getLogger(PlaintextChannelBuilder.class);
+    private final ListenerName listenerName;
     private Map<String, ?> configs;
+
+    /**
+     * Constructs a plaintext channel builder. ListenerName is non-null whenever
+     * it's instantiated in the broker and null otherwise.
+     */
+    public PlaintextChannelBuilder(ListenerName listenerName) {
+        this.listenerName = listenerName;
+    }
 
     public void configure(Map<String, ?> configs) throws KafkaException {
         this.configs = configs;
@@ -43,7 +52,7 @@ public class PlaintextChannelBuilder implements ChannelBuilder {
     public KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize, MemoryPool memoryPool) throws KafkaException {
         try {
             PlaintextTransportLayer transportLayer = new PlaintextTransportLayer(key);
-            PlaintextAuthenticator authenticator = new PlaintextAuthenticator(configs, transportLayer);
+            PlaintextAuthenticator authenticator = new PlaintextAuthenticator(configs, transportLayer, listenerName);
             return new KafkaChannel(id, transportLayer, authenticator, maxReceiveSize,
                     memoryPool != null ? memoryPool : MemoryPool.NONE);
         } catch (Exception e) {
@@ -58,10 +67,12 @@ public class PlaintextChannelBuilder implements ChannelBuilder {
     private static class PlaintextAuthenticator implements Authenticator {
         private final PlaintextTransportLayer transportLayer;
         private final KafkaPrincipalBuilder principalBuilder;
+        private final ListenerName listenerName;
 
-        private PlaintextAuthenticator(Map<String, ?> configs, PlaintextTransportLayer transportLayer) {
+        private PlaintextAuthenticator(Map<String, ?> configs, PlaintextTransportLayer transportLayer, ListenerName listenerName) {
             this.transportLayer = transportLayer;
             this.principalBuilder = ChannelBuilders.createPrincipalBuilder(configs, transportLayer, this, null);
+            this.listenerName = listenerName;
         }
 
         @Override
@@ -70,7 +81,10 @@ public class PlaintextChannelBuilder implements ChannelBuilder {
         @Override
         public KafkaPrincipal principal() {
             InetAddress clientAddress = transportLayer.socketChannel().socket().getInetAddress();
-            return principalBuilder.build(new PlaintextAuthenticationContext(clientAddress));
+            // listenerName should only be null in Client mode where principal() should not be called
+            if (listenerName == null)
+                throw new IllegalStateException("Unexpected call to principal() when listenerName is null");
+            return principalBuilder.build(new PlaintextAuthenticationContext(clientAddress, listenerName.value()));
         }
 
         @Override

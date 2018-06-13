@@ -47,7 +47,7 @@ public class SinkNodeTest {
             new Metrics().sensor("skipped-records")
         )
     );
-    private final SinkNode sink = new SinkNode<>("anyNodeName", "any-output-topic", anySerializer, anySerializer, null);
+    private final SinkNode sink = new SinkNode<>("anyNodeName", new StaticTopicNameExtractor("any-output-topic"), anySerializer, anySerializer, null);
 
     @Before
     public void before() {

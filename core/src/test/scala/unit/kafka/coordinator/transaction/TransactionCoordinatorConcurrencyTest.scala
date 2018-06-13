@@ -181,7 +181,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
         val request = requestAndHandler.request.asInstanceOf[WriteTxnMarkersRequest.Builder].build()
         val response = createResponse(request)
         requestAndHandler.handler.onComplete(new ClientResponse(new RequestHeader(ApiKeys.PRODUCE, 0, "client", 1),
-          null, null, 0, 0, false, null, response))
+          null, null, 0, 0, false, null, null, response))
       }
     }
   }

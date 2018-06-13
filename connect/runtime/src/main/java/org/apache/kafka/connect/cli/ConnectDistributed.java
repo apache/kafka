@@ -21,6 +21,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.Connect;
 import org.apache.kafka.connect.runtime.Worker;
+import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
 import org.apache.kafka.connect.runtime.WorkerInfo;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedHerder;
@@ -85,12 +86,16 @@ public class ConnectDistributed {
             offsetBackingStore.configure(config);
 
             Worker worker = new Worker(workerId, time, plugins, config, offsetBackingStore);
+            WorkerConfigTransformer configTransformer = worker.configTransformer();
 
             Converter internalValueConverter = worker.getInternalValueConverter();
             StatusBackingStore statusBackingStore = new KafkaStatusBackingStore(time, internalValueConverter);
             statusBackingStore.configure(config);
 
-            ConfigBackingStore configBackingStore = new KafkaConfigBackingStore(internalValueConverter, config);
+            ConfigBackingStore configBackingStore = new KafkaConfigBackingStore(
+                    internalValueConverter,
+                    config,
+                    configTransformer);
 
             DistributedHerder herder = new DistributedHerder(config, time, worker,
                     kafkaClusterId, statusBackingStore, configBackingStore,

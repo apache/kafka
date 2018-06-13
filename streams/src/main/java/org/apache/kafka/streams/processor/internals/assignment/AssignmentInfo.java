@@ -42,7 +42,7 @@ public class AssignmentInfo {
     private static final Logger log = LoggerFactory.getLogger(AssignmentInfo.class);
 
     public static final int LATEST_SUPPORTED_VERSION = 3;
-    public static final int UNKNOWN = -1;
+    static final int UNKNOWN = -1;
 
     private final int usedVersion;
     private final int latestSupportedVersion;
@@ -65,9 +65,9 @@ public class AssignmentInfo {
 
     public AssignmentInfo() {
         this(LATEST_SUPPORTED_VERSION,
-            Collections.<TaskId>emptyList(),
-            Collections.<TaskId, Set<TopicPartition>>emptyMap(),
-            Collections.<HostInfo, Set<TopicPartition>>emptyMap());
+            Collections.emptyList(),
+            Collections.emptyMap(),
+            Collections.emptyMap());
     }
 
     public AssignmentInfo(final int version,
@@ -229,7 +229,7 @@ public class AssignmentInfo {
                     decodeVersionThreeData(assignmentInfo, in);
                     break;
                 default:
-                    TaskAssignmentException fatalException = new TaskAssignmentException("Unable to decode assignment data: " +
+                    final TaskAssignmentException fatalException = new TaskAssignmentException("Unable to decode assignment data: " +
                         "used version: " + usedVersion + "; latest supported version: " + LATEST_SUPPORTED_VERSION);
                     log.error(fatalException.getMessage(), fatalException);
                     throw fatalException;
@@ -262,7 +262,7 @@ public class AssignmentInfo {
         final int count = in.readInt();
         assignmentInfo.standbyTasks = new HashMap<>(count);
         for (int i = 0; i < count; i++) {
-            TaskId id = TaskId.readFrom(in);
+            final TaskId id = TaskId.readFrom(in);
             assignmentInfo.standbyTasks.put(id, readTopicPartitions(in));
         }
     }

@@ -465,7 +465,7 @@ class GroupMetadataManager(brokerId: Int,
               }
 
             case Some(topicPartitions) =>
-              topicPartitionsOpt.getOrElse(Seq.empty[TopicPartition]).map { topicPartition =>
+              topicPartitions.map { topicPartition =>
                 val partitionData = group.offset(topicPartition) match {
                   case None =>
                     new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET, "", Errors.NONE)
@@ -1212,7 +1212,7 @@ object GroupMetadataManager {
   }
 
   /**
-   * Decodes the group metadata messages' payload and retrieves its member metadatafrom it
+   * Decodes the group metadata messages' payload and retrieves its member metadata from it
    *
    * @param buffer input byte-buffer
    * @return a group metadata object from the message

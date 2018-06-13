@@ -39,8 +39,13 @@ public class DeleteGroupsRequest extends AbstractRequest {
     private static final Schema DELETE_GROUPS_REQUEST_V0 = new Schema(
             new Field(GROUPS_KEY_NAME, new ArrayOf(STRING), "An array of groups to be deleted."));
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema DELETE_GROUPS_REQUEST_V1 = DELETE_GROUPS_REQUEST_V0;
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{DELETE_GROUPS_REQUEST_V0};
+        return new Schema[]{DELETE_GROUPS_REQUEST_V0, DELETE_GROUPS_REQUEST_V1};
     }
 
     private final Set<String> groups;
@@ -99,6 +104,7 @@ public class DeleteGroupsRequest extends AbstractRequest {
 
         switch (version()) {
             case 0:
+            case 1:
                 return new DeleteGroupsResponse(throttleTimeMs, groupErrors);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",

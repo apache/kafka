@@ -16,16 +16,18 @@ package kafka.api
 import java.util.Properties
 import java.util.concurrent.Future
 
-import kafka.consumer.SimpleConsumer
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.{ShutdownableThread, TestUtils}
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
+import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.common.serialization.StringDeserializer
 import org.junit.Assert._
 import org.junit.{Ignore, Test}
 
+import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
 
 class ProducerBounceTest extends KafkaServerTestHarness {
@@ -35,14 +37,14 @@ class ProducerBounceTest extends KafkaServerTestHarness {
   val numServers = 4
 
   val overridingProps = new Properties()
-  overridingProps.put(KafkaConfig.AutoCreateTopicsEnableProp, false.toString)
+  overridingProps.put(KafkaConfig.AutoCreateTopicsEnableProp, "false")
   overridingProps.put(KafkaConfig.MessageMaxBytesProp, serverMessageMaxBytes.toString)
   // Set a smaller value for the number of partitions for the offset commit topic (__consumer_offset topic)
   // so that the creation of that topic/partition(s) and subsequent leader assignment doesn't take relatively long
-  overridingProps.put(KafkaConfig.OffsetsTopicPartitionsProp, 1.toString)
-  overridingProps.put(KafkaConfig.ControlledShutdownEnableProp, true.toString)
-  overridingProps.put(KafkaConfig.UncleanLeaderElectionEnableProp, false.toString)
-  overridingProps.put(KafkaConfig.AutoLeaderRebalanceEnableProp, false.toString)
+  overridingProps.put(KafkaConfig.OffsetsTopicPartitionsProp, "1")
+  overridingProps.put(KafkaConfig.ControlledShutdownEnableProp, "true")
+  overridingProps.put(KafkaConfig.UncleanLeaderElectionEnableProp, "false")
+  overridingProps.put(KafkaConfig.AutoLeaderRebalanceEnableProp, "false")
   // This is the one of the few tests we currently allow to preallocate ports, despite the fact that this can result in transient
   // failures due to ports getting reused. We can't use random ports because of bad behavior that can result from bouncing
   // brokers too quickly when they get new, random ports. If we're not careful, the client can end up in a situation
@@ -58,62 +60,6 @@ class ProducerBounceTest extends KafkaServerTestHarness {
   }
 
   private val topic1 = "topic-1"
-
-  /**
-   * With replication, producer should able to find new leader after it detects broker failure
-   */
-  @Ignore // To be re-enabled once we can make it less flaky (KAFKA-2837)
-  @Test
-  def testBrokerFailure() {
-    val numPartitions = 3
-    val topicConfig = new Properties()
-    topicConfig.put(KafkaConfig.MinInSyncReplicasProp, 2.toString)
-    createTopic(topic1, numPartitions, numServers, topicConfig)
-
-    val scheduler = new ProducerScheduler()
-    scheduler.start()
-
-    // rolling bounce brokers
-
-    for (_ <- 0 until numServers) {
-      for (server <- servers) {
-        info("Shutting down server : %s".format(server.config.brokerId))
-        server.shutdown()
-        server.awaitShutdown()
-        info("Server %s shut down. Starting it up again.".format(server.config.brokerId))
-        server.startup()
-        info("Restarted server: %s".format(server.config.brokerId))
-      }
-
-      // Make sure the producer do not see any exception in returned metadata due to broker failures
-      assertFalse(scheduler.failed)
-
-      // Make sure the leader still exists after bouncing brokers
-      (0 until numPartitions).foreach(partition => TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic1, partition))
-    }
-
-    scheduler.shutdown()
-
-    // Make sure the producer do not see any exception
-    // when draining the left messages on shutdown
-    assertFalse(scheduler.failed)
-
-    // double check that the leader info has been propagated after consecutive bounces
-    val newLeaders = (0 until numPartitions).map(i => TestUtils.waitUntilMetadataIsPropagated(servers, topic1, i))
-    val fetchResponses = newLeaders.zipWithIndex.map { case (leader, partition) =>
-      // Consumers must be instantiated after all the restarts since they use random ports each time they start up
-      val consumer = new SimpleConsumer("localhost", boundPort(servers(leader)), 30000, 1024 * 1024, "")
-      val response = consumer.fetch(new FetchRequestBuilder().addFetch(topic1, partition, 0, Int.MaxValue).build()).messageSet(topic1, partition)
-      consumer.close
-      response
-    }
-    val messages = fetchResponses.flatMap(r => r.iterator.toList.map(_.message))
-    val uniqueMessages = messages.toSet
-    val uniqueMessageSize = uniqueMessages.size
-    info(s"number of unique messages sent: ${uniqueMessageSize}")
-    assertEquals(s"Found ${messages.size - uniqueMessageSize} duplicate messages.", uniqueMessageSize, messages.size)
-    assertEquals("Should have fetched " + scheduler.sent + " unique messages", scheduler.sent, messages.size)
-  }
 
   private class ProducerScheduler extends ShutdownableThread("daemon-producer", false) {
     val numRecords = 1000

@@ -26,10 +26,10 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.slf4j.Logger;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -50,11 +50,14 @@ public class StoreChangelogReader implements ChangelogReader {
     private final Map<TopicPartition, StateRestorer> stateRestorers = new HashMap<>();
     private final Map<TopicPartition, StateRestorer> needsRestoring = new HashMap<>();
     private final Map<TopicPartition, StateRestorer> needsInitializing = new HashMap<>();
+    private final Duration pollTime;
 
     public StoreChangelogReader(final Consumer<byte[], byte[]> restoreConsumer,
+                                final Duration pollTime,
                                 final StateRestoreListener userStateRestoreListener,
                                 final LogContext logContext) {
         this.restoreConsumer = restoreConsumer;
+        this.pollTime = pollTime;
         this.log = logContext.logger(getClass());
         this.userStateRestoreListener = userStateRestoreListener;
     }
@@ -66,9 +69,6 @@ public class StoreChangelogReader implements ChangelogReader {
         needsInitializing.put(restorer.partition(), restorer);
     }
 
-    /**
-     * @throws TaskMigratedException if another thread wrote to the changelog topic that is currently restored
-     */
     public Collection<TopicPartition> restore(final RestoringTasks active) {
         if (!needsInitializing.isEmpty()) {
             initialize();
@@ -79,11 +79,19 @@ public class StoreChangelogReader implements ChangelogReader {
             return completed();
         }
 
-        final Set<TopicPartition> restoringPartitions = new HashSet<>(needsRestoring.keySet());
         try {
-            final ConsumerRecords<byte[], byte[]> allRecords = restoreConsumer.poll(10);
-            for (final TopicPartition partition : restoringPartitions) {
-                restorePartition(allRecords, partition, active.restoringTaskFor(partition));
+            final ConsumerRecords<byte[], byte[]> records = restoreConsumer.poll(pollTime);
+            final Iterator<TopicPartition> iterator = needsRestoring.keySet().iterator();
+            while (iterator.hasNext()) {
+                final TopicPartition partition = iterator.next();
+                final StateRestorer restorer = stateRestorers.get(partition);
+                final long pos = processNext(records.records(partition), restorer, endOffsets.get(partition));
+                restorer.setRestoredOffset(pos);
+                if (restorer.hasCompleted(pos, endOffsets.get(partition))) {
+                    restorer.restoreDone();
+                    endOffsets.remove(partition);
+                    iterator.remove();
+                }
             }
         } catch (final InvalidOffsetException recoverableException) {
             log.warn("Restoring StreamTasks failed. Deleting StreamTasks stores to recreate from scratch.", recoverableException);
@@ -112,8 +120,8 @@ public class StoreChangelogReader implements ChangelogReader {
         // the needsInitializing map is not empty, meaning we do not know the metadata for some of them yet
         refreshChangelogInfo();
 
-        Map<TopicPartition, StateRestorer> initializable = new HashMap<>();
-        for (Map.Entry<TopicPartition, StateRestorer> entry : needsInitializing.entrySet()) {
+        final Map<TopicPartition, StateRestorer> initializable = new HashMap<>();
+        for (final Map.Entry<TopicPartition, StateRestorer> entry : needsInitializing.entrySet()) {
             final TopicPartition topicPartition = entry.getKey();
             if (hasPartition(topicPartition)) {
                 initializable.put(entry.getKey(), entry.getValue());
@@ -240,47 +248,12 @@ public class StoreChangelogReader implements ChangelogReader {
         needsInitializing.clear();
     }
 
-    /**
-     * @throws TaskMigratedException if another thread wrote to the changelog topic that is currently restored
-     */
-    private void restorePartition(final ConsumerRecords<byte[], byte[]> allRecords,
-                                  final TopicPartition topicPartition,
-                                  final Task task) {
-        final StateRestorer restorer = stateRestorers.get(topicPartition);
-        final Long endOffset = endOffsets.get(topicPartition);
-        final long pos = processNext(allRecords.records(topicPartition), restorer, endOffset);
-        restorer.setRestoredOffset(pos);
-        if (restorer.hasCompleted(pos, endOffset)) {
-            if (pos > endOffset) {
-                throw new TaskMigratedException(task, topicPartition, endOffset, pos);
-            }
-
-            // need to check for changelog topic
-            if (restorer.offsetLimit() == Long.MAX_VALUE) {
-                final Long updatedEndOffset = restoreConsumer.endOffsets(Collections.singletonList(topicPartition)).get(topicPartition);
-                if (!restorer.hasCompleted(pos, updatedEndOffset)) {
-                    throw new TaskMigratedException(task, topicPartition, updatedEndOffset, pos);
-                }
-            }
-
-
-            log.debug("Completed restoring state from changelog {} with {} records ranging from offset {} to {}",
-                      topicPartition,
-                      restorer.restoredNumRecords(),
-                      restorer.startingOffset(),
-                      restorer.restoredOffset());
-
-            restorer.restoreDone();
-            needsRestoring.remove(topicPartition);
-        }
-    }
-
     private long processNext(final List<ConsumerRecord<byte[], byte[]>> records,
                              final StateRestorer restorer,
                              final Long endOffset) {
         final List<KeyValue<byte[], byte[]>> restoreRecords = new ArrayList<>();
         long nextPosition = -1;
-        int numberRecords = records.size();
+        final int numberRecords = records.size();
         int numberRestored = 0;
         long lastRestoredOffset = -1;
         for (final ConsumerRecord<byte[], byte[]> record : records) {

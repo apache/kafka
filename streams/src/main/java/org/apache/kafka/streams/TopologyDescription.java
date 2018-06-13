@@ -134,6 +134,7 @@ public interface TopologyDescription {
     interface Sink extends Node {
         /**
          * The topic name this sink node is writing to.
+         * Could be null if the topic name can only be dynamically determined based on {@code TopicNameExtractor}
          * @return a topic name
          */
         String topic();

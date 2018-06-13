@@ -37,7 +37,6 @@ import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, Deserializer}
 import org.apache.kafka.common.utils.Utils
 
-import scala.collection.JavaConversions
 import scala.collection.JavaConverters._
 
 /**
@@ -170,7 +169,7 @@ object ConsoleConsumer extends Logging {
   def checkErr(output: PrintStream, formatter: MessageFormatter): Boolean = {
     val gotError = output.checkError()
     if (gotError) {
-      // This means no one is listening to our output stream any more, time to shutdown
+      // This means no one is listening to our output stream anymore, time to shutdown
       System.err.println("Unable to write to standard out, closing consumer.")
     }
     gotError
@@ -325,8 +324,6 @@ object ConsoleConsumer extends Logging {
       .withRequiredArg
       .describedAs("metrics directory")
       .ofType(classOf[java.lang.String])
-    val newConsumerOpt = parser.accepts("new-consumer", "Use the new consumer implementation. This is the default, so " +
-      "this option is deprecated and will be removed in a future release.")
     val bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED (unless old consumer is used): The server to connect to.")
       .withRequiredArg
       .describedAs("server to connect to")
@@ -398,8 +395,6 @@ object ConsoleConsumer extends Logging {
     if (useOldConsumer) {
       if (options.has(bootstrapServerOpt))
         CommandLineUtils.printUsageAndDie(parser, s"Option $bootstrapServerOpt is not valid with $zkConnectOpt.")
-      else if (options.has(newConsumerOpt))
-        CommandLineUtils.printUsageAndDie(parser, s"Option $newConsumerOpt is not valid with $zkConnectOpt.")
       val topicOrFilterOpt = List(topicIdOpt, whitelistOpt, blacklistOpt).filter(options.has)
       if (topicOrFilterOpt.size != 1)
         CommandLineUtils.printUsageAndDie(parser, "Exactly one of whitelist/blacklist/topic is required.")
@@ -450,11 +445,6 @@ object ConsoleConsumer extends Logging {
 
     if (!useOldConsumer) {
       CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt)
-
-      if (options.has(newConsumerOpt)) {
-        Console.err.println("The --new-consumer option is deprecated and will be removed in a future major release. " +
-          "The new consumer is used by default if the --bootstrap-server option is provided.")
-      }
     }
 
     if (options.has(csvMetricsReporterEnabledOpt)) {
@@ -535,21 +525,21 @@ class DefaultMessageFormatter extends MessageFormatter {
     // Note that `toString` will be called on the instance returned by `Deserializer.deserialize`
     if (props.containsKey("key.deserializer")) {
       keyDeserializer = Some(Class.forName(props.getProperty("key.deserializer")).newInstance().asInstanceOf[Deserializer[_]])
-      keyDeserializer.get.configure(JavaConversions.propertiesAsScalaMap(propertiesWithKeyPrefixStripped("key.deserializer.", props)).asJava, true)
+      keyDeserializer.get.configure(propertiesWithKeyPrefixStripped("key.deserializer.", props).asScala.asJava, true)
     }
     // Note that `toString` will be called on the instance returned by `Deserializer.deserialize`
     if (props.containsKey("value.deserializer")) {
       valueDeserializer = Some(Class.forName(props.getProperty("value.deserializer")).newInstance().asInstanceOf[Deserializer[_]])
-      valueDeserializer.get.configure(JavaConversions.propertiesAsScalaMap(propertiesWithKeyPrefixStripped("value.deserializer.", props)).asJava, false)
+      valueDeserializer.get.configure(propertiesWithKeyPrefixStripped("value.deserializer.", props).asScala.asJava, false)
     }
   }
 
   private def propertiesWithKeyPrefixStripped(prefix: String, props: Properties): Properties = {
     val newProps = new Properties()
-    import scala.collection.JavaConversions._
-    for ((key, value) <- props if key.startsWith(prefix) && key.length > prefix.length)
-      newProps.put(key.substring(prefix.length), value)
-
+    props.asScala.foreach { case (key, value) =>
+      if (key.startsWith(prefix) && key.length > prefix.length)
+        newProps.put(key.substring(prefix.length), value)
+    }
     newProps
   }
 

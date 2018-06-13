@@ -22,6 +22,7 @@ import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
@@ -33,6 +34,8 @@ import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.json.JsonConverterConfig;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.MockConnectMetrics.MockMetricsReporter;
+import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
+import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
@@ -47,7 +50,6 @@ import org.apache.kafka.connect.storage.OffsetBackingStore;
 import org.apache.kafka.connect.storage.OffsetStorageReader;
 import org.apache.kafka.connect.storage.OffsetStorageWriter;
 import org.apache.kafka.connect.util.ConnectorTaskId;
-import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.connect.util.ThreadedTest;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
@@ -68,6 +70,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperatorTest.NOOP_OPERATOR;
 import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.eq;
 import static org.junit.Assert.assertEquals;
@@ -485,14 +488,16 @@ public class WorkerTest extends ThreadedTest {
                 anyObject(JsonConverter.class),
                 anyObject(JsonConverter.class),
                 anyObject(JsonConverter.class),
-                EasyMock.eq(TransformationChain.<SourceRecord>noOp()),
+                EasyMock.eq(new TransformationChain(Collections.emptyList(), NOOP_OPERATOR)),
                 anyObject(KafkaProducer.class),
                 anyObject(OffsetStorageReader.class),
                 anyObject(OffsetStorageWriter.class),
                 EasyMock.eq(config),
+                anyObject(ClusterConfigState.class),
                 anyObject(ConnectMetrics.class),
                 anyObject(ClassLoader.class),
-                anyObject(Time.class))
+                anyObject(Time.class),
+                anyObject(RetryWithToleranceOperator.class))
                 .andReturn(workerTask);
         Map<String, String> origProps = new HashMap<>();
         origProps.put(TaskConfig.TASK_CLASS_CONFIG, TestSourceTask.class.getName());
@@ -545,7 +550,7 @@ public class WorkerTest extends ThreadedTest {
         assertStatistics(worker, 0, 0);
         assertStartupStatistics(worker, 0, 0, 0, 0);
         assertEquals(Collections.emptySet(), worker.taskIds());
-        worker.startTask(TASK_ID, anyConnectorConfigMap(), origProps, taskStatusListener, TargetState.STARTED);
+        worker.startTask(TASK_ID, ClusterConfigState.EMPTY, anyConnectorConfigMap(), origProps, taskStatusListener, TargetState.STARTED);
         assertStatistics(worker, 0, 1);
         assertStartupStatistics(worker, 0, 0, 1, 0);
         assertEquals(new HashSet<>(Arrays.asList(TASK_ID)), worker.taskIds());
@@ -596,7 +601,7 @@ public class WorkerTest extends ThreadedTest {
         assertStatistics(worker, 0, 0);
         assertStartupStatistics(worker, 0, 0, 0, 0);
 
-        assertFalse(worker.startTask(TASK_ID, anyConnectorConfigMap(), origProps, taskStatusListener, TargetState.STARTED));
+        assertFalse(worker.startTask(TASK_ID, ClusterConfigState.EMPTY, anyConnectorConfigMap(), origProps, taskStatusListener, TargetState.STARTED));
         assertStartupStatistics(worker, 0, 0, 1, 1);
 
         assertStatistics(worker, 0, 0);
@@ -622,14 +627,16 @@ public class WorkerTest extends ThreadedTest {
                 anyObject(JsonConverter.class),
                 anyObject(JsonConverter.class),
                 anyObject(JsonConverter.class),
-                EasyMock.eq(TransformationChain.<SourceRecord>noOp()),
+                EasyMock.eq(new TransformationChain(Collections.emptyList(), NOOP_OPERATOR)),
                 anyObject(KafkaProducer.class),
                 anyObject(OffsetStorageReader.class),
                 anyObject(OffsetStorageWriter.class),
                 anyObject(WorkerConfig.class),
+                anyObject(ClusterConfigState.class),
                 anyObject(ConnectMetrics.class),
                 EasyMock.eq(pluginLoader),
-                anyObject(Time.class))
+                anyObject(Time.class),
+                anyObject(RetryWithToleranceOperator.class))
                 .andReturn(workerTask);
         Map<String, String> origProps = new HashMap<>();
         origProps.put(TaskConfig.TASK_CLASS_CONFIG, TestSourceTask.class.getName());
@@ -685,7 +692,7 @@ public class WorkerTest extends ThreadedTest {
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore);
         worker.start();
         assertStatistics(worker, 0, 0);
-        worker.startTask(TASK_ID, anyConnectorConfigMap(), origProps, taskStatusListener, TargetState.STARTED);
+        worker.startTask(TASK_ID, ClusterConfigState.EMPTY, anyConnectorConfigMap(), origProps, taskStatusListener, TargetState.STARTED);
         assertStatistics(worker, 0, 1);
         worker.stop();
         assertStatistics(worker, 0, 0);
@@ -713,14 +720,16 @@ public class WorkerTest extends ThreadedTest {
                 EasyMock.capture(keyConverter),
                 EasyMock.capture(valueConverter),
                 EasyMock.capture(headerConverter),
-                EasyMock.eq(TransformationChain.<SourceRecord>noOp()),
+                EasyMock.eq(new TransformationChain(Collections.emptyList(), NOOP_OPERATOR)),
                 anyObject(KafkaProducer.class),
                 anyObject(OffsetStorageReader.class),
                 anyObject(OffsetStorageWriter.class),
                 anyObject(WorkerConfig.class),
+                anyObject(ClusterConfigState.class),
                 anyObject(ConnectMetrics.class),
                 EasyMock.eq(pluginLoader),
-                anyObject(Time.class))
+                anyObject(Time.class),
+                anyObject(RetryWithToleranceOperator.class))
                 .andReturn(workerTask);
         Map<String, String> origProps = new HashMap<>();
         origProps.put(TaskConfig.TASK_CLASS_CONFIG, TestSourceTask.class.getName());
@@ -780,7 +789,7 @@ public class WorkerTest extends ThreadedTest {
         connProps.put("key.converter.extra.config", "foo");
         connProps.put(ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG, TestConfigurableConverter.class.getName());
         connProps.put("value.converter.extra.config", "bar");
-        worker.startTask(TASK_ID, connProps, origProps, taskStatusListener, TargetState.STARTED);
+        worker.startTask(TASK_ID, ClusterConfigState.EMPTY, connProps, origProps, taskStatusListener, TargetState.STARTED);
         assertStatistics(worker, 0, 1);
         assertEquals(new HashSet<>(Arrays.asList(TASK_ID)), worker.taskIds());
         worker.stopAndAwaitTask(TASK_ID);

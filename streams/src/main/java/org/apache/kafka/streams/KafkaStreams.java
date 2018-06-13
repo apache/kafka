@@ -109,12 +109,11 @@ import static org.apache.kafka.common.utils.Utils.getPort;
  * props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
  * props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
  * props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
- * StreamsConfig config = new StreamsConfig(props);
  *
  * StreamsBuilder builder = new StreamsBuilder();
  * builder.<String, String>stream("my-input-topic").mapValues(value -> value.length().toString()).to("my-output-topic");
  *
- * KafkaStreams streams = new KafkaStreams(builder.build(), config);
+ * KafkaStreams streams = new KafkaStreams(builder.build(), props);
  * streams.start();
  * }</pre>
  *
@@ -600,7 +599,7 @@ public class KafkaStreams {
     @Deprecated
     public KafkaStreams(final Topology topology,
                         final StreamsConfig config) {
-        this(topology.internalTopologyBuilder, config, new DefaultKafkaClientSupplier());
+        this(topology, config, new DefaultKafkaClientSupplier());
     }
 
     /**
@@ -635,6 +634,10 @@ public class KafkaStreams {
                          final Time time) throws StreamsException {
         this.config = config;
         this.time = time;
+
+        // adjust the topology if optimization is turned on.
+        // TODO: to be removed post 2.0
+        internalTopologyBuilder.adjust(config);
 
         // The application ID is a required config and hence should always have value
         processId = UUID.randomUUID();
@@ -1028,7 +1031,7 @@ public class KafkaStreams {
      * @param <T>                 return type
      * @return A facade wrapping the local {@link StateStore} instances
      * @throws InvalidStateStoreException if Kafka Streams is (re-)initializing or a store with {@code storeName} and
-     * {@code queryableStoreType} doesnt' exist
+     * {@code queryableStoreType} doesn't exist
      */
     public <T> T store(final String storeName, final QueryableStoreType<T> queryableStoreType) {
         validateIsRunning();

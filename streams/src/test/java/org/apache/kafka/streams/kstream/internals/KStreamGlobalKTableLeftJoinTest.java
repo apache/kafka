@@ -108,7 +108,7 @@ public class KStreamGlobalKTableLeftJoinTest {
     private void pushNullValueToGlobalTable(final int messageCount) {
         final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
         for (int i = 0; i < messageCount; i++) {
-            driver.pipeInput(recordFactory.create(globalTableTopic, "FKey" + expectedKeys[i], null));
+            driver.pipeInput(recordFactory.create(globalTableTopic, "FKey" + expectedKeys[i], (String) null));
         }
     }
 

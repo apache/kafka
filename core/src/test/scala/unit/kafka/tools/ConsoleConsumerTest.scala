@@ -149,8 +149,7 @@ class ConsoleConsumerTest {
     val args: Array[String] = Array(
       "--bootstrap-server", "localhost:9092",
       "--topic", "test",
-      "--from-beginning",
-      "--new-consumer") //new
+      "--from-beginning")
 
     //When
     val config = new ConsoleConsumer.ConsumerConfig(args)
@@ -169,8 +168,7 @@ class ConsoleConsumerTest {
       "--bootstrap-server", "localhost:9092",
       "--topic", "test",
       "--partition", "0",
-      "--offset", "3",
-      "--new-consumer") //new
+      "--offset", "3")
 
     //When
     val config = new ConsoleConsumer.ConsumerConfig(args)
@@ -185,8 +183,42 @@ class ConsoleConsumerTest {
 
   }
 
+  @Test(expected = classOf[IllegalArgumentException])
+  def shouldExitOnUnrecognizedNewConsumerOption(): Unit = {
+    Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
+
+    //Given
+    val args: Array[String] = Array(
+      "--new-consumer",
+      "--bootstrap-server", "localhost:9092",
+      "--topic", "test",
+      "--from-beginning")
+
+    //When
+    try {
+      new ConsoleConsumer.ConsumerConfig(args)
+    } finally {
+      Exit.resetExitProcedure()
+    }
+  }
+
   @Test
   def testDefaultConsumer() {
+    //Given
+    val args: Array[String] = Array(
+      "--bootstrap-server", "localhost:9092",
+      "--topic", "test",
+      "--from-beginning")
+
+    //When
+    val config = new ConsoleConsumer.ConsumerConfig(args)
+
+    //Then
+    assertFalse(config.useOldConsumer)
+  }
+
+  @Test
+  def testNewConsumerRemovedOption() {
     //Given
     val args: Array[String] = Array(
       "--bootstrap-server", "localhost:9092",
@@ -208,7 +240,6 @@ class ConsoleConsumerTest {
       "--topic", "test",
       "--partition", "0",
       "--offset", "LatEst",
-      "--new-consumer", //new
       "--property", "print.value=false")
 
     //When
@@ -366,9 +397,6 @@ class ConsoleConsumerTest {
 
   @Test(expected = classOf[IllegalArgumentException])
   def shouldExitOnInvalidConfigWithAutoOffsetResetAndConflictingFromBeginningNewConsumer() {
-
-    // Override exit procedure to throw an exception instead of exiting, so we can catch the exit
-    // properly for this test case
     Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
 
     //Given
@@ -384,15 +412,10 @@ class ConsoleConsumerTest {
     } finally {
       Exit.resetExitProcedure()
     }
-
-    fail("Expected consumer property construction to fail due to inconsistent reset options")
   }
 
   @Test(expected = classOf[IllegalArgumentException])
   def shouldExitOnInvalidConfigWithAutoOffsetResetAndConflictingFromBeginningOldConsumer() {
-
-    // Override exit procedure to throw an exception instead of exiting, so we can catch the exit
-    // properly for this test case
     Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
 
     //Given
@@ -408,8 +431,6 @@ class ConsoleConsumerTest {
     } finally {
       Exit.resetExitProcedure()
     }
-
-    fail("Expected consumer property construction to fail due to inconsistent reset options")
   }
 
   @Test

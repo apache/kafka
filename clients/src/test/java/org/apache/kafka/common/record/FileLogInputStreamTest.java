@@ -221,7 +221,7 @@ public class FileLogInputStreamTest {
     }
 
     private void assertProducerData(RecordBatch batch, long producerId, short producerEpoch, int baseSequence,
-                                    boolean isTransactional, SimpleRecord ... records) {
+                                    boolean isTransactional, SimpleRecord... records) {
         assertEquals(producerId, batch.producerId());
         assertEquals(producerEpoch, batch.producerEpoch());
         assertEquals(baseSequence, batch.baseSequence());
@@ -237,7 +237,7 @@ public class FileLogInputStreamTest {
         assertFalse(batch.isTransactional());
     }
 
-    private void assertGenericRecordBatchData(RecordBatch batch, long baseOffset, long maxTimestamp, SimpleRecord ... records) {
+    private void assertGenericRecordBatchData(RecordBatch batch, long baseOffset, long maxTimestamp, SimpleRecord... records) {
         assertEquals(magic, batch.magic());
         assertEquals(compression, batch.compressionType());
 

@@ -175,6 +175,10 @@ class KStreamSessionWindowAggregate<K, V, T> implements KStreamAggProcessorSuppl
                 return value;
             }
         }
+
+        @Override
+        public void close() {
+        }
     }
 
 }

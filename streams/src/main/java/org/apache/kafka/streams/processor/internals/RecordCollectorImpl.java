@@ -34,6 +34,7 @@ import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.ProductionExceptionHandler;
@@ -48,11 +49,11 @@ import java.util.Map;
 
 public class RecordCollectorImpl implements RecordCollector {
     private final Logger log;
+    private final String logPrefix;
+    private final Sensor skippedRecordsSensor;
     private final Producer<byte[], byte[]> producer;
     private final Map<TopicPartition, Long> offsets;
-    private final String logPrefix;
     private final ProductionExceptionHandler productionExceptionHandler;
-    private final Sensor skippedRecordsSensor;
 
     private final static String LOG_MESSAGE = "Error sending record (key {} value {} timestamp {}) to topic {} due to {}; " +
         "No more records will be sent and no more offsets will be recorded for this task.";
@@ -77,6 +78,7 @@ public class RecordCollectorImpl implements RecordCollector {
     public <K, V> void send(final String topic,
                             final K key,
                             final V value,
+                            final Headers headers,
                             final Long timestamp,
                             final Serializer<K> keySerializer,
                             final Serializer<V> valueSerializer,
@@ -86,14 +88,14 @@ public class RecordCollectorImpl implements RecordCollector {
         if (partitioner != null) {
             final List<PartitionInfo> partitions = producer.partitionsFor(topic);
             if (partitions.size() > 0) {
-                partition = partitioner.partition(key, value, partitions.size());
+                partition = partitioner.partition(topic, key, value, partitions.size());
             } else {
                 throw new StreamsException("Could not get partition information for topic '" + topic + "'." +
                     " This can happen if the topic does not exist.");
             }
         }
 
-        send(topic, key, value, partition, timestamp, keySerializer, valueSerializer);
+        send(topic, key, value, headers, partition, timestamp, keySerializer, valueSerializer);
     }
 
     private boolean productionExceptionIsFatal(final Exception exception) {
@@ -142,6 +144,7 @@ public class RecordCollectorImpl implements RecordCollector {
     public <K, V> void send(final String topic,
                             final K key,
                             final V value,
+                            final Headers headers,
                             final Integer partition,
                             final Long timestamp,
                             final Serializer<K> keySerializer,
@@ -150,7 +153,7 @@ public class RecordCollectorImpl implements RecordCollector {
         final byte[] keyBytes = keySerializer.serialize(topic, key);
         final byte[] valBytes = valueSerializer.serialize(topic, value);
 
-        final ProducerRecord<byte[], byte[]> serializedRecord = new ProducerRecord<>(topic, partition, timestamp, keyBytes, valBytes);
+        final ProducerRecord<byte[], byte[]> serializedRecord = new ProducerRecord<>(topic, partition, timestamp, keyBytes, valBytes, headers);
 
         try {
             producer.send(serializedRecord, new Callback() {

@@ -229,22 +229,14 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                                 final String operationName,
                                                 final Sensor.RecordingLevel recordingLevel,
                                                 final String... tags) {
-        final Map<String, String> tagMap = constructTags(scopeName, entityName, tags);
-        final Map<String, String> allTagMap = constructTags(scopeName, "all", tags);
 
-        // first add the global operation metrics if not yet, with the global tags only
-        final Sensor parent = metrics.sensor(sensorName(operationName, null), recordingLevel);
-        addLatencyMetrics(scopeName, parent, operationName, allTagMap);
-        addThroughputMetrics(scopeName, parent, operationName, allTagMap);
+        return addLatencyAndThroughputSensor(null,
+                                             scopeName,
+                                             entityName,
+                                             operationName,
+                                             recordingLevel,
+                                             tags);
 
-        // add the operation metrics with additional tags
-        final Sensor sensor = metrics.sensor(sensorName(operationName, entityName), recordingLevel, parent);
-        addLatencyMetrics(scopeName, sensor, operationName, tagMap);
-        addThroughputMetrics(scopeName, sensor, operationName, tagMap);
-
-        parentSensors.put(sensor, parent);
-
-        return sensor;
     }
 
     public Sensor addLatencyAndThroughputSensor(final String taskName,
@@ -253,12 +245,23 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                                 final String operationName,
                                                 final Sensor.RecordingLevel recordingLevel,
                                                 final String... tags) {
-        return addLatencyAndThroughputSensor(
-            scopeName,
-            entityName,
-            threadName + "." + taskName + "." + operationName,
-            recordingLevel,
-            tags);
+
+        final Map<String, String> tagMap = constructTags(scopeName, entityName, tags);
+        final Map<String, String> allTagMap = constructTags(scopeName, "all", tags);
+
+        // first add the global operation metrics if not yet, with the global tags only
+        final Sensor parent = metrics.sensor(sensorName(buildUniqueSensorName(operationName, taskName), null), recordingLevel);
+        addLatencyMetrics(scopeName, parent, operationName, allTagMap);
+        addThroughputMetrics(scopeName, parent, operationName, allTagMap);
+
+        // add the operation metrics with additional tags
+        final Sensor sensor = metrics.sensor(sensorName(buildUniqueSensorName(operationName, taskName), entityName), recordingLevel, parent);
+        addLatencyMetrics(scopeName, sensor, operationName, tagMap);
+        addThroughputMetrics(scopeName, sensor, operationName, tagMap);
+
+        parentSensors.put(sensor, parent);
+
+        return sensor;
     }
 
     /**
@@ -270,20 +273,14 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                       final String operationName,
                                       final Sensor.RecordingLevel recordingLevel,
                                       final String... tags) {
-        final Map<String, String> tagMap = constructTags(scopeName, entityName, tags);
-        final Map<String, String> allTagMap = constructTags(scopeName, "all", tags);
 
-        // first add the global operation metrics if not yet, with the global tags only
-        final Sensor parent = metrics.sensor(sensorName(operationName, null), recordingLevel);
-        addThroughputMetrics(scopeName, parent, operationName, allTagMap);
+        return addThroughputSensor(null,
+                                   scopeName,
+                                   entityName,
+                                   operationName,
+                                   recordingLevel,
+                                   tags);
 
-        // add the operation metrics with additional tags
-        final Sensor sensor = metrics.sensor(sensorName(operationName, entityName), recordingLevel, parent);
-        addThroughputMetrics(scopeName, sensor, operationName, tagMap);
-
-        parentSensors.put(sensor, parent);
-
-        return sensor;
     }
 
     public Sensor addThroughputSensor(final String taskName,
@@ -292,13 +289,28 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                       final String operationName,
                                       final Sensor.RecordingLevel recordingLevel,
                                       final String... tags) {
-        return addThroughputSensor(
-            scopeName,
-            entityName,
-            threadName + "." + taskName + "." + operationName,
-            recordingLevel,
-            tags
-        );
+
+        final Map<String, String> tagMap = constructTags(scopeName, entityName, tags);
+        final Map<String, String> allTagMap = constructTags(scopeName, "all", tags);
+
+        // first add the global operation metrics if not yet, with the global tags only
+        final Sensor parent = metrics.sensor(sensorName(buildUniqueSensorName(operationName, taskName), null), recordingLevel);
+        addThroughputMetrics(scopeName, parent, operationName, allTagMap);
+
+        // add the operation metrics with additional tags
+        final Sensor sensor = metrics.sensor(sensorName(buildUniqueSensorName(operationName, taskName), entityName), recordingLevel, parent);
+        addThroughputMetrics(scopeName, sensor, operationName, tagMap);
+
+        parentSensors.put(sensor, parent);
+
+        return sensor;
+
+    }
+
+
+    private String buildUniqueSensorName(String operationName, String taskName) {
+        String task = taskName == null ? "" : taskName + ".";
+        return threadName + "." + task + operationName;
     }
 
     private void addLatencyMetrics(final String scopeName, final Sensor sensor, final String opName, final Map<String, String> tags) {

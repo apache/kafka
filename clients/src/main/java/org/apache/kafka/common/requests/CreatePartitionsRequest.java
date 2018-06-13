@@ -60,8 +60,13 @@ public class CreatePartitionsRequest extends AbstractRequest {
             new Field(VALIDATE_ONLY_KEY_NAME, BOOLEAN,
                     "If true then validate the request, but don't actually increase the number of partitions."));
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema CREATE_PARTITIONS_REQUEST_V1 = CREATE_PARTITIONS_REQUEST_V0;
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{CREATE_PARTITIONS_REQUEST_V0};
+        return new Schema[]{CREATE_PARTITIONS_REQUEST_V0, CREATE_PARTITIONS_REQUEST_V1};
     }
 
     // It is an error for duplicate topics to be present in the request,
@@ -201,6 +206,7 @@ public class CreatePartitionsRequest extends AbstractRequest {
         short versionId = version();
         switch (versionId) {
             case 0:
+            case 1:
                 return new CreatePartitionsResponse(throttleTimeMs, topicErrors);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
