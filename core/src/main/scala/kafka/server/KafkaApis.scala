@@ -43,7 +43,6 @@ import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME, isInternal}
-import org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ListenerName, Send}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -507,8 +506,8 @@ class KafkaApis(val requestChannel: RequestChannel,
           fetchRequest.toForget(),
           fetchRequest.isFromFollower())
 
-    def errorResponse(error: Errors): FetchResponse.PartitionData[Records] = {
-      new FetchResponse.PartitionData(error, FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LAST_STABLE_OFFSET,
+    def errorResponse[T >: MemoryRecords <: BaseRecords](error: Errors): FetchResponse.PartitionData[T] = {
+      new FetchResponse.PartitionData[T](error, FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LAST_STABLE_OFFSET,
         FetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY)
     }
 
@@ -564,8 +563,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       // For fetch requests from clients, check if down-conversion is disabled for the particular partition
       if (downConvertMagic.isDefined && !fetchRequest.isFromFollower && !logConfig.forall(_.messageDownConversionEnable)) {
         trace(s"Conversion to message format ${downConvertMagic.get} is disabled for partition $tp. Sending unsupported version response to $clientId.")
-        new FetchResponse.PartitionData(Errors.UNSUPPORTED_VERSION, FetchResponse.INVALID_HIGHWATERMARK,
-          FetchResponse.INVALID_LAST_STABLE_OFFSET, FetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY)
+        errorResponse(Errors.UNSUPPORTED_VERSION)
       } else {
         val convertedRecords =
           downConvertMagic.map { magic =>
