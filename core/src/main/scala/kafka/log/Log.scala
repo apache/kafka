@@ -1700,12 +1700,9 @@ class Log(@volatile var dir: File,
    * inbound swap segment
    */
   private def swapSegmentIntersection(swapSegment: LogSegment): Iterable[LogSegment] = {
-    val swapStartOffset = swapSegment.baseOffset
-    val swapEndOffset = swapSegment.readNextOffset
-
     lock synchronized {
-      logSegments(swapStartOffset, swapEndOffset).filter { segment =>
-        segment.readNextOffset > swapStartOffset
+      logSegments(swapSegment.baseOffset, swapSegment.readNextOffset).filter { segment =>
+        segment.readNextOffset > swapSegment.baseOffset
       }
     }
   }
@@ -1847,7 +1844,7 @@ class Log(@volatile var dir: File,
         case e: LogSegmentOffsetOverflowException =>
           triesSoFar += 1
           info(s"Caught LogOffsetOverflowException ${e.getMessage}. Split segment and retry. retry#: $triesSoFar.")
-          splitOverflowedSegment(e.logSegment)
+          splitOverflowedSegment(e.segment)
       }
     }
     throw new IllegalStateException()
@@ -1887,6 +1884,9 @@ class Log(@volatile var dir: File,
 
         position += bytesAppended
       }
+
+      if (!newSegments.exists(_.baseOffset - segment.baseOffset > Int.MaxValue))
+        throw new IllegalStateException(s"Could not find the expected overflow offset in $segment")
 
       // It is possible to have only one segment after splitting if all the messages in the segment to split
       // have offsets that overflow

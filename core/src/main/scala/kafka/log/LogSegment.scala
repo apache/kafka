@@ -154,8 +154,7 @@ class LogSegment private[log] (val log: FileRecords,
 
   private def ensureOffsetInRange(offset: Long): Unit = {
     if (!canConvertToRelativeOffset(offset))
-      throw new LogSegmentOffsetOverflowException(s"Detected offset overflow at offset $offset " +
-        s"in segment $this", this)
+      throw new LogSegmentOffsetOverflowException(this, offset)
   }
 
   private def appendChunkFromFile(records: FileRecords, position: Int, bufferSupplier: BufferSupplier): Int = {
@@ -198,6 +197,9 @@ class LogSegment private[log] (val log: FileRecords,
   /**
    * Append records from a file beginning at the given position until either the end of the file
    * is reached or an offset is found which is too large to convert to a relative offset for the indexes.
+   *
+   * @return the number of bytes appended to the log (may be less than the size of the input if an
+   *         offset is encountered which would overflow this segment)
    */
   def appendFromFile(records: FileRecords, start: Int): Int = {
     var position = start
