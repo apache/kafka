@@ -88,8 +88,8 @@ public class NetworkClient implements KafkaClient {
     /* the current correlation id to use when sending requests to servers */
     private int correlation;
 
-    /* minimum timeout for individual requests to await acknowledgement from servers */
-    private final int minRequestTimeoutMs;
+    /* default timeout for individual requests to await acknowledgement from servers */
+    private final int defaultRequestTimeoutMs;
 
     /* time in ms to wait before retrying to create connection to a server */
     private final long reconnectBackoffMs;
@@ -117,7 +117,7 @@ public class NetworkClient implements KafkaClient {
                          long reconnectBackoffMax,
                          int socketSendBuffer,
                          int socketReceiveBuffer,
-                         int minRequestTimeoutMs,
+                         int defaultRequestTimeoutMs,
                          Time time,
                          boolean discoverBrokerVersions,
                          ApiVersions apiVersions,
@@ -131,7 +131,7 @@ public class NetworkClient implements KafkaClient {
              reconnectBackoffMax,
              socketSendBuffer,
              socketReceiveBuffer,
-             minRequestTimeoutMs,
+             defaultRequestTimeoutMs,
              time,
              discoverBrokerVersions,
              apiVersions,
@@ -147,7 +147,7 @@ public class NetworkClient implements KafkaClient {
             long reconnectBackoffMax,
             int socketSendBuffer,
             int socketReceiveBuffer,
-            int minRequestTimeoutMs,
+            int defaultRequestTimeoutMs,
             Time time,
             boolean discoverBrokerVersions,
             ApiVersions apiVersions,
@@ -162,7 +162,7 @@ public class NetworkClient implements KafkaClient {
              reconnectBackoffMax,
              socketSendBuffer,
              socketReceiveBuffer,
-             minRequestTimeoutMs,
+             defaultRequestTimeoutMs,
              time,
              discoverBrokerVersions,
              apiVersions,
@@ -178,7 +178,7 @@ public class NetworkClient implements KafkaClient {
                          long reconnectBackoffMax,
                          int socketSendBuffer,
                          int socketReceiveBuffer,
-                         int minRequestTimeoutMs,
+                         int defaultRequestTimeoutMs,
                          Time time,
                          boolean discoverBrokerVersions,
                          ApiVersions apiVersions,
@@ -192,7 +192,7 @@ public class NetworkClient implements KafkaClient {
              reconnectBackoffMax,
              socketSendBuffer,
              socketReceiveBuffer,
-             minRequestTimeoutMs,
+             defaultRequestTimeoutMs,
              time,
              discoverBrokerVersions,
              apiVersions,
@@ -209,7 +209,7 @@ public class NetworkClient implements KafkaClient {
                           long reconnectBackoffMax,
                           int socketSendBuffer,
                           int socketReceiveBuffer,
-                          int minRequestTimeoutMs,
+                          int defaultRequestTimeoutMs,
                           Time time,
                           boolean discoverBrokerVersions,
                           ApiVersions apiVersions,
@@ -234,7 +234,7 @@ public class NetworkClient implements KafkaClient {
         this.socketReceiveBuffer = socketReceiveBuffer;
         this.correlation = 0;
         this.randOffset = new Random();
-        this.minRequestTimeoutMs = minRequestTimeoutMs;
+        this.defaultRequestTimeoutMs = defaultRequestTimeoutMs;
         this.reconnectBackoffMs = reconnectBackoffMs;
         this.time = time;
         this.discoverBrokerVersions = discoverBrokerVersions;
@@ -505,7 +505,7 @@ public class NetworkClient implements KafkaClient {
 
         long metadataTimeout = metadataUpdater.maybeUpdate(now);
         try {
-            this.selector.poll(Utils.min(timeout, metadataTimeout, minRequestTimeoutMs));
+            this.selector.poll(Utils.min(timeout, metadataTimeout, defaultRequestTimeoutMs));
         } catch (IOException e) {
             log.error("Unexpected error during I/O", e);
         }
@@ -898,7 +898,7 @@ public class NetworkClient implements KafkaClient {
         public long maybeUpdate(long now) {
             // should we update our metadata?
             long timeToNextMetadataUpdate = metadata.timeToNextUpdate(now);
-            long waitForMetadataFetch = this.metadataFetchInProgress ? minRequestTimeoutMs : 0;
+            long waitForMetadataFetch = this.metadataFetchInProgress ? defaultRequestTimeoutMs : 0;
 
             long metadataTimeout = Math.max(timeToNextMetadataUpdate, waitForMetadataFetch);
 
@@ -995,7 +995,7 @@ public class NetworkClient implements KafkaClient {
 
                 log.debug("Sending metadata request {} to node {}", metadataRequest, node);
                 sendInternalMetadataRequest(metadataRequest, nodeConnectionId, now);
-                return minRequestTimeoutMs;
+                return defaultRequestTimeoutMs;
             }
 
             // If there's any connection establishment underway, wait until it completes. This prevents
@@ -1027,7 +1027,7 @@ public class NetworkClient implements KafkaClient {
                                           AbstractRequest.Builder<?> requestBuilder,
                                           long createdTimeMs,
                                           boolean expectResponse) {
-        return newClientRequest(nodeId, requestBuilder, createdTimeMs, expectResponse, minRequestTimeoutMs, null);
+        return newClientRequest(nodeId, requestBuilder, createdTimeMs, expectResponse, defaultRequestTimeoutMs, null);
     }
 
     @Override
@@ -1037,12 +1037,8 @@ public class NetworkClient implements KafkaClient {
                                           boolean expectResponse,
                                           int requestTimeoutMs,
                                           RequestCompletionHandler callback) {
-        if (requestTimeoutMs < minRequestTimeoutMs)
-            throw new IllegalArgumentException("Request timeout " + requestTimeoutMs +
-                    " is smaller than minimum permitted timeout " + minRequestTimeoutMs);
-
         return new ClientRequest(nodeId, requestBuilder, correlation++, clientId, createdTimeMs, expectResponse,
-                minRequestTimeoutMs, callback);
+                defaultRequestTimeoutMs, callback);
     }
 
     public boolean discoverBrokerVersions() {
