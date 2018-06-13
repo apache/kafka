@@ -50,9 +50,8 @@ object ConsumerPerformance extends LazyLogging {
     var metrics: mutable.Map[MetricName, _ <: Metric] = null
     val joinGroupTimeInMs = new AtomicLong(0)
 
-    if (!config.hideHeader) {
-      printHeader(config.showDetailedStats, config.useOldConsumer)
-    }
+    if (!config.hideHeader)
+      printHeader(config.showDetailedStats)
 
     var startMs, endMs = 0L
     val consumer = new KafkaConsumer[Array[Byte], Array[Byte]](config.props)
@@ -62,30 +61,25 @@ object ConsumerPerformance extends LazyLogging {
     endMs = System.currentTimeMillis
 
     if (config.printMetrics) {
-      metrics = consumer.metrics().asScala
+      metrics = consumer.metrics.asScala
     }
     consumer.close()
     val elapsedSecs = (endMs - startMs) / 1000.0
     val fetchTimeInMs = (endMs - startMs) - joinGroupTimeInMs.get
     if (!config.showDetailedStats) {
       val totalMBRead = (totalBytesRead.get * 1.0) / (1024 * 1024)
-      print("%s, %s, %.4f, %.4f, %d, %.4f".format(
+      println("%s, %s, %.4f, %.4f, %d, %.4f, %d, %d, %.4f, %.4f".format(
         config.dateFormat.format(startMs),
         config.dateFormat.format(endMs),
         totalMBRead,
         totalMBRead / elapsedSecs,
         totalMessagesRead.get,
-        totalMessagesRead.get / elapsedSecs
+        totalMessagesRead.get / elapsedSecs,
+        joinGroupTimeInMs.get,
+        fetchTimeInMs,
+        totalMBRead / (fetchTimeInMs / 1000.0),
+        totalMessagesRead.get / (fetchTimeInMs / 1000.0)
       ))
-      if (!config.useOldConsumer) {
-        print(", %d, %d, %.4f, %.4f".format(
-          joinGroupTimeInMs.get,
-          fetchTimeInMs,
-          totalMBRead / (fetchTimeInMs / 1000.0),
-          totalMessagesRead.get / (fetchTimeInMs / 1000.0)
-        ))
-      }
-      println()
     }
 
     if (metrics != null) {
@@ -94,13 +88,12 @@ object ConsumerPerformance extends LazyLogging {
 
   }
 
-  private[tools] def printHeader(showDetailedStats: Boolean, useOldConsumer: Boolean): Unit = {
-    val newFieldsInHeader = if (!useOldConsumer) ", rebalance.time.ms, fetch.time.ms, fetch.MB.sec, fetch.nMsg.sec" else ""
-    if (!showDetailedStats) {
-        println("start.time, end.time, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec" + newFieldsInHeader)
-      } else {
-        println("time, threadId, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec" + newFieldsInHeader)
-    }
+  private[tools] def printHeader(showDetailedStats: Boolean): Unit = {
+    val newFieldsInHeader = ", rebalance.time.ms, fetch.time.ms, fetch.MB.sec, fetch.nMsg.sec"
+    if (!showDetailedStats)
+      println("start.time, end.time, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec" + newFieldsInHeader)
+    else
+      println("time, threadId, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec" + newFieldsInHeader)
   }
 
   def consume(consumer: KafkaConsumer[Array[Byte], Array[Byte]],
@@ -214,12 +207,7 @@ object ConsumerPerformance extends LazyLogging {
   }
 
   class ConsumerPerfConfig(args: Array[String]) extends PerfConfig(args) {
-    val zkConnectOpt = parser.accepts("zookeeper", "REQUIRED (only when using old consumer): The connection string for the zookeeper connection in the form host:port. " +
-      "Multiple URLS can be given to allow fail-over. This option is only used with the old consumer.")
-      .withRequiredArg
-      .describedAs("urls")
-      .ofType(classOf[String])
-    val bootstrapServersOpt = parser.accepts("broker-list", "REQUIRED (unless old consumer is used): A broker list to use for connecting if using the new consumer.")
+    val bootstrapServersOpt = parser.accepts("broker-list", "REQUIRED: The server(s) to connect to.")
       .withRequiredArg()
       .describedAs("host")
       .ofType(classOf[String])
@@ -258,7 +246,7 @@ object ConsumerPerformance extends LazyLogging {
       .withRequiredArg
       .describedAs("config file")
       .ofType(classOf[String])
-    val printMetricsOpt = parser.accepts("print-metrics", "Print out the metrics. This only applies to new consumer.")
+    val printMetricsOpt = parser.accepts("print-metrics", "Print out the metrics.")
     val showDetailedStatsOpt = parser.accepts("show-detailed-stats", "If set, stats are reported for each reporting " +
       "interval as configured by reporting-interval")
     val recordFetchTimeoutOpt = parser.accepts("timeout", "The maximum allowed time in milliseconds between returned records.")
@@ -269,40 +257,25 @@ object ConsumerPerformance extends LazyLogging {
 
     val options = parser.parse(args: _*)
 
-    CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, numMessagesOpt)
+    CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, numMessagesOpt, bootstrapServersOpt)
 
-    val useOldConsumer = options.has(zkConnectOpt)
     val printMetrics = options.has(printMetricsOpt)
 
     val props = if (options.has(consumerConfigOpt))
       Utils.loadProps(options.valueOf(consumerConfigOpt))
     else
       new Properties
-    if (!useOldConsumer) {
-      CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServersOpt)
 
-      import org.apache.kafka.clients.consumer.ConsumerConfig
-      props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, options.valueOf(bootstrapServersOpt))
-      props.put(ConsumerConfig.GROUP_ID_CONFIG, options.valueOf(groupIdOpt))
-      props.put(ConsumerConfig.RECEIVE_BUFFER_CONFIG, options.valueOf(socketBufferSizeOpt).toString)
-      props.put(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, options.valueOf(fetchSizeOpt).toString)
-      props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, if (options.has(resetBeginningOffsetOpt)) "latest" else "earliest")
-      props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, classOf[ByteArrayDeserializer])
-      props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, classOf[ByteArrayDeserializer])
-      props.put(ConsumerConfig.CHECK_CRCS_CONFIG, "false")
-    } else {
-      if (options.has(bootstrapServersOpt))
-        CommandLineUtils.printUsageAndDie(parser, s"Option $bootstrapServersOpt is not valid with $zkConnectOpt.")
+    import org.apache.kafka.clients.consumer.ConsumerConfig
+    props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, options.valueOf(bootstrapServersOpt))
+    props.put(ConsumerConfig.GROUP_ID_CONFIG, options.valueOf(groupIdOpt))
+    props.put(ConsumerConfig.RECEIVE_BUFFER_CONFIG, options.valueOf(socketBufferSizeOpt).toString)
+    props.put(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, options.valueOf(fetchSizeOpt).toString)
+    props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, if (options.has(resetBeginningOffsetOpt)) "latest" else "earliest")
+    props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, classOf[ByteArrayDeserializer])
+    props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, classOf[ByteArrayDeserializer])
+    props.put(ConsumerConfig.CHECK_CRCS_CONFIG, "false")
 
-      CommandLineUtils.checkRequiredArgs(parser, options, zkConnectOpt, numMessagesOpt)
-      props.put("group.id", options.valueOf(groupIdOpt))
-      props.put("socket.receive.buffer.bytes", options.valueOf(socketBufferSizeOpt).toString)
-      props.put("fetch.message.max.bytes", options.valueOf(fetchSizeOpt).toString)
-      props.put("auto.offset.reset", if (options.has(resetBeginningOffsetOpt)) "largest" else "smallest")
-      props.put("zookeeper.connect", options.valueOf(zkConnectOpt))
-      props.put("consumer.timeout.ms", "1000")
-      props.put("num.consumer.fetchers", options.valueOf(numFetchersOpt).toString)
-    }
     val numThreads = options.valueOf(numThreadsOpt).intValue
     val topic = options.valueOf(topicOpt)
     val numMessages = options.valueOf(numMessagesOpt).longValue

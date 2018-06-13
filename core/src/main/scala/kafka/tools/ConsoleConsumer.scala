@@ -156,8 +156,8 @@ object ConsoleConsumer extends Logging {
   }
 
   /**
-    * Used by both getNewConsumerProps and getOldConsumerProps to retrieve the correct value for the
-    * consumer parameter 'auto.offset.reset'.
+    * Used by consumerProps to retrieve the correct value for the consumer parameter 'auto.offset.reset'.
+    *
     * Order of priority is:
     *   1. Explicitly set parameter via --consumer.property command line parameter
     *   2. Explicit --from-beginning given -> 'earliest'
@@ -257,7 +257,7 @@ object ConsoleConsumer extends Logging {
       .withRequiredArg
       .describedAs("metrics directory")
       .ofType(classOf[java.lang.String])
-    val bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED (unless old consumer is used): The server to connect to.")
+    val bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED: The server(s) to connect to.")
       .withRequiredArg
       .describedAs("server to connect to")
       .ofType(classOf[String])
@@ -291,8 +291,7 @@ object ConsoleConsumer extends Logging {
     val options: OptionSet = tryParse(parser, args)
     val enableSystestEventsLogging = options.has(enableSystestEventsLoggingOpt)
 
-    // If using old consumer, exactly one of whitelist/blacklist/topic is required.
-    // If using new consumer, topic must be specified.
+    // topic must be specified.
     var topicArg: String = null
     var whitelistArg: String = null
     var filterSpec: TopicFilter = null

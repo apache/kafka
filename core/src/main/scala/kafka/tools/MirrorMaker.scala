@@ -48,7 +48,7 @@ import scala.util.control.ControlThrowable
  * - Each mirror maker thread periodically flushes the producer and then commits all offsets.
  *
  * @note For mirror maker, the following settings are set by default to make sure there is no data loss:
- *       1. use new producer with following settings
+ *       1. use producer with following settings
  *            acks=all
  *            retries=max integer
  *            max.block.ms=max long
@@ -168,12 +168,12 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       val consumerProps = Utils.loadProps(options.valueOf(consumerConfigOpt))
 
       if (!options.has(whitelistOpt)) {
-        error("whitelist must be specified when using new consumer in mirror maker.")
+        error("whitelist must be specified")
         sys.exit(1)
       }
 
       if (!consumerProps.containsKey(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG))
-        System.err.println("WARNING: The default partition assignment strategy of the new-consumer-based mirror maker will " +
+        System.err.println("WARNING: The default partition assignment strategy of the mirror maker will " +
           "change from 'range' to 'roundrobin' in an upcoming release (so that better load balancing can be achieved). If " +
           "you prefer to make this switch in advance of that release add the following to the corresponding " +
           "config: 'partition.assignment.strategy=org.apache.kafka.clients.consumer.RoundRobinAssignor'")
@@ -263,7 +263,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       consumerConfigProps.setProperty("client.id", groupIdString + "-" + i.toString)
       new KafkaConsumer[Array[Byte], Array[Byte]](consumerConfigProps)
     }
-    whitelist.getOrElse(throw new IllegalArgumentException("White list cannot be empty for new consumer"))
+    whitelist.getOrElse(throw new IllegalArgumentException("White list cannot be empty"))
     consumers.map(consumer => new ConsumerWrapper(consumer, customRebalanceListener, whitelist))
   }
 
@@ -338,8 +338,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       try {
         consumerWrapper.init()
 
-        // We need the two while loop to make sure when old consumer is used, even there is no message we
-        // still commit offset. When new consumer is used, this is handled by poll(timeout).
+        // FIXME Is it safe to remove one of the loops?
         while (!exitingOnSendFailure && !shuttingDown) {
           try {
             while (!exitingOnSendFailure && !shuttingDown) {
@@ -428,14 +427,12 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     val regex = whitelistOpt.getOrElse(throw new IllegalArgumentException("New consumer only supports whitelist."))
     var recordIter: java.util.Iterator[ConsumerRecord[Array[Byte], Array[Byte]]] = null
 
-    // TODO: we need to manually maintain the consumed offsets for new consumer
-    // since its internal consumed position is updated in batch rather than one
-    // record at a time, this can be resolved when we break the unification of both consumers
+    // We manually maintain the consumed offsets for historical reasons and it could be simplified
     private val offsets = new HashMap[TopicPartition, Long]()
 
     def init() {
-      debug("Initiating new consumer")
-      val consumerRebalanceListener = new InternalRebalanceListenerForNewConsumer(this, customRebalanceListener)
+      debug("Initiating consumer")
+      val consumerRebalanceListener = new InternalRebalanceListener(this, customRebalanceListener)
       whitelistOpt.foreach { whitelist =>
         try {
           consumer.subscribe(Pattern.compile(Whitelist(whitelist).regex), consumerRebalanceListener)
@@ -480,18 +477,18 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     }
   }
 
-  private class InternalRebalanceListenerForNewConsumer(consumerWrapper: ConsumerWrapper,
-                                                        customRebalanceListenerForNewConsumer: Option[org.apache.kafka.clients.consumer.ConsumerRebalanceListener])
-    extends org.apache.kafka.clients.consumer.ConsumerRebalanceListener {
+  private class InternalRebalanceListener(consumerWrapper: ConsumerWrapper,
+                                          customRebalanceListener: Option[ConsumerRebalanceListener])
+    extends ConsumerRebalanceListener {
 
     override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]) {
       producer.flush()
       commitOffsets(consumerWrapper)
-      customRebalanceListenerForNewConsumer.foreach(_.onPartitionsRevoked(partitions))
+      customRebalanceListener.foreach(_.onPartitionsRevoked(partitions))
     }
 
     override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]) {
-      customRebalanceListenerForNewConsumer.foreach(_.onPartitionsAssigned(partitions))
+      customRebalanceListener.foreach(_.onPartitionsAssigned(partitions))
     }
   }
 

@@ -353,7 +353,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     val numMessages = new AtomicInteger
     import scala.concurrent.ExecutionContext.Implicits._
     val producerFuture = Future {
-      val producer = TestUtils.createNewProducer(
+      val producer = TestUtils.createProducer(
         TestUtils.getBrokerListStrFromServers(servers, protocol = securityProtocol),
         securityProtocol = securityProtocol,
         trustStoreFile = trustStoreFile,
@@ -1118,7 +1118,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
         new NewTopic(testTopicName, testNumPartitions, 1))).all().get()
       waitForTopics(client, List(testTopicName), List())
 
-      val producer = createNewProducer
+      val producer = createProducer
       try {
         producer.send(new ProducerRecord(testTopicName, 0, null, null)).get()
       } finally {
@@ -1130,7 +1130,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       val newConsumerConfig = new Properties(consumerConfig)
       newConsumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, testGroupId)
       newConsumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, testClientId)
-      val consumer = TestUtils.createNewConsumer(brokerList,
+      val consumer = TestUtils.createConsumer(brokerList,
         securityProtocol = this.securityProtocol,
         trustStoreFile = this.trustStoreFile,
         saslProperties = this.clientSaslProperties,
