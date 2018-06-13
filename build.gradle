@@ -1221,7 +1221,7 @@ project(':connect:api') {
   dependencies {
     compile project(':clients')
     compile libs.slf4jApi
-    compile libs.jerseyContainerServlet
+    compile libs.jaxrsApi
 
     testCompile libs.junit
 
@@ -1461,6 +1461,7 @@ project(':connect:basic-auth-extension') {
     testCompile project(':clients').sourceSets.test.output
 
     testRuntime libs.slf4jlog4j
+    testRuntime libs.jerseyContainerServlet
   }
 
   javadoc {
