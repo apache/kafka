@@ -143,7 +143,7 @@ class PartitionTest {
   }
 
   @Test
-  def testAppendRecordsToFollowerWithNoReplicaThrowsExpection(): Unit = {
+  def testAppendRecordsToFollowerWithNoReplicaThrowsException(): Unit = {
     val partition = new Partition(topicPartition.topic, topicPartition.partition, time, replicaManager)
     assertThrows[ReplicaNotAvailableException] {
       partition.appendRecordsToFollowerOrFutureReplica(
