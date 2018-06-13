@@ -162,24 +162,28 @@ final class InFlightRequests {
         }
     }
 
+    private Boolean hasExpiredRequest(long now, Deque<NetworkClient.InFlightRequest> deque) {
+        for (NetworkClient.InFlightRequest request : deque) {
+            long timeSinceSend = Math.max(0, now - request.sendTimeMs);
+            if (timeSinceSend > request.requestTimeoutMs)
+                return true;
+        }
+        return false;
+    }
+
     /**
      * Returns a list of nodes with pending in-flight request, that need to be timed out
      *
      * @param now current time in milliseconds
      * @return list of nodes
      */
-    public List<String> getNodesWithTimedOutRequests(long now) {
+    public List<String> nodesWithTimedOutRequests(long now) {
         List<String> nodeIds = new ArrayList<>();
         for (Map.Entry<String, Deque<NetworkClient.InFlightRequest>> requestEntry : requests.entrySet()) {
             String nodeId = requestEntry.getKey();
             Deque<NetworkClient.InFlightRequest> deque = requestEntry.getValue();
-
-            if (!deque.isEmpty()) {
-                NetworkClient.InFlightRequest request = deque.peekLast();
-                long timeSinceSend = now - request.sendTimeMs;
-                if (timeSinceSend > request.requestTimeoutMs)
-                    nodeIds.add(nodeId);
-            }
+            if (hasExpiredRequest(now, deque))
+                nodeIds.add(nodeId);
         }
         return nodeIds;
     }

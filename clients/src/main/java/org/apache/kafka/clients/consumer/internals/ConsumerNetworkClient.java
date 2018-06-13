@@ -673,7 +673,8 @@ public class ConsumerNetworkClient implements Closeable {
                 Iterator<ClientRequest> requestIterator = requests.iterator();
                 while (requestIterator.hasNext()) {
                     ClientRequest request = requestIterator.next();
-                    if (request.createdTimeMs() < now - request.requestTimeoutMs()) {
+                    long elapsedMs = Math.max(0, now - request.createdTimeMs());
+                    if (elapsedMs > request.requestTimeoutMs()) {
                         expiredRequests.add(request);
                         requestIterator.remove();
                     } else

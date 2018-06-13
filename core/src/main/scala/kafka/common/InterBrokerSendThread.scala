@@ -160,7 +160,8 @@ private class UnsentRequests {
       var foundExpiredRequest = false
       while (requestIterator.hasNext && !foundExpiredRequest) {
         val request = requestIterator.next
-        if (request.createdTimeMs < now - request.requestTimeoutMs) {
+        val elapsedMs = Math.max(0, now - request.createdTimeMs)
+        if (elapsedMs > request.requestTimeoutMs) {
           expiredRequests.add(request)
           requestIterator.remove()
           foundExpiredRequest = true
