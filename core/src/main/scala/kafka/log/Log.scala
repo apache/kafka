@@ -1888,11 +1888,6 @@ class Log(@volatile var dir: File,
       if (!newSegments.exists(_.baseOffset - segment.baseOffset > Int.MaxValue))
         throw new IllegalStateException(s"Could not find the expected overflow offset in $segment")
 
-      // It is possible to have only one segment after splitting if all the messages in the segment to split
-      // have offsets that overflow
-      if (newSegments.size == 1 && newSegments.headOption.forall(_.baseOffset == segment.baseOffset))
-        throw new IllegalStateException(s"Failed to split segment $segment. ")
-
       // prepare new segments
       var totalSizeOfNewSegments = 0
       info(s"Split messages from $segment into ${newSegments.length} new segments")
