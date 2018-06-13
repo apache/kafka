@@ -202,7 +202,7 @@ public enum CompressionType {
     // We should only have a runtime dependency on compression algorithms in case the native libraries don't support
     // some platforms.
     //
-    // For Snappy and ZSTD, we dynamically load the classes and rely on the initialization-on-demand holder idiom to ensure
+    // For Snappy and Zstd, we dynamically load the classes and rely on the initialization-on-demand holder idiom to ensure
     // they're only loaded if used.
     //
     // For LZ4 we are using org.apache.kafka classes, which should always be in the classpath, and would not trigger
