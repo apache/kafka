@@ -1929,10 +1929,13 @@ class LogTest {
     for (magic <- magicVals) {
       val batch = singletonRecordsWithLeaderEpoch(value = "random".getBytes, leaderEpoch = 1,
                                                   offset = firstOffset, codec = CompressionType.LZ4, magicValue = magic)
-      val actualFirstOffset = intercept[UnexpectedAppendOffsetException] {
+      val exception = intercept[UnexpectedAppendOffsetException] {
         log.appendAsFollower(records = batch)
-      }.firstOffset
+      }
+      val actualFirstOffset = exception.firstOffset
+      val actualLastOffset = exception.lastOffset
       assertEquals(s"Magic $magic. UnexpectedAppendOffsetException#firstOffset", firstOffset, actualFirstOffset)
+      assertEquals(s"Magic $magic. UnexpectedAppendOffsetException#lastOffset", firstOffset, actualLastOffset)
     }
   }
 

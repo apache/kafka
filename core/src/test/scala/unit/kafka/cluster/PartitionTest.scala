@@ -99,7 +99,15 @@ class PartitionTest {
     assertEquals(s"Log start offset after truncate fully and start at $initialLogStartOffset:",
                  initialLogStartOffset, replica.logStartOffset)
 
-    // verify that we can append records with first offset < log start offset if the log is empty
+    // verify that we cannot append records that do not contain log start offset even if the log is empty
+    assertThrows[UnexpectedAppendOffsetException] {
+      // append one record with offset = 3
+      partition.appendRecordsToFollowerOrFutureReplica(createRecords(List(new SimpleRecord("k1".getBytes, "v1".getBytes)), baseOffset = 3L), isFuture = false)
+    }
+    assertEquals(s"Log end offset should not change after failure to append", initialLogStartOffset, replica.logEndOffset.messageOffset)
+
+    // verify that we can append records that contain log start offset, even when first
+    // offset < log start offset if the log is empty
     val newLogStartOffset = 4L
     val records = createRecords(List(new SimpleRecord("k1".getBytes, "v1".getBytes),
                                      new SimpleRecord("k2".getBytes, "v2".getBytes),
@@ -116,7 +124,10 @@ class PartitionTest {
 
     // but we cannot append to offset < log start if the log is not empty
     assertThrows[UnexpectedAppendOffsetException] {
-      partition.appendRecordsToFollowerOrFutureReplica(createRecords(List(new SimpleRecord("k1".getBytes, "v1".getBytes)), baseOffset = 3L), isFuture = false)
+      val records2 = createRecords(List(new SimpleRecord("k1".getBytes, "v1".getBytes),
+                                        new SimpleRecord("k2".getBytes, "v2".getBytes)),
+                                   baseOffset = 3L)
+      partition.appendRecordsToFollowerOrFutureReplica(records2, isFuture = false)
     }
     assertEquals(s"Log end offset should not change after failure to append", 8L, replica.logEndOffset.messageOffset)
 

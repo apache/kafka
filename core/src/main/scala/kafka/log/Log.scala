@@ -87,15 +87,12 @@ case class LogAppendInfo(var firstOffset: Option[Long],
                          offsetsMonotonic: Boolean,
                          lastOffsetOfFirstBatch: Long) {
   /**
-   * Get the first offset if it exists, else get the last offset.
-   * @return The offset of first message if it exists; else offset of the last message.
-   */
-  def firstOrLastOffset: Long = firstOffset.getOrElse(lastOffset)
-
-  /**
    * Get the first offset if it exists, else get the last offset of the first batch
+   * For magic versions 2 and newer, this method will return first offset. For magic versions
+   * older than 2, we use the last offset of the first batch as an approximation of the first
+   * offset to avoid decompressing the data.
    */
-  def firstOrLastOfFirstBatchOffset: Long = firstOffset.getOrElse(lastOffsetOfFirstBatch)
+  def firstOrLastOffsetOfFirstBatch: Long = firstOffset.getOrElse(lastOffsetOfFirstBatch)
 
   /**
    * Get the (maximum) number of messages described by LogAppendInfo
@@ -810,7 +807,7 @@ class Log(@volatile var dir: File,
             throw new OffsetsOutOfOrderException(s"Out of order offsets found in append to $topicPartition: " +
                                                  records.records.asScala.map(_.offset))
 
-          if (appendInfo.firstOrLastOfFirstBatchOffset < nextOffsetMetadata.messageOffset) {
+          if (appendInfo.firstOrLastOffsetOfFirstBatch < nextOffsetMetadata.messageOffset) {
             // we may still be able to recover if the log is empty
             // one example: fetching from log start offset on the leader which is not batch aligned,
             // which may happen as a result of AdminClient#deleteRecords()
@@ -822,9 +819,10 @@ class Log(@volatile var dir: File,
             val firstOrLast = if (appendInfo.firstOffset.isDefined) "First offset" else "Last offset of the first batch"
             throw new UnexpectedAppendOffsetException(
               s"Unexpected offset in append to $topicPartition. $firstOrLast " +
-              s"${appendInfo.firstOrLastOfFirstBatchOffset} is less than the next offset ${nextOffsetMetadata.messageOffset}. " +
+              s"${appendInfo.firstOrLastOffsetOfFirstBatch} is less than the next offset ${nextOffsetMetadata.messageOffset}. " +
               s"First 10 offsets in append: ${records.records.asScala.take(10).map(_.offset)}, last offset in" +
-              s" append: ${appendInfo.lastOffset}. Log start offset = $logStartOffset", firstOffset)
+              s" append: ${appendInfo.lastOffset}. Log start offset = $logStartOffset",
+              firstOffset, appendInfo.lastOffset)
           }
         }
 
@@ -855,7 +853,7 @@ class Log(@volatile var dir: File,
         val segment = maybeRoll(validRecords.sizeInBytes, appendInfo)
 
         val logOffsetMetadata = LogOffsetMetadata(
-          messageOffset = appendInfo.firstOrLastOffset,
+          messageOffset = appendInfo.firstOrLastOffsetOfFirstBatch,
           segmentBaseOffset = segment.baseOffset,
           relativePositionInSegment = segment.size)
 
