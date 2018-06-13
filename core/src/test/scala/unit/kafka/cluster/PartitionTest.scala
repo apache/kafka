@@ -27,6 +27,7 @@ import kafka.server._
 import kafka.utils.{MockTime, TestUtils, MockScheduler}
 import kafka.utils.timer.MockTimer
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.errors.ReplicaNotAvailableException
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.record._
@@ -123,6 +124,31 @@ class PartitionTest {
     partition.appendRecordsToFollowerOrFutureReplica(createRecords(List(new SimpleRecord("k1".getBytes, "v1".getBytes)), baseOffset = 8L), isFuture = false)
     assertEquals(s"Log end offset after append of 1 record at offset 8:", 9L, replica.logEndOffset.messageOffset)
     assertEquals(s"Log start offset not expected to change:", newLogStartOffset, replica.logStartOffset)
+  }
+
+  @Test
+  def testGetReplica(): Unit = {
+    val log = logManager.getOrCreateLog(topicPartition, logConfig)
+    val replica = new Replica(brokerId, topicPartition, time, log = Some(log))
+    val partition = new
+        Partition(topicPartition.topic, topicPartition.partition, time, replicaManager)
+
+    assertEquals(None, partition.getReplica(brokerId))
+    assertThrows[ReplicaNotAvailableException] {
+      partition.getReplicaOrException(brokerId)
+    }
+
+    partition.addReplicaIfNotExists(replica)
+    assertEquals(replica, partition.getReplicaOrException(brokerId))
+  }
+
+  @Test
+  def testAppendRecordsToFollowerWithNoReplicaThrowsExpection(): Unit = {
+    val partition = new Partition(topicPartition.topic, topicPartition.partition, time, replicaManager)
+    assertThrows[ReplicaNotAvailableException] {
+      partition.appendRecordsToFollowerOrFutureReplica(
+           createRecords(List(new SimpleRecord("k1".getBytes, "v1".getBytes)), baseOffset = 0L), isFuture = false)
+    }
   }
 
   def createRecords(records: Iterable[SimpleRecord], baseOffset: Long, partitionLeaderEpoch: Int = 0): MemoryRecords = {
