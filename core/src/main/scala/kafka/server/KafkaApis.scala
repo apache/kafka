@@ -562,8 +562,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
 
       // For fetch requests from clients, check if down-conversion is disabled for the particular partition
-      if (downConvertMagic.isDefined && !fetchRequest.isFromFollower &&
-          !logConfig.map(_.messageDownConversionEnable.booleanValue()).getOrElse(true)) {
+      if (downConvertMagic.isDefined && !fetchRequest.isFromFollower && !logConfig.forall(_.messageDownConversionEnable)) {
         trace(s"Conversion to message format ${downConvertMagic.get} is disabled for partition $tp. Sending unsupported version response to $clientId.")
         new FetchResponse.PartitionData(Errors.UNSUPPORTED_VERSION, FetchResponse.INVALID_HIGHWATERMARK,
           FetchResponse.INVALID_LAST_STABLE_OFFSET, FetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY)

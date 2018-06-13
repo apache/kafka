@@ -83,6 +83,9 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
     FetchResponse.parse(response, request.version)
   }
 
+  /**
+   * Tests that fetch request that require down-conversion returns with an error response when down-conversion is disabled on broker.
+   */
   @Test
   def testV1FetchWithDownConversionDisabled(): Unit = {
     val topicMap = createTopics(numTopics = 5, numPartitions = 1)
@@ -94,6 +97,9 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
     topicPartitions.foreach(tp => assertEquals(Errors.UNSUPPORTED_VERSION, fetchResponse.responseData().get(tp).error))
   }
 
+  /**
+   * Tests that "message.downconversion.enable" has no effect when down-conversion is not required.
+   */
   @Test
   def testLatestFetchWithDownConversionDisabled(): Unit = {
     val topicMap = createTopics(numTopics = 5, numPartitions = 1)
@@ -105,6 +111,10 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
     topicPartitions.foreach(tp => assertEquals(Errors.NONE, fetchResponse.responseData().get(tp).error))
   }
 
+  /**
+   * Tests that "message.downconversion.enable" can be set at topic level, and its configuration is obeyed for client
+   * fetch requests.
+   */
   @Test
   def testV1FetchWithTopicLevelOverrides(): Unit = {
     // create topics with default down-conversion configuration (i.e. conversion disabled)
@@ -128,6 +138,9 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
     conversionEnabledTopicPartitions.foreach(tp => assertEquals(Errors.NONE, fetchResponse.responseData().get(tp).error))
   }
 
+  /**
+   * Tests that "message.downconversion.enable" has no effect on fetch requests from replicas.
+   */
   @Test
   def testV1FetchFromReplica(): Unit = {
     // create topics with default down-conversion configuration (i.e. conversion disabled)
