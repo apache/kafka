@@ -63,7 +63,7 @@ public abstract class AbstractStream<K> {
 
     protected void addGraphNode(final StreamsGraphNode newNode) {
         parentGraphNode.addChildNode(newNode);
-        builder.addNode(newNode);
+        builder.maybeAddNodeForOptimizationMetadata(newNode);
 
     }
 
