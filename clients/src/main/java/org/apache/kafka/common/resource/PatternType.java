@@ -41,7 +41,15 @@ public enum PatternType {
     ANY((byte) 1),
 
     /**
-     * In a filter, matches any resource pattern type.
+     * In a filter, will perform pattern matching.
+     *
+     * e.g. Given a filter of {@code ResourcePatternFilter(TOPIC, "payments.received", MATCH)`}, the filter match
+     * any {@link ResourcePattern} that matches topic 'payments.received'. This might include:
+     * <ul>
+     *     <li>A Literal pattern with the same type and name, e.g. {@code ResourcePattern(TOPIC, "payments.received", LITERAL)}</li>
+     *     <li>A Wildcard pattern with the same type, e.g. {@code ResourcePattern(TOPIC, "*", LITERAL)}</li>
+     *     <li>A Prefixed pattern with the same type and where the name is a matching prefix, e.g. {@code ResourcePattern(TOPIC, "payments.", PREFIXED)}</li>
+     * </ul>
      */
     MATCH((byte) 2),
 
