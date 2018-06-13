@@ -24,6 +24,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.HeartbeatRequest;
@@ -123,6 +124,26 @@ public class ConsumerNetworkClientTest {
         consumerClient.pollNoWakeup();
         assertTrue(future.failed());
         assertTrue(future.exception() instanceof DisconnectException);
+    }
+
+    @Test
+    public void testTimeoutUnsentRequest() {
+        // Delay connection to the node so that the request remains unsent
+        client.delayReady(node, 1000);
+
+        RequestFuture<ClientResponse> future = consumerClient.send(node, heartbeat(), 500);
+        consumerClient.pollNoWakeup();
+
+        // Ensure the request is pending, but hasn't been sent
+        assertTrue(consumerClient.hasPendingRequests());
+        assertFalse(client.hasInFlightRequests());
+
+        time.sleep(501);
+        consumerClient.pollNoWakeup();
+
+        assertFalse(consumerClient.hasPendingRequests());
+        assertTrue(future.failed());
+        assertTrue(future.exception() instanceof TimeoutException);
     }
 
     @Test

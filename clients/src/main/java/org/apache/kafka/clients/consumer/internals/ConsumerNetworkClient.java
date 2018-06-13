@@ -112,8 +112,9 @@ public class ConsumerNetworkClient implements Closeable {
      *
      * @param node The destination of the request
      * @param requestBuilder A builder for the request payload
-     * @param requestTimeoutMs Time in milliseconds to await a response before disconnecting the socket and
-     *                         cancelling the request
+     * @param requestTimeoutMs Maximum time in milliseconds to await a response before disconnecting the socket and
+     *                         cancelling the request. The request may be cancelled sooner if the socket disconnects
+     *                         for any reason.
      * @return A future which indicates the result of the send.
      */
     public RequestFuture<ClientResponse> send(Node node,
@@ -146,13 +147,6 @@ public class ConsumerNetworkClient implements Closeable {
         } finally {
             lock.unlock();
         }
-    }
-
-    /**
-     * Block until the metadata has been refreshed.
-     */
-    public void awaitMetadataUpdate() {
-        awaitMetadataUpdate(Long.MAX_VALUE);
     }
 
     /**
