@@ -25,7 +25,7 @@ import org.apache.kafka.common.errors.SaslAuthenticationException
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.junit.{After, Before, Test}
 import org.junit.Assert._
-import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, KafkaConsumerGroupService}
+import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, ConsumerGroupService}
 import kafka.server.KafkaConfig
 import kafka.utils.{JaasTestUtils, TestUtils}
 import kafka.zk.ConfigEntityChangeNotificationZNode
@@ -169,7 +169,7 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
                         "--group", "test.group",
                         "--command-config", propsFile.getAbsolutePath)
     val opts = new ConsumerGroupCommandOptions(cgcArgs)
-    val consumerGroupService = new KafkaConsumerGroupService(opts)
+    val consumerGroupService = new ConsumerGroupService(opts)
 
     val consumer = consumers.head
     consumer.subscribe(List(topic).asJava)

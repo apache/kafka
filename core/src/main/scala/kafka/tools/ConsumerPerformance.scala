@@ -21,7 +21,6 @@ import java.util
 
 import scala.collection.JavaConverters._
 import java.util.concurrent.atomic.AtomicLong
-import java.nio.channels.ClosedByInterruptException
 
 import org.apache.kafka.clients.consumer.{ConsumerRebalanceListener, KafkaConsumer}
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
@@ -30,10 +29,6 @@ import org.apache.kafka.common.{Metric, MetricName, TopicPartition}
 import kafka.utils.{CommandLineUtils, ToolsUtils}
 import java.util.{Collections, Properties, Random}
 
-import kafka.consumer.Consumer
-import kafka.consumer.ConsumerConnector
-import kafka.consumer.KafkaStream
-import kafka.consumer.ConsumerTimeoutException
 import java.text.SimpleDateFormat
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -52,7 +47,6 @@ object ConsumerPerformance extends LazyLogging {
     logger.info("Starting consumer...")
     val totalMessagesRead = new AtomicLong(0)
     val totalBytesRead = new AtomicLong(0)
-    val consumerTimeout = new AtomicBoolean(false)
     var metrics: mutable.Map[MetricName, _ <: Metric] = null
     val joinGroupTimeInMs = new AtomicLong(0)
 
@@ -61,40 +55,16 @@ object ConsumerPerformance extends LazyLogging {
     }
 
     var startMs, endMs = 0L
-    if (!config.useOldConsumer) {
-      val consumer = new KafkaConsumer[Array[Byte], Array[Byte]](config.props)
-      consumer.subscribe(Collections.singletonList(config.topic))
-      startMs = System.currentTimeMillis
-      consume(consumer, List(config.topic), config.numMessages, config.recordFetchTimeoutMs, config, totalMessagesRead, totalBytesRead, joinGroupTimeInMs, startMs)
-      endMs = System.currentTimeMillis
+    val consumer = new KafkaConsumer[Array[Byte], Array[Byte]](config.props)
+    consumer.subscribe(Collections.singletonList(config.topic))
+    startMs = System.currentTimeMillis
+    consume(consumer, List(config.topic), config.numMessages, config.recordFetchTimeoutMs, config, totalMessagesRead, totalBytesRead, joinGroupTimeInMs, startMs)
+    endMs = System.currentTimeMillis
 
-      if (config.printMetrics) {
-        metrics = consumer.metrics().asScala
-      }
-      consumer.close()
-    } else {
-      import kafka.consumer.ConsumerConfig
-      val consumerConfig = new ConsumerConfig(config.props)
-      val consumerConnector: ConsumerConnector = Consumer.create(consumerConfig)
-      val topicMessageStreams = consumerConnector.createMessageStreams(Map(config.topic -> config.numThreads))
-      var threadList = List[ConsumerPerfThread]()
-      for (streamList <- topicMessageStreams.values)
-        for (i <- 0 until streamList.length)
-          threadList ::= new ConsumerPerfThread(i, "kafka-zk-consumer-" + i, streamList(i), config, totalMessagesRead, totalBytesRead, consumerTimeout)
-
-      logger.info("Sleeping for 1 second.")
-      Thread.sleep(1000)
-      logger.info("starting threads")
-      startMs = System.currentTimeMillis
-      for (thread <- threadList)
-        thread.start()
-      for (thread <- threadList)
-        thread.join()
-      endMs =
-        if (consumerTimeout.get()) System.currentTimeMillis - consumerConfig.consumerTimeoutMs
-        else System.currentTimeMillis
-      consumerConnector.shutdown()
+    if (config.printMetrics) {
+      metrics = consumer.metrics().asScala
     }
+    consumer.close()
     val elapsedSecs = (endMs - startMs) / 1000.0
     val fetchTimeInMs = (endMs - startMs) - joinGroupTimeInMs.get
     if (!config.showDetailedStats) {
@@ -178,7 +148,7 @@ object ConsumerPerformance extends LazyLogging {
 
         if (currentTimeMillis - lastReportTime >= config.reportingInterval) {
           if (config.showDetailedStats)
-            printNewConsumerProgress(0, bytesRead, lastBytesRead, messagesRead, lastMessagesRead,
+            printConsumerProgress(0, bytesRead, lastBytesRead, messagesRead, lastMessagesRead,
               lastReportTime, currentTimeMillis, config.dateFormat, joinTimeMsInSingleRound)
           joinTimeMsInSingleRound = 0L
           lastReportTime = currentTimeMillis
@@ -195,19 +165,7 @@ object ConsumerPerformance extends LazyLogging {
     totalBytesRead.set(bytesRead)
   }
 
-  def printOldConsumerProgress(id: Int,
-                               bytesRead: Long,
-                               lastBytesRead: Long,
-                               messagesRead: Long,
-                               lastMessagesRead: Long,
-                               startMs: Long,
-                               endMs: Long,
-                               dateFormat: SimpleDateFormat): Unit = {
-    printBasicProgress(id, bytesRead, lastBytesRead, messagesRead, lastMessagesRead, startMs, endMs, dateFormat)
-    println()
-  }
-
-  def printNewConsumerProgress(id: Int,
+  def printConsumerProgress(id: Int,
                                bytesRead: Long,
                                lastBytesRead: Long,
                                messagesRead: Long,
@@ -355,54 +313,5 @@ object ConsumerPerformance extends LazyLogging {
     val dateFormat = new SimpleDateFormat(options.valueOf(dateFormatOpt))
     val hideHeader = options.has(hideHeaderOpt)
     val recordFetchTimeoutMs = options.valueOf(recordFetchTimeoutOpt).longValue()
-  }
-
-  class ConsumerPerfThread(threadId: Int,
-                           name: String,
-                           stream: KafkaStream[Array[Byte], Array[Byte]],
-                           config: ConsumerPerfConfig,
-                           totalMessagesRead: AtomicLong,
-                           totalBytesRead: AtomicLong,
-                           consumerTimeout: AtomicBoolean)
-    extends Thread(name) {
-
-    override def run() {
-      var bytesRead = 0L
-      var messagesRead = 0L
-      val startMs = System.currentTimeMillis
-      var lastReportTime: Long = startMs
-      var lastBytesRead = 0L
-      var lastMessagesRead = 0L
-
-      try {
-        val iter = stream.iterator
-        while (iter.hasNext && messagesRead < config.numMessages) {
-          val messageAndMetadata = iter.next()
-          messagesRead += 1
-          bytesRead += messageAndMetadata.message.length
-          val currentTimeMillis = System.currentTimeMillis
-
-          if (currentTimeMillis - lastReportTime >= config.reportingInterval) {
-            if (config.showDetailedStats)
-              printOldConsumerProgress(threadId, bytesRead, lastBytesRead, messagesRead, lastMessagesRead, lastReportTime, currentTimeMillis, config.dateFormat)
-            lastReportTime = currentTimeMillis
-            lastMessagesRead = messagesRead
-            lastBytesRead = bytesRead
-          }
-        }
-      } catch {
-        case _: InterruptedException =>
-        case _: ClosedByInterruptException =>
-        case _: ConsumerTimeoutException =>
-          consumerTimeout.set(true)
-        case e: Throwable => e.printStackTrace()
-      }
-      totalMessagesRead.addAndGet(messagesRead)
-      totalBytesRead.addAndGet(bytesRead)
-      if (config.showDetailedStats)
-        printOldConsumerProgress(threadId, bytesRead, lastBytesRead, messagesRead, lastMessagesRead, startMs, System.currentTimeMillis, config.dateFormat)
-
-    }
-
   }
 }

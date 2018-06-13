@@ -18,23 +18,19 @@
 package kafka.utils
 
 import java.nio.charset.StandardCharsets
-import java.util.concurrent.CountDownLatch
 
 import kafka.admin._
-import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, LeaderAndIsr}
+import kafka.api.LeaderAndIsr
 import kafka.cluster._
 import kafka.common.{KafkaException, NoEpochForPartitionException, TopicAndPartition}
-import kafka.consumer.{ConsumerThreadId, TopicCount}
 import kafka.controller.{LeaderIsrAndControllerEpoch, ReassignedPartitionsContext}
 import kafka.zk.{BrokerIdZNode, ReassignPartitionsZNode, ZkData}
-import org.I0Itec.zkclient.exception.{ZkBadVersionException, ZkException, ZkMarshallingError, ZkNoNodeException, ZkNodeExistsException}
+import org.I0Itec.zkclient.exception.{ZkBadVersionException, ZkMarshallingError, ZkNoNodeException, ZkNodeExistsException}
 import org.I0Itec.zkclient.serialize.ZkSerializer
 import org.I0Itec.zkclient.{IZkChildListener, IZkDataListener, IZkStateListener, ZkClient, ZkConnection}
 import org.apache.kafka.common.config.ConfigException
-import org.apache.zookeeper.AsyncCallback.{DataCallback, StringCallback}
-import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.data.{ACL, Stat}
-import org.apache.zookeeper.{CreateMode, KeeperException, ZooDefs, ZooKeeper}
+import org.apache.zookeeper.ZooDefs
 
 import scala.collection._
 import scala.collection.JavaConverters._
@@ -341,62 +337,6 @@ class ZkUtils(val zkClient: ZkClient,
       seq <- replicaMap.asJsonObject.get(partition.toString)
     } yield seq.to[Seq[Int]]
     seqOpt.getOrElse(Seq.empty)
-  }
-
-  /**
-   * Register brokers with v4 json format (which includes multiple endpoints and rack) if
-   * the apiVersion is 0.10.0.X or above. Register the broker with v2 json format otherwise.
-   * Due to KAFKA-3100, 0.9.0.0 broker and old clients will break if JSON version is above 2.
-   * We include v2 to make it possible for the broker to migrate from 0.9.0.0 to 0.10.0.X or above without having to
-   * upgrade to 0.9.0.1 first (clients have to be upgraded to 0.9.0.1 in any case).
-   *
-   * This format also includes default endpoints for compatibility with older clients.
-   *
-   * @param id broker ID
-   * @param host broker host name
-   * @param port broker port
-   * @param advertisedEndpoints broker end points
-   * @param jmxPort jmx port
-   * @param rack broker rack
-   * @param apiVersion Kafka version the broker is running as
-   */
-  def registerBrokerInZk(id: Int,
-                         host: String,
-                         port: Int,
-                         advertisedEndpoints: Seq[EndPoint],
-                         jmxPort: Int,
-                         rack: Option[String],
-                         apiVersion: ApiVersion) {
-    val brokerIdPath = BrokerIdsPath + "/" + id
-    // see method documentation for reason why we do this
-    val version = if (apiVersion >= KAFKA_0_10_0_IV1) 4 else 2
-    val json = new String(BrokerIdZNode.encode(version, host, port, advertisedEndpoints, jmxPort, rack),
-      StandardCharsets.UTF_8)
-    registerBrokerInZk(brokerIdPath, json)
-
-    info("Registered broker %d at path %s with addresses: %s".format(id, brokerIdPath, advertisedEndpoints.mkString(",")))
-  }
-
-  private def registerBrokerInZk(brokerIdPath: String, brokerInfo: String) {
-    try {
-      val zkCheckedEphemeral = new ZKCheckedEphemeral(brokerIdPath,
-                                                      brokerInfo,
-                                                      zkConnection.getZookeeper,
-                                                      isSecure)
-      zkCheckedEphemeral.create()
-    } catch {
-      case _: ZkNodeExistsException =>
-        throw new RuntimeException("A broker is already registered on the path " + brokerIdPath
-                + ". This probably " + "indicates that you either have configured a brokerid that is already in use, or "
-                + "else you have shutdown this broker and restarted it faster than the zookeeper "
-                + "timeout so it appears to be re-registering.")
-    }
-  }
-
-  @deprecated("This method has been deprecated and will be removed in a future release.", "0.11.0.0")
-  def getConsumerPartitionOwnerPath(group: String, topic: String, partition: Int): String = {
-    val topicDirs = new ZKGroupTopicDirs(group, topic)
-    topicDirs.consumerOwnerDir + "/" + partition
   }
 
   def leaderAndIsrZkData(leaderAndIsr: LeaderAndIsr, controllerEpoch: Int): String = {
@@ -803,42 +743,6 @@ class ZkUtils(val zkClient: ZkClient,
     zkClient.delete(brokerPartTopicPath)
   }
 
-  @deprecated("This method has been deprecated and will be removed in a future release.", "0.11.0.0")
-  def getConsumersInGroup(group: String): Seq[String] = {
-    val dirs = new ZKGroupDirs(group)
-    getChildren(dirs.consumerRegistryDir)
-  }
-
-  @deprecated("This method has been deprecated and will be removed in a future release.", "0.11.0.0")
-  def getConsumersPerTopic(group: String, excludeInternalTopics: Boolean): mutable.Map[String, List[ConsumerThreadId]] = {
-    val dirs = new ZKGroupDirs(group)
-    val consumers = getChildrenParentMayNotExist(dirs.consumerRegistryDir)
-    val consumersPerTopicMap = new mutable.HashMap[String, List[ConsumerThreadId]]
-    for (consumer <- consumers) {
-      val topicCount = TopicCount.constructTopicCount(group, consumer, this, excludeInternalTopics)
-      for ((topic, consumerThreadIdSet) <- topicCount.getConsumerThreadIdsPerTopic) {
-        for (consumerThreadId <- consumerThreadIdSet)
-          consumersPerTopicMap.get(topic) match {
-            case Some(curConsumers) => consumersPerTopicMap.put(topic, consumerThreadId :: curConsumers)
-            case _ => consumersPerTopicMap.put(topic, List(consumerThreadId))
-          }
-      }
-    }
-    for ((topic, consumerList) <- consumersPerTopicMap)
-      consumersPerTopicMap.put(topic, consumerList.sortWith((s, t) => s < t))
-    consumersPerTopicMap
-  }
-
-  @deprecated("This method has been deprecated and will be removed in a future release.", "0.11.0.0")
-  def getTopicsPerMemberId(group: String, excludeInternalTopics: Boolean = true): Map[String, List[String]] = {
-    val dirs = new ZKGroupDirs(group)
-    val memberIds = getChildrenParentMayNotExist(dirs.consumerRegistryDir)
-    memberIds.map { memberId =>
-      val topicCount = TopicCount.constructTopicCount(group, memberId, this, excludeInternalTopics)
-      memberId -> topicCount.getTopicCountMap.keys.toList
-    }.toMap
-  }
-
   /**
    * This API takes in a broker id, queries zookeeper for the broker metadata and returns the metadata for that broker
    * or throws an exception if the broker dies before the query to zookeeper finishes
@@ -900,29 +804,6 @@ class ZkUtils(val zkClient: ZkClient,
     }
   }
 
-  @deprecated("This method has been deprecated and will be removed in a future release.", "0.11.0.0")
-  def getConsumerGroups() = {
-    getChildren(ConsumersPath)
-  }
-
-  @deprecated("This method has been deprecated and will be removed in a future release.", "0.11.0.0")
-  def getTopicsByConsumerGroup(consumerGroup:String) = {
-    getChildrenParentMayNotExist(new ZKGroupDirs(consumerGroup).consumerGroupOwnersDir)
-  }
-
-  @deprecated("This method has been deprecated and will be removed in a future release.", "0.11.0.0")
-  def getAllConsumerGroupsForTopic(topic: String): Set[String] = {
-    val groups = getChildrenParentMayNotExist(ConsumersPath)
-    if (groups == null) Set.empty
-    else {
-      groups.foldLeft(Set.empty[String]) {(consumerGroupsForTopic, group) =>
-        val topics = getChildren(new ZKGroupDirs(group).consumerGroupOffsetsDir)
-        if (topics.contains(topic)) consumerGroupsForTopic + group
-        else consumerGroupsForTopic
-      }
-    }
-  }
-
   def close() {
     zkClient.close()
   }
@@ -940,21 +821,6 @@ private object ZKStringSerializer extends ZkSerializer {
     else
       new String(bytes, "UTF-8")
   }
-}
-
-@deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
-class ZKGroupDirs(val group: String) {
-  def consumerDir = ZkUtils.ConsumersPath
-  def consumerGroupDir = consumerDir + "/" + group
-  def consumerRegistryDir = consumerGroupDir + "/ids"
-  def consumerGroupOffsetsDir = consumerGroupDir + "/offsets"
-  def consumerGroupOwnersDir = consumerGroupDir + "/owners"
-}
-
-@deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
-class ZKGroupTopicDirs(group: String, topic: String) extends ZKGroupDirs(group) {
-  def consumerOffsetDir = consumerGroupOffsetsDir + "/" + topic
-  def consumerOwnerDir = consumerGroupOwnersDir + "/" + topic
 }
 
 object ZKConfig {
@@ -1016,171 +882,5 @@ class ZkPath(zkClient: ZkClient) {
   def createPersistentSequential(path: String, data: Object, acls: java.util.List[ACL]): String = {
     checkNamespace()
     zkClient.createPersistentSequential(path, data, acls)
-  }
-}
-
-/**
- * Creates an ephemeral znode checking the session owner
- * in the case of conflict. In the regular case, the
- * znode is created and the create call returns OK. If
- * the call receives a node exists event, then it checks
- * if the session matches. If it does, then it returns OK,
- * and otherwise it fails the operation.
- */
-
-class ZKCheckedEphemeral(path: String,
-                         data: String,
-                         zkHandle: ZooKeeper,
-                         isSecure: Boolean) extends Logging {
-  private val createCallback = new CreateCallback
-  private val getDataCallback = new GetDataCallback
-  val latch: CountDownLatch = new CountDownLatch(1)
-  var result: Code = Code.OK
-  val defaultAcls = ZkUtils.defaultAcls(isSecure, path)
-
-  private class CreateCallback extends StringCallback {
-    def processResult(rc: Int,
-                      path: String,
-                      ctx: Object,
-                      name: String) {
-      Code.get(rc) match {
-        case Code.OK =>
-           setResult(Code.OK)
-        case Code.CONNECTIONLOSS =>
-          // try again
-          createEphemeral
-        case Code.NONODE =>
-          error("No node for path %s (could be the parent missing)".format(path))
-          setResult(Code.NONODE)
-        case Code.NODEEXISTS =>
-          zkHandle.getData(path, false, getDataCallback, null)
-        case Code.SESSIONEXPIRED =>
-          error("Session has expired while creating %s".format(path))
-          setResult(Code.SESSIONEXPIRED)
-        case Code.INVALIDACL =>
-          error("Invalid ACL")
-          setResult(Code.INVALIDACL)
-        case _ =>
-          warn("ZooKeeper event while creating registration node: %s %s".format(path, Code.get(rc)))
-          setResult(Code.get(rc))
-      }
-    }
-  }
-
-  private class GetDataCallback extends DataCallback {
-      def processResult(rc: Int,
-                        path: String,
-                        ctx: Object,
-                        readData: Array[Byte],
-                        stat: Stat) {
-        Code.get(rc) match {
-          case Code.OK =>
-                if (stat.getEphemeralOwner != zkHandle.getSessionId)
-                  setResult(Code.NODEEXISTS)
-                else
-                  setResult(Code.OK)
-          case Code.NONODE =>
-            info("The ephemeral node [%s] at %s has gone away while reading it, ".format(data, path))
-            createEphemeral
-          case Code.SESSIONEXPIRED =>
-            error("Session has expired while reading znode %s".format(path))
-            setResult(Code.SESSIONEXPIRED)
-          case Code.INVALIDACL =>
-            error("Invalid ACL")
-            setResult(Code.INVALIDACL)
-          case _ =>
-            warn("ZooKeeper event while getting znode data: %s %s".format(path, Code.get(rc)))
-            setResult(Code.get(rc))
-        }
-      }
-  }
-
-  private def createEphemeral() {
-    zkHandle.create(path,
-                    ZKStringSerializer.serialize(data),
-                    defaultAcls,
-                    CreateMode.EPHEMERAL,
-                    createCallback,
-                    null)
-  }
-
-  private def createRecursive(prefix: String, suffix: String) {
-    debug("Path: %s, Prefix: %s, Suffix: %s".format(path, prefix, suffix))
-    if(suffix.isEmpty()) {
-      createEphemeral
-    } else {
-      zkHandle.create(prefix,
-                      new Array[Byte](0),
-                      defaultAcls,
-                      CreateMode.PERSISTENT,
-                      new StringCallback() {
-                        def processResult(rc : Int,
-                                          path : String,
-                                          ctx : Object,
-                                          name : String) {
-                          Code.get(rc) match {
-                            case Code.OK | Code.NODEEXISTS =>
-                              // Nothing to do
-                            case Code.CONNECTIONLOSS =>
-                              // try again
-                              val suffix = ctx.asInstanceOf[String]
-                              createRecursive(path, suffix)
-                            case Code.NONODE =>
-                              error("No node for path %s (could be the parent missing)".format(path))
-                              setResult(Code.get(rc))
-                            case Code.SESSIONEXPIRED =>
-                              error("Session has expired while creating %s".format(path))
-                              setResult(Code.get(rc))
-                            case Code.INVALIDACL =>
-                              error("Invalid ACL")
-                              setResult(Code.INVALIDACL)
-                            case _ =>
-                              warn("ZooKeeper event while creating registration node: %s %s".format(path, Code.get(rc)))
-                              setResult(Code.get(rc))
-                          }
-                        }
-                  },
-                  suffix)
-      // Update prefix and suffix
-      val index = suffix.indexOf('/', 1) match {
-        case -1 => suffix.length
-        case x : Int => x
-      }
-      // Get new prefix
-      val newPrefix = prefix + suffix.substring(0, index)
-      // Get new suffix
-      val newSuffix = suffix.substring(index, suffix.length)
-      createRecursive(newPrefix, newSuffix)
-    }
-  }
-
-  private def setResult(code: Code) {
-    result = code
-    latch.countDown()
-  }
-
-  private def waitUntilResolved(): Code = {
-    latch.await()
-    result
-  }
-
-  def create() {
-    val index = path.indexOf('/', 1) match {
-        case -1 => path.length
-        case x : Int => x
-    }
-    val prefix = path.substring(0, index)
-    val suffix = path.substring(index, path.length)
-    debug(s"Path: $path, Prefix: $prefix, Suffix: $suffix")
-    info(s"Creating $path (is it secure? $isSecure)")
-    createRecursive(prefix, suffix)
-    val result = waitUntilResolved()
-    info("Result of znode creation is: %s".format(result))
-    result match {
-      case Code.OK =>
-        // Nothing to do
-      case _ =>
-        throw ZkException.create(KeeperException.create(result))
-    }
   }
 }

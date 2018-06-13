@@ -20,7 +20,7 @@ import java.util.{ArrayList, Collections, Properties}
 import java.time.Duration
 
 import kafka.admin.AdminClient
-import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, KafkaConsumerGroupService}
+import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, ConsumerGroupService}
 import kafka.common.TopicAndPartition
 import kafka.log.LogConfig
 import kafka.network.SocketServer
@@ -1022,7 +1022,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
     val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group)
     val opts = new ConsumerGroupCommandOptions(cgcArgs)
-    val consumerGroupService = new KafkaConsumerGroupService(opts)
+    val consumerGroupService = new ConsumerGroupService(opts)
     consumerGroupService.describeGroup()
     consumerGroupService.close()
   }

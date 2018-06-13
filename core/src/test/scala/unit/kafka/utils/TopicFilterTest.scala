@@ -15,15 +15,13 @@
  * limitations under the License.
  */
 
-package kafka.consumer
-
+package kafka.utils
 
 import org.apache.kafka.common.internals.Topic
 import org.junit.Assert._
-import org.scalatest.junit.JUnitSuite
 import org.junit.Test
+import org.scalatest.junit.JUnitSuite
 
-@deprecated("This test has been deprecated and will be removed in a future release.", "0.11.0.0")
 class TopicFilterTest extends JUnitSuite {
 
   @Test
@@ -61,25 +59,4 @@ class TopicFilterTest extends JUnitSuite {
     assertTrue(topicFilter1.isTopicAllowed(Topic.GROUP_METADATA_TOPIC_NAME, excludeInternalTopics = false))
   }
 
-  @Test
-  def testWildcardTopicCountGetTopicCountMapEscapeJson() {
-    def getTopicCountMapKey(regex: String): String = {
-      val topicCount = new WildcardTopicCount(null, "consumerId", new Whitelist(regex), 1, true)
-      topicCount.getTopicCountMap.head._1
-    }
-    //lets make sure that the JSON strings are escaping as we expect
-    //if they are not then when they get saved to ZooKeeper and read back out they will be broken on parse
-    assertEquals("-\\\"-", getTopicCountMapKey("-\"-"))
-    assertEquals("-\\\\-", getTopicCountMapKey("-\\-"))
-    assertEquals("-\\/-", getTopicCountMapKey("-/-"))
-    assertEquals("-\\\\b-", getTopicCountMapKey("-\\b-"))
-    assertEquals("-\\\\f-", getTopicCountMapKey("-\\f-"))
-    assertEquals("-\\\\n-", getTopicCountMapKey("-\\n-"))
-    assertEquals("-\\\\r-", getTopicCountMapKey("-\\r-"))
-    assertEquals("-\\\\t-", getTopicCountMapKey("-\\t-"))
-    assertEquals("-\\\\u0000-", getTopicCountMapKey("-\\u0000-"))
-    assertEquals("-\\\\u001f-", getTopicCountMapKey("-\\u001f-"))
-    assertEquals("-\\\\u007f-", getTopicCountMapKey("-\\u007f-"))
-    assertEquals("-\\\\u009f-", getTopicCountMapKey("-\\u009f-"))
-  }
 }
