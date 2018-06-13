@@ -67,7 +67,7 @@ public class ProcessorStateManager extends AbstractStateManager {
                                  final ChangelogReader changelogReader,
                                  final boolean eosEnabled,
                                  final LogContext logContext) throws IOException {
-        super(stateDirectory.directoryForTask(taskId));
+        super(stateDirectory.directoryForTask(taskId), eosEnabled);
 
         this.log = logContext.logger(ProcessorStateManager.class);
         this.taskId = taskId;
@@ -81,12 +81,11 @@ public class ProcessorStateManager extends AbstractStateManager {
         offsetLimits = new HashMap<>();
         standbyRestoredOffsets = new HashMap<>();
         this.isStandby = isStandby;
-        restoreCallbacks = isStandby ? new HashMap<String, StateRestoreCallback>() : null;
+        restoreCallbacks = isStandby ? new HashMap<>() : null;
         this.storeToChangelogTopic = storeToChangelogTopic;
 
         // load the checkpoint information
         checkpointableOffsets.putAll(checkpoint.read());
-
         if (eosEnabled) {
             // delete the checkpoint file after finish loading its stored offsets
             checkpoint.delete();
@@ -169,11 +168,7 @@ public class ProcessorStateManager extends AbstractStateManager {
             final int partition = getPartition(topicName);
             final TopicPartition storePartition = new TopicPartition(topicName, partition);
 
-            if (checkpointableOffsets.containsKey(storePartition)) {
-                partitionsAndOffsets.put(storePartition, checkpointableOffsets.get(storePartition));
-            } else {
-                partitionsAndOffsets.put(storePartition, -1L);
-            }
+            partitionsAndOffsets.put(storePartition, checkpointableOffsets.getOrDefault(storePartition, -1L));
         }
         return partitionsAndOffsets;
     }
@@ -340,7 +335,7 @@ public class ProcessorStateManager extends AbstractStateManager {
         return globalStores.get(name);
     }
 
-    private BatchingStateRestoreCallback getBatchingRestoreCallback(StateRestoreCallback callback) {
+    private BatchingStateRestoreCallback getBatchingRestoreCallback(final StateRestoreCallback callback) {
         if (callback instanceof BatchingStateRestoreCallback) {
             return (BatchingStateRestoreCallback) callback;
         }
