@@ -167,7 +167,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         for (final TopicPartition topicPartition : topicPartitions) {
             consumer.assign(Collections.singletonList(topicPartition));
             final Long checkpoint = checkpointableOffsets.get(topicPartition);
-            if (checkpoint != null) {
+            if (checkpoint != null && checkpoint > StateRestorer.NO_CHECKPOINT) {
                 consumer.seek(topicPartition, checkpoint);
             } else {
                 consumer.seekToBeginning(Collections.singletonList(topicPartition));
@@ -249,10 +249,33 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
 
     @Override
     public void checkpoint(final Map<TopicPartition, Long> offsets) {
+
+        // Find non persistent store's topics
+        final Map<String, String> storeToChangelogTopic = topology.storeToChangelogTopic();
+        final Set<String> globalNonPersistentStoresTopics = new HashSet<>();
+        for (final StateStore store : topology.globalStateStores()) {
+            if (!store.persistent() && storeToChangelogTopic.containsKey(store.name())) {
+                globalNonPersistentStoresTopics.add(storeToChangelogTopic.get(store.name()));
+            }
+        }
+
         checkpointableOffsets.putAll(offsets);
-        if (!checkpointableOffsets.isEmpty()) {
+
+        final Map<TopicPartition, Long> filteredOffsets = new HashMap<>();
+
+        // Skip non persistent store
+        for (final Map.Entry<TopicPartition, Long> topicPartitionOffset : checkpointableOffsets.entrySet()) {
+            final String topic = topicPartitionOffset.getKey().topic();
+            if (globalNonPersistentStoresTopics.contains(topic)) {
+                filteredOffsets.put(topicPartitionOffset.getKey(), (long) StateRestorer.NO_CHECKPOINT);
+            } else {
+                filteredOffsets.put(topicPartitionOffset.getKey(), topicPartitionOffset.getValue());
+            }
+        }
+
+        if (!filteredOffsets.isEmpty()) {
             try {
-                checkpoint.write(checkpointableOffsets);
+                checkpoint.write(filteredOffsets);
             } catch (IOException e) {
                 log.warn("Failed to write offsets checkpoint for global stores", e);
             }
