@@ -15,19 +15,13 @@
  * limitations under the License.
  */
 
-package kafka.javaapi
+package kafka.api
 
-import java.nio.ByteBuffer
+object Request {
+  val OrdinaryConsumerId: Int = -1
+  val DebuggingConsumerId: Int = -2
+  val FutureLocalReplicaId: Int = -3
 
-import kafka.common.{TopicAndPartition, OffsetMetadataAndError}
-import collection.JavaConverters._
-
-class OffsetFetchResponse(private val underlying: kafka.api.OffsetFetchResponse) {
-
-  def offsets: java.util.Map[TopicAndPartition, OffsetMetadataAndError] = underlying.requestInfo.asJava
-
-}
-
-object OffsetFetchResponse {
-  def readFrom(buffer: ByteBuffer) = new OffsetFetchResponse(kafka.api.OffsetFetchResponse.readFrom(buffer))
+  // Broker ids are non-negative int.
+  def isValidBrokerId(brokerId: Int): Boolean = brokerId >= 0
 }
