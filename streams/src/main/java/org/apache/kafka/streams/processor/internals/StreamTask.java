@@ -443,11 +443,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                     transactionInFlight = true;
                 }
             }
-
-            if (eosEnabled && !startNewTransaction && transactionInFlight) { // need to make sure to commit txn for suspend case
-                producer.commitTransaction();
-                transactionInFlight = false;
-            }
         } catch (final CommitFailedException | ProducerFencedException fatal) {
             throw new TaskMigratedException(this, fatal);
         }
