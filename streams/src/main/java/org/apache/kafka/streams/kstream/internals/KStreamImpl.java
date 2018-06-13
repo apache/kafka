@@ -302,7 +302,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                                                                         innerProcessorParameters,
                                                                                         repartitionRequired);
             branchNode.addChildNode(branchChildNode);
-            builder.addNode(branchChildNode);
+            builder.maybeAddNodeForOptimizationMetadata(branchChildNode);
             branchChildren[i] = new KStreamImpl<>(builder, childNames[i], sourceNodes, this.repartitionRequired, branchChildNode);
         }
 

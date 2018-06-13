@@ -77,30 +77,9 @@ class GroupedStreamAggregateBuilder<K, V> {
         if (!sourceName.equals(this.name)) {
             StreamsGraphNode repartitionNode = repartitionNodeBuilder.build();
             streamsGraphNode.addChildNode(repartitionNode);
-            builder.addNode(repartitionNode);
+            builder.maybeAddNodeForOptimizationMetadata(repartitionNode);
             parentNode = repartitionNode;
         }
-
-        StatefulProcessorNode.StatefulProcessorNodeBuilder<K, T> statefulProcessorNodeBuilder = StatefulProcessorNode.statefulProcessorNodeBuilder();
-
-        ProcessorParameters processorParameters = new ProcessorParameters<>(aggregateSupplier, aggFunctionName);
-        statefulProcessorNodeBuilder
-            .withProcessorParameters(processorParameters)
-            .withNodeName(aggFunctionName)
-            .withRepartitionRequired(repartitionRequired)
-            .withStoreBuilder(storeBuilder);
-
-        StatefulProcessorNode<K, T> statefulProcessorNode = statefulProcessorNodeBuilder.build();
-
-
-        StreamsGraphNode parentNode = streamsGraphNode;
-
-        if (!sourceName.equals(this.name)) {
-            StreamsGraphNode repartitionNode = repartitionNodeBuilder.build();
-            streamsGraphNode.addChildNode(repartitionNode);
-            parentNode = repartitionNode;
-        }
-
         StatefulProcessorNode.StatefulProcessorNodeBuilder<K, T> statefulProcessorNodeBuilder = StatefulProcessorNode.statefulProcessorNodeBuilder();
 
         ProcessorParameters processorParameters = new ProcessorParameters<>(aggregateSupplier, aggFunctionName);
@@ -113,6 +92,7 @@ class GroupedStreamAggregateBuilder<K, V> {
         StatefulProcessorNode<K, T> statefulProcessorNode = statefulProcessorNodeBuilder.build();
 
         parentNode.addChildNode(statefulProcessorNode);
+        builder.maybeAddNodeForOptimizationMetadata(statefulProcessorNode);
 
         return new KTableImpl<>(builder,
                                 aggFunctionName,

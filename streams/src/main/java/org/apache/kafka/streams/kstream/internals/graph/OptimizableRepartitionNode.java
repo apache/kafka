@@ -17,15 +17,12 @@
 
 package org.apache.kafka.streams.kstream.internals.graph;
 
-<<<<<<< HEAD
+
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
-=======
-import org.apache.kafka.common.serialization.Serde;
->>>>>>> Intercepting calls to InternalStreamsBuilder, and InternalTopologyBuilder to add to graph
 
 public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode {
 

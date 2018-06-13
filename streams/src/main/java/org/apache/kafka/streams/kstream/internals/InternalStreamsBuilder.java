@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.KStream;
@@ -84,7 +85,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                                                          consumed);
 
         root.addChildNode(streamSourceNode);
-        addNode(streamSourceNode);
+        maybeAddNodeForOptimizationMetadata(streamSourceNode);
 
         return new KStreamImpl<>(this, name, Collections.singleton(name), false, streamSourceNode);
     }
@@ -97,7 +98,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                                                                 topicPattern,
                                                                                 consumed);
         root.addChildNode(streamPatternSourceNode);
-        addNode(streamPatternSourceNode);
+        maybeAddNodeForOptimizationMetadata(streamPatternSourceNode);
 
         return new KStreamImpl<>(this,
                                  name,
@@ -129,7 +130,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                                                                .build();
 
         root.addChildNode(tableSourceNode);
-        addNode(tableSourceNode);
+        maybeAddNodeForOptimizationMetadata(tableSourceNode);
 
         return new KTableImpl<>(this,
                                 name,
@@ -166,7 +167,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                                                                                     .build();
 
         root.addChildNode(tableSourceNode);
-        addNode(tableSourceNode);
+        maybeAddNodeForOptimizationMetadata(tableSourceNode);
 
         return new GlobalKTableImpl<>(new KTableSourceValueGetterSupplier<K, V>(storeBuilder.name()), materialized.isQueryable());
     }
@@ -222,12 +223,10 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     public void buildAndOptimizeTopology(Properties props) {
         if (!topologyBuilt) {
 
-            LOG.debug("BEFORE OPTIMIZATION Root node {} child nodes {}", root, root.children());
             if (props != null) {
+                LOG.debug("Optimizing the Kafka Streams graph");
                 optimize();
             }
-
-            LOG.debug("AFTER OPTIMIZATION Root node {} child nodes {}", root, root.children());
             final PriorityQueue<StreamsGraphNode> graphNodePriorityQueue = new PriorityQueue<>(5, nodeIdComparator);
 
             graphNodePriorityQueue.offer(root);
@@ -251,65 +250,49 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     }
 
     private void optimize() {
-        final PriorityQueue<StreamsGraphNode> graphNodePriorityQueue = new PriorityQueue<>(5, nodeIdComparator);
-        LOG.debug("Entering optimize");
-        graphNodePriorityQueue.offer(root);
-
-        while (!graphNodePriorityQueue.isEmpty()) {
-            final StreamsGraphNode streamGraphNode = graphNodePriorityQueue.remove();
-
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("{} child nodes {}", streamGraphNode, streamGraphNode.children());
-            }
-
-
-                mayOptimizeRepartitions(streamGraphNode);
-
-
-            for (StreamsGraphNode graphNode : streamGraphNode.children()) {
-                graphNodePriorityQueue.offer(graphNode);
-            }
-        }
+        mayOptimizeRepartitionOperations();
     }
 
-    private void mayOptimizeRepartitions(StreamsGraphNode node) {
-        if (node.triggersRepartitioning() && repartitioningNodeToRepartitioned.containsKey(node)) {
-            LOG.debug("Looking to maybe optimize {}", node);
-            StreamsGraphNode repartitionNode = setRepartitionOnTriggeringOperation(node);
-            LOG.debug("Now created repartition node {}", repartitionNode);
-            for (OptimizableRepartitionNode optimizableRepartitionNode : repartitioningNodeToRepartitioned.get(node)) {
-                StreamsGraphNode reparititionParent = optimizableRepartitionNode.parentNode();
+    private void mayOptimizeRepartitionOperations() {
+        for (Map.Entry<StreamsGraphNode, Set<OptimizableRepartitionNode>> streamsGraphNodeSetEntry : repartitioningNodeToRepartitioned.entrySet()) {
+            StreamsGraphNode node = streamsGraphNodeSetEntry.getKey();
 
+            StreamsGraphNode repartitionNode = addRepartitionNodeToOperationCausingRepartition(node);
+
+            for (OptimizableRepartitionNode optimizableRepartitionNode : streamsGraphNodeSetEntry.getValue()) {
+                StreamsGraphNode repartitionParent = optimizableRepartitionNode.parentNode();
+                repartitionParent.clearChildren();
                 Collection<StreamsGraphNode> repartitionNodeChildren = optimizableRepartitionNode.children();
+
                 optimizableRepartitionNode.clearChildren();
+
                 for (StreamsGraphNode repartitionNodeChild : repartitionNodeChildren) {
-                    reparititionParent.clearChildren();
-                    reparititionParent.addChildNode(repartitionNodeChild);
+                    repartitionNode.addChildNode(repartitionNodeChild);
                 }
-                optimizableRepartitionNode = null;
                 LOG.debug("UPDATED node {}", repartitionNode);
             }
         }
     }
 
-    private StreamsGraphNode setRepartitionOnTriggeringOperation(StreamsGraphNode node) {
-        StreamsGraphNode repartitionNode = createRepartitionNode(node);
-        insertChildNode(node, repartitionNode);
+    private StreamsGraphNode addRepartitionNodeToOperationCausingRepartition(StreamsGraphNode node) {
+        StreamSourceNode parentSourceNode = (StreamSourceNode) findParentNodeMatching(node, n -> n instanceof StreamSourceNode);
+
+        StreamsGraphNode repartitionNode = createRepartitionNode(node.nodeName(),
+                                                                 parentSourceNode.keySerde(),
+                                                                 parentSourceNode.valueSerde());
+
+        insertNodeAndUpdateParentChildConnections(node, repartitionNode);
+
         return repartitionNode;
     }
 
-    private StreamsGraphNode createRepartitionNode(StreamsGraphNode node) {
-
-        StreamsGraphNode parentNode = getParentNode(node, n -> n instanceof StreamSourceNode);
-
-        StreamSourceNode sourceNode = (StreamSourceNode) parentNode;
-
+    private StreamsGraphNode createRepartitionNode(String name, Serde keySerde, Serde valueSerde) {
         OptimizableRepartitionNode.OptimizableRepartitionNodeBuilder repartitionNodeBuilder = OptimizableRepartitionNode.optimizableRepartitionNodeBuilder();
         KStreamImpl.createRepartitionedSource(this,
-                                              sourceNode.keySerde(),
-                                              sourceNode.valueSerde(),
-                                              node.nodeName() + "repartitioned",
-                                              node.nodeName(),
+                                              keySerde,
+                                              valueSerde,
+                                              name + "-optimized",
+                                              name,
                                               repartitionNodeBuilder);
 
         return repartitionNodeBuilder.build();
@@ -317,18 +300,17 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     }
 
 
-    private void insertChildNode(StreamsGraphNode original, StreamsGraphNode nodeToInsert) {
+    private void insertNodeAndUpdateParentChildConnections(StreamsGraphNode parentNode, StreamsGraphNode nodeToInsert) {
+        Collection<StreamsGraphNode> childNodes = parentNode.children();
+        parentNode.clearChildren();
 
-        Collection<StreamsGraphNode> childNodes = original.children();
-
-        original.clearChildren();
         for (StreamsGraphNode childNode : childNodes) {
             nodeToInsert.addChildNode(childNode);
         }
-        original.addChildNode(nodeToInsert);
+        parentNode.addChildNode(nodeToInsert);
     }
 
-    private StreamsGraphNode getParentNode(StreamsGraphNode original, Predicate<StreamsGraphNode> parentFound) {
+    private StreamsGraphNode findParentNodeMatching(StreamsGraphNode original, Predicate<StreamsGraphNode> parentFound) {
         StreamsGraphNode parent = original.parentNode();
         while (!parentFound.test(parent)) {
             parent = parent.parentNode();
@@ -336,7 +318,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         return parent;
     }
 
-    void addNode(final StreamsGraphNode node) {
+    void maybeAddNodeForOptimizationMetadata(final StreamsGraphNode node) {
         node.setId(nodeIdCounter.getAndIncrement());
         node.setInternalStreamsBuilder(this);
 
@@ -357,7 +339,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
             while (currentNode != null) {
                 final StreamsGraphNode parentNode = currentNode.parentNode();
                 if (parentNode != null && parentNode.triggersRepartitioning()) {
-                    repartitioningNodeToRepartitioned.get(parentNode).add((OptimizableRepartitionNode)node);
+                    repartitioningNodeToRepartitioned.get(parentNode).add((OptimizableRepartitionNode) node);
                     break;
                 }
                 currentNode = parentNode;
