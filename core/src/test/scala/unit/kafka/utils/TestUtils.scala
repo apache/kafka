@@ -22,6 +22,7 @@ import java.nio._
 import java.nio.channels._
 import java.nio.charset.{Charset, StandardCharsets}
 import java.security.cert.X509Certificate
+import java.time.Duration
 import java.util.{Collections, Properties}
 import java.util.concurrent.{Callable, Executors, TimeUnit}
 import javax.net.ssl.X509TrustManager
@@ -1258,10 +1259,11 @@ object TestUtils extends Logging {
   def consumeTopicRecords[K, V](servers: Seq[KafkaServer],
                                 topic: String,
                                 numMessages: Int,
+                                groupId: String = "group",
                                 securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT,
                                 trustStoreFile: Option[File] = None,
                                 waitTime: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Seq[ConsumerRecord[Array[Byte], Array[Byte]]] = {
-    val consumer = createNewConsumer(TestUtils.getBrokerListStrFromServers(servers, securityProtocol),
+    val consumer = createNewConsumer(TestUtils.getBrokerListStrFromServers(servers, securityProtocol), groupId = groupId,
       securityProtocol = securityProtocol, trustStoreFile = trustStoreFile)
     try {
       consumer.subscribe(Collections.singleton(topic))
@@ -1273,7 +1275,7 @@ object TestUtils extends Logging {
                            waitTime: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Seq[ConsumerRecord[K, V]] = {
     val records = new ArrayBuffer[ConsumerRecord[K, V]]()
     waitUntilTrue(() => {
-      records ++= consumer.poll(50).asScala
+      records ++= consumer.poll(Duration.ofMillis(50)).asScala
       records.size >= numMessages
     }, s"Consumed ${records.size} records until timeout instead of the expected $numMessages records", waitTime)
     assertEquals("Consumed more records than expected", numMessages, records.size)
@@ -1288,11 +1290,11 @@ object TestUtils extends Logging {
     *
     * @return All the records consumed by the consumer within the specified duration.
     */
-  def consumeRecordsFor[K, V](consumer: KafkaConsumer[K, V], duration: Long): Seq[ConsumerRecord[K, V]] = {
+  def consumeRecordsFor[K, V](consumer: KafkaConsumer[K, V], duration: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Seq[ConsumerRecord[K, V]] = {
     val startTime = System.currentTimeMillis()
     val records = new ArrayBuffer[ConsumerRecord[K, V]]()
     waitUntilTrue(() => {
-      records ++= consumer.poll(50).asScala
+      records ++= consumer.poll(Duration.ofMillis(50)).asScala
       System.currentTimeMillis() - startTime > duration
     }, s"The timeout $duration was greater than the maximum wait time.")
     records
@@ -1375,14 +1377,14 @@ object TestUtils extends Logging {
   def pollUntilAtLeastNumRecords(consumer: KafkaConsumer[Array[Byte], Array[Byte]], numRecords: Int): Seq[ConsumerRecord[Array[Byte], Array[Byte]]] = {
     val records = new ArrayBuffer[ConsumerRecord[Array[Byte], Array[Byte]]]()
     TestUtils.waitUntilTrue(() => {
-      records ++= consumer.poll(50).asScala
+      records ++= consumer.poll(Duration.ofMillis(50)).asScala
       records.size >= numRecords
     }, s"Consumed ${records.size} records until timeout, but expected $numRecords records.")
     records
   }
 
   def resetToCommittedPositions(consumer: KafkaConsumer[Array[Byte], Array[Byte]]) = {
-    consumer.assignment.asScala.foreach { case(topicPartition) =>
+    consumer.assignment.asScala.foreach { topicPartition =>
       val offset = consumer.committed(topicPartition)
       if (offset != null)
         consumer.seek(topicPartition, offset.offset)
