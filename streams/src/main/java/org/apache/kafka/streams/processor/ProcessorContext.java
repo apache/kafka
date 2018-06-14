@@ -239,4 +239,10 @@ public interface ProcessorContext {
      */
     Map<String, Object> appConfigsWithPrefix(final String prefix);
 
+    /**
+     * Returns whether current task is active (or standby).
+     *
+     * @return if this is active task context.
+     */
+    boolean isActive();
 }

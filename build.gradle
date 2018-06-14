@@ -29,6 +29,17 @@ buildscript {
     classpath 'org.scoverage:gradle-scoverage:2.1.0'
     classpath 'com.github.jengelman.gradle.plugins:shadow:2.0.2'
     classpath 'org.owasp:dependency-check-gradle:3.1.1'
+    classpath "io.spring.gradle:dependency-management-plugin:1.0.3.RELEASE"
+  }
+}
+
+// Adopted from https://docs.aws.amazon.com/sdk-for-java/v1/developer-guide/setup-project-gradle.html
+// To use amazon s3 SDK
+apply plugin: "io.spring.dependency-management"
+
+dependencyManagement {
+  imports {
+    mavenBom 'software.amazon.awssdk:bom:2.0.0-preview-1'
   }
 }
 
@@ -930,6 +941,7 @@ project(':streams') {
     compile project(':connect:json')  // this dependency should be removed after we unify data API
     compile libs.slf4jApi
     compile libs.rocksDBJni
+    compile libs.amazons3
 
     // testCompileOnly prevents streams from exporting a dependency on test-utils, which would cause a dependency cycle
     testCompileOnly project(':streams:test-utils')

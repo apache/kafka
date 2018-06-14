@@ -41,6 +41,8 @@ import org.rocksdb.RocksDBException;
 import org.rocksdb.RocksIterator;
 import org.rocksdb.WriteBatch;
 import org.rocksdb.WriteOptions;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.FilenameFilter;
@@ -55,6 +57,10 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
 
 /**
  * A persistent key-value store based on RocksDB.
@@ -64,6 +70,7 @@ import java.util.Set;
  * i.e. use {@code RocksDBStore<Bytes, ...>} rather than {@code RocksDBStore<byte[], ...>}.
  */
 public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
+    private static final Logger LOG = LoggerFactory.getLogger(RocksDBStore.class);
 
     private static final int TTL_NOT_USED = -1;
 
@@ -94,6 +101,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
     volatile BatchingStateRestoreCallback batchingStateRestoreCallback = null;
 
     protected volatile boolean open = false;
+    private RemoteCheckpoint remoteCheckpoint;
 
     RocksDBStore(String name) {
         this(name, DB_FILE_DIR);
@@ -162,12 +170,42 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
                      final StateStore root) {
         // open the DB dir
         this.internalProcessorContext = context;
+
+        // Register remote checkpoint work.
+        registerRemoteCheckpoint(context);
+
         openDB(context);
         this.batchingStateRestoreCallback = new RocksDBBatchingRestoreCallback(this);
 
         // value getter should always read directly from rocksDB
         // since it is only for values that are already flushed
         context.register(root, this.batchingStateRestoreCallback);
+    }
+
+    private void registerRemoteCheckpoint(final ProcessorContext context) {
+        final Map<String, Object> configs = context.appConfigs();
+
+        // Get the notion of active task to determine whether we should do remote checkpoint.
+        boolean shouldDoRemoteCheckpoint = (boolean) configs.get(StreamsConfig.ROCKSDB_SHOULD_DO_REMOTE_CHECKPOINT) && context.isActive();
+        if (shouldDoRemoteCheckpoint) {
+            String remoteS3Bucket = (String) configs.get(StreamsConfig.ROCKSDB_REMOTE_S3_BUCKET);
+            String remoteS3Key = (String) configs.get(StreamsConfig.ROCKSDB_REMOTE_S3_KEY);
+            long remoteCheckpointInterval = (long) configs.get(StreamsConfig.ROCKSDB_REMOTE_CHECKPOINT_INTERVAL);
+
+            String localBackUpdir = parentDir + "/remote_cp_backup";
+            String dbDirName = parentDir + "/" + name;
+            try {
+                this.remoteCheckpoint = new RemoteCheckpoint(db,
+                        context.taskId().toString(),
+                        dbDirName,
+                        localBackUpdir,
+                        remoteS3Bucket,
+                        remoteS3Key,
+                        remoteCheckpointInterval);
+            } catch (Exception e) {
+                LOG.error("failed to initiate remote checkpoint: {}", e);
+            }
+        }
     }
 
     private RocksDB openDB(final File dir,
@@ -400,7 +438,17 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         }
         // flush RocksDB
         flushInternal();
+
+        // Need to checkpoint the state if needed.
+        if (remoteCheckpoint != null && remoteCheckpoint.shouldCheckpoint()) {
+            try {
+                remoteCheckpoint.runOnce();
+            } catch (Exception e) {
+               LOG.error("Exception caught in remote checkpoint: " + e.toString());
+            }
+        }
     }
+
     /**
      * @throws ProcessorStateException if flushing failed because of any internal store exceptions
      */
@@ -424,6 +472,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         wOptions.close();
         fOptions.close();
         db.close();
+        remoteCheckpoint.close();
 
         options = null;
         wOptions = null;

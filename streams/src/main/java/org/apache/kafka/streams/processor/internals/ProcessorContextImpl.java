@@ -43,7 +43,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
                          final ProcessorStateManager stateMgr,
                          final StreamsMetricsImpl metrics,
                          final ThreadCache cache) {
-        super(id, config, metrics, stateMgr, cache);
+        super(id, true, config, metrics, stateMgr, cache);
         this.task = task;
         this.collector = collector;
     }

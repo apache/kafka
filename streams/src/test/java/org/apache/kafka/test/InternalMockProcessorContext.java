@@ -127,6 +127,7 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
                                         final RecordCollector.Supplier collectorSupplier,
                                         final ThreadCache cache) {
         super(new TaskId(0, 0),
+            true,
             config,
             metrics,
             null,

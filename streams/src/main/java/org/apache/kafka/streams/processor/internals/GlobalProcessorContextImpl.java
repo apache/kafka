@@ -35,7 +35,8 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
                                       final StateManager stateMgr,
                                       final StreamsMetricsImpl metrics,
                                       final ThreadCache cache) {
-        super(new TaskId(-1, -1), config, metrics, stateMgr, cache);
+        // We don't want to enable active task confirmation for global processor now.
+        super(new TaskId(-1, -1), false, config, metrics, stateMgr, cache);
     }
 
     @Override

@@ -467,4 +467,9 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
             "For processor unit tests, use an in-memory state store with change-logging disabled. " +
             "Alternatively, use the TopologyTestDriver for testing processor/store/topology integration.");
     }
+
+    @Override
+    public boolean isActive() {
+        return true;
+    }
 }

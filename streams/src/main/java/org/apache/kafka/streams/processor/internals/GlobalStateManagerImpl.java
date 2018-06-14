@@ -367,6 +367,4 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
     public Map<TopicPartition, Long> checkpointed() {
         return Collections.unmodifiableMap(checkpointableOffsets);
     }
-
-
 }

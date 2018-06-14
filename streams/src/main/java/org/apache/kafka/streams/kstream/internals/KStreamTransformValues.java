@@ -163,6 +163,11 @@ public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V> 
                     public Map<String, Object> appConfigsWithPrefix(String prefix) {
                         return context.appConfigsWithPrefix(prefix);
                     }
+
+                    @Override
+                    public boolean isActive() {
+                        return context.isActive();
+                    }
                 });
             this.context = context;
         }

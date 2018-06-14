@@ -34,6 +34,7 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
 
     static final String NONEXIST_TOPIC = "__null_topic__";
     private final TaskId taskId;
+    private final boolean isActiveTask;
     private final String applicationId;
     private final StreamsConfig config;
     private final StreamsMetricsImpl metrics;
@@ -46,6 +47,7 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     final StateManager stateManager;
 
     public AbstractProcessorContext(final TaskId taskId,
+                                    boolean isActiveTask,
                                     final StreamsConfig config,
                                     final StreamsMetricsImpl metrics,
                                     final StateManager stateManager,
@@ -58,6 +60,7 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
         valueSerde = config.defaultValueSerde();
         keySerde = config.defaultKeySerde();
         this.cache = cache;
+        this.isActiveTask = isActiveTask;
     }
 
     @Override
@@ -200,5 +203,10 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     @Override
     public void uninitialize() {
         initialized = false;
+    }
+
+    @Override
+    public boolean isActive() {
+        return isActiveTask;
     }
 }

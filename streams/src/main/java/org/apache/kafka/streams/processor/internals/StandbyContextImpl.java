@@ -73,6 +73,7 @@ class StandbyContextImpl extends AbstractProcessorContext implements RecordColle
                        final StreamsMetricsImpl metrics) {
         super(
             id,
+            false,
             config,
             metrics,
             stateMgr,

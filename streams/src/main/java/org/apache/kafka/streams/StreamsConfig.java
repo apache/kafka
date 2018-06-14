@@ -368,6 +368,11 @@ public class StreamsConfig extends AbstractConfig {
     public static final String ROCKSDB_CONFIG_SETTER_CLASS_CONFIG = "rocksdb.config.setter";
     private static final String ROCKSDB_CONFIG_SETTER_CLASS_DOC = "A Rocks DB config setter class or class name that implements the <code>org.apache.kafka.streams.state.RocksDBConfigSetter</code> interface";
 
+    public static final String ROCKSDB_SHOULD_DO_REMOTE_CHECKPOINT = "rocksdb.should.do.remote.checkpoint";
+    public static final String ROCKSDB_REMOTE_S3_KEY = "rocksdb.remote.s3.key";
+    public static final String ROCKSDB_REMOTE_S3_BUCKET = "rocksdb.remote.s3.bucket";
+    public static final String ROCKSDB_REMOTE_CHECKPOINT_INTERVAL = "rocksdb.remote.checkpoint.interval";
+
     /** {@code security.protocol} */
     public static final String SECURITY_PROTOCOL_CONFIG = CommonClientConfigs.SECURITY_PROTOCOL_CONFIG;
 
