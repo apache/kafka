@@ -816,18 +816,18 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     val leaders = createTopic(topic, numPartitions = 1, replicationFactor = serverCount)
     val followerIndex = if (leaders(0) != servers(0).config.brokerId) 0 else 1
 
-    def waitForFollowerLogStartOffsetAndLEOAfterRestart(expectedLSO: Long, expectedLEO: Long): Unit = {
+    def waitForFollowerLog(expectedStartOffset: Long, expectedEndOffset: Long): Unit = {
       TestUtils.waitUntilTrue(() => servers(followerIndex).replicaManager.getReplica(topicPartition) != None,
                               "Expected follower to create replica for partition")
 
       // wait until the follower discovers that log start offset moved beyond its HW
       TestUtils.waitUntilTrue(() => {
-        servers(followerIndex).replicaManager.getReplica(topicPartition).get.logStartOffset == expectedLSO
-      }, s"Expected follower to discover new log start offset $expectedLSO")
+        servers(followerIndex).replicaManager.getReplica(topicPartition).get.logStartOffset == expectedStartOffset
+      }, s"Expected follower to discover new log start offset $expectedStartOffset")
 
       TestUtils.waitUntilTrue(() => {
-        servers(followerIndex).replicaManager.getReplica(topicPartition).get.logEndOffset.messageOffset == expectedLEO
-      }, s"Expected new replica to catch up to log end offset $expectedLEO")
+        servers(followerIndex).replicaManager.getReplica(topicPartition).get.logEndOffset.messageOffset == expectedEndOffset
+      }, s"Expected follower to catch up to log end offset $expectedEndOffset")
     }
 
     // we will produce to topic and delete records while one follower is down
@@ -842,7 +842,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     // start the stopped broker to verify that it will be able to fetch from new log start offset
     restartDeadBrokers()
 
-    waitForFollowerLogStartOffsetAndLEOAfterRestart(expectedLSO=3L, expectedLEO=100L)
+    waitForFollowerLog(expectedStartOffset=3L, expectedEndOffset=100L)
 
     // after the new replica caught up, all replicas should have same log start offset
     for (i <- 0 until serverCount)
@@ -854,7 +854,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     val result1 = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(117L)).asJava)
     result1.all().get()
     restartDeadBrokers()
-    waitForFollowerLogStartOffsetAndLEOAfterRestart(expectedLSO=117L, expectedLEO=200L)
+    waitForFollowerLog(expectedStartOffset=117L, expectedEndOffset=200L)
   }
 
   @Test

@@ -43,7 +43,7 @@ import org.junit.{After, Before, Test}
 import scala.collection.Iterable
 import scala.collection.JavaConverters._
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
-import org.scalatest.Assertions.{assertThrows, intercept}
+import org.scalatest.Assertions.{assertThrows, intercept, withClue}
 
 class LogTest {
   var config: KafkaConfig = null
@@ -1908,13 +1908,22 @@ class LogTest {
     }
   }
 
-  @Test(expected = classOf[UnexpectedAppendOffsetException])
+  @Test
   def testAppendBelowExpectedOffsetThrowsException() {
     val log = createLog(logDir, LogConfig(), brokerTopicStats = brokerTopicStats)
     val records = (0 until 2).map(id => new SimpleRecord(id.toString.getBytes)).toArray
     records.foreach(record => log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, record), leaderEpoch = 0))
-    val invalidRecord = MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord(1.toString.getBytes))
-    log.appendAsFollower(invalidRecord)
+
+    val magicVals = Seq(RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1, RecordBatch.MAGIC_VALUE_V2)
+    val compressionTypes = Seq(CompressionType.NONE, CompressionType.LZ4)
+    for (magic <- magicVals; compression <- compressionTypes) {
+      val invalidRecord = MemoryRecords.withRecords(magic, compression, new SimpleRecord(1.toString.getBytes))
+      withClue(s"Magic=$magic, compressionType=$compression") {
+        assertThrows[UnexpectedAppendOffsetException] {
+          log.appendAsFollower(invalidRecord)
+        }
+      }
+    }
   }
 
   @Test
@@ -1924,18 +1933,25 @@ class LogTest {
     assertEquals(7L, log.logStartOffset)
     assertEquals(7L, log.logEndOffset)
 
-    val firstOffset = 5L
+    val firstOffset = 4L
     val magicVals = Seq(RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1, RecordBatch.MAGIC_VALUE_V2)
-    for (magic <- magicVals) {
-      val batch = singletonRecordsWithLeaderEpoch(value = "random".getBytes, leaderEpoch = 1,
-                                                  offset = firstOffset, codec = CompressionType.LZ4, magicValue = magic)
-      val exception = intercept[UnexpectedAppendOffsetException] {
-        log.appendAsFollower(records = batch)
+    val compressionTypes = Seq(CompressionType.NONE, CompressionType.LZ4)
+    for (magic <- magicVals; compression <- compressionTypes) {
+      val batch = TestUtils.records(List(new SimpleRecord("k1".getBytes, "v1".getBytes),
+                                         new SimpleRecord("k2".getBytes, "v2".getBytes),
+                                         new SimpleRecord("k3".getBytes, "v3".getBytes)),
+                                    magicValue = magic, codec = compression,
+                                    baseOffset = firstOffset)
+
+      withClue(s"Magic=$magic, compressionType=$compression") {
+        val exception = intercept[UnexpectedAppendOffsetException] {
+          log.appendAsFollower(records = batch)
+        }
+        assertEquals(s"Magic=$magic, compressionType=$compression, UnexpectedAppendOffsetException#firstOffset",
+                     firstOffset, exception.firstOffset)
+        assertEquals(s"Magic=$magic, compressionType=$compression, UnexpectedAppendOffsetException#lastOffset",
+                     firstOffset + 2, exception.lastOffset)
       }
-      val actualFirstOffset = exception.firstOffset
-      val actualLastOffset = exception.lastOffset
-      assertEquals(s"Magic $magic. UnexpectedAppendOffsetException#firstOffset", firstOffset, actualFirstOffset)
-      assertEquals(s"Magic $magic. UnexpectedAppendOffsetException#lastOffset", firstOffset, actualLastOffset)
     }
   }
 
