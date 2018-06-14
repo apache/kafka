@@ -29,24 +29,28 @@ import javax.management.MBeanServer;
 public class PoisonPill {
 
     public static void die() {
-        die(null, -1);
+        die(null, -1, 1);
     }
 
     public static void die(File heapDumpFolder, final long maxWaitForDump) {
+        die(heapDumpFolder, maxWaitForDump, 1);
+    }
+
+    public static void die(File heapDumpFolder, final long maxWaitForDump, int haltStatusCode) {
         try {
             if (maxWaitForDump > 0 && heapDumpFolder != null) {
-                grabHeapDump(heapDumpFolder, maxWaitForDump);
+                grabHeapDump(heapDumpFolder, maxWaitForDump, haltStatusCode);
             }
         } catch (Exception e) {
             System.err.println("unable to complete heap dump");
             e.printStackTrace(System.err);
             System.err.flush();
         } finally {
-            Runtime.getRuntime().halt(1);
+            Runtime.getRuntime().halt(haltStatusCode);
         }
     }
 
-    private static void grabHeapDump(File heapDumpFolder, final long maxWait) throws Exception {
+    private static void grabHeapDump(File heapDumpFolder, final long maxWait, final int haltStatusCode) throws Exception {
 
         //set up a watchdog background thread that will halt in ~maxWait regardless of whether or not
         //we succeed in taking a heap dump (since we dont know when it'll ever complete)
@@ -67,7 +71,7 @@ public class PoisonPill {
                     e.printStackTrace(System.err);
                     System.err.flush();
                 } finally {
-                    Runtime.getRuntime().halt(1);
+                    Runtime.getRuntime().halt(haltStatusCode);
                 }
             }
         });
