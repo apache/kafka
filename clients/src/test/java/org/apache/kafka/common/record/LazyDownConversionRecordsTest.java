@@ -42,43 +42,23 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class LazyDownConversionRecordsTest {
-
-
-    public static MemoryRecords convertRecords(MemoryRecords recordsToConvert, byte toMagic, int toWrite) throws IOException {
-        try (FileRecords inputRecords = FileRecords.open(tempFile())) {
-            inputRecords.append(recordsToConvert);
-            inputRecords.flush();
-
-            LazyDownConversionRecords lazyRecords = new LazyDownConversionRecords(new TopicPartition("test", 1),
-                    inputRecords, toMagic, 0L, Time.SYSTEM);
-            LazyDownConversionRecordsSend lazySend = lazyRecords.toSend("foo");
-            File outputFile = tempFile();
-            FileChannel channel = new RandomAccessFile(outputFile, "rw").getChannel();
-
-            int written = 0;
-            while (written < toWrite)
-                written += lazySend.writeTo(channel, written, toWrite - written);
-
-            FileRecords convertedRecords = FileRecords.open(outputFile, true, (int) channel.size(), false);
-            ByteBuffer convertedRecordsBuffer = ByteBuffer.allocate(convertedRecords.sizeInBytes());
-            convertedRecords.readInto(convertedRecordsBuffer, 0);
-
-            // cleanup
-            convertedRecords.close();
-            channel.close();
-
-            return MemoryRecords.readableRecords(convertedRecordsBuffer);
-        }
-    }
-
+    /**
+     * Test the lazy down-conversion path in the presence of commit markers. When converting to V0 or V1, these batches
+     * are dropped. If there happen to be no more batches left to convert, we must get an overflow message batch after
+     * conversion.
+     */
     @Test
     public void testConversionOfCommitMarker() throws IOException {
         MemoryRecords recordsToConvert = MemoryRecords.withEndTransactionMarker(0, Time.SYSTEM.milliseconds(), RecordBatch.NO_PARTITION_LEADER_EPOCH,
                 1, (short) 1, new EndTransactionMarker(ControlRecordType.COMMIT, 0));
         MemoryRecords convertedRecords = convertRecords(recordsToConvert, (byte) 1, recordsToConvert.sizeInBytes());
         ByteBuffer buffer = convertedRecords.buffer();
+
+        // read the offset and the batch length
         buffer.getLong();
         int sizeOfConvertedRecords = buffer.getInt();
+
+        // assert we got an overflow message batch
         assertTrue(sizeOfConvertedRecords > buffer.limit());
         assertFalse(convertedRecords.batchIterator().hasNext());
     }
@@ -87,33 +67,41 @@ public class LazyDownConversionRecordsTest {
     public static class ParameterizedConversionTest {
         private final CompressionType compressionType;
         private final byte toMagic;
-        private final DownConversionTest test;
 
-        public ParameterizedConversionTest(CompressionType compressionType, byte toMagic, DownConversionTest test) {
+        public ParameterizedConversionTest(CompressionType compressionType, byte toMagic) {
             this.compressionType = compressionType;
             this.toMagic = toMagic;
-            this.test = test;
         }
 
-        enum DownConversionTest {
-            DEFAULT,
-            OVERFLOW,
-        }
-
-        @Parameterized.Parameters(name = "compressionType={0}, toMagic={1}, test={2}")
+        @Parameterized.Parameters(name = "compressionType={0}, toMagic={1}")
         public static Collection<Object[]> data() {
             List<Object[]> values = new ArrayList<>();
             for (byte toMagic = RecordBatch.MAGIC_VALUE_V0; toMagic <= RecordBatch.CURRENT_MAGIC_VALUE; toMagic++) {
-                for (DownConversionTest test : DownConversionTest.values()) {
-                    values.add(new Object[]{CompressionType.NONE, toMagic, test});
-                    values.add(new Object[]{CompressionType.GZIP, toMagic, test});
-                }
+                values.add(new Object[]{CompressionType.NONE, toMagic});
+                values.add(new Object[]{CompressionType.GZIP, toMagic});
             }
             return values;
         }
 
+        /**
+         * Test the lazy down-conversion path.
+         */
         @Test
-        public void doTestConversion() throws IOException {
+        public void testConversion() throws IOException {
+            doTestConversion(false);
+        }
+
+        /**
+         * Test the lazy down-conversion path where the number of bytes we want to convert is much larger than the
+         * number of bytes we get after conversion. This causes overflow message batch(es) to be appended towards the
+         * end of the converted output.
+         */
+        @Test
+        public void testConversionWithOverflow() throws IOException {
+            doTestConversion(true);
+        }
+
+        private void doTestConversion(boolean testConversionOverflow) throws IOException {
             List<Long> offsets = asList(0L, 2L, 3L, 9L, 11L, 15L, 16L, 17L, 22L, 24L);
 
             Header[] headers = {new RecordHeader("headerKey1", "headerValue1".getBytes()),
@@ -151,35 +139,43 @@ public class LazyDownConversionRecordsTest {
             for (int i = 6; i < 10; i++)
                 builder.appendWithOffset(offsets.get(i), records.get(i));
             builder.close();
-
             buffer.flip();
 
-            MemoryRecords memoryRecords = MemoryRecords.readableRecords(buffer);
-            int toWrite;
-            List<SimpleRecord> recordsBeingConverted;
-            List<Long> offsetsOfRecords;
-            switch (test) {
-                case DEFAULT:
-                    toWrite = memoryRecords.sizeInBytes();
-                    recordsBeingConverted = records;
-                    offsetsOfRecords = offsets;
-                    break;
-                case OVERFLOW:
-                    toWrite = memoryRecords.sizeInBytes() * 2;
-                    recordsBeingConverted = records;
-                    offsetsOfRecords = offsets;
-                    break;
-                default:
-                    throw new IllegalArgumentException();
-            }
+            MemoryRecords recordsToConvert = MemoryRecords.readableRecords(buffer);
+            int numBytesToConvert = recordsToConvert.sizeInBytes();
+            if (testConversionOverflow)
+                numBytesToConvert *= 2;
 
-            MemoryRecords convertedRecords = convertRecords(memoryRecords, toMagic, toWrite);
-            verifyDownConvertedRecords(recordsBeingConverted, offsetsOfRecords, convertedRecords, compressionType, toMagic);
+            MemoryRecords convertedRecords = convertRecords(recordsToConvert, toMagic, numBytesToConvert);
+            verifyDownConvertedRecords(records, offsets, convertedRecords, compressionType, toMagic);
         }
     }
 
-    private static String utf8(ByteBuffer buffer) {
-        return Utils.utf8(buffer, buffer.remaining());
+    private static MemoryRecords convertRecords(MemoryRecords recordsToConvert, byte toMagic, int bytesToConvert) throws IOException {
+        try (FileRecords inputRecords = FileRecords.open(tempFile())) {
+            inputRecords.append(recordsToConvert);
+            inputRecords.flush();
+
+            LazyDownConversionRecords lazyRecords = new LazyDownConversionRecords(new TopicPartition("test", 1),
+                    inputRecords, toMagic, 0L, Time.SYSTEM);
+            LazyDownConversionRecordsSend lazySend = lazyRecords.toSend("foo");
+            File outputFile = tempFile();
+            FileChannel channel = new RandomAccessFile(outputFile, "rw").getChannel();
+
+            int written = 0;
+            while (written < bytesToConvert)
+                written += lazySend.writeTo(channel, written, bytesToConvert - written);
+
+            FileRecords convertedRecords = FileRecords.open(outputFile, true, (int) channel.size(), false);
+            ByteBuffer convertedRecordsBuffer = ByteBuffer.allocate(convertedRecords.sizeInBytes());
+            convertedRecords.readInto(convertedRecordsBuffer, 0);
+
+            // cleanup
+            convertedRecords.close();
+            channel.close();
+
+            return MemoryRecords.readableRecords(convertedRecordsBuffer);
+        }
     }
 
     private static void verifyDownConvertedRecords(List<SimpleRecord> initialRecords,
@@ -198,8 +194,8 @@ public class LazyDownConversionRecordsTest {
             for (Record record : batch) {
                 assertTrue("Inner record should have magic " + toMagic, record.hasMagic(batch.magic()));
                 assertEquals("Offset should not change", initialOffsets.get(i).longValue(), record.offset());
-                assertEquals("Key should not change", utf8(initialRecords.get(i).key()), utf8(record.key()));
-                assertEquals("Value should not change", utf8(initialRecords.get(i).value()), utf8(record.value()));
+                assertEquals("Key should not change", Utils.utf8(initialRecords.get(i).key()), Utils.utf8(record.key()));
+                assertEquals("Value should not change", Utils.utf8(initialRecords.get(i).value()), Utils.utf8(record.value()));
                 assertFalse(record.hasTimestampType(TimestampType.LOG_APPEND_TIME));
                 if (batch.magic() == RecordBatch.MAGIC_VALUE_V0) {
                     assertEquals(RecordBatch.NO_TIMESTAMP, record.timestamp());

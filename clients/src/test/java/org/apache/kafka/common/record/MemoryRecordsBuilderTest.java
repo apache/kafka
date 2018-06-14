@@ -568,8 +568,8 @@ public class MemoryRecordsBuilderTest {
         }
     }
 
-    private String utf8(ByteBuffer buffer) {
-        return Utils.utf8(buffer, buffer.remaining());
+    private static String utf8(ByteBuffer buffer) {
+        return Utils.utf8(buffer);
     }
 
     @Test

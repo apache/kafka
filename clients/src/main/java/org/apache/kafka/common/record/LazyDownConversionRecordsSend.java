@@ -55,7 +55,7 @@ public final class LazyDownConversionRecordsSend extends RecordsSend<LazyDownCon
                 ConvertedRecords<MemoryRecords> recordsAndStats = convertedRecordsIterator.next();
                 convertedRecords = recordsAndStats.records();
                 recordConversionStats.add(recordsAndStats.recordConversionStats());
-                log.debug("Got converted records for partition {} with length={}", topicPartition(), convertedRecords.sizeInBytes());
+                log.debug("Down-converted records for partition {} with length={}", topicPartition(), convertedRecords.sizeInBytes());
             } else {
                 // We do not have any records left to down-convert. Construct an overflow message for the length remaining.
                 // This message will be ignored by the consumer because its length will be past the length of maximum

@@ -431,7 +431,7 @@ public class FileRecordsTest {
     }
 
     private String utf8(ByteBuffer buffer) {
-        return Utils.utf8(buffer, buffer.remaining());
+        return Utils.utf8(buffer);
     }
 
     private void downConvertAndVerifyRecords(List<SimpleRecord> initialRecords,

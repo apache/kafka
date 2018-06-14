@@ -162,9 +162,13 @@ public class LazyDownConversionRecords implements BaseRecords {
                     sizeSoFar += currentBatch.sizeInBytes();
                     isFirstBatch = false;
                 }
-                ConvertedRecords records = RecordsUtil.downConvert(batches, toMagic, firstOffset, time);
-                if (records.records().sizeInBytes() > 0)
-                    return records;
+                ConvertedRecords convertedRecords = RecordsUtil.downConvert(batches, toMagic, firstOffset, time);
+                // During conversion, it is possible that we drop certain batches because they do not have an equivalent
+                // representation in the message format we want to convert to. For example, V0 and V1 message formats
+                // have no notion of transaction markers which were introduced in V2 so they get dropped during conversion.
+                // We return converted records only when we have at least one valid batch of messages after conversion.
+                if (convertedRecords.records().sizeInBytes() > 0)
+                    return convertedRecords;
             }
             return allDone();
         }
