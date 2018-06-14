@@ -22,16 +22,20 @@ import java.util.Arrays.asList
 import java.util.concurrent.{ExecutionException, TimeUnit}
 import java.io.File
 
+import kafka.admin.AdminClient.DeleteRecordsResult
 import org.apache.kafka.clients.admin.KafkaAdminClientTest
 import org.apache.kafka.common.utils.{Time, Utils}
 import kafka.integration.KafkaServerTestHarness
 import kafka.log.LogConfig
 import kafka.server.{Defaults, KafkaConfig, KafkaServer}
 import org.apache.kafka.clients.admin._
+//import kafka.admin.AdminClient
 import kafka.utils.{Logging, TestUtils, ZkUtils}
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.admin.NewTopic
-import org.apache.kafka.common.{KafkaFuture, TopicPartition, TopicPartitionReplica}
+import org.apache.kafka.clients.producer.KafkaProducer
+import org.apache.kafka.clients.producer.ProducerRecord
+import org.apache.kafka.common.{TopicPartition, KafkaFuture, TopicPartitionReplica}
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors._
@@ -49,7 +53,7 @@ import scala.collection.JavaConverters._
  *
  * Also see {@link org.apache.kafka.clients.admin.KafkaAdminClientTest} for a unit test of the admin client.
  */
-class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
+class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
 
   import AdminClientIntegrationTest._
 
@@ -71,8 +75,9 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
     super.tearDown()
   }
 
-  val brokerCount = 3
-  lazy val serverConfig = new Properties
+  val consumerCount: Int = 1
+  val producerCount: Int = 1
+  val serverCount: Int = 3
 
   def createConfig(): util.Map[String, Object] = {
     val config = new util.HashMap[String, Object]
@@ -170,7 +175,7 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
       assertEquals(3, partition.replicas.size)
       partition.replicas.asScala.foreach { replica =>
         assertTrue(replica.id >= 0)
-        assertTrue(replica.id < brokerCount)
+        assertTrue(replica.id < serverCount)
       }
       assertEquals("No duplicate replica ids", partition.replicas.size, partition.replicas.asScala.map(_.id).distinct.size)
 
@@ -224,10 +229,10 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
     val topic = "topic"
     val leaderByPartition = TestUtils.createTopic(zkUtils, topic, 10, 1, servers, new Properties())
     val partitionsByBroker = leaderByPartition.groupBy { case (partitionId, leaderId) => leaderId }.mapValues(_.keys.toSeq)
-    val brokers = (0 until brokerCount).map(Integer.valueOf)
+    val brokers = (0 until serverCount).map(Integer.valueOf)
     val logDirInfosByBroker = client.describeLogDirs(brokers.asJava).all.get
 
-    (0 until brokerCount).foreach { brokerId =>
+    (0 until serverCount).foreach { brokerId =>
       val server = servers.find(_.config.brokerId == brokerId).get
       val expectedPartitions = partitionsByBroker(brokerId)
       val logDirInfos = logDirInfosByBroker.get(brokerId)
@@ -281,7 +286,7 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
       }
     }
 
-    TestUtils.createTopic(zkUtils, topic, 1, brokerCount, servers, new Properties())
+    TestUtils.createTopic(zkUtils, topic, 1, serverCount, servers, new Properties())
     servers.foreach { server =>
       val logDir = server.logManager.getLog(tp).get.dir.getParent
       assertEquals(replicaAssignment(new TopicPartitionReplica(topic, 0, server.config.brokerId)), logDir)
@@ -623,6 +628,95 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
   }
 
   @Test
+  def testLogStartOffsetAfterDeleteRecords(): Unit = {
+    val topic = "test-topic"
+    val topicPartition = new TopicPartition(topic, 0)
+    TestUtils.createTopic(zkUtils, topic, numPartitions = 2, replicationFactor = serverCount, servers, new Properties)
+
+    sendRecords(producers.head, 10, topicPartition)
+    var adminClient: kafka.admin.AdminClient = null
+    val props = new Properties()
+    props.putAll(createConfig())
+
+    try {
+      adminClient = kafka.admin.AdminClient.create(props)
+
+      val deleteRecordsResult: Map[TopicPartition, DeleteRecordsResult]= adminClient.deleteRecordsBefore(Map(topicPartition -> 3L)).get()
+      val lowWatermark = deleteRecordsResult(topicPartition).lowWatermark
+      assertEquals(3L, lowWatermark)
+
+      for (i <- 0 until serverCount)
+        assertEquals(3, servers(i).replicaManager.getReplica(topicPartition).get.logStartOffset)
+    } finally {
+      adminClient.close()
+    }
+  }
+
+  @Test
+  def testReplicaCanFetchFromLogStartOffsetAfterDeleteRecords(): Unit = {
+    val topic = "test-topic"
+    val topicPartition = new TopicPartition(topic, 0)
+    val leaders = TestUtils.createTopic(zkUtils, topic, numPartitions = 1, replicationFactor = serverCount, servers, new Properties)
+    val followerIndex = if (leaders(0) != servers(0).config.brokerId) 0 else 1
+
+    def waitForFollowerLog(expectedStartOffset: Long, expectedEndOffset: Long): Unit = {
+      TestUtils.waitUntilTrue(() => servers(followerIndex).replicaManager.getReplica(topicPartition) != None,
+                              "Expected follower to create replica for partition")
+
+      // wait until the follower discovers that log start offset moved beyond its HW
+      TestUtils.waitUntilTrue(() => {
+        servers(followerIndex).replicaManager.getReplica(topicPartition).get.logStartOffset == expectedStartOffset
+      }, s"Expected follower to discover new log start offset $expectedStartOffset")
+
+      TestUtils.waitUntilTrue(() => {
+        servers(followerIndex).replicaManager.getReplica(topicPartition).get.logEndOffset.messageOffset == expectedEndOffset
+      }, s"Expected follower to catch up to log end offset $expectedEndOffset")
+    }
+
+    // we will produce to topic and delete records while one follower is down
+    killBroker(followerIndex)
+
+    sendRecords(producers.head, 100, topicPartition)
+
+    var adminClient: kafka.admin.AdminClient = null
+    val props = new Properties()
+    props.putAll(createConfig())
+    try {
+      adminClient = kafka.admin.AdminClient.create(props)
+      val deleteRecordsResult = adminClient.deleteRecordsBefore(Map(topicPartition -> 3L)).get()
+
+      // start the stopped broker to verify that it will be able to fetch from new log start offset
+      restartDeadBrokers()
+
+      waitForFollowerLog(expectedStartOffset = 3L, expectedEndOffset = 100L)
+
+      // after the new replica caught up, all replicas should have same log start offset
+      for (i <- 0 until serverCount)
+        assertEquals(3, servers(i).replicaManager.getReplica(topicPartition).get.logStartOffset)
+
+      // kill the same follower again, produce more records, and delete records beyond follower's LOE
+      killBroker(followerIndex)
+      sendRecords(producers.head, 100, topicPartition)
+      val result1 = adminClient.deleteRecordsBefore(Map(topicPartition -> 117L)).get()
+      restartDeadBrokers()
+      waitForFollowerLog(expectedStartOffset = 117L, expectedEndOffset = 200L)
+    } finally {
+      adminClient.close()
+    }
+  }
+
+  private def sendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]],
+                          numRecords: Int,
+                          topicPartition: TopicPartition): Unit = {
+    val futures = (0 until numRecords).map( i => {
+      val record = new ProducerRecord(topicPartition.topic, topicPartition.partition, s"$i".getBytes, s"$i".getBytes)
+      debug(s"Sending this record: $record")
+      producer.send(record)
+    })
+
+    futures.foreach(_.get)
+  }
+
   def testInvalidAlterConfigs(): Unit = {
     client = AdminClient.create(createConfig)
     checkInvalidAlterConfigs(zkUtils, servers, client)
@@ -701,7 +795,7 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
   }
 
   override def generateConfigs = {
-    val cfgs = TestUtils.createBrokerConfigs(brokerCount, zkConnect, interBrokerSecurityProtocol = Some(securityProtocol),
+    val cfgs = TestUtils.createBrokerConfigs(serverCount, zkConnect, interBrokerSecurityProtocol = Some(securityProtocol),
       trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties, logDirCount = 2)
     cfgs.foreach { config =>
       config.setProperty(KafkaConfig.ListenersProp, s"${listenerName.value}://localhost:${TestUtils.RandomPort}")
