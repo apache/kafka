@@ -103,7 +103,7 @@ class ReplicaAlterLogDirsThread(name: String,
         topicPartition, fetchOffset, futureReplica.logEndOffset.messageOffset))
 
     // Append the leader's messages to the log
-    partition.appendRecordsToFutureReplica(records)
+    partition.appendRecordsToFollowerOrFutureReplica(records, isFuture = true)
     futureReplica.highWatermark = new LogOffsetMetadata(partitionData.highWatermark)
     futureReplica.maybeIncrementLogStartOffset(partitionData.logStartOffset)
 
