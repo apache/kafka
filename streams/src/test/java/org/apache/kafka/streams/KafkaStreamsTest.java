@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams;
 
-import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.common.Cluster;
@@ -245,12 +244,7 @@ public class KafkaStreamsTest {
         props.setProperty(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, NUM_THREADS);
 
-        // We want to configure request.timeout.ms, but it must be larger than a
-        // few other configs.
-        props.put(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, 200);
-        props.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 200);
-        props.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 201);
-        props.put(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG, 202);
+        props.put(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, 200);
 
         final StreamsBuilder builder = new StreamsBuilder();
         // make sure we have the global state thread running too

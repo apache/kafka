@@ -100,6 +100,7 @@ public class ConsumerCoordinatorTest {
     private int heartbeatIntervalMs = 5000;
     private long retryBackoffMs = 100;
     private int autoCommitIntervalMs = 2000;
+    private int requestTimeoutMs = 30000;
     private MockPartitionAssignor partitionAssignor = new MockPartitionAssignor();
     private List<PartitionAssignor> assignors = Collections.<PartitionAssignor>singletonList(partitionAssignor);
     private MockTime time;
@@ -126,7 +127,8 @@ public class ConsumerCoordinatorTest {
         this.metadata = new Metadata(0, Long.MAX_VALUE, true);
         this.metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
         this.client = new MockClient(time, metadata);
-        this.consumerClient = new ConsumerNetworkClient(new LogContext(), client, metadata, time, 100, 1000, Integer.MAX_VALUE);
+        this.consumerClient = new ConsumerNetworkClient(new LogContext(), client, metadata, time, 100,
+                requestTimeoutMs, Integer.MAX_VALUE);
         this.metrics = new Metrics(time);
         this.rebalanceListener = new MockRebalanceListener();
         this.mockOffsetCommitCallback = new MockCommitCallback();
@@ -566,7 +568,7 @@ public class ConsumerCoordinatorTest {
             }
         }, syncGroupResponse(singletonList(t1p), Errors.NONE));
 
-        coordinator.joinGroupIfNeeded(Long.MAX_VALUE);
+        coordinator.joinGroupIfNeeded(Long.MAX_VALUE, time.milliseconds());
 
         assertFalse(coordinator.rejoinNeededOrPending());
         assertEquals(singleton(t1p), subscriptions.assignedPartitions());
@@ -603,9 +605,9 @@ public class ConsumerCoordinatorTest {
             }
         }, syncGroupResponse(Arrays.asList(t1p, t2p), Errors.NONE));
         // expect client to force updating the metadata, if yes gives it both topics
-        client.prepareMetadataUpdate(cluster, Collections.<String>emptySet());
+        client.prepareMetadataUpdate(cluster, Collections.emptySet());
 
-        coordinator.joinGroupIfNeeded(Long.MAX_VALUE);
+        coordinator.joinGroupIfNeeded(Long.MAX_VALUE, time.milliseconds());
 
         assertFalse(coordinator.rejoinNeededOrPending());
         assertEquals(2, subscriptions.assignedPartitions().size());
@@ -671,8 +673,8 @@ public class ConsumerCoordinatorTest {
 
         // join initially, but let coordinator rebalance on sync
         client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE));
-        client.prepareResponse(syncGroupResponse(Collections.<TopicPartition>emptyList(), Errors.UNKNOWN_SERVER_ERROR));
-        coordinator.joinGroupIfNeeded(Long.MAX_VALUE);
+        client.prepareResponse(syncGroupResponse(Collections.emptyList(), Errors.UNKNOWN_SERVER_ERROR));
+        coordinator.joinGroupIfNeeded(Long.MAX_VALUE, time.milliseconds());
     }
 
     @Test
@@ -698,7 +700,7 @@ public class ConsumerCoordinatorTest {
         }, joinGroupFollowerResponse(2, consumerId, "leader", Errors.NONE));
         client.prepareResponse(syncGroupResponse(singletonList(t1p), Errors.NONE));
 
-        coordinator.joinGroupIfNeeded(Long.MAX_VALUE);
+        coordinator.joinGroupIfNeeded(Long.MAX_VALUE, time.milliseconds());
 
         assertFalse(coordinator.rejoinNeededOrPending());
         assertEquals(singleton(t1p), subscriptions.assignedPartitions());
@@ -721,7 +723,7 @@ public class ConsumerCoordinatorTest {
         client.prepareResponse(joinGroupFollowerResponse(2, consumerId, "leader", Errors.NONE));
         client.prepareResponse(syncGroupResponse(singletonList(t1p), Errors.NONE));
 
-        coordinator.joinGroupIfNeeded(Long.MAX_VALUE);
+        coordinator.joinGroupIfNeeded(Long.MAX_VALUE, time.milliseconds());
 
         assertFalse(coordinator.rejoinNeededOrPending());
         assertEquals(singleton(t1p), subscriptions.assignedPartitions());
@@ -750,7 +752,7 @@ public class ConsumerCoordinatorTest {
         }, joinGroupFollowerResponse(2, consumerId, "leader", Errors.NONE));
         client.prepareResponse(syncGroupResponse(singletonList(t1p), Errors.NONE));
 
-        coordinator.joinGroupIfNeeded(Long.MAX_VALUE);
+        coordinator.joinGroupIfNeeded(Long.MAX_VALUE, time.milliseconds());
 
         assertFalse(coordinator.rejoinNeededOrPending());
         assertEquals(singleton(t1p), subscriptions.assignedPartitions());
@@ -937,7 +939,7 @@ public class ConsumerCoordinatorTest {
         subscriptions.subscribe(new HashSet<>(Arrays.asList(topic1, otherTopic)), rebalanceListener);
         client.prepareResponse(joinGroupFollowerResponse(2, "consumer", "leader", Errors.NONE));
         client.prepareResponse(syncGroupResponse(singletonList(t1p), Errors.NONE));
-        coordinator.joinGroupIfNeeded(Long.MAX_VALUE);
+        coordinator.joinGroupIfNeeded(Long.MAX_VALUE, time.milliseconds());
 
         assertEquals(2, rebalanceListener.revokedCount);
         assertEquals(singleton(t1p), rebalanceListener.revoked);
@@ -957,7 +959,7 @@ public class ConsumerCoordinatorTest {
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         client.prepareResponse(joinGroupFollowerResponse(1, "consumer", "leader", Errors.NONE));
         client.prepareResponse(syncGroupResponse(singletonList(t1p), Errors.NONE));
-        coordinator.joinGroupIfNeeded(Long.MAX_VALUE);
+        coordinator.joinGroupIfNeeded(Long.MAX_VALUE, time.milliseconds());
 
         assertFalse(coordinator.rejoinNeededOrPending());
         assertEquals(singleton(t1p), subscriptions.assignedPartitions());
@@ -975,7 +977,7 @@ public class ConsumerCoordinatorTest {
 
         // coordinator doesn't like the session timeout
         client.prepareResponse(joinGroupFollowerResponse(0, "consumer", "", Errors.INVALID_SESSION_TIMEOUT));
-        coordinator.joinGroupIfNeeded(Long.MAX_VALUE);
+        coordinator.joinGroupIfNeeded(Long.MAX_VALUE, time.milliseconds());
     }
 
     @Test
@@ -1132,7 +1134,7 @@ public class ConsumerCoordinatorTest {
 
         client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE));
         client.prepareResponse(syncGroupResponse(singletonList(t1p), Errors.NONE));
-        coordinator.joinGroupIfNeeded(Long.MAX_VALUE);
+        coordinator.joinGroupIfNeeded(Long.MAX_VALUE, time.milliseconds());
 
         subscriptions.seek(t1p, 100);
 
@@ -1630,14 +1632,14 @@ public class ConsumerCoordinatorTest {
         ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(false, true, true);
         makeCoordinatorUnknown(coordinator, Errors.NOT_COORDINATOR);
         time.sleep(autoCommitIntervalMs);
-        closeVerifyTimeout(coordinator, 1000, 60000, 1000, 1000);
+        closeVerifyTimeout(coordinator, 1000, 1000, 1000);
     }
 
     @Test
     public void testCloseCoordinatorNotKnownNoCommits() throws Exception {
         ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, false, true);
         makeCoordinatorUnknown(coordinator, Errors.NOT_COORDINATOR);
-        closeVerifyTimeout(coordinator, 1000, 60000, 0, 0);
+        closeVerifyTimeout(coordinator, 1000, 0, 0);
     }
 
     @Test
@@ -1645,14 +1647,14 @@ public class ConsumerCoordinatorTest {
         ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, true, true);
         makeCoordinatorUnknown(coordinator, Errors.NOT_COORDINATOR);
         time.sleep(autoCommitIntervalMs);
-        closeVerifyTimeout(coordinator, 1000, 60000, 1000, 1000);
+        closeVerifyTimeout(coordinator, 1000, 1000, 1000);
     }
 
     @Test
     public void testCloseCoordinatorUnavailableNoCommits() throws Exception {
         ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, false, true);
         makeCoordinatorUnknown(coordinator, Errors.COORDINATOR_NOT_AVAILABLE);
-        closeVerifyTimeout(coordinator, 1000, 60000, 0, 0);
+        closeVerifyTimeout(coordinator, 1000, 0, 0);
     }
 
     @Test
@@ -1660,7 +1662,7 @@ public class ConsumerCoordinatorTest {
         ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, true, true);
         makeCoordinatorUnknown(coordinator, Errors.COORDINATOR_NOT_AVAILABLE);
         time.sleep(autoCommitIntervalMs);
-        closeVerifyTimeout(coordinator, 1000, 60000, 1000, 1000);
+        closeVerifyTimeout(coordinator, 1000, 1000, 1000);
     }
 
     @Test
@@ -1668,27 +1670,27 @@ public class ConsumerCoordinatorTest {
         ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, true, true);
         makeCoordinatorUnknown(coordinator, Errors.COORDINATOR_NOT_AVAILABLE);
         time.sleep(autoCommitIntervalMs);
-        closeVerifyTimeout(coordinator, Long.MAX_VALUE, 60000, 60000, 60000);
+        closeVerifyTimeout(coordinator, Long.MAX_VALUE, requestTimeoutMs, requestTimeoutMs);
     }
 
     @Test
     public void testCloseNoResponseForCommit() throws Exception {
         ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, true, true);
         time.sleep(autoCommitIntervalMs);
-        closeVerifyTimeout(coordinator, Long.MAX_VALUE, 60000, 60000, 60000);
+        closeVerifyTimeout(coordinator, Long.MAX_VALUE, requestTimeoutMs, requestTimeoutMs);
     }
 
     @Test
     public void testCloseNoResponseForLeaveGroup() throws Exception {
         ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, false, true);
-        closeVerifyTimeout(coordinator, Long.MAX_VALUE, 60000, 60000, 60000);
+        closeVerifyTimeout(coordinator, Long.MAX_VALUE, requestTimeoutMs, requestTimeoutMs);
     }
 
     @Test
     public void testCloseNoWait() throws Exception {
         ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, true, true);
         time.sleep(autoCommitIntervalMs);
-        closeVerifyTimeout(coordinator, 0, 60000, 0, 0);
+        closeVerifyTimeout(coordinator, 0, 0, 0);
     }
 
     @Test
@@ -1698,7 +1700,7 @@ public class ConsumerCoordinatorTest {
         coordinator.ensureActiveGroup();
         time.sleep(heartbeatIntervalMs + 100);
         Thread.yield(); // Give heartbeat thread a chance to attempt heartbeat
-        closeVerifyTimeout(coordinator, Long.MAX_VALUE, 60000, 60000, 60000);
+        closeVerifyTimeout(coordinator, Long.MAX_VALUE, requestTimeoutMs, requestTimeoutMs);
         Thread[] threads = new Thread[Thread.activeCount()];
         int threadCount = Thread.enumerate(threads);
         for (int i = 0; i < threadCount; i++)
@@ -1736,7 +1738,7 @@ public class ConsumerCoordinatorTest {
             subscriptions.subscribe(singleton(topic1), rebalanceListener);
             client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE));
             client.prepareResponse(syncGroupResponse(singletonList(t1p), Errors.NONE));
-            coordinator.joinGroupIfNeeded(Long.MAX_VALUE);
+            coordinator.joinGroupIfNeeded(Long.MAX_VALUE, time.milliseconds());
         } else
             subscriptions.assignFromUser(singleton(t1p));
 
@@ -1754,9 +1756,11 @@ public class ConsumerCoordinatorTest {
         consumerClient.poll(0);
         assertTrue(coordinator.coordinatorUnknown());
     }
+
     private void closeVerifyTimeout(final ConsumerCoordinator coordinator,
-            final long closeTimeoutMs, final long requestTimeoutMs,
-            long expectedMinTimeMs, long expectedMaxTimeMs) throws Exception {
+                                    final long closeTimeoutMs,
+                                    final long expectedMinTimeMs,
+                                    final long expectedMaxTimeMs) throws Exception {
         ExecutorService executor = Executors.newSingleThreadExecutor();
         try {
             boolean coordinatorUnknown = coordinator.coordinatorUnknown();
@@ -1903,7 +1907,7 @@ public class ConsumerCoordinatorTest {
         coordinator.ensureCoordinatorReady(Long.MAX_VALUE);
         client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE));
         client.prepareResponse(syncGroupResponse(assignment, Errors.NONE));
-        coordinator.joinGroupIfNeeded(Long.MAX_VALUE);
+        coordinator.joinGroupIfNeeded(Long.MAX_VALUE, time.milliseconds());
     }
 
     private void prepareOffsetCommitRequest(Map<TopicPartition, Long> expectedOffsets, Errors error) {

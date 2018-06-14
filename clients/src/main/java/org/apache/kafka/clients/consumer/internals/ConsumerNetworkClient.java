@@ -62,7 +62,7 @@ public class ConsumerNetworkClient implements Closeable {
     private final Time time;
     private final long retryBackoffMs;
     private final int maxPollTimeoutMs;
-    private final long unsentExpiryMs;
+    private final int requestTimeoutMs;
     private final AtomicBoolean wakeupDisabled = new AtomicBoolean();
 
     // We do not need high throughput, so use a fair lock to try to avoid starvation
@@ -83,7 +83,7 @@ public class ConsumerNetworkClient implements Closeable {
                                  Metadata metadata,
                                  Time time,
                                  long retryBackoffMs,
-                                 long requestTimeoutMs,
+                                 int requestTimeoutMs,
                                  int maxPollTimeoutMs) {
         this.log = logContext.logger(ConsumerNetworkClient.class);
         this.client = client;
@@ -91,7 +91,15 @@ public class ConsumerNetworkClient implements Closeable {
         this.time = time;
         this.retryBackoffMs = retryBackoffMs;
         this.maxPollTimeoutMs = Math.min(maxPollTimeoutMs, MAX_POLL_TIMEOUT_MS);
-        this.unsentExpiryMs = requestTimeoutMs;
+        this.requestTimeoutMs = requestTimeoutMs;
+    }
+
+
+    /**
+     * Send a request with the default timeout. See {@link #send(Node, AbstractRequest.Builder, int)}.
+     */
+    public RequestFuture<ClientResponse> send(Node node, AbstractRequest.Builder<?> requestBuilder) {
+        return send(node, requestBuilder, requestTimeoutMs);
     }
 
     /**
@@ -104,13 +112,18 @@ public class ConsumerNetworkClient implements Closeable {
      *
      * @param node The destination of the request
      * @param requestBuilder A builder for the request payload
+     * @param requestTimeoutMs Maximum time in milliseconds to await a response before disconnecting the socket and
+     *                         cancelling the request. The request may be cancelled sooner if the socket disconnects
+     *                         for any reason.
      * @return A future which indicates the result of the send.
      */
-    public RequestFuture<ClientResponse> send(Node node, AbstractRequest.Builder<?> requestBuilder) {
+    public RequestFuture<ClientResponse> send(Node node,
+                                              AbstractRequest.Builder<?> requestBuilder,
+                                              int requestTimeoutMs) {
         long now = time.milliseconds();
         RequestFutureCompletionHandler completionHandler = new RequestFutureCompletionHandler();
         ClientRequest clientRequest = client.newClientRequest(node.idString(), requestBuilder, now, true,
-                completionHandler);
+                requestTimeoutMs, completionHandler);
         unsent.put(node, clientRequest);
 
         // wakeup the client in case it is blocking in poll so that we can send the queued request
@@ -134,13 +147,6 @@ public class ConsumerNetworkClient implements Closeable {
         } finally {
             lock.unlock();
         }
-    }
-
-    /**
-     * Block until the metadata has been refreshed.
-     */
-    public void awaitMetadataUpdate() {
-        awaitMetadataUpdate(Long.MAX_VALUE);
     }
 
     /**
@@ -444,10 +450,10 @@ public class ConsumerNetworkClient implements Closeable {
 
     private void failExpiredRequests(long now) {
         // clear all expired unsent requests and fail their corresponding futures
-        Collection<ClientRequest> expiredRequests = unsent.removeExpiredRequests(now, unsentExpiryMs);
+        Collection<ClientRequest> expiredRequests = unsent.removeExpiredRequests(now);
         for (ClientRequest request : expiredRequests) {
             RequestFutureCompletionHandler handler = (RequestFutureCompletionHandler) request.callback();
-            handler.onFailure(new TimeoutException("Failed to send request after " + unsentExpiryMs + " ms."));
+            handler.onFailure(new TimeoutException("Failed to send request after " + request.requestTimeoutMs() + " ms."));
         }
     }
 
@@ -655,13 +661,14 @@ public class ConsumerNetworkClient implements Closeable {
             return false;
         }
 
-        public Collection<ClientRequest> removeExpiredRequests(long now, long unsentExpiryMs) {
+        private Collection<ClientRequest> removeExpiredRequests(long now) {
             List<ClientRequest> expiredRequests = new ArrayList<>();
             for (ConcurrentLinkedQueue<ClientRequest> requests : unsent.values()) {
                 Iterator<ClientRequest> requestIterator = requests.iterator();
                 while (requestIterator.hasNext()) {
                     ClientRequest request = requestIterator.next();
-                    if (request.createdTimeMs() < now - unsentExpiryMs) {
+                    long elapsedMs = Math.max(0, now - request.createdTimeMs());
+                    if (elapsedMs > request.requestTimeoutMs()) {
                         expiredRequests.add(request);
                         requestIterator.remove();
                     } else

@@ -14,16 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package unit.kafka.admin
+package kafka.admin
 
 import joptsimple.OptionException
-import kafka.admin.ConsumerGroupCommandTest
 import kafka.utils.TestUtils
 import org.apache.kafka.common.protocol.Errors
 import org.junit.Assert._
 import org.junit.Test
 
-class DeleteConsumerGroupTest extends ConsumerGroupCommandTest {
+class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
 
   @Test(expected = classOf[OptionException])
   def testDeleteWithTopicOption() {

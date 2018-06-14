@@ -1747,7 +1747,8 @@ public class KafkaConsumerTest {
         String groupId = "mock-group";
         String metricGroupPrefix = "consumer";
         long retryBackoffMs = 100;
-        long requestTimeoutMs = 30000;
+        int requestTimeoutMs = 30000;
+        int defaultApiTimeoutMs = 30000;
         boolean excludeInternalTopics = true;
         int minBytes = 1;
         int maxBytes = Integer.MAX_VALUE;
@@ -1761,7 +1762,7 @@ public class KafkaConsumerTest {
         Deserializer<String> valueDeserializer = new StringDeserializer();
 
         List<PartitionAssignor> assignors = singletonList(assignor);
-        ConsumerInterceptors<String, String> interceptors = new ConsumerInterceptors<>(Collections.<ConsumerInterceptor<String, String>>emptyList());
+        ConsumerInterceptors<String, String> interceptors = new ConsumerInterceptors<>(Collections.emptyList());
 
         Metrics metrics = new Metrics();
         ConsumerMetrics metricsRegistry = new ConsumerMetrics(metricGroupPrefix);
@@ -1825,6 +1826,7 @@ public class KafkaConsumerTest {
                 metadata,
                 retryBackoffMs,
                 requestTimeoutMs,
+                defaultApiTimeoutMs,
                 assignors);
     }
 
