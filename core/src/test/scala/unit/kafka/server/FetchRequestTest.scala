@@ -69,7 +69,7 @@ class FetchRequestTest extends BaseRequestTest {
   }
 
   private def initProducer(): Unit = {
-    producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers),
+    producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
       retries = 5, keySerializer = new StringSerializer, valueSerializer = new StringSerializer)
   }
 
@@ -203,7 +203,7 @@ class FetchRequestTest extends BaseRequestTest {
     val batchSize = 4 * msgValueLen
     val propsOverride = new Properties
     propsOverride.put(ProducerConfig.BATCH_SIZE_CONFIG, batchSize.toString)
-    val producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers),
+    val producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
       retries = 5, lingerMs = Long.MaxValue,
       keySerializer = new StringSerializer, valueSerializer = new ByteArraySerializer, props = Some(propsOverride))
     val bytes = new Array[Byte](msgValueLen)
@@ -261,7 +261,7 @@ class FetchRequestTest extends BaseRequestTest {
   @Test
   def testDownConversionFromBatchedToUnbatchedRespectsOffset(): Unit = {
     // Increase linger so that we have control over the batches created
-    producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers),
+    producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
       retries = 5, keySerializer = new StringSerializer, valueSerializer = new StringSerializer,
       lingerMs = 300 * 1000)
 

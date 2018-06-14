@@ -44,7 +44,6 @@ class ConsoleConsumerTest(Test):
         self.zk.start()
 
     @cluster(num_nodes=3)
-    @parametrize(security_protocol='PLAINTEXT', new_consumer=False)
     @matrix(security_protocol=['PLAINTEXT', 'SSL'])
     @cluster(num_nodes=4)
     @matrix(security_protocol=['SASL_SSL'], sasl_mechanism=['PLAIN', 'SCRAM-SHA-256', 'SCRAM-SHA-512'])
@@ -58,7 +57,6 @@ class ConsoleConsumerTest(Test):
         self.kafka.start()
 
         self.consumer.security_protocol = security_protocol
-        self.consumer.new_consumer = new_consumer
 
         t0 = time.time()
         self.consumer.start()

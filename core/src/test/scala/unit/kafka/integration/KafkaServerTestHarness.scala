@@ -31,6 +31,7 @@ import scala.collection.mutable.{ArrayBuffer, Buffer}
 import java.util.Properties
 
 import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.utils.Time
 
 /**
  * A test harness that brings up some number of broker nodes
@@ -82,6 +83,7 @@ abstract class KafkaServerTestHarness extends ZooKeeperTestHarness {
   protected def trustStoreFile: Option[File] = None
   protected def serverSaslProperties: Option[Properties] = None
   protected def clientSaslProperties: Option[Properties] = None
+  protected def brokerTime(brokerId: Int): Time = Time.SYSTEM
 
   @Before
   override def setUp() {
@@ -96,7 +98,7 @@ abstract class KafkaServerTestHarness extends ZooKeeperTestHarness {
     // Add each broker to `servers` buffer as soon as it is created to ensure that brokers
     // are shutdown cleanly in tearDown even if a subsequent broker fails to start
     for (config <- configs)
-      servers += TestUtils.createServer(config)
+      servers += TestUtils.createServer(config, time = brokerTime(config.brokerId))
     brokerList = TestUtils.bootstrapServers(servers, listenerName)
     alive = new Array[Boolean](servers.length)
     Arrays.fill(alive, true)

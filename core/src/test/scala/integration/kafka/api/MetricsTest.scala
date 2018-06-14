@@ -119,7 +119,7 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
     saslProps.put(SaslConfigs.SASL_MECHANISM, "SCRAM-SHA-256")
     // Use acks=0 to verify error metric when connection is closed without a response
     saslProps.put(ProducerConfig.ACKS_CONFIG, "0")
-    val producer = TestUtils.createNewProducer(brokerList, securityProtocol = securityProtocol,
+    val producer = TestUtils.createProducer(brokerList, securityProtocol = securityProtocol,
         trustStoreFile = trustStoreFile, saslProperties = Some(saslProps), props = Some(producerProps))
 
     try {

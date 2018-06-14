@@ -65,7 +65,7 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
   def updateProducer() = {
     if (producer != null)
       producer.close()
-    producer = TestUtils.createNewProducer(
+    producer = TestUtils.createProducer(
       TestUtils.getBrokerListStrFromServers(servers),
       retries = 5,
       keySerializer = new IntegerSerializer,

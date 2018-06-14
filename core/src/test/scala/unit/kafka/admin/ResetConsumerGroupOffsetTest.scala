@@ -92,7 +92,7 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
   }
 
   @Test
-  def testResetOffsetsNewConsumerExistingTopic(): Unit = {
+  def testResetOffsetsExistingTopic(): Unit = {
     val args = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", "new.group", "--topic", topic,
       "--to-offset", "50")
     produceMessages(topic, 100)
