@@ -542,39 +542,25 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testGetAclsForWildcardPrincipalDoesNotReturnAclsOnSpecificPrincipal(): Unit = {
-    val acl1 = new Acl(principal, Allow, WildCardHost, Write)
-    simpleAclAuthorizer.addAcls(Set[Acl](acl1), resource)
-    assertEquals(0, simpleAclAuthorizer.getAcls(Acl.WildCardPrincipal).size)
-  }
+  def testGetAclsPrincipal(): Unit = {
+    val aclOnSpecificPrincipal = new Acl(principal, Allow, WildCardHost, Write)
+    simpleAclAuthorizer.addAcls(Set[Acl](aclOnSpecificPrincipal), resource)
 
-  @Test
-  def testGetAclsForSpecificPrincipalDoesReturnAclsOnSpecificPrincipal(): Unit = {
-    val acl1 = new Acl(principal, Allow, WildCardHost, Write)
-    simpleAclAuthorizer.addAcls(Set[Acl](acl1), resource)
-    assertEquals(1, simpleAclAuthorizer.getAcls(principal).size)
-  }
+    assertEquals("acl on specific should not be returned for wildcard request",
+      0, simpleAclAuthorizer.getAcls(Acl.WildCardPrincipal).size)
+    assertEquals("acl on specific should be returned for specific request",
+      1, simpleAclAuthorizer.getAcls(principal).size)
+    assertEquals("acl on specific should be returned for different principal instance",
+      1, simpleAclAuthorizer.getAcls(new KafkaPrincipal(principal.getPrincipalType, principal.getName)).size)
 
-  @Test
-  def testGetAclsForPrincipalWorksForEqualPrincipalButDifferentInstance(): Unit = {
-    val principalCone = new KafkaPrincipal(principal.getPrincipalType, principal.getName)
-    val acl1 = new Acl(principal, Allow, WildCardHost, Write)
-    simpleAclAuthorizer.addAcls(Set[Acl](acl1), resource)
-    assertEquals(1, simpleAclAuthorizer.getAcls(principalCone).size)
-  }
+    simpleAclAuthorizer.removeAcls(resource)
+    val aclOnWildcardPrincipal = new Acl(Acl.WildCardPrincipal, Allow, WildCardHost, Write)
+    simpleAclAuthorizer.addAcls(Set[Acl](aclOnWildcardPrincipal), resource)
 
-  @Test
-  def testGetAclsForSpecificPrincipalDoesNotReturnAclsOnWildcardPrincipal(): Unit = {
-    val wildcardAcl = new Acl(Acl.WildCardPrincipal, Allow, WildCardHost, Write)
-    simpleAclAuthorizer.addAcls(Set[Acl](wildcardAcl), resource)
-    assertEquals(0, simpleAclAuthorizer.getAcls(principal).size)
-  }
-
-  @Test
-  def testGetAclsForWildcaradPrincipalDoesReturnAclsOnWildcardPrincipal(): Unit = {
-    val wildcardAcl = new Acl(Acl.WildCardPrincipal, Allow, WildCardHost, Write)
-    simpleAclAuthorizer.addAcls(Set[Acl](wildcardAcl), resource)
-    assertEquals(1, simpleAclAuthorizer.getAcls(Acl.WildCardPrincipal).size)
+    assertEquals("acl on wildcard should be returned for wildcard request",
+      1, simpleAclAuthorizer.getAcls(Acl.WildCardPrincipal).size)
+    assertEquals("acl on wildcard should not be returned for specific request",
+      0, simpleAclAuthorizer.getAcls(principal).size)
   }
 
   @Test(expected = classOf[UnsupportedVersionException])
