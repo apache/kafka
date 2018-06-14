@@ -25,13 +25,12 @@ import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.NewPartitions
 import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
 import org.apache.kafka.common.config.ConfigResource
-import org.apache.kafka.common.resource.{ResourcePattern, ResourcePatternFilter, ResourceType => AdminResourceType}
+import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourcePatternFilter, ResourceType => AdminResourceType}
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.metrics.{KafkaMetric, Quota, Sensor}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.protocol.types.Struct
-import org.apache.kafka.common.resource.ResourceNameType
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.CreateAclsRequest.AclCreation
 import org.apache.kafka.common.requests._
@@ -314,12 +313,12 @@ class RequestQuotaTest extends BaseRequestTest {
 
         case ApiKeys.CREATE_ACLS =>
           new CreateAclsRequest.Builder(Collections.singletonList(new AclCreation(new AclBinding(
-            new ResourcePattern(AdminResourceType.TOPIC, "mytopic", ResourceNameType.LITERAL),
+            new ResourcePattern(AdminResourceType.TOPIC, "mytopic", PatternType.LITERAL),
             new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.WRITE, AclPermissionType.DENY)))))
 
         case ApiKeys.DELETE_ACLS =>
           new DeleteAclsRequest.Builder(Collections.singletonList(new AclBindingFilter(
-            new ResourcePatternFilter(AdminResourceType.TOPIC, null, ResourceNameType.LITERAL),
+            new ResourcePatternFilter(AdminResourceType.TOPIC, null, PatternType.LITERAL),
             new AccessControlEntryFilter("User:ANONYMOUS", "*", AclOperation.ANY, AclPermissionType.DENY))))
 
         case ApiKeys.DESCRIBE_CONFIGS =>

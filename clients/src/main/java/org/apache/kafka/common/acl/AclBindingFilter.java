@@ -18,8 +18,8 @@
 package org.apache.kafka.common.acl;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourceFilter;
-import org.apache.kafka.common.resource.ResourceNameType;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
 
 import java.util.Objects;
@@ -59,7 +59,7 @@ public class AclBindingFilter {
      */
     @Deprecated
     public AclBindingFilter(ResourceFilter resourceFilter, AccessControlEntryFilter entryFilter) {
-        this(new ResourcePatternFilter(resourceFilter.resourceType(), resourceFilter.name(), ResourceNameType.LITERAL), entryFilter);
+        this(new ResourcePatternFilter(resourceFilter.resourceType(), resourceFilter.name(), PatternType.LITERAL), entryFilter);
     }
 
     /**
