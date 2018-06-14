@@ -332,7 +332,6 @@ class MetadataRequestTest extends BaseRequestTest {
 
       // Assert that metadata is propagated correctly
       servers.filter(_.brokerState.currentState != NotRunning.state).foreach { broker =>
-        println(s"broker ${broker.brokerState}")
         TestUtils.waitUntilTrue(() => {
           val metadataResponse = sendMetadataRequest(MetadataRequest.Builder.allTopics.build,
             Some(brokerSocketServer(broker.config.brokerId)))
