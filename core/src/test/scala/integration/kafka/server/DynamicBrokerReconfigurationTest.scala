@@ -37,7 +37,7 @@ import kafka.message.ProducerCompressionCodec
 import kafka.network.{Processor, RequestChannel}
 import kafka.utils._
 import kafka.utils.Implicits._
-import kafka.zk.ZooKeeperTestHarness
+import kafka.zk.{ConfigEntityChangeNotificationZNode, ZooKeeperTestHarness}
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.ConfigEntry.{ConfigSource, ConfigSynonym}
 import org.apache.kafka.clients.admin._
@@ -1160,6 +1160,14 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
   }
 
   private def listenerPrefix(name: String): String = new ListenerName(name).configPrefix
+
+  private def configureDynamicKeystoreInZooKeeper(kafkaConfig: KafkaConfig, brokers: Seq[Int], sslProperties: Properties): Unit = {
+    val sslStoreProps = new Properties
+    sslStoreProps ++= securityProps(sslProperties, KEYSTORE_PROPS, listenerPrefix(SecureExternal))
+    val persistentProps = kafkaConfig.dynamicConfig.toPersistentProps(sslStoreProps, perBrokerConfig = true)
+    zkClient.makeSurePersistentPathExists(ConfigEntityChangeNotificationZNode.path)
+    adminZkClient.changeBrokerConfig(brokers, persistentProps)
+  }
 
   private def waitForConfig(propName: String, propValue: String, maxWaitMs: Long = 10000): Unit = {
     servers.foreach { server => waitForConfigOnServer(server, propName, propValue, maxWaitMs) }
