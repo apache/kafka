@@ -50,12 +50,12 @@ object GetOffsetShell {
                            .describedAs("timestamp/-1(latest)/-2(earliest)")
                            .ofType(classOf[java.lang.Long])
                            .defaultsTo(-1L)
-    val nOffsetsOpt = parser.accepts("offsets", "DEPRECATED AND IGNORED: number of offsets returned")
+    parser.accepts("offsets", "DEPRECATED AND IGNORED: number of offsets returned")
                            .withRequiredArg
                            .describedAs("count")
                            .ofType(classOf[java.lang.Integer])
                            .defaultsTo(1)
-    val maxWaitMsOpt = parser.accepts("max-wait-ms", "DEPRECATED AND IGNORED: The max amount of time each fetch request waits.")
+    parser.accepts("max-wait-ms", "DEPRECATED AND IGNORED: The max amount of time each fetch request waits.")
                            .withRequiredArg
                            .describedAs("ms")
                            .ofType(classOf[java.lang.Integer])
@@ -73,9 +73,7 @@ object GetOffsetShell {
     ToolsUtils.validatePortOrDie(parser, brokerList)
     val topic = options.valueOf(topicOpt)
     val partitionIdsRequested = options.valueOf(partitionOpt).split(",").map(_.toInt).toSet
-    val time = options.valueOf(timeOpt).longValue
-    options.valueOf(nOffsetsOpt).intValue
-    options.valueOf(maxWaitMsOpt).intValue()
+    val listOffsetsTimestamp = options.valueOf(timeOpt).longValue
 
     val config = new Properties
     config.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
@@ -109,11 +107,11 @@ object GetOffsetShell {
         Some(new TopicPartition(p.topic, p.partition))
     }
 
-    val partitionOffsets: collection.Map[TopicPartition, java.lang.Long] = time match {
+    val partitionOffsets: collection.Map[TopicPartition, java.lang.Long] = listOffsetsTimestamp match {
       case ListOffsetRequest.EARLIEST_TIMESTAMP => consumer.beginningOffsets(topicPartitions.asJava).asScala
       case ListOffsetRequest.LATEST_TIMESTAMP => consumer.endOffsets(topicPartitions.asJava).asScala
-      case timestamp =>
-        val timestampsToSearch = topicPartitions.map(tp => tp -> (timestamp: java.lang.Long)).toMap.asJava
+      case _ =>
+        val timestampsToSearch = topicPartitions.map(tp => tp -> (listOffsetsTimestamp: java.lang.Long)).toMap.asJava
         consumer.offsetsForTimes(timestampsToSearch).asScala.mapValues(_.offset)
     }
 
