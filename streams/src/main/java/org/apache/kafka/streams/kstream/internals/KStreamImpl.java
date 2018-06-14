@@ -157,7 +157,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         Objects.requireNonNull(mapper, "mapper can't be null");
 
         StatelessProcessorNode<K, V> selectKeyProcessorNode = internalSelectKey(mapper);
-        selectKeyProcessorNode.setTriggersRepartitioning(true);
+        selectKeyProcessorNode.keyChangingOperation(true);
         addGraphNode(selectKeyProcessorNode);
         return new KStreamImpl<>(builder, selectKeyProcessorNode.nodeName(), sourceNodes, true, selectKeyProcessorNode);
     }
@@ -430,7 +430,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                                                                   stateStoreNames,
                                                                                   null,
                                                                                   true);
-        transformNode.setTriggersRepartitioning(true);
+        transformNode.keyChangingOperation(true);
         addGraphNode(transformNode);
 
 

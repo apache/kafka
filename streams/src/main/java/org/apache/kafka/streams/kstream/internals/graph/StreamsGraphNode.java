@@ -30,7 +30,7 @@ public abstract class StreamsGraphNode {
     private LinkedHashSet<StreamsGraphNode> childNodes = new LinkedHashSet<>();
     private final String nodeName;
     private boolean repartitionRequired;
-    private boolean triggersRepartitioning;
+    private boolean keyChangingOperation;
     private Integer id;
     private InternalStreamsBuilder internalStreamsBuilder;
 
@@ -76,12 +76,12 @@ public abstract class StreamsGraphNode {
         return repartitionRequired;
     }
 
-    public boolean triggersRepartitioning() {
-        return triggersRepartitioning;
+    public boolean isKeyChangingOperation() {
+        return keyChangingOperation;
     }
 
-    public void setTriggersRepartitioning(final boolean triggersRepartitioning) {
-        this.triggersRepartitioning = triggersRepartitioning;
+    public void keyChangingOperation(final boolean keyChangingOperation) {
+        this.keyChangingOperation = keyChangingOperation;
     }
 
     public void setId(final int id) {
