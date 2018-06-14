@@ -617,15 +617,7 @@ public class KafkaProducerTest {
     }
 
     @Test
-    public void testInvalidTopicName() {
-
-        class SendCallback implements Callback {
-
-            public void onCompletion(RecordMetadata metadata, Exception exception) {
-                assertNull("RecordMetadata expected to be null", metadata);
-                assertTrue("Exception is not of type InvalidTopicException", exception instanceof InvalidTopicException);
-            }
-        }
+    public void testInvalidTopicName() throws Exception {
 
         Properties props = new Properties();
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
@@ -648,7 +640,6 @@ public class KafkaProducerTest {
         String topic = "topic 10";
         ProducerRecord<String, String> record = new ProducerRecord<>(topic, "HelloKafka");
 
-        // Set<String> invalidTopic = new Collections.<String>emptySet();
         Set<String> invalidTopic = new HashSet<String>();
         invalidTopic.add(topic);
         Cluster metaDataUpdateResponseCluster = new Cluster(cluster.clusterResource().clusterId(),
@@ -656,23 +647,19 @@ public class KafkaProducerTest {
                                                             new ArrayList<PartitionInfo>(0),
                                                             Collections.<String>emptySet(),
                                                             invalidTopic,
-                                                            Collections.<String>emptySet(),
+                                                            cluster.internalTopics(),
                                                             cluster.controller());
         client.prepareMetadataUpdate(metaDataUpdateResponseCluster, Collections.<String>emptySet());
 
-        Future<RecordMetadata> future = producer.send(record, new SendCallback());
+        Future<RecordMetadata> future = producer.send(record);
 
-        assertEquals("Invalid topic count in cluster is wrong.", 1, cluster.internalTopics().size());
-        assertTrue("Expeced Future status to be completed.", future.isDone());
+        assertEquals("Cluster has incorrect invalid topic list.", metaDataUpdateResponseCluster.invalidTopics(), metadata.fetch().invalidTopics());
         try {
-            future.get();
+            future.get(0, TimeUnit.MILLISECONDS);
             fail("Expected InvalidTopicException to be raised");
         } catch (ExecutionException e) {
             // expected
-            assertTrue("Expected ExecutionException message to contain \"InvalidTopicException\"",
-                       e.getMessage().contains("InvalidTopicException"));
-        } catch (Exception e) {
-            fail("Did not expect " + e + " exception to be raised");
+            assertEquals("Expected InvalidTopicException.", e.getCause().getClass(), InvalidTopicException.class);
         }
     }
 }
