@@ -107,7 +107,6 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                                  name);
 
         internalTopologyBuilder.addStateStore(storeBuilder, name);
-        internalTopologyBuilder.connectSourceStoreAndTopic(storeBuilder.name(), topic);
 
         return kTable;
     }

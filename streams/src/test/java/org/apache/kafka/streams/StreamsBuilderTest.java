@@ -293,7 +293,26 @@ public class StreamsBuilderTest {
         assertFalse(stores.hasNext());
         assertFalse(subtopologies.hasNext());
     }
-    
+
+    @Test
+    public void shouldNotReuseSourceTopicAsChangelogsByDefault() {
+        final String topic = "topic";
+        builder.table(topic, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("store"));
+
+        final InternalTopologyBuilder internalTopologyBuilder = InternalTopologyAccessor.getInternalTopologyBuilder(builder.build());
+        internalTopologyBuilder.setApplicationId("appId");
+
+        assertThat(internalTopologyBuilder.build().storeToChangelogTopic(), equalTo(Collections.singletonMap("store", "appId-store-changelog")));
+
+        assertThat(internalTopologyBuilder.getStateStores().keySet(), equalTo(Collections.singleton("store")));
+
+
+        assertThat(internalTopologyBuilder.getStateStores().get("store").loggingEnabled(), equalTo(true));
+
+        assertThat(internalTopologyBuilder.topicGroups().get(0).stateChangelogTopics.keySet(), equalTo(Collections.singleton("appId-store-changelog")));
+    }
+
+
     @Test(expected = TopologyException.class)
     public void shouldThrowExceptionWhenNoTopicPresent() throws Exception {
         builder.stream(Collections.<String>emptyList());

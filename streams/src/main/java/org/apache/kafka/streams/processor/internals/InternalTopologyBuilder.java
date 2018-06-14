@@ -123,7 +123,7 @@ public class InternalTopologyBuilder {
 
     private Map<Integer, Set<String>> nodeGroups = null;
 
-    interface StateStoreFactory {
+    public interface StateStoreFactory {
         Set<String> users();
         boolean loggingEnabled();
         StateStore build();
@@ -1819,6 +1819,12 @@ public class InternalTopologyBuilder {
             return "none";
         }
         return sb.toString();
+    }
+
+    // following functions are for test only
+
+    public synchronized Map<String, StateStoreFactory> getStateStores() {
+        return stateFactories;
     }
 
 }

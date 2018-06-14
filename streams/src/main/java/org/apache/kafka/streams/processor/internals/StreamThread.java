@@ -1257,4 +1257,13 @@ public class StreamThread extends Thread implements ThreadDataProvider {
         }
         threadMetadata = new ThreadMetadata(this.getName(), this.state().name(), activeTasksMetadata, standbyTasksMetadata);
     }
+
+    // this is for testing only
+    TaskManager taskManager() {
+        return taskManager;
+    }
+
+    Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> standbyRecords() {
+        return standbyRecords;
+    }
 }
