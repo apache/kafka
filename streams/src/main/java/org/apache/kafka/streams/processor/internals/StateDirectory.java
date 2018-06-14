@@ -81,7 +81,7 @@ public class StateDirectory {
      * @param taskId
      * @return directory for the {@link TaskId}
      */
-    File directoryForTask(final TaskId taskId) {
+    public File directoryForTask(final TaskId taskId) {
         final File taskDir = new File(stateDir, taskId.toString());
         if (!taskDir.exists() && !taskDir.mkdir()) {
             throw new ProcessorStateException(String.format("task directory [%s] doesn't exist and couldn't be created",
