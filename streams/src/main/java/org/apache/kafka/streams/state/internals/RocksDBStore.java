@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
@@ -129,10 +130,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         // (this could be a bug in the RocksDB code and their devs have been contacted).
         options.setIncreaseParallelism(Math.max(Runtime.getRuntime().availableProcessors(), 2));
 
-        if (prepareForBulkload) {
-            options.prepareForBulkLoad();
-        }
-
         wOptions = new WriteOptions();
         wOptions.setDisableWAL(true);
 
@@ -147,6 +144,11 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
             final RocksDBConfigSetter configSetter = Utils.newInstance(configSetterClass);
             configSetter.setConfig(name, options, configs);
         }
+
+        if (prepareForBulkload) {
+            options.prepareForBulkLoad();
+        }
+
         this.dbDir = new File(new File(context.stateDir(), parentDir), this.name);
 
         try {
@@ -223,7 +225,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         try {
             return this.db.get(rawKey);
         } catch (final RocksDBException e) {
-            throw new ProcessorStateException("Error while getting value for key from store " + this.name, e);
+            // String format is happening in wrapping stores. So formatted message is thrown from wrapping stores.
+            throw new ProcessorStateException("Error while getting value for key %s from store " + this.name, e);
         }
     }
 
@@ -299,13 +302,15 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
             try {
                 db.delete(wOptions, rawKey);
             } catch (final RocksDBException e) {
-                throw new ProcessorStateException("Error while removing key from store " + this.name, e);
+                // String format is happening in wrapping stores. So formatted message is thrown from wrapping stores.
+                throw new ProcessorStateException("Error while removing key %s from store " + this.name, e);
             }
         } else {
             try {
                 db.put(wOptions, rawKey, rawValue);
             } catch (final RocksDBException e) {
-                throw new ProcessorStateException("Error while executing putting key/value into store " + this.name, e);
+                // String format is happening in wrapping stores. So formatted message is thrown from wrapping stores.
+                throw new ProcessorStateException("Error while putting key %s value %s into store " + this.name, e);
             }
         }
     }
@@ -441,11 +446,13 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         }
     }
 
-    private class RocksDbIterator implements KeyValueIterator<Bytes, byte[]> {
+    private class RocksDbIterator extends AbstractIterator<KeyValue<Bytes, byte[]>> implements KeyValueIterator<Bytes, byte[]> {
         private final String storeName;
         private final RocksIterator iter;
 
         private volatile boolean open = true;
+
+        private KeyValue<Bytes, byte[]> next;
 
         RocksDbIterator(final String storeName,
                         final RocksIterator iter) {
@@ -453,34 +460,32 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
             this.storeName = storeName;
         }
 
-        byte[] peekRawKey() {
-            return iter.key();
-        }
-
-        private KeyValue<Bytes, byte[]> getKeyValue() {
-            return new KeyValue<>(new Bytes(iter.key()), iter.value());
-        }
-
         @Override
         public synchronized boolean hasNext() {
             if (!open) {
                 throw new InvalidStateStoreException(String.format("RocksDB store %s has closed", storeName));
             }
-
-            return iter.isValid();
+            return super.hasNext();
         }
 
-        /**
-         * @throws NoSuchElementException if no next element exist
-         */
         @Override
         public synchronized KeyValue<Bytes, byte[]> next() {
-            if (!hasNext())
-                throw new NoSuchElementException();
+            return super.next();
+        }
 
-            final KeyValue<Bytes, byte[]> entry = this.getKeyValue();
-            iter.next();
-            return entry;
+        @Override
+        public KeyValue<Bytes, byte[]> makeNext() {
+            if (!iter.isValid()) {
+                return allDone();
+            } else {
+                next = this.getKeyValue();
+                iter.next();
+                return next;
+            }
+        }
+
+        private KeyValue<Bytes, byte[]> getKeyValue() {
+            return new KeyValue<>(new Bytes(iter.key()), iter.value());
         }
 
         @Override
@@ -500,7 +505,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
             if (!hasNext()) {
                 throw new NoSuchElementException();
             }
-            return new Bytes(iter.key());
+            return next.key;
         }
     }
 
@@ -524,8 +529,17 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         }
 
         @Override
-        public synchronized boolean hasNext() {
-            return super.hasNext() && comparator.compare(super.peekRawKey(), this.rawToKey) <= 0;
+        public KeyValue<Bytes, byte[]> makeNext() {
+            final KeyValue<Bytes, byte[]> next = super.makeNext();
+
+            if (next == null) {
+                return allDone();
+            } else {
+                if (comparator.compare(next.key.get(), this.rawToKey) <= 0)
+                    return next;
+                else
+                    return allDone();
+            }
         }
     }
 
@@ -557,5 +571,10 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
                                  final long totalRestored) {
             rocksDBStore.toggleDbForBulkLoading(false);
         }
+    }
+
+    // for testing
+    public Options getOptions() {
+        return options;
     }
 }

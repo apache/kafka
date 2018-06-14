@@ -156,9 +156,9 @@ public class MockProcessorContextTest {
     @Test
     public void shouldThrowIfForwardedWithDeprecatedChildIndex() {
         final AbstractProcessor<String, Long> processor = new AbstractProcessor<String, Long>() {
+            @SuppressWarnings("deprecation")
             @Override
             public void process(final String key, final Long value) {
-                //noinspection deprecation
                 context().forward(key, value, 0);
             }
         };
@@ -178,9 +178,9 @@ public class MockProcessorContextTest {
     @Test
     public void shouldThrowIfForwardedWithDeprecatedChildName() {
         final AbstractProcessor<String, Long> processor = new AbstractProcessor<String, Long>() {
+            @SuppressWarnings("deprecation")
             @Override
             public void process(final String key, final Long value) {
-                //noinspection deprecation
                 context().forward(key, value, "child1");
             }
         };
@@ -286,7 +286,7 @@ public class MockProcessorContextTest {
         }
 
         context.resetForwards();
-        context.setRecordMetadata("t1", 0, 0L, 0L);
+        context.setRecordMetadata("t1", 0, 0L, null, 0L);
 
         {
             processor.process("foo", 5L);
@@ -347,12 +347,7 @@ public class MockProcessorContextTest {
                 context.schedule(
                     1000L,
                     PunctuationType.WALL_CLOCK_TIME,
-                    new Punctuator() {
-                        @Override
-                        public void punctuate(final long timestamp) {
-                            context.commit();
-                        }
-                    }
+                    timestamp -> context.commit()
                 );
             }
 

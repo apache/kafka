@@ -35,10 +35,11 @@ class OffsetIndexTest extends JUnitSuite {
   
   var idx: OffsetIndex = null
   val maxEntries = 30
+  val baseOffset = 45L
   
   @Before
   def setup() {
-    this.idx = new OffsetIndex(nonExistentTempFile(), baseOffset = 45L, maxIndexSize = 30 * 8)
+    this.idx = new OffsetIndex(nonExistentTempFile(), baseOffset, maxIndexSize = 30 * 8)
   }
   
   @After
@@ -102,10 +103,10 @@ class OffsetIndexTest extends JUnitSuite {
 
   @Test
   def testFetchUpperBoundOffset() {
-    val first = OffsetPosition(0, 0)
-    val second = OffsetPosition(1, 10)
-    val third = OffsetPosition(2, 23)
-    val fourth = OffsetPosition(3, 37)
+    val first = OffsetPosition(baseOffset + 0, 0)
+    val second = OffsetPosition(baseOffset + 1, 10)
+    val third = OffsetPosition(baseOffset + 2, 23)
+    val fourth = OffsetPosition(baseOffset + 3, 37)
 
     assertEquals(None, idx.fetchUpperBoundOffset(first, 5))
 

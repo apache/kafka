@@ -109,12 +109,11 @@ import static org.apache.kafka.common.utils.Utils.getPort;
  * props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
  * props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
  * props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
- * StreamsConfig config = new StreamsConfig(props);
  *
  * StreamsBuilder builder = new StreamsBuilder();
  * builder.<String, String>stream("my-input-topic").mapValues(value -> value.length().toString()).to("my-output-topic");
  *
- * KafkaStreams streams = new KafkaStreams(builder.build(), config);
+ * KafkaStreams streams = new KafkaStreams(builder.build(), props);
  * streams.start();
  * }</pre>
  *
@@ -390,10 +389,11 @@ public class KafkaStreams {
      *
      * @return Map of all metrics.
      */
-    // TODO: we can add metrics for producer and admin client as well
+    // TODO: we can add metrics for admin client as well
     public Map<MetricName, ? extends Metric> metrics() {
         final Map<MetricName, Metric> result = new LinkedHashMap<>();
         for (final StreamThread thread : threads) {
+            result.putAll(thread.producerMetrics());
             result.putAll(thread.consumerMetrics());
         }
         if (globalStreamThread != null) result.putAll(globalStreamThread.consumerMetrics());
@@ -607,7 +607,7 @@ public class KafkaStreams {
     @Deprecated
     public KafkaStreams(final Topology topology,
                         final StreamsConfig config) {
-        this(topology.internalTopologyBuilder, config, new DefaultKafkaClientSupplier(), DEFAULT_BLOCKING_TIME);
+        this(topology, config, new DefaultKafkaClientSupplier());
     }
 
     /**
@@ -644,6 +644,10 @@ public class KafkaStreams {
                          final long maxCommitMs) throws StreamsException {
         this.config = config;
         this.time = time;
+
+        // adjust the topology if optimization is turned on.
+        // TODO: to be removed post 2.0
+        internalTopologyBuilder.adjust(config);
 
         // The application ID is a required config and hence should always have value
         processId = UUID.randomUUID();
@@ -1038,7 +1042,7 @@ public class KafkaStreams {
      * @param <T>                 return type
      * @return A facade wrapping the local {@link StateStore} instances
      * @throws InvalidStateStoreException if Kafka Streams is (re-)initializing or a store with {@code storeName} and
-     * {@code queryableStoreType} doesnt' exist
+     * {@code queryableStoreType} doesn't exist
      */
     public <T> T store(final String storeName, final QueryableStoreType<T> queryableStoreType) {
         validateIsRunning();

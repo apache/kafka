@@ -208,9 +208,7 @@
     <p>
         Note that we can always describe the topology as we did above at any given point while we are building it in the code, so as a user you can interactively "try and taste" your computational logic defined in the topology until you are happy with it.
         Suppose we are already done with this simple topology that just pipes data from one Kafka topic to another in an endless streaming manner,
-        we can now construct the Streams client with the two components we have just constructed above: the configuration map and the topology object
-        (one can also construct a <code>StreamsConfig</code> object from the <code>props</code> map and then pass that object to the constructor,
-        <code>KafkaStreams</code> have overloaded constructor functions to takes either type).
+        we can now construct the Streams client with the two components we have just constructed above: the configuration map specified in a <code>java.util.Properties</code> instance and the <code>Topology</code> object.
     </p>
 
     <pre class="brush: java;">

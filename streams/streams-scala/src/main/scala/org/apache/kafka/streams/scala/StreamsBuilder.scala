@@ -21,12 +21,13 @@ package org.apache.kafka.streams.scala
 
 import java.util.regex.Pattern
 
-import org.apache.kafka.streams.kstream.{GlobalKTable, Materialized}
+import org.apache.kafka.streams.kstream.{Consumed, GlobalKTable, Materialized}
 import org.apache.kafka.streams.processor.{ProcessorSupplier, StateStore}
 import org.apache.kafka.streams.state.StoreBuilder
-import org.apache.kafka.streams.{Consumed, StreamsBuilder => StreamsBuilderJ, Topology}
+import org.apache.kafka.streams.{Topology, StreamsBuilder => StreamsBuilderJ}
 import org.apache.kafka.streams.scala.kstream._
 import ImplicitConversions._
+
 import scala.collection.JavaConverters._
 
 /**
@@ -70,7 +71,7 @@ class StreamsBuilder(inner: StreamsBuilderJ = new StreamsBuilderJ) {
    * @see #stream(String)
    * @see `org.apache.kafka.streams.StreamsBuilder#stream`
    */
-  def stream[K, V](topics: List[String])(implicit consumed: Consumed[K, V]): KStream[K, V] =
+  def stream[K, V](topics: Set[String])(implicit consumed: Consumed[K, V]): KStream[K, V] =
     inner.stream[K, V](topics.asJava, consumed)
 
   /**

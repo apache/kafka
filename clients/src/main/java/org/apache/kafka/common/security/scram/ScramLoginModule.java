@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.common.security.scram;
 
-import org.apache.kafka.common.security.scram.internal.ScramSaslClientProvider;
-import org.apache.kafka.common.security.scram.internal.ScramSaslServerProvider;
+import org.apache.kafka.common.security.scram.internals.ScramSaslClientProvider;
+import org.apache.kafka.common.security.scram.internals.ScramSaslServerProvider;
 
 import java.util.Collections;
 import java.util.Map;

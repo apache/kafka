@@ -19,35 +19,29 @@ package kafka.tools
 
 import kafka.common._
 import kafka.message._
-import kafka.serializer._
 import kafka.utils.{CommandLineUtils, Exit, ToolsUtils}
 import kafka.utils.Implicits._
-import kafka.producer.{NewShinyProducer, OldProducer}
 import java.util.Properties
 import java.io._
 import java.nio.charset.StandardCharsets
 
 import joptsimple._
-import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
+import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.utils.Utils
 
 import scala.collection.JavaConverters._
 
 object ConsoleProducer {
 
-  def main(args: Array[String]) {
+  def main(args: Array[String]): Unit = {
 
     try {
         val config = new ProducerConfig(args)
         val reader = Class.forName(config.readerClass).newInstance().asInstanceOf[MessageReader]
         reader.init(System.in, getReaderProps(config))
 
-        val producer =
-          if(config.useOldProducer) {
-            new OldProducer(getOldProducerProps(config))
-          } else {
-            new NewShinyProducer(getNewProducerProps(config))
-          }
+        val producer = new KafkaProducer[Array[Byte], Array[Byte]](producerProps(config))
 
         Runtime.getRuntime.addShutdownHook(new Thread() {
           override def run() {
@@ -55,12 +49,12 @@ object ConsoleProducer {
           }
         })
 
-        var message: ProducerRecord[Array[Byte], Array[Byte]] = null
+        var record: ProducerRecord[Array[Byte], Array[Byte]] = null
         do {
-          message = reader.readMessage()
-          if (message != null)
-            producer.send(message.topic, message.key, message.value)
-        } while (message != null)
+          record = reader.readMessage()
+          if (record != null)
+            send(producer, record, config.sync)
+        } while (record != null)
     } catch {
       case e: joptsimple.OptionException =>
         System.err.println(e.getMessage)
@@ -72,47 +66,28 @@ object ConsoleProducer {
     Exit.exit(0)
   }
 
+  private def send(producer: KafkaProducer[Array[Byte], Array[Byte]],
+                         record: ProducerRecord[Array[Byte], Array[Byte]], sync: Boolean): Unit = {
+    if (sync)
+      producer.send(record).get()
+    else
+      producer.send(record, new ErrorLoggingCallback(record.topic, record.key, record.value, false))
+  }
+
   def getReaderProps(config: ProducerConfig): Properties = {
     val props = new Properties
-    props.put("topic",config.topic)
+    props.put("topic", config.topic)
     props ++= config.cmdLineProps
     props
   }
 
-  def getOldProducerProps(config: ProducerConfig): Properties = {
-    val props = producerProps(config)
-
-    props.put("metadata.broker.list", config.brokerList)
-    props.put("compression.codec", config.compressionCodec)
-    props.put("producer.type", if(config.sync) "sync" else "async")
-    props.put("batch.num.messages", config.batchSize.toString)
-    props.put("message.send.max.retries", config.messageSendMaxRetries.toString)
-    props.put("retry.backoff.ms", config.retryBackoffMs.toString)
-    props.put("queue.buffering.max.ms", config.sendTimeout.toString)
-    props.put("queue.buffering.max.messages", config.queueSize.toString)
-    props.put("queue.enqueue.timeout.ms", config.queueEnqueueTimeoutMs.toString)
-    props.put("request.required.acks", config.requestRequiredAcks)
-    props.put("request.timeout.ms", config.requestTimeoutMs.toString)
-    props.put("key.serializer.class", config.keyEncoderClass)
-    props.put("serializer.class", config.valueEncoderClass)
-    props.put("send.buffer.bytes", config.socketBuffer.toString)
-    props.put("topic.metadata.refresh.interval.ms", config.metadataExpiryMs.toString)
-    props.put("client.id", "console-producer")
-
-    props
-  }
-
-  private def producerProps(config: ProducerConfig): Properties = {
+  def producerProps(config: ProducerConfig): Properties = {
     val props =
       if (config.options.has(config.producerConfigOpt))
         Utils.loadProps(config.options.valueOf(config.producerConfigOpt))
       else new Properties
-    props ++= config.extraProducerProps
-    props
-  }
 
-  def getNewProducerProps(config: ProducerConfig): Properties = {
-    val props = producerProps(config)
+    props ++= config.extraProducerProps
 
     props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, config.brokerList)
     props.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, config.compressionCodec)
@@ -168,17 +143,6 @@ object ConsoleProducer {
       .describedAs("timeout_ms")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(1000)
-    val queueSizeOpt = parser.accepts("queue-size", "If set and the producer is running in asynchronous mode, this gives the maximum amount of " +
-      " messages will queue awaiting sufficient batch size.")
-      .withRequiredArg
-      .describedAs("queue_size")
-      .ofType(classOf[java.lang.Integer])
-      .defaultsTo(10000)
-    val queueEnqueueTimeoutMsOpt = parser.accepts("queue-enqueuetimeout-ms", "Timeout for event enqueue")
-      .withRequiredArg
-      .describedAs("queue enqueuetimeout ms")
-      .ofType(classOf[java.lang.Integer])
-      .defaultsTo(Int.MaxValue)
     val requestRequiredAcksOpt = parser.accepts("request-required-acks", "The required acks of the producer requests")
       .withRequiredArg
       .describedAs("request required acks")
@@ -214,16 +178,6 @@ object ConsoleProducer {
       .describedAs("memory in bytes per partition")
       .ofType(classOf[java.lang.Long])
       .defaultsTo(16 * 1024L)
-    val valueEncoderOpt = parser.accepts("value-serializer", "The class name of the message encoder implementation to use for serializing values.")
-      .withRequiredArg
-      .describedAs("encoder_class")
-      .ofType(classOf[java.lang.String])
-      .defaultsTo(classOf[DefaultEncoder].getName)
-    val keyEncoderOpt = parser.accepts("key-serializer", "The class name of the message encoder implementation to use for serializing keys.")
-      .withRequiredArg
-      .describedAs("encoder_class")
-      .ofType(classOf[java.lang.String])
-      .defaultsTo(classOf[DefaultEncoder].getName)
     val messageReaderOpt = parser.accepts("line-reader", "The class name of the class to use for reading lines from standard in. " +
       "By default each line is read as a separate message.")
       .withRequiredArg
@@ -248,14 +202,12 @@ object ConsoleProducer {
       .withRequiredArg
       .describedAs("config file")
       .ofType(classOf[String])
-    val useOldProducerOpt = parser.accepts("old-producer", "Use the old producer implementation.")
 
     val options = parser.parse(args : _*)
-    if(args.length == 0)
+    if (args.length == 0)
       CommandLineUtils.printUsageAndDie(parser, "Read data from standard input and publish it to Kafka.")
     CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, brokerListOpt)
 
-    val useOldProducer = options.has(useOldProducerOpt)
     val topic = options.valueOf(topicOpt)
     val brokerList = options.valueOf(brokerListOpt)
     ToolsUtils.validatePortOrDie(parser,brokerList)
@@ -268,14 +220,10 @@ object ConsoleProducer {
                            else NoCompressionCodec.name
     val batchSize = options.valueOf(batchSizeOpt)
     val sendTimeout = options.valueOf(sendTimeoutOpt)
-    val queueSize = options.valueOf(queueSizeOpt)
-    val queueEnqueueTimeoutMs = options.valueOf(queueEnqueueTimeoutMsOpt)
     val requestRequiredAcks = options.valueOf(requestRequiredAcksOpt)
     val requestTimeoutMs = options.valueOf(requestTimeoutMsOpt)
     val messageSendMaxRetries = options.valueOf(messageSendMaxRetriesOpt)
     val retryBackoffMs = options.valueOf(retryBackoffMsOpt)
-    val keyEncoderClass = options.valueOf(keyEncoderOpt)
-    val valueEncoderClass = options.valueOf(valueEncoderOpt)
     val readerClass = options.valueOf(messageReaderOpt)
     val socketBuffer = options.valueOf(socketBufferSizeOpt)
     val cmdLineProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(propertyOpt).asScala)

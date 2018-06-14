@@ -103,4 +103,3 @@ public class SaslAuthenticateResponse extends AbstractResponse {
         return new SaslAuthenticateResponse(ApiKeys.SASL_AUTHENTICATE.parseResponse(version, buffer));
     }
 }
-

@@ -129,6 +129,49 @@ final class ClusterConnectionStates {
     }
 
     /**
+     * Indicate that the connection is throttled until the specified deadline.
+     * @param id the connection to be throttled
+     * @param throttleUntilTimeMs the throttle deadline in milliseconds
+     */
+    public void throttle(String id, long throttleUntilTimeMs) {
+        NodeConnectionState state = nodeState.get(id);
+        // The throttle deadline should never regress.
+        if (state != null && state.throttleUntilTimeMs < throttleUntilTimeMs) {
+            state.throttleUntilTimeMs = throttleUntilTimeMs;
+        }
+    }
+
+    /**
+     * Return the remaining throttling delay in milliseconds if throttling is in progress. Return 0, otherwise.
+     * @param id the connection to check
+     * @param now the current time in ms
+     */
+    public long throttleDelayMs(String id, long now) {
+        NodeConnectionState state = nodeState.get(id);
+        if (state != null && state.throttleUntilTimeMs > now) {
+            return state.throttleUntilTimeMs - now;
+        } else {
+            return 0;
+        }
+    }
+
+    /**
+     * Return the number of milliseconds to wait, based on the connection state and the throttle time, before
+     * attempting to send data. If the connection has been established but being throttled, return throttle delay.
+     * Otherwise, return connection delay.
+     * @param id the connection to check
+     * @param now the current time in ms
+     */
+    public long pollDelayMs(String id, long now) {
+        long throttleDelayMs = throttleDelayMs(id, now);
+        if (isConnected(id) && throttleDelayMs > 0) {
+            return throttleDelayMs;
+        } else {
+            return connectionDelay(id, now);
+        }
+    }
+
+    /**
      * Enter the checking_api_versions state for the given node.
      * @param id the connection identifier
      */
@@ -163,24 +206,41 @@ final class ClusterConnectionStates {
     }
 
     /**
-     * Return true if the connection is ready.
+     * Return true if the connection is in the READY state and currently not throttled.
+     *
      * @param id the connection identifier
+     * @param now the current time
      */
-    public boolean isReady(String id) {
-        NodeConnectionState state = nodeState.get(id);
-        return state != null && state.state == ConnectionState.READY;
+    public boolean isReady(String id, long now) {
+        return isReady(nodeState.get(id), now);
+    }
+
+    private boolean isReady(NodeConnectionState state, long now) {
+        return state != null && state.state == ConnectionState.READY && state.throttleUntilTimeMs <= now;
     }
 
     /**
-     * Return true if there is at least one node with connection in ready state and false otherwise.
+     * Return true if there is at least one node with connection in the READY state and not throttled. Returns false
+     * otherwise.
+     *
+     * @param now the current time
      */
-    public boolean hasReadyNodes() {
+    public boolean hasReadyNodes(long now) {
         for (Map.Entry<String, NodeConnectionState> entry : nodeState.entrySet()) {
-            NodeConnectionState state = entry.getValue();
-            if (state != null && state.state == ConnectionState.READY)
+            if (isReady(entry.getValue(), now)) {
                 return true;
+            }
         }
         return false;
+    }
+
+    /**
+     * Return true if the connection has been established
+     * @param id The id of the node to check
+     */
+    public boolean isConnected(String id) {
+        NodeConnectionState state = nodeState.get(id);
+        return state != null && state.state.isConnected();
     }
 
     /**
@@ -272,6 +332,8 @@ final class ClusterConnectionStates {
         long lastConnectAttemptMs;
         long failedAttempts;
         long reconnectBackoffMs;
+        // Connection is being throttled if current time < throttleUntilTimeMs.
+        long throttleUntilTimeMs;
 
         public NodeConnectionState(ConnectionState state, long lastConnectAttempt, long reconnectBackoffMs) {
             this.state = state;
@@ -279,10 +341,11 @@ final class ClusterConnectionStates {
             this.lastConnectAttemptMs = lastConnectAttempt;
             this.failedAttempts = 0;
             this.reconnectBackoffMs = reconnectBackoffMs;
+            this.throttleUntilTimeMs = 0;
         }
 
         public String toString() {
-            return "NodeState(" + state + ", " + lastConnectAttemptMs + ", " + failedAttempts + ")";
+            return "NodeState(" + state + ", " + lastConnectAttemptMs + ", " + failedAttempts + ", " + throttleUntilTimeMs + ")";
         }
     }
 }

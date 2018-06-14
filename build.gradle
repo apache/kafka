@@ -26,9 +26,9 @@ buildscript {
     // For Apache Rat plugin to ignore non-Git files
     classpath "org.ajoberstar:grgit:1.9.3"
     classpath 'com.github.ben-manes:gradle-versions-plugin:0.17.0'
-    classpath 'org.scoverage:gradle-scoverage:2.1.0'
-    classpath 'com.github.jengelman.gradle.plugins:shadow:2.0.2'
-    classpath 'org.owasp:dependency-check-gradle:3.1.1'
+    classpath 'org.scoverage:gradle-scoverage:2.3.0'
+    classpath 'com.github.jengelman.gradle.plugins:shadow:2.0.4'
+    classpath 'org.owasp:dependency-check-gradle:3.2.1'
   }
 }
 
@@ -67,23 +67,18 @@ allprojects {
     }
   }
 
-  if (JavaVersion.current().isJava8Compatible()) {
-    tasks.withType(Javadoc) {
-      // disable the crazy super-strict doclint tool in Java 8
-      // noinspection SpellCheckingInspection
-      options.addStringOption('Xdoclint:none', '-quiet')
-    }
+  tasks.withType(Javadoc) {
+    // disable the crazy super-strict doclint tool in Java 8
+    // noinspection SpellCheckingInspection
+    options.addStringOption('Xdoclint:none', '-quiet')
   }
 
 }
 
 ext {
-  gradleVersion = "4.5.1"
+  gradleVersion = "4.8"
+  minJavaVersion = "8"
   buildVersionFileName = "kafka-version.properties"
-
-  maxPermSizeArgs = []
-  if (!JavaVersion.current().isJava8Compatible())
-    maxPermSizeArgs += '-XX:MaxPermSize=512m'
 
   userMaxForks = project.hasProperty('maxParallelForks') ? maxParallelForks.toInteger() : null
 
@@ -145,20 +140,18 @@ subprojects {
   if (!JavaVersion.current().isJava9Compatible())
     apply plugin: 'findbugs'
 
-  sourceCompatibility = 1.8
-  targetCompatibility = 1.8
+  sourceCompatibility = minJavaVersion
+  targetCompatibility = minJavaVersion
+
 
   compileJava {
     options.encoding = 'UTF-8'
-    options.compilerArgs << "-Xlint:deprecation"
-    // -Xlint:unchecked is too buggy in Java 7, so we only enable for Java 8 or higher
-    if (JavaVersion.current().isJava8Compatible())
-      options.compilerArgs << "-Xlint:unchecked"
+    options.compilerArgs << "-Xlint:deprecation,unchecked"
     // --release is the recommended way to select the target release, but it's only supported in Java 9 so we also
     // set --source and --target via `sourceCompatibility` and `targetCompatibility`. If/when Gradle supports `--release`
     // natively (https://github.com/gradle/gradle/issues/2510), we should switch to that.
     if (JavaVersion.current().isJava9Compatible())
-      options.compilerArgs << "--release" << "7"
+      options.compilerArgs << "--release" << minJavaVersion
   }
 
   uploadArchives {
@@ -202,7 +195,6 @@ subprojects {
 
     minHeapSize = "256m"
     maxHeapSize = "2048m"
-    jvmArgs = maxPermSizeArgs
 
     testLogging {
       events = userTestLoggingEvents ?: testLoggingEvents
@@ -217,7 +209,6 @@ subprojects {
 
     minHeapSize = "256m"
     maxHeapSize = "2048m"
-    jvmArgs = maxPermSizeArgs
 
     testLogging {
       events = userTestLoggingEvents ?: testLoggingEvents
@@ -236,7 +227,6 @@ subprojects {
 
     minHeapSize = "256m"
     maxHeapSize = "2048m"
-    jvmArgs = maxPermSizeArgs
 
     testLogging {
       events = userTestLoggingEvents ?: testLoggingEvents
@@ -343,7 +333,7 @@ subprojects {
       "-Xlint:private-shadow",
       "-Xlint:stars-align",
       "-Xlint:type-parameter-shadow",
-      "-Xlint:unsound-match",
+      "-Xlint:unsound-match"
     ]
 
     if (versions.baseScala != '2.11') {
@@ -355,15 +345,14 @@ subprojects {
 
     configure(scalaCompileOptions.forkOptions) {
       memoryMaximumSize = '1g'
-      jvmArgs = ['-Xss2m'] + maxPermSizeArgs
+      jvmArgs = ['-Xss2m']
     }
   }
 
   checkstyle {
     configFile = new File(rootDir, "checkstyle/checkstyle.xml")
     configProperties = [importControlFile: "$rootDir/checkstyle/import-control.xml"]
-    // version 7.x requires Java 8
-    toolVersion = '6.19'
+    toolVersion = '8.10'
   }
   test.dependsOn('checkstyleMain', 'checkstyleTest')
 
@@ -519,7 +508,7 @@ for ( sv in availableScalaVersions ) {
   }
 }
 
-def connectPkgs = ['connect:api', 'connect:runtime', 'connect:transforms', 'connect:json', 'connect:file']
+def connectPkgs = ['connect:api', 'connect:runtime', 'connect:transforms', 'connect:json', 'connect:file', 'connect:basic-auth-extension']
 def pkgs = ['clients', 'examples', 'log4j-appender', 'tools', 'streams', 'streams:streams-scala', 'streams:test-utils', 'streams:examples'] + connectPkgs
 
 /** Create one task per default Scala version */
@@ -740,6 +729,8 @@ project(':core') {
     from(project(':connect:json').configurations.runtime) { into("libs/") }
     from(project(':connect:file').jar) { into("libs/") }
     from(project(':connect:file').configurations.runtime) { into("libs/") }
+    from(project(':connect:basic-auth-extension').jar) { into("libs/") }
+    from(project(':connect:basic-auth-extension').configurations.runtime) { into("libs/") }
     from(project(':streams').jar) { into("libs/") }
     from(project(':streams').configurations.runtime) { into("libs/") }
     from(project(':streams:streams-scala').jar) { into("libs/") }
@@ -795,10 +786,20 @@ project(':examples') {
 project(':clients') {
   archivesBaseName = "kafka-clients"
 
+  configurations {
+    jacksonDatabindConfig
+  }
+
+  // add jacksonDatabindConfig as provided scope config with high priority (1000)
+  conf2ScopeMappings.addMapping(1000, configurations.jacksonDatabindConfig, "provided")
+
   dependencies {
     compile libs.lz4
     compile libs.snappy
     compile libs.slf4jApi
+    compileOnly libs.jacksonDatabind // for SASL/OAUTHBEARER bearer token parsing
+
+    jacksonDatabindConfig libs.jacksonDatabind // to publish as provided scope dependency.
 
     testCompile libs.bcpkix
     testCompile libs.junit
@@ -807,6 +808,7 @@ project(':clients') {
     testCompile libs.powermockEasymock
 
     testRuntime libs.slf4jlog4j
+    testRuntime libs.jacksonDatabind
   }
 
   task determineCommitId {
@@ -867,9 +869,13 @@ project(':clients') {
     include "**/org/apache/kafka/common/resource/*"
     include "**/org/apache/kafka/common/serialization/*"
     include "**/org/apache/kafka/common/config/*"
+    include "**/org/apache/kafka/common/config/provider/*"
     include "**/org/apache/kafka/common/security/auth/*"
-    include "**/org/apache/kafka/server/policy/*"
+    include "**/org/apache/kafka/common/security/plain/*"
+    include "**/org/apache/kafka/common/security/scram/*"
     include "**/org/apache/kafka/common/security/token/delegation/*"
+    include "**/org/apache/kafka/common/security/oauthbearer/*"
+    include "**/org/apache/kafka/server/policy/*"
   }
 }
 
@@ -885,6 +891,7 @@ project(':tools') {
 
     compile libs.jacksonJaxrsJsonProvider
     compile libs.jerseyContainerServlet
+    compile libs.jerseyHk2
     compile libs.jaxbApi // Jersey dependency that was available in the JDK before Java 9
     compile libs.activation // Jersey dependency that was available in the JDK before Java 9
     compile libs.jettyServer
@@ -1026,6 +1033,7 @@ project(':streams:test-utils') {
 
     testCompile project(':clients').sourceSets.test.output
     testCompile libs.junit
+    testCompile libs.easymock
 
     testRuntime libs.slf4jlog4j
   }
@@ -1216,6 +1224,7 @@ project(':connect:api') {
   dependencies {
     compile project(':clients')
     compile libs.slf4jApi
+    compile libs.jaxrsApi
 
     testCompile libs.junit
 
@@ -1327,14 +1336,17 @@ project(':connect:runtime') {
   archivesBaseName = "connect-runtime"
 
   dependencies {
+
     compile project(':connect:api')
-    compile project(":connect:transforms")
     compile project(':clients')
     compile project(':tools')
-    compile libs.slf4jApi
+    compile project(':connect:json')
+    compile project(':connect:transforms')
 
+    compile libs.slf4jApi
     compile libs.jacksonJaxrsJsonProvider
     compile libs.jerseyContainerServlet
+    compile libs.jerseyHk2
     compile libs.jaxbApi // Jersey dependency that was available in the JDK before Java 9
     compile libs.activation // Jersey dependency that was available in the JDK before Java 9
     compile libs.jettyServer
@@ -1350,7 +1362,6 @@ project(':connect:runtime') {
     testCompile libs.powermockJunit4
     testCompile libs.powermockEasymock
 
-    testCompile project(":connect:json")
     testCompile project(':clients').sourceSets.test.output
 
     testRuntime libs.slf4jlog4j
@@ -1414,6 +1425,46 @@ project(':connect:file') {
 
     testRuntime libs.slf4jlog4j
     testCompile project(':clients').sourceSets.test.output
+  }
+
+  javadoc {
+    enabled = false
+  }
+
+  tasks.create(name: "copyDependantLibs", type: Copy) {
+    from (configurations.testRuntime) {
+      include('slf4j-log4j12*')
+      include('log4j*jar')
+    }
+    from (configurations.runtime) {
+      exclude('kafka-clients*')
+      exclude('connect-*')
+    }
+    into "$buildDir/dependant-libs"
+    duplicatesStrategy 'exclude'
+  }
+
+  jar {
+    dependsOn copyDependantLibs
+  }
+}
+
+project(':connect:basic-auth-extension') {
+  archivesBaseName = "connect-basic-auth-extension"
+
+  dependencies {
+    compile project(':connect:api')
+    compile libs.slf4jApi
+
+    testCompile libs.bcpkix
+    testCompile libs.easymock
+    testCompile libs.junit
+    testCompile libs.powermockJunit4
+    testCompile libs.powermockEasymock
+    testCompile project(':clients').sourceSets.test.output
+
+    testRuntime libs.slf4jlog4j
+    testRuntime libs.jerseyContainerServlet
   }
 
   javadoc {

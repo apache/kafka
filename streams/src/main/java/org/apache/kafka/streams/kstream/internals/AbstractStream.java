@@ -24,6 +24,7 @@ import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.ValueMapperWithKey;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
 import java.util.HashSet;
 import java.util.Objects;
@@ -33,7 +34,7 @@ public abstract class AbstractStream<K> {
 
     protected final InternalStreamsBuilder builder;
     protected final String name;
-    final Set<String> sourceNodes;
+    protected final Set<String> sourceNodes;
 
     // This copy-constructor will allow to extend KStream
     // and KTable APIs with new methods without impacting the public interface.
@@ -53,6 +54,11 @@ public abstract class AbstractStream<K> {
         this.sourceNodes = sourceNodes;
     }
 
+    // This method allows to expose the InternalTopologyBuilder instance
+    // to subclasses that extend AbstractStream class.
+    protected InternalTopologyBuilder internalTopologyBuilder() {
+        return builder.internalTopologyBuilder;
+    }
 
     Set<String> ensureJoinableWith(final AbstractStream<K> other) {
         Set<String> allSourceNodes = new HashSet<>();
