@@ -333,7 +333,7 @@
                           context.taskId(), record.topic(), record.partition(), record.offset(),
                           exception);
 
-                      dlqProducer.send(new ProducerRecord<>(dlqTopic, record.timestamp(), record.key(), record.value()));
+                      dlqProducer.send(new ProducerRecord&lt;&gt;(dlqTopic, record.timestamp(), record.key(), record.value()));
 
                       return DeserializationHandlerResponse.CONTINUE;
                   }
