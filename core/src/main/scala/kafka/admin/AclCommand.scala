@@ -347,8 +347,8 @@ object AclCommand extends Logging {
       .ofType(classOf[String])
 
     val resourcePatternType = parser.accepts("resource-pattern-type", "The type of the resource pattern or pattern filter. " +
-      "When adding acls, this should a specific pattern type, e.g. 'literal' or 'prefixed'. " +
-      "When listing or removing acls, a specific pattern type can be used to remove acls from specific resource patterns, " +
+      "When adding acls, this should be a specific pattern type, e.g. 'literal' or 'prefixed'. " +
+      "When listing or removing acls, a specific pattern type can be used to list or remove acls from specific resource patterns, " +
       "or use the filter values of 'any' or 'match', where 'any' will match any pattern type, but will match the resource name exactly, " +
       "where as 'match' will perform pattern matching to list or remove all acls that affect the supplied resource(s). " +
       "WARNING: 'match', when used in combination with the '--remove' switch, should be used with care.")

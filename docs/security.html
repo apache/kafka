@@ -1009,7 +1009,7 @@
     <h3><a id="security_authz" href="#security_authz">7.4 Authorization and ACLs</a></h3>
     Kafka ships with a pluggable Authorizer and an out-of-box authorizer implementation that uses zookeeper to store all the acls. The Authorizer is configured by setting <code>authorizer.class.name</code> in server.properties. To enable the out of the box implementation use:
     <pre>authorizer.class.name=kafka.security.auth.SimpleAclAuthorizer</pre>
-    Kafka acls are defined in the general format of "Principal P is [Allowed/Denied] Operation O From Host H On Any Resoure R matching ResourcePattern RP". You can read more about the acl structure in KIP-11 and resource patterns in KIP-290. In order to add, remove or list acls you can use the Kafka authorizer CLI. By default, if no ResourcePatterns match a specific Resource R, then R has no associated acls, and therefore no one other than super users is allowed to access R. If you want to change that behavior, you can include the following in server.properties.
+    Kafka acls are defined in the general format of "Principal P is [Allowed/Denied] Operation O From Host H on any Resource R matching ResourcePattern RP". You can read more about the acl structure in KIP-11 and resource patterns in KIP-290. In order to add, remove or list acls you can use the Kafka authorizer CLI. By default, if no ResourcePatterns match a specific Resource R, then R has no associated acls, and therefore no one other than super users is allowed to access R. If you want to change that behavior, you can include the following in server.properties.
     <pre>allow.everyone.if.no.acl.found=true</pre>
     One can also add super users in server.properties like the following (note that the delimiter is semicolon since SSL user names may contain comma).
     <pre>super.users=User:Bob;User:Alice</pre>
@@ -1070,26 +1070,26 @@
         </tr>
         <tr>
             <td>--cluster</td>
-            <td>Indicates to the script tha the user is trying to interact with acls on the singular cluster resource.</td>
+            <td>Indicates to the script that the user is trying to interact with acls on the singular cluster resource.</td>
             <td></td>
             <td>ResourcePattern</td>
         </tr>
         <tr>
             <td>--topic [topic-name]</td>
-            <td>Indicates to the script tha the user is trying to interact with acls on topic resource pattern(s).</td>
+            <td>Indicates to the script that the user is trying to interact with acls on topic resource pattern(s).</td>
             <td></td>
             <td>ResourcePattern</td>
         </tr>
         <tr>
             <td>--group [group-name]</td>
-            <td>Indicates to the script tha the user is trying to interact with acls on consumer-group resource pattern(s)</td>
+            <td>Indicates to the script that the user is trying to interact with acls on consumer-group resource pattern(s)</td>
             <td></td>
             <td>ResourcePattern</td>
         </tr>
         <tr>
             <td>--resource-pattern-type [pattern-type]</td>
             <td>Indicates to the script the type of resource pattern, (for --add), or resource pattern filter, (for --list and --remove), the user wishes to use.<br>
-                When adding acls, this should a specific pattern type, e.g. 'literal' or 'prefixed'.<br>
+                When adding acls, this should be a specific pattern type, e.g. 'literal' or 'prefixed'.<br>
                 When listing or removing acls, a specific pattern type filter can be used to list or remove acls from a specific type of resource pattern,
                 or the filter values of 'any' or 'match' can be used, where 'any' will match any pattern type, but will match the resource name exactly,
                 and 'match' will perform pattern matching to list or remove all acls that affect the supplied resource(s).<br>
@@ -1163,7 +1163,7 @@
             You can add acls on any resource of a certain type, e.g. suppose you wanted to add an acl "Principal User:Peter is allowed to produce to any Topic from IP 198.51.200.0"
             You can do that by using the wildcard resource '*', e.g. by executing the CLI with following options:
             <pre class="brush: bash;">bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:Peter --allow-host 198.51.200.1 --producer --topic *</pre>
-            You can add acls on prefixed resource patterns, e.g. suppose you want to add an acl "Principal User:Jane is allowed to produce to any Topic whose name is starts with 'Test-' from any host".
+            You can add acls on prefixed resource patterns, e.g. suppose you want to add an acl "Principal User:Jane is allowed to produce to any Topic whose name starts with 'Test-' from any host".
             You can do that by executing the CLI with following options:
             <pre class="brush: bash;">bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:Jane --producer --topic Test- --resource-pattern-type prefixed</pre>
             Note, --resource-pattern-type defaults to 'literal', which only affects resources with the exact same name or, in the case of the wildcard resource name '*', a resource with any name.</li>
@@ -1182,7 +1182,7 @@
                 <pre class="brush: bash;">bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --list --topic *</pre>
                 However, it is not necessarily possible to explicitly query for acls on prefixed resource patterns that match Test-topic as the name of such patterns may not be known.
                 We can list <i>all</i> acls affecting Test-topic by using '--resource-pattern-type match', e.g.
-                <pre class="brush: bash;">bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --list --topic Test-topic --resource-pattern-type any</pre>
+                <pre class="brush: bash;">bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --list --topic Test-topic --resource-pattern-type match</pre>
                 This will list acls on all matching literal, wildcard and prefixed resource patterns.</li>
 
         <li><b>Adding or removing a principal as producer or consumer</b><br>
