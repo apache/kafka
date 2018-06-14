@@ -16,8 +16,10 @@ package org.apache.kafka.streams.integration;
 
 import kafka.utils.MockTime;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
@@ -31,8 +33,13 @@ import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
+import org.apache.kafka.streams.state.internals.InMemoryKeyValueStoreSupplier;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -45,6 +52,9 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+
+import static org.hamcrest.core.IsEqual.equalTo;
+import static org.junit.Assert.assertThat;
 
 public class GlobalKTableIntegrationTest {
     private static final int NUM_BROKERS = 1;
@@ -212,6 +222,60 @@ public class GlobalKTableIntegrationTest {
         }, 30000L, "waiting for final values");
     }
 
+    @Test
+    public void shouldRestoreGlobalInMemoryKTableOnRestart() throws Exception {
+        produceInitialGlobalTableValues();
+
+        builder = new KStreamBuilder();
+        addGlobalStore(builder);
+        startStreams();
+        ReadOnlyKeyValueStore<Long, String> store = kafkaStreams.store(globalStore, QueryableStoreTypes.<Long, String>keyValueStore());
+        assertThat(store.approximateNumEntries(), equalTo(4L));
+        kafkaStreams.close();
+
+        builder = new KStreamBuilder();
+        addGlobalStore(builder);
+        startStreams();
+        store = kafkaStreams.store(globalStore, QueryableStoreTypes.<Long, String>keyValueStore());
+        assertThat(store.approximateNumEntries(), equalTo(4L));
+    }
+
+    private void addGlobalStore(final KStreamBuilder builder) {
+        builder.addGlobalStore(
+            new InMemoryKeyValueStoreSupplier<>(globalStore, Serdes.Long(), Serdes.String(), false, null).get(),
+            "sourceName",
+            new LongDeserializer(),
+            new StringDeserializer(),
+            globalOne,
+            "processorName",
+            new ProcessorSupplier<String, Long>() {
+                @Override
+                public Processor<String, Long> get() {
+                    return new Processor<String, Long>() {
+                        private KeyValueStore<String, Long> store;
+
+                        @SuppressWarnings("unchecked")
+                        @Override
+                        public void init(final ProcessorContext context) {
+                            store = (KeyValueStore<String, Long>) context.getStateStore(globalStore);
+                        }
+
+                        @Override
+                        public void process(final String key,
+                                            final Long value) {
+                            store.put(key, value);
+                        }
+
+                        @Override
+                        public void punctuate(final long timestamp) {}
+
+                        @Override
+                        public void close() {}
+                    };
+                }
+            }
+        );
+    }
 
     private void createTopics() throws InterruptedException {
         inputStream = "input-stream-" + testNo;
