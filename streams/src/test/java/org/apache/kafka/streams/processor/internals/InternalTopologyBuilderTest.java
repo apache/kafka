@@ -164,7 +164,7 @@ public class InternalTopologyBuilderTest {
         builder.addProcessor("processor", new MockProcessorSupplier());
     }
 
-    @Test(expected = TopologyException.class)
+    @Test(expected = NullPointerException.class)
     public void testAddProcessorWithNullParents() {
         builder.addProcessor("processor", new MockProcessorSupplier(), null);
     }
@@ -195,7 +195,7 @@ public class InternalTopologyBuilderTest {
         builder.addSink("sink", "topic", null, null, null);
     }
 
-    @Test(expected = TopologyException.class)
+    @Test(expected = NullPointerException.class)
     public void testAddSinkWithNullParents() {
         builder.addSink("sink", "topic", null, null, null, null);
     }

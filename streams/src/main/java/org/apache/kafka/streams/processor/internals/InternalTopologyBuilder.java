@@ -442,7 +442,8 @@ public class InternalTopologyBuilder {
                                      final String... predecessorNames) {
         Objects.requireNonNull(name, "name must not be null");
         Objects.requireNonNull(topic, "topic must not be null");
-        if (predecessorNames == null || predecessorNames.length == 0) {
+        Objects.requireNonNull(predecessorNames, "predecessor names must not be null");
+        if (predecessorNames.length == 0) {
             throw new TopologyException("Sink " + name + " must have at least one parent");
         }
 
@@ -458,10 +459,11 @@ public class InternalTopologyBuilder {
                                      final String... predecessorNames) {
         Objects.requireNonNull(name, "name must not be null");
         Objects.requireNonNull(topicExtractor, "topic extractor must not be null");
+        Objects.requireNonNull(predecessorNames, "predecessor names must not be null");
         if (nodeFactories.containsKey(name)) {
             throw new TopologyException("Processor " + name + " is already added.");
         }
-        if (predecessorNames == null || predecessorNames.length == 0) {
+        if (predecessorNames.length == 0) {
             throw new TopologyException("Sink " + name + " must have at least one parent");
         }
 
@@ -488,10 +490,11 @@ public class InternalTopologyBuilder {
                                    final String... predecessorNames) {
         Objects.requireNonNull(name, "name must not be null");
         Objects.requireNonNull(supplier, "supplier must not be null");
+        Objects.requireNonNull(predecessorNames, "predecessor names must not be null");
         if (nodeFactories.containsKey(name)) {
             throw new TopologyException("Processor " + name + " is already added.");
         }
-        if (predecessorNames == null || predecessorNames.length == 0) {
+        if (predecessorNames.length == 0) {
             throw new TopologyException("Processor " + name + " must have at least one parent");
         }
 

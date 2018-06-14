@@ -188,8 +188,8 @@ public class TopologyTest {
         topology.addSource("source", "topic-1");
         try {
             topology.addProcessor("processor", new MockProcessorSupplier(), null);
-            fail("Should throw TopologyException for processor without at least one parent node");
-        } catch (final TopologyException expected) { }
+            fail("Should throw NullPointerException for processor when null parent names are provided");
+        } catch (final NullPointerException expected) { }
     }
 
     @Test(expected = TopologyException.class)
@@ -228,8 +228,8 @@ public class TopologyTest {
         topology.addProcessor("processor", new MockProcessorSupplier(), "source");
         try {
             topology.addSink("sink", "topic-2", null);
-            fail("Should throw TopologyException for sink without at least one parent node");
-        } catch (final TopologyException expected) { }
+            fail("Should throw NullPointerException for sink when null parent names are provided");
+        } catch (final NullPointerException expected) { }
     }
 
     @Test(expected = TopologyException.class)
