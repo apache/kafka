@@ -33,7 +33,7 @@ import kafka.utils.Json
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.UnsupportedVersionException
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.resource.ResourceNameType
+import org.apache.kafka.common.resource.PatternType
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.Time
@@ -451,7 +451,7 @@ object StateChangeHandlers {
 /**
   * Acls for resources are stored in ZK under two root paths:
   * <ul>
-  *   <li>[[org.apache.kafka.common.resource.ResourceNameType#LITERAL Literal]] patterns are stored under '/kafka-acl'.
+  *   <li>[[org.apache.kafka.common.resource.PatternType#LITERAL Literal]] patterns are stored under '/kafka-acl'.
   *   The format is JSON. See [[kafka.zk.ResourceZNode]] for details.</li>
   *   <li>All other patterns are stored under '/kafka-acl-extended/<i>pattern-type</i>'.
   *   The format is JSON. See [[kafka.zk.ResourceZNode]] for details.</li>
@@ -472,14 +472,14 @@ object StateChangeHandlers {
   *
   * Acl change events are also stored under two paths:
   * <ul>
-  *   <li>[[org.apache.kafka.common.resource.ResourceNameType#LITERAL Literal]] patterns are stored under '/kafka-acl-changes'.
+  *   <li>[[org.apache.kafka.common.resource.PatternType#LITERAL Literal]] patterns are stored under '/kafka-acl-changes'.
   *   The format is a UTF8 string in the form: &lt;resource-type&gt;:&lt;resource-name&gt;</li>
   *   <li>All other patterns are stored under '/kafka-acl-extended-changes'
   *   The format is JSON, as defined by [[kafka.zk.ExtendedAclChangeEvent]]</li>
   * </ul>
   */
 sealed trait ZkAclStore {
-  val patternType: ResourceNameType
+  val patternType: PatternType
   val aclPath: String
 
   def path(resourceType: ResourceType): String = s"$aclPath/$resourceType"
@@ -490,9 +490,11 @@ sealed trait ZkAclStore {
 }
 
 object ZkAclStore {
-  private val storesByType: Map[ResourceNameType, ZkAclStore] = ResourceNameType.values
-    .filter(nameType => nameType != ResourceNameType.ANY && nameType != ResourceNameType.UNKNOWN)
-    .map(nameType => (nameType, create(nameType)))
+  private val storesByType: Map[PatternType, ZkAclStore] = PatternType.values
+    .filter(patternType => patternType != PatternType.MATCH)
+    .filter(patternType => patternType != PatternType.ANY)
+    .filter(patternType => patternType != PatternType.UNKNOWN)
+    .map(patternType => (patternType, create(patternType)))
     .toMap
 
   val stores: Iterable[ZkAclStore] = storesByType.values
@@ -500,30 +502,30 @@ object ZkAclStore {
   val securePaths: Iterable[String] = stores
     .flatMap(store => Set(store.aclPath, store.changeStore.aclChangePath))
 
-  def apply(patternType: ResourceNameType): ZkAclStore = {
+  def apply(patternType: PatternType): ZkAclStore = {
     storesByType.get(patternType) match {
       case Some(store) => store
       case None => throw new KafkaException(s"Invalid pattern type: $patternType")
     }
   }
 
-  private def create(patternType: ResourceNameType) = {
+  private def create(patternType: PatternType) = {
     patternType match {
-      case ResourceNameType.LITERAL => LiteralAclStore
+      case PatternType.LITERAL => LiteralAclStore
       case _ => new ExtendedAclStore(patternType)
     }
   }
 }
 
 object LiteralAclStore extends ZkAclStore {
-  val patternType: ResourceNameType = ResourceNameType.LITERAL
+  val patternType: PatternType = PatternType.LITERAL
   val aclPath: String = "/kafka-acl"
 
   def changeStore: ZkAclChangeStore = LiteralAclChangeStore
 }
 
-class ExtendedAclStore(val patternType: ResourceNameType) extends ZkAclStore {
-  if (patternType == ResourceNameType.LITERAL)
+class ExtendedAclStore(val patternType: PatternType) extends ZkAclStore {
+  if (patternType == PatternType.LITERAL)
     throw new IllegalArgumentException("Literal pattern types are not supported")
 
   val aclPath: String = s"/kafka-acl-extended/${patternType.name.toLowerCase}"
@@ -579,7 +581,7 @@ case object LiteralAclChangeStore extends ZkAclChangeStore {
   val aclChangePath: String = "/kafka-acl-changes"
 
   def encode(resource: Resource): Array[Byte] = {
-    if (resource.nameType != ResourceNameType.LITERAL)
+    if (resource.patternType != PatternType.LITERAL)
       throw new IllegalArgumentException("Only literal resource patterns can be encoded")
 
     val legacyName = resource.resourceType + Resource.Separator + resource.name
@@ -589,7 +591,7 @@ case object LiteralAclChangeStore extends ZkAclChangeStore {
   def decode(bytes: Array[Byte]): Resource = {
     val string = new String(bytes, UTF_8)
     string.split(Separator, 2) match {
-        case Array(resourceType, resourceName, _*) => new Resource(ResourceType.fromString(resourceType), resourceName, ResourceNameType.LITERAL)
+        case Array(resourceType, resourceName, _*) => new Resource(ResourceType.fromString(resourceType), resourceName, PatternType.LITERAL)
         case _ => throw new IllegalArgumentException("expected a string in format ResourceType:ResourceName but got " + string)
       }
   }
@@ -600,14 +602,14 @@ case object ExtendedAclChangeStore extends ZkAclChangeStore {
   val aclChangePath: String = "/kafka-acl-extended-changes"
 
   def encode(resource: Resource): Array[Byte] = {
-    if (resource.nameType == ResourceNameType.LITERAL)
+    if (resource.patternType == PatternType.LITERAL)
       throw new IllegalArgumentException("Literal pattern types are not supported")
 
     Json.encodeAsBytes(ExtendedAclChangeEvent(
       ExtendedAclChangeEvent.currentVersion,
       resource.resourceType.name,
       resource.name,
-      resource.nameType.name))
+      resource.patternType.name))
   }
 
   def decode(bytes: Array[Byte]): Resource = {
@@ -624,7 +626,7 @@ case object ExtendedAclChangeStore extends ZkAclChangeStore {
 }
 
 object ResourceZNode {
-  def path(resource: Resource): String = ZkAclStore(resource.nameType).path(resource.resourceType, resource.name)
+  def path(resource: Resource): String = ZkAclStore(resource.patternType).path(resource.resourceType, resource.name)
 
   def encode(acls: Set[Acl]): Array[Byte] = Json.encodeAsBytes(Acl.toJsonCompatibleMap(acls).asJava)
   def decode(bytes: Array[Byte], stat: Stat): VersionedAcls = VersionedAcls(Acl.fromBytes(bytes), stat.getVersion)
@@ -637,15 +639,15 @@ object ExtendedAclChangeEvent {
 case class ExtendedAclChangeEvent(@BeanProperty @JsonProperty("version") version: Int,
                                   @BeanProperty @JsonProperty("resourceType") resourceType: String,
                                   @BeanProperty @JsonProperty("name") name: String,
-                                  @BeanProperty @JsonProperty("resourceNameType") resourceNameType: String) {
+                                  @BeanProperty @JsonProperty("patternType") patternType: String) {
   if (version > ExtendedAclChangeEvent.currentVersion)
     throw new UnsupportedVersionException(s"Acl change event received for unsupported version: $version")
 
   def toResource: Try[Resource] = {
     for {
       resType <- Try(ResourceType.fromString(resourceType))
-      nameType <- Try(ResourceNameType.fromString(resourceNameType))
-      resource = Resource(resType, name, nameType)
+      patType <- Try(PatternType.fromString(patternType))
+      resource = Resource(resType, name, patType)
     } yield resource
   }
 }

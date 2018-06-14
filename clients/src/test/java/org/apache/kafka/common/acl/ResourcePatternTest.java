@@ -17,7 +17,7 @@
 
 package org.apache.kafka.common.acl;
 
-import org.apache.kafka.common.resource.ResourceNameType;
+import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
 import org.junit.Test;
@@ -25,16 +25,21 @@ import org.junit.Test;
 public class ResourcePatternTest {
     @Test(expected = IllegalArgumentException.class)
     public void shouldThrowIfResourceTypeIsAny() {
-        new ResourcePattern(ResourceType.ANY, "name", ResourceNameType.LITERAL);
+        new ResourcePattern(ResourceType.ANY, "name", PatternType.LITERAL);
     }
 
     @Test(expected = IllegalArgumentException.class)
-    public void shouldThrowIfResourceNameTypeIsAny() {
-        new ResourcePattern(ResourceType.TOPIC, "name", ResourceNameType.ANY);
+    public void shouldThrowIfPatternTypeIsMatch() {
+        new ResourcePattern(ResourceType.TOPIC, "name", PatternType.MATCH);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void shouldThrowIfPatternTypeIsAny() {
+        new ResourcePattern(ResourceType.TOPIC, "name", PatternType.ANY);
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowIfResourceNameIsNull() {
-        new ResourcePattern(ResourceType.TOPIC, null, ResourceNameType.ANY);
+        new ResourcePattern(ResourceType.TOPIC, null, PatternType.ANY);
     }
 }

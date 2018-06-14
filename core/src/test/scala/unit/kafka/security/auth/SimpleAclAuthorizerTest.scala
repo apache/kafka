@@ -28,8 +28,8 @@ import kafka.utils.TestUtils
 import kafka.zk.{ZkAclStore, ZooKeeperTestHarness}
 import kafka.zookeeper.{GetChildrenRequest, GetDataRequest, ZooKeeperClient}
 import org.apache.kafka.common.errors.UnsupportedVersionException
-import org.apache.kafka.common.resource.ResourceNameType
-import org.apache.kafka.common.resource.ResourceNameType.{LITERAL, PREFIXED}
+import org.apache.kafka.common.resource.PatternType
+import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.Time
 import org.junit.Assert._
@@ -37,23 +37,21 @@ import org.junit.{After, Before, Test}
 
 class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
 
-  val allowReadAcl = Acl(Acl.WildCardPrincipal, Allow, WildCardHost, Read)
-  val allowWriteAcl = Acl(Acl.WildCardPrincipal, Allow, WildCardHost, Write)
-  val denyReadAcl = Acl(Acl.WildCardPrincipal, Deny, WildCardHost, Read)
+  private val allowReadAcl = Acl(Acl.WildCardPrincipal, Allow, WildCardHost, Read)
+  private val allowWriteAcl = Acl(Acl.WildCardPrincipal, Allow, WildCardHost, Write)
+  private val denyReadAcl = Acl(Acl.WildCardPrincipal, Deny, WildCardHost, Read)
 
-  val wildCardResource = Resource(Topic, WildCardResource, LITERAL)
-  val prefixedResource = Resource(Topic, "foo", PREFIXED)
+  private val wildCardResource = Resource(Topic, WildCardResource, LITERAL)
+  private val prefixedResource = Resource(Topic, "foo", PREFIXED)
 
-  val simpleAclAuthorizer = new SimpleAclAuthorizer
-  val simpleAclAuthorizer2 = new SimpleAclAuthorizer
-  val testPrincipal = Acl.WildCardPrincipal
-  val testHostName = InetAddress.getByName("192.168.0.1")
-  var resource: Resource = null
-  val superUsers = "User:superuser1; User:superuser2"
-  val username = "alice"
-  val principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
-  val session = Session(principal, testHostName)
-  var config: KafkaConfig = _
+  private val simpleAclAuthorizer = new SimpleAclAuthorizer
+  private val simpleAclAuthorizer2 = new SimpleAclAuthorizer
+  private var resource: Resource = _
+  private val superUsers = "User:superuser1; User:superuser2"
+  private val username = "alice"
+  private val principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
+  private val session = Session(principal, InetAddress.getByName("192.168.0.1"))
+  private var config: KafkaConfig = _
   private var zooKeeperClient: ZooKeeperClient = _
 
   @Before
@@ -545,23 +543,24 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
 
   @Test
   def testGetAclsPrincipal(): Unit = {
-    assertEquals(0, simpleAclAuthorizer.getAcls(principal).size)
+    val aclOnSpecificPrincipal = new Acl(principal, Allow, WildCardHost, Write)
+    simpleAclAuthorizer.addAcls(Set[Acl](aclOnSpecificPrincipal), resource)
 
-    val acl1 = new Acl(principal, Allow, WildCardHost, Write)
-    simpleAclAuthorizer.addAcls(Set[Acl](acl1), resource)
-    assertEquals(1, simpleAclAuthorizer.getAcls(principal).size)
+    assertEquals("acl on specific should not be returned for wildcard request",
+      0, simpleAclAuthorizer.getAcls(Acl.WildCardPrincipal).size)
+    assertEquals("acl on specific should be returned for specific request",
+      1, simpleAclAuthorizer.getAcls(principal).size)
+    assertEquals("acl on specific should be returned for different principal instance",
+      1, simpleAclAuthorizer.getAcls(new KafkaPrincipal(principal.getPrincipalType, principal.getName)).size)
 
-    simpleAclAuthorizer.addAcls(Set[Acl](acl1), Resource(Topic, Acl.WildCardResource, LITERAL))
-    assertEquals(2, simpleAclAuthorizer.getAcls(principal).size)
+    simpleAclAuthorizer.removeAcls(resource)
+    val aclOnWildcardPrincipal = new Acl(Acl.WildCardPrincipal, Allow, WildCardHost, Write)
+    simpleAclAuthorizer.addAcls(Set[Acl](aclOnWildcardPrincipal), resource)
 
-    val acl2 = new Acl(Acl.WildCardPrincipal, Allow, WildCardHost, Write)
-    simpleAclAuthorizer.addAcls(Set[Acl](acl1), Resource(Group, "groupA", LITERAL))
-    assertEquals(3, simpleAclAuthorizer.getAcls(principal).size)
-
-    // add prefixed principal acl on wildcard group name
-    val acl3 = new Acl(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, principal.getName.charAt(0) + WildCardResource), Allow, WildCardHost, Write)
-    simpleAclAuthorizer.addAcls(Set[Acl](acl1), Resource(Group, Acl.WildCardResource, LITERAL))
-    assertEquals(4, simpleAclAuthorizer.getAcls(principal).size)
+    assertEquals("acl on wildcard should be returned for wildcard request",
+      1, simpleAclAuthorizer.getAcls(Acl.WildCardPrincipal).size)
+    assertEquals("acl on wildcard should not be returned for specific request",
+      0, simpleAclAuthorizer.getAcls(principal).size)
   }
 
   @Test(expected = classOf[UnsupportedVersionException])
@@ -634,7 +633,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
     simpleAclAuthorizer.configure(config.originals)
   }
 
-  private def getAclChangeEventAsString(patternType: ResourceNameType) = {
+  private def getAclChangeEventAsString(patternType: PatternType) = {
     val store = ZkAclStore(patternType)
     val children = zooKeeperClient.handleRequest(GetChildrenRequest(store.changeStore.aclChangePath))
     children.maybeThrow()

@@ -36,26 +36,26 @@ public class ResourcePattern {
 
     private final ResourceType resourceType;
     private final String name;
-    private final ResourceNameType nameType;
+    private final PatternType patternType;
 
    /**
      * Create a pattern using the supplied parameters.
      *
      * @param resourceType non-null, specific, resource type
      * @param name non-null resource name, which can be the {@link #WILDCARD_RESOURCE}.
-     * @param nameType non-null, specific, resource name type, which controls how the pattern will match resource names.
+     * @param patternType non-null, specific, resource pattern type, which controls how the pattern will match resource names.
      */
-    public ResourcePattern(ResourceType resourceType, String name, ResourceNameType nameType) {
+    public ResourcePattern(ResourceType resourceType, String name, PatternType patternType) {
         this.resourceType = Objects.requireNonNull(resourceType, "resourceType");
         this.name = Objects.requireNonNull(name, "name");
-        this.nameType = Objects.requireNonNull(nameType, "nameType");
+        this.patternType = Objects.requireNonNull(patternType, "patternType");
 
         if (resourceType == ResourceType.ANY) {
             throw new IllegalArgumentException("resourceType must not be ANY");
         }
 
-        if (nameType == ResourceNameType.ANY) {
-            throw new IllegalArgumentException("nameType must not be ANY");
+        if (patternType == PatternType.MATCH || patternType == PatternType.ANY) {
+            throw new IllegalArgumentException("patternType must not be " + patternType);
         }
     }
 
@@ -74,29 +74,29 @@ public class ResourcePattern {
     }
 
     /**
-     * @return the resource name type.
+     * @return the resource pattern type.
      */
-    public ResourceNameType nameType() {
-        return nameType;
+    public PatternType patternType() {
+        return patternType;
     }
 
     /**
      * @return a filter which matches only this pattern.
      */
     public ResourcePatternFilter toFilter() {
-        return new ResourcePatternFilter(resourceType, name, nameType);
+        return new ResourcePatternFilter(resourceType, name, patternType);
     }
 
     @Override
     public String toString() {
-        return "ResourcePattern(resourceType=" + resourceType + ", name=" + ((name == null) ? "<any>" : name) + ", nameType=" + nameType + ")";
+        return "ResourcePattern(resourceType=" + resourceType + ", name=" + ((name == null) ? "<any>" : name) + ", patternType=" + patternType + ")";
     }
 
     /**
      * @return {@code true} if this Resource has any UNKNOWN components.
      */
     public boolean isUnknown() {
-        return resourceType.isUnknown() || nameType.isUnknown();
+        return resourceType.isUnknown() || patternType.isUnknown();
     }
 
     @Override
@@ -109,11 +109,11 @@ public class ResourcePattern {
         final ResourcePattern resource = (ResourcePattern) o;
         return resourceType == resource.resourceType &&
             Objects.equals(name, resource.name) &&
-            nameType == resource.nameType;
+            patternType == resource.patternType;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(resourceType, name, nameType);
+        return Objects.hash(resourceType, name, patternType);
     }
 }

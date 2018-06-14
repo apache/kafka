@@ -31,7 +31,7 @@ import kafka.server.ConfigType
 import kafka.utils.Logging
 import kafka.zookeeper._
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.resource.ResourceNameType
+import org.apache.kafka.common.resource.PatternType
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.zookeeper.KeeperException.{Code, NodeExistsException}
@@ -1010,7 +1010,7 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
    * @param resource resource pattern that has changed
    */
   def createAclChangeNotification(resource: Resource): Unit = {
-    val aclChange = ZkAclStore(resource.nameType).changeStore.createChangeNode(resource)
+    val aclChange = ZkAclStore(resource.patternType).changeStore.createChangeNode(resource)
     val createRequest = CreateRequest(aclChange.path, aclChange.bytes, acls(aclChange.path), CreateMode.PERSISTENT_SEQUENTIAL)
     val createResponse = retryRequestUntilConnected(createRequest)
     createResponse.maybeThrow
@@ -1064,22 +1064,22 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
   }
 
   /**
-   * Gets the resource types, for which ACLs are stored, for the supplied resource name type.
-   * @param nameType The resource name type to retrieve the names for.
+   * Gets the resource types, for which ACLs are stored, for the supplied resource pattern type.
+   * @param patternType The resource pattern type to retrieve the names for.
    * @return list of resource type names
    */
-  def getResourceTypes(nameType: ResourceNameType): Seq[String] = {
-    getChildren(ZkAclStore(nameType).aclPath)
+  def getResourceTypes(patternType: PatternType): Seq[String] = {
+    getChildren(ZkAclStore(patternType).aclPath)
   }
 
   /**
-   * Gets the resource names, for which ACLs are stored, for a given resource type and name type
-   * @param nameType The resource name type to retrieve the names for.
+   * Gets the resource names, for which ACLs are stored, for a given resource type and pattern type
+   * @param patternType The resource pattern type to retrieve the names for.
    * @param resourceType Resource type to retrieve the names for.
    * @return list of resource names
    */
-  def getResourceNames(nameType: ResourceNameType, resourceType: ResourceType): Seq[String] = {
-    getChildren(ZkAclStore(nameType).path(resourceType))
+  def getResourceNames(patternType: PatternType, resourceType: ResourceType): Seq[String] = {
+    getChildren(ZkAclStore(patternType).path(resourceType))
   }
 
   /**
