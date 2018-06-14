@@ -157,11 +157,6 @@ public interface Consumer<K, V> extends Closeable {
     OffsetAndMetadata committed(TopicPartition partition, final Duration timeout);
 
     /**
-     * @see KafkaConsumer#committed(TopicPartition, long, TimeUnit)
-     */
-    public OffsetAndMetadata committed(TopicPartition partition, final Duration duration);
-
-    /**
      * @see KafkaConsumer#metrics()
      */
     Map<MetricName, ? extends Metric> metrics();

@@ -399,7 +399,7 @@ public class RestoreIntegrationTest {
 
         for (TopicPartition partition : partitions) {
             final long position = consumer.position(partition);
-
+            consumer.seek(partition, position - limitDelta);
         }
 
         consumer.commitSync();

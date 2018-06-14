@@ -1116,7 +1116,7 @@ public class KafkaConsumerTest {
 
         ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(1));
         assertEquals(1, records.count());
-        assertEquals(11L, consumer.position(tp0, Duration.ofSeconds(2)));
+        assertEquals(11L, consumer.position(tp0));
 
         // mock the offset commit response for to be revoked partitions
         AtomicBoolean commitReceived = prepareOffsetCommitResponse(client, coordinator, tp0, 11);
@@ -1237,8 +1237,8 @@ public class KafkaConsumerTest {
         offsetResponse.put(tp0, 3L);
         offsetResponse.put(tp1, 3L);
         client.prepareResponse(listOffsetsResponse(offsetResponse));
-        assertEquals(3L, consumer.position(tp0, Duration.ofSeconds(2)));
-        assertEquals(3L, consumer.position(tp1, Duration.ofSeconds(2)));
+        assertEquals(3L, consumer.position(tp0));
+        assertEquals(3L, consumer.position(tp1));
 
         client.requests().clear();
         consumer.unsubscribe();

@@ -279,8 +279,8 @@ public class StreamsUpgradeTest {
             buf.putInt(LATEST_SUPPORTED_VERSION + 1); // used version
             buf.putInt(LATEST_SUPPORTED_VERSION + 1); // supported version
             encodeClientUUID(buf);
-            encodeTasks(buf, prevTasks());
-            encodeTasks(buf, standbyTasks());
+            encodeTasks(buf, prevTasks(), LATEST_SUPPORTED_VERSION + 1);
+            encodeTasks(buf, standbyTasks(), LATEST_SUPPORTED_VERSION + 1);
             encodeUserEndPoint(buf, endPointBytes);
 
             return buf;

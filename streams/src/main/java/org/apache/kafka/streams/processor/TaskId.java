@@ -80,14 +80,14 @@ public class TaskId implements Comparable<TaskId> {
     public void writeTo(ByteBuffer buf, final int version) {
         buf.putInt(topicGroupId);
         buf.putInt(partition);
-        if (version == 2) {
+        if (version >= 2) {
             buf.putInt(numberOfStateStores);
         }
     }
 
     public static TaskId readFrom(ByteBuffer buf, final int version) {
         final TaskId result = new TaskId(buf.getInt(), buf.getInt());
-        if (version == 2) {
+        if (version >= 2) {
             result.setNumberOfStateStores(buf.getInt());
         }
         return result;

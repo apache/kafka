@@ -837,10 +837,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         this.assignors = assignors;
     }
 
-    public long requestTimeoutMs() {
-        return requestTimeoutMs;
-    }
-
     /**
      * Get the set of partitions currently assigned to this consumer. If subscription happened by directly assigning
      * partitions using {@link #assign(Collection)} then this will simply return the same partitions that
@@ -1656,60 +1652,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Get the offset of the <i>next record</i> that will be fetched (if a record with that offset exists).
-     * This method may issue a remote call to the server if there is no current position for the given partition.
-     * <p>
-     * This call will block until either the position could be determined or an unrecoverable error is
-     * encountered (in which case it is thrown to the caller). However, if offset position is not retrieved
-     * within a given amount of time, the process will be terminated.
-     *
-     * @param partition The partition to get the position for
-     * @param duration  The maximum duration in which the method can block
-     * @return The current position of the consumer (that is, the offset of the next record to be fetched)
-     * @throws IllegalArgumentException if the provided TopicPartition is not assigned to this consumer
-     * @throws org.apache.kafka.clients.consumer.InvalidOffsetException if no offset is currently defined for
-     *             the partition
-     * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
-     *             function is called
-     * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
-     *             this function is called
-     * @throws org.apache.kafka.common.errors.TimeoutException if the method blocks for longer than requestTimoutMs
-     * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
-     * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic or to the
-     *             configured groupId. See the exception for more details
-     * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors
-     */
-    public long position(TopicPartition partition, final Duration duration) {
-        final long timeout = duration.toMillis();
-        acquireAndEnsureOpen();
-        try {
-            if (!this.subscriptions.isAssigned(partition))
-                throw new IllegalArgumentException("You can only check the position for partitions assigned to this consumer.");
-            Long offset = this.subscriptions.position(partition);
-            final long startMs = time.milliseconds();
-            long finishMs = time.milliseconds();
-            while (offset == null && finishMs - startMs < timeout) {
-                // batch update fetch positions for any partitions without a valid position
-                updateFetchPositions(time.milliseconds(), timeout - (time.milliseconds() - startMs));
-                finishMs = time.milliseconds();
-                final long remainingTime = Math.max(0, timeout - (finishMs - startMs));
-                
-                if (remainingTime > 0) {
-                    client.poll(remainingTime);
-                    offset = this.subscriptions.position(partition);
-                    finishMs = time.milliseconds();
-                } else {
-                    break;
-                }
-            }
-            if (offset == null) throw new TimeoutException("request timed out, position is unable to be acquired.");
-            return offset;
-        } finally {
-            release();
-        }
-    }
-
-    /**
      * Get the last committed offset for the given partition (whether the commit happened by this process or
      * another). This offset will be used as the position for the consumer in the event of a failure.
      * <p>
@@ -1766,39 +1708,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before the last " +
                         "committed offset for partition " + partition + " could be determined");
             }
-            return offsets.get(partition);
-        } finally {
-            release();
-        }
-    }
-
-    /**
-     * Get the last committed offset for the given partition (whether the commit happened by this process or
-     * another). This offset will be used as the position for the consumer in the event of a failure.
-     * <p>
-     * This call will block to do a remote call to get the latest committed offsets from the server.
-     *
-     * @param partition The partition to check
-     * @param duration  The duration we would want to block
-     * @return The last committed offset and metadata or null if there was no prior commit
-     * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
-     *             function is called
-     * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
-     *             this function is called
-     * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
-     * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic or to the
-     *             configured groupId. See the exception for more details
-     * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors
-     */
-    @Override
-    public OffsetAndMetadata committed(TopicPartition partition, final Duration duration) {
-        acquireAndEnsureOpen();
-        final long totalWaitTime = duration.toMillis();
-        try {
-            Map<TopicPartition, OffsetAndMetadata> offsets = coordinator.fetchCommittedOffsets(Collections.singleton(partition), 
-                                                                                               time.milliseconds(), 
-                                                                                               totalWaitTime, 
-                                                                                               time);
             return offsets.get(partition);
         } finally {
             release();
@@ -2282,29 +2191,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         fetcher.resetOffsetsIfNeeded();
 
         return true;
-    }
-
-    /**
-     * Set the fetch position to the committed position (if there is one) 
-     * or reset it using the offset reset policy the user has configured
-     * within a given time limit.
-     * 
-     * @param start        the time at which the operation begins
-     * @param timeoutMs    the maximum duration of the method
-     * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
-     * @throws NoOffsetForPartitionException If no offset is stored for a given partition and no offset reset policy is
-     *             defined
-     * @return true if all assigned positions have a position
-     */
-    private boolean updateFetchPositions(long start, long timeoutMs) {
-        if (subscriptions.hasAllFetchPositions())
-            return true;
-
-        coordinator.refreshCommittedOffsetsIfNeeded(start, timeoutMs);
-        subscriptions.resetMissingPositions();
-        fetcher.resetOffsetsIfNeeded();
-
-        return false;
     }
 
     /**

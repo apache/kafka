@@ -261,7 +261,7 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
                 globalConsumer.seekToBeginning(Collections.singletonList(topicPartition));
             }
 
-            long offset = globalConsumer.position(topicPartition, DEFAULT_WAIT_TIME, TimeUnit.MILLISECONDS);
+            long offset = globalConsumer.position(topicPartition);
             final Long highWatermark = highWatermarks.get(topicPartition);
             final BatchingStateRestoreCallback stateRestoreAdapter =
                 (BatchingStateRestoreCallback) ((stateRestoreCallback instanceof
