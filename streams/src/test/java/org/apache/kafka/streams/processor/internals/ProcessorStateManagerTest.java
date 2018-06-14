@@ -123,7 +123,7 @@ public class ProcessorStateManagerTest {
             assertThat(batchingRestoreCallback.getRestoredRecords().size(), is(1));
             assertTrue(batchingRestoreCallback.getRestoredRecords().contains(expectedKeyValue));
         } finally {
-            stateMgr.close(Collections.emptyMap());
+            stateMgr.close(Collections.<TopicPartition, Long>emptyMap());
         }
     }
 
@@ -141,7 +141,7 @@ public class ProcessorStateManagerTest {
             assertThat(persistentStore.keys.size(), is(1));
             assertTrue(persistentStore.keys.contains(intKey));
         } finally {
-            stateMgr.close(Collections.emptyMap());
+            stateMgr.close(Collections.<TopicPartition, Long>emptyMap());
         }
     }
 
@@ -169,7 +169,7 @@ public class ProcessorStateManagerTest {
             stateMgr.register(persistentStore, persistentStore.stateRestoreCallback);
             assertTrue(changelogReader.wasRegistered(new TopicPartition(persistentStoreTopicName, 2)));
         } finally {
-            stateMgr.close(Collections.emptyMap());
+            stateMgr.close(Collections.<TopicPartition, Long>emptyMap());
         }
     }
 
@@ -196,7 +196,7 @@ public class ProcessorStateManagerTest {
             stateMgr.register(nonPersistentStore, nonPersistentStore.stateRestoreCallback);
             assertTrue(changelogReader.wasRegistered(new TopicPartition(nonPersistentStoreTopicName, 2)));
         } finally {
-            stateMgr.close(Collections.emptyMap());
+            stateMgr.close(Collections.<TopicPartition, Long>emptyMap());
         }
     }
 
@@ -257,7 +257,7 @@ public class ProcessorStateManagerTest {
             assertEquals(-1L, (long) changeLogOffsets.get(partition3));
 
         } finally {
-            stateMgr.close(Collections.emptyMap());
+            stateMgr.close(Collections.<TopicPartition, Long>emptyMap());
         }
     }
 
@@ -269,7 +269,7 @@ public class ProcessorStateManagerTest {
             noPartitions,
             false,
             stateDirectory,
-            Collections.emptyMap(),
+            Collections.<String, String>emptyMap(),
             changelogReader,
             false,
             logContext);
@@ -280,13 +280,13 @@ public class ProcessorStateManagerTest {
             assertEquals(mockStateStore, stateMgr.getStore(nonPersistentStoreName));
 
         } finally {
-            stateMgr.close(Collections.emptyMap());
+            stateMgr.close(Collections.<TopicPartition, Long>emptyMap());
         }
     }
 
     @Test
     public void testFlushAndClose() throws IOException {
-        checkpoint.write(Collections.emptyMap());
+        checkpoint.write(Collections.<TopicPartition, Long>emptyMap());
 
         // set up ack'ed offsets
         final HashMap<TopicPartition, Long> ackedOffsets = new HashMap<>();
@@ -339,7 +339,7 @@ public class ProcessorStateManagerTest {
             noPartitions,
             false,
             stateDirectory,
-            Collections.emptyMap(),
+            Collections.<String, String>emptyMap(),
             changelogReader,
             false,
             logContext);
@@ -358,7 +358,7 @@ public class ProcessorStateManagerTest {
             noPartitions,
             false,
             stateDirectory,
-            Collections.emptyMap(),
+            Collections.<String, String>emptyMap(),
             changelogReader,
             false,
             logContext);
@@ -408,7 +408,7 @@ public class ProcessorStateManagerTest {
                                                                   bytes,
                                                                   bytes)));
 
-        stateMgr.checkpoint(Collections.emptyMap());
+        stateMgr.checkpoint(Collections.<TopicPartition, Long>emptyMap());
 
         final Map<TopicPartition, Long> read = checkpoint.read();
         assertThat(read, equalTo(Collections.singletonMap(persistentStorePartition, 889L)));
@@ -433,7 +433,7 @@ public class ProcessorStateManagerTest {
         stateMgr.checkpoint(Collections.singletonMap(topicPartition, 876L));
 
         final Map<TopicPartition, Long> read = checkpoint.read();
-        assertThat(read, equalTo(Collections.emptyMap()));
+        assertThat(read, equalTo(Collections.<TopicPartition, Long>emptyMap()));
     }
 
     @Test
@@ -443,7 +443,7 @@ public class ProcessorStateManagerTest {
             noPartitions,
             true, // standby
             stateDirectory,
-            Collections.emptyMap(),
+            Collections.<String, String>emptyMap(),
             changelogReader,
             false,
             logContext);
@@ -453,7 +453,7 @@ public class ProcessorStateManagerTest {
         stateMgr.checkpoint(Collections.singletonMap(persistentStorePartition, 987L));
 
         final Map<TopicPartition, Long> read = checkpoint.read();
-        assertThat(read, equalTo(Collections.emptyMap()));
+        assertThat(read, equalTo(Collections.<TopicPartition, Long>emptyMap()));
     }
 
     @Test
@@ -463,7 +463,7 @@ public class ProcessorStateManagerTest {
             noPartitions,
             false,
             stateDirectory,
-            Collections.emptyMap(),
+            Collections.<String, String>emptyMap(),
             changelogReader,
             false,
             logContext);
@@ -483,7 +483,7 @@ public class ProcessorStateManagerTest {
             noPartitions,
             false,
             stateDirectory,
-            Collections.emptyMap(),
+            Collections.<String, String>emptyMap(),
             changelogReader,
             false,
             logContext);
@@ -550,7 +550,7 @@ public class ProcessorStateManagerTest {
         stateManager.register(stateStore, stateStore.stateRestoreCallback);
 
         try {
-            stateManager.close(Collections.emptyMap());
+            stateManager.close(Collections.<TopicPartition, Long>emptyMap());
             fail("Should throw ProcessorStateException if store close throws exception");
         } catch (final ProcessorStateException e) {
             // pass
@@ -622,7 +622,7 @@ public class ProcessorStateManagerTest {
         stateManager.register(stateStore2, stateStore2.stateRestoreCallback);
 
         try {
-            stateManager.close(Collections.emptyMap());
+            stateManager.close(Collections.<TopicPartition, Long>emptyMap());
         } catch (final ProcessorStateException expected) { /* ignode */ }
         Assert.assertTrue(closedStore.get());
     }
@@ -639,7 +639,7 @@ public class ProcessorStateManagerTest {
                 noPartitions,
                 false,
                 stateDirectory,
-                Collections.emptyMap(),
+                Collections.<String, String>emptyMap(),
                 changelogReader,
                 true,
                 logContext);
