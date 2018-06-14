@@ -67,6 +67,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
         this.valSerde = valSerde;
     }
 
+    @SuppressWarnings("unchecked")
     private <T> KTable<K, T> doAggregate(final ProcessorSupplier<K, Change<V>> aggregateSupplier,
                                          final String functionName,
                                          final MaterializedInternal<K, T, KeyValueStore<Bytes, byte[]>> materialized) {
@@ -75,22 +76,17 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
         final String funcName = builder.newProcessorName(functionName);
         final String topic = materialized.storeName() + KStreamImpl.REPARTITION_TOPIC_SUFFIX;
 
-        GroupedTableOperationRepartitionNode.GroupedTableOperationRepartitionNodeBuilder<K, V>
-            groupedTableOperationRepartitionNodeBuilder = GroupedTableOperationRepartitionNode.groupedTableOperationNodeBuilder();
-
-        ProcessorParameters processorParameters = new ProcessorParameters<>(aggregateSupplier, funcName);
-
-        groupedTableOperationRepartitionNodeBuilder.withRepartitionTopic(topic)
-                              .withSinkName(sinkName)
-                              .withSourceName(sourceName)
-                              .withProcessorParameters(processorParameters)
-                              .withKeySerde(keySerde)
-                              .withValueSerde(valSerde)
-                              .withMaterializedInternal(materialized)
-                              .withNodeName(funcName);
-
-        GroupedTableOperationRepartitionNode repartitionNode = groupedTableOperationRepartitionNodeBuilder.build();
+        StreamsGraphNode repartitionNode = createRepartitionNode(sinkName,
+                                                                 sourceName,
+                                                                 topic);
         addGraphNode(repartitionNode);
+
+        StatefulProcessorNode statefulProcessorNode = getStatefulProcessorNode(materialized,
+                                                                               funcName,
+                                                                               aggregateSupplier);
+
+        repartitionNode.addChildNode(statefulProcessorNode);
+        builder.maybeAddNodeForOptimizationMetadata(statefulProcessorNode);
 
         // return the KTable representation with the intermediate topic as the sources
         return new KTableImpl<>(builder,
@@ -99,7 +95,34 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
                                 Collections.singleton(sourceName),
                                 materialized.storeName(),
                                 materialized.isQueryable(),
-                                repartitionNode);
+                                statefulProcessorNode);
+    }
+
+    @SuppressWarnings("unchecked")
+    private <T> StatefulProcessorNode getStatefulProcessorNode(final MaterializedInternal<K, T, KeyValueStore<Bytes, byte[]>> materialized,
+                                                               final String functionName,
+                                                               final ProcessorSupplier aggregateSupplier) {
+
+        ProcessorParameters aggregateFunctionProcessorParams = new ProcessorParameters<>(aggregateSupplier, functionName);
+
+        return StatefulProcessorNode.statefulProcessorNodeBuilder()
+            .withNodeName(functionName)
+            .withProcessorParameters(aggregateFunctionProcessorParams)
+            .withStoreBuilder(new KeyValueStoreMaterializer(materialized).materialize()).build();
+    }
+
+    @SuppressWarnings("unchecked")
+    private GroupedTableOperationRepartitionNode createRepartitionNode(final String sinkName,
+                                                                       final String sourceName,
+                                                                       final String topic) {
+
+        return GroupedTableOperationRepartitionNode.groupedTableOperationNodeBuilder()
+            .withRepartitionTopic(topic)
+            .withSinkName(sinkName)
+            .withSourceName(sourceName)
+            .withKeySerde(keySerde)
+            .withValueSerde(valSerde)
+            .withNodeName(sourceName).build();
     }
 
     @Override
