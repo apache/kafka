@@ -82,7 +82,7 @@ object GetOffsetShell {
           try partitionString.toInt
           catch {
             case e: NumberFormatException =>
-              s"--partitions expected a comma separated list of numeric partition ids, but received: $partitionsString"
+              System.err.println(s"--partitions expected a comma separated list of numeric partition ids, but received: $partitionsString")
               Exit.exit(1)
           }
         }.toSet
