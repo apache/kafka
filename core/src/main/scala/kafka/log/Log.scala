@@ -29,7 +29,7 @@ import java.util.regex.Pattern
 
 import com.yammer.metrics.core.Gauge
 import kafka.api.KAFKA_0_10_0_IV0
-import kafka.common.{InvalidOffsetException, KafkaException, LogSegmentOffsetOverflowException, LongRef}
+import kafka.common.{InvalidOffsetException, KafkaException, LogSegmentOffsetOverflowException, LongRef, UnexpectedAppendOffsetException, OffsetsOutOfOrderException}
 import kafka.message.{BrokerCompressionCodec, CompressionCodec, NoCompressionCodec}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.checkpoints.{LeaderEpochCheckpointFile, LeaderEpochFile}
@@ -49,11 +49,11 @@ import scala.collection.{Seq, Set, mutable}
 
 object LogAppendInfo {
   val UnknownLogAppendInfo = LogAppendInfo(None, -1, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, -1L,
-    RecordConversionStats.EMPTY, NoCompressionCodec, NoCompressionCodec, -1, -1, offsetsMonotonic = false)
+    RecordConversionStats.EMPTY, NoCompressionCodec, NoCompressionCodec, -1, -1, offsetsMonotonic = false, -1L)
 
   def unknownLogAppendInfoWithLogStartOffset(logStartOffset: Long): LogAppendInfo =
     LogAppendInfo(None, -1, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, logStartOffset,
-      RecordConversionStats.EMPTY, NoCompressionCodec, NoCompressionCodec, -1, -1, offsetsMonotonic = false)
+      RecordConversionStats.EMPTY, NoCompressionCodec, NoCompressionCodec, -1, -1, offsetsMonotonic = false, -1L)
 }
 
 /**
@@ -72,6 +72,7 @@ object LogAppendInfo {
  * @param shallowCount The number of shallow messages
  * @param validBytes The number of valid bytes
  * @param offsetsMonotonic Are the offsets in this message set monotonically increasing
+ * @param lastOffsetOfFirstBatch The last offset of the first batch
  */
 case class LogAppendInfo(var firstOffset: Option[Long],
                          var lastOffset: Long,
@@ -84,12 +85,15 @@ case class LogAppendInfo(var firstOffset: Option[Long],
                          targetCodec: CompressionCodec,
                          shallowCount: Int,
                          validBytes: Int,
-                         offsetsMonotonic: Boolean) {
+                         offsetsMonotonic: Boolean,
+                         lastOffsetOfFirstBatch: Long) {
   /**
-   * Get the first offset if it exists, else get the last offset.
-   * @return The offset of first message if it exists; else offset of the last message.
+   * Get the first offset if it exists, else get the last offset of the first batch
+   * For magic versions 2 and newer, this method will return first offset. For magic versions
+   * older than 2, we use the last offset of the first batch as an approximation of the first
+   * offset to avoid decompressing the data.
    */
-  def firstOrLastOffset: Long = firstOffset.getOrElse(lastOffset)
+  def firstOrLastOffsetOfFirstBatch: Long = firstOffset.getOrElse(lastOffsetOfFirstBatch)
 
   /**
    * Get the (maximum) number of messages described by LogAppendInfo
@@ -736,6 +740,8 @@ class Log(@volatile var dir: File,
    * @param assignOffsets Should the log assign offsets to this message set or blindly apply what it is given
    * @param leaderEpoch The partition's leader epoch which will be applied to messages when offsets are assigned on the leader
    * @throws KafkaStorageException If the append fails due to an I/O error.
+   * @throws OffsetsOutOfOrderException If out of order offsets found in 'records'
+   * @throws UnexpectedAppendOffsetException If the first or last offset in append is less than next offset
    * @return Information about the appended messages including the first and last offset.
    */
   private def append(records: MemoryRecords, isFromClient: Boolean, assignOffsets: Boolean, leaderEpoch: Int): LogAppendInfo = {
@@ -798,9 +804,27 @@ class Log(@volatile var dir: File,
           }
         } else {
           // we are taking the offsets we are given
-          if (!appendInfo.offsetsMonotonic || appendInfo.firstOrLastOffset < nextOffsetMetadata.messageOffset)
-            throw new IllegalArgumentException(s"Out of order offsets found in append to $topicPartition: " +
-              records.records.asScala.map(_.offset))
+          if (!appendInfo.offsetsMonotonic)
+            throw new OffsetsOutOfOrderException(s"Out of order offsets found in append to $topicPartition: " +
+                                                 records.records.asScala.map(_.offset))
+
+          if (appendInfo.firstOrLastOffsetOfFirstBatch < nextOffsetMetadata.messageOffset) {
+            // we may still be able to recover if the log is empty
+            // one example: fetching from log start offset on the leader which is not batch aligned,
+            // which may happen as a result of AdminClient#deleteRecords()
+            val firstOffset = appendInfo.firstOffset match {
+              case Some(offset) => offset
+              case None => records.batches.asScala.head.baseOffset()
+            }
+
+            val firstOrLast = if (appendInfo.firstOffset.isDefined) "First offset" else "Last offset of the first batch"
+            throw new UnexpectedAppendOffsetException(
+              s"Unexpected offset in append to $topicPartition. $firstOrLast " +
+              s"${appendInfo.firstOrLastOffsetOfFirstBatch} is less than the next offset ${nextOffsetMetadata.messageOffset}. " +
+              s"First 10 offsets in append: ${records.records.asScala.take(10).map(_.offset)}, last offset in" +
+              s" append: ${appendInfo.lastOffset}. Log start offset = $logStartOffset",
+              firstOffset, appendInfo.lastOffset)
+          }
         }
 
         // update the epoch cache with the epoch stamped onto the message by the leader
@@ -830,7 +854,7 @@ class Log(@volatile var dir: File,
         val segment = maybeRoll(validRecords.sizeInBytes, appendInfo)
 
         val logOffsetMetadata = LogOffsetMetadata(
-          messageOffset = appendInfo.firstOrLastOffset,
+          messageOffset = appendInfo.firstOrLastOffsetOfFirstBatch,
           segmentBaseOffset = segment.baseOffset,
           relativePositionInSegment = segment.size)
 
@@ -970,6 +994,7 @@ class Log(@volatile var dir: File,
     var maxTimestamp = RecordBatch.NO_TIMESTAMP
     var offsetOfMaxTimestamp = -1L
     var readFirstMessage = false
+    var lastOffsetOfFirstBatch = -1L
 
     for (batch <- records.batches.asScala) {
       // we only validate V2 and higher to avoid potential compatibility issues with older clients
@@ -986,6 +1011,7 @@ class Log(@volatile var dir: File,
       if (!readFirstMessage) {
         if (batch.magic >= RecordBatch.MAGIC_VALUE_V2)
           firstOffset = Some(batch.baseOffset)
+        lastOffsetOfFirstBatch = batch.lastOffset
         readFirstMessage = true
       }
 
@@ -1024,7 +1050,7 @@ class Log(@volatile var dir: File,
     // Apply broker-side compression if any
     val targetCodec = BrokerCompressionCodec.getTargetCompressionCodec(config.compressionType, sourceCodec)
     LogAppendInfo(firstOffset, lastOffset, maxTimestamp, offsetOfMaxTimestamp, RecordBatch.NO_TIMESTAMP, logStartOffset,
-      RecordConversionStats.EMPTY, sourceCodec, targetCodec, shallowMessageCount, validBytesCount, monotonic)
+      RecordConversionStats.EMPTY, sourceCodec, targetCodec, shallowMessageCount, validBytesCount, monotonic, lastOffsetOfFirstBatch)
   }
 
   private def updateProducers(batch: RecordBatch,
