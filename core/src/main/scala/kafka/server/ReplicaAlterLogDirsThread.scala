@@ -17,20 +17,20 @@
 
 package kafka.server
 
-import java.nio.ByteBuffer
 import java.util
 
 import kafka.api.Request
 import kafka.cluster.BrokerEndPoint
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import kafka.server.QuotaFactory.UnboundedQuota
-import kafka.server.ReplicaAlterLogDirsThread.{FetchRequest, PartitionData}
+import kafka.server.ReplicaAlterLogDirsThread.FetchRequest
 import kafka.server.epoch.LeaderEpochCache
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.{FileRecords, MemoryRecords, Records}
+import org.apache.kafka.common.record.{MemoryRecords, Records}
 import org.apache.kafka.common.requests.EpochEndOffset._
+import org.apache.kafka.common.requests.FetchResponse.PartitionData
 import org.apache.kafka.common.requests.{EpochEndOffset, FetchResponse, FetchRequest => JFetchRequest}
 
 import scala.collection.JavaConverters._
@@ -50,13 +50,12 @@ class ReplicaAlterLogDirsThread(name: String,
                                 includeLogTruncation = true) {
 
   type REQ = FetchRequest
-  type PD = PartitionData
 
   private val replicaId = brokerConfig.brokerId
   private val maxBytes = brokerConfig.replicaFetchResponseMaxBytes
   private val fetchSize = brokerConfig.replicaFetchMaxBytes
 
-  def fetch(fetchRequest: FetchRequest): Seq[(TopicPartition, PartitionData)] = {
+  def fetch(fetchRequest: FetchRequest): Seq[(TopicPartition, PD)] = {
     var partitionData: Seq[(TopicPartition, FetchResponse.PartitionData[Records])] = null
     val request = fetchRequest.underlying.build()
 
@@ -83,16 +82,14 @@ class ReplicaAlterLogDirsThread(name: String,
     if (partitionData == null)
       throw new IllegalStateException(s"Failed to fetch data for partitions ${request.fetchData.keySet().toArray.mkString(",")}")
 
-    partitionData.map { case (key, value) =>
-      key -> new PartitionData(value)
-    }
+    partitionData
   }
 
   // process fetched data
-  def processPartitionData(topicPartition: TopicPartition, fetchOffset: Long, partitionData: PartitionData) {
+  def processPartitionData(topicPartition: TopicPartition, fetchOffset: Long, partitionData: PartitionData[Records],
+                           records: MemoryRecords) {
     val futureReplica = replicaMgr.getReplicaOrException(topicPartition, Request.FutureLocalReplicaId)
     val partition = replicaMgr.getPartition(topicPartition).get
-    val records = partitionData.toRecords
 
     if (fetchOffset != futureReplica.logEndOffset.messageOffset)
       throw new IllegalStateException("Offset mismatch for the future replica %s: fetched offset = %d, log end offset = %d.".format(
@@ -254,29 +251,4 @@ object ReplicaAlterLogDirsThread {
     override def toString = underlying.toString
   }
 
-  private[server] class PartitionData(val underlying: FetchResponse.PartitionData[Records]) extends AbstractFetcherThread.PartitionData {
-
-    def error = underlying.error
-
-    def toRecords: MemoryRecords = {
-      if (underlying.records == MemoryRecords.EMPTY)
-        underlying.records.asInstanceOf[MemoryRecords]
-      else {
-        val buffer = ByteBuffer.allocate(underlying.records.sizeInBytes())
-        underlying.records.asInstanceOf[FileRecords].readInto(buffer, 0)
-        MemoryRecords.readableRecords(buffer)
-      }
-    }
-
-    def highWatermark: Long = underlying.highWatermark
-
-    def logStartOffset: Long = underlying.logStartOffset
-
-    def exception: Option[Throwable] = error match {
-      case Errors.NONE => None
-      case e => Some(e.exception)
-    }
-
-    override def toString = underlying.toString
-  }
 }
