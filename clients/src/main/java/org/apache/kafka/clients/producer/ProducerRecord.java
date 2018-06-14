@@ -107,7 +107,19 @@ public class ProducerRecord<K, V> {
     public ProducerRecord(String topic, Integer partition, K key, V value, Iterable<Header> headers) {
         this(topic, partition, null, key, value, headers);
     }
-    
+
+    /**
+     * Creates a record to be sent to a specified topic and partition
+     *
+     * @param topic The topic the record will be appended to
+     * @param key The key that will be included in the record
+     * @param value The record contents
+     * @param headers The headers that will be included in the record
+     */
+    public ProducerRecord(String topic, K key, V value, Iterable<Header> headers) {
+        this(topic, null, null, key, value, headers);
+    }
+
     /**
      * Creates a record to be sent to a specified topic and partition
      *
