@@ -16,11 +16,12 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
@@ -144,9 +145,9 @@ public class MeteredSessionStore<K, V> extends WrappedStateStore.AbstractStateSt
         try {
             final Bytes key = keyBytes(sessionKey.key());
             inner.remove(new Windowed<>(key, sessionKey.window()));
-        } catch (final ProcessorStateException e) {
+        } catch (final StreamsException | ProducerFencedException e) {
             final String message = String.format(e.getMessage(), sessionKey.key());
-            throw new ProcessorStateException(message, e);
+            throwException(e, message);
         } finally {
             this.metrics.recordLatency(removeTime, startNs, time.nanoseconds());
         }
@@ -159,9 +160,9 @@ public class MeteredSessionStore<K, V> extends WrappedStateStore.AbstractStateSt
         try {
             final Bytes key = keyBytes(sessionKey.key());
             this.inner.put(new Windowed<>(key, sessionKey.window()), serdes.rawValue(aggregate));
-        } catch (final ProcessorStateException e) {
+        } catch (final StreamsException | ProducerFencedException e) {
             final String message = String.format(e.getMessage(), sessionKey.key(), aggregate);
-            throw new ProcessorStateException(message, e);
+            throwException(e, message);
         } finally {
             this.metrics.recordLatency(this.putTime, startNs, time.nanoseconds());
         }

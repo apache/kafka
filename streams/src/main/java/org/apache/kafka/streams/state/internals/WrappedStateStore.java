@@ -16,7 +16,11 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 
@@ -93,6 +97,16 @@ public interface WrappedStateStore extends StateStore {
         @Override
         public StateStore wrappedStore() {
             return innerState;
+        }
+
+        void throwException(final KafkaException exception, final String message) {
+            if (exception instanceof ProducerFencedException) {
+                throw new ProducerFencedException(message);
+            } else if (exception instanceof ProcessorStateException) {
+                throw new ProcessorStateException(message, exception);
+            } else {
+                throw new StreamsException(message, exception);
+            }
         }
     }
 }
