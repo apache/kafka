@@ -353,9 +353,7 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
         // Skip non persistent store
         for (final Map.Entry<TopicPartition, Long> topicPartitionOffset : checkpointableOffsets.entrySet()) {
             final String topic = topicPartitionOffset.getKey().topic();
-            if (globalNonPersistentStoresTopics.contains(topic)) {
-                filteredOffsets.remove(topicPartitionOffset.getKey());
-            } else {
+            if (!globalNonPersistentStoresTopics.contains(topic)) {
                 filteredOffsets.put(topicPartitionOffset.getKey(), topicPartitionOffset.getValue());
             }
         }
