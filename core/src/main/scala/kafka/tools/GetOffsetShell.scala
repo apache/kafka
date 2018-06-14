@@ -25,6 +25,7 @@ import kafka.utils.{CommandLineUtils, Exit, ToolsUtils}
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.common.{PartitionInfo, TopicPartition}
 import org.apache.kafka.common.requests.ListOffsetRequest
+import org.apache.kafka.common.serialization.ByteArrayDeserializer
 
 import scala.collection.JavaConverters._
 
@@ -62,7 +63,7 @@ object GetOffsetShell {
                            .defaultsTo(1000)
 
    if (args.length == 0)
-      CommandLineUtils.printUsageAndDie(parser, "An interactive shell for getting consumer offsets.")
+      CommandLineUtils.printUsageAndDie(parser, "An interactive shell for getting topic offsets.")
 
     val options = parser.parse(args : _*)
 
@@ -72,13 +73,26 @@ object GetOffsetShell {
     val brokerList = options.valueOf(brokerListOpt)
     ToolsUtils.validatePortOrDie(parser, brokerList)
     val topic = options.valueOf(topicOpt)
-    val partitionIdsRequested = options.valueOf(partitionOpt).split(",").map(_.toInt).toSet
+    val partitionIdsRequested: Set[Int] = {
+      val partitionsString = options.valueOf(partitionOpt)
+      if (partitionsString.isEmpty)
+        Set.empty
+      else
+        partitionsString.split(",").map { partitionString =>
+          try partitionString.toInt
+          catch {
+            case e: NumberFormatException =>
+              s"--partitions expected a comma separated list of numeric partition ids, but received: $partitionsString"
+              Exit.exit(1)
+          }
+        }.toSet
+    }
     val listOffsetsTimestamp = options.valueOf(timeOpt).longValue
 
     val config = new Properties
     config.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     config.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, clientId)
-    val consumer = new KafkaConsumer(config)
+    val consumer = new KafkaConsumer(config, new ByteArrayDeserializer, new ByteArrayDeserializer)
 
     val partitionInfos = listPartitionInfos(consumer, topic, partitionIdsRequested) match {
       case None =>
@@ -94,12 +108,12 @@ object GetOffsetShell {
     }
 
     if (partitionIdsRequested.nonEmpty) {
-      partitionIdsRequested.filterNot(partitionId => partitionInfos.exists(_.partition == partitionId)).foreach { partitionId =>
-        s"Error: partition $partitionId does not exist"
+      (partitionIdsRequested -- partitionInfos.map(_.partition)).foreach { partitionId =>
+        System.err.println(s"Error: partition $partitionId does not exist")
       }
     }
 
-    val topicPartitions = partitionInfos.flatMap { p =>
+    val topicPartitions = partitionInfos.sortBy(_.partition).flatMap { p =>
       if (p.leader == null) {
         System.err.println(s"Error: partition ${p.partition} does not have a leader. Skip getting offsets")
         None
@@ -107,16 +121,17 @@ object GetOffsetShell {
         Some(new TopicPartition(p.topic, p.partition))
     }
 
+    /* Note that the value of the map can be null */
     val partitionOffsets: collection.Map[TopicPartition, java.lang.Long] = listOffsetsTimestamp match {
       case ListOffsetRequest.EARLIEST_TIMESTAMP => consumer.beginningOffsets(topicPartitions.asJava).asScala
       case ListOffsetRequest.LATEST_TIMESTAMP => consumer.endOffsets(topicPartitions.asJava).asScala
       case _ =>
         val timestampsToSearch = topicPartitions.map(tp => tp -> (listOffsetsTimestamp: java.lang.Long)).toMap.asJava
-        consumer.offsetsForTimes(timestampsToSearch).asScala.mapValues(_.offset)
+        consumer.offsetsForTimes(timestampsToSearch).asScala.mapValues(x => if (x == null) null else x.offset)
     }
 
-    partitionOffsets.foreach { case (tp, offset) =>
-      println(s"$topic:${tp.partition}:$offset")
+    partitionOffsets.toSeq.sortBy { case (tp, _) => tp.partition }.foreach { case (tp, offset) =>
+      println(s"$topic:${tp.partition}:${Option(offset).getOrElse("")}")
     }
 
   }
