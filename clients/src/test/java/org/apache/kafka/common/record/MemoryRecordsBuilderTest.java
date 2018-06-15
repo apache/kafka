@@ -30,6 +30,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Random;
 
+import static org.apache.kafka.common.utils.Utils.utf8;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -566,10 +567,6 @@ public class MemoryRecordsBuilderTest {
             verifyRecordsProcessingStats(convertedRecords.recordConversionStats(), 3, 1,
                     records.sizeInBytes(), buffer.limit());
         }
-    }
-
-    private String utf8(ByteBuffer buffer) {
-        return Utils.utf8(buffer, buffer.remaining());
     }
 
     @Test
