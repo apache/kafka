@@ -106,7 +106,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         private boolean sameRequest(final Set<TopicPartition> currentRequest, final Generation currentGeneration) {
             return (requestedGeneration == null ? currentGeneration == null : requestedGeneration.equals(currentGeneration))
-                && requestedPartitions.equals(currentRequest);
+                    && requestedPartitions.equals(currentRequest);
         }
     }
 
@@ -132,16 +132,16 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                boolean excludeInternalTopics,
                                final boolean leaveGroupOnClose) {
         super(logContext,
-              client,
-              groupId,
-              rebalanceTimeoutMs,
-              sessionTimeoutMs,
-              heartbeatIntervalMs,
-              metrics,
-              metricGrpPrefix,
-              time,
-              retryBackoffMs,
-              leaveGroupOnClose);
+                client,
+                groupId,
+                rebalanceTimeoutMs,
+                sessionTimeoutMs,
+                heartbeatIntervalMs,
+                metrics,
+                metricGrpPrefix,
+                time,
+                retryBackoffMs,
+                leaveGroupOnClose);
         this.log = logContext.logger(ConsumerCoordinator.class);
         this.metadata = metadata;
         this.metadataSnapshot = new MetadataSnapshot(subscriptions, metadata.fetch());
@@ -567,16 +567,19 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         client.disableWakeups();
 
         long now = time.milliseconds();
-        final long endTimeMs = now + timeoutMs;
+        final long start = now;
+        long delta = 0;
         try {
             maybeAutoCommitOffsetsSync(timeoutMs);
             now = time.milliseconds();
-            if (pendingAsyncCommits.get() > 0 && now - endTimeMs < 0) {
-                ensureCoordinatorReady(endTimeMs - now);
+            delta = now - start;
+            if (pendingAsyncCommits.get() > 0 && delta < timeoutMs) {
+                ensureCoordinatorReady(remainingTimeAtLeastZero(timeoutMs, delta));
                 now = time.milliseconds();
             }
         } finally {
-            super.close(Math.max(0, endTimeMs - now));
+            delta = now - start;
+            super.close(remainingTimeAtLeastZero(timeoutMs, delta));
         }
     }
 
@@ -954,11 +957,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
             this.commitLatency = metrics.sensor("commit-latency");
             this.commitLatency.add(metrics.metricName("commit-latency-avg",
-                this.metricGrpName,
-                "The average time taken for a commit request"), new Avg());
+                    this.metricGrpName,
+                    "The average time taken for a commit request"), new Avg());
             this.commitLatency.add(metrics.metricName("commit-latency-max",
-                this.metricGrpName,
-                "The max time taken for a commit request"), new Max());
+                    this.metricGrpName,
+                    "The max time taken for a commit request"), new Max());
             this.commitLatency.add(createMeter(metrics, metricGrpName, "commit", "commit calls"));
 
             Measurable numParts =
@@ -968,8 +971,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     }
                 };
             metrics.addMetric(metrics.metricName("assigned-partitions",
-                this.metricGrpName,
-                "The number of partitions currently assigned to this consumer"), numParts);
+                    this.metricGrpName,
+                    "The number of partitions currently assigned to this consumer"), numParts);
         }
     }
 

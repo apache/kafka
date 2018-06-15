@@ -241,7 +241,7 @@ public class StateDirectory {
     /**
      * Remove the directories for any {@link TaskId}s that are no-longer
      * owned by this {@link StreamThread} and aren't locked by either
-     * another process or another {@link StreamThread}
+     * another process or another {@link StreamThread}org.apache.kafka.streams.integration.QueryableStateIntegrationTest.shouldBeAbleToQueryStateWithNonZeroSizedCache
      * @param cleanupDelayMs only remove directories if they haven't been modified for at least
      *                       this amount of time (milliseconds)
      */
@@ -268,7 +268,7 @@ public class StateDirectory {
                     if (lock(id)) {
                         final long now = time.milliseconds();
                         final long lastModifiedMs = taskDir.lastModified();
-                        if ((lastModifiedMs + cleanupDelayMs) - now < 0 || manualUserCall) {
+                        if (now - lastModifiedMs > cleanupDelayMs || manualUserCall) {
                             if (!manualUserCall) {
                                 log.info(
                                     "{} Deleting obsolete state directory {} for task {} as {}ms has elapsed (cleanup delay is {}ms).",

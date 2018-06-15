@@ -1021,7 +1021,7 @@ public class StreamThread extends Thread {
      *                               or if the task producer got fenced (EOS)
      */
     void maybeCommit(final long now) {
-        if (commitTimeMs >= 0 && (lastCommitMs + commitTimeMs) - now < 0) {
+        if (commitTimeMs >= 0 && now - lastCommitMs > commitTimeMs) {
             if (log.isTraceEnabled()) {
                 log.trace("Committing all active tasks {} and standby tasks {} since {}ms has elapsed (commit interval is {}ms)",
                     taskManager.activeTaskIds(), taskManager.standbyTaskIds(), now - lastCommitMs, commitTimeMs);

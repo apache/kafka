@@ -65,11 +65,11 @@ public final class NetworkClientUtils {
             return true;
 
         long attemptStartTime = time.milliseconds();
-        while (!client.isReady(node, attemptStartTime) && attemptStartTime - expiryTime < 0) {
+        while (!client.isReady(node, attemptStartTime) && attemptStartTime - startTime < timeoutMs) {
             if (client.connectionFailed(node)) {
                 throw new IOException("Connection to " + node + " failed.");
             }
-            long pollTimeout = expiryTime - attemptStartTime;
+            long pollTimeout = Math.max(0, expiryTime - attemptStartTime);
             client.poll(pollTimeout, attemptStartTime);
             if (client.authenticationException(node) != null)
                 throw client.authenticationException(node);
