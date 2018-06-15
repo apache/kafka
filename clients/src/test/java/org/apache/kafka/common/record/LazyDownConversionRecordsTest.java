@@ -20,7 +20,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -35,6 +34,7 @@ import java.util.Collection;
 import java.util.List;
 
 import static java.util.Arrays.asList;
+import static org.apache.kafka.common.utils.Utils.utf8;
 import static org.apache.kafka.test.TestUtils.tempFile;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -194,8 +194,8 @@ public class LazyDownConversionRecordsTest {
             for (Record record : batch) {
                 assertTrue("Inner record should have magic " + toMagic, record.hasMagic(batch.magic()));
                 assertEquals("Offset should not change", initialOffsets.get(i).longValue(), record.offset());
-                assertEquals("Key should not change", Utils.utf8(initialRecords.get(i).key()), Utils.utf8(record.key()));
-                assertEquals("Value should not change", Utils.utf8(initialRecords.get(i).value()), Utils.utf8(record.value()));
+                assertEquals("Key should not change", utf8(initialRecords.get(i).key()), utf8(record.key()));
+                assertEquals("Value should not change", utf8(initialRecords.get(i).value()), utf8(record.value()));
                 assertFalse(record.hasTimestampType(TimestampType.LOG_APPEND_TIME));
                 if (batch.magic() == RecordBatch.MAGIC_VALUE_V0) {
                     assertEquals(RecordBatch.NO_TIMESTAMP, record.timestamp());
