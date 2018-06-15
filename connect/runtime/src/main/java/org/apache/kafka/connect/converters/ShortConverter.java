@@ -14,22 +14,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.connect.storage;
+package org.apache.kafka.connect.converters;
 
-import org.apache.kafka.common.serialization.FloatDeserializer;
-import org.apache.kafka.common.serialization.FloatSerializer;
+import org.apache.kafka.common.serialization.ShortDeserializer;
+import org.apache.kafka.common.serialization.ShortSerializer;
 import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.storage.Converter;
+import org.apache.kafka.connect.storage.HeaderConverter;
 
 /**
- * {@link Converter} and {@link HeaderConverter} implementation that only supports serializing to and deserializing from float values.
+ * {@link Converter} and {@link HeaderConverter} implementation that only supports serializing to and deserializing from short values.
  * It does support handling nulls. When converting from bytes to Kafka Connect format, the converter will always return an
- * optional FLOAT32 schema.
+ * optional INT16 schema.
  * <p>
  * This implementation currently does nothing with the topic names or header names.
  */
-public class FloatConverter extends NumberConverter<Float> {
+public class ShortConverter extends NumberConverter<Short> {
 
-    public FloatConverter() {
-        super("float", Schema.OPTIONAL_FLOAT32_SCHEMA, new FloatSerializer(), new FloatDeserializer());
+    public ShortConverter() {
+        super("short", Schema.OPTIONAL_INT16_SCHEMA, new ShortSerializer(), new ShortDeserializer());
     }
 }

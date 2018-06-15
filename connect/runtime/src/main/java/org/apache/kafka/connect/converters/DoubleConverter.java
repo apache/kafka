@@ -14,23 +14,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.connect.storage;
+package org.apache.kafka.connect.converters;
 
-import org.apache.kafka.common.serialization.LongDeserializer;
-import org.apache.kafka.common.serialization.LongSerializer;
+import org.apache.kafka.common.serialization.DoubleDeserializer;
+import org.apache.kafka.common.serialization.DoubleSerializer;
 import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.storage.Converter;
+import org.apache.kafka.connect.storage.HeaderConverter;
 
 /**
- * {@link Converter} and {@link HeaderConverter} implementation that only supports serializing to and deserializing from long values.
+ * {@link Converter} and {@link HeaderConverter} implementation that only supports serializing to and deserializing from double values.
  * It does support handling nulls. When converting from bytes to Kafka Connect format, the converter will always return an
- * optional INT64 schema.
+ * optional FLOAT64 schema.
  * <p>
  * This implementation currently does nothing with the topic names or header names.
  */
-public class LongConverter extends NumberConverter<Long> {
+public class DoubleConverter extends NumberConverter<Double> {
 
-    public LongConverter() {
-        super("long", Schema.OPTIONAL_INT64_SCHEMA, new LongSerializer(), new LongDeserializer());
+    public DoubleConverter() {
+        super("double", Schema.OPTIONAL_FLOAT64_SCHEMA, new DoubleSerializer(), new DoubleDeserializer());
     }
-
 }

@@ -14,22 +14,30 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.connect.storage;
+package org.apache.kafka.connect.converters;
 
-import org.apache.kafka.common.serialization.DoubleDeserializer;
-import org.apache.kafka.common.serialization.DoubleSerializer;
+import org.apache.kafka.common.serialization.IntegerSerializer;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.connect.data.Schema;
 
-/**
- * {@link Converter} and {@link HeaderConverter} implementation that only supports serializing to and deserializing from double values.
- * It does support handling nulls. When converting from bytes to Kafka Connect format, the converter will always return an
- * optional FLOAT64 schema.
- * <p>
- * This implementation currently does nothing with the topic names or header names.
- */
-public class DoubleConverter extends NumberConverter<Double> {
+public class IntegerConverterTest extends NumberConverterTest<Integer> {
 
-    public DoubleConverter() {
-        super("double", Schema.OPTIONAL_FLOAT64_SCHEMA, new DoubleSerializer(), new DoubleDeserializer());
+    public Integer[] samples() {
+        return new Integer[]{Integer.MIN_VALUE, 1234, Integer.MAX_VALUE};
+    }
+
+    @Override
+    protected Schema schema() {
+        return Schema.OPTIONAL_INT32_SCHEMA;
+    }
+
+    @Override
+    protected NumberConverter<Integer> createConverter() {
+        return new IntegerConverter();
+    }
+
+    @Override
+    protected Serializer<Integer> createSerializer() {
+        return new IntegerSerializer();
     }
 }
