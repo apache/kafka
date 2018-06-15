@@ -174,6 +174,24 @@ public class TopologyTest {
         } catch (final TopologyException expected) { }
     }
 
+    @Test
+    public void shouldNotAllowToAddProcessorWithEmptyParents() {
+        topology.addSource("source", "topic-1");
+        try {
+            topology.addProcessor("processor", new MockProcessorSupplier());
+            fail("Should throw TopologyException for processor without at least one parent node");
+        } catch (final TopologyException expected) { }
+    }
+
+    @Test
+    public void shouldNotAllowToAddProcessorWithNullParents() {
+        topology.addSource("source", "topic-1");
+        try {
+            topology.addProcessor("processor", new MockProcessorSupplier(), null);
+            fail("Should throw NullPointerException for processor when null parent names are provided");
+        } catch (final NullPointerException expected) { }
+    }
+
     @Test(expected = TopologyException.class)
     public void shouldFailOnUnknownSource() {
         topology.addProcessor("processor", new MockProcessorSupplier(), "source");
@@ -192,6 +210,26 @@ public class TopologyTest {
             topology.addSink("sink", "topic-3", "source");
             fail("Should throw TopologyException for duplicate sink name");
         } catch (final TopologyException expected) { }
+    }
+
+    @Test
+    public void shouldNotAllowToAddSinkWithEmptyParents() {
+        topology.addSource("source", "topic-1");
+        topology.addProcessor("processor", new MockProcessorSupplier(), "source");
+        try {
+            topology.addSink("sink", "topic-2");
+            fail("Should throw TopologyException for sink without at least one parent node");
+        } catch (final TopologyException expected) { }
+    }
+
+    @Test
+    public void shouldNotAllowToAddSinkWithNullParents() {
+        topology.addSource("source", "topic-1");
+        topology.addProcessor("processor", new MockProcessorSupplier(), "source");
+        try {
+            topology.addSink("sink", "topic-2", null);
+            fail("Should throw NullPointerException for sink when null parent names are provided");
+        } catch (final NullPointerException expected) { }
     }
 
     @Test(expected = TopologyException.class)
@@ -236,7 +274,8 @@ public class TopologyTest {
     public void shouldNotAllowToAddStateStoreToSink() {
         mockStoreBuilder();
         EasyMock.replay(storeBuilder);
-        topology.addSink("sink-1", "topic-1");
+        topology.addSource("source-1", "topic-1");
+        topology.addSink("sink-1", "topic-1", "source-1");
         try {
             topology.addStateStore(storeBuilder, "sink-1");
             fail("Should have thrown TopologyException for adding store to sink node");

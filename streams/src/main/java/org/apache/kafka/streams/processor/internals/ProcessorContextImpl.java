@@ -116,7 +116,8 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
             if (sendTo != null) {
                 final ProcessorNode child = currentNode().getChild(sendTo);
                 if (child == null) {
-                    throw new StreamsException("Unknown processor name: " + sendTo);
+                    throw new StreamsException("Unknown downstream node: " + sendTo + " either does not exist or is not" +
+                            " connected to this processor.");
                 }
                 forward(child, key, value);
             } else {
