@@ -71,6 +71,7 @@ import org.apache.kafka.test.MockConsumerInterceptor;
 import org.apache.kafka.test.MockMetricsReporter;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
+import org.easymock.EasyMock;
 import org.junit.Assert;
 import org.junit.Rule;
 import org.junit.Test;
@@ -1827,13 +1828,7 @@ public class KafkaConsumerTest {
                 retryBackoffMs,
                 requestTimeoutMs,
                 defaultApiTimeoutMs,
-                assignors) {
-            @Override
-            public void close(Duration duration) {
-                if (spyClose != null) spyClose.accept(duration);
-                super.close(duration);
-            }
-        };
+                assignors);
     }
 
     private static class FetchInfo {
@@ -1846,29 +1841,14 @@ public class KafkaConsumerTest {
         }
     }
 
-    private java.util.function.Consumer<Duration> spyClose = null;
     @Test
     public void testCloseWithTimeUnit() {
-        try {
-            Time time = new MockTime();
-            Cluster cluster = TestUtils.singletonCluster(topic, 1);
-            Node node = cluster.nodes().get(0);
-
-            Metadata metadata = createMetadata();
-            metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
-
-            MockClient client = new MockClient(time, metadata);
-            client.setNode(node);
-            PartitionAssignor assignor = new RoundRobinAssignor();
-
-            AtomicReference<Duration> capturedDuration = new AtomicReference();
-            spyClose = (Duration duration) -> capturedDuration.set(duration);
-            KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, true);
-            consumer.close(1, TimeUnit.SECONDS);
-            Assert.assertNotNull(capturedDuration.get());
-            Assert.assertEquals(1, capturedDuration.get().getSeconds());
-        } finally {
-            spyClose = null;
-        }
+        KafkaConsumer consumer = EasyMock.partialMockBuilder(KafkaConsumer.class)
+                .addMockedMethod("close", Duration.class).createMock();
+        consumer.close(Duration.ofSeconds(1));
+        EasyMock.expectLastCall();
+        EasyMock.replay(consumer);
+        consumer.close(1, TimeUnit.SECONDS);
+        EasyMock.verify(consumer);
     }
 }
