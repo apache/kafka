@@ -314,12 +314,12 @@
               </ul>
 
               <p>You can also provide your own customized exception handler besides the library provided ones to meet your needs. For example, you can choose to forward corrupt
-                records into a quarantine topic (think: a “dead letter queue”) for further processing. To do this, use the Producer API to write a corrupted record directly to
-                the quarantine topic. The drawback of this approach is that “manual” writes are side effects that are invisible to the Kafka Streams runtime library,
+                records into a quarantine topic (think: a "dead letter queue") for further processing. To do this, use the Producer API to write a corrupted record directly to
+                the quarantine topic. The drawback of this approach is that "manual" writes are side effects that are invisible to the Kafka Streams runtime library,
                 so they do not benefit from the end-to-end processing guarantees of the Streams API:</p>
 
               <pre class="brush: java;">
-              class SendToDeadLetterQueueExceptionHandler implements DeserializationExceptionHandler {
+              public class SendToDeadLetterQueueExceptionHandler implements DeserializationExceptionHandler {
                   KafkaProducer&lt;byte[], byte[]&gt; dlqProducer;
                   String dlqTopic;
 
@@ -333,7 +333,7 @@
                           context.taskId(), record.topic(), record.partition(), record.offset(),
                           exception);
 
-                      dlqProducer.send(new ProducerRecord&lt;&gt;(dlqTopic, record.timestamp(), record.key(), record.value()));
+                      dlqProducer.send(new ProducerRecord&lt;&gt;(dlqTopic, record.timestamp(), record.key(), record.value(), record.headers())).get();
 
                       return DeserializationHandlerResponse.CONTINUE;
                   }
@@ -365,7 +365,7 @@
             import org.apache.kafka.streams.errors.ProductionExceptionHandler;
             import org.apache.kafka.streams.errors.ProductionExceptionHandler.ProductionExceptionHandlerResponse;
 
-            class IgnoreRecordTooLargeHandler implements ProductionExceptionHandler {
+            public class IgnoreRecordTooLargeHandler implements ProductionExceptionHandler {
                 public void configure(Map&lt;String, Object&gt; config) {}
 
                 public ProductionExceptionHandlerResponse handle(final ProducerRecord&lt;byte[], byte[]&gt; record,
