@@ -22,7 +22,6 @@ import java.util.Arrays.asList
 import java.util.concurrent.{ExecutionException, TimeUnit}
 import java.io.File
 
-import kafka.admin.AdminClient.DeleteRecordsResult
 import org.apache.kafka.clients.admin.KafkaAdminClientTest
 import org.apache.kafka.common.utils.{Time, Utils}
 import kafka.integration.KafkaServerTestHarness
@@ -32,9 +31,7 @@ import org.apache.kafka.clients.admin._
 import kafka.utils.{Logging, TestUtils, ZkUtils}
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.admin.NewTopic
-import org.apache.kafka.clients.producer.KafkaProducer
-import org.apache.kafka.clients.producer.ProducerRecord
-import org.apache.kafka.common.{TopicPartition, KafkaFuture, TopicPartitionReplica}
+import org.apache.kafka.common.{KafkaFuture, TopicPartition, TopicPartitionReplica}
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors._
@@ -625,6 +622,7 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
     }
   }
 
+  @Test
   def testInvalidAlterConfigs(): Unit = {
     client = AdminClient.create(createConfig)
     checkInvalidAlterConfigs(zkUtils, servers, client)
