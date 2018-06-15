@@ -26,7 +26,6 @@ import java.util.{Collections, Locale, Properties, Random}
 import com.typesafe.scalalogging.LazyLogging
 import joptsimple._
 import kafka.common.MessageFormatter
-import kafka.metrics.KafkaMetricsReporter
 import kafka.utils._
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerRecord, KafkaConsumer}
@@ -198,10 +197,6 @@ object ConsoleConsumer extends Logging {
       .withRequiredArg
       .describedAs("whitelist")
       .ofType(classOf[String])
-    val blacklistOpt = parser.accepts("blacklist", "Blacklist of topics to exclude from consumption.")
-      .withRequiredArg
-      .describedAs("blacklist")
-      .ofType(classOf[String])
     val partitionIdOpt = parser.accepts("partition", "The partition to consume from. Consumption " +
       "starts from the end of the partition unless '--offset' is specified.")
       .withRequiredArg
@@ -251,12 +246,6 @@ object ConsoleConsumer extends Logging {
       .ofType(classOf[java.lang.Integer])
     val skipMessageOnErrorOpt = parser.accepts("skip-message-on-error", "If there is an error when processing a message, " +
       "skip it instead of halt.")
-    val csvMetricsReporterEnabledOpt = parser.accepts("csv-reporter-enabled", "If set, the CSV metrics reporter will be enabled")
-    val metricsDirectoryOpt = parser.accepts("metrics-dir", "If csv-reporter-enable is set, and this parameter is" +
-      "set, the csv metrics will be output here")
-      .withRequiredArg
-      .describedAs("metrics directory")
-      .ofType(classOf[java.lang.String])
     val bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED: The server(s) to connect to.")
       .withRequiredArg
       .describedAs("server to connect to")
@@ -360,19 +349,6 @@ object ConsoleConsumer extends Logging {
       else ListOffsetRequest.LATEST_TIMESTAMP
 
     CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt)
-
-    if (options.has(csvMetricsReporterEnabledOpt)) {
-      val csvReporterProps = new Properties()
-      csvReporterProps.put("kafka.metrics.polling.interval.secs", "5")
-      csvReporterProps.put("kafka.metrics.reporters", "kafka.metrics.KafkaCSVMetricsReporter")
-      if (options.has(metricsDirectoryOpt))
-        csvReporterProps.put("kafka.csv.metrics.dir", options.valueOf(metricsDirectoryOpt))
-      else
-        csvReporterProps.put("kafka.csv.metrics.dir", "kafka_metrics")
-      csvReporterProps.put("kafka.csv.metrics.reporter.enabled", "true")
-      val verifiableProps = new VerifiableProperties(csvReporterProps)
-      KafkaMetricsReporter.startReporters(verifiableProps)
-    }
 
     // if the group id is provided in more than place (through different means) all values must be the same
     val groupIdsProvided = Set(
