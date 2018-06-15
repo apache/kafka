@@ -121,11 +121,6 @@ class MetadataCache(brokerId: Int) extends Logging {
       aliveNodes.get(brokerId).flatMap(_.get(listenerName))
     }
 
-  private def brokerAlive(brokerId: Int): Boolean =
-    inReadLock(partitionMetadataLock) {
-      aliveNodes.get(brokerId).exists(_.nonEmpty)
-    }
-
   // errorUnavailableEndpoints exists to support v0 MetadataResponses
   def getTopicMetadata(topics: Set[String], listenerName: ListenerName, errorUnavailableEndpoints: Boolean = false,
                        errorUnavailableListeners: Boolean = false): Seq[MetadataResponse.TopicMetadata] = {
