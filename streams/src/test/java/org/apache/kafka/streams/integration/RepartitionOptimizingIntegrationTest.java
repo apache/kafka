@@ -49,6 +49,7 @@ import org.junit.experimental.categories.Category;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
@@ -115,9 +116,9 @@ public class RepartitionOptimizingIntegrationTest {
 
         KStream<String, String> sourceStream = builder.stream(INPUT_TOPIC, Consumed.with(Serdes.String(), Serdes.String()));
 
-        KStream<String, String> mappedStream = sourceStream.map((k, v) -> KeyValue.pair(k.toUpperCase(), v));
+        KStream<String, String> mappedStream = sourceStream.map((k, v) -> KeyValue.pair(k.toUpperCase(Locale.getDefault()), v));
 
-        mappedStream.peek(((key, value) -> System.out.println("peek 1"))).peek((k,v) -> System.out.println("peek 2"));
+        mappedStream.peek((key, value) -> System.out.println("peek 1")).peek((k, v) -> System.out.println("peek 2"));
 
         mappedStream.groupByKey().count(Materialized.with(Serdes.String(), Serdes.Long())).toStream().to(COUNT_TOPIC, Produced.with(Serdes.String(), Serdes.Long()));
         mappedStream.groupByKey().aggregate(initializer, aggregator, Materialized.with(Serdes.String(), Serdes.Integer())).toStream().to(AGGREGATION_TOPIC, Produced.with(Serdes.String(), Serdes.Integer()));

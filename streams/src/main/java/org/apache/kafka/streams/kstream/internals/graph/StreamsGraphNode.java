@@ -20,7 +20,6 @@ package org.apache.kafka.streams.kstream.internals.graph;
 import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilder;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
-import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
@@ -48,7 +47,7 @@ public abstract class StreamsGraphNode {
         this.parentNode = parentNode;
     }
 
-    public Collection<StreamsGraphNode> children() {
+    public Set<StreamsGraphNode> children() {
         return new LinkedHashSet<>(childNodes);
     }
 
@@ -57,7 +56,7 @@ public abstract class StreamsGraphNode {
     }
 
     public boolean removeChild(StreamsGraphNode child) {
-       return childNodes.remove(child);
+        return childNodes.remove(child);
     }
 
     public void setChildNodes(Set<StreamsGraphNode> streamsGraphNodes) {

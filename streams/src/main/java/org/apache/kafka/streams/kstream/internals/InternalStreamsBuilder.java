@@ -224,7 +224,6 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     public void buildAndOptimizeTopology(Properties props) {
         if (!topologyBuilt) {
 
-
             if (props != null && props.getProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION).equals(StreamsConfig.OPTIMIZE)) {
                 LOG.debug("Optimizing the Kafka Streams graph");
                 optimize();
@@ -237,7 +236,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                 final StreamsGraphNode streamGraphNode = graphNodePriorityQueue.remove();
 
                 if (LOG.isDebugEnabled()) {
-                    LOG.debug("{} child nodes {}", streamGraphNode, streamGraphNode.children());
+                    LOG.debug("about write topology for {} child nodes {}", streamGraphNode, streamGraphNode.children());
                 }
 
                 streamGraphNode.writeToTopology(internalTopologyBuilder);
@@ -256,48 +255,73 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     }
 
     private void mayOptimizeRepartitionOperations() {
+        StreamsGraphNode optimizedSingleRepartition = null;
 
-        for (Map.Entry<StreamsGraphNode, Set<OptimizableRepartitionNode>> streamsGraphNodeSetEntry : keyChangingOperationsToOptimizableRepartitionNodes.entrySet()) {
-            StreamsGraphNode node = streamsGraphNodeSetEntry.getKey();
+        for (Map.Entry<StreamsGraphNode, Set<OptimizableRepartitionNode>> streamsGraphNodeSetEntry : keyChangingOperationsToOptimizableRepartitionNodes
+            .entrySet()) {
 
-            StreamsGraphNode optimizedSingleRepartition = null;
-            // step one check if changing key forced optimizations
-            if (!streamsGraphNodeSetEntry.getValue().isEmpty()) {
-                // create repartition node and attach as child of key changing operation, an implicit "through" operation
-                optimizedSingleRepartition = addRepartitionNodeToKeyChangingOperation(node);
+            StreamsGraphNode keyChangingNode = streamsGraphNodeSetEntry.getKey();
+
+            if (streamsGraphNodeSetEntry.getValue().isEmpty()) {
+                continue;
             }
 
-            for (OptimizableRepartitionNode optimizableRepartitionNode : streamsGraphNodeSetEntry.getValue()) {
-                // need to get the parent node of the downstream repartition
-                StreamsGraphNode repartitionParent = optimizableRepartitionNode.parentNode();
-                // now get rid of the downstream repartition operation
-                repartitionParent.clearChildren();
+            StreamSourceNode parentSourceNode = (StreamSourceNode) findParentNodeMatching(keyChangingNode, n -> n instanceof StreamSourceNode);
 
-                // get child nodes of downstream repartition in order to assign to the single repartition node
-                Collection<StreamsGraphNode> repartitionNodeChildren = optimizableRepartitionNode.children();
+            optimizedSingleRepartition = createRepartitionNode(keyChangingNode.nodeName(),
+                                                               parentSourceNode.keySerde(),
+                                                               parentSourceNode.valueSerde());
 
-                optimizableRepartitionNode.clearChildren();
+            optimizedSingleRepartition.setId(index.getAndIncrement());
 
-                // now all children of N repartition operations are children of a single repartition
-                // thus resulting in 1 repartition operation
-                for (StreamsGraphNode repartitionNodeChild : repartitionNodeChildren) {
-                    optimizedSingleRepartition.addChildNode(repartitionNodeChild);
+            for (OptimizableRepartitionNode keyChangedRepartitionNode : streamsGraphNodeSetEntry.getValue()) {
+
+                // The "easy" case, the forced repartition is a direct child node of key-changing operation
+                if (keyChangedRepartitionNode.parentNode().equals(keyChangingNode)) {
+                    // now get rid of the downstream repartition operation
+                    StreamsGraphNode keyChangedRepartitionParent = keyChangedRepartitionNode.parentNode();
+                    Set<StreamsGraphNode> keyChangedRepartitionChildren = keyChangedRepartitionNode.children();
+                    keyChangedRepartitionNode.clearChildren();
+                    keyChangedRepartitionParent.removeChild(keyChangedRepartitionNode);
+                    for (StreamsGraphNode keyChangedRepartitionChild : keyChangedRepartitionChildren) {
+                        optimizedSingleRepartition.addChildNode(keyChangedRepartitionChild);
+                    }
+
+                } else { // The more difficult case the force repartition is somewhere downstream of key-changing
+                    StreamsGraphNode nodeFollowingKeyChangingNode = findParentNodeMatching(keyChangedRepartitionNode, gn -> gn.parentNode().equals(keyChangingNode));
+
+                    LOG.debug("Found the node downstream of key-changer {}", nodeFollowingKeyChangingNode);
+
+                    optimizedSingleRepartition.addChildNode(nodeFollowingKeyChangingNode);
+
+                    LOG.debug("Removing {} from {}  children {}",  nodeFollowingKeyChangingNode,  keyChangingNode, keyChangingNode.children());
+                    keyChangingNode.removeChild(nodeFollowingKeyChangingNode);
+
+                    Set<StreamsGraphNode> keyChangedRepartitionChildren = keyChangedRepartitionNode.children();
+                    StreamsGraphNode parentOfNestedRepartition = findParentNodeMatching(keyChangedRepartitionNode, n -> n.equals(keyChangedRepartitionNode.parentNode()));
+
+                    LOG.debug("Returned {} parentOfNestedRepartition as parent of {}", parentOfNestedRepartition, keyChangedRepartitionNode);
+
+                    parentOfNestedRepartition.removeChild(keyChangedRepartitionNode);
+                    keyChangedRepartitionNode.clearChildren();
+                    for (StreamsGraphNode keyChangedRepartitionChild : keyChangedRepartitionChildren) {
+                        parentOfNestedRepartition.addChildNode(keyChangedRepartitionChild);
+                    }
                 }
-                LOG.debug("UPDATED node {}", optimizedSingleRepartition);
+
+                LOG.debug("UPDATED node {} children {}", optimizedSingleRepartition, optimizedSingleRepartition.children());
             }
+
+            for (OptimizableRepartitionNode optimizableRepartitionNode : keyChangingOperationsToOptimizableRepartitionNodes.get(keyChangingNode)) {
+                optimizableRepartitionNode.clearChildren();
+                keyChangingNode.removeChild(optimizableRepartitionNode);
+            }
+
+            keyChangingNode.addChildNode(optimizedSingleRepartition);
+            LOG.debug("Key Changing node {} children {}", keyChangingNode, keyChangingNode.children());
         }
-    }
 
-    private StreamsGraphNode addRepartitionNodeToKeyChangingOperation(StreamsGraphNode node) {
-        StreamSourceNode parentSourceNode = (StreamSourceNode) findParentNodeMatching(node, n -> n instanceof StreamSourceNode);
-
-        StreamsGraphNode repartitionNode = createRepartitionNode(node.nodeName(),
-                                                                 parentSourceNode.keySerde(),
-                                                                 parentSourceNode.valueSerde());
-
-        insertNodeAndUpdateParentChildConnections(node, repartitionNode);
-
-        return repartitionNode;
+        LOG.debug("Fully updated repartition {} children {}", optimizedSingleRepartition, optimizedSingleRepartition.children());
     }
 
     private StreamsGraphNode createRepartitionNode(String name, Serde keySerde, Serde valueSerde) {
@@ -313,19 +337,8 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
     }
 
-
-    private void insertNodeAndUpdateParentChildConnections(StreamsGraphNode parentNode, StreamsGraphNode nodeToInsert) {
-        Collection<StreamsGraphNode> childNodes = parentNode.children();
-        parentNode.clearChildren();
-
-        for (StreamsGraphNode childNode : childNodes) {
-            nodeToInsert.addChildNode(childNode);
-        }
-        parentNode.addChildNode(nodeToInsert);
-    }
-
     private StreamsGraphNode findParentNodeMatching(StreamsGraphNode original, Predicate<StreamsGraphNode> parentFound) {
-        StreamsGraphNode parent = original.parentNode();
+        StreamsGraphNode parent = original;
         while (!parentFound.test(parent)) {
             parent = parent.parentNode();
         }
