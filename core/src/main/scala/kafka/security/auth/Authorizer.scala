@@ -37,7 +37,7 @@ trait Authorizer extends Configurable {
   /**
    * @param session The session being authenticated.
    * @param operation Type of operation client is trying to perform on resource.
-   * @param resource Resource the client is trying to access. Resource name type is always literal in input resource.
+   * @param resource Resource the client is trying to access. Resource pattern type is always literal in input resource.
    * @return true if the operation should be permitted, false otherwise
    */
   def authorize(session: Session, operation: Operation, resource: Resource): Boolean
@@ -59,8 +59,8 @@ trait Authorizer extends Configurable {
    *
    * @param acls set of acls to add to existing acls
    * @param resource the resource path to which these acls should be attached.
-   *                the supplied resource will have a specific resource name type,
-   *                i.e. the resource name type will not be ``ResourceNameType.ANY`` or ``ResourceNameType.UNKNOWN``.
+   *                the supplied resource will have a specific resource pattern type,
+   *                i.e. the resource pattern type will not be ``PatternType.ANY`` or ``PatternType.UNKNOWN``.
    */
   def addAcls(acls: Set[Acl], resource: Resource): Unit
 
@@ -80,8 +80,8 @@ trait Authorizer extends Configurable {
    *
    * @param acls set of acls to be removed.
    * @param resource resource path from which the acls should be removed.
-   *                 the supplied resource will have a specific resource name type,
-   *                 i.e. the resource name type will not be ``ResourceNameType.ANY`` or ``ResourceNameType.UNKNOWN``.
+   *                 the supplied resource will have a specific resource pattern type,
+   *                 i.e. the resource pattern type will not be ``PatternType.ANY`` or ``PatternType.UNKNOWN``.
    * @return true if some acl got removed, false if no acl was removed.
    */
   def removeAcls(acls: Set[Acl], resource: Resource): Boolean
@@ -101,8 +101,8 @@ trait Authorizer extends Configurable {
    * {code}
    *
    * @param resource the resource path from which these acls should be removed.
-   *                 the supplied resource will have a specific resource name type,
-   *                 i.e. the resource name type will not be ``ResourceNameType.ANY`` or ``ResourceNameType.UNKNOWN``.
+   *                 the supplied resource will have a specific resource pattern type,
+   *                 i.e. the resource pattern type will not be ``PatternType.ANY`` or ``PatternType.UNKNOWN``.
    * @return
    */
   def removeAcls(resource: Resource): Boolean
@@ -122,8 +122,8 @@ trait Authorizer extends Configurable {
    * {code}
    *
    * @param resource the resource path to which the acls belong.
-   *                 the supplied resource will have a specific resource name type,
-   *                 i.e. the resource name type will not be ``ResourceNameType.ANY`` or ``ResourceNameType.UNKNOWN``.
+   *                 the supplied resource will have a specific resource pattern type,
+   *                 i.e. the resource pattern type will not be ``PatternType.ANY`` or ``PatternType.UNKNOWN``.
    * @return empty set if no acls are found, otherwise the acls for the resource.
    */
   def getAcls(resource: Resource): Set[Acl]

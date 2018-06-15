@@ -26,7 +26,7 @@ import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.resource.ResourceNameType;
+import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
@@ -38,7 +38,7 @@ import static org.apache.kafka.common.protocol.CommonFields.OPERATION;
 import static org.apache.kafka.common.protocol.CommonFields.PERMISSION_TYPE;
 import static org.apache.kafka.common.protocol.CommonFields.PRINCIPAL;
 import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_NAME;
-import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_NAME_TYPE;
+import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_PATTERN_TYPE;
 import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_TYPE;
 
 public class CreateAclsRequest extends AbstractRequest {
@@ -54,16 +54,16 @@ public class CreateAclsRequest extends AbstractRequest {
                     PERMISSION_TYPE))));
 
     /**
-     * Version 1 adds RESOURCE_NAME_TYPE.
-     * Also, when the quota is violated, brokers will respond to a version 1 or later request before throttling.
+     * Version 1 adds RESOURCE_PATTERN_TYPE, to support more than just literal resource patterns.
+     * For more info, see {@link PatternType}.
      *
-     * For more info, see {@link org.apache.kafka.common.resource.ResourceNameType}.
+     * Also, when the quota is violated, brokers will respond to a version 1 or later request before throttling.
      */
     private static final Schema CREATE_ACLS_REQUEST_V1 = new Schema(
             new Field(CREATIONS_KEY_NAME, new ArrayOf(new Schema(
                     RESOURCE_TYPE,
                     RESOURCE_NAME,
-                    RESOURCE_NAME_TYPE,
+                    RESOURCE_PATTERN_TYPE,
                     PRINCIPAL,
                     HOST,
                     OPERATION,
@@ -180,10 +180,10 @@ public class CreateAclsRequest extends AbstractRequest {
             final boolean unsupported = aclCreations.stream()
                 .map(AclCreation::acl)
                 .map(AclBinding::pattern)
-                .map(ResourcePattern::nameType)
-                .anyMatch(nameType -> nameType != ResourceNameType.LITERAL);
+                .map(ResourcePattern::patternType)
+                .anyMatch(patternType -> patternType != PatternType.LITERAL);
             if (unsupported) {
-                throw new UnsupportedVersionException("Version 0 only supports literal resource name types");
+                throw new UnsupportedVersionException("Version 0 only supports literal resource pattern types");
             }
         }
 

@@ -35,7 +35,7 @@ object SecurityUtils {
       principal <- Try(KafkaPrincipal.fromString(filter.entryFilter.principal))
       operation <- Try(Operation.fromJava(filter.entryFilter.operation))
       permissionType <- Try(PermissionType.fromJava(filter.entryFilter.permissionType))
-      resource = Resource(resourceType, filter.patternFilter.name, filter.patternFilter.nameType)
+      resource = Resource(resourceType, filter.patternFilter.name, filter.patternFilter.patternType)
       acl = Acl(principal, permissionType, filter.entryFilter.host, operation)
     } yield (resource, acl)) match {
       case Failure(throwable) => Left(new ApiError(Errors.INVALID_REQUEST, throwable.getMessage))
@@ -44,7 +44,7 @@ object SecurityUtils {
   }
 
   def convertToAclBinding(resource: Resource, acl: Acl): AclBinding = {
-    val resourcePattern = new ResourcePattern(resource.resourceType.toJava, resource.name, resource.nameType)
+    val resourcePattern = new ResourcePattern(resource.resourceType.toJava, resource.name, resource.patternType)
     val entry = new AccessControlEntry(acl.principal.toString, acl.host.toString,
       acl.operation.toJava, acl.permissionType.toJava)
     new AclBinding(resourcePattern, entry)

@@ -28,7 +28,7 @@ import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
 import kafka.zk.{AclChangeNotificationHandler, AclChangeSubscription, KafkaZkClient, ZkAclChangeStore, ZkAclStore}
 import org.apache.kafka.common.errors.UnsupportedVersionException
-import org.apache.kafka.common.resource.ResourceNameType
+import org.apache.kafka.common.resource.PatternType
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{SecurityUtils, Time}
 
@@ -106,8 +106,8 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   }
 
   override def authorize(session: Session, operation: Operation, resource: Resource): Boolean = {
-    if (resource.nameType != ResourceNameType.LITERAL) {
-      throw new IllegalArgumentException("Only literal resources are supported. Got: " + resource.nameType)
+    if (resource.patternType != PatternType.LITERAL) {
+      throw new IllegalArgumentException("Only literal resources are supported. Got: " + resource.patternType)
     }
 
     val principal = session.principal
@@ -165,7 +165,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
   override def addAcls(acls: Set[Acl], resource: Resource) {
     if (acls != null && acls.nonEmpty) {
-      if (!extendedAclSupport && resource.nameType == ResourceNameType.PREFIXED) {
+      if (!extendedAclSupport && resource.patternType == PatternType.PREFIXED) {
         throw new UnsupportedVersionException(s"Adding ACLs on prefixed resource patterns requires " +
           s"${KafkaConfig.InterBrokerProtocolVersionProp} of $KAFKA_2_0_IV1 or greater")
       }
@@ -213,17 +213,17 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
   def getMatchingAcls(resourceType: ResourceType, resourceName: String): Set[Acl] = {
     inReadLock(lock) {
-      val wildcard = aclCache.get(Resource(resourceType, Acl.WildCardResource, ResourceNameType.LITERAL))
+      val wildcard = aclCache.get(Resource(resourceType, Acl.WildCardResource, PatternType.LITERAL))
         .map(_.acls)
         .getOrElse(Set.empty[Acl])
 
-      val literal = aclCache.get(Resource(resourceType, resourceName, ResourceNameType.LITERAL))
+      val literal = aclCache.get(Resource(resourceType, resourceName, PatternType.LITERAL))
         .map(_.acls)
         .getOrElse(Set.empty[Acl])
 
       val prefixed = aclCache.range(
-        Resource(resourceType, resourceName, ResourceNameType.PREFIXED),
-        Resource(resourceType, resourceName.substring(0, 1), ResourceNameType.PREFIXED)
+        Resource(resourceType, resourceName, PatternType.PREFIXED),
+        Resource(resourceType, resourceName.substring(0, 1), PatternType.PREFIXED)
       )
         .filterKeys(resource => resourceName.startsWith(resource.name))
         .flatMap { case (resource, versionedAcls) => versionedAcls.acls }
@@ -364,7 +364,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     }
   }
 
-  // Orders by resource type, then resource name type and finally reverse ordering by name.
+  // Orders by resource type, then resource pattern type and finally reverse ordering by name.
   private object ResourceOrdering extends Ordering[Resource] {
 
     def compare(a: Resource, b: Resource): Int = {
@@ -372,7 +372,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
       if (rt != 0)
         rt
       else {
-        val rnt = a.nameType compareTo b.nameType
+        val rnt = a.patternType compareTo b.patternType
         if (rnt != 0)
           rnt
         else
