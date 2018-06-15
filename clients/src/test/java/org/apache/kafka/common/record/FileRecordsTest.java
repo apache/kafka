@@ -22,7 +22,6 @@ import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 import org.easymock.EasyMock;
 import org.junit.Before;
@@ -38,6 +37,7 @@ import java.util.Iterator;
 import java.util.List;
 
 import static java.util.Arrays.asList;
+import static org.apache.kafka.common.utils.Utils.utf8;
 import static org.apache.kafka.test.TestUtils.tempFile;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -430,10 +430,6 @@ public class FileRecordsTest {
         }
     }
 
-    private String utf8(ByteBuffer buffer) {
-        return Utils.utf8(buffer, buffer.remaining());
-    }
-
     private void downConvertAndVerifyRecords(List<SimpleRecord> initialRecords,
                                              List<Long> initialOffsets,
                                              FileRecords fileRecords,
@@ -441,13 +437,11 @@ public class FileRecordsTest {
                                              byte toMagic,
                                              long firstOffset,
                                              Time time) {
-        long numBatches = 0;
         long minBatchSize = Long.MAX_VALUE;
         long maxBatchSize = Long.MIN_VALUE;
         for (RecordBatch batch : fileRecords.batches()) {
             minBatchSize = Math.min(minBatchSize, batch.sizeInBytes());
             maxBatchSize = Math.max(maxBatchSize, batch.sizeInBytes());
-            numBatches++;
         }
 
         // Test the normal down-conversion path
@@ -469,21 +463,6 @@ public class FileRecordsTest {
             Iterator<ConvertedRecords> it = lazyRecords.iterator(readSize);
             while (it.hasNext())
                 convertedRecords.add(it.next().records());
-
-            // Check if chunking works as expected. The only way to predictably test for this is by testing the edge cases.
-            // 1. If maximum read size is greater than the size of all batches combined, we must get all down-conversion
-            //    records in exactly two batches; the first chunk is pre down-converted and returned, and the second chunk
-            //    contains the remaining batches.
-            // 2. If maximum read size is just smaller than the size of all batches combined, we must get results in two
-            //    chunks.
-            // 3. If maximum read size is less than the size of a single record, we get one batch in each chunk.
-            if (readSize >= fileRecords.sizeInBytes())
-                assertEquals(2, convertedRecords.size());
-            else if (readSize == fileRecords.sizeInBytes() - 1)
-                assertEquals(2, convertedRecords.size());
-            else if (readSize <= minBatchSize)
-                assertEquals(numBatches, convertedRecords.size());
-
             verifyConvertedRecords(initialRecords, initialOffsets, convertedRecords, compressionType, toMagic);
             convertedRecords.clear();
         }

@@ -119,6 +119,14 @@
     </li>
     <li><a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-290%3A+Support+for+Prefixed+ACLs">KIP-290</a> adds the ability
         to define ACLs on prefixed resources, e.g. any topic starting with 'foo'.</li>
+    <li><a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-283%3A+Efficient+Memory+Usage+for+Down-Conversion">KIP-283</a> improves message down-conversion
+        handling on Kafka broker, which has typically been a memory-intensive operation. The KIP adds a mechanism by which the operation becomes less memory intensive
+        by down-converting chunks of partition data at a time which helps put an upper bound on memory consumption. With this improvement, there is a change in
+        <code>FetchResponse</code> protocol behavior where the broker could send an oversized message batch towards the end of the response with an invalid offset.
+        Such oversized messages must be ignored by consumer clients, as is done by <code>KafkaConsumer</code>.
+    <p>KIP-283 also adds new topic and broker configurations <code>message.downconversion.enable</code> and <code>log.message.downconversion.enable</code> respectively
+       to control whether down-conversion is enabled. When disabled, broker does not perform any down-conversion and instead sends an <code>UNSUPPORTED_VERSION</code>
+       error to the client.</p></li>
 </ul>
 
 <h5><a id="upgrade_200_new_protocols" href="#upgrade_200_new_protocols">New Protocol Versions</a></h5>
