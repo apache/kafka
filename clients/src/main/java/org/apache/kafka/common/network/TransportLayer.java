@@ -94,6 +94,7 @@ public interface TransportLayer extends ScatteringByteChannel, GatheringByteChan
 
     /**
      * @return true if channel has bytes to be read in any intermediate buffers
+     * which may be processed without reading additional data from the network.
      */
     boolean hasBytesBuffered();
 
