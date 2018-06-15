@@ -111,11 +111,10 @@ class TestMirrorMakerService(ProduceConsumeValidateTest):
                      err_msg="Producer failed to produce %d messages in a reasonable amount of time." % n_messages)
 
     @cluster(num_nodes=7)
-    @parametrize(security_protocol='PLAINTEXT', new_consumer=False)
-    @matrix(security_protocol=['PLAINTEXT', 'SSL'], new_consumer=[True])
+    @matrix(security_protocol=['PLAINTEXT', 'SSL'])
     @cluster(num_nodes=8)
-    @matrix(security_protocol=['SASL_PLAINTEXT', 'SASL_SSL'], new_consumer=[True])
-    def test_simple_end_to_end(self, security_protocol, new_consumer):
+    @matrix(security_protocol=['SASL_PLAINTEXT', 'SASL_SSL'])
+    def test_simple_end_to_end(self, security_protocol):
         """
         Test end-to-end behavior under non-failure conditions.
 
@@ -128,18 +127,11 @@ class TestMirrorMakerService(ProduceConsumeValidateTest):
         - Verify that number of consumed messages matches the number produced.
         """
         self.start_kafka(security_protocol)
-        self.consumer.new_consumer = new_consumer
-
-        self.mirror_maker.new_consumer = new_consumer
         self.mirror_maker.start()
 
         mm_node = self.mirror_maker.nodes[0]
         with mm_node.account.monitor_log(self.mirror_maker.LOG_FILE) as monitor:
-            if new_consumer:
-                monitor.wait_until("Resetting offset for partition", timeout_sec=30, err_msg="Mirrormaker did not reset fetch offset in a reasonable amount of time.")
-            else:
-                monitor.wait_until("reset fetch offset", timeout_sec=30, err_msg="Mirrormaker did not reset fetch offset in a reasonable amount of time.")
-
+            monitor.wait_until("Resetting offset for partition", timeout_sec=30, err_msg="Mirrormaker did not reset fetch offset in a reasonable amount of time.")
         self.run_produce_consume_validate(core_test_action=self.wait_for_n_messages)
         self.mirror_maker.stop()
 

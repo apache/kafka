@@ -49,7 +49,7 @@ class ClientCompatibilityTestNewBroker(ProduceConsumeValidateTest):
     @parametrize(producer_version=str(DEV_BRANCH), consumer_version=str(LATEST_0_9), compression_types=["none"], new_consumer=False, timestamp_type=None)
     @parametrize(producer_version=str(DEV_BRANCH), consumer_version=str(LATEST_0_9), compression_types=["snappy"], timestamp_type=str("CreateTime"))
     @parametrize(producer_version=str(LATEST_1_1), consumer_version=str(LATEST_1_1), compression_types=["lz4"], timestamp_type=str("CreateTime"))
-    @parametrize(producer_version=str(LATEST_1_0), consumer_version=str(LATEST_1_0), compression_types=["node"], timestamp_type=str("CreateTime"))
+    @parametrize(producer_version=str(LATEST_1_0), consumer_version=str(LATEST_1_0), compression_types=["none"], timestamp_type=str("CreateTime"))
     @parametrize(producer_version=str(LATEST_0_11_0), consumer_version=str(LATEST_0_11_0), compression_types=["gzip"], timestamp_type=str("CreateTime"))
     @parametrize(producer_version=str(LATEST_0_10_2), consumer_version=str(LATEST_0_10_2), compression_types=["lz4"], timestamp_type=str("CreateTime"))
     @parametrize(producer_version=str(LATEST_0_10_1), consumer_version=str(LATEST_0_10_1), compression_types=["snappy"], timestamp_type=str("LogAppendTime"))

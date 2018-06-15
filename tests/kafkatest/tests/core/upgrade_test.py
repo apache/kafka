@@ -123,7 +123,7 @@ class TestUpgrade(ProduceConsumeValidateTest):
 
         # TODO - reduce the timeout
         self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka,
-                                        self.topic, consumer_timeout_ms=30000, new_consumer=True,
+                                        self.topic, consumer_timeout_ms=30000,
                                         message_validator=is_int, version=KafkaVersion(from_kafka_version))
 
         self.run_produce_consume_validate(core_test_action=lambda: self.perform_upgrade(from_kafka_version,

@@ -270,7 +270,7 @@ class Benchmark(Test):
         # consume
         self.consumer = ConsumerPerformanceService(
             self.test_context, num_consumers, self.kafka,
-            topic=TOPIC_REP_THREE, new_consumer=True, messages=num_records)
+            topic=TOPIC_REP_THREE, messages=num_records)
         self.consumer.group = "test-consumer-group"
         self.consumer.run()
         return compute_aggregate_throughput(self.consumer)

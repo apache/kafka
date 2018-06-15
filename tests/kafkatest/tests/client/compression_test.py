@@ -55,7 +55,7 @@ class CompressionTest(ProduceConsumeValidateTest):
 
     @cluster(num_nodes=7)
     @parametrize(compression_types=["snappy","gzip","lz4","none"])
-    def test_compressed_topic(self, compression_types, new_consumer):
+    def test_compressed_topic(self, compression_types):
         """Test produce => consume => validate for compressed topics
         Setup: 1 zk, 1 kafka node, 1 topic with partitions=10, replication-factor=1
 
@@ -76,8 +76,7 @@ class CompressionTest(ProduceConsumeValidateTest):
                                            message_validator=is_int_with_prefix,
                                            compression_types=compression_types)
         self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka, self.topic,
-                                        new_consumer=True, consumer_timeout_ms=60000,
-                                        message_validator=is_int_with_prefix)
+                                        consumer_timeout_ms=60000, message_validator=is_int_with_prefix)
         self.kafka.start()
 
         self.run_produce_consume_validate(lambda: wait_until(
