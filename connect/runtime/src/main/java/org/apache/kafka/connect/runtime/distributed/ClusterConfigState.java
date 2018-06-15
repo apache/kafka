@@ -112,7 +112,7 @@ public class ClusterConfigState {
      * {@link org.apache.kafka.common.config.ConfigTransformer} by having all variable
      * references replaced with the current values from external instances of
      * {@link ConfigProvider}, and may include secrets.
-     * NOTED: WorkerConfigTransformer#transform won't be called if the configuration of task doesn't exist.
+     * NOTED: If the configuration is not null, it will have been transformed.
      * @param connector name of the connector
      * @return a map containing configuration parameters
      */
@@ -138,7 +138,7 @@ public class ClusterConfigState {
      * {@link org.apache.kafka.common.config.ConfigTransformer} by having all variable
      * references replaced with the current values from external instances of
      * {@link ConfigProvider}, and may include secrets.
-     * NOTED: WorkerConfigTransformer#transform won't be called if the configuration of task doesn't exist.
+     * NOTED: If the configuration is not null, it will have been transformed.
      * @param task id of the task
      * @return a map containing configuration parameters
      */
