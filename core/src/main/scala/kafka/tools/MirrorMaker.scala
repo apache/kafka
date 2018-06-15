@@ -19,7 +19,7 @@ package kafka.tools
 
 import java.util
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
-import java.util.concurrent.{CountDownLatch, TimeUnit, TimeoutException}
+import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.regex.Pattern
 import java.util.{Collections, Properties}
 
@@ -338,7 +338,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       try {
         consumerWrapper.init()
 
-        // FIXME Is it safe to remove one of the loops?
+        // We needed two while loops due to the old consumer semantics, this can now be simplified
         while (!exitingOnSendFailure && !shuttingDown) {
           try {
             while (!exitingOnSendFailure && !shuttingDown) {
@@ -353,9 +353,8 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
               maybeFlushAndCommitOffsets()
             }
           } catch {
-            //FIXME Is this change OK?
-            case _: TimeoutException =>
-              trace("Caught TimeoutException, continue iteration.")
+            case _: NoRecordsException =>
+              trace("Caught NoRecordsException, continue iteration.")
             case _: WakeupException =>
               trace("Caught WakeupException, continue iteration.")
           }
@@ -453,7 +452,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
         // commit.
         recordIter = consumer.poll(1000).iterator
         if (!recordIter.hasNext)
-          throw new TimeoutException
+          throw new NoRecordsException
       }
 
       val record = recordIter.next()
@@ -550,5 +549,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       Collections.singletonList(new ProducerRecord(record.topic, null, timestamp, record.key, record.value, record.headers))
     }
   }
+
+  private class NoRecordsException extends RuntimeException
 
 }
