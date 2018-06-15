@@ -47,16 +47,4 @@ class TopicFilterTest extends JUnitSuite {
     assertFalse(topicFilter4.isTopicAllowed("test-bad", excludeInternalTopics = true))
   }
 
-  @Test
-  def testBlacklists() {
-    val topicFilter1 = Blacklist("black1")
-    assertTrue(topicFilter1.isTopicAllowed("white2", excludeInternalTopics = true))
-    assertTrue(topicFilter1.isTopicAllowed("white2", excludeInternalTopics = false))
-    assertFalse(topicFilter1.isTopicAllowed("black1", excludeInternalTopics = true))
-    assertFalse(topicFilter1.isTopicAllowed("black1", excludeInternalTopics = false))
-
-    assertFalse(topicFilter1.isTopicAllowed(Topic.GROUP_METADATA_TOPIC_NAME, excludeInternalTopics = true))
-    assertTrue(topicFilter1.isTopicAllowed(Topic.GROUP_METADATA_TOPIC_NAME, excludeInternalTopics = false))
-  }
-
 }

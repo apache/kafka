@@ -21,7 +21,7 @@ import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
 
 import joptsimple.OptionException
-import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
+import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class ConsumerPerformanceTest {

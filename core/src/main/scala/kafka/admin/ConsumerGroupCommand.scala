@@ -34,7 +34,7 @@ import org.apache.kafka.common.serialization.StringDeserializer
 import org.apache.kafka.common.utils.Utils
 
 import scala.collection.JavaConverters._
-import scala.collection.{Seq, Set, mutable}
+import scala.collection.{Seq, Set}
 
 object ConsumerGroupCommand extends Logging {
 
@@ -253,9 +253,6 @@ object ConsumerGroupCommand extends Logging {
       } else
         printState(group, collectGroupState())
     }
-
-    private def getLogEndOffset(topicPartition: TopicPartition): LogOffsetResult =
-      getLogEndOffsets(Seq(topicPartition)).getOrElse(topicPartition, LogOffsetResult.Ignore)
 
     private def collectConsumerAssignment(group: String,
                                             coordinator: Option[Node],
