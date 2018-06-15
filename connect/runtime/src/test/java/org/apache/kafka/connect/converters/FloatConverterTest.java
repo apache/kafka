@@ -14,31 +14,30 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.connect.storage;
+package org.apache.kafka.connect.converters;
 
+import org.apache.kafka.common.serialization.FloatSerializer;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.serialization.ShortSerializer;
 import org.apache.kafka.connect.data.Schema;
 
-public class ShortConverterTest extends NumberConverterTest<Short> {
+public class FloatConverterTest extends NumberConverterTest<Float> {
 
-    public Short[] samples() {
-        return new Short[]{Short.MIN_VALUE, 123, Short.MAX_VALUE};
+    public Float[] samples() {
+        return new Float[]{Float.MIN_VALUE, 1234.31f, Float.MAX_VALUE};
     }
 
     @Override
     protected Schema schema() {
-        return Schema.OPTIONAL_INT16_SCHEMA;
+        return Schema.OPTIONAL_FLOAT32_SCHEMA;
     }
 
     @Override
-    protected NumberConverter<Short> createConverter() {
-        return new ShortConverter();
+    protected NumberConverter<Float> createConverter() {
+        return new FloatConverter();
     }
 
     @Override
-    protected Serializer<Short> createSerializer() {
-        return new ShortSerializer();
+    protected Serializer<Float> createSerializer() {
+        return new FloatSerializer();
     }
 }
-
