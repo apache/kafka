@@ -2081,7 +2081,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     @Deprecated
     @Override
     public void close(long timeout, TimeUnit timeUnit) {
-        close(Duration.ofMillis(TimeUnit.MILLISECONDS.toMillis(timeout)));
+        close(Duration.ofMillis(timeUnit.toMillis(timeout)));
     }
 
     /**
