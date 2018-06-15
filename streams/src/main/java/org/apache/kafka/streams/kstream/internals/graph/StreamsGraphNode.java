@@ -56,6 +56,10 @@ public abstract class StreamsGraphNode {
         childNodes.clear();
     }
 
+    public boolean removeChild(StreamsGraphNode child) {
+       return childNodes.remove(child);
+    }
+
     public void setChildNodes(Set<StreamsGraphNode> streamsGraphNodes) {
         childNodes.clear();
         for (StreamsGraphNode streamsGraphNode : streamsGraphNodes) {
