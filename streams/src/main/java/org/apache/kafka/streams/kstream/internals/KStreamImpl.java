@@ -768,21 +768,13 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     public KGroupedStream<K, V> groupByKey(final Serialized<K, V> serialized) {
         final SerializedInternal<K, V> serializedInternal = new SerializedInternal<>(serialized);
 
-        final StatelessProcessorNode<K, V> graphNode = new StatelessProcessorNode<>(
-            this.name,
-            null,
-            repartitionRequired,
-            Collections.<String>emptyList());
-
-        addGraphNode(graphNode);
-
         return new KGroupedStreamImpl<>(builder,
                                         this.name,
                                         sourceNodes,
                                         serializedInternal.keySerde(),
                                         serializedInternal.valueSerde(),
                                         this.repartitionRequired,
-                                        graphNode);
+                                        parentGraphNode);
 
     }
 
