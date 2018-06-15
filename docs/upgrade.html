@@ -88,7 +88,7 @@
         in the Scala producers. Users migrating should consider configuring a custom partitioner that retains the previous behaviour.</li>
     <li>MirrorMaker and ConsoleConsumer no longer support the Scala consumer, they always use the Java consumer.</li>
     <li>The ConsoleProducer no longer supports the Scala producer, it always uses the Java producer.</li>
-    <li>A number of deprecated tools that rely on the Scala clients have been removed: ReplayLogProducer, SimpleConsumerPerformance, SimpleConsumerShell, UpdateOffsetsInZK, VerifyConsumerRebalance.</li>
+    <li>A number of deprecated tools that rely on the Scala clients have been removed: ReplayLogProducer, SimpleConsumerPerformance, SimpleConsumerShell, ExportZkOffsets, ImportZkOffsets, UpdateOffsetsInZK, VerifyConsumerRebalance.</li>
     <li>The deprecated kafka.tools.ProducerPerformance has been removed, please use org.apache.kafka.tools.ProducerPerformance.</li>
     <li>New Kafka Streams configuration parameter <code>upgrade.from</code> added that allows rolling bounce upgrade from older version. </li>
     <li><a href="https://cwiki.apache.org/confluence/x/DVyHB">KIP-284</a> changed the retention time for Kafka Streams repartition topics by setting its default value to <code>Long.MAX_VALUE</code>.</li>
