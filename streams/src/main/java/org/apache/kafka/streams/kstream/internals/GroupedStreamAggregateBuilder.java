@@ -20,6 +20,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.WindowedKTable;
 import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.util.Collections;
@@ -79,6 +80,24 @@ class GroupedStreamAggregateBuilder<K, V> {
         builder.internalTopologyBuilder.addStateStore(storeBuilder, aggFunctionName);
 
         return new KTableImpl<>(
+                builder,
+                aggFunctionName,
+                aggregateSupplier,
+                sourceName.equals(this.name) ? sourceNodes : Collections.singleton(sourceName),
+                storeBuilder.name(),
+                isQueryable);
+    }
+
+    <T> WindowedKTable<K, T> buildWindowed(final KStreamAggProcessorSupplier<K, ?, V, T> aggregateSupplier,
+                                           final String functionName,
+                                           final StoreBuilder storeBuilder,
+                                           final boolean isQueryable) {
+        final String aggFunctionName = builder.newProcessorName(functionName);
+        final String sourceName = repartitionIfRequired(storeBuilder.name());
+        builder.internalTopologyBuilder.addProcessor(aggFunctionName, aggregateSupplier, sourceName);
+        builder.internalTopologyBuilder.addStateStore(storeBuilder, aggFunctionName);
+
+        return new WindowedKTableImpl<>(
                 builder,
                 aggFunctionName,
                 aggregateSupplier,

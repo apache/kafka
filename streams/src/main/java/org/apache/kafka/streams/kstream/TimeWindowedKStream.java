@@ -120,7 +120,7 @@ public interface TimeWindowedKStream<K, V> {
      * @return a {@link KTable} that contains "update" records with unmodified keys and {@link Long} values that
      * represent the latest (rolling) count (i.e., number of records) for each key
      */
-    KTable<Windowed<K>, Long> count(final Materialized<K, Long, WindowStore<Bytes, byte[]>> materialized);
+    WindowedKTable<K, Long> count(final Materialized<K, Long, WindowStore<Bytes, byte[]>> materialized);
 
     /**
      * Aggregate the values of records in this stream by the grouped key.
