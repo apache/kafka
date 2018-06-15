@@ -74,7 +74,7 @@ public interface TimeWindowedKStream<K, V> {
      * @return a {@link KTable} that contains "update" records with unmodified keys and {@link Long} values that
      * represent the latest (rolling) count (i.e., number of records) for each key
      */
-    KTable<Windowed<K>, Long> count();
+    WindowedKTable<K, Long> count();
 
     /**
      * Count the number of records in this stream by the grouped key and the defined windows.
@@ -165,8 +165,8 @@ public interface TimeWindowedKStream<K, V> {
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
      * latest (rolling) aggregate for each key
      */
-    <VR> KTable<Windowed<K>, VR> aggregate(final Initializer<VR> initializer,
-                                           final Aggregator<? super K, ? super V, VR> aggregator);
+    <VR> WindowedKTable<K, VR> aggregate(final Initializer<VR> initializer,
+                                         final Aggregator<? super K, ? super V, VR> aggregator);
 
     /**
      * Aggregate the values of records in this stream by the grouped key.
@@ -224,9 +224,9 @@ public interface TimeWindowedKStream<K, V> {
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
      * latest (rolling) aggregate for each key
      */
-    <VR> KTable<Windowed<K>, VR> aggregate(final Initializer<VR> initializer,
-                                           final Aggregator<? super K, ? super V, VR> aggregator,
-                                           final Materialized<K, VR, WindowStore<Bytes, byte[]>> materialized);
+    <VR> WindowedKTable<K, VR> aggregate(final Initializer<VR> initializer,
+                                         final Aggregator<? super K, ? super V, VR> aggregator,
+                                         final Materialized<K, VR, WindowStore<Bytes, byte[]>> materialized);
 
     /**
      * Combine the values of records in this stream by the grouped key.
@@ -261,7 +261,7 @@ public interface TimeWindowedKStream<K, V> {
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
      * latest (rolling) aggregate for each key
      */
-    KTable<Windowed<K>, V> reduce(final Reducer<V> reducer);
+    WindowedKTable<K, V> reduce(final Reducer<V> reducer);
 
     /**
      * Combine the values of records in this stream by the grouped key.
@@ -312,6 +312,6 @@ public interface TimeWindowedKStream<K, V> {
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
      * latest (rolling) aggregate for each key
      */
-    KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
-                                  final Materialized<K, V, WindowStore<Bytes, byte[]>> materialized);
+    WindowedKTable<K, V> reduce(final Reducer<V> reducer,
+                                final Materialized<K, V, WindowStore<Bytes, byte[]>> materialized);
 }

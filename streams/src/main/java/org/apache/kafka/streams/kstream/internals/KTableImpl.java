@@ -50,7 +50,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
     static final String STATE_STORE_NAME = "STATE-STORE-";
 
-    private static final String FILTER_NAME = "KTABLE-FILTER-";
+    static final String FILTER_NAME = "KTABLE-FILTER-";
 
     private static final String JOINTHIS_NAME = "KTABLE-JOINTHIS-";
 
@@ -68,12 +68,12 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
     private final ProcessorSupplier<?, ?> processorSupplier;
 
-    private final String queryableStoreName;
+    final String queryableStoreName;
     private final boolean isQueryable;
 
     private boolean sendOldValues = false;
-    private final Serde<K> keySerde;
-    private final Serde<V> valSerde;
+    final Serde<K> keySerde;
+    final Serde<V> valSerde;
 
     public KTableImpl(final InternalStreamsBuilder builder,
                       final String name,
