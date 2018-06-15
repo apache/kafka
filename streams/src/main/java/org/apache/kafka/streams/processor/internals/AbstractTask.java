@@ -127,13 +127,13 @@ public abstract class AbstractTask {
     void closeStateManager(final boolean writeCheckpoint) {
         log.trace("task [{}] Closing", id());
         try {
-            stateMgr.close(writeCheckpoint ? recordCollectorOffsets() : null);
+            stateMgr.close(writeCheckpoint ? activeTaskCheckpointableOffsets() : null);
         } catch (IOException e) {
             throw new ProcessorStateException("Error while closing the state manager", e);
         }
     }
 
-    protected Map<TopicPartition, Long> recordCollectorOffsets() {
+    protected Map<TopicPartition, Long> activeTaskCheckpointableOffsets() {
         return Collections.emptyMap();
     }
 
