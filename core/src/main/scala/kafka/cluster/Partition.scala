@@ -22,6 +22,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
 import com.yammer.metrics.core.Gauge
 import kafka.admin.AdminUtils
 import kafka.api.LeaderAndIsr
+import kafka.common.UnexpectedAppendOffsetException
 import kafka.controller.KafkaController
 import kafka.log.{LogAppendInfo, LogConfig}
 import kafka.metrics.KafkaMetricsGroup
@@ -29,7 +30,7 @@ import kafka.server._
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.{NotEnoughReplicasException, NotLeaderForPartitionException, PolicyViolationException}
+import org.apache.kafka.common.errors.{ReplicaNotAvailableException, NotEnoughReplicasException, NotLeaderForPartitionException, PolicyViolationException}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.record.MemoryRecords
@@ -154,6 +155,10 @@ class Partition(val topic: String,
   }
 
   def getReplica(replicaId: Int = localBrokerId): Option[Replica] = Option(assignedReplicaMap.get(replicaId))
+
+  def getReplicaOrException(replicaId: Int = localBrokerId): Replica =
+    getReplica(replicaId).getOrElse(
+      throw new ReplicaNotAvailableException(s"Replica $replicaId is not available for partition $topicPartition"))
 
   def leaderReplicaIfLocal: Option[Replica] =
     leaderReplicaIdOpt.filter(_ == localBrokerId).flatMap(getReplica)
@@ -484,6 +489,31 @@ class Partition(val topic: String,
       debug("Lagging replicas are %s".format(laggingReplicas.map(_.brokerId).mkString(",")))
 
     laggingReplicas
+  }
+
+  def appendRecordsToFollower(records: MemoryRecords) {
+    try {
+      getReplicaOrException().log.get.appendAsFollower(records)
+    } catch {
+      case e: UnexpectedAppendOffsetException =>
+        val replica = getReplicaOrException()
+        val logEndOffset = replica.logEndOffset.messageOffset
+        if (logEndOffset == replica.logStartOffset &&
+            e.firstOffset < logEndOffset && e.lastOffset >= logEndOffset) {
+          // This may happen if the log start offset on the leader (or current replica) falls in
+          // the middle of the batch due to delete records request and the follower tries to
+          // fetch its first offset from the leader.
+          // We handle this case here instead of Log#append() because we will need to remove the
+          // segment that start with log start offset and create a new one with earlier offset
+          // (base offset of the batch), which will move recoveryPoint backwards, so we will need
+          // to checkpoint the new recovery point before we append
+          info(s"Unexpected offset in append to $topicPartition. First offset ${e.firstOffset} is less than log start offset ${replica.logStartOffset}." +
+               s" Since this is the first record to be appended to the follower's log, will start the log from offset ${e.firstOffset}.")
+          logManager.truncateFullyAndStartAt(topicPartition, e.firstOffset)
+          replica.log.get.appendAsFollower(records)
+        } else
+          throw e
+    }
   }
 
   def appendRecordsToLeader(records: MemoryRecords, isFromClient: Boolean, requiredAcks: Int = 0): LogAppendInfo = {

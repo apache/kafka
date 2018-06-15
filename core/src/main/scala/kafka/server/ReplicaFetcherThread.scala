@@ -87,6 +87,7 @@ class ReplicaFetcherThread(name: String,
   // process fetched data
   def processPartitionData(topicPartition: TopicPartition, fetchOffset: Long, partitionData: PartitionData) {
     val replica = replicaMgr.getReplicaOrException(topicPartition)
+    val partition = replicaMgr.getPartition(topicPartition).get
     val records = partitionData.toRecords
 
     maybeWarnIfOversizedRecords(records, topicPartition)
@@ -99,7 +100,7 @@ class ReplicaFetcherThread(name: String,
         .format(replica.logEndOffset.messageOffset, topicPartition, records.sizeInBytes, partitionData.highWatermark))
 
     // Append the leader's messages to the log
-    replica.log.get.appendAsFollower(records)
+    partition.appendRecordsToFollower(records)
 
     if (logger.isTraceEnabled)
       trace("Follower has replica log end offset %d after appending %d bytes of messages for partition %s"
