@@ -67,6 +67,9 @@ public final class LazyDownConversionRecordsSend extends RecordsSend<LazyDownCon
                 ByteBuffer overflowMessageBatch = ByteBuffer.allocate(
                         Math.max(MIN_OVERFLOW_MESSAGE_LENGTH, Math.min(remaining + 1, MAX_READ_SIZE)));
                 overflowMessageBatch.putLong(-1L);
+
+                // Fill in the length of the overflow batch. A valid batch must be at least as long as the minimum batch
+                // overhead.
                 overflowMessageBatch.putInt(Math.max(remaining + 1, DefaultRecordBatch.RECORD_BATCH_OVERHEAD));
                 convertedRecords = MemoryRecords.readableRecords(overflowMessageBatch);
                 log.debug("Constructed overflow message batch for partition {} with length={}", topicPartition(), remaining);

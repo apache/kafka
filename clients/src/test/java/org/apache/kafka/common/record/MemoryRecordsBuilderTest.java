@@ -534,9 +534,9 @@ public class MemoryRecordsBuilderTest {
         }
 
         List<Record> logRecords = Utils.toList(records.records().iterator());
-        assertEquals("1", utf8(logRecords.get(0).key()));
-        assertEquals("2", utf8(logRecords.get(1).key()));
-        assertEquals("3", utf8(logRecords.get(2).key()));
+        assertEquals("1", Utils.utf8(logRecords.get(0).key()));
+        assertEquals("2", Utils.utf8(logRecords.get(1).key()));
+        assertEquals("3", Utils.utf8(logRecords.get(2).key()));
 
         convertedRecords = MemoryRecords.readableRecords(buffer).downConvert(RecordBatch.MAGIC_VALUE_V1, 2L, time);
         records = convertedRecords.records();
@@ -550,9 +550,9 @@ public class MemoryRecordsBuilderTest {
             assertEquals(0, batches.get(0).baseOffset());
             assertEquals(RecordBatch.MAGIC_VALUE_V1, batches.get(1).magic());
             assertEquals(1, batches.get(1).baseOffset());
-            assertEquals("1", utf8(logRecords.get(0).key()));
-            assertEquals("2", utf8(logRecords.get(1).key()));
-            assertEquals("3", utf8(logRecords.get(2).key()));
+            assertEquals("1", Utils.utf8(logRecords.get(0).key()));
+            assertEquals("2", Utils.utf8(logRecords.get(1).key()));
+            assertEquals("3", Utils.utf8(logRecords.get(2).key()));
             verifyRecordsProcessingStats(convertedRecords.recordConversionStats(), 3, 2,
                     records.sizeInBytes(), buffer.limit());
         } else {
@@ -561,15 +561,11 @@ public class MemoryRecordsBuilderTest {
             assertEquals(0, batches.get(0).baseOffset());
             assertEquals(RecordBatch.MAGIC_VALUE_V1, batches.get(1).magic());
             assertEquals(2, batches.get(1).baseOffset());
-            assertEquals("1", utf8(logRecords.get(0).key()));
-            assertEquals("3", utf8(logRecords.get(1).key()));
+            assertEquals("1", Utils.utf8(logRecords.get(0).key()));
+            assertEquals("3", Utils.utf8(logRecords.get(1).key()));
             verifyRecordsProcessingStats(convertedRecords.recordConversionStats(), 3, 1,
                     records.sizeInBytes(), buffer.limit());
         }
-    }
-
-    private static String utf8(ByteBuffer buffer) {
-        return Utils.utf8(buffer);
     }
 
     @Test
