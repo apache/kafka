@@ -443,13 +443,12 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         addGraphNode(sinkNode);
     }
 
-    @Override
-    public <K1, V1> KStream<K1, V1> transform(final TransformerSupplier<? super K, ? super V, KeyValue<K1, V1>> transformerSupplier,
-                                              final String... stateStoreNames) {
-        Objects.requireNonNull(transformerSupplier, "transformerSupplier can't be null");
+    private <K1, V1> KStream<K1, V1> doTransform(final ProcessorSupplier processorSupplierForGraph,
+                                                 final ProcessorSupplier processorSupplierForTopologyBuilder,
+                                                 final String... stateStoreNames) {
         String name = builder.newProcessorName(TRANSFORM_NAME);
 
-        ProcessorParameters processorParameters = new ProcessorParameters<>(new KStreamTransform<>(transformerSupplier), name);
+        ProcessorParameters processorParameters = new ProcessorParameters<>(processorSupplierForGraph, name);
 
         StatefulProcessorNode<K1, V1> transformNode = new StatefulProcessorNode<>(name,
                                                                                   processorParameters,
@@ -460,12 +459,30 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         transformNode.keyChangingOperation(true);
         addGraphNode(transformNode);
 
-        builder.internalTopologyBuilder.addProcessor(name, new KStreamTransform<>(transformerSupplier), this.name);
+        builder.internalTopologyBuilder.addProcessor(name, processorSupplierForTopologyBuilder, this.name);
         if (stateStoreNames != null && stateStoreNames.length > 0) {
             builder.internalTopologyBuilder.connectProcessorAndStateStores(name, stateStoreNames);
         }
 
         return new KStreamImpl<>(builder, name, sourceNodes, true, null);
+    }
+
+    @Override
+    public <K1, V1> KStream<K1, V1> transform(final TransformerSupplier<? super K, ? super V, KeyValue<K1, V1>> transformerSupplier,
+                                              final String... stateStoreNames) {
+        Objects.requireNonNull(transformerSupplier, "transformerSupplier can't be null");
+        return doTransform(new KStreamTransform<>(transformerSupplier),
+                           new KStreamTransform<>(transformerSupplier),
+                           stateStoreNames);
+    }
+
+    @Override
+    public <K1, V1> KStream<K1, V1> flatTransform(final TransformerSupplier<? super K, ? super V, ? extends Iterable<? extends KeyValue<? extends K1, ? extends V1>>> transformerSupplier,
+                                                  final String... stateStoreNames) {
+        Objects.requireNonNull(transformerSupplier, "transformerSupplier can't be null");
+        return doTransform(new KStreamFlatTransform<>(transformerSupplier),
+                           new KStreamFlatTransform<>(transformerSupplier),
+                           stateStoreNames);
     }
 
     @Override

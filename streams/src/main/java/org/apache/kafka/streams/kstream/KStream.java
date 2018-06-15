@@ -263,7 +263,7 @@ public interface KStream<K, V> {
      * @see #mapValues(ValueMapperWithKey)
      * @see #flatMapValues(ValueMapper)
      * @see #flatMapValues(ValueMapperWithKey)
-     * @see #transform(TransformerSupplier, String...)
+     * @see #flatTransform(TransformerSupplier, String...)
      * @see #transformValues(ValueTransformerSupplier, String...)
      * @see #transformValues(ValueTransformerWithKeySupplier, String...)
      */
@@ -304,7 +304,7 @@ public interface KStream<K, V> {
      * @see #flatMap(KeyValueMapper)
      * @see #mapValues(ValueMapper)
      * @see #mapValues(ValueMapperWithKey)
-     * @see #transform(TransformerSupplier, String...)
+     * @see #flatTransform(TransformerSupplier, String...)
      * @see #transformValues(ValueTransformerSupplier, String...)
      * @see #transformValues(ValueTransformerWithKeySupplier, String...)
      */
@@ -351,7 +351,7 @@ public interface KStream<K, V> {
      * @see #flatMap(KeyValueMapper)
      * @see #mapValues(ValueMapper)
      * @see #mapValues(ValueMapperWithKey)
-     * @see #transform(TransformerSupplier, String...)
+     * @see #flatTransform(TransformerSupplier, String...)
      * @see #transformValues(ValueTransformerSupplier, String...)
      * @see #transformValues(ValueTransformerWithKeySupplier, String...)
      */
@@ -362,7 +362,7 @@ public interface KStream<K, V> {
      * @param printed options for printing
      */
     void print(final Printed<K, V> printed);
-    
+
     /**
      * Perform an action on each record of {@code KStream}.
      * This is a stateless record-by-record operation (cf. {@link #process(ProcessorSupplier, String...)}).
@@ -488,14 +488,24 @@ public interface KStream<K, V> {
             final Produced<K, V> produced);
 
     /**
-     * Transform each record of the input stream into zero or more records in the output stream (both key and value type
+     * Transform each record of the input stream into zero or one record in the output stream (both key and value type
      * can be altered arbitrarily).
      * A {@link Transformer} (provided by the given {@link TransformerSupplier}) is applied to each input record and
-     * computes zero or more output records.
-     * Thus, an input record {@code <K,V>} can be transformed into output records {@code <K':V'>, <K'':V''>, ...}.
-     * This is a stateful record-by-record operation (cf. {@link #flatMap(KeyValueMapper)}).
-     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress can be observed and additional
-     * periodic actions can be performed.
+     * returns zero or one output record.
+     * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K':V'>}.
+     * This is a stateful record-by-record operation (cf. {@link #map(KeyValueMapper)}).
+     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress
+     * can be observed and additional periodic actions can be performed.
+     * Although calling {@link ProcessorContext#forward(K, V) forward()} in {@link Transformer#transform}
+     * allows to emit multiple records for each input record, it is discouraged to do so since output records
+     * that are incompatible with the output stream would only be detected at runtime.
+     * To transform each record of the input stream to zero or more records in the output stream, it is recommended to
+     * use {@link #flatTransform(TransformerSupplier, String...)}.
+     * {@link #flatTransform(TransformerSupplier, String...) flatTransform()} is safer because it throws a compile error
+     * if the types of the output records are not compatible with the output stream.
+     * Calling {@link ProcessorContext#forward(K, V)} in {@link Transformer#transform} may be disallowed in future
+     * releases.
+     *
      * <p>
      * In order to assign a state, the state must be created and registered beforehand:
      * <pre>{@code
@@ -532,7 +542,7 @@ public interface KStream<K, V> {
      *
      *             KeyValue transform(K key, V value) {
      *                 // can access this.state
-     *                 // can emit as many new KeyValue pairs as required via this.context#forward()
+     *                 // can emit as many new KeyValue pairs as required via this.context#forward() -- not recommended!, use flatTransform instead
      *                 return new KeyValue(key, value); // can emit a single value via return -- can also be null
      *             }
      *
@@ -549,18 +559,100 @@ public interface KStream<K, V> {
      * or join) is applied to the result {@code KStream}.
      * (cf. {@link #transformValues(ValueTransformerSupplier, String...)})
      *
-     * @param transformerSupplier a instance of {@link TransformerSupplier} that generates a {@link Transformer}
+     * @param transformerSupplier an instance of {@link TransformerSupplier} that generates a {@link Transformer}
      * @param stateStoreNames     the names of the state stores used by the processor
      * @param <K1>                the key type of the new stream
      * @param <V1>                the value type of the new stream
      * @return a {@code KStream} that contains more or less records with new key and value (possibly of different type)
-     * @see #flatMap(KeyValueMapper)
+     * @see #map(KeyValueMapper)
+     * @see #flatTransform(TransformerSupplier, String...)
      * @see #transformValues(ValueTransformerSupplier, String...)
      * @see #transformValues(ValueTransformerWithKeySupplier, String...)
      * @see #process(ProcessorSupplier, String...)
      */
     <K1, V1> KStream<K1, V1> transform(final TransformerSupplier<? super K, ? super V, KeyValue<K1, V1>> transformerSupplier,
                                        final String... stateStoreNames);
+
+    /**
+     * Transform each record of the input stream into zero or more records in the output stream (both key and value type
+     * can be altered arbitrarily).
+     * A {@link Transformer} (provided by the given {@link TransformerSupplier}) is applied to each input record and
+     * returns zero or more output records.
+     * Thus, an input record {@code <K,V>} can be transformed into output records {@code <K':V'>, <K'':V''>, ...}.
+     * This is a stateful record-by-record operation (cf. {@link #flatMap(KeyValueMapper)} for stateless record
+     * transformation).
+     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress
+     * can be observed and additional periodic actions can be performed.
+     *
+     * <p>
+     * In order to assign a state, the state must be created and registered beforehand:
+     * <pre>{@code
+     * // create store
+     * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
+     *         Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myTransformState"),
+     *                 Serdes.String(),
+     *                 Serdes.String());
+     * // register store
+     * builder.addStateStore(keyValueStoreBuilder);
+     *
+     * KStream outputStream = inputStream.flatTransform(new TransformerSupplier() { ... }, "myTransformState");
+     * }</pre>
+     * <p>
+     * Within the {@link Transformer}, the state is obtained via the {@link ProcessorContext}.
+     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
+     * a schedule must be registered.
+     *
+     * Method {@link Transformer#transform(Object, Object) transform()} must return an {@link java.util.Iterable} (e.g.,
+     * any {@link java.util.Collection} type) and the return value must not be {@code null}.
+     *
+     * <pre>{@code
+     * new TransformerSupplier() {
+     *     Transformer get() {
+     *         return new Transformer() {
+     *             private ProcessorContext context;
+     *             private StateStore state;
+     *
+     *             void init(ProcessorContext context) {
+     *                 this.context = context;
+     *                 this.state = context.getStateStore("myTransformState");
+     *                 // punctuate each 1000ms; can access this.state
+     *                 context.schedule(1000, PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
+     *             }
+     *
+     *             Iterable<KeyValue> transform(K key, V value) {
+     *                 // can access this.state
+     *                 List<KeyValue> result = new ArrayList<>();
+     *                 for (int i = 0; i < n; i++) {
+     *                     result.add(new KeyValue(key, value));
+     *                 }
+     *                 return result; // emits a list of key-value pairs via return
+     *             }
+     *
+     *             void close() {
+     *                 // can access this.state
+     *             }
+     *         }
+     *     }
+     * }
+     * }</pre>
+     * <p>
+     * Transforming records might result in an internal data redistribution if a key based operator (like an aggregation
+     * or join) is applied to the result {@code KStream}.
+     * (cf. {@link #transformValues(ValueTransformerSupplier, String...)})
+     *
+     * @param transformerSupplier an instance of {@link TransformerSupplier} that generates a {@link Transformer}
+     * @param stateStoreNames     the names of the state stores used by the processor
+     * @param <K1>                the key type of the new stream
+     * @param <V1>                the value type of the new stream
+     * @return a {@code KStream} that contains more or less records with new key and value (possibly of different type)
+     * @see #flatMap(KeyValueMapper)
+     * @see #transform(TransformerSupplier, String...)
+     * @see #transformValues(ValueTransformerSupplier, String...)
+     * @see #transformValues(ValueTransformerWithKeySupplier, String...)
+     * @see #process(ProcessorSupplier, String...)
+     */
+    <K1, V1> KStream<K1, V1> flatTransform(final TransformerSupplier<? super K, ? super V, ? extends Iterable<? extends KeyValue<? extends K1, ? extends V1>>> transformerSupplier,
+                                           final String... stateStoreNames);
 
     /**
      * Transform the value of each input record into a new value (with possible new type) of the output record.
