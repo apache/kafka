@@ -127,6 +127,8 @@
     <p>KIP-283 also adds new topic and broker configurations <code>message.downconversion.enable</code> and <code>log.message.downconversion.enable</code> respectively
        to control whether down-conversion is enabled. When disabled, broker does not perform any down-conversion and instead sends an <code>UNSUPPORTED_VERSION</code>
        error to the client.</p></li>
+    <li>Dynamic broker configuration options can be stored in ZooKeeper using kafka-configs.sh before brokers are started.
+        This option can be used to avoid storing clear passwords in server.properties as all password configs may be stored encrypted in ZooKeeper.</li>
 </ul>
 
 <h5><a id="upgrade_200_new_protocols" href="#upgrade_200_new_protocols">New Protocol Versions</a></h5>

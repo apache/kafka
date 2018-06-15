@@ -265,6 +265,18 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
     }
   }
 
+  def parseBroker(broker: String): Option[Int] = {
+    broker match {
+      case ConfigEntityName.Default => None
+      case _ =>
+        try Some(broker.toInt)
+        catch {
+          case _: NumberFormatException =>
+            throw new IllegalArgumentException(s"Error parsing broker $broker. The broker's Entity Name must be a single integer value")
+        }
+    }
+  }
+
   /**
    * Change the configs for a given entityType and entityName
    * @param entityType
@@ -272,18 +284,6 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
    * @param configs
    */
   def changeConfigs(entityType: String, entityName: String, configs: Properties): Unit = {
-
-    def parseBroker(broker: String): Option[Int] = {
-      broker match {
-        case ConfigEntityName.Default => None
-        case _ =>
-          try Some(broker.toInt)
-          catch {
-            case _: NumberFormatException =>
-              throw new IllegalArgumentException(s"Error parsing broker $broker. The broker's Entity Name must be a single integer value")
-          }
-      }
-    }
 
     entityType match {
       case ConfigType.Topic => changeTopicConfig(entityName, configs)

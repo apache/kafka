@@ -90,6 +90,23 @@
   using <code>kafka-configs.sh</code> even if the password config is not being altered. This constraint will be removed in
   a future release.</p>
 
+  <h5>Updating Password Configs in ZooKeeper Before Starting Brokers</h5>
+
+  From Kafka 2.0.0 onwards, <code>kafka-configs.sh</code> enables dynamic broker configs to be updated using ZooKeeper before
+  starting brokers for bootstrapping. This enables all password configs to be stored in encrypted form, avoiding the need for
+  clear passwords in <code>server.properties</code>. The broker config <code>password.encoder.secret</code> must also be specified
+  if any password configs are included in the alter command. Additional encryption parameters may also be specified. Password
+  encoder configs will not be persisted in ZooKeeper. For example, to store SSL key password for listener <code>INTERNAL</code>
+  on broker 0:
+
+  <pre class="brush: bash;">
+  &gt; bin/kafka-configs.sh --zookeeper localhost:2181 --entity-type brokers --entity-name 0 --alter --add-config
+    'listener.name.internal.ssl.key.password=key-password,password.encoder.secret=secret,password.encoder.iterations=8192'
+  </pre>
+
+  The configuration <code>listener.name.internal.ssl.key.password</code> will be persisted in ZooKeeper in encrypted
+  form using the provided encoder configs. The encoder secret and iterations are not persisted in ZooKeeper.
+
   <h5>Updating SSL Keystore of an Existing Listener</h5>
   Brokers may be configured with SSL keystores with short validity periods to reduce the risk of compromised certificates.
   Keystores may be updated dynamically without restarting the broker. The config name must be prefixed with the listener prefix

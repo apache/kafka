@@ -57,10 +57,12 @@ import scala.collection.JavaConverters._
 object ConfigCommand extends Config {
 
   val DefaultScramIterations = 4096
-  // Dynamic broker configs can only be updated using the new AdminClient since they may require
-  // password encryption currently implemented only in the broker. For consistency with older versions,
-  // quota-related broker configs can still be updated using ZooKeeper. ConfigCommand will be migrated
-  // fully to the new AdminClient later (KIP-248).
+  // Dynamic broker configs can only be updated using the new AdminClient once brokers have started
+  // so that configs may be fully validated. Prior to starting brokers, updates may be performed using
+  // ZooKeeper for bootstrapping. This allows all password configs to be stored encrypted in ZK,
+  // avoiding clear passwords in server.properties. For consistency with older versions, quota-related
+  // broker configs can still be updated using ZooKeeper at any time. ConfigCommand will be migrated
+  // to the new AdminClient later for these configs (KIP-248).
   val BrokerConfigsUpdatableUsingZooKeeperWhileBrokerRunning = Set(
     DynamicConfig.Broker.LeaderReplicationThrottledRateProp,
     DynamicConfig.Broker.FollowerReplicationThrottledRateProp,
@@ -123,11 +125,17 @@ object ConfigCommand extends Config {
       val dynamicBrokerConfigs = configsToBeAdded.asScala.keySet.filterNot(BrokerConfigsUpdatableUsingZooKeeperWhileBrokerRunning.contains)
       if (dynamicBrokerConfigs.nonEmpty) {
         val perBrokerConfig = entityName != ConfigEntityName.Default
-        val errorMessage = s"--bootstrap-server option must be specified to update broker configs $dynamicBrokerConfigs"
+        val errorMessage = s"--bootstrap-server option must be specified to update broker configs $dynamicBrokerConfigs."
+        val info = "Broker configuraton updates using ZooKeeper are supported for bootstrapping before brokers" +
+          " are started to enable encrypted password configs to be stored in ZooKeeper. Passwords are encrypted" +
+          " using default encryption parameters and may be re-encrypted using different encryption parameters" +
+          " if required after brokers are started."
         if (perBrokerConfig) {
-          require(zkClient.getBroker(entityName.toInt).isEmpty, s"$errorMessage when broker $entityName is running")
+          adminZkClient.parseBroker(entityName).foreach { brokerId =>
+            require(zkClient.getBroker(brokerId).isEmpty, s"$errorMessage when broker $entityName is running. $info")
+          }
         } else {
-          require(zkClient.getAllBrokersInCluster.isEmpty, s"$errorMessage for default cluster if any broker is running")
+          require(zkClient.getAllBrokersInCluster.isEmpty, s"$errorMessage for default cluster if any broker is running. $info")
         }
         preProcessBrokerConfigs(configsToBeAdded, perBrokerConfig)
       }
@@ -170,12 +178,15 @@ object ConfigCommand extends Config {
     }
   }
 
-  private[admin] def createPasswordEncoder(encoderSecret: String): PasswordEncoder = {
+  private[admin] def createPasswordEncoder(encoderConfigs: Map[String, String]): PasswordEncoder = {
+    encoderConfigs.get(KafkaConfig.PasswordEncoderSecretProp)
+    val encoderSecret = encoderConfigs.getOrElse(KafkaConfig.PasswordEncoderSecretProp,
+      throw new IllegalArgumentException("Password encoder secret not specified"))
     new PasswordEncoder(new Password(encoderSecret),
       None,
-      Defaults.PasswordEncoderCipherAlgorithm,
-      Defaults.PasswordEncoderKeyLength,
-      Defaults.PasswordEncoderIterations)
+      encoderConfigs.get(KafkaConfig.PasswordEncoderCipherAlgorithmProp).getOrElse(Defaults.PasswordEncoderCipherAlgorithm),
+      encoderConfigs.get(KafkaConfig.PasswordEncoderKeyLengthProp).map(_.toInt).getOrElse(Defaults.PasswordEncoderKeyLength),
+      encoderConfigs.get(KafkaConfig.PasswordEncoderIterationsProp).map(_.toInt).getOrElse(Defaults.PasswordEncoderIterations))
   }
 
   /**
@@ -184,12 +195,25 @@ object ConfigCommand extends Config {
    * The secret is removed from `configsToBeAdded` and will not be persisted in ZooKeeper.
    */
   private def preProcessBrokerConfigs(configsToBeAdded: Properties, perBrokerConfig: Boolean) {
-    val encoderSecret = configsToBeAdded.remove(KafkaConfig.PasswordEncoderSecretProp).asInstanceOf[String]
+    val passwordEncoderConfigs = new Properties
+    passwordEncoderConfigs ++= configsToBeAdded.asScala.filterKeys(_.startsWith("password.encoder."))
+    if (!passwordEncoderConfigs.isEmpty) {
+      info(s"Password encoder configs ${passwordEncoderConfigs.keySet} will be used for encrypting" +
+        " passwords, but will not be stored in ZooKeeper")
+      passwordEncoderConfigs.asScala.keySet.foreach(configsToBeAdded.remove)
+    }
+
     DynamicBrokerConfig.validateConfigs(configsToBeAdded, perBrokerConfig)
     val passwordConfigs = configsToBeAdded.asScala.keySet.filter(DynamicBrokerConfig.isPasswordConfig)
     if (passwordConfigs.nonEmpty) {
-      require(encoderSecret != null, s"${KafkaConfig.PasswordEncoderSecretProp} must be specified to update $passwordConfigs")
-      val passwordEncoder = createPasswordEncoder(encoderSecret)
+      require(passwordEncoderConfigs.containsKey(KafkaConfig.PasswordEncoderSecretProp),
+        s"${KafkaConfig.PasswordEncoderSecretProp} must be specified to update $passwordConfigs." +
+          " Other password encoder configs like cipher algorithm and iterations may also be specified" +
+          " to override the default encoding parameters. Password encoder configs will not be persisted" +
+          " in ZooKeeper."
+      )
+
+      val passwordEncoder = createPasswordEncoder(passwordEncoderConfigs.asScala)
       passwordConfigs.foreach { configName =>
         val encodedValue = passwordEncoder.encode(new Password(configsToBeAdded.getProperty(configName)))
         configsToBeAdded.setProperty(configName, encodedValue)

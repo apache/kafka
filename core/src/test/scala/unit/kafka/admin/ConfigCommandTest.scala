@@ -320,9 +320,9 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       brokerId.map(id => Array("--entity-name", id)).getOrElse(Array("--entity-default"))
     }
 
-    def alterConfig(configs: Map[String, String], brokerId: Option[String], encoderSecret: Option[String] = None): Unit = {
-      val configStr = configs.map { case (k, v) => s"$k=$v" }.mkString(",") +
-        encoderSecret.map(secret => s",${KafkaConfig.PasswordEncoderSecretProp}=$secret").getOrElse("")
+    def alterConfig(configs: Map[String, String], brokerId: Option[String],
+                    encoderConfigs: Map[String, String] = Map.empty): Unit = {
+      val configStr = (configs ++ encoderConfigs).map { case (k, v) => s"$k=$v" }.mkString(",")
       val addOpts = new ConfigCommandOptions(alterOpts ++ entityOpt(brokerId) ++ Array("--add-config", configStr))
       ConfigCommand.alterConfig(zkClient, addOpts, adminZkClient)
     }
@@ -369,21 +369,36 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
 
     // Password config update with encoder secret should succeed and encoded password must be stored in ZK
     val configs = Map("listener.name.external.ssl.keystore.password" -> "secret", "log.cleaner.threads" -> "2")
-    alterConfig(configs, Some(brokerId), Some("encoder-secret"))
+    val encoderConfigs = Map(KafkaConfig.PasswordEncoderSecretProp -> "encoder-secret")
+    alterConfig(configs, Some(brokerId), encoderConfigs)
     val brokerConfigs = zkClient.getEntityConfigs("brokers", brokerId)
     assertFalse("Encoder secret stored in ZooKeeper", brokerConfigs.contains(KafkaConfig.PasswordEncoderSecretProp))
     assertEquals("2", brokerConfigs.getProperty("log.cleaner.threads")) // not encoded
     val encodedPassword = brokerConfigs.getProperty("listener.name.external.ssl.keystore.password")
-    val passwordEncoder = ConfigCommand.createPasswordEncoder("encoder-secret")
+    val passwordEncoder = ConfigCommand.createPasswordEncoder(encoderConfigs)
     assertEquals("secret", passwordEncoder.decode(encodedPassword).value)
     assertEquals(configs.size, brokerConfigs.size)
 
+    // Password config update with overrides for encoder parameters
+    val configs2 = Map("listener.name.internal.ssl.keystore.password" -> "secret2")
+    val encoderConfigs2 = Map(KafkaConfig.PasswordEncoderSecretProp -> "encoder-secret",
+      KafkaConfig.PasswordEncoderCipherAlgorithmProp -> "DES/CBC/PKCS5Padding",
+      KafkaConfig.PasswordEncoderIterationsProp -> "1024",
+      KafkaConfig.PasswordEncoderKeyFactoryAlgorithmProp -> "PBKDF2WithHmacSHA1",
+      KafkaConfig.PasswordEncoderKeyLengthProp -> "64")
+    alterConfig(configs2, Some(brokerId), encoderConfigs2)
+    val brokerConfigs2 = zkClient.getEntityConfigs("brokers", brokerId)
+    val encodedPassword2 = brokerConfigs2.getProperty("listener.name.internal.ssl.keystore.password")
+    assertEquals("secret2", ConfigCommand.createPasswordEncoder(encoderConfigs).decode(encodedPassword2).value)
+    assertEquals("secret2", ConfigCommand.createPasswordEncoder(encoderConfigs2).decode(encodedPassword2).value)
+
+
     // Password config update at default cluster-level should fail
-    intercept[ConfigException](alterConfig(configs, None, Some("encoder-secret")))
+    intercept[ConfigException](alterConfig(configs, None, encoderConfigs))
 
     // Dynamic config updates using ZK should fail if broker is running.
-    registerBrokerInZk(1)
-    intercept[IllegalArgumentException](alterConfig(Map("message.max.size" -> "210000"), Some("1")))
+    registerBrokerInZk(brokerId.toInt)
+    intercept[IllegalArgumentException](alterConfig(Map("message.max.size" -> "210000"), Some(brokerId)))
     intercept[IllegalArgumentException](alterConfig(Map("message.max.size" -> "220000"), None))
 
     // Dynamic config updates using ZK should for a different broker that is not running should succeed
