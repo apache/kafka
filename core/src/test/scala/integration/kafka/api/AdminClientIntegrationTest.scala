@@ -25,11 +25,9 @@ import java.io.File
 import kafka.admin.AdminClient.DeleteRecordsResult
 import org.apache.kafka.clients.admin.KafkaAdminClientTest
 import org.apache.kafka.common.utils.{Time, Utils}
-import kafka.integration.KafkaServerTestHarness
 import kafka.log.LogConfig
 import kafka.server.{Defaults, KafkaConfig, KafkaServer}
 import org.apache.kafka.clients.admin._
-//import kafka.admin.AdminClient
 import kafka.utils.{Logging, TestUtils, ZkUtils}
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.admin.NewTopic
@@ -636,7 +634,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     sendRecords(producers.head, 10, topicPartition)
     var adminClient: kafka.admin.AdminClient = null
     val props = new Properties()
-    props.putAll(createConfig())
+    createConfig().asScala.foreach { case (key, value) => props.put(key, value) }
 
     try {
       adminClient = kafka.admin.AdminClient.create(props)
@@ -680,10 +678,10 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
 
     var adminClient: kafka.admin.AdminClient = null
     val props = new Properties()
-    props.putAll(createConfig())
+    createConfig().asScala.foreach { case (key, value) => props.put(key, value) }
     try {
       adminClient = kafka.admin.AdminClient.create(props)
-      val deleteRecordsResult = adminClient.deleteRecordsBefore(Map(topicPartition -> 3L)).get()
+      adminClient.deleteRecordsBefore(Map(topicPartition -> 3L)).get()
 
       // start the stopped broker to verify that it will be able to fetch from new log start offset
       restartDeadBrokers()
@@ -697,7 +695,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       // kill the same follower again, produce more records, and delete records beyond follower's LOE
       killBroker(followerIndex)
       sendRecords(producers.head, 100, topicPartition)
-      val result1 = adminClient.deleteRecordsBefore(Map(topicPartition -> 117L)).get()
+      adminClient.deleteRecordsBefore(Map(topicPartition -> 117L)).get()
       restartDeadBrokers()
       waitForFollowerLog(expectedStartOffset = 117L, expectedEndOffset = 200L)
     } finally {
