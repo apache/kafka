@@ -38,8 +38,8 @@ import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.ValueMapperWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
+import org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
-import org.apache.kafka.streams.kstream.internals.graph.RepartitionNode;
 import org.apache.kafka.streams.kstream.internals.graph.StatefulProcessorNode;
 import org.apache.kafka.streams.kstream.internals.graph.StatelessProcessorNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamSinkNode;
@@ -601,7 +601,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
      */
     private KStreamImpl<K, V> repartitionForJoin(final Serde<K> keySerde,
                                                  final Serde<V> valSerde) {
-        RepartitionNode.RepartitionNodeBuilder<K, V> repartitionNodeBuilder = RepartitionNode.repartitionNodeBuilder();
+        OptimizableRepartitionNode.OptimizableRepartitionNodeBuilder repartitionNodeBuilder = OptimizableRepartitionNode.optimizableRepartitionNodeBuilder();
         String repartitionedSourceName = createRepartitionedSource(builder,
                                                                    keySerde,
                                                                    valSerde,
@@ -609,7 +609,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                                                    name,
                                                                    repartitionNodeBuilder);
 
-        RepartitionNode<K, V> repartitionNode = repartitionNodeBuilder.build();
+        OptimizableRepartitionNode<K, V> repartitionNode = repartitionNodeBuilder.build();
         addGraphNode(repartitionNode);
 
         return new KStreamImpl<>(builder, repartitionedSourceName, Collections
@@ -621,7 +621,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                                      final Serde<V1> valSerde,
                                                      final String topicNamePrefix,
                                                      final String name,
-                                                     final RepartitionNode.RepartitionNodeBuilder<K1, V1> repartitionNodeBuilder) {
+                                                     final OptimizableRepartitionNode.OptimizableRepartitionNodeBuilder repartitionNodeBuilder) {
 
         Serializer<K1> keySerializer = keySerde != null ? keySerde.serializer() : null;
         Serializer<V1> valSerializer = valSerde != null ? valSerde.serializer() : null;
