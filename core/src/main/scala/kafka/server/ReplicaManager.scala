@@ -580,7 +580,7 @@ class ReplicaManager(val config: KafkaConfig,
           getPartition(topicPartition) match {
             case Some(partition) =>
               if (partition eq ReplicaManager.OfflinePartition)
-                throw new KafkaStorageException()
+                throw new KafkaStorageException(s"Partition $topicPartition is offline")
 
               // Stop current replica movement if the destinationDir is different from the existing destination log directory
               if (partition.futureReplicaDirChanged(destinationDir)) {
