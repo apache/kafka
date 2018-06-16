@@ -161,7 +161,8 @@ class LogManager(logDirs: Seq[File],
         if (!dir.isDirectory || !dir.canRead)
           throw new IOException(s"${dir.getAbsolutePath} is not a readable log directory.")
 
-        // getCanonicalPath can throw IOException if the disk is bad
+        // getCanonicalPath() can throw IOException if the disk is not properly mounted or if the path is invalid (e.g. contains Nul character)
+        // We treat both cases the same and mark the log directory as offline in either case
         if (!canonicalPaths.add(dir.getCanonicalPath))
           throw new KafkaException(s"Duplicate log directory found: ${dirs.mkString(", ")}")
 

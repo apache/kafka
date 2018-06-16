@@ -80,6 +80,9 @@ class LogManagerTest {
    */
   @Test
   def testCreateLogWithInvalidLogDir() {
+    // We would like to simulate the scenario that the disk is not properly mounted. But it is not easy to achieve in the unit test.
+    // Thus we configure a log dir path with Nul character which can cause dir.getCanonicalPath() to throw IOException
+    // as an alternative approach to simulate the scenario that the disk is that not properly mounted
     val dirs = Seq(logDir, new File("\u0000"))
 
     logManager.shutdown()
