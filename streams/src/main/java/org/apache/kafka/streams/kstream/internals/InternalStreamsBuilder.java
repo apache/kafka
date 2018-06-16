@@ -268,60 +268,84 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
             StreamSourceNode parentSourceNode = (StreamSourceNode) findParentNodeMatching(keyChangingNode, n -> n instanceof StreamSourceNode);
 
+            if (parentSourceNode == null) {
+                throw new IllegalStateException(String.format("Can't find parent source node for %s ", keyChangingNode));
+            }
+
             optimizedSingleRepartition = createRepartitionNode(keyChangingNode.nodeName(),
                                                                parentSourceNode.keySerde(),
                                                                parentSourceNode.valueSerde());
 
             optimizedSingleRepartition.setId(index.getAndIncrement());
 
-            for (OptimizableRepartitionNode keyChangedRepartitionNode : streamsGraphNodeSetEntry.getValue()) {
+            for (OptimizableRepartitionNode repartitionNodeToBeReplaced : streamsGraphNodeSetEntry.getValue()) {
 
                 // The "easy" case, the forced repartition is a direct child node of key-changing operation
-                if (keyChangedRepartitionNode.parentNode().equals(keyChangingNode)) {
+                //   ..map.groupByKey()....
+                // We just need to move the repartition to occur immediately after the map
+                // then move all child nodes of the map call to children of the optimized repartition
+                if (repartitionNodeToBeReplaced.parentNode().equals(keyChangingNode)) {
                     // now get rid of the downstream repartition operation
-                    StreamsGraphNode keyChangedRepartitionParent = keyChangedRepartitionNode.parentNode();
-                    Set<StreamsGraphNode> keyChangedRepartitionChildren = keyChangedRepartitionNode.children();
-                    keyChangedRepartitionNode.clearChildren();
-                    keyChangedRepartitionParent.removeChild(keyChangedRepartitionNode);
-                    for (StreamsGraphNode keyChangedRepartitionChild : keyChangedRepartitionChildren) {
-                        optimizedSingleRepartition.addChildNode(keyChangedRepartitionChild);
+                    StreamsGraphNode parentOfRepartitionNodeToBeReplaced = repartitionNodeToBeReplaced.parentNode();
+                    Set<StreamsGraphNode> childrenOfRepartitionNodeToBeReplaced = repartitionNodeToBeReplaced.children();
+
+                    repartitionNodeToBeReplaced.clearChildren();
+                    parentOfRepartitionNodeToBeReplaced.removeChild(repartitionNodeToBeReplaced);
+
+                    for (StreamsGraphNode childOfRepartitionNodeToBeReplaced : childrenOfRepartitionNodeToBeReplaced) {
+                        optimizedSingleRepartition.addChildNode(childOfRepartitionNodeToBeReplaced);
                     }
 
-                } else { // The more difficult case the force repartition is somewhere downstream of key-changing
-                    StreamsGraphNode nodeFollowingKeyChangingNode = findParentNodeMatching(keyChangedRepartitionNode, gn -> gn.parentNode().equals(keyChangingNode));
+                } else { /*
+                           The more difficult case is the auto generated repartition is somewhere downstream of key-changing like so:
+                                ..map.filter(..)..mapValues(..).peek(..).groupByKey...
 
-                    LOG.debug("Found the node downstream of key-changer {}", nodeFollowingKeyChangingNode);
+                           The repartition node was automatically added between peek and groupByKey
+                           We need to:
+                             1. Move the repartition to come immediately after the map call
+                             2. Remove the repartition between peek and groupByKey
+                             3. Re-attach graph children on either side to keep sub-topology in place
+                        */
 
-                    optimizedSingleRepartition.addChildNode(nodeFollowingKeyChangingNode);
+                    StreamsGraphNode keyChangingNodeChild = findParentNodeMatching(repartitionNodeToBeReplaced, gn -> gn.parentNode().equals(keyChangingNode));
 
-                    LOG.debug("Removing {} from {}  children {}",  nodeFollowingKeyChangingNode,  keyChangingNode, keyChangingNode.children());
-                    keyChangingNode.removeChild(nodeFollowingKeyChangingNode);
+                    LOG.debug("Found the node downstream of key-changer {}", keyChangingNodeChild);
 
-                    Set<StreamsGraphNode> keyChangedRepartitionChildren = keyChangedRepartitionNode.children();
-                    StreamsGraphNode parentOfNestedRepartition = findParentNodeMatching(keyChangedRepartitionNode, n -> n.equals(keyChangedRepartitionNode.parentNode()));
+                    // need to add children of key-changing node as children of optimized repartition
+                    // in order to process records from re-partitioning
+                    optimizedSingleRepartition.addChildNode(keyChangingNodeChild);
 
-                    LOG.debug("Returned {} parentOfNestedRepartition as parent of {}", parentOfNestedRepartition, keyChangedRepartitionNode);
+                    LOG.debug("Removing {} from {}  children {}", keyChangingNodeChild, keyChangingNode, keyChangingNode.children());
+                    // now remove children from key-changing node
+                    keyChangingNode.removeChild(keyChangingNodeChild);
 
-                    parentOfNestedRepartition.removeChild(keyChangedRepartitionNode);
-                    keyChangedRepartitionNode.clearChildren();
-                    for (StreamsGraphNode keyChangedRepartitionChild : keyChangedRepartitionChildren) {
-                        parentOfNestedRepartition.addChildNode(keyChangedRepartitionChild);
+                    // now need to get children of repartition node so we can remove repartition node
+                    Set<StreamsGraphNode> repartitionNodeToBeReplacedChildren = repartitionNodeToBeReplaced.children();
+
+                    StreamsGraphNode parentOfRepartitionNodeToBeReplaced = findParentNodeMatching(repartitionNodeToBeReplaced, n -> n.equals(repartitionNodeToBeReplaced.parentNode()));
+
+                    LOG.debug("Returned {} parentOfRepartitionNodeToBeReplaced as parent of {}", parentOfRepartitionNodeToBeReplaced, repartitionNodeToBeReplaced);
+
+                    // remove repartition node
+                    parentOfRepartitionNodeToBeReplaced.removeChild(repartitionNodeToBeReplaced);
+
+                    repartitionNodeToBeReplaced.clearChildren();
+
+                    // re-attach children of removed repartition
+                    for (StreamsGraphNode repartitionNodeToBeReplacedChild : repartitionNodeToBeReplacedChildren) {
+                        parentOfRepartitionNodeToBeReplaced.addChildNode(repartitionNodeToBeReplacedChild);
                     }
                 }
 
                 LOG.debug("UPDATED node {} children {}", optimizedSingleRepartition, optimizedSingleRepartition.children());
             }
 
-            for (OptimizableRepartitionNode optimizableRepartitionNode : keyChangingOperationsToOptimizableRepartitionNodes.get(keyChangingNode)) {
-                optimizableRepartitionNode.clearChildren();
-                keyChangingNode.removeChild(optimizableRepartitionNode);
-            }
-
             keyChangingNode.addChildNode(optimizedSingleRepartition);
             LOG.debug("Key Changing node {} children {}", keyChangingNode, keyChangingNode.children());
         }
 
-        LOG.debug("Fully updated repartition {} children {}", optimizedSingleRepartition, optimizedSingleRepartition.children());
+        LOG.debug("Fully updated repartition {} children {}", optimizedSingleRepartition,
+                  optimizedSingleRepartition != null ? optimizedSingleRepartition.children() : null);
     }
 
     private StreamsGraphNode createRepartitionNode(String name, Serde keySerde, Serde valueSerde) {
@@ -337,12 +361,11 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
     }
 
-    private StreamsGraphNode findParentNodeMatching(StreamsGraphNode original, Predicate<StreamsGraphNode> parentFound) {
-        StreamsGraphNode parent = original;
-        while (!parentFound.test(parent)) {
-            parent = parent.parentNode();
+    private StreamsGraphNode findParentNodeMatching(StreamsGraphNode startSeekingNode, Predicate<StreamsGraphNode> parentNodePredicate) {
+        if (startSeekingNode == null || parentNodePredicate.test(startSeekingNode)) {
+            return startSeekingNode;
         }
-        return parent;
+        return findParentNodeMatching(startSeekingNode.parentNode(), parentNodePredicate);
     }
 
     void maybeAddNodeForOptimizationMetadata(final StreamsGraphNode node) {
@@ -362,15 +385,11 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         } else if (node.isKeyChangingOperation() && !keyChangingOperationsToOptimizableRepartitionNodes.containsKey(node)) {
             keyChangingOperationsToOptimizableRepartitionNodes.put(node, new HashSet<>());
         } else if (node instanceof OptimizableRepartitionNode) {
-            StreamsGraphNode currentNode = node;
-            while (currentNode != null) {
-                final StreamsGraphNode parentNode = currentNode.parentNode();
-                if (parentNode != null && parentNode.isKeyChangingOperation()) {
-                    keyChangingOperationsToOptimizableRepartitionNodes.get(parentNode).add((OptimizableRepartitionNode) node);
-                    break;
-                }
-                currentNode = parentNode;
+            StreamsGraphNode parentNode = findParentNodeMatching(node, StreamsGraphNode::isKeyChangingOperation);
+            if (parentNode != null) {
+                keyChangingOperationsToOptimizableRepartitionNodes.get(parentNode).add((OptimizableRepartitionNode) node);
             }
+
         }
     }
 
