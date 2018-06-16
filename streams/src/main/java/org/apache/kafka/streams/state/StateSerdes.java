@@ -168,8 +168,7 @@ public final class StateSerdes<K, V> {
     public byte[] rawKey(K key) {
         try {
             return keySerde.serializer().serialize(topic, key);
-        }
-        catch (final ClassCastException e) {
+        } catch (final ClassCastException e) {
             final String keyClass = key == null ? "unknown because key is null" : key.getClass().getName();
             throw new StreamsException(
                     String.format("A serializer (key: %s) is not compatible to the actual key type " +
