@@ -184,14 +184,12 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         String name = builder.newProcessorName(MAP_NAME);
 
         ProcessorParameters processorParameters = new ProcessorParameters<>(new KStreamMap<>(mapper), name);
-        ProcessorParameters processorParameters = new ProcessorParameters<>(new KStreamMap<>(mapper), name);
 
         StatelessProcessorNode<K1, V1> mapProcessorNode = new StatelessProcessorNode<>(name,
                                                                                        processorParameters,
                                                                                        true);
         mapProcessorNode.keyChangingOperation(true);
         addGraphNode(mapProcessorNode);
-
 
         return new KStreamImpl<>(builder, name, sourceNodes, true, mapProcessorNode);
     }
@@ -668,7 +666,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         final KTableValueGetterSupplier<K1, V1> valueGetterSupplier = ((GlobalKTableImpl<K1, V1>) globalTable).valueGetterSupplier();
         final String name = builder.newProcessorName(LEFTJOIN_NAME);
-        builder.internalTopologyBuilder.addProcessor(name, new KStreamGlobalKTableJoin<>(valueGetterSupplier, joiner, keyMapper, leftJoin), this.name);
 
         ProcessorSupplier<K, V> processorSupplier = new KStreamGlobalKTableJoin<>(valueGetterSupplier,
                                                                                   joiner,
@@ -701,14 +698,11 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                                                             joiner,
                                                                             leftJoin);
 
-        ProcessorSupplier<K, V> processorSupplier = new KStreamKTableJoin<>(((KTableImpl<K, ?, V1>) other).valueGetterSupplier(),
-                                                                            joiner,
-                                                                            leftJoin);
-
         ProcessorParameters<K, V> processorParameters = new ProcessorParameters<>(processorSupplier, name);
         StreamTableJoinNode<K, V> streamTableJoinNode = new StreamTableJoinNode<>(name,
                                                                                   processorParameters,
-                                                                                  ((KTableImpl) other).valueGetterSupplier().storeNames());
+                                                                                  ((KTableImpl) other).valueGetterSupplier().storeNames(),
+                                                                                  this.name);
 
         addGraphNode(streamTableJoinNode);
 
