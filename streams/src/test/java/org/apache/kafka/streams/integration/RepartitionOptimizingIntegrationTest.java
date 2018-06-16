@@ -95,8 +95,8 @@ public class RepartitionOptimizingIntegrationTest {
         streamsConfiguration = StreamsTestUtils.getStreamsConfig(
             "repartitionOptimizationTest",
             CLUSTER.bootstrapServers(),
-            Serdes.ByteArray().getClass().getName(),
-            Serdes.ByteArray().getClass().getName(),
+            BYTE_ARRAY_SERDES_CLASS_NAME,
+            BYTE_ARRAY_SERDES_CLASS_NAME,
             props);
 
         // Remove any state from previous test runs
@@ -117,8 +117,6 @@ public class RepartitionOptimizingIntegrationTest {
         KStream<String, String> sourceStream = builder.stream(INPUT_TOPIC, Consumed.with(Serdes.String(), Serdes.String()));
 
         KStream<String, String> mappedStream = sourceStream.map((k, v) -> KeyValue.pair(k.toUpperCase(Locale.getDefault()), v));
-
-        mappedStream.peek((key, value) -> System.out.println("peek 1")).peek((k, v) -> System.out.println("peek 2"));
 
         mappedStream.groupByKey().count(Materialized.with(Serdes.String(), Serdes.Long())).toStream().to(COUNT_TOPIC, Produced.with(Serdes.String(), Serdes.Long()));
         mappedStream.groupByKey().aggregate(initializer, aggregator, Materialized.with(Serdes.String(), Serdes.Integer())).toStream().to(AGGREGATION_TOPIC, Produced.with(Serdes.String(), Serdes.Integer()));
