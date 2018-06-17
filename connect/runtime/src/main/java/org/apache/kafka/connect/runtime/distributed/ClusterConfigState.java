@@ -112,13 +112,12 @@ public class ClusterConfigState {
      * {@link org.apache.kafka.common.config.ConfigTransformer} by having all variable
      * references replaced with the current values from external instances of
      * {@link ConfigProvider}, and may include secrets.
-     * NOTED: If the configuration is not null, it will have been transformed.
      * @param connector name of the connector
      * @return a map containing configuration parameters
      */
     public Map<String, String> connectorConfig(String connector) {
         Map<String, String> configs = connectorConfigs.get(connector);
-        if (configs != null && configTransformer != null) {
+        if (configTransformer != null) {
             configs = configTransformer.transform(connector, configs);
         }
         return configs;
@@ -138,13 +137,12 @@ public class ClusterConfigState {
      * {@link org.apache.kafka.common.config.ConfigTransformer} by having all variable
      * references replaced with the current values from external instances of
      * {@link ConfigProvider}, and may include secrets.
-     * NOTED: If the configuration is not null, it will have been transformed.
      * @param task id of the task
      * @return a map containing configuration parameters
      */
     public Map<String, String> taskConfig(ConnectorTaskId task) {
         Map<String, String> configs = taskConfigs.get(task);
-        if (configs != null && configTransformer != null) {
+        if (configTransformer != null) {
             configs = configTransformer.transform(task.connector(), configs);
         }
         return configs;

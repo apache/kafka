@@ -27,7 +27,6 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.runtime.TargetState;
-import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.util.Callback;
@@ -37,7 +36,6 @@ import org.apache.kafka.connect.util.TestFuture;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
 import org.easymock.IAnswer;
-import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -146,21 +144,9 @@ public class KafkaConfigBackingStoreTest {
 
     private long logOffset = 0;
 
-    /**
-     * Using the invalid arguments to create a WorkerConfigTransformer is ok in testing since we override all public methods.
-     * TODO: implement the interface of WorkerConfigTransformer rather than doing the weird construction in testing
-     */
-    private final WorkerConfigTransformer transformer = new WorkerConfigTransformer(null, Collections.emptyMap()) {
-        @Override
-        public Map<String, String> transform(String connectorName, Map<String, String> configs) {
-            Assert.assertNotNull(configs);
-            return configs;
-        }
-    };
-
     @Before
     public void setUp() {
-        configStorage = PowerMock.createPartialMock(KafkaConfigBackingStore.class, new String[]{"createKafkaBasedLog"}, converter, DEFAULT_DISTRIBUTED_CONFIG, transformer);
+        configStorage = PowerMock.createPartialMock(KafkaConfigBackingStore.class, new String[]{"createKafkaBasedLog"}, converter, DEFAULT_DISTRIBUTED_CONFIG, null);
         Whitebox.setInternalState(configStorage, "configLog", storeLog);
         configStorage.setUpdateListener(configUpdateListener);
     }
