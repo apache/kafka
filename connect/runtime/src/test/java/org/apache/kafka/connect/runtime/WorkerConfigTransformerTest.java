@@ -32,6 +32,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.powermock.api.easymock.PowerMock.replayAll;
 
 @RunWith(PowerMockRunner.class)
@@ -108,6 +109,11 @@ public class WorkerConfigTransformerTest {
 
         result = configTransformer.transform(MY_CONNECTOR, Collections.singletonMap(MY_KEY, "${test:testPath:testKeyWithLongerTTL}"));
         assertEquals(TEST_RESULT_WITH_LONGER_TTL, result.get(MY_KEY));
+    }
+
+    @Test
+    public void testTransformNullConfiguration() {
+        assertNull(configTransformer.transform(MY_CONNECTOR, null));
     }
 
     public static class TestConfigProvider implements ConfigProvider {
