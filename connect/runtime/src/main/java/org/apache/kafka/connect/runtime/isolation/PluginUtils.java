@@ -128,6 +128,7 @@ public class PluginUtils {
             + "|file\\..*"
             + "|converters\\..*"
             + "|storage\\.StringConverter"
+            + "|storage\\.SimpleHeaderConverter"
             + "|rest\\.basic\\.auth\\.extension\\.BasicAuthSecurityRestExtension"
             + ")"
             + "|common\\.config\\.provider\\.(?!ConfigProvider$).*"
