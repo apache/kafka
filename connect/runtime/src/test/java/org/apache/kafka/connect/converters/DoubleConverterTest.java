@@ -14,30 +14,30 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.connect.storage;
+package org.apache.kafka.connect.converters;
 
-import org.apache.kafka.common.serialization.IntegerSerializer;
+import org.apache.kafka.common.serialization.DoubleSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.connect.data.Schema;
 
-public class IntegerConverterTest extends NumberConverterTest<Integer> {
+public class DoubleConverterTest extends NumberConverterTest<Double> {
 
-    public Integer[] samples() {
-        return new Integer[]{Integer.MIN_VALUE, 1234, Integer.MAX_VALUE};
+    public Double[] samples() {
+        return new Double[]{Double.MIN_VALUE, 1234.31, Double.MAX_VALUE};
     }
 
     @Override
     protected Schema schema() {
-        return Schema.OPTIONAL_INT32_SCHEMA;
+        return Schema.OPTIONAL_FLOAT64_SCHEMA;
     }
 
     @Override
-    protected NumberConverter<Integer> createConverter() {
-        return new IntegerConverter();
+    protected NumberConverter<Double> createConverter() {
+        return new DoubleConverter();
     }
 
     @Override
-    protected Serializer<Integer> createSerializer() {
-        return new IntegerSerializer();
+    protected Serializer<Double> createSerializer() {
+        return new DoubleSerializer();
     }
 }

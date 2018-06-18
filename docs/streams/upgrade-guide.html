@@ -34,7 +34,7 @@
     </div>
 
     <p>
-        Upgrading from any older version to 2.0.0 is possible: (1) you need to make sure to update you code accordingly, because there are some minor non-compatible API changes since older
+        Upgrading from any older version to 2.0.0 is possible: (1) you need to make sure to update you code and config accordingly, because there are some minor non-compatible API changes since older
         releases (the code changes are expected to be minimal, please see below for the details),
         (2) upgrading to 2.0.0 in the online mode requires two rolling bounces.
         For (2), in the first rolling bounce phase users need to set config <code>upgrade.from="older version"</code> (possible values are <code>"0.10.0", "0.10.1", "0.10.2", "0.11.0", "1.0", and "1.1"</code>)
@@ -57,6 +57,16 @@
         Note, that a brokers must be on version 0.10.1 or higher to run a Kafka Streams application version 0.10.1 or higher;
         On-disk message format must be 0.10 or higher to run a Kafka Streams application version 1.0 or higher.
         For Kafka Streams 0.10.0, broker version 0.10.0 or higher is required.
+    </p>
+
+    <p>
+        Another important thing to keep in mind: in deprecated <code>KStreamBuilder</code> class, when a <code>KTable</code> is created from a source topic via <code>KStreamBuilder.table()</code>, its materialized state store
+        will reuse the source topic as its changelog topic for restoring, and will disable logging to avoid appending new updates to the source topic; in the <code>StreamsBuilder</code> class introduced in 1.0, this behavior was changed
+        accidentally: we still reuse the source topic as the changelog topic for restoring, but will also create a separate changelog topic to append the update records from source topic to. In the 2.0 release, we have fixed this issue and now users
+        can choose whether or not to reuse the source topic based on the <code>StreamsConfig#TOPOLOGY_OPTIMIZATION</code>: if you are upgrading from the old <code>KStreamBuilder</code> class and hence you need to change your code to use
+        the new <code>StreamsBuilder</code>, you should set this config value to <code>StreamsConfig#OPTIMIZE</code> to continue reusing the source topic; if you are upgrading from 1.0 or 1.1 where you are already using <code>StreamsBuilder</code> and hence have already
+        created a separate changelog topic, you should set this config value to <code>StreamsConfig#NO_OPTIMIZATION</code> when upgrading to 2.0.0 in order to use that changelog topic for restoring the state store.
+        More details about the new config <code>StreamsConfig#TOPOLOGY_OPTIMIZATION</code> can be found in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-295%3A+Add+Streams+Configuration+Allowing+for+Optional+Topology+Optimization">KIP-295</a>.
     </p>
 
     <p>

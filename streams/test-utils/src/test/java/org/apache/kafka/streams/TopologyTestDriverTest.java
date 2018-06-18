@@ -707,7 +707,7 @@ public class TopologyTestDriverTest {
     @Test
     public void shouldReturnAllStores() {
         final Topology topology = setupSourceSinkTopology();
-        topology.addProcessor("processor", () -> null);
+        topology.addProcessor("processor", () -> null, "source");
         topology.addStateStore(
             new KeyValueStoreBuilder<>(
                 Stores.inMemoryKeyValueStore("store"),
