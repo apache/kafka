@@ -591,7 +591,7 @@ class TransactionStateManagerTest {
     EasyMock.expectLastCall().andAnswer(new IAnswer[Unit] {
       override def answer: Unit = {
         val buffer = bufferCapture.getValue
-        buffer.put(records.buffer.duplicate())
+        buffer.put(records.buffer.duplicate)
         buffer.flip()
       }
     })

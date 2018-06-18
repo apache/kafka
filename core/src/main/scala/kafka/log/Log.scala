@@ -461,7 +461,17 @@ class Log(@volatile var dir: File,
       info(s"Found log file ${swapFile.getPath} from interrupted swap operation, repairing.")
       recoverSegment(swapSegment)
 
-      val oldSegments = swapSegmentIntersection(swapSegment)
+      // We create swap files for two cases:
+      // (1) Log cleaning where multiple segments are merged into one, and
+      // (2) Log splitting where one segment is split into multiple.
+      //
+      // Both of these mean that the resultant swap segments be composed of the original set, i.e. the swap segment
+      // must fall within the range of existing segment(s). If we cannot find such a segment, it means the deletion
+      // of that segment was successful. In such an event, we should simply rename the .swap to .log without having to
+      // do a replace with an existing segment.
+      val oldSegments = logSegments(swapSegment.baseOffset, swapSegment.readNextOffset).filter { segment =>
+        segment.readNextOffset > swapSegment.baseOffset
+      }
       replaceSegments(Seq(swapSegment), oldSegments.toSeq, isRecoveredSwapFile = true)
     }
   }
@@ -1692,18 +1702,6 @@ class Log(@volatile var dir: File,
         segments.subMap(floor, to)
       }.getOrElse(segments.headMap(to))
       view.values.asScala
-    }
-  }
-
-  /**
-   * Get the segments in the log which have a non-empty offset intersection with the
-   * inbound swap segment
-   */
-  private def swapSegmentIntersection(swapSegment: LogSegment): Iterable[LogSegment] = {
-    lock synchronized {
-      logSegments(swapSegment.baseOffset, swapSegment.readNextOffset).filter { segment =>
-        segment.readNextOffset > swapSegment.baseOffset
-      }
     }
   }
 
