@@ -20,20 +20,20 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 
-class ProducedInternal<K, V> extends Produced<K, V> {
+public class ProducedInternal<K, V> extends Produced<K, V> {
     ProducedInternal(final Produced<K, V> produced) {
         super(produced);
     }
 
-    Serde<K> keySerde() {
+    public Serde<K> keySerde() {
         return keySerde;
     }
 
-    Serde<V> valueSerde() {
+    public Serde<V> valueSerde() {
         return valueSerde;
     }
 
-    StreamPartitioner<? super K, ? super V> streamPartitioner() {
+    public StreamPartitioner<? super K, ? super V> streamPartitioner() {
         return partitioner;
     }
 }

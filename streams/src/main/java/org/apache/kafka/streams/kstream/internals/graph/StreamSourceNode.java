@@ -15,77 +15,56 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.kstream.internals;
+package org.apache.kafka.streams.kstream.internals.graph;
 
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.streams.Topology;
-import org.apache.kafka.streams.processor.TimestampExtractor;
+import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.List;
 import java.util.regex.Pattern;
 
-class StreamSourceNode<K, V> extends StreamsGraphNode {
+public class StreamSourceNode<K, V> extends StreamsGraphNode {
 
-    private Collection<String> topics;
+    private Collection<String> topicNames;
     private Pattern topicPattern;
     private final ConsumedInternal<K, V> consumedInternal;
 
 
-    StreamSourceNode(final String parentProcessorNodeName,
-                     final String processorNodeName,
-                     final Collection<String> topics,
+    public StreamSourceNode(final String nodeName,
+                     final Collection<String> topicNames,
                      final ConsumedInternal<K, V> consumedInternal) {
-        super(parentProcessorNodeName,
-              processorNodeName,
+        super(nodeName,
               false);
 
-        this.topics = topics;
+        this.topicNames = topicNames;
         this.consumedInternal = consumedInternal;
     }
 
-    StreamSourceNode(final String parentProcessorNodeName,
-                     final String processorNodeName,
+    public StreamSourceNode(final String nodeName,
                      final Pattern topicPattern,
                      final ConsumedInternal<K, V> consumedInternal) {
 
-        super(parentProcessorNodeName,
-              processorNodeName,
+        super(nodeName,
               false);
 
         this.topicPattern = topicPattern;
         this.consumedInternal = consumedInternal;
     }
 
-    List<String> getTopics() {
-        return new ArrayList<>(topics);
+    public Collection<String> getTopicNames() {
+        return topicNames;
     }
 
-    Pattern getTopicPattern() {
+    public Pattern getTopicPattern() {
         return topicPattern;
     }
 
-    Serde<K> keySerde() {
-        return consumedInternal.keySerde();
-    }
-
-    Deserializer<K> keyDeserializer() {
-        return consumedInternal.keySerde() != null ? consumedInternal.keySerde().deserializer() : null;
-    }
-
-    TimestampExtractor timestampExtractor() {
-        return consumedInternal.timestampExtractor();
-    }
-
-    Topology.AutoOffsetReset autoOffsetReset() {
-        return consumedInternal.offsetResetPolicy();
+    public ConsumedInternal<K, V> getConsumedInternal() {
+        return consumedInternal;
     }
 
     @Override
-    void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
+    public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
         //TODO will implement in follow-up pr
     }
 

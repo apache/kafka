@@ -15,9 +15,8 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.kstream.internals;
+package org.apache.kafka.streams.kstream.internals.graph;
 
-import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
 import java.util.Arrays;
@@ -26,34 +25,41 @@ import java.util.Arrays;
  * Represents a join between a KStream and a KTable or GlobalKTable
  */
 
-class StreamTableJoinNode<K1, K2, V1, V2, VR> extends StreamsGraphNode {
+public class StreamTableJoinNode<K, V> extends StreamsGraphNode {
 
     private final String[] storeNames;
-    private final ProcessorSupplier<K1, V1> processorSupplier;
+    private final ProcessorParameters<K, V> processorParameters;
+    private boolean isGlobalKTableJoin;
 
-    StreamTableJoinNode(final String parentProcessorNodeName,
-                        final String processorNodeName,
-                        final ProcessorSupplier<K1, V1> processorSupplier,
+    public StreamTableJoinNode(final String nodeName,
+                        final ProcessorParameters<K, V> processorParameters,
                         final String[] storeNames) {
-        super(parentProcessorNodeName,
-              processorNodeName,
+        super(nodeName,
               false);
 
         // in the case of Stream-Table join the state stores associated with the KTable
         this.storeNames = storeNames;
-        this.processorSupplier = processorSupplier;
+        this.processorParameters = processorParameters;
     }
 
     String[] storeNames() {
         return Arrays.copyOf(storeNames, storeNames.length);
     }
 
-    ProcessorSupplier<K1, V1> processorSupplier() {
-        return processorSupplier;
+    ProcessorParameters<K, V> processorParameters() {
+        return processorParameters;
+    }
+
+    public void setGlobalKTableJoin(boolean globalKTableJoin) {
+        isGlobalKTableJoin = globalKTableJoin;
+    }
+
+    boolean isGlobalKTableJoin() {
+        return isGlobalKTableJoin;
     }
 
     @Override
-    void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
+    public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
         //TODO will implement in follow-up pr
     }
 }

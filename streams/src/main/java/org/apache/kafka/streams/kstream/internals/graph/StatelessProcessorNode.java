@@ -15,9 +15,8 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.kstream.internals;
+package org.apache.kafka.streams.kstream.internals.graph;
 
-import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
 import java.util.ArrayList;
@@ -29,9 +28,9 @@ import java.util.List;
  * map, mapValues, flatMap, flatMapValues, filter, filterNot, branch
  *
  */
-class StatelessProcessorNode<K, V> extends StreamsGraphNode {
+public class StatelessProcessorNode<K, V> extends StreamsGraphNode {
 
-    private final ProcessorSupplier<K, V> processorSupplier;
+    private final ProcessorParameters<K, V> processorParameters;
 
     // some processors need to register multiple parent names with
     // the InternalTopologyBuilder KStream#merge for example.
@@ -41,31 +40,28 @@ class StatelessProcessorNode<K, V> extends StreamsGraphNode {
     private List<String> multipleParentNames = new ArrayList<>();
 
 
-    StatelessProcessorNode(final String parentProcessorNodeName,
-                           final String processorNodeName,
-                           final ProcessorSupplier<K, V> processorSupplier,
+    public StatelessProcessorNode(final String nodeName,
+                           final ProcessorParameters processorParameters,
                            final boolean repartitionRequired) {
 
-        super(parentProcessorNodeName,
-              processorNodeName,
+        super(nodeName,
               repartitionRequired);
 
-        this.processorSupplier = processorSupplier;
+        this.processorParameters = processorParameters;
     }
 
-    StatelessProcessorNode(final String parentProcessorNodeName,
-                           final String processorNodeName,
+    public StatelessProcessorNode(final String nodeName,
+                           final ProcessorParameters processorParameters,
                            final boolean repartitionRequired,
-                           final ProcessorSupplier<K, V> processorSupplier,
                            final List<String> multipleParentNames) {
 
-        this(parentProcessorNodeName, processorNodeName, processorSupplier, repartitionRequired);
+        this(nodeName, processorParameters, repartitionRequired);
 
         this.multipleParentNames = multipleParentNames;
     }
 
-    ProcessorSupplier<K, V> processorSupplier() {
-        return processorSupplier;
+    ProcessorParameters<K, V> processorSupplier() {
+        return processorParameters;
     }
 
     List<String> multipleParentNames() {
@@ -73,7 +69,7 @@ class StatelessProcessorNode<K, V> extends StreamsGraphNode {
     }
 
     @Override
-    void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
+    public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
         //TODO will implement in follow-up pr
     }
 }

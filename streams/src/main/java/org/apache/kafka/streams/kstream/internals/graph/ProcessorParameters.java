@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.kstream.internals;
+package org.apache.kafka.streams.kstream.internals.graph;
 
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 
@@ -26,21 +26,21 @@ import org.apache.kafka.streams.processor.ProcessorSupplier;
  * Used by the Join nodes as there are several parameters, this abstraction helps
  * keep the number of arguments more reasonable.
  */
-class ProcessorParameters<K, V> {
+public class ProcessorParameters<K, V> {
 
     private final ProcessorSupplier<K, V> processorSupplier;
     private final String processorName;
 
-    ProcessorParameters(final ProcessorSupplier<K, V> processorSupplier, final String processorName) {
+    public ProcessorParameters(final ProcessorSupplier<K, V> processorSupplier, final String processorName) {
         this.processorSupplier = processorSupplier;
         this.processorName = processorName;
     }
 
-    ProcessorSupplier<K, V> processorSupplier() {
+    public ProcessorSupplier<K, V> processorSupplier() {
         return processorSupplier;
     }
 
-    String processorName() {
+    public String processorName() {
         return processorName;
     }
 }
