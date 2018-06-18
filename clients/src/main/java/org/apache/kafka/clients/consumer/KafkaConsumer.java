@@ -25,6 +25,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerCoordinator;
 import org.apache.kafka.clients.consumer.internals.ConsumerInterceptors;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetrics;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
+import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.PollCondition;
 import org.apache.kafka.clients.consumer.internals.Fetcher;
 import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
@@ -1162,7 +1163,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         long now = time.milliseconds();
         long pollTimeout = Math.min(coordinator.timeToNextPoll(now), timeout);
 
-        client.poll(pollTimeout, now, new ConsumerNetworkClient.PollCondition() {
+        client.poll(pollTimeout, now, new PollCondition() {
             @Override
             public boolean shouldBlock() {
                 // since a fetch might be completed by the background thread, we need this poll condition
