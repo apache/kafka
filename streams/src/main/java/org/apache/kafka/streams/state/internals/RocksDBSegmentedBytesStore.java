@@ -20,6 +20,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
@@ -30,7 +31,7 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
     private final String name;
     private final Segments segments;
     private final KeySchema keySchema;
-    private ProcessorContext context;
+    private InternalProcessorContext context;
     private volatile boolean open;
 
     RocksDBSegmentedBytesStore(final String name,
@@ -39,7 +40,7 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
                                final KeySchema keySchema) {
         this.name = name;
         this.keySchema = keySchema;
-        this.segments = new Segments(name, retention, numSegments);
+        this.segments = new Segments(name, retention, Segments.segmentInterval(retention, numSegments));
     }
 
     @Override
@@ -97,7 +98,7 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
     @Override
     public void put(final Bytes key, final byte[] value) {
         final long segmentId = segments.segmentId(keySchema.segmentTimestamp(key));
-        final Segment segment = segments.getOrCreateSegment(segmentId, context);
+        final Segment segment = segments.getOrCreateSegmentIfLive(segmentId, context);
         if (segment != null) {
             segment.put(key, value);
         }
@@ -119,11 +120,11 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
 
     @Override
     public void init(ProcessorContext context, StateStore root) {
-        this.context = context;
+        this.context = (InternalProcessorContext) context;
 
         keySchema.init(ProcessorStateManager.storeChangelogTopic(context.applicationId(), root.name()));
 
-        segments.openExisting(context);
+        segments.openExisting((InternalProcessorContext) context);
 
         // register and possibly restore the state from the logs
         context.register(root, new StateRestoreCallback() {

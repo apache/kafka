@@ -163,7 +163,7 @@ public class RocksDBSegmentedBytesStoreTest {
     @Test
     public void shouldRollSegments() {
         // just to validate directories
-        final Segments segments = new Segments(storeName, retention, numSegments);
+        final Segments segments = new Segments(storeName, retention, segmentInterval(retention, numSegments));
         final String key = "a";
 
         bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(50));
@@ -186,7 +186,7 @@ public class RocksDBSegmentedBytesStoreTest {
     @Test
     public void shouldGetAllSegments() {
         // just to validate directories
-        final Segments segments = new Segments(storeName, retention, numSegments);
+        final Segments segments = new Segments(storeName, retention, segmentInterval(retention, numSegments));
         final String key = "a";
 
         bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(50L));
@@ -206,7 +206,7 @@ public class RocksDBSegmentedBytesStoreTest {
     @Test
     public void shouldFetchAllSegments() {
         // just to validate directories
-        final Segments segments = new Segments(storeName, retention, numSegments);
+        final Segments segments = new Segments(storeName, retention, segmentInterval(retention, numSegments));
         final String key = "a";
 
         bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(50L));
@@ -225,7 +225,7 @@ public class RocksDBSegmentedBytesStoreTest {
 
     @Test
     public void shouldLoadSegementsWithOldStyleDateFormattedName() {
-        final Segments segments = new Segments(storeName, retention, numSegments);
+        final Segments segments = new Segments(storeName, retention, segmentInterval(retention, numSegments));
         final String key = "a";
 
         bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(50L));
@@ -256,7 +256,7 @@ public class RocksDBSegmentedBytesStoreTest {
 
     @Test
     public void shouldLoadSegementsWithOldStyleColonFormattedName() {
-        final Segments segments = new Segments(storeName, retention, numSegments);
+        final Segments segments = new Segments(storeName, retention, segmentInterval(retention, numSegments));
         final String key = "a";
 
         bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(50L));

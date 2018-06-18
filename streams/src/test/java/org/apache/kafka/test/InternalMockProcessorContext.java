@@ -49,6 +49,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class InternalMockProcessorContext extends AbstractProcessorContext implements RecordCollector.Supplier {
 
@@ -57,6 +58,7 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
     private final Map<String, StateStore> storeMap = new LinkedHashMap<>();
     private final Map<String, StateRestoreCallback> restoreFuncs = new HashMap<>();
     private final ToInternal toInternal = new ToInternal();
+    private final AtomicLong streamTimeSupplier = new AtomicLong();
 
     private Serde<?> keySerde;
     private Serde<?> valSerde;
@@ -178,6 +180,15 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
     // state mgr will be overridden by the state dir and store maps
     @Override
     public void initialized() {}
+
+    public void setStreamTime(final long time) {
+        streamTimeSupplier.set(time);
+    }
+
+    @Override
+    public Long streamTime() {
+        return streamTimeSupplier.get();
+    }
 
     @Override
     public File stateDir() {

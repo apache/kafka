@@ -216,4 +216,9 @@ class StandbyContextImpl extends AbstractProcessorContext implements RecordColle
         throw new UnsupportedOperationException("this should not happen: currentNode not supported in standby tasks.");
     }
 
+    @Override
+    public Long streamTime() {
+        throw new RuntimeException("Stream time is not implemented for the standby context.");
+    }
+
 }

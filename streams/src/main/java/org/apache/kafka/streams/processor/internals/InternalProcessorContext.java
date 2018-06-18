@@ -63,4 +63,6 @@ public interface InternalProcessorContext extends ProcessorContext {
      * Mark this context as being uninitialized
      */
     void uninitialize();
+
+    Long streamTime();
 }
