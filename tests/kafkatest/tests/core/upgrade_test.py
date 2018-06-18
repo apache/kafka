@@ -23,7 +23,7 @@ from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 from kafkatest.utils import is_int
-from kafkatest.version import LATEST_0_8_2, LATEST_0_9, LATEST_0_10, LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0, LATEST_1_1, DEV_BRANCH, KafkaVersion
+from kafkatest.version import LATEST_0_8_2, LATEST_0_9, LATEST_0_10, LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0, LATEST_1_1, V_0_9_0_0, DEV_BRANCH, KafkaVersion
 
 class TestUpgrade(ProduceConsumeValidateTest):
 
@@ -121,9 +121,10 @@ class TestUpgrade(ProduceConsumeValidateTest):
         if from_kafka_version <= LATEST_0_10_0:
             assert self.kafka.cluster_id() is None
 
+        new_consumer = from_kafka_version >= V_0_9_0_0
         # TODO - reduce the timeout
         self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka,
-                                        self.topic, consumer_timeout_ms=30000,
+                                        self.topic, new_consumer=new_consumer, consumer_timeout_ms=30000,
                                         message_validator=is_int, version=KafkaVersion(from_kafka_version))
 
         self.run_produce_consume_validate(core_test_action=lambda: self.perform_upgrade(from_kafka_version,
