@@ -16,7 +16,10 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.NoSuchElementException;
 
 public class QuickUnion<T> {
@@ -36,18 +39,23 @@ public class QuickUnion<T> {
      */
     public T root(T id) {
         T current = id;
+        if (current == null) {
+            return null;
+        }
+        if (current.equals(ids.get(current))) {
+            return current;
+        }
         T parent = ids.get(current);
-
-        if (parent == null)
+        if (parent == null) {
             throw new NoSuchElementException("id: " + id.toString());
-
-        while (!parent.equals(current)) {
-            // do the path compression
-            T grandparent = ids.get(parent);
-            ids.put(current, grandparent);
-
-            current = parent;
-            parent = grandparent;
+        }
+        List<T> subNodes = new LinkedList<>();
+        while (!current.equals(ids.get(current))) {
+            subNodes.add(current);
+            current = ids.get(current);
+        }
+        for (T node : subNodes) {
+            ids.put(node, current);
         }
         return current;
     }
