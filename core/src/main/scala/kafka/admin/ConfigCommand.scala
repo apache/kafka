@@ -24,13 +24,14 @@ import joptsimple._
 import kafka.common.Config
 import kafka.common.InvalidConfigException
 import kafka.log.LogConfig
-import kafka.server.{ConfigEntityName, ConfigType, DynamicConfig}
-import kafka.utils.{CommandLineUtils, Exit}
+import kafka.server.{ConfigEntityName, ConfigType, Defaults, DynamicBrokerConfig, DynamicConfig, KafkaConfig}
+import kafka.utils.{CommandLineUtils, Exit, PasswordEncoder}
 import kafka.utils.Implicits._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.{AlterConfigsOptions, ConfigEntry, DescribeConfigsOptions, AdminClient => JAdminClient, Config => JConfig}
 import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.scram.internals.{ScramCredentialUtils, ScramFormatter, ScramMechanism}
 import org.apache.kafka.common.utils.{Sanitizer, Time, Utils}
@@ -56,11 +57,14 @@ import scala.collection.JavaConverters._
 object ConfigCommand extends Config {
 
   val DefaultScramIterations = 4096
-  // Dynamic broker configs can only be updated using the new AdminClient since they may require
-  // password encryption currently implemented only in the broker. For consistency with older versions,
-  // quota-related broker configs can still be updated using ZooKeeper. ConfigCommand will be migrated
-  // fully to the new AdminClient later (KIP-248).
-  val BrokerConfigsUpdatableUsingZooKeeper = Set(DynamicConfig.Broker.LeaderReplicationThrottledRateProp,
+  // Dynamic broker configs can only be updated using the new AdminClient once brokers have started
+  // so that configs may be fully validated. Prior to starting brokers, updates may be performed using
+  // ZooKeeper for bootstrapping. This allows all password configs to be stored encrypted in ZK,
+  // avoiding clear passwords in server.properties. For consistency with older versions, quota-related
+  // broker configs can still be updated using ZooKeeper at any time. ConfigCommand will be migrated
+  // to the new AdminClient later for these configs (KIP-248).
+  val BrokerConfigsUpdatableUsingZooKeeperWhileBrokerRunning = Set(
+    DynamicConfig.Broker.LeaderReplicationThrottledRateProp,
     DynamicConfig.Broker.FollowerReplicationThrottledRateProp,
     DynamicConfig.Broker.ReplicaAlterLogDirsIoMaxBytesPerSecondProp)
 
@@ -114,9 +118,25 @@ object ConfigCommand extends Config {
 
     if (entityType == ConfigType.User)
       preProcessScramCredentials(configsToBeAdded)
-    if (entityType == ConfigType.Broker) {
-      require(configsToBeAdded.asScala.keySet.forall(BrokerConfigsUpdatableUsingZooKeeper.contains),
-        s"--bootstrap-server option must be specified to update broker configs $configsToBeAdded")
+    else if (entityType == ConfigType.Broker) {
+      // Replication quota configs may be updated using ZK at any time. Other dynamic broker configs
+      // may be updated using ZooKeeper only if the corresponding broker is not running. Dynamic broker
+      // configs at cluster-default level may be configured using ZK only if there are no brokers running.
+      val dynamicBrokerConfigs = configsToBeAdded.asScala.keySet.filterNot(BrokerConfigsUpdatableUsingZooKeeperWhileBrokerRunning.contains)
+      if (dynamicBrokerConfigs.nonEmpty) {
+        val perBrokerConfig = entityName != ConfigEntityName.Default
+        val errorMessage = s"--bootstrap-server option must be specified to update broker configs $dynamicBrokerConfigs."
+        val info = "Broker configuraton updates using ZooKeeper are supported for bootstrapping before brokers" +
+          " are started to enable encrypted password configs to be stored in ZooKeeper."
+        if (perBrokerConfig) {
+          adminZkClient.parseBroker(entityName).foreach { brokerId =>
+            require(zkClient.getBroker(brokerId).isEmpty, s"$errorMessage when broker $entityName is running. $info")
+          }
+        } else {
+          require(zkClient.getAllBrokersInCluster.isEmpty, s"$errorMessage for default cluster if any broker is running. $info")
+        }
+        preProcessBrokerConfigs(configsToBeAdded, perBrokerConfig)
+      }
     }
 
     // compile the final set of configs
@@ -152,6 +172,49 @@ object ConfigCommand extends Config {
         case null =>
         case value =>
           configsToBeAdded.setProperty(mechanism.mechanismName, scramCredential(mechanism, value))
+      }
+    }
+  }
+
+  private[admin] def createPasswordEncoder(encoderConfigs: Map[String, String]): PasswordEncoder = {
+    encoderConfigs.get(KafkaConfig.PasswordEncoderSecretProp)
+    val encoderSecret = encoderConfigs.getOrElse(KafkaConfig.PasswordEncoderSecretProp,
+      throw new IllegalArgumentException("Password encoder secret not specified"))
+    new PasswordEncoder(new Password(encoderSecret),
+      None,
+      encoderConfigs.get(KafkaConfig.PasswordEncoderCipherAlgorithmProp).getOrElse(Defaults.PasswordEncoderCipherAlgorithm),
+      encoderConfigs.get(KafkaConfig.PasswordEncoderKeyLengthProp).map(_.toInt).getOrElse(Defaults.PasswordEncoderKeyLength),
+      encoderConfigs.get(KafkaConfig.PasswordEncoderIterationsProp).map(_.toInt).getOrElse(Defaults.PasswordEncoderIterations))
+  }
+
+  /**
+   * Pre-process broker configs provided to convert them to persistent format.
+   * Password configs are encrypted using the secret `KafkaConfig.PasswordEncoderSecretProp`.
+   * The secret is removed from `configsToBeAdded` and will not be persisted in ZooKeeper.
+   */
+  private def preProcessBrokerConfigs(configsToBeAdded: Properties, perBrokerConfig: Boolean) {
+    val passwordEncoderConfigs = new Properties
+    passwordEncoderConfigs ++= configsToBeAdded.asScala.filterKeys(_.startsWith("password.encoder."))
+    if (!passwordEncoderConfigs.isEmpty) {
+      info(s"Password encoder configs ${passwordEncoderConfigs.keySet} will be used for encrypting" +
+        " passwords, but will not be stored in ZooKeeper.")
+      passwordEncoderConfigs.asScala.keySet.foreach(configsToBeAdded.remove)
+    }
+
+    DynamicBrokerConfig.validateConfigs(configsToBeAdded, perBrokerConfig)
+    val passwordConfigs = configsToBeAdded.asScala.keySet.filter(DynamicBrokerConfig.isPasswordConfig)
+    if (passwordConfigs.nonEmpty) {
+      require(passwordEncoderConfigs.containsKey(KafkaConfig.PasswordEncoderSecretProp),
+        s"${KafkaConfig.PasswordEncoderSecretProp} must be specified to update $passwordConfigs." +
+          " Other password encoder configs like cipher algorithm and iterations may also be specified" +
+          " to override the default encoding parameters. Password encoder configs will not be persisted" +
+          " in ZooKeeper."
+      )
+
+      val passwordEncoder = createPasswordEncoder(passwordEncoderConfigs.asScala)
+      passwordConfigs.foreach { configName =>
+        val encodedValue = passwordEncoder.encode(new Password(configsToBeAdded.getProperty(configName)))
+        configsToBeAdded.setProperty(configName, encodedValue)
       }
     }
   }
@@ -358,7 +421,12 @@ object ConfigCommand extends Config {
       parseQuotaEntity(opts)
     else {
       // Exactly one entity type and at-most one entity name expected for other entities
-      val name = if (opts.options.has(opts.entityName)) Some(opts.options.valueOf(opts.entityName)) else None
+      val name = if (opts.options.has(opts.entityName))
+        Some(opts.options.valueOf(opts.entityName))
+      else if (entityTypes.head == ConfigType.Broker && opts.options.has(opts.entityDefault))
+        Some(ConfigEntityName.Default)
+      else
+        None
       ConfigEntity(Entity(entityTypes.head, name), None)
     }
   }

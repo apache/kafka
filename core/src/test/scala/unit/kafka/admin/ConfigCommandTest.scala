@@ -20,21 +20,25 @@ import java.util
 import java.util.Properties
 
 import kafka.admin.ConfigCommand.ConfigCommandOptions
+import kafka.api.ApiVersion
+import kafka.cluster.{Broker, EndPoint}
 import kafka.common.InvalidConfigException
-import kafka.server.ConfigEntityName
+import kafka.server.{ConfigEntityName, KafkaConfig}
 import kafka.utils.{Exit, Logging}
-import kafka.zk.{AdminZkClient, KafkaZkClient, ZooKeeperTestHarness}
+import kafka.zk.{AdminZkClient, BrokerInfo, KafkaZkClient, ZooKeeperTestHarness}
 import org.apache.kafka.clients.admin._
-import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.config.{ConfigException, ConfigResource}
 import org.apache.kafka.common.internals.KafkaFutureImpl
 import org.apache.kafka.common.Node
+import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils
 import org.apache.kafka.common.utils.Sanitizer
 import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.Test
 
-import scala.collection.mutable
+import scala.collection.{Seq, mutable}
 import scala.collection.JavaConverters._
 
 class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
@@ -51,7 +55,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       "--entity-name", "1",
       "--entity-type", "brokers",
       "--alter",
-      "--add-config", "message.max.size=100000"))
+      "--add-config", "security.inter.broker.protocol=PLAINTEXT"))
   }
 
   @Test
@@ -306,14 +310,99 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     ConfigCommand.alterConfig(null, createOpts, new DummyAdminZkClient(zkClient))
   }
 
-  @Test (expected = classOf[IllegalArgumentException])
-  def shouldNotUpdateDynamicBrokerConfigUsingZooKeeper(): Unit = {
-    val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
-      "--entity-name", "1",
-      "--entity-type", "brokers",
-      "--alter",
-      "--add-config", "message.max.size=100000"))
-    ConfigCommand.alterConfig(null, createOpts, new DummyAdminZkClient(zkClient))
+  @Test
+  def testDynamicBrokerConfigUpdateUsingZooKeeper(): Unit = {
+    val brokerId = "1"
+    val adminZkClient = new AdminZkClient(zkClient)
+    val alterOpts = Array("--zookeeper", zkConnect, "--entity-type", "brokers", "--alter")
+
+    def entityOpt(brokerId: Option[String]): Array[String] = {
+      brokerId.map(id => Array("--entity-name", id)).getOrElse(Array("--entity-default"))
+    }
+
+    def alterConfig(configs: Map[String, String], brokerId: Option[String],
+                    encoderConfigs: Map[String, String] = Map.empty): Unit = {
+      val configStr = (configs ++ encoderConfigs).map { case (k, v) => s"$k=$v" }.mkString(",")
+      val addOpts = new ConfigCommandOptions(alterOpts ++ entityOpt(brokerId) ++ Array("--add-config", configStr))
+      ConfigCommand.alterConfig(zkClient, addOpts, adminZkClient)
+    }
+
+    def verifyConfig(configs: Map[String, String], brokerId: Option[String]): Unit = {
+      val entityConfigs = zkClient.getEntityConfigs("brokers", brokerId.getOrElse(ConfigEntityName.Default))
+      assertEquals(configs, entityConfigs.asScala)
+    }
+
+    def alterAndVerifyConfig(configs: Map[String, String], brokerId: Option[String]): Unit = {
+      alterConfig(configs, brokerId)
+      verifyConfig(configs, brokerId)
+    }
+
+    def deleteAndVerifyConfig(configNames: Set[String], brokerId: Option[String]): Unit = {
+      val deleteOpts = new ConfigCommandOptions(alterOpts ++ entityOpt(brokerId) ++
+        Array("--delete-config", configNames.mkString(",")))
+      ConfigCommand.alterConfig(zkClient, deleteOpts, adminZkClient)
+      verifyConfig(Map.empty, brokerId)
+    }
+
+    // Add config
+    alterAndVerifyConfig(Map("message.max.size" -> "110000"), Some(brokerId))
+    alterAndVerifyConfig(Map("message.max.size" -> "120000"), None)
+
+    // Change config
+    alterAndVerifyConfig(Map("message.max.size" -> "130000"), Some(brokerId))
+    alterAndVerifyConfig(Map("message.max.size" -> "140000"), None)
+
+    // Delete config
+    deleteAndVerifyConfig(Set("message.max.size"), Some(brokerId))
+    deleteAndVerifyConfig(Set("message.max.size"), None)
+
+    // Listener configs: should work only with listener name
+    alterAndVerifyConfig(Map("listener.name.external.ssl.keystore.location" -> "/tmp/test.jks"), Some(brokerId))
+    intercept[ConfigException](alterConfig(Map("ssl.keystore.location" -> "/tmp/test.jks"), Some(brokerId)))
+
+    // Per-broker config configured at default cluster-level should fail
+    intercept[ConfigException](alterConfig(Map("listener.name.external.ssl.keystore.location" -> "/tmp/test.jks"), None))
+    deleteAndVerifyConfig(Set("listener.name.external.ssl.keystore.location"), Some(brokerId))
+
+    // Password config update without encoder secret should fail
+    intercept[IllegalArgumentException](alterConfig(Map("listener.name.external.ssl.keystore.password" -> "secret"), Some(brokerId)))
+
+    // Password config update with encoder secret should succeed and encoded password must be stored in ZK
+    val configs = Map("listener.name.external.ssl.keystore.password" -> "secret", "log.cleaner.threads" -> "2")
+    val encoderConfigs = Map(KafkaConfig.PasswordEncoderSecretProp -> "encoder-secret")
+    alterConfig(configs, Some(brokerId), encoderConfigs)
+    val brokerConfigs = zkClient.getEntityConfigs("brokers", brokerId)
+    assertFalse("Encoder secret stored in ZooKeeper", brokerConfigs.contains(KafkaConfig.PasswordEncoderSecretProp))
+    assertEquals("2", brokerConfigs.getProperty("log.cleaner.threads")) // not encoded
+    val encodedPassword = brokerConfigs.getProperty("listener.name.external.ssl.keystore.password")
+    val passwordEncoder = ConfigCommand.createPasswordEncoder(encoderConfigs)
+    assertEquals("secret", passwordEncoder.decode(encodedPassword).value)
+    assertEquals(configs.size, brokerConfigs.size)
+
+    // Password config update with overrides for encoder parameters
+    val configs2 = Map("listener.name.internal.ssl.keystore.password" -> "secret2")
+    val encoderConfigs2 = Map(KafkaConfig.PasswordEncoderSecretProp -> "encoder-secret",
+      KafkaConfig.PasswordEncoderCipherAlgorithmProp -> "DES/CBC/PKCS5Padding",
+      KafkaConfig.PasswordEncoderIterationsProp -> "1024",
+      KafkaConfig.PasswordEncoderKeyFactoryAlgorithmProp -> "PBKDF2WithHmacSHA1",
+      KafkaConfig.PasswordEncoderKeyLengthProp -> "64")
+    alterConfig(configs2, Some(brokerId), encoderConfigs2)
+    val brokerConfigs2 = zkClient.getEntityConfigs("brokers", brokerId)
+    val encodedPassword2 = brokerConfigs2.getProperty("listener.name.internal.ssl.keystore.password")
+    assertEquals("secret2", ConfigCommand.createPasswordEncoder(encoderConfigs).decode(encodedPassword2).value)
+    assertEquals("secret2", ConfigCommand.createPasswordEncoder(encoderConfigs2).decode(encodedPassword2).value)
+
+
+    // Password config update at default cluster-level should fail
+    intercept[ConfigException](alterConfig(configs, None, encoderConfigs))
+
+    // Dynamic config updates using ZK should fail if broker is running.
+    registerBrokerInZk(brokerId.toInt)
+    intercept[IllegalArgumentException](alterConfig(Map("message.max.size" -> "210000"), Some(brokerId)))
+    intercept[IllegalArgumentException](alterConfig(Map("message.max.size" -> "220000"), None))
+
+    // Dynamic config updates using ZK should for a different broker that is not running should succeed
+    alterAndVerifyConfig(Map("message.max.size" -> "230000"), Some("2"))
   }
 
   @Test (expected = classOf[IllegalArgumentException])
@@ -322,7 +411,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       "--entity-name", "1",
       "--entity-type", "brokers",
       "--alter",
-      "--add-config", "a="))
+      "--add-config", "a=="))
     ConfigCommand.alterConfig(null, createOpts, new DummyAdminZkClient(zkClient))
   }
 
@@ -591,6 +680,14 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     checkEntities(opts,
         Map("users" -> Seq("<default>", sanitizedPrincipal)) ++ defaultUserMap ++ userMap,
         Seq("<default>/clients/client-3", sanitizedPrincipal + "/clients/client-2"))
+  }
+
+  private def registerBrokerInZk(id: Int): Unit = {
+    zkClient.createTopLevelPaths()
+    val securityProtocol = SecurityProtocol.PLAINTEXT
+    val endpoint = new EndPoint("localhost", 9092, ListenerName.forSecurityProtocol(securityProtocol), securityProtocol)
+    val brokerInfo = BrokerInfo(Broker(id, Seq(endpoint), rack = None), ApiVersion.latestVersion, jmxPort = 9192)
+    zkClient.registerBrokerInZk(brokerInfo)
   }
 
   class DummyAdminZkClient(zkClient: KafkaZkClient) extends AdminZkClient(zkClient) {
