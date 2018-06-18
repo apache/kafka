@@ -112,6 +112,10 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
    * @return a boolean indicating whether the size of the memory map and the underneath file is changed or not.
    */
   def resize(newSize: Int): Boolean = {
+    resize(newSize, true)
+  }
+
+  private def resize(newSize: Int, remap: Boolean): Boolean = {
     inLock(lock) {
       val roundedNewSize = roundDownToExactMultiple(newSize, entrySize)
 
@@ -127,9 +131,11 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
             safeForceUnmap()
           raf.setLength(roundedNewSize)
           _length = roundedNewSize
-          mmap = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, roundedNewSize)
-          _maxEntries = mmap.limit() / entrySize
-          mmap.position(position)
+          if (remap) {
+            mmap = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, roundedNewSize)
+            _maxEntries = mmap.limit() / entrySize
+            mmap.position(position)
+          }
           true
         } finally {
           CoreUtils.swallow(raf.close(), this)
@@ -190,9 +196,11 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
    */
   def sizeInBytes = entrySize * _entries
 
-  /** Close the index */
+  /** Close the index and unmap memory */
   def close() {
-    trimToValidSize()
+     inLock(lock) {
+       resize(entrySize * _entries, false)
+     }
   }
 
   def closeHandler(): Unit = {
@@ -248,9 +256,14 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
   }
 
   protected def safeForceUnmap(): Unit = {
-    try forceUnmap()
-    catch {
-      case t: Throwable => error(s"Error unmapping index $file", t)
+    if(mmap == null) {
+      debug(s"Failed to unmap ${file.getAbsolutePath} because it is already unmapped.")
+    } else {
+      try forceUnmap()
+      catch {
+        case t: Throwable => error(s"Error unmapping index $file", t)
+
+      }
     }
   }
 
