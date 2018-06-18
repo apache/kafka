@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.kstream.internals.graph;
 
+
 import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilder;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
@@ -52,18 +53,19 @@ public abstract class StreamsGraphNode {
     }
 
     public void clearChildren() {
+        for (StreamsGraphNode childNode : childNodes) {
+            if (childNode.parentNode != null && childNode.parentNode.equals(this)) {
+                childNode.setParentNode(null);
+            }
+        }
         childNodes.clear();
     }
 
     public boolean removeChild(StreamsGraphNode child) {
-        return childNodes.remove(child);
-    }
-
-    public void setChildNodes(Set<StreamsGraphNode> streamsGraphNodes) {
-        childNodes.clear();
-        for (StreamsGraphNode streamsGraphNode : streamsGraphNodes) {
-            addChildNode(streamsGraphNode);
+        if (child.parentNode != null && child.parentNode.equals(this)) {
+            child.setParentNode(null);
         }
+        return childNodes.remove(child);
     }
 
     public void addChildNode(final StreamsGraphNode childNode) {

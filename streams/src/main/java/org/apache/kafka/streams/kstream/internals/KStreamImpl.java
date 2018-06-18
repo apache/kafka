@@ -853,8 +853,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                 .withOtherWindowedStreamProcessorParameters(otherWindowStreamProcessorParams)
                 .withThisWindowStoreBuilder(thisWindow)
                 .withOtherWindowStoreBuilder(otherWindow)
-                .withLeftHandSideStreamName(((AbstractStream) lhs).name)
-                .withOtherStreamName(((AbstractStream) other).name)
+                .withLeftHandSideStreamName(((AbstractStream) lhs).parentGraphNode)
+                .withOtherStreamName(((AbstractStream) other).parentGraphNode)
                 .withValueJoiner(joiner)
                 .withNodeName(joinMergeName);
 

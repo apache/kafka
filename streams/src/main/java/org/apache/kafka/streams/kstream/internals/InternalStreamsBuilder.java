@@ -257,8 +257,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     private void mayOptimizeRepartitionOperations() {
         StreamsGraphNode optimizedSingleRepartition = null;
 
-        for (Map.Entry<StreamsGraphNode, Set<OptimizableRepartitionNode>> streamsGraphNodeSetEntry : keyChangingOperationsToOptimizableRepartitionNodes
-            .entrySet()) {
+        for (Map.Entry<StreamsGraphNode, Set<OptimizableRepartitionNode>> streamsGraphNodeSetEntry : keyChangingOperationsToOptimizableRepartitionNodes.entrySet()) {
 
             StreamsGraphNode keyChangingNode = streamsGraphNodeSetEntry.getKey();
 
@@ -276,7 +275,8 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                                                parentSourceNode.keySerde(),
                                                                parentSourceNode.valueSerde());
 
-            optimizedSingleRepartition.setId(index.getAndIncrement());
+            // re-use parent id to make sure StreamsGraphNode is evaluated before downstream nodes
+            optimizedSingleRepartition.setId(parentSourceNode.id());
 
             for (OptimizableRepartitionNode repartitionNodeToBeReplaced : streamsGraphNodeSetEntry.getValue()) {
 
@@ -298,7 +298,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
                 } else { /*
                            The more difficult case is the auto generated repartition is somewhere downstream of key-changing like so:
-                                ..map.filter(..)..mapValues(..).peek(..).groupByKey...
+                                ..map.filter(..)..mapValues(..).peek(..).groupByKey.(auto-repartition node created internally before groupByKey)
 
                            The repartition node was automatically added between peek and groupByKey
                            We need to:
