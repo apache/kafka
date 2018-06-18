@@ -21,7 +21,7 @@ import java.lang.{Long => JLong}
 import java.nio.ByteBuffer
 import java.util
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
 import java.util.{Collections, Properties}
 
 import kafka.admin.{AdminUtils, RackAwareMode}
@@ -369,6 +369,29 @@ class KafkaApis(val requestChannel: RequestChannel,
   private def authorize(session: RequestChannel.Session, operation: Operation, resource: Resource): Boolean =
     authorizer.forall(_.authorize(session, operation, resource))
 
+  val numProduceRequests = new AtomicLong(0)
+
+  case class ProduceRequestTag(requestNumber: Long, startNs: Long) {
+    val queued = new mutable.ArrayBuffer[String]()
+    val LOG_PERIOD_NS = 30000000
+
+    def calculateElapsedNs() = {
+      Time.SYSTEM.nanoseconds() - startNs
+    }
+
+    def log(message: String) = {
+      val elapsedNs = calculateElapsedNs()
+      val logMessage = s"PRODUCE_REQUEST_TAG($requestNumber, $elapsedNs ns): $message"
+      if (elapsedNs < LOG_PERIOD_NS) {
+        queued += logMessage
+      } else {
+        queued.foreach(s => logger.info(s))
+        queued.clear()
+        logger.info(logMessage)
+      }
+    }
+  }
+
   /**
    * Handle a produce request
    */
@@ -376,14 +399,21 @@ class KafkaApis(val requestChannel: RequestChannel,
     val produceRequest = request.body[ProduceRequest]
     val numBytesAppended = request.header.toStruct.sizeOf + request.sizeOfBodyInBytes
 
+    val curNumFetchRequests = numProduceRequests.incrementAndGet()
+    val produceRequestTag = new ProduceRequestTag(curNumFetchRequests, Time.SYSTEM.nanoseconds())
+    produceRequestTag.log("handling produceRequest.")
+
     if (produceRequest.isTransactional) {
       if (!authorize(request.session, Write, Resource(TransactionalId, produceRequest.transactionalId, LITERAL))) {
+        produceRequestTag.log(s"sending error response with " +
+          s"${Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED}")
         sendErrorResponseMaybeThrottle(request, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED.exception)
         return
       }
       // Note that authorization to a transactionalId implies ProducerId authorization
 
     } else if (produceRequest.isIdempotent && !authorize(request.session, IdempotentWrite, Resource.ClusterResource)) {
+      produceRequestTag.log(s"sending error response with ${Errors.CLUSTER_AUTHORIZATION_FAILED}")
       sendErrorResponseMaybeThrottle(request, Errors.CLUSTER_AUTHORIZATION_FAILED.exception)
       return
     }
@@ -400,9 +430,11 @@ class KafkaApis(val requestChannel: RequestChannel,
       else
         authorizedRequestInfo += (topicPartition -> memoryRecords)
     }
+    produceRequestTag.log(s"calculated unauthorized and nonExisting responses.")
 
     // the callback for sending a produce response
     def sendResponseCallback(responseStatus: Map[TopicPartition, PartitionResponse]) {
+      produceRequestTag.log(s"entered sendResponseCallback.")
       val mergedResponseStatus = responseStatus ++ unauthorizedTopicResponses ++ nonExistingTopicResponses
       var errorInResponse = false
 
@@ -457,6 +489,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       } else {
         sendResponse(request, Some(new ProduceResponse(mergedResponseStatus.asJava, maxThrottleTimeMs)), None)
       }
+      produceRequestTag.log(s"exiting sendResponseCallback.")
     }
 
     def processingStatsCallback(processingStats: FetchResponseStats): Unit = {
@@ -478,7 +511,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         isFromClient = true,
         entriesPerPartition = authorizedRequestInfo,
         responseCallback = sendResponseCallback,
-        recordConversionStatsCallback = processingStatsCallback)
+        recordConversionStatsCallback = processingStatsCallback,
+        produceRequestTag = Some(produceRequestTag))
 
       // if the request is put into the purgatory, it will have a held reference and hence cannot be garbage collected;
       // hence we clear its data here in order to let GC reclaim its memory since it is already appended to log
@@ -486,10 +520,16 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
+  val numFetchRequests = new AtomicLong(0)
+
   /**
    * Handle a fetch request
    */
   def handleFetchRequest(request: RequestChannel.Request) {
+    val curNumFetchRequests = numFetchRequests.incrementAndGet()
+    if (curNumFetchRequests % 5000 == 0) {
+      logger.info("WATERMELON: numFetchRequests = " + curNumFetchRequests)
+    }
     val versionId = request.header.apiVersion
     val clientId = request.header.clientId
     val fetchRequest = request.body[FetchRequest]
