@@ -470,11 +470,15 @@ class ReplicaManager(val config: KafkaConfig,
                     entriesPerPartition: Map[TopicPartition, MemoryRecords],
                     responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
                     delayedProduceLock: Option[Lock] = None,
-                    recordConversionStatsCallback: Map[TopicPartition, RecordConversionStats] => Unit = _ => ()) {
+                    recordConversionStatsCallback: Map[TopicPartition, RecordConversionStats] => Unit = _ => (),
+                    produceRequestTag: Option[KafkaApis#ProduceRequestTag] = None) {
     if (isValidRequiredAcks(requiredAcks)) {
       val sTime = time.milliseconds
       val localProduceResults = appendToLocalLog(internalTopicsAllowed = internalTopicsAllowed,
         isFromClient = isFromClient, entriesPerPartition, requiredAcks)
+      produceRequestTag.map(t => t.log(s"finished appendToLocalLog " +
+        s"internalTopicsAllowed=${internalTopicsAllowed} " +
+        s"isFromClient=${isFromClient}"))
       debug("Produce to local log in %d ms".format(time.milliseconds - sTime))
 
       val produceStatus = localProduceResults.map { case (topicPartition, result) =>
@@ -489,7 +493,7 @@ class ReplicaManager(val config: KafkaConfig,
       if (delayedProduceRequestRequired(requiredAcks, entriesPerPartition, localProduceResults)) {
         // create delayed produce operation
         val produceMetadata = ProduceMetadata(requiredAcks, produceStatus)
-        val delayedProduce = new DelayedProduce(timeout, produceMetadata, this, responseCallback, delayedProduceLock)
+        val delayedProduce = new DelayedProduce(timeout, produceMetadata, this, responseCallback, delayedProduceLock, produceRequestTag)
 
         // create a list of (topic, partition) pairs to use as keys for this delayed produce operation
         val producerRequestKeys = entriesPerPartition.keys.map(new TopicPartitionOperationKey(_)).toSeq
@@ -497,11 +501,12 @@ class ReplicaManager(val config: KafkaConfig,
         // try to complete the request immediately, otherwise put it into the purgatory
         // this is because while the delayed produce operation is being created, new
         // requests may arrive and hence make this operation completable.
+        produceRequestTag.map(t => t.log(s"ReplicaManager invoking delayedProducePurgatory#tryCompleteElseWatch."))
         delayedProducePurgatory.tryCompleteElseWatch(delayedProduce, producerRequestKeys)
-
       } else {
         // we can respond immediately
         val produceResponseStatus = produceStatus.mapValues(status => status.responseStatus)
+        produceRequestTag.map(t => t.log(s"ReplicaManager invoking responseCallback directly."))
         responseCallback(produceResponseStatus)
       }
     } else {

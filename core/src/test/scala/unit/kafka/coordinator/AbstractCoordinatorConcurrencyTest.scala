@@ -177,7 +177,8 @@ object AbstractCoordinatorConcurrencyTest {
                                entriesPerPartition: Map[TopicPartition, MemoryRecords],
                                responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
                                delayedProduceLock: Option[Lock] = None,
-                               processingStatsCallback: Map[TopicPartition, RecordConversionStats] => Unit = _ => ()) {
+                               processingStatsCallback: Map[TopicPartition, RecordConversionStats] => Unit = _ => (),
+                               produceRequestTag: Option[KafkaApis#ProduceRequestTag] = None) {
 
       if (entriesPerPartition.isEmpty)
         return

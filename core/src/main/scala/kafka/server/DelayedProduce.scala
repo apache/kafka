@@ -55,7 +55,8 @@ class DelayedProduce(delayMs: Long,
                      produceMetadata: ProduceMetadata,
                      replicaManager: ReplicaManager,
                      responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
-                     lockOpt: Option[Lock] = None)
+                     lockOpt: Option[Lock] = None,
+                     produceRequestTag: Option[KafkaApis#ProduceRequestTag] = None)
   extends DelayedOperation(delayMs, lockOpt) {
 
   // first update the acks pending variable according to the error code
@@ -68,7 +69,8 @@ class DelayedProduce(delayMs: Long,
       status.acksPending = false
     }
 
-    trace(s"Initial partition status for $topicPartition is $status")
+    //trace(s"Initial partition status for $topicPartition is $status")
+    produceRequestTag.map(p => p.log(s"Initial partition status for $topicPartition is $status"))
   }
 
   /**
@@ -84,7 +86,7 @@ class DelayedProduce(delayMs: Long,
   override def tryComplete(): Boolean = {
     // check for each partition if it still has pending acks
     produceMetadata.produceStatus.foreach { case (topicPartition, status) =>
-      trace(s"Checking produce satisfaction for $topicPartition, current status $status")
+      produceRequestTag.map(p => p.log(s"Checking produce satisfaction for $topicPartition, current status $status"))
       // skip those partitions that have already been satisfied
       if (status.acksPending) {
         val (hasEnough, error) = replicaManager.getPartition(topicPartition) match {
@@ -115,7 +117,7 @@ class DelayedProduce(delayMs: Long,
   override def onExpiration() {
     produceMetadata.produceStatus.foreach { case (topicPartition, status) =>
       if (status.acksPending) {
-        debug(s"Expiring produce request for partition $topicPartition with status $status")
+        produceRequestTag.map(p => p.log(s"Expiring produce request for partition $topicPartition with status $status"))
         DelayedProduceMetrics.recordExpiration(topicPartition)
       }
     }
