@@ -30,12 +30,12 @@ public enum ClientDnsLookup {
         this.clientDnsLookup = clientDnsLookup;
     }
 
-    private static final Map<String, ClientDnsLookup> map =
+    private static final Map<String, ClientDnsLookup> MAP =
             new HashMap<String, ClientDnsLookup>();
 
     static {
         for (ClientDnsLookup type : ClientDnsLookup.values()) {
-            map.put(type.toString(), type);
+            MAP.put(type.toString(), type);
         }
     }
 
@@ -45,8 +45,8 @@ public enum ClientDnsLookup {
     }
 
     public static ClientDnsLookup fromString(String name) {
-        if (map.containsKey(name)) {
-            return map.get(name);
+        if (MAP.containsKey(name)) {
+            return MAP.get(name);
         }
         throw new IllegalArgumentException();
     }

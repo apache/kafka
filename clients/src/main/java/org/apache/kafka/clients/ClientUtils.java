@@ -43,16 +43,13 @@ public final class ClientUtils {
     private ClientUtils() {
     }
 
-    public static List<InetSocketAddress> parseAndValidateAddresses(List<String> urls,String clientDnsLookup) {
+    public static List<InetSocketAddress> parseAndValidateAddresses(List<String> urls, String clientDnsLookup) {
         List<InetSocketAddress> addresses = new ArrayList<>();
         ClientDnsLookup clientDnsLookupBehaviour = null;
-        try
-        {
+        try {
             clientDnsLookupBehaviour = ClientDnsLookup.fromString(clientDnsLookup);
-        }
-        catch(IllegalArgumentException e)
-        {
-            log.error("{} isn't a valid value for {}",clientDnsLookup,CommonClientConfigs.CLIENT_DNS_LOOKUP);
+        } catch (IllegalArgumentException e) {
+            log.error("{} isn't a valid value for {}", clientDnsLookup, CommonClientConfigs.CLIENT_DNS_LOOKUP);
             throw new ConfigException("Invalid value in " + CommonClientConfigs.CLIENT_DNS_LOOKUP);
         }
         for (String url : urls) {
@@ -63,8 +60,7 @@ public final class ClientUtils {
                     if (host == null || port == null)
                         throw new ConfigException("Invalid url in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
 
-                    if(clientDnsLookupBehaviour == ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY)
-                    {
+                    if (clientDnsLookupBehaviour == ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY) {
                         InetAddress[] inetAddresses = InetAddress.getAllByName(host);
                         for (InetAddress inetAddress : inetAddresses) {
                             String resolvedCanonicalName = inetAddress.getCanonicalHostName();
@@ -75,9 +71,7 @@ public final class ClientUtils {
                                 addresses.add(address);
                             }
                         }
-                    }
-                    else
-                    {
+                    } else {
                         InetSocketAddress address = new InetSocketAddress(host, port);
                         if (address.isUnresolved()) {
                             log.warn("Removing server {} from {} as DNS resolution failed for {}", url, CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, host);
