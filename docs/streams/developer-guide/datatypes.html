@@ -93,6 +93,11 @@
 <span class="n">userCountByRegion</span><span class="o">.</span><span class="na">to</span><span class="o">(</span><span class="s">&quot;RegionCountsTopic&quot;</span><span class="o">,</span> <span class="n">Produced</span><span class="o">.</span><span class="na">valueSerde</span><span class="o">(</span><span class="n">Serdes</span><span class="o">.</span><span class="na">Long</span><span class="o">()));</span>
 </pre></div>
       </div>
+      <p>If some of your incoming records are corrupted or ill-formatted, they will cause the deserializer class to report an error.
+         Since 1.0.x we have introduced an <code>DeserializationExceptionHandler</code> interface which allows
+         you to customize how to handle such records. The customized implementation of the interface can be specified via the <code>StreamsConfig</code>.
+         For more details, please feel free to read the <a href="config-streams.html#default-deserialization-exception-handler">Configuring a Streams Application</a> section.
+      </p>
     </div>
     <div class="section" id="available-serdes">
       <span id="streams-developer-guide-serdes-available"></span><h2>Available SerDes<a class="headerlink" href="#available-serdes" title="Permalink to this headline"></a></h2>
