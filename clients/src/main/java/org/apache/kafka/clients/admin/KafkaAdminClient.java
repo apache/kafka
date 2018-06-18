@@ -1676,35 +1676,30 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public DescribeConfigsResult describeConfigs(Collection<ConfigResource> configResources, final DescribeConfigsOptions options) {
-        final Map<ConfigResource, KafkaFutureImpl<Config>> unifiedRequestFutures = new HashMap<>();
-        final Map<ConfigResource, KafkaFutureImpl<Config>> brokerFutures = new HashMap<>(configResources.size());
-
         // The BROKER resources which we want to describe.  We must make a separate DescribeConfigs
         // request for every BROKER resource we want to describe.
-        final Collection<ConfigResource> brokerResources = new ArrayList<>();
+        final Map<ConfigResource, KafkaFutureImpl<Config>> brokerFutures = new HashMap<>(configResources.size());
 
         // The non-BROKER resources which we want to describe.  These resources can be described by a
         // single, unified DescribeConfigs request.
-        final Collection<ConfigResource> unifiedRequestResources = new ArrayList<>(configResources.size());
+        final Map<ConfigResource, KafkaFutureImpl<Config>> unifiedRequestFutures = new HashMap<>(configResources.size());
 
-        for (ConfigResource resource : configResources) {
+        for (final ConfigResource resource : configResources) {
             if (resource.type() == ConfigResource.Type.BROKER && !resource.isDefault()) {
                 brokerFutures.put(resource, new KafkaFutureImpl<>());
-                brokerResources.add(resource);
             } else {
                 unifiedRequestFutures.put(resource, new KafkaFutureImpl<>());
-                unifiedRequestResources.add(resource);
             }
         }
 
         final long now = time.milliseconds();
-        if (!unifiedRequestResources.isEmpty()) {
+        if (!unifiedRequestFutures.isEmpty()) {
             runnable.call(new Call("describeConfigs", calcDeadlineMs(now, options.timeoutMs()),
                 new LeastLoadedNodeProvider()) {
 
                 @Override
                 AbstractRequest.Builder createRequest(int timeoutMs) {
-                    return new DescribeConfigsRequest.Builder(unifiedRequestResources)
+                    return new DescribeConfigsRequest.Builder(unifiedRequestFutures.keySet())
                             .includeSynonyms(options.includeSynonyms());
                 }
 
