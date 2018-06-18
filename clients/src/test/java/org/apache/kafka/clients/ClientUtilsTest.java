@@ -20,7 +20,9 @@ import org.apache.kafka.common.config.ConfigException;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.UnknownHostException;
 import java.util.Arrays;
 import java.util.List;
 
@@ -28,15 +30,19 @@ public class ClientUtilsTest {
 
 
     @Test
-    public void testParseAndValidateAddresses() {
+    public void testParseAndValidateAddresses() throws UnknownHostException {
+        String hostAddress = InetAddress.getLocalHost().getHostAddress();
+        InetAddress[] allByName = InetAddress.getAllByName("localhost");
+        System.out.println(allByName[0].getCanonicalHostName());
+        System.out.println(allByName[1].getCanonicalHostName());
         checkWithoutLookup("127.0.0.1:8000");
-        checkWithoutLookup("mydomain.com:8080");
+        checkWithoutLookup("localhost:8080");
         checkWithoutLookup("[::1]:8000");
-        checkWithoutLookup("[2001:db8:85a3:8d3:1319:8a2e:370:7348]:1234", "mydomain.com:10000");
-        List<InetSocketAddress> validatedAddresses = checkWithoutLookup("mydomain.com:10000");
+        checkWithoutLookup("[2001:db8:85a3:8d3:1319:8a2e:370:7348]:1234", "localhost:10000");
+        List<InetSocketAddress> validatedAddresses = checkWithoutLookup("localhost:10000");
         assertEquals(1, validatedAddresses.size());
         InetSocketAddress onlyAddress = validatedAddresses.get(0);
-        assertEquals("mydomain.com", onlyAddress.getHostName());
+        assertEquals("localhost", onlyAddress.getHostName());
         assertEquals(10000, onlyAddress.getPort());
     }
 
@@ -44,21 +50,17 @@ public class ClientUtilsTest {
 
     @Test
     public void testParseAndValidateAddressesWithReverseLookup() {
-        List<InetSocketAddress> validatedAddresses = checkWithLookup(Arrays.asList("mydomain.com:10000"));
-        assertEquals(1, validatedAddresses.size());
-        InetSocketAddress onlyAddress = validatedAddresses.get(0);
-        assertEquals("65-254-242-180.yourhostingaccount.com", onlyAddress.getHostName());
-        assertEquals(10000, onlyAddress.getPort());
+        List<InetSocketAddress> validatedAddresses = checkWithLookup(Arrays.asList("localhost:10000"));
+        assertEquals(2, validatedAddresses.size());
+        InetSocketAddress address = validatedAddresses.get(0);
+        assertEquals("127.0.0.1", address.getHostName());
+        assertEquals(10000, address.getPort());
     }
 
 
     @Test(expected = ConfigException.class)
     public void testInvalidConfig() {
-        List<InetSocketAddress> validatedAddresses = ClientUtils.parseAndValidateAddresses(Arrays.asList("mydomain.com:10000"),"random.value");
-        assertEquals(1, validatedAddresses.size());
-        InetSocketAddress onlyAddress = validatedAddresses.get(0);
-        assertEquals("65-254-242-180.yourhostingaccount.com", onlyAddress.getHostName());
-        assertEquals(10000, onlyAddress.getPort());
+        List<InetSocketAddress> validatedAddresses = ClientUtils.parseAndValidateAddresses(Arrays.asList("localhost:10000"), "random.value");
     }
 
 
@@ -73,11 +75,11 @@ public class ClientUtilsTest {
     }
 
     private List<InetSocketAddress> checkWithoutLookup(String... url) {
-        return ClientUtils.parseAndValidateAddresses(Arrays.asList(url),"disabled");
+        return ClientUtils.parseAndValidateAddresses(Arrays.asList(url), "disabled");
     }
 
     private List<InetSocketAddress> checkWithLookup(List<String> url) {
-        return ClientUtils.parseAndValidateAddresses(url,"resolve.canonical.bootstrap.servers.only");
+        return ClientUtils.parseAndValidateAddresses(url, "resolve.canonical.bootstrap.servers.only");
     }
 
 }
