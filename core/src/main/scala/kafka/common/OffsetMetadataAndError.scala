@@ -40,7 +40,7 @@ case class OffsetAndMetadata(offsetMetadata: OffsetMetadata,
 
   def metadata = offsetMetadata.metadata
 
-  override def toString = s"[$offsetMetadata,CommitTime $commitTimestamp,ExpirationTime ${expireTimestamp.getOrElse("_")}"
+  override def toString = s"[$offsetMetadata,CommitTime $commitTimestamp,ExpirationTime ${expireTimestamp.getOrElse("_")}]"
 }
 
 object OffsetAndMetadata {
