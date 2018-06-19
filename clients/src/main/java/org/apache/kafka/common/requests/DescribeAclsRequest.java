@@ -130,7 +130,9 @@ public class DescribeAclsRequest extends AbstractRequest {
     }
 
     private void validate(AclBindingFilter filter, short version) {
-        if (version == 0 && filter.patternFilter().patternType() != PatternType.LITERAL) {
+        if (version == 0
+            && filter.patternFilter().patternType() != PatternType.LITERAL
+            && filter.patternFilter().patternType() != PatternType.ANY) {
             throw new UnsupportedVersionException("Version 0 only supports literal resource pattern types");
         }
 

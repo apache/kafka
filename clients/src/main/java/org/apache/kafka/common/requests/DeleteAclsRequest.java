@@ -158,7 +158,7 @@ public class DeleteAclsRequest extends AbstractRequest {
             final boolean unsupported = filters.stream()
                 .map(AclBindingFilter::patternFilter)
                 .map(ResourcePatternFilter::patternType)
-                .anyMatch(patternType -> patternType != PatternType.LITERAL);
+                .anyMatch(patternType -> patternType != PatternType.LITERAL && patternType != PatternType.ANY);
             if (unsupported) {
                 throw new UnsupportedVersionException("Version 0 only supports literal resource pattern types");
             }
