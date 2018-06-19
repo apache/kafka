@@ -36,6 +36,9 @@ import kafka.message.{CompressionCodec, NoCompressionCodec}
  *                              commit or this timeout is reached. (Similar to the producer request timeout.)
  * @param offsetCommitRequiredAcks The required acks before the commit can be accepted. In general, the default (-1)
  *                                 should not be overridden.
+ * @param offsetsTopicMaxMessageBytes The maximum record batch size for the offset commit topic
+ * @param offsetsTopicMinInSyncReplicas The minimum number of replicas that must acknowledged a write for the write to be considered successful
+ * @param offsetsTopicMinCompactionLagMs The minimum time a message will stay un-compacted in the log
  */
 case class OffsetConfig(maxMetadataSize: Int = OffsetConfig.DefaultMaxMetadataSize,
                         loadBufferSize: Int = OffsetConfig.DefaultLoadBufferSize,
@@ -46,7 +49,10 @@ case class OffsetConfig(maxMetadataSize: Int = OffsetConfig.DefaultMaxMetadataSi
                         offsetsTopicReplicationFactor: Short = OffsetConfig.DefaultOffsetsTopicReplicationFactor,
                         offsetsTopicCompressionCodec: CompressionCodec = OffsetConfig.DefaultOffsetsTopicCompressionCodec,
                         offsetCommitTimeoutMs: Int = OffsetConfig.DefaultOffsetCommitTimeoutMs,
-                        offsetCommitRequiredAcks: Short = OffsetConfig.DefaultOffsetCommitRequiredAcks)
+                        offsetCommitRequiredAcks: Short = OffsetConfig.DefaultOffsetCommitRequiredAcks,
+                        offsetsTopicMaxMessageBytes: Int = OffsetConfig.DefaultOffsetsTopicMaxMessageBytes,
+                        offsetsTopicMinInSyncReplicas: Int = OffsetConfig.DefaultOffsetsTopicMinInSyncReplicas,
+                        offsetsTopicMinCompactionLagMs: Long = OffsetConfig.DefaultOffsetsTopicMinCompactionLagMs)
 
 object OffsetConfig {
   val DefaultMaxMetadataSize = 4096
@@ -59,4 +65,7 @@ object OffsetConfig {
   val DefaultOffsetsTopicCompressionCodec = NoCompressionCodec
   val DefaultOffsetCommitTimeoutMs = 5000
   val DefaultOffsetCommitRequiredAcks = (-1).toShort
+  val DefaultOffsetsTopicMaxMessageBytes = 20 * 1024 * 1024
+  val DefaultOffsetsTopicMinInSyncReplicas = 1
+  val DefaultOffsetsTopicMinCompactionLagMs = 0L
 }
