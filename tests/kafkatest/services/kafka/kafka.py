@@ -230,7 +230,6 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         return prop_file
 
     def file_exists(self, node, filename_regex):
-        """Helper used as a proxy to determine whether jmx is running by that jmx_tool_log contains output."""
         try:
             node.account.ssh("test -s %s" % filename_regex, allow_fail=False)
             return True

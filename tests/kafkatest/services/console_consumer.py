@@ -98,7 +98,7 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
                  message_validator=None, from_beginning=True, consumer_timeout_ms=None, version=DEV_BRANCH,
                  client_id="console-consumer", print_key=False, jmx_object_names=None, jmx_attributes=None,
                  enable_systest_events=False, stop_timeout_sec=15, print_timestamp=False,
-                 isolation_level="read_uncommitted", config={}):
+                 isolation_level="read_uncommitted"):
         """
         Args:
             context:                    standard context
@@ -150,7 +150,6 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
             assert version >= V_0_10_0_0
 
         self.print_timestamp = print_timestamp
-        self.config = config
 
     def prop_file(self, node):
         """Return a string which can be used to create a configuration file appropriate for the given node."""
@@ -160,10 +159,6 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
             # in 0.8.2.X and earlier, console consumer does not have --timeout-ms option
             # instead, we have to pass it through the config file
             prop_file += "\nconsumer.timeout.ms=%s\n" % str(self.consumer_timeout_ms)
-
-        # Add additional configs to config file
-        for key, value in self.config.items():
-            prop_file += "\n%s=%s\n" % (key, str(value))
 
         # Add security properties to the config. If security protocol is not specified,
         # use the default in the template properties.

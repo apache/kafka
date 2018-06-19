@@ -70,7 +70,7 @@ class ConsumerPerformanceService(PerformanceService):
             "collect_default": True}
     }
 
-    def __init__(self, context, num_nodes, kafka, topic, messages, version=DEV_BRANCH, new_consumer=True, settings={}):
+    def __init__(self, context, num_nodes, kafka, topic, messages, version=DEV_BRANCH, new_consumer=True, settings={}, config={}, timeout=None):
         super(ConsumerPerformanceService, self).__init__(context, num_nodes)
         self.kafka = kafka
         self.security_config = kafka.security_config.client_config()
@@ -78,6 +78,8 @@ class ConsumerPerformanceService(PerformanceService):
         self.messages = messages
         self.new_consumer = new_consumer
         self.settings = settings
+        self.config = config
+        self.timeout = timeout
 
         assert version >= V_0_9_0_0 or (not new_consumer), \
             "new_consumer is only supported if version >= 0.9.0.0, version %s" % str(version)
@@ -174,10 +176,16 @@ class ConsumerPerformanceService(PerformanceService):
         node.account.create_file(ConsumerPerformanceService.CONFIG_FILE, str(self.security_config))
         self.security_config.setup_node(node)
 
+        # Add additional configs to config file
+        for key, value in self.config.items():
+            node.account.ssh("echo \"%s=%s\" >> %s" % (key, str(value), ConsumerPerformanceService.CONFIG_FILE),
+                             allow_fail=False)
+
         cmd = self.start_cmd(node)
         self.logger.debug("Consumer performance %d command: %s", idx, cmd)
         last = None
-        for line in node.account.ssh_capture(cmd):
+
+        for line in node.account.ssh_capture(cmd, timeout_sec=self.timeout):
             last = line
 
         # Parse and save the last line's information
