@@ -16,21 +16,28 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.processor.AbstractNotifyingBatchingRestoreCallback;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.rocksdb.RocksDBException;
+import org.rocksdb.WriteBatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
-    private final static Logger LOG = LoggerFactory.getLogger(RocksDBSegmentedBytesStore.class);
-
+    private static final Logger LOG = LoggerFactory.getLogger(RocksDBSegmentedBytesStore.class);
     private final String name;
     private final Segments segments;
     private final KeySchema keySchema;
@@ -132,14 +139,8 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
         segments.openExisting(this.context);
 
         // register and possibly restore the state from the logs
-        context.register(root, new StateRestoreCallback() {
-            @Override
-            public void restore(byte[] key, byte[] value) {
-                put(Bytes.wrap(key), value);
-            }
-        });
+        context.register(root, new RocksDBSegmentsBatchingRestoreCallback());
 
-        flush();
         open = true;
     }
 
@@ -164,4 +165,72 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
         return open;
     }
 
+    // Visible for testing
+    List<Segment> getSegments() {
+        return segments.allSegments();
+    }
+
+    // Visible for testing
+    void restoreAllInternal(final Collection<KeyValue<byte[], byte[]>> records) {
+        try {
+            Map<Segment, WriteBatch> writeBatchMap = getWriteBatches(records);
+            for (Map.Entry<Segment, WriteBatch> entry: writeBatchMap.entrySet()) {
+                Segment segment = entry.getKey();
+                WriteBatch batch = entry.getValue();
+                segment.write(batch);
+            }
+        } catch (final RocksDBException e) {
+            throw new ProcessorStateException("Error restoring batch to store " + this.name, e);
+        }
+    }
+
+    // Visible for testing
+    Map<Segment, WriteBatch> getWriteBatches(final Collection<KeyValue<byte[], byte[]>> records) {
+        Map<Segment, WriteBatch> writeBatchMap = new HashMap<>();
+        for (final KeyValue<byte[], byte[]> record : records) {
+            final long segmentId = segments.segmentId(keySchema.segmentTimestamp(Bytes.wrap(record.key)));
+            final Segment segment = segments.getOrCreateSegmentIfLive(segmentId, context);
+            if (segment != null) {
+                if (!writeBatchMap.containsKey(segment)) {
+                    writeBatchMap.put(segment, new WriteBatch());
+                }
+                WriteBatch batch = writeBatchMap.get(segment);
+                if (record.value == null) {
+                    batch.remove(record.key);
+                } else {
+                    batch.put(record.key, record.value);
+                }
+            }
+        }
+        return writeBatchMap;
+    }
+
+    private void toggleForBulkLoaidng(final boolean prepareForBulkload) {
+        for (Segment segment: segments.allSegments()) {
+            segment.toggleDbForBulkLoading(prepareForBulkload);
+        }
+    }
+
+    class RocksDBSegmentsBatchingRestoreCallback extends AbstractNotifyingBatchingRestoreCallback {
+
+        @Override
+        public void restoreAll(final Collection<KeyValue<byte[], byte[]>> records) {
+            restoreAllInternal(records);
+        }
+
+        @Override
+        public void onRestoreStart(final TopicPartition topicPartition,
+                                   final String storeName,
+                                   final long startingOffset,
+                                   final long endingOffset) {
+            toggleForBulkLoaidng(true);
+        }
+
+        @Override
+        public void onRestoreEnd(final TopicPartition topicPartition,
+                                 final String storeName,
+                                 final long totalRestored) {
+            toggleForBulkLoaidng(false);
+        }
+    }
 }
