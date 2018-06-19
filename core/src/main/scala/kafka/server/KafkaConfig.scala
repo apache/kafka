@@ -175,6 +175,9 @@ object Defaults {
   val OffsetsRetentionCheckIntervalMs: Long = OffsetConfig.DefaultOffsetsRetentionCheckIntervalMs
   val OffsetCommitTimeoutMs = OffsetConfig.DefaultOffsetCommitTimeoutMs
   val OffsetCommitRequiredAcks = OffsetConfig.DefaultOffsetCommitRequiredAcks
+  val OffsetsTopicMaxMessageBytes = OffsetConfig.DefaultOffsetsTopicMaxMessageBytes
+  val OffsetsTopicMinInSyncReplicas = OffsetConfig.DefaultOffsetsTopicMinInSyncReplicas
+  val OffsetsTopicMinCompactionLagMs = OffsetConfig.DefaultOffsetsTopicMinCompactionLagMs
 
   /** ********* Transaction management configuration ***********/
   val TransactionalIdExpirationMs = TransactionStateManager.DefaultTransactionalIdExpirationMs
@@ -402,6 +405,9 @@ object KafkaConfig {
   val OffsetsRetentionCheckIntervalMsProp = "offsets.retention.check.interval.ms"
   val OffsetCommitTimeoutMsProp = "offsets.commit.timeout.ms"
   val OffsetCommitRequiredAcksProp = "offsets.commit.required.acks"
+  val OffsetsTopicMaxMessageBytesProp = "offsets.topic.max.message.bytes"
+  val OffsetsTopicMinInSyncReplicasProp = "offsets.topic.min.insync.replicas"
+  val OffsetsTopicMinCompactionLagMsProp = "offsets.topic.min.compaction.lag.ms"
   /** ********* Transaction management configuration ***********/
   val TransactionalIdExpirationMsProp = "transactional.id.expiration.ms"
   val TransactionsMaxTimeoutMsProp = "transaction.max.timeout.ms"
@@ -743,6 +749,9 @@ object KafkaConfig {
   val OffsetCommitTimeoutMsDoc = "Offset commit will be delayed until all replicas for the offsets topic receive the commit " +
   "or this timeout is reached. This is similar to the producer request timeout."
   val OffsetCommitRequiredAcksDoc = "The required acks before the commit can be accepted. In general, the default (-1) should not be overridden"
+  val OffsetsTopicMaxMessageBytesDoc = "Overriden " + MessageMaxBytesProp + " config for the consumer_offset topic."
+  val OffsetsTopicMinInSyncReplicasDoc = "Overridden " + MinInSyncReplicasProp + " config for the consumer_offset topic."
+  val OffsetsTopicMinCompactionLagMsDoc = "Overridden " + LogCleanerMinCompactionLagMsProp + " config for the consumer_offset topic."
   /** ********* Transaction management configuration ***********/
   val TransactionalIdExpirationMsDoc = "The time in ms that the transaction coordinator will wait without receiving any transaction status updates " +
     "for the current transaction before expiring its transactional id. This setting also influences producer id expiration - producer ids are expired " + 
@@ -1014,6 +1023,9 @@ object KafkaConfig {
       .define(OffsetCommitRequiredAcksProp, SHORT, Defaults.OffsetCommitRequiredAcks, HIGH, OffsetCommitRequiredAcksDoc)
       .define(DeleteTopicEnableProp, BOOLEAN, Defaults.DeleteTopicEnable, HIGH, DeleteTopicEnableDoc)
       .define(CompressionTypeProp, STRING, Defaults.CompressionType, HIGH, CompressionTypeDoc)
+      .define(OffsetsTopicMaxMessageBytesProp, INT, Defaults.OffsetsTopicMaxMessageBytes, atLeast(0), HIGH, OffsetsTopicMaxMessageBytesDoc)
+      .define(OffsetsTopicMinInSyncReplicasProp, INT, Defaults.OffsetsTopicMinInSyncReplicas, atLeast(1), HIGH, OffsetsTopicMinInSyncReplicasDoc)
+      .define(OffsetsTopicMinCompactionLagMsProp, LONG, Defaults.OffsetsTopicMinCompactionLagMs, atLeast(0), HIGH, OffsetsTopicMinCompactionLagMsDoc)
 
       /** ********* Transaction management configuration ***********/
       .define(TransactionalIdExpirationMsProp, INT, Defaults.TransactionalIdExpirationMs, atLeast(1), HIGH, TransactionalIdExpirationMsDoc)
@@ -1315,6 +1327,9 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   val offsetCommitRequiredAcks = getShort(KafkaConfig.OffsetCommitRequiredAcksProp)
   val offsetsTopicSegmentBytes = getInt(KafkaConfig.OffsetsTopicSegmentBytesProp)
   val offsetsTopicCompressionCodec = Option(getInt(KafkaConfig.OffsetsTopicCompressionCodecProp)).map(value => CompressionCodec.getCompressionCodec(value)).orNull
+  val offsetsTopicMaxMessageBytes = getInt(KafkaConfig.OffsetsTopicMaxMessageBytesProp)
+  val offsetsTopicMinInSyncReplicas = getInt(KafkaConfig.OffsetsTopicMinInSyncReplicasProp)
+  val offsetsTopicMinCompactionLagMs = getLong(KafkaConfig.OffsetsTopicMinCompactionLagMsProp)
 
   /** ********* Transaction management configuration ***********/
   val transactionalIdExpirationMs = getInt(KafkaConfig.TransactionalIdExpirationMsProp)
