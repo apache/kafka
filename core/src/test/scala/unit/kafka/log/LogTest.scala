@@ -22,7 +22,8 @@ import java.nio.ByteBuffer
 import java.nio.file.{Files, Paths}
 import java.util.Properties
 
-import kafka.common.{OffsetsOutOfOrderException, UnexpectedAppendOffsetException}
+import kafka.common.{OffsetsOutOfOrderException, UnexpectedAppendOffsetException, KafkaException}
+import kafka.api.{ApiVersion, KAFKA_0_11_0_IV0}
 import kafka.log.Log.DeleteDirSuffix
 import kafka.server.epoch.{EpochEntry, LeaderEpochCache, LeaderEpochFileCache}
 import kafka.server.{BrokerTopicStats, FetchDataInfo, KafkaConfig, LogDirFailureChannel}
@@ -39,11 +40,11 @@ import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 import org.scalatest.Assertions
+import org.scalatest.Assertions.{assertThrows, intercept, withClue}
 
 import scala.collection.Iterable
 import scala.collection.JavaConverters._
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
-import org.scalatest.Assertions.{assertThrows, intercept, withClue}
 
 class LogTest {
   var config: KafkaConfig = null
@@ -222,89 +223,13 @@ class LogTest {
   }
 
   @Test
-  def testProducerSnapshotsRecoveryAfterUncleanShutdown(): Unit = {
-    val logConfig = LogTest.createLogConfig(segmentBytes = 64 * 10)
-    var log = createLog(logDir, logConfig)
-    assertEquals(None, log.oldestProducerSnapshotOffset)
+  def testProducerSnapshotsRecoveryAfterUncleanShutdownV1(): Unit = {
+    testProducerSnapshotsRecoveryAfterUncleanShutdown(ApiVersion.minSupportedFor(RecordVersion.V1).version)
+  }
 
-    for (i <- 0 to 100) {
-      val record = new SimpleRecord(mockTime.milliseconds, i.toString.getBytes)
-      log.appendAsLeader(TestUtils.records(List(record)), leaderEpoch = 0)
-    }
-
-    assertTrue(log.logSegments.size >= 5)
-    val segmentOffsets = log.logSegments.toVector.map(_.baseOffset)
-    val activeSegmentOffset = segmentOffsets.last
-
-    // We want the recovery point to be past the segment offset and before the last 2 segments including a gap of
-    // 1 segment. We collect the data before closing the log.
-    val offsetForSegmentAfterRecoveryPoint = segmentOffsets(segmentOffsets.size - 3)
-    val offsetForRecoveryPointSegment = segmentOffsets(segmentOffsets.size - 4)
-    val (segOffsetsBeforeRecovery, segOffsetsAfterRecovery) = segmentOffsets.partition(_ < offsetForRecoveryPointSegment)
-    val recoveryPoint = offsetForRecoveryPointSegment + 1
-    assertTrue(recoveryPoint < offsetForSegmentAfterRecoveryPoint)
-    log.close()
-
-    val segmentsWithReads = ArrayBuffer[LogSegment]()
-    val recoveredSegments = ArrayBuffer[LogSegment]()
-
-    def createLogWithInterceptedReads(recoveryPoint: Long) = {
-      val maxProducerIdExpirationMs = 60 * 60 * 1000
-      val topicPartition = Log.parseTopicPartitionName(logDir)
-      val producerStateManager = new ProducerStateManager(topicPartition, logDir, maxProducerIdExpirationMs)
-
-      // Intercept all segment read calls
-      new Log(logDir, logConfig, logStartOffset = 0, recoveryPoint = recoveryPoint, mockTime.scheduler,
-        brokerTopicStats, mockTime, maxProducerIdExpirationMs, LogManager.ProducerIdExpirationCheckIntervalMs,
-        topicPartition, producerStateManager, new LogDirFailureChannel(10)) {
-
-        override def addSegment(segment: LogSegment): LogSegment = {
-          val wrapper = new LogSegment(segment.log, segment.offsetIndex, segment.timeIndex, segment.txnIndex, segment.baseOffset,
-            segment.indexIntervalBytes, segment.rollJitterMs, segment.maxSegmentMs, segment.maxSegmentBytes, mockTime) {
-
-            override def read(startOffset: Long, maxOffset: Option[Long], maxSize: Int, maxPosition: Long,
-                              minOneMessage: Boolean): FetchDataInfo = {
-              segmentsWithReads += this
-              super.read(startOffset, maxOffset, maxSize, maxPosition, minOneMessage)
-            }
-
-            override def recover(producerStateManager: ProducerStateManager,
-                                 leaderEpochCache: Option[LeaderEpochCache]): Int = {
-              recoveredSegments += this
-              super.recover(producerStateManager, leaderEpochCache)
-            }
-          }
-          super.addSegment(wrapper)
-        }
-      }
-    }
-
-    // Retain snapshots for the last 2 segments
-    ProducerStateManager.deleteSnapshotsBefore(logDir, segmentOffsets(segmentOffsets.size - 2))
-    log = createLogWithInterceptedReads(offsetForRecoveryPointSegment)
-    // We will reload all segments because the recovery point is behind the producer snapshot files (pre KAFKA-5829 behaviour)
-    assertEquals(segOffsetsBeforeRecovery, segmentsWithReads.map(_.baseOffset) -- Seq(activeSegmentOffset))
-    assertEquals(segOffsetsAfterRecovery, recoveredSegments.map(_.baseOffset))
-    var expectedSnapshotOffsets = segmentOffsets.takeRight(4) :+ log.logEndOffset
-    assertEquals(expectedSnapshotOffsets, listProducerSnapshotOffsets)
-    log.close()
-    segmentsWithReads.clear()
-    recoveredSegments.clear()
-
-    // Only delete snapshots before the base offset of the recovery point segment (post KAFKA-5829 behaviour) to
-    // avoid reading all segments
-    ProducerStateManager.deleteSnapshotsBefore(logDir, offsetForRecoveryPointSegment)
-    log = createLogWithInterceptedReads(recoveryPoint = recoveryPoint)
-    assertEquals(Seq(activeSegmentOffset), segmentsWithReads.map(_.baseOffset))
-    assertEquals(segOffsetsAfterRecovery, recoveredSegments.map(_.baseOffset))
-    expectedSnapshotOffsets = log.logSegments.map(_.baseOffset).toVector.takeRight(4) :+ log.logEndOffset
-    assertEquals(expectedSnapshotOffsets, listProducerSnapshotOffsets)
-
-    // Verify that we keep 2 snapshot files if we checkpoint the log end offset
-    log.deleteSnapshotsAfterRecoveryPointCheckpoint()
-    expectedSnapshotOffsets = log.logSegments.map(_.baseOffset).toVector.takeRight(2) :+ log.logEndOffset
-    assertEquals(expectedSnapshotOffsets, listProducerSnapshotOffsets)
-    log.close()
+  @Test
+  def testProducerSnapshotsRecoveryAfterUncleanShutdownCurrentMessageFormat(): Unit = {
+    testProducerSnapshotsRecoveryAfterUncleanShutdown(ApiVersion.latestVersion.version)
   }
 
   @Test
@@ -398,6 +323,9 @@ class LogTest {
     // We skip directly to updating the map end offset
     stateManager.updateMapEndOffset(1L)
     EasyMock.expectLastCall()
+    // Finally, we take a snapshot
+    stateManager.takeSnapshot()
+    EasyMock.expectLastCall().once()
 
     EasyMock.replay(stateManager)
 
@@ -409,8 +337,6 @@ class LogTest {
   @Test
   def testSkipTruncateAndReloadIfOldMessageFormatAndNoCleanShutdown(): Unit = {
     val stateManager = EasyMock.mock(classOf[ProducerStateManager])
-
-    EasyMock.expect(stateManager.latestSnapshotOffset).andReturn(None)
 
     stateManager.updateMapEndOffset(0L)
     EasyMock.expectLastCall().anyTimes()
@@ -442,8 +368,6 @@ class LogTest {
   @Test
   def testSkipTruncateAndReloadIfOldMessageFormatAndCleanShutdown(): Unit = {
     val stateManager = EasyMock.mock(classOf[ProducerStateManager])
-
-    EasyMock.expect(stateManager.latestSnapshotOffset).andReturn(None)
 
     stateManager.updateMapEndOffset(0L)
     EasyMock.expectLastCall().anyTimes()
@@ -644,8 +568,12 @@ class LogTest {
     assertEquals(2, log.latestProducerStateEndOffset)
 
     log.truncateTo(1)
-    assertEquals(None, log.latestProducerSnapshotOffset)
+    assertEquals(Some(1), log.latestProducerSnapshotOffset)
     assertEquals(1, log.latestProducerStateEndOffset)
+
+    log.truncateTo(0)
+    assertEquals(None, log.latestProducerSnapshotOffset)
+    assertEquals(0, log.latestProducerStateEndOffset)
   }
 
   @Test
@@ -2883,6 +2811,100 @@ class LogTest {
     // epoch entries should be recovered
     assertEquals(ListBuffer(EpochEntry(1, 0), EpochEntry(2, 1), EpochEntry(3, 3)), recoveredLeaderEpochCache.epochEntries)
     recoveredLog.close()
+  }
+
+  private def testProducerSnapshotsRecoveryAfterUncleanShutdown(messageFormatVersion: String): Unit = {
+    val logConfig = LogTest.createLogConfig(segmentBytes = 64 * 10, messageFormatVersion = messageFormatVersion)
+    var log = createLog(logDir, logConfig)
+    assertEquals(None, log.oldestProducerSnapshotOffset)
+
+    for (i <- 0 to 100) {
+      val record = new SimpleRecord(mockTime.milliseconds, i.toString.getBytes)
+      log.appendAsLeader(TestUtils.records(List(record)), leaderEpoch = 0)
+    }
+
+    assertTrue(log.logSegments.size >= 5)
+    val segmentOffsets = log.logSegments.toVector.map(_.baseOffset)
+    val activeSegmentOffset = segmentOffsets.last
+
+    // We want the recovery point to be past the segment offset and before the last 2 segments including a gap of
+    // 1 segment. We collect the data before closing the log.
+    val offsetForSegmentAfterRecoveryPoint = segmentOffsets(segmentOffsets.size - 3)
+    val offsetForRecoveryPointSegment = segmentOffsets(segmentOffsets.size - 4)
+    val (segOffsetsBeforeRecovery, segOffsetsAfterRecovery) = segmentOffsets.partition(_ < offsetForRecoveryPointSegment)
+    val recoveryPoint = offsetForRecoveryPointSegment + 1
+    assertTrue(recoveryPoint < offsetForSegmentAfterRecoveryPoint)
+    log.close()
+
+    val segmentsWithReads = ArrayBuffer[LogSegment]()
+    val recoveredSegments = ArrayBuffer[LogSegment]()
+    val expectedSegmentsWithReads = ArrayBuffer[Long]()
+    val expectedSnapshotOffsets = ArrayBuffer[Long]()
+
+    if (logConfig.messageFormatVersion < KAFKA_0_11_0_IV0) {
+      expectedSegmentsWithReads += activeSegmentOffset
+      expectedSnapshotOffsets ++= log.logSegments.map(_.baseOffset).toVector.takeRight(2) :+ log.logEndOffset
+    } else {
+      expectedSegmentsWithReads ++= segOffsetsBeforeRecovery ++ Seq(activeSegmentOffset)
+      expectedSnapshotOffsets ++= log.logSegments.map(_.baseOffset).toVector.takeRight(4) :+ log.logEndOffset
+    }
+
+    def createLogWithInterceptedReads(recoveryPoint: Long) = {
+      val maxProducerIdExpirationMs = 60 * 60 * 1000
+      val topicPartition = Log.parseTopicPartitionName(logDir)
+      val producerStateManager = new ProducerStateManager(topicPartition, logDir, maxProducerIdExpirationMs)
+
+      // Intercept all segment read calls
+      new Log(logDir, logConfig, logStartOffset = 0, recoveryPoint = recoveryPoint, mockTime.scheduler,
+        brokerTopicStats, mockTime, maxProducerIdExpirationMs, LogManager.ProducerIdExpirationCheckIntervalMs,
+        topicPartition, producerStateManager, new LogDirFailureChannel(10)) {
+
+        override def addSegment(segment: LogSegment): LogSegment = {
+          val wrapper = new LogSegment(segment.log, segment.offsetIndex, segment.timeIndex, segment.txnIndex, segment.baseOffset,
+            segment.indexIntervalBytes, segment.rollJitterMs, segment.maxSegmentMs, segment.maxSegmentBytes, mockTime) {
+
+            override def read(startOffset: Long, maxOffset: Option[Long], maxSize: Int, maxPosition: Long,
+                              minOneMessage: Boolean): FetchDataInfo = {
+              segmentsWithReads += this
+              super.read(startOffset, maxOffset, maxSize, maxPosition, minOneMessage)
+            }
+
+            override def recover(producerStateManager: ProducerStateManager,
+                                 leaderEpochCache: Option[LeaderEpochCache]): Int = {
+              recoveredSegments += this
+              super.recover(producerStateManager, leaderEpochCache)
+            }
+          }
+          super.addSegment(wrapper)
+        }
+      }
+    }
+
+    // Retain snapshots for the last 2 segments
+    ProducerStateManager.deleteSnapshotsBefore(logDir, segmentOffsets(segmentOffsets.size - 2))
+    log = createLogWithInterceptedReads(offsetForRecoveryPointSegment)
+    // We will reload all segments because the recovery point is behind the producer snapshot files (pre KAFKA-5829 behaviour)
+    assertEquals(expectedSegmentsWithReads, segmentsWithReads.map(_.baseOffset))
+    assertEquals(segOffsetsAfterRecovery, recoveredSegments.map(_.baseOffset))
+    // var expectedSnapshotOffsets = segmentOffsets.takeRight(4) :+ log.logEndOffset
+    assertEquals(expectedSnapshotOffsets, listProducerSnapshotOffsets)
+    log.close()
+    segmentsWithReads.clear()
+    recoveredSegments.clear()
+
+    // Only delete snapshots before the base offset of the recovery point segment (post KAFKA-5829 behaviour) to
+    // avoid reading all segments
+    ProducerStateManager.deleteSnapshotsBefore(logDir, offsetForRecoveryPointSegment)
+    log = createLogWithInterceptedReads(recoveryPoint = recoveryPoint)
+    assertEquals(Seq(activeSegmentOffset), segmentsWithReads.map(_.baseOffset))
+    assertEquals(segOffsetsAfterRecovery, recoveredSegments.map(_.baseOffset))
+    assertEquals(expectedSnapshotOffsets, listProducerSnapshotOffsets)
+
+    // Verify that we keep 2 snapshot files if we checkpoint the log end offset
+    log.deleteSnapshotsAfterRecoveryPointCheckpoint()
+    val expectedSnapshotsAfterDelete = log.logSegments.map(_.baseOffset).toVector.takeRight(2) :+ log.logEndOffset
+    assertEquals(expectedSnapshotsAfterDelete, listProducerSnapshotOffsets)
+    log.close()
   }
 
   /**

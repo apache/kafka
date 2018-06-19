@@ -418,24 +418,12 @@ class Log(@volatile var dir: File,
    * @throws LogSegmentOffsetOverflowException if the segment contains messages that cause index offset overflow
    */
   private def recoverSegment(segment: LogSegment, leaderEpochCache: Option[LeaderEpochCache] = None): Int = lock synchronized {
-    val stateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs)
-    stateManager.truncateAndReload(logStartOffset, segment.baseOffset, time.milliseconds)
-    logSegments(stateManager.mapEndOffset, segment.baseOffset).foreach { segment =>
-      val startOffset = math.max(segment.baseOffset, stateManager.mapEndOffset)
-      val fetchDataInfo = segment.read(startOffset, None, Int.MaxValue)
-      if (fetchDataInfo != null)
-        loadProducersFromLog(stateManager, fetchDataInfo.records)
-    }
-    stateManager.updateMapEndOffset(segment.baseOffset)
-
-    // take a snapshot for the first recovered segment to avoid reloading all the segments if we shutdown before we
-    // checkpoint the recovery point
-    stateManager.takeSnapshot()
-    val bytesTruncated = segment.recover(stateManager, leaderEpochCache)
+    loadProducerState(segment.baseOffset, reloadFromCleanShutdown = false)
+    val bytesTruncated = segment.recover(producerStateManager, leaderEpochCache)
 
     // once we have recovered the segment's data, take a snapshot to ensure that we won't
     // need to reload the same segment again while recovering another segment.
-    stateManager.takeSnapshot()
+    producerStateManager.takeSnapshot()
     bytesTruncated
   }
 
@@ -583,7 +571,7 @@ class Log(@volatile var dir: File,
     // (or later snapshots). Otherwise, if there is no snapshot file, then we have to rebuild producer state
     // from the first segment.
 
-    if (producerStateManager.latestSnapshotOffset.isEmpty && (messageFormatVersion < RecordBatch.MAGIC_VALUE_V2 || reloadFromCleanShutdown)) {
+    if (messageFormatVersion < RecordBatch.MAGIC_VALUE_V2 || (producerStateManager.latestSnapshotOffset.isEmpty && reloadFromCleanShutdown)) {
       // To avoid an expensive scan through all of the segments, we take empty snapshots from the start of the
       // last two segments and the last offset. This should avoid the full scan in the case that the log needs
       // truncation.
@@ -607,16 +595,15 @@ class Log(@volatile var dir: File,
         logSegments(producerStateManager.mapEndOffset, lastOffset).foreach { segment =>
           val startOffset = Utils.max(segment.baseOffset, producerStateManager.mapEndOffset, logStartOffset)
           producerStateManager.updateMapEndOffset(startOffset)
-          producerStateManager.takeSnapshot()
 
           val fetchDataInfo = segment.read(startOffset, Some(lastOffset), Int.MaxValue)
           if (fetchDataInfo != null)
             loadProducersFromLog(producerStateManager, fetchDataInfo.records)
         }
       }
-
       producerStateManager.updateMapEndOffset(lastOffset)
       updateFirstUnstableOffset()
+      producerStateManager.takeSnapshot()
     }
   }
 
