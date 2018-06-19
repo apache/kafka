@@ -178,10 +178,9 @@ public class SslSelectorTest extends SelectorTest {
             selector.poll(5);
         }
 
-        // Verify that pollSelectionKeys was invoked at least once once to process buffered data
-        // but not more than once again since there isn't sufficient data to process.
-        assertTrue("Buffered data not processed: " + node1Polls, node1Polls.get() >= 1);
-        assertTrue("Too many calls to pollSelectionKeys: " + node1Polls, node1Polls.get() <= 2);
+        // Verify that pollSelectionKeys was invoked once to process buffered data
+        // but not again since there isn't sufficient data to process.
+        assertEquals(1, node1Polls.get());
         selector.close(node1);
         selector.close(node2);
         verifySelectorEmpty();

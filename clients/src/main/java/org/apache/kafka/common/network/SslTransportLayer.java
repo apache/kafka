@@ -510,10 +510,11 @@ public class SslTransportLayer implements TransportLayer {
         while (dst.remaining() > 0) {
             int netread = 0;
             netReadBuffer = Utils.ensureCapacity(netReadBuffer, netReadBufferSize());
-            if (netReadBuffer.remaining() > 0)
+            if (netReadBuffer.remaining() > 0) {
                 netread = readFromSocketChannel();
-            if (netread > 0)
-                readFromNetwork  = true;
+                if (netread > 0)
+                    readFromNetwork = true;
+            }
 
             while (netReadBuffer.position() > 0) {
                 netReadBuffer.flip();
