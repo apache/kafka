@@ -77,7 +77,7 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
 
     producerConfig.put(SaslConfigs.SASL_JAAS_CONFIG,
       ScramLoginModule(JaasTestUtils.KafkaScramAdmin, JaasTestUtils.KafkaScramAdminPassword).toString)
-    producerWithoutQuota = createNewProducer
+    producerWithoutQuota = createProducer
     producers += producerWithoutQuota
   }
 
@@ -225,13 +225,13 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
 
     producerConfig.put(ProducerConfig.CLIENT_ID_CONFIG, producerClientId)
     producerConfig.put(SaslConfigs.SASL_JAAS_CONFIG, ScramLoginModule(user, password).toString)
-    val producer = createNewProducer
+    val producer = createProducer
     producers += producer
 
     consumerConfig.put(ConsumerConfig.CLIENT_ID_CONFIG, consumerClientId)
     consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, s"$user-group")
     consumerConfig.put(SaslConfigs.SASL_JAAS_CONFIG, ScramLoginModule(user, password).toString)
-    val consumer = createNewConsumer
+    val consumer = createConsumer
     consumers += consumer
 
     GroupedUser(user, userGroup, topic, servers(leader), producerClientId, consumerClientId, producer, consumer)

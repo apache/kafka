@@ -31,7 +31,7 @@ import org.apache.kafka.common.errors.WakeupException
 import org.apache.kafka.common.internals.Topic
 
 /**
- * Integration tests for the new consumer that cover basic usage as well as server failures
+ * Integration tests for the consumer that cover basic usage as well as server failures
  */
 abstract class BaseConsumerTest extends IntegrationTestHarness {
 

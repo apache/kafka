@@ -20,7 +20,7 @@ import java.util.{ArrayList, Collections, Properties}
 import java.time.Duration
 
 import kafka.admin.AdminClient
-import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, KafkaConsumerGroupService}
+import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, ConsumerGroupService}
 import kafka.common.TopicAndPartition
 import kafka.log.LogConfig
 import kafka.network.SocketServer
@@ -242,12 +242,12 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, ClusterAction)), Resource.ClusterResource)
 
     for (_ <- 0 until producerCount)
-      producers += TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers),
+      producers += TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
         maxBlockMs = 3000,
         acks = 1)
 
     for (_ <- 0 until consumerCount)
-      consumers += TestUtils.createNewConsumer(TestUtils.getBrokerListStrFromServers(servers), groupId = group, securityProtocol = SecurityProtocol.PLAINTEXT)
+      consumers += TestUtils.createConsumer(TestUtils.getBrokerListStrFromServers(servers), groupId = group, securityProtocol = SecurityProtocol.PLAINTEXT)
 
     // create the consumer offset topic
     createTopic(GROUP_METADATA_TOPIC_NAME, topicConfig = servers.head.groupCoordinator.offsetsTopicConfigs)
@@ -768,7 +768,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
     val consumerConfig = new Properties
     consumerConfig.put(ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_CONFIG, "false")
-    val consumer = TestUtils.createNewConsumer(TestUtils.getBrokerListStrFromServers(servers), groupId = group,
+    val consumer = TestUtils.createConsumer(TestUtils.getBrokerListStrFromServers(servers), groupId = group,
       securityProtocol = SecurityProtocol.PLAINTEXT, props = Some(consumerConfig))
     try {
       // ensure that internal topics are not included if no permission
@@ -798,7 +798,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
     val consumerConfig = new Properties
     consumerConfig.put(ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_CONFIG, "false")
-    val consumer = TestUtils.createNewConsumer(TestUtils.getBrokerListStrFromServers(servers), groupId = group,
+    val consumer = TestUtils.createConsumer(TestUtils.getBrokerListStrFromServers(servers), groupId = group,
       securityProtocol = SecurityProtocol.PLAINTEXT, props = Some(consumerConfig))
     try {
       consumer.subscribe(Pattern.compile(".*"))
@@ -822,7 +822,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
     val consumerConfig = new Properties
     consumerConfig.put(ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_CONFIG, "false")
-    val consumer = TestUtils.createNewConsumer(TestUtils.getBrokerListStrFromServers(servers), groupId = group,
+    val consumer = TestUtils.createConsumer(TestUtils.getBrokerListStrFromServers(servers), groupId = group,
       securityProtocol = SecurityProtocol.PLAINTEXT, props = Some(consumerConfig))
     try {
       consumer.subscribe(Pattern.compile(topicPattern))
@@ -1022,7 +1022,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
     val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group)
     val opts = new ConsumerGroupCommandOptions(cgcArgs)
-    val consumerGroupService = new KafkaConsumerGroupService(opts)
+    val consumerGroupService = new ConsumerGroupService(opts)
     consumerGroupService.describeGroup()
     consumerGroupService.close()
   }
@@ -1442,7 +1442,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   private def buildTransactionalProducer(): KafkaProducer[Array[Byte], Array[Byte]] = {
     val transactionalProperties = new Properties()
     transactionalProperties.setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId)
-    val producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers),
+    val producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
       retries = 3,
       props = Some(transactionalProperties))
     producers += producer
@@ -1452,7 +1452,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   private def buildIdempotentProducer(): KafkaProducer[Array[Byte], Array[Byte]] = {
     val idempotentProperties = new Properties()
     idempotentProperties.setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
-    val producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers),
+    val producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
       retries = 3,
       props = Some(idempotentProperties))
     producers += producer

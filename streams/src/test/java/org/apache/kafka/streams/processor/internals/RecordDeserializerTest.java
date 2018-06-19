@@ -48,7 +48,7 @@ public class RecordDeserializerTest {
 
     @SuppressWarnings("deprecation")
     @Test
-    public void shouldReturnNewConsumerRecordWithDeserializedValueWhenNoExceptions() {
+    public void shouldReturnConsumerRecordWithDeserializedValueWhenNoExceptions() {
         final RecordDeserializer recordDeserializer = new RecordDeserializer(
             new TheSourceNode(
                 false,

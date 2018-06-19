@@ -81,10 +81,15 @@
         updated to aggregate across different versions.
     </li>
     <li><a href="https://cwiki.apache.org/confluence/x/uaBzB">KIP-225</a> changed the metric "records.lag" to use tags for topic and partition. The original version with the name format "{topic}-{partition}.records-lag" has been removed.</li>
+    <li>The Scala consumers, which have been deprecated since 0.11.0.0, have been removed. The Java consumer has been the recommended option
+        since 0.10.0.0. Note that the Scala consumers in 1.1.0 (and older) will continue to work even if the brokers are upgraded to 2.0.0.</li>
     <li>The Scala producers, which have been deprecated since 0.10.0.0, have been removed. The Java producer has been the recommended option
         since 0.9.0.0. Note that the behaviour of the default partitioner in the Java producer differs from the default partitioner
-        in the Scala producers. Users migrating should consider configuring a custom partitioner that retains the previous behaviour.</li>
-    <li>The ConsoleProducer no longer supports the Scala producer.</li>
+        in the Scala producers. Users migrating should consider configuring a custom partitioner that retains the previous behaviour.
+        Note that the Scala producers in 1.1.0 (and older) will continue to work even if the brokers are upgraded to 2.0.0.</li>
+    <li>MirrorMaker and ConsoleConsumer no longer support the Scala consumer, they always use the Java consumer.</li>
+    <li>The ConsoleProducer no longer supports the Scala producer, it always uses the Java producer.</li>
+    <li>A number of deprecated tools that rely on the Scala clients have been removed: ReplayLogProducer, SimpleConsumerPerformance, SimpleConsumerShell, ExportZkOffsets, ImportZkOffsets, UpdateOffsetsInZK, VerifyConsumerRebalance.</li>
     <li>The deprecated kafka.tools.ProducerPerformance has been removed, please use org.apache.kafka.tools.ProducerPerformance.</li>
     <li>New Kafka Streams configuration parameter <code>upgrade.from</code> added that allows rolling bounce upgrade from older version. </li>
     <li><a href="https://cwiki.apache.org/confluence/x/DVyHB">KIP-284</a> changed the retention time for Kafka Streams repartition topics by setting its default value to <code>Long.MAX_VALUE</code>.</li>
@@ -111,7 +116,6 @@
         <code>max.poll.interval.ms</code> for the request timeout. All other request types use the timeout defined
         by <code>request.timeout.ms</code></li> 
     <li>The internal method <code>kafka.admin.AdminClient.deleteRecordsBefore</code> has been removed. Users are encouraged to migrate to <code>org.apache.kafka.clients.admin.AdminClient.deleteRecords</code>.</li>
-    <li>The tool kafka.tools.ReplayLogProducer has been removed.</li>
     <li>The AclCommand tool <code>--producer</code> convenience option uses the <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-277+-+Fine+Grained+ACL+for+CreateTopics+API">KIP-277</a> finer grained ACL on the given topic. </li>
     <li><a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-176%3A+Remove+deprecated+new-consumer+option+for+tools">KIP-176</a> removes
         the <code>--new-consumer</code> option for all consumer based tools. This option is redundant since the new consumer is automatically

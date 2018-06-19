@@ -15,14 +15,12 @@
  * limitations under the License.
  */
 
-package kafka.consumer
+package kafka.utils
 
-import kafka.utils.Logging
 import java.util.regex.{Pattern, PatternSyntaxException}
 
 import org.apache.kafka.common.internals.Topic
 
-@deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
 sealed abstract class TopicFilter(rawRegex: String) extends Logging {
 
   val regex = rawRegex
@@ -45,7 +43,6 @@ sealed abstract class TopicFilter(rawRegex: String) extends Logging {
   def isTopicAllowed(topic: String, excludeInternalTopics: Boolean): Boolean
 }
 
-@deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
 case class Whitelist(rawRegex: String) extends TopicFilter(rawRegex) {
   override def isTopicAllowed(topic: String, excludeInternalTopics: Boolean) = {
     val allowed = topic.matches(regex) && !(Topic.isInternal(topic) && excludeInternalTopics)
@@ -56,16 +53,3 @@ case class Whitelist(rawRegex: String) extends TopicFilter(rawRegex) {
     allowed
   }
 }
-
-@deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
-case class Blacklist(rawRegex: String) extends TopicFilter(rawRegex) {
-  override def isTopicAllowed(topic: String, excludeInternalTopics: Boolean) = {
-    val allowed = (!topic.matches(regex)) && !(Topic.isInternal(topic) && excludeInternalTopics)
-
-    debug("%s %s".format(
-      topic, if (allowed) "allowed" else "filtered"))
-
-    allowed
-  }
-}
-
