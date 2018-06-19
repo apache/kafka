@@ -170,7 +170,8 @@ class LogSegment private[log] (val log: FileRecords,
 
     // find all batches that are valid to be appended to the current log segment and
     // determine the maximum offset and timestamp
-    for (batch <- records.batchesFrom(position).asScala if canAppend(batch)) {
+    val nextBatches = records.batchesFrom(position).asScala.iterator
+    for (batch <- nextBatches.takeWhile(canAppend)) {
       if (batch.maxTimestamp > maxTimestamp) {
         maxTimestamp = batch.maxTimestamp
         offsetOfMaxTimestamp = batch.lastOffset

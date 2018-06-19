@@ -22,7 +22,6 @@ import java.nio.ByteBuffer
 import java.nio.file.{Files, Paths}
 import java.util.Properties
 
-import org.apache.kafka.common.errors._
 import kafka.common.{OffsetsOutOfOrderException, UnexpectedAppendOffsetException, KafkaException}
 import kafka.log.Log.DeleteDirSuffix
 import kafka.server.epoch.{EpochEntry, LeaderEpochCache, LeaderEpochFileCache}
