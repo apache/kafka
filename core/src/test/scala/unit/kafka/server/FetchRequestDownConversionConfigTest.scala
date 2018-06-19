@@ -52,7 +52,7 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
   }
 
   private def initProducer(): Unit = {
-    producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers),
+    producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
       retries = 5, keySerializer = new StringSerializer, valueSerializer = new StringSerializer)
   }
 

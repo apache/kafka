@@ -20,20 +20,19 @@ package kafka.tools
 import java.io.PrintStream
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.CountDownLatch
-import java.util.{Locale, Properties, Random}
+import java.util.regex.Pattern
+import java.util.{Collections, Locale, Properties, Random}
 
 import com.typesafe.scalalogging.LazyLogging
 import joptsimple._
-import kafka.api.OffsetRequest
-import kafka.common.{MessageFormatter, StreamEndException}
-import kafka.consumer._
-import kafka.message._
-import kafka.metrics.KafkaMetricsReporter
+import kafka.common.MessageFormatter
 import kafka.utils._
 import kafka.utils.Implicits._
-import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord, KafkaConsumer}
-import org.apache.kafka.common.errors.{AuthenticationException, WakeupException}
+import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerRecord, KafkaConsumer}
+import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.errors.{AuthenticationException, TimeoutException, WakeupException}
 import org.apache.kafka.common.record.TimestampType
+import org.apache.kafka.common.requests.ListOffsetRequest
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, Deserializer}
 import org.apache.kafka.common.utils.Utils
 
@@ -63,57 +62,30 @@ object ConsoleConsumer extends Logging {
   }
 
   def run(conf: ConsumerConfig) {
+    val timeoutMs = if (conf.timeoutMs >= 0) conf.timeoutMs else Long.MaxValue
+    val consumer = new KafkaConsumer(consumerProps(conf), new ByteArrayDeserializer, new ByteArrayDeserializer)
+    val consumerWrapper =
+      if (conf.partitionArg.isDefined)
+        new ConsumerWrapper(Option(conf.topicArg), conf.partitionArg, Option(conf.offsetArg), None, consumer, timeoutMs)
+      else
+        new ConsumerWrapper(Option(conf.topicArg), None, None, Option(conf.whitelistArg), consumer, timeoutMs)
 
-    val consumer =
-      if (conf.useOldConsumer) {
-        checkZk(conf)
-        val props = getOldConsumerProps(conf)
-        checkAndMaybeDeleteOldPath(conf, props)
-        new OldConsumer(conf.filterSpec, props)
-      } else {
-        val timeoutMs = if (conf.timeoutMs >= 0) conf.timeoutMs else Long.MaxValue
-        val consumer = new KafkaConsumer(getNewConsumerProps(conf), new ByteArrayDeserializer, new ByteArrayDeserializer)
-        if (conf.partitionArg.isDefined)
-          new NewShinyConsumer(Option(conf.topicArg), conf.partitionArg, Option(conf.offsetArg), None, consumer, timeoutMs)
-        else
-          new NewShinyConsumer(Option(conf.topicArg), None, None, Option(conf.whitelistArg), consumer, timeoutMs)
-      }
+    addShutdownHook(consumerWrapper, conf)
 
-    addShutdownHook(consumer, conf)
-
-    try {
-      process(conf.maxMessages, conf.formatter, consumer, System.out, conf.skipMessageOnError)
-    } finally {
-      consumer.cleanup()
+    try process(conf.maxMessages, conf.formatter, consumerWrapper, System.out, conf.skipMessageOnError)
+    finally {
+      consumerWrapper.cleanup()
       conf.formatter.close()
       reportRecordCount()
-
-      // if we generated a random group id (as none specified explicitly) then avoid polluting zookeeper with persistent group data, this is a hack
-      if (conf.useOldConsumer && !conf.groupIdPassed)
-        ZkUtils.maybeDeletePath(conf.options.valueOf(conf.zkConnectOpt), "/consumers/" + conf.consumerProps.get("group.id"))
 
       shutdownLatch.countDown()
     }
   }
 
-  def checkZk(config: ConsumerConfig) {
-    if (!checkZkPathExists(config.options.valueOf(config.zkConnectOpt), "/brokers/ids")) {
-      System.err.println("No brokers found in ZK.")
-      Exit.exit(1)
-    }
-
-    if (!config.options.has(config.deleteConsumerOffsetsOpt) && config.options.has(config.resetBeginningOpt) &&
-      checkZkPathExists(config.options.valueOf(config.zkConnectOpt), "/consumers/" + config.consumerProps.getProperty("group.id") + "/offsets")) {
-      System.err.println("Found previous offset information for this group " + config.consumerProps.getProperty("group.id")
-        + ". Please use --delete-consumer-offsets to delete previous offsets metadata")
-      Exit.exit(1)
-    }
-  }
-
-  def addShutdownHook(consumer: BaseConsumer, conf: ConsumerConfig) {
+  def addShutdownHook(consumer: ConsumerWrapper, conf: ConsumerConfig) {
     Runtime.getRuntime.addShutdownHook(new Thread() {
       override def run() {
-        consumer.stop()
+        consumer.wakeup()
 
         shutdownLatch.await()
 
@@ -124,15 +96,12 @@ object ConsoleConsumer extends Logging {
     })
   }
 
-  def process(maxMessages: Integer, formatter: MessageFormatter, consumer: BaseConsumer, output: PrintStream, skipMessageOnError: Boolean) {
+  def process(maxMessages: Integer, formatter: MessageFormatter, consumer: ConsumerWrapper, output: PrintStream,
+              skipMessageOnError: Boolean) {
     while (messageCount < maxMessages || maxMessages == -1) {
-      val msg: BaseConsumerRecord = try {
+      val msg: ConsumerRecord[Array[Byte], Array[Byte]] = try {
         consumer.receive()
       } catch {
-        case _: StreamEndException =>
-          trace("Caught StreamEndException because consumer is shutdown, ignore and terminate.")
-          // Consumer is already closed
-          return
         case _: WakeupException =>
           trace("Caught WakeupException because consumer is shutdown, ignore and terminate.")
           // Consumer will be closed
@@ -175,35 +144,7 @@ object ConsoleConsumer extends Logging {
     gotError
   }
 
-  def getOldConsumerProps(config: ConsumerConfig): Properties = {
-    val props = new Properties
-
-    props ++= config.consumerProps
-    props ++= config.extraConsumerProps
-    setAutoOffsetResetValue(config, props)
-    props.put("zookeeper.connect", config.zkConnectionStr)
-
-    if (config.timeoutMs >= 0)
-      props.put("consumer.timeout.ms", config.timeoutMs.toString)
-
-    props
-  }
-
-  def checkAndMaybeDeleteOldPath(config: ConsumerConfig, props: Properties) = {
-    val consumerGroupBasePath = "/consumers/" + props.getProperty("group.id")
-    if (config.options.has(config.deleteConsumerOffsetsOpt)) {
-      ZkUtils.maybeDeletePath(config.options.valueOf(config.zkConnectOpt), consumerGroupBasePath)
-    } else {
-      val resetToBeginning = OffsetRequest.SmallestTimeString == props.getProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG)
-      if (resetToBeginning && checkZkPathExists(config.options.valueOf(config.zkConnectOpt), consumerGroupBasePath + "/offsets")) {
-        System.err.println("Found previous offset information for this group " + props.getProperty("group.id")
-          + ". Please use --delete-consumer-offsets to delete previous offsets metadata")
-        Exit.exit(1)
-      }
-    }
-  }
-
-  private[tools] def getNewConsumerProps(config: ConsumerConfig): Properties = {
+  private[tools] def consumerProps(config: ConsumerConfig): Properties = {
     val props = new Properties
     props ++= config.consumerProps
     props ++= config.extraConsumerProps
@@ -214,8 +155,8 @@ object ConsoleConsumer extends Logging {
   }
 
   /**
-    * Used by both getNewConsumerProps and getOldConsumerProps to retrieve the correct value for the
-    * consumer parameter 'auto.offset.reset'.
+    * Used by consumerProps to retrieve the correct value for the consumer parameter 'auto.offset.reset'.
+    *
     * Order of priority is:
     *   1. Explicitly set parameter via --consumer.property command line parameter
     *   2. Explicit --from-beginning given -> 'earliest'
@@ -225,10 +166,7 @@ object ConsoleConsumer extends Logging {
     * are conflicting.
     */
   def setAutoOffsetResetValue(config: ConsumerConfig, props: Properties) {
-    val (earliestConfigValue, latestConfigValue) = if (config.useOldConsumer)
-      (OffsetRequest.SmallestTimeString, OffsetRequest.LargestTimeString)
-    else
-      ("earliest", "latest")
+    val (earliestConfigValue, latestConfigValue) = ("earliest", "latest")
 
     if (props.containsKey(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG)) {
       // auto.offset.reset parameter was specified on the command line
@@ -259,10 +197,6 @@ object ConsoleConsumer extends Logging {
       .withRequiredArg
       .describedAs("whitelist")
       .ofType(classOf[String])
-    val blacklistOpt = parser.accepts("blacklist", "Blacklist of topics to exclude from consumption.")
-      .withRequiredArg
-      .describedAs("blacklist")
-      .ofType(classOf[String])
     val partitionIdOpt = parser.accepts("partition", "The partition to consume from. Consumption " +
       "starts from the end of the partition unless '--offset' is specified.")
       .withRequiredArg
@@ -273,11 +207,6 @@ object ConsoleConsumer extends Logging {
       .describedAs("consume offset")
       .ofType(classOf[String])
       .defaultsTo("latest")
-    val zkConnectOpt = parser.accepts("zookeeper", "REQUIRED (only when using old consumer): The connection string for the zookeeper connection in the form host:port. " +
-      "Multiple URLS can be given to allow fail-over.")
-      .withRequiredArg
-      .describedAs("urls")
-      .ofType(classOf[String])
     val consumerPropertyOpt = parser.accepts("consumer-property", "A mechanism to pass user-defined properties in the form key=value to the consumer.")
       .withRequiredArg
       .describedAs("consumer_prop")
@@ -305,7 +234,6 @@ object ConsoleConsumer extends Logging {
       .withRequiredArg
       .describedAs("prop")
       .ofType(classOf[String])
-    val deleteConsumerOffsetsOpt = parser.accepts("delete-consumer-offsets", "If specified, the consumer path in zookeeper is deleted when starting up")
     val resetBeginningOpt = parser.accepts("from-beginning", "If the consumer does not already have an established offset to consume from, " +
       "start with the earliest message present in the log rather than the latest message.")
     val maxMessagesOpt = parser.accepts("max-messages", "The maximum number of messages to consume before exiting. If not set, consumption is continual.")
@@ -318,13 +246,7 @@ object ConsoleConsumer extends Logging {
       .ofType(classOf[java.lang.Integer])
     val skipMessageOnErrorOpt = parser.accepts("skip-message-on-error", "If there is an error when processing a message, " +
       "skip it instead of halt.")
-    val csvMetricsReporterEnabledOpt = parser.accepts("csv-reporter-enabled", "If set, the CSV metrics reporter will be enabled")
-    val metricsDirectoryOpt = parser.accepts("metrics-dir", "If csv-reporter-enable is set, and this parameter is" +
-      "set, the csv metrics will be output here")
-      .withRequiredArg
-      .describedAs("metrics directory")
-      .ofType(classOf[java.lang.String])
-    val bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED (unless old consumer is used): The server to connect to.")
+    val bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED: The server(s) to connect to.")
       .withRequiredArg
       .describedAs("server to connect to")
       .ofType(classOf[String])
@@ -337,10 +259,10 @@ object ConsoleConsumer extends Logging {
       .describedAs("deserializer for values")
       .ofType(classOf[String])
     val enableSystestEventsLoggingOpt = parser.accepts("enable-systest-events",
-                                                       "Log lifecycle events of the consumer in addition to logging consumed " +
-                                                       "messages. (This is specific for system tests.)")
+      "Log lifecycle events of the consumer in addition to logging consumed " +
+        "messages. (This is specific for system tests.)")
     val isolationLevelOpt = parser.accepts("isolation-level",
-        "Set to read_committed in order to filter out transactional messages which are not committed. Set to read_uncommitted" +
+      "Set to read_committed in order to filter out transactional messages which are not committed. Set to read_uncommitted" +
         "to read all messages.")
       .withRequiredArg()
       .ofType(classOf[String])
@@ -356,11 +278,9 @@ object ConsoleConsumer extends Logging {
 
     var groupIdPassed = true
     val options: OptionSet = tryParse(parser, args)
-    val useOldConsumer = options.has(zkConnectOpt)
     val enableSystestEventsLogging = options.has(enableSystestEventsLoggingOpt)
 
-    // If using old consumer, exactly one of whitelist/blacklist/topic is required.
-    // If using new consumer, topic must be specified.
+    // topic must be specified.
     var topicArg: String = null
     var whitelistArg: String = null
     var filterSpec: TopicFilter = null
@@ -369,7 +289,6 @@ object ConsoleConsumer extends Logging {
       Utils.loadProps(options.valueOf(consumerConfigOpt))
     else
       new Properties()
-    val zkConnectionStr = options.valueOf(zkConnectOpt)
     val fromBeginning = options.has(resetBeginningOpt)
     val partitionArg = if (options.has(partitionIdOpt)) Some(options.valueOf(partitionIdOpt).intValue) else None
     val skipMessageOnError = options.has(skipMessageOnErrorOpt)
@@ -392,26 +311,11 @@ object ConsoleConsumer extends Logging {
 
     formatter.init(formatterArgs)
 
-    if (useOldConsumer) {
-      if (options.has(bootstrapServerOpt))
-        CommandLineUtils.printUsageAndDie(parser, s"Option $bootstrapServerOpt is not valid with $zkConnectOpt.")
-      val topicOrFilterOpt = List(topicIdOpt, whitelistOpt, blacklistOpt).filter(options.has)
-      if (topicOrFilterOpt.size != 1)
-        CommandLineUtils.printUsageAndDie(parser, "Exactly one of whitelist/blacklist/topic is required.")
-      topicArg = options.valueOf(topicOrFilterOpt.head)
-      filterSpec = if (options.has(blacklistOpt)) new Blacklist(topicArg) else new Whitelist(topicArg)
-      Console.err.println("Using the ConsoleConsumer with old consumer is deprecated and will be removed " +
-        s"in a future major release. Consider using the new consumer by passing $bootstrapServerOpt instead of ${zkConnectOpt}.")
-    } else {
-      val topicOrFilterOpt = List(topicIdOpt, whitelistOpt).filter(options.has)
-      if (topicOrFilterOpt.size != 1)
-        CommandLineUtils.printUsageAndDie(parser, "Exactly one of whitelist/topic is required.")
-      topicArg = options.valueOf(topicIdOpt)
-      whitelistArg = options.valueOf(whitelistOpt)
-    }
-
-    if (useOldConsumer && (partitionArg.isDefined || options.has(offsetOpt)))
-      CommandLineUtils.printUsageAndDie(parser, "Partition-offset based consumption is supported in the new consumer only.")
+    val topicOrFilterOpt = List(topicIdOpt, whitelistOpt).filter(options.has)
+    if (topicOrFilterOpt.size != 1)
+      CommandLineUtils.printUsageAndDie(parser, "Exactly one of whitelist/topic is required.")
+    topicArg = options.valueOf(topicIdOpt)
+    whitelistArg = options.valueOf(whitelistOpt)
 
     if (partitionArg.isDefined) {
       if (!options.has(topicIdOpt))
@@ -428,49 +332,35 @@ object ConsoleConsumer extends Logging {
     val offsetArg =
       if (options.has(offsetOpt)) {
         options.valueOf(offsetOpt).toLowerCase(Locale.ROOT) match {
-          case "earliest" => OffsetRequest.EarliestTime
-          case "latest" => OffsetRequest.LatestTime
+          case "earliest" => ListOffsetRequest.EARLIEST_TIMESTAMP
+          case "latest" => ListOffsetRequest.LATEST_TIMESTAMP
           case offsetString =>
-            val offset =
-              try offsetString.toLong
-              catch {
-                case _: NumberFormatException => invalidOffset(offsetString)
-              }
-            if (offset < 0) invalidOffset(offsetString)
-            offset
+            try {
+              val offset = offsetString.toLong
+              if (offset < 0)
+                invalidOffset(offsetString)
+              offset
+            } catch {
+              case _: NumberFormatException => invalidOffset(offsetString)
+            }
         }
       }
-      else if (fromBeginning) OffsetRequest.EarliestTime
-      else OffsetRequest.LatestTime
+      else if (fromBeginning) ListOffsetRequest.EARLIEST_TIMESTAMP
+      else ListOffsetRequest.LATEST_TIMESTAMP
 
-    if (!useOldConsumer) {
-      CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt)
-    }
-
-    if (options.has(csvMetricsReporterEnabledOpt)) {
-      val csvReporterProps = new Properties()
-      csvReporterProps.put("kafka.metrics.polling.interval.secs", "5")
-      csvReporterProps.put("kafka.metrics.reporters", "kafka.metrics.KafkaCSVMetricsReporter")
-      if (options.has(metricsDirectoryOpt))
-        csvReporterProps.put("kafka.csv.metrics.dir", options.valueOf(metricsDirectoryOpt))
-      else
-        csvReporterProps.put("kafka.csv.metrics.dir", "kafka_metrics")
-      csvReporterProps.put("kafka.csv.metrics.reporter.enabled", "true")
-      val verifiableProps = new VerifiableProperties(csvReporterProps)
-      KafkaMetricsReporter.startReporters(verifiableProps)
-    }
+    CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt)
 
     // if the group id is provided in more than place (through different means) all values must be the same
     val groupIdsProvided = Set(
-        Option(options.valueOf(groupIdOpt)),                           // via --group
-        Option(consumerProps.get(ConsumerConfig.GROUP_ID_CONFIG)),     // via --consumer-property
-        Option(extraConsumerProps.get(ConsumerConfig.GROUP_ID_CONFIG)) // via --cosumer.config
-      ).flatten
+      Option(options.valueOf(groupIdOpt)), // via --group
+      Option(consumerProps.get(ConsumerConfig.GROUP_ID_CONFIG)), // via --consumer-property
+      Option(extraConsumerProps.get(ConsumerConfig.GROUP_ID_CONFIG)) // via --cosumer.config
+    ).flatten
 
     if (groupIdsProvided.size > 1) {
       CommandLineUtils.printUsageAndDie(parser, "The group ids provided in different places (directly using '--group', "
-                                              + "via '--consumer-property', or via '--consumer.config') do not match. "
-                                              + s"Detected group ids: ${groupIdsProvided.mkString("'", "', '", "'")}")
+        + "via '--consumer-property', or via '--consumer.config') do not match. "
+        + s"Detected group ids: ${groupIdsProvided.mkString("'", "', '", "'")}")
     }
 
     groupIdsProvided.headOption match {
@@ -491,12 +381,72 @@ object ConsoleConsumer extends Logging {
     }
   }
 
-  def checkZkPathExists(zkUrl: String, path: String): Boolean = {
-    try {
-      val zk = ZkUtils.createZkClient(zkUrl, 30 * 1000, 30 * 1000)
-      zk.exists(path)
-    } catch {
-      case _: Throwable => false
+  private[tools] class ConsumerWrapper(topic: Option[String], partitionId: Option[Int], offset: Option[Long], whitelist: Option[String],
+                                       consumer: Consumer[Array[Byte], Array[Byte]], val timeoutMs: Long = Long.MaxValue) {
+    consumerInit()
+    var recordIter = consumer.poll(0).iterator
+
+    def consumerInit() {
+      (topic, partitionId, offset, whitelist) match {
+        case (Some(topic), Some(partitionId), Some(offset), None) =>
+          seek(topic, partitionId, offset)
+        case (Some(topic), Some(partitionId), None, None) =>
+          // default to latest if no offset is provided
+          seek(topic, partitionId, ListOffsetRequest.LATEST_TIMESTAMP)
+        case (Some(topic), None, None, None) =>
+          consumer.subscribe(Collections.singletonList(topic))
+        case (None, None, None, Some(whitelist)) =>
+          consumer.subscribe(Pattern.compile(whitelist))
+        case _ =>
+          throw new IllegalArgumentException("An invalid combination of arguments is provided. " +
+            "Exactly one of 'topic' or 'whitelist' must be provided. " +
+            "If 'topic' is provided, an optional 'partition' may also be provided. " +
+            "If 'partition' is provided, an optional 'offset' may also be provided, otherwise, consumption starts from the end of the partition.")
+      }
+    }
+
+    def seek(topic: String, partitionId: Int, offset: Long) {
+      val topicPartition = new TopicPartition(topic, partitionId)
+      consumer.assign(Collections.singletonList(topicPartition))
+      offset match {
+        case ListOffsetRequest.EARLIEST_TIMESTAMP => consumer.seekToBeginning(Collections.singletonList(topicPartition))
+        case ListOffsetRequest.LATEST_TIMESTAMP => consumer.seekToEnd(Collections.singletonList(topicPartition))
+        case _ => consumer.seek(topicPartition, offset)
+      }
+    }
+
+    def resetUnconsumedOffsets() {
+      val smallestUnconsumedOffsets = collection.mutable.Map[TopicPartition, Long]()
+      while (recordIter.hasNext) {
+        val record = recordIter.next()
+        val tp = new TopicPartition(record.topic, record.partition)
+        // avoid auto-committing offsets which haven't been consumed
+        smallestUnconsumedOffsets.getOrElseUpdate(tp, record.offset)
+      }
+      smallestUnconsumedOffsets.foreach { case (tp, offset) => consumer.seek(tp, offset) }
+    }
+
+    def receive(): ConsumerRecord[Array[Byte], Array[Byte]] = {
+      if (!recordIter.hasNext) {
+        recordIter = consumer.poll(timeoutMs).iterator
+        if (!recordIter.hasNext)
+          throw new TimeoutException()
+      }
+
+      recordIter.next
+    }
+
+    def wakeup(): Unit = {
+      this.consumer.wakeup()
+    }
+
+    def cleanup() {
+      resetUnconsumedOffsets()
+      this.consumer.close()
+    }
+
+    def commitSync() {
+      this.consumer.commitSync()
     }
   }
 }
@@ -613,12 +563,6 @@ class ChecksumMessageFormatter extends MessageFormatter {
   }
 
   def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream) {
-    import consumerRecord._
-    val chksum =
-      if (timestampType != TimestampType.NO_TIMESTAMP_TYPE)
-        new Message(value, key, timestamp, timestampType, NoCompressionCodec, 0, -1, Message.MagicValue_V1).checksum
-      else
-        new Message(value, key, Message.NoTimestamp, Message.MagicValue_V0).checksum
-    output.println(topicStr + "checksum:" + chksum)
+    output.println(topicStr + "checksum:" + consumerRecord.checksum)
   }
 }

@@ -51,7 +51,7 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
   def testCleanShutdown() {
 
     def createProducer(server: KafkaServer): KafkaProducer[Integer, String] =
-      TestUtils.createNewProducer(
+      TestUtils.createProducer(
         TestUtils.getBrokerListStrFromServers(Seq(server)),
         retries = 5,
         keySerializer = new IntegerSerializer,
@@ -59,7 +59,7 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
       )
 
     def createConsumer(server: KafkaServer): KafkaConsumer[Integer, String] =
-      TestUtils.createNewConsumer(
+      TestUtils.createConsumer(
         TestUtils.getBrokerListStrFromServers(Seq(server)),
         securityProtocol = SecurityProtocol.PLAINTEXT,
         keyDeserializer = new IntegerDeserializer,

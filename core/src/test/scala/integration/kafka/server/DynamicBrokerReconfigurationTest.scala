@@ -1349,7 +1349,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     def acks(acks: Int): ProducerBuilder = { _acks = acks; this }
 
     override def build(): KafkaProducer[String, String] = {
-      val producer = TestUtils.createNewProducer(bootstrapServers,
+      val producer = TestUtils.createProducer(bootstrapServers,
         acks = _acks,
         retries = _retries,
         securityProtocol = _securityProtocol,
@@ -1374,7 +1374,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     override def build(): KafkaConsumer[String, String] = {
       val consumerProps = propsOverride
       consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, _enableAutoCommit.toString)
-      val consumer = TestUtils.createNewConsumer(bootstrapServers,
+      val consumer = TestUtils.createConsumer(bootstrapServers,
         group,
         autoOffsetReset = _autoOffsetReset,
         securityProtocol = _securityProtocol,
