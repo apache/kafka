@@ -1065,8 +1065,13 @@ class LogCleanerTest extends JUnitSuite {
     logProps.put(LogConfig.FileDeleteDelayMsProp, 1000: java.lang.Integer)
     val config = LogConfig.fromProps(logConfig.originals, logProps)
 
-    val time = new MockTime()
-    val (log, segmentWithOverflow, _) = LogTest.createLogWithOffsetOverflow(dir, new BrokerTopicStats(), Some(config), time.scheduler, time)
+    LogTest.initializeLogDirWithOverflowedSegment(dir)
+
+    val log = makeLog(config = config, recoveryPoint = Long.MaxValue)
+    val segmentWithOverflow = LogTest.firstOverflowSegment(log).getOrElse {
+      fail("Failed to create log with a segment which has overflowed offsets")
+    }
+
     val numSegmentsInitial = log.logSegments.size
     val allKeys = LogTest.keysInLog(log).toList
     val expectedKeysAfterCleaning = mutable.MutableList[Long]()
@@ -1445,7 +1450,7 @@ class LogCleanerTest extends JUnitSuite {
   private def tombstoneRecord(key: Int): MemoryRecords = record(key, null)
 
   private def recoverAndCheck(config: LogConfig, expectedKeys: Iterable[Long]): Log = {
-    LogTest.recoverAndCheck(dir, config, expectedKeys, new BrokerTopicStats())
+    LogTest.recoverAndCheck(dir, config, expectedKeys, new BrokerTopicStats(), time, time.scheduler)
   }
 }
 
