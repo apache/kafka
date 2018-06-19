@@ -2140,12 +2140,32 @@ class LogTest {
     // This tests a scenario where all of the batches appended to a segment have overflowed.
     // When we split the overflowed segment, only one new segment will be created.
 
-    val segment = LogTest.rawSegment(logDir, 0L)
     val overflowOffset = Int.MaxValue + 1L
-    segment.append(MemoryRecords.withRecords(overflowOffset, CompressionType.NONE, 0,
-      new SimpleRecord("a".getBytes)))
-    segment.append(MemoryRecords.withRecords(overflowOffset + 1, CompressionType.NONE, 0,
-      new SimpleRecord("b".getBytes)))
+    val batch1 = MemoryRecords.withRecords(overflowOffset, CompressionType.NONE, 0,
+      new SimpleRecord("a".getBytes))
+    val batch2 = MemoryRecords.withRecords(overflowOffset + 1, CompressionType.NONE, 0,
+      new SimpleRecord("b".getBytes))
+
+    testDegenerateSplitSegmentWithOverflow(segmentBaseOffset = 0L, List(batch1, batch2))
+  }
+
+  @Test
+  def testDegenerateSegmentSplitWithOutOfRangeBatchLastOffset(): Unit = {
+    // Degenerate case where the only batch in the segment overflows. In this scenario,
+    // the first offset of the batch is valid, but the last overflows.
+
+    val firstBatchBaseOffset = Int.MaxValue - 1
+    val records = MemoryRecords.withRecords(firstBatchBaseOffset, CompressionType.NONE, 0,
+      new SimpleRecord("a".getBytes),
+      new SimpleRecord("b".getBytes),
+      new SimpleRecord("c".getBytes))
+
+    testDegenerateSplitSegmentWithOverflow(segmentBaseOffset = 0L, List(records))
+  }
+
+  private def testDegenerateSplitSegmentWithOverflow(segmentBaseOffset: Long, records: List[MemoryRecords]): Unit = {
+    val segment = LogTest.rawSegment(logDir, segmentBaseOffset)
+    records.foreach(segment.append _)
     segment.close()
 
     // Create clean shutdown file so that we do not split during the load
@@ -2153,6 +2173,7 @@ class LogTest {
 
     val logConfig = LogTest.createLogConfig(indexIntervalBytes = 1, fileDeleteDelayMs = 1000)
     val log = createLog(logDir, logConfig, recoveryPoint = Long.MaxValue)
+
     val segmentWithOverflow = LogTest.firstOverflowSegment(log).getOrElse {
       Assertions.fail("Failed to create log with a segment which has overflowed offsets")
     }
@@ -2161,7 +2182,9 @@ class LogTest {
     log.splitOverflowedSegment(segmentWithOverflow)
 
     assertEquals(1, log.numberOfSegments)
-    assertEquals(overflowOffset, log.activeSegment.baseOffset)
+
+    val firstBatchBaseOffset = records.head.batches.asScala.head.baseOffset
+    assertEquals(firstBatchBaseOffset, log.activeSegment.baseOffset)
     LogTest.verifyRecordsInLog(log, allRecordsBeforeSplit)
 
     assertFalse(LogTest.hasOffsetOverflow(log))
@@ -2184,7 +2207,7 @@ class LogTest {
         log.splitOverflowedSegment(segment)
         fail()
       } catch {
-        case _: IllegalStateException =>
+        case _: IllegalArgumentException =>
       }
     }
   }

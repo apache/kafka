@@ -513,7 +513,7 @@ private[log] class Cleaner(val id: Int,
           case e: LogSegmentOffsetOverflowException =>
             // Split the current segment. It's also safest to abort the current cleaning process, so that we retry from
             // scratch once the split is complete.
-            info(s"Caught LogSegmentOverflowException during log cleaning $e")
+            info(s"Caught segment overflow error during cleaning: ${e.getMessage}")
             log.splitOverflowedSegment(currentSegment)
             throw new LogCleaningAbortedException()
         }
@@ -529,8 +529,7 @@ private[log] class Cleaner(val id: Int,
       cleaned.lastModified = modified
 
       // swap in new segment
-      info(s"Swapping in cleaned segment ${cleaned.baseOffset} for segment(s) ${segments.map(_.baseOffset).mkString(",")} " +
-        s"in log ${log.name}")
+      info(s"Swapping in cleaned segment $cleaned for segment(s) $segments in log $log")
       log.replaceSegments(List(cleaned), segments)
     } catch {
       case e: LogCleaningAbortedException =>

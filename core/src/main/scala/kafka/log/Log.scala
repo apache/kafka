@@ -1834,14 +1834,12 @@ class Log(@volatile var dir: File,
   }
 
   private[log] def retryOnOffsetOverflow[T](fn: => T): T = {
-    var triesSoFar = 0
     while (true) {
       try {
         return fn
       } catch {
         case e: LogSegmentOffsetOverflowException =>
-          triesSoFar += 1
-          info(s"Caught LogOffsetOverflowException ${e.getMessage}. Split segment and retry. retry#: $triesSoFar.")
+          info(s"Caught segment overflow error: ${e.getMessage}. Split segment and retry.")
           splitOverflowedSegment(e.segment)
       }
     }
@@ -1849,7 +1847,7 @@ class Log(@volatile var dir: File,
   }
 
   /**
-   * Split the given log segment into multiple such that there is no offset overflow in the resulting segments. The
+   * Split a segment into one or more segments such that there is no offset overflow in any of them. The
    * resulting segments will contain the exact same messages that are present in the input segment. On successful
    * completion of this method, the input segment will be deleted and will be replaced by the resulting new segments.
    * See replaceSegments for recovery logic, in case the broker dies in the middle of this operation.
@@ -1863,14 +1861,15 @@ class Log(@volatile var dir: File,
    */
   private[log] def splitOverflowedSegment(segment: LogSegment): List[LogSegment] = {
     require(isLogFile(segment.log.file), s"Cannot split file ${segment.log.file.getAbsoluteFile}")
-    info(s"Attempting to split segment ${segment.log.file.getAbsolutePath}")
+    require(segment.hasOverflow, "Split operation is only permitted for segments with overflow")
+
+    info(s"Splitting overflowed segment $segment")
 
     val newSegments = ListBuffer[LogSegment]()
     try {
       var position = 0
       val sourceRecords = segment.log
 
-      info(s"Splitting segment $segment")
       while (position < sourceRecords.sizeInBytes) {
         val firstBatch = sourceRecords.batchesFrom(position).asScala.head
         val newSegment = LogCleaner.createNewCleanedSegment(this, firstBatch.baseOffset)
@@ -1883,24 +1882,21 @@ class Log(@volatile var dir: File,
         position += bytesAppended
       }
 
-      if (!newSegments.exists(_.baseOffset - segment.baseOffset > Int.MaxValue))
-        throw new IllegalStateException(s"Could not find the expected overflow offset in $segment")
-
       // prepare new segments
       var totalSizeOfNewSegments = 0
-      info(s"Split messages from $segment into ${newSegments.length} new segments")
       newSegments.foreach { splitSegment =>
         splitSegment.onBecomeInactiveSegment()
         splitSegment.flush()
         splitSegment.lastModified = segment.lastModified
         totalSizeOfNewSegments += splitSegment.log.sizeInBytes
-        info(s"New segment: $splitSegment")
       }
       // size of all the new segments combined must equal size of the original segment
-      require(totalSizeOfNewSegments == segment.log.sizeInBytes, "Inconsistent segment sizes after split" +
-        s" before: ${segment.log.sizeInBytes} after: $totalSizeOfNewSegments")
+      if (totalSizeOfNewSegments != segment.log.sizeInBytes)
+        throw new IllegalStateException("Inconsistent segment sizes after split" +
+          s" before: ${segment.log.sizeInBytes} after: $totalSizeOfNewSegments")
 
       // replace old segment with new ones
+      info(s"Replacing overflowed segment $segment with split segments $newSegments")
       replaceSegments(newSegments.toList, List(segment), isRecoveredSwapFile = false)
       newSegments.toList
     } catch {

@@ -395,6 +395,14 @@ class LogSegment private[log] (val log: FileRecords,
     }
   }
 
+  /**
+   * Check whether the last offset of the last batch in this segment overflows the indexes.
+   */
+  def hasOverflow: Boolean = {
+    val nextOffset = readNextOffset
+    nextOffset > baseOffset && !canConvertToRelativeOffset(nextOffset - 1)
+  }
+
   def collectAbortedTxns(fetchOffset: Long, upperBoundOffset: Long): TxnIndexSearchResult =
     txnIndex.collectAbortedTxns(fetchOffset, upperBoundOffset)
 
