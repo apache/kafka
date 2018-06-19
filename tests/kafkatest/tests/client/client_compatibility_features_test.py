@@ -102,6 +102,8 @@ class ClientCompatibilityFeaturesTest(Test):
     @parametrize(broker_version=str(LATEST_0_10_1))
     @parametrize(broker_version=str(LATEST_0_10_2))
     @parametrize(broker_version=str(LATEST_0_11_0))
+    @parametrize(broker_version=str(LATEST_1_0))
+    @parametrize(broker_version=str(LATEST_1_1))
     def run_compatibility_test(self, broker_version):
         self.zk.start()
         self.kafka.set_version(KafkaVersion(broker_version))
