@@ -164,13 +164,13 @@ class LogSegment private[log] (val log: FileRecords,
     var maxOffset = Long.MinValue
     var readBuffer = bufferSupplier.get(1024 * 1024)
 
-    def bufferHasRoomFor(batch: RecordBatch) =
-      bytesToAppend == 0 || bytesToAppend + batch.sizeInBytes() < readBuffer.capacity()
+    def canAppend(batch: RecordBatch) =
+      canConvertToRelativeOffset(batch.lastOffset) &&
+        (bytesToAppend == 0 || bytesToAppend + batch.sizeInBytes < readBuffer.capacity)
 
     // find all batches that are valid to be appended to the current log segment and
     // determine the maximum offset and timestamp
-    for (batch <- records.batchesFrom(position).asScala
-         if canConvertToRelativeOffset(batch.lastOffset) && bufferHasRoomFor(batch)) {
+    for (batch <- records.batchesFrom(position).asScala if canAppend(batch)) {
       if (batch.maxTimestamp > maxTimestamp) {
         maxTimestamp = batch.maxTimestamp
         offsetOfMaxTimestamp = batch.lastOffset
@@ -179,9 +179,7 @@ class LogSegment private[log] (val log: FileRecords,
       bytesToAppend += batch.sizeInBytes
     }
 
-    if (bytesToAppend == 0) {
-      0
-    } else {
+    if (bytesToAppend > 0) {
       // Grow buffer if needed to ensure we copy at least one batch
       if (readBuffer.capacity < bytesToAppend)
         readBuffer = bufferSupplier.get(bytesToAppend)
@@ -190,8 +188,10 @@ class LogSegment private[log] (val log: FileRecords,
       records.readInto(readBuffer, position)
 
       append(maxOffset, maxTimestamp, offsetOfMaxTimestamp, MemoryRecords.readableRecords(readBuffer))
-      bytesToAppend
     }
+
+    bufferSupplier.release(readBuffer)
+    bytesToAppend
   }
 
   /**
