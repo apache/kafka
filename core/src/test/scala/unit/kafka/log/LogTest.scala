@@ -22,7 +22,6 @@ import java.nio.ByteBuffer
 import java.nio.file.{Files, Paths}
 import java.util.Properties
 
-import org.apache.kafka.common.errors._
 import kafka.common.{OffsetsOutOfOrderException, UnexpectedAppendOffsetException, KafkaException}
 import kafka.log.Log.DeleteDirSuffix
 import kafka.server.epoch.{EpochEntry, LeaderEpochCache, LeaderEpochFileCache}
@@ -39,6 +38,7 @@ import org.apache.kafka.common.utils.{Time, Utils}
 import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
+import org.scalatest.Assertions
 
 import scala.collection.Iterable
 import scala.collection.JavaConverters._
@@ -2118,33 +2118,90 @@ class LogTest {
   def testSplitOnOffsetOverflow(): Unit = {
     // create a log such that one log segment has offsets that overflow, and call the split API on that segment
     val logConfig = LogTest.createLogConfig(indexIntervalBytes = 1, fileDeleteDelayMs = 1000)
-    val (log, segmentWithOverflow, inputRecords) = createLogWithOffsetOverflow(Some(logConfig))
+    val (log, segmentWithOverflow) = createLogWithOffsetOverflow(logConfig)
     assertTrue("At least one segment must have offset overflow", LogTest.hasOffsetOverflow(log))
+
+    val allRecordsBeforeSplit = LogTest.allRecords(log)
 
     // split the segment with overflow
     log.splitOverflowedSegment(segmentWithOverflow)
 
     // assert we were successfully able to split the segment
-    assertEquals(log.numberOfSegments, 4)
-    assertTrue(LogTest.verifyRecordsInLog(log, inputRecords))
+    assertEquals(4, log.numberOfSegments)
+    LogTest.verifyRecordsInLog(log, allRecordsBeforeSplit)
 
     // verify we do not have offset overflow anymore
     assertFalse(LogTest.hasOffsetOverflow(log))
   }
 
   @Test
+  def testDegenerateSegmentSplit(): Unit = {
+    // This tests a scenario where all of the batches appended to a segment have overflowed.
+    // When we split the overflowed segment, only one new segment will be created.
+
+    val overflowOffset = Int.MaxValue + 1L
+    val batch1 = MemoryRecords.withRecords(overflowOffset, CompressionType.NONE, 0,
+      new SimpleRecord("a".getBytes))
+    val batch2 = MemoryRecords.withRecords(overflowOffset + 1, CompressionType.NONE, 0,
+      new SimpleRecord("b".getBytes))
+
+    testDegenerateSplitSegmentWithOverflow(segmentBaseOffset = 0L, List(batch1, batch2))
+  }
+
+  @Test
+  def testDegenerateSegmentSplitWithOutOfRangeBatchLastOffset(): Unit = {
+    // Degenerate case where the only batch in the segment overflows. In this scenario,
+    // the first offset of the batch is valid, but the last overflows.
+
+    val firstBatchBaseOffset = Int.MaxValue - 1
+    val records = MemoryRecords.withRecords(firstBatchBaseOffset, CompressionType.NONE, 0,
+      new SimpleRecord("a".getBytes),
+      new SimpleRecord("b".getBytes),
+      new SimpleRecord("c".getBytes))
+
+    testDegenerateSplitSegmentWithOverflow(segmentBaseOffset = 0L, List(records))
+  }
+
+  private def testDegenerateSplitSegmentWithOverflow(segmentBaseOffset: Long, records: List[MemoryRecords]): Unit = {
+    val segment = LogTest.rawSegment(logDir, segmentBaseOffset)
+    records.foreach(segment.append _)
+    segment.close()
+
+    // Create clean shutdown file so that we do not split during the load
+    createCleanShutdownFile()
+
+    val logConfig = LogTest.createLogConfig(indexIntervalBytes = 1, fileDeleteDelayMs = 1000)
+    val log = createLog(logDir, logConfig, recoveryPoint = Long.MaxValue)
+
+    val segmentWithOverflow = LogTest.firstOverflowSegment(log).getOrElse {
+      Assertions.fail("Failed to create log with a segment which has overflowed offsets")
+    }
+
+    val allRecordsBeforeSplit = LogTest.allRecords(log)
+    log.splitOverflowedSegment(segmentWithOverflow)
+
+    assertEquals(1, log.numberOfSegments)
+
+    val firstBatchBaseOffset = records.head.batches.asScala.head.baseOffset
+    assertEquals(firstBatchBaseOffset, log.activeSegment.baseOffset)
+    LogTest.verifyRecordsInLog(log, allRecordsBeforeSplit)
+
+    assertFalse(LogTest.hasOffsetOverflow(log))
+  }
+
+  @Test
   def testRecoveryOfSegmentWithOffsetOverflow(): Unit = {
     val logConfig = LogTest.createLogConfig(indexIntervalBytes = 1, fileDeleteDelayMs = 1000)
-    var (log, segmentWithOverflow, initialRecords) = createLogWithOffsetOverflow(Some(logConfig))
+    val (log, _) = createLogWithOffsetOverflow(logConfig)
     val expectedKeys = LogTest.keysInLog(log)
 
     // Run recovery on the log. This should split the segment underneath. Ignore .deleted files as we could have still
     // have them lying around after the split.
-    log = LogTest.recoverAndCheck(logDir, logConfig, expectedKeys, brokerTopicStats, expectDeletedFiles = true)
-    assertEquals(expectedKeys, LogTest.keysInLog(log))
+    val recoveredLog = recoverAndCheck(logConfig, expectedKeys)
+    assertEquals(expectedKeys, LogTest.keysInLog(recoveredLog))
 
     // Running split again would throw an error
-    for (segment <- log.logSegments) {
+    for (segment <- recoveredLog.logSegments) {
       try {
         log.splitOverflowedSegment(segment)
         fail()
@@ -2157,7 +2214,7 @@ class LogTest {
   @Test
   def testRecoveryAfterCrashDuringSplitPhase1(): Unit = {
     val logConfig = LogTest.createLogConfig(indexIntervalBytes = 1, fileDeleteDelayMs = 1000)
-    var (log, segmentWithOverflow, initialRecords) = createLogWithOffsetOverflow(Some(logConfig))
+    val (log, segmentWithOverflow) = createLogWithOffsetOverflow(logConfig)
     val expectedKeys = LogTest.keysInLog(log)
     val numSegmentsInitial = log.logSegments.size
 
@@ -2172,16 +2229,17 @@ class LogTest {
     })
     for (file <- logDir.listFiles if file.getName.endsWith(Log.DeletedFileSuffix))
       Utils.atomicMoveWithFallback(file.toPath, Paths.get(CoreUtils.replaceSuffix(file.getPath, Log.DeletedFileSuffix, "")))
-    log = LogTest.recoverAndCheck(logDir, logConfig, expectedKeys, brokerTopicStats, expectDeletedFiles = true)
-    assertEquals(expectedKeys, LogTest.keysInLog(log))
-    assertEquals(numSegmentsInitial + 1, log.logSegments.size)
-    log.close()
+
+    val recoveredLog = recoverAndCheck(logConfig, expectedKeys)
+    assertEquals(expectedKeys, LogTest.keysInLog(recoveredLog))
+    assertEquals(numSegmentsInitial + 1, recoveredLog.logSegments.size)
+    recoveredLog.close()
   }
 
   @Test
   def testRecoveryAfterCrashDuringSplitPhase2(): Unit = {
     val logConfig = LogTest.createLogConfig(indexIntervalBytes = 1, fileDeleteDelayMs = 1000)
-    var (log, segmentWithOverflow, initialRecords) = createLogWithOffsetOverflow(Some(logConfig))
+    val (log, segmentWithOverflow) = createLogWithOffsetOverflow(logConfig)
     val expectedKeys = LogTest.keysInLog(log)
     val numSegmentsInitial = log.logSegments.size
 
@@ -2190,25 +2248,26 @@ class LogTest {
 
     // Simulate recovery just after one of the new segments has been renamed to .swap. On recovery, existing split
     // operation is aborted but the recovery process itself kicks off split which should complete.
-    newSegments.reverse.foreach(segment => {
-      if (segment != newSegments.tail)
+    newSegments.reverse.foreach { segment =>
+      if (segment != newSegments.last)
         segment.changeFileSuffixes("", Log.CleanedFileSuffix)
       else
         segment.changeFileSuffixes("", Log.SwapFileSuffix)
       segment.truncateTo(0)
-    })
+    }
     for (file <- logDir.listFiles if file.getName.endsWith(Log.DeletedFileSuffix))
       Utils.atomicMoveWithFallback(file.toPath, Paths.get(CoreUtils.replaceSuffix(file.getPath, Log.DeletedFileSuffix, "")))
-    log = LogTest.recoverAndCheck(logDir, logConfig, expectedKeys, brokerTopicStats, expectDeletedFiles = true)
-    assertEquals(expectedKeys, LogTest.keysInLog(log))
-    assertEquals(numSegmentsInitial + 1, log.logSegments.size)
-    log.close()
+
+    val recoveredLog = recoverAndCheck(logConfig, expectedKeys)
+    assertEquals(expectedKeys, LogTest.keysInLog(recoveredLog))
+    assertEquals(numSegmentsInitial + 1, recoveredLog.logSegments.size)
+    recoveredLog.close()
   }
 
   @Test
   def testRecoveryAfterCrashDuringSplitPhase3(): Unit = {
     val logConfig = LogTest.createLogConfig(indexIntervalBytes = 1, fileDeleteDelayMs = 1000)
-    var (log, segmentWithOverflow, initialRecords) = createLogWithOffsetOverflow(Some(logConfig))
+    val (log, segmentWithOverflow) = createLogWithOffsetOverflow(logConfig)
     val expectedKeys = LogTest.keysInLog(log)
     val numSegmentsInitial = log.logSegments.size
 
@@ -2226,16 +2285,16 @@ class LogTest {
     // Truncate the old segment
     segmentWithOverflow.truncateTo(0)
 
-    log = LogTest.recoverAndCheck(logDir, logConfig, expectedKeys, brokerTopicStats, expectDeletedFiles = true)
-    assertEquals(expectedKeys, LogTest.keysInLog(log))
-    assertEquals(numSegmentsInitial + 1, log.logSegments.size)
+    val recoveredLog = recoverAndCheck(logConfig, expectedKeys)
+    assertEquals(expectedKeys, LogTest.keysInLog(recoveredLog))
+    assertEquals(numSegmentsInitial + 1, recoveredLog.logSegments.size)
     log.close()
   }
 
   @Test
   def testRecoveryAfterCrashDuringSplitPhase4(): Unit = {
     val logConfig = LogTest.createLogConfig(indexIntervalBytes = 1, fileDeleteDelayMs = 1000)
-    var (log, segmentWithOverflow, initialRecords) = createLogWithOffsetOverflow(Some(logConfig))
+    val (log, segmentWithOverflow) = createLogWithOffsetOverflow(logConfig)
     val expectedKeys = LogTest.keysInLog(log)
     val numSegmentsInitial = log.logSegments.size
 
@@ -2244,25 +2303,24 @@ class LogTest {
 
     // Simulate recovery right after all new segments have been renamed to .swap and old segment has been deleted. On
     // recovery, existing split operation is completed.
-    newSegments.reverse.foreach(segment => {
-      segment.changeFileSuffixes("", Log.SwapFileSuffix)
-    })
+    newSegments.reverse.foreach(_.changeFileSuffixes("", Log.SwapFileSuffix))
+
     for (file <- logDir.listFiles if file.getName.endsWith(Log.DeletedFileSuffix))
       Utils.delete(file)
 
     // Truncate the old segment
     segmentWithOverflow.truncateTo(0)
 
-    log = LogTest.recoverAndCheck(logDir, logConfig, expectedKeys, brokerTopicStats, expectDeletedFiles = true)
-    assertEquals(expectedKeys, LogTest.keysInLog(log))
-    assertEquals(numSegmentsInitial + 1, log.logSegments.size)
-    log.close()
+    val recoveredLog = recoverAndCheck(logConfig, expectedKeys)
+    assertEquals(expectedKeys, LogTest.keysInLog(recoveredLog))
+    assertEquals(numSegmentsInitial + 1, recoveredLog.logSegments.size)
+    recoveredLog.close()
   }
 
   @Test
   def testRecoveryAfterCrashDuringSplitPhase5(): Unit = {
     val logConfig = LogTest.createLogConfig(indexIntervalBytes = 1, fileDeleteDelayMs = 1000)
-    var (log, segmentWithOverflow, initialRecords) = createLogWithOffsetOverflow(Some(logConfig))
+    val (log, segmentWithOverflow) = createLogWithOffsetOverflow(logConfig)
     val expectedKeys = LogTest.keysInLog(log)
     val numSegmentsInitial = log.logSegments.size
 
@@ -2276,10 +2334,10 @@ class LogTest {
     // Truncate the old segment
     segmentWithOverflow.truncateTo(0)
 
-    log = LogTest.recoverAndCheck(logDir, logConfig, expectedKeys, brokerTopicStats, expectDeletedFiles = true)
-    assertEquals(expectedKeys, LogTest.keysInLog(log))
-    assertEquals(numSegmentsInitial + 1, log.logSegments.size)
-    log.close()
+    val recoveredLog = recoverAndCheck(logConfig, expectedKeys)
+    assertEquals(expectedKeys, LogTest.keysInLog(recoveredLog))
+    assertEquals(numSegmentsInitial + 1, recoveredLog.logSegments.size)
+    recoveredLog.close()
   }
 
   @Test
@@ -3390,13 +3448,28 @@ class LogTest {
                         time: Time = mockTime,
                         maxProducerIdExpirationMs: Int = 60 * 60 * 1000,
                         producerIdExpirationCheckIntervalMs: Int = LogManager.ProducerIdExpirationCheckIntervalMs): Log = {
-    return LogTest.createLog(dir, config, brokerTopicStats, scheduler, time, logStartOffset, recoveryPoint,
+    LogTest.createLog(dir, config, brokerTopicStats, scheduler, time, logStartOffset, recoveryPoint,
       maxProducerIdExpirationMs, producerIdExpirationCheckIntervalMs)
   }
 
-  private def createLogWithOffsetOverflow(logConfig: Option[LogConfig]): (Log, LogSegment, List[Record]) = {
-    return LogTest.createLogWithOffsetOverflow(logDir, brokerTopicStats, logConfig, mockTime.scheduler, mockTime)
+  private def createLogWithOffsetOverflow(logConfig: LogConfig): (Log, LogSegment) = {
+    LogTest.initializeLogDirWithOverflowedSegment(logDir)
+
+    val log = createLog(logDir, logConfig, recoveryPoint = Long.MaxValue)
+    val segmentWithOverflow = LogTest.firstOverflowSegment(log).getOrElse {
+      Assertions.fail("Failed to create log with a segment which has overflowed offsets")
+    }
+
+    (log, segmentWithOverflow)
   }
+
+  private def recoverAndCheck(config: LogConfig,
+                              expectedKeys: Iterable[Long],
+                              expectDeletedFiles: Boolean = true): Log = {
+    LogTest.recoverAndCheck(logDir, config, expectedKeys, brokerTopicStats, mockTime, mockTime.scheduler,
+      expectDeletedFiles)
+  }
+
 }
 
 object LogTest {
@@ -3453,133 +3526,77 @@ object LogTest {
    * @param log Log to check
    * @return true if log contains at least one segment with offset overflow; false otherwise
    */
-  def hasOffsetOverflow(log: Log): Boolean = {
-    for (logSegment <- log.logSegments) {
-      val baseOffset = logSegment.baseOffset
-      for (batch <- logSegment.log.batches.asScala) {
-        val it = batch.iterator()
-        while (it.hasNext()) {
-          val record = it.next()
-          if (record.offset > baseOffset + Int.MaxValue || record.offset < baseOffset)
-            return true
-        }
-      }
+  def hasOffsetOverflow(log: Log): Boolean = firstOverflowSegment(log).isDefined
+
+  def firstOverflowSegment(log: Log): Option[LogSegment] = {
+    def hasOverflow(baseOffset: Long, batch: RecordBatch): Boolean =
+      batch.lastOffset > baseOffset + Int.MaxValue || batch.baseOffset < baseOffset
+
+    for (segment <- log.logSegments) {
+      val overflowBatch = segment.log.batches.asScala.find(batch => hasOverflow(segment.baseOffset, batch))
+      if (overflowBatch.isDefined)
+        return Some(segment)
     }
-    false
+    None
   }
+
+  private def rawSegment(logDir: File, baseOffset: Long): FileRecords =
+    FileRecords.open(Log.logFile(logDir, baseOffset))
 
   /**
-   * Create a log such that one of the log segments has messages with offsets that cause index offset overflow.
-   * @param logDir Directory in which log should be created
-   * @param brokerTopicStats Container for Broker Topic Yammer Metrics
-   * @param logConfigOpt Optional log configuration to use
-   * @param scheduler The thread pool scheduler used for background actions
-   * @param time The time instance to use
-   * @return (1) Created log containing segment with offset overflow, (2) Log segment within log containing messages with
-   *         offset overflow, and (3) List of messages in the log
+   * Initialize the given log directory with a set of segments, one of which will have an
+   * offset which overflows the segment
    */
-  def createLogWithOffsetOverflow(logDir: File, brokerTopicStats: BrokerTopicStats, logConfigOpt: Option[LogConfig] = None,
-                                  scheduler: Scheduler, time: Time): (Log, LogSegment, List[Record]) = {
-    val logConfig =
-      if (logConfigOpt.isDefined)
-        logConfigOpt.get
-      else
-        createLogConfig(indexIntervalBytes = 1)
-
-    var log = createLog(logDir, logConfig, brokerTopicStats, scheduler, time)
-    val inputRecords = ListBuffer[Record]()
-
-    // References to files we want to "merge" to emulate offset overflow
-    val toMerge = ListBuffer[File]()
-
-    def getRecords(baseOffset: Long): List[MemoryRecords] = {
-      def toBytes(value: Long): Array[Byte] = value.toString.getBytes
-
-      val set1 = MemoryRecords.withRecords(baseOffset, CompressionType.NONE, 0,
-        new SimpleRecord(toBytes(baseOffset), toBytes(baseOffset)))
-      val set2 = MemoryRecords.withRecords(baseOffset + 1, CompressionType.NONE, 0,
-        new SimpleRecord(toBytes(baseOffset + 1), toBytes(baseOffset + 1)),
-        new SimpleRecord(toBytes(baseOffset + 2), toBytes(baseOffset + 2)));
-      val set3 = MemoryRecords.withRecords(baseOffset + Int.MaxValue - 1, CompressionType.NONE, 0,
-        new SimpleRecord(toBytes(baseOffset + Int.MaxValue - 1), toBytes(baseOffset + Int.MaxValue - 1)));
-      List(set1, set2, set3)
-    }
-
-    // Append some messages to the log. This will create four log segments.
-    var firstOffset = 0L
-    for (i <- 0 until 4) {
-      val recordsToAppend = getRecords(firstOffset)
-      for (records <- recordsToAppend)
-        log.appendAsFollower(records)
-
-      if (i == 1 || i == 2)
-        toMerge += log.activeSegment.log.file
-
-      firstOffset += Int.MaxValue + 1L
-    }
-
-    // assert that we have the correct number of segments
-    assertEquals(log.numberOfSegments, 4)
-
-    // assert number of batches
-    for (logSegment <- log.logSegments) {
-      var numBatches = 0
-      for (_ <- logSegment.log.batches.asScala)
-        numBatches += 1
-      assertEquals(numBatches, 3)
-    }
-
-    // create a list of appended records
-    for (logSegment <- log.logSegments) {
-      for (batch <- logSegment.log.batches.asScala) {
-        val it = batch.iterator()
-        while (it.hasNext())
-          inputRecords += it.next()
+  def initializeLogDirWithOverflowedSegment(logDir: File): Unit = {
+    def writeSampleBatches(baseOffset: Long, segment: FileRecords): Long = {
+      def record(offset: Long) = {
+        val data = offset.toString.getBytes
+        new SimpleRecord(data, data)
       }
+
+      segment.append(MemoryRecords.withRecords(baseOffset, CompressionType.NONE, 0,
+        record(baseOffset)))
+      segment.append(MemoryRecords.withRecords(baseOffset + 1, CompressionType.NONE, 0,
+        record(baseOffset + 1),
+        record(baseOffset + 2)))
+      segment.append(MemoryRecords.withRecords(baseOffset + Int.MaxValue - 1, CompressionType.NONE, 0,
+        record(baseOffset + Int.MaxValue - 1)))
+      baseOffset + Int.MaxValue
     }
 
-    log.flush()
-    log.close()
-
-    // We want to "merge" log segments 1 and 2. This is where the offset overflow will be.
-    // Current: segment #1 | segment #2 | segment #3 | segment# 4
-    // Final: segment #1 | segment #2' | segment #4
-    // where 2' corresponds to segment #2 and segment #3 combined together.
-    // Append segment #3 at the end of segment #2 to create 2'
-    var dest: FileOutputStream = null
-    var source: FileInputStream = null
-    try {
-      dest = new FileOutputStream(toMerge(0), true)
-      source = new FileInputStream(toMerge(1))
-      val sourceBytes = new Array[Byte](toMerge(1).length.toInt)
-      source.read(sourceBytes)
-      dest.write(sourceBytes)
-    } finally {
-      dest.close()
-      source.close()
+    def writeNormalSegment(baseOffset: Long): Long = {
+      val segment = rawSegment(logDir, baseOffset)
+      try writeSampleBatches(baseOffset, segment)
+      finally segment.close()
     }
 
-    // Delete segment #3 including any index, etc.
-    toMerge(1).delete()
-    log = createLog(logDir, logConfig, brokerTopicStats, scheduler, time, recoveryPoint = Long.MaxValue)
+    def writeOverflowSegment(baseOffset: Long): Long = {
+      val segment = rawSegment(logDir, baseOffset)
+      try {
+        val nextOffset = writeSampleBatches(baseOffset, segment)
+        writeSampleBatches(nextOffset, segment)
+      } finally segment.close()
+    }
 
-    // assert that there is now one less segment than before, and that the records in the log are same as before
-    assertEquals(log.numberOfSegments, 3)
-    assertTrue(verifyRecordsInLog(log, inputRecords.toList))
-
-    (log, log.logSegments.toList(1), inputRecords.toList)
+    // We create three segments, the second of which contains offsets which overflow
+    var nextOffset = 0L
+    nextOffset = writeNormalSegment(nextOffset)
+    nextOffset = writeOverflowSegment(nextOffset)
+    writeNormalSegment(nextOffset)
   }
 
-  def verifyRecordsInLog(log: Log, expectedRecords: List[Record]): Boolean = {
+  def allRecords(log: Log): List[Record] = {
     val recordsFound = ListBuffer[Record]()
     for (logSegment <- log.logSegments) {
       for (batch <- logSegment.log.batches.asScala) {
-        val it = batch.iterator()
-        while (it.hasNext())
-          recordsFound += it.next()
+        recordsFound ++= batch.iterator().asScala
       }
     }
-    return recordsFound.equals(expectedRecords)
+    recordsFound.toList
+  }
+
+  def verifyRecordsInLog(log: Log, expectedRecords: List[Record]): Unit = {
+    assertEquals(expectedRecords, allRecords(log))
   }
 
   /* extract all the keys from a log */
@@ -3590,12 +3607,16 @@ object LogTest {
       yield TestUtils.readString(record.key).toLong
   }
 
-  def recoverAndCheck(logDir: File, config: LogConfig, expectedKeys: Iterable[Long],
-                      brokerTopicStats: BrokerTopicStats, expectDeletedFiles: Boolean = false): Log = {
-    val time = new MockTime()
+  def recoverAndCheck(logDir: File,
+                      config: LogConfig,
+                      expectedKeys: Iterable[Long],
+                      brokerTopicStats: BrokerTopicStats,
+                      time: Time,
+                      scheduler: Scheduler,
+                      expectDeletedFiles: Boolean = false): Log = {
     // Recover log file and check that after recovery, keys are as expected
     // and all temporary files have been deleted
-    val recoveredLog = createLog(logDir, config, brokerTopicStats, time.scheduler, time)
+    val recoveredLog = createLog(logDir, config, brokerTopicStats, scheduler, time)
     time.sleep(config.fileDeleteDelayMs + 1)
     for (file <- logDir.listFiles) {
       if (!expectDeletedFiles)

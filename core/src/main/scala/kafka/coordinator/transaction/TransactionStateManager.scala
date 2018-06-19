@@ -313,8 +313,8 @@ class TransactionStateManager(brokerId: Int,
               case records: MemoryRecords => records
               case fileRecords: FileRecords =>
                 buffer.clear()
-                val bufferRead = fileRecords.readInto(buffer, 0)
-                MemoryRecords.readableRecords(bufferRead)
+                fileRecords.readInto(buffer, 0)
+                MemoryRecords.readableRecords(buffer)
             }
 
             memRecords.batches.asScala.foreach { batch =>

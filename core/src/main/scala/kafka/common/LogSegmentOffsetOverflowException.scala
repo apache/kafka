@@ -25,7 +25,6 @@ import kafka.log.LogSegment
  * KAFKA-5413. With KAFKA-6264, we have the ability to split such log segments into multiple log segments such that we
  * do not have any segments with offset overflow.
  */
-class LogSegmentOffsetOverflowException(message: String, cause: Throwable, val logSegment: LogSegment) extends KafkaException(message, cause) {
-  def this(cause: Throwable, logSegment: LogSegment) = this(null, cause, logSegment)
-  def this(message: String, logSegment: LogSegment) = this(message, null, logSegment)
+class LogSegmentOffsetOverflowException(val segment: LogSegment, val offset: Long)
+  extends KafkaException(s"Detected offset overflow at offset $offset in segment $segment") {
 }
