@@ -27,7 +27,7 @@ public class ConfigResourceTest {
     @Test
     public void shouldGetTypeFromId() {
         assertEquals(ConfigResource.Type.TOPIC, ConfigResource.Type.forId((byte) 2));
-        assertEquals(ConfigResource.Type.BROKER, ConfigResource.Type.forId((byte) 3));
+        assertEquals(ConfigResource.Type.BROKER, ConfigResource.Type.forId((byte) 4));
     }
 
     @Test

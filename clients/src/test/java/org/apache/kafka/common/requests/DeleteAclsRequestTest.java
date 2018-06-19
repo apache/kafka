@@ -21,10 +21,10 @@ import org.apache.kafka.common.acl.AccessControlEntryFilter;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
-import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.resource.PatternType;
+import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
 import org.junit.Test;
 
@@ -43,14 +43,14 @@ public class DeleteAclsRequestTest {
     private static final AclBindingFilter PREFIXED_FILTER = new AclBindingFilter(new ResourcePatternFilter(ResourceType.GROUP, "prefix", PatternType.PREFIXED),
         new AccessControlEntryFilter("User:*", "127.0.0.1", AclOperation.CREATE, AclPermissionType.ALLOW));
 
-    private static final AclBindingFilter ANY_FILTER = new AclBindingFilter(new ResourcePatternFilter(ResourceType.GROUP, "prefix", PatternType.PREFIXED),
+    private static final AclBindingFilter ANY_FILTER = new AclBindingFilter(new ResourcePatternFilter(ResourceType.GROUP, "bar", PatternType.ANY),
         new AccessControlEntryFilter("User:*", "127.0.0.1", AclOperation.CREATE, AclPermissionType.ALLOW));
 
     private static final AclBindingFilter UNKNOWN_FILTER = new AclBindingFilter(new ResourcePatternFilter(ResourceType.UNKNOWN, "prefix", PatternType.PREFIXED),
         new AccessControlEntryFilter("User:*", "127.0.0.1", AclOperation.CREATE, AclPermissionType.ALLOW));
 
     @Test(expected = UnsupportedVersionException.class)
-    public void shouldThrowOnV0IfNotLiteral() {
+    public void shouldThrowOnV0IfPrefixed() {
         new DeleteAclsRequest(V0, aclFilters(PREFIXED_FILTER));
     }
 
@@ -60,13 +60,28 @@ public class DeleteAclsRequestTest {
     }
 
     @Test
-    public void shouldRoundTripV0() {
+    public void shouldRoundTripLiteralV0() {
         final DeleteAclsRequest original = new DeleteAclsRequest(V0, aclFilters(LITERAL_FILTER));
         final Struct struct = original.toStruct();
 
         final DeleteAclsRequest result = new DeleteAclsRequest(struct, V0);
 
         assertRequestEquals(original, result);
+    }
+
+    @Test
+    public void shouldRoundTripAnyV0AsLiteral() {
+        final DeleteAclsRequest original = new DeleteAclsRequest(V0, aclFilters(ANY_FILTER));
+        final DeleteAclsRequest expected = new DeleteAclsRequest(V0, aclFilters(
+            new AclBindingFilter(new ResourcePatternFilter(
+                ANY_FILTER.patternFilter().resourceType(),
+                ANY_FILTER.patternFilter().name(),
+                PatternType.LITERAL),
+                ANY_FILTER.entryFilter())));
+
+        final DeleteAclsRequest result = new DeleteAclsRequest(original.toStruct(), V0);
+
+        assertRequestEquals(expected, result);
     }
 
     @Test
