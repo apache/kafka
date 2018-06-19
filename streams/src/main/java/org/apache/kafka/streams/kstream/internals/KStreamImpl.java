@@ -676,8 +676,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         StreamTableJoinNode<K, V> streamTableJoinNode = new StreamTableJoinNode<>(name,
                                                                                   processorParameters,
-                                                                                  new String[]{});
-        streamTableJoinNode.setGlobalKTableJoin(true);
+                                                                                  new String[]{},
+                                                                                  null);
         addGraphNode(streamTableJoinNode);
 
         return new KStreamImpl<>(builder, name, sourceNodes, false, streamTableJoinNode);

@@ -31,7 +31,9 @@ public class ProcessorParameters<K, V> {
     private final ProcessorSupplier<K, V> processorSupplier;
     private final String processorName;
 
-    public ProcessorParameters(final ProcessorSupplier<K, V> processorSupplier, final String processorName) {
+    public ProcessorParameters(final ProcessorSupplier<K, V> processorSupplier,
+                               final String processorName) {
+
         this.processorSupplier = processorSupplier;
         this.processorName = processorName;
     }
@@ -43,4 +45,5 @@ public class ProcessorParameters<K, V> {
     public String processorName() {
         return processorName;
     }
+
 }

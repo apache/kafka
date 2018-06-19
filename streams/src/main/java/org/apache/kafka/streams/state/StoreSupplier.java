@@ -16,16 +16,32 @@
  */
 package org.apache.kafka.streams.state;
 
-import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.processor.StateStore;
 
 /**
- * A store supplier that can be used to create one or more {@link KeyValueStore KeyValueStore<Bytes, byte[]>} instances of type &lt;Byte, byte[]&gt;.
+ * A state store supplier which can create one or more {@link StateStore} instances.
  *
- * For any stores implementing the {@link KeyValueStore KeyValueStore<Bytes, byte[]>} interface, null value bytes are considered as "not exist". This means:
- *
- * 1. Null value bytes in put operations should be treated as delete.
- * 2. If the key does not exist, get operations should return null value bytes.
+ * @param <T> State store type
  */
-public interface KeyValueBytesStoreSupplier extends StoreSupplier<KeyValueStore<Bytes, byte[]>> {
+public interface StoreSupplier<T extends StateStore> {
+    /**
+     * Return the name of this state store supplier.
+     * This must be a valid Kafka topic name; valid characters are ASCII alphanumerics, '.', '_' and '-'.
+     *
+     * @return the name of this state store supplier
+     */
+    String name();
 
+    /**
+     * Return a new {@link StateStore} instance.
+     *
+     * @return a new {@link StateStore} instance of type T
+     */
+    T get();
+
+    /**
+     * Return a String that is used as the scope for metrics recorded by Metered stores.
+     * @return metricsScope
+     */
+    String metricsScope();
 }
