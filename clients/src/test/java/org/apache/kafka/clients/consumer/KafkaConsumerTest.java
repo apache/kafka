@@ -179,7 +179,7 @@ public class KafkaConsumerTest {
 
     @Test
     public void testSubscription() {
-        KafkaConsumer<byte[], byte[]> consumer = newConsumer();
+        KafkaConsumer<byte[], byte[]> consumer = getConsumer();
 
         consumer.subscribe(singletonList(topic));
         assertEquals(singleton(topic), consumer.subscription());
@@ -202,21 +202,21 @@ public class KafkaConsumerTest {
 
     @Test(expected = IllegalArgumentException.class)
     public void testSubscriptionOnNullTopicCollection() {
-        try (KafkaConsumer<byte[], byte[]> consumer = newConsumer()) {
+        try (KafkaConsumer<byte[], byte[]> consumer = getConsumer()) {
             consumer.subscribe((List<String>) null);
         }
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void testSubscriptionOnNullTopic() {
-        try (KafkaConsumer<byte[], byte[]> consumer = newConsumer()) {
+        try (KafkaConsumer<byte[], byte[]> consumer = getConsumer()) {
             consumer.subscribe(singletonList((String) null));
         }
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void testSubscriptionOnEmptyTopic() {
-        try (KafkaConsumer<byte[], byte[]> consumer = newConsumer()) {
+        try (KafkaConsumer<byte[], byte[]> consumer = getConsumer()) {
             String emptyTopic = "  ";
             consumer.subscribe(singletonList(emptyTopic));
         }
@@ -224,7 +224,7 @@ public class KafkaConsumerTest {
 
     @Test(expected = IllegalArgumentException.class)
     public void testSubscriptionOnNullPattern() {
-        try (KafkaConsumer<byte[], byte[]> consumer = newConsumer()) {
+        try (KafkaConsumer<byte[], byte[]> consumer = getConsumer()) {
             consumer.subscribe((Pattern) null);
         }
     }
@@ -234,14 +234,14 @@ public class KafkaConsumerTest {
         Properties props = new Properties();
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         props.setProperty(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, "");
-        try (KafkaConsumer<byte[], byte[]> consumer = newConsumer(props)) {
+        try (KafkaConsumer<byte[], byte[]> consumer = getConsumer(props)) {
             consumer.subscribe(singletonList(topic));
         }
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void testSeekNegative() {
-        try (KafkaConsumer<byte[], byte[]> consumer = newConsumer()) {
+        try (KafkaConsumer<byte[], byte[]> consumer = getConsumer()) {
             consumer.assign(singleton(new TopicPartition("nonExistTopic", 0)));
             consumer.seek(new TopicPartition("nonExistTopic", 0), -1);
         }
@@ -249,14 +249,14 @@ public class KafkaConsumerTest {
 
     @Test(expected = IllegalArgumentException.class)
     public void testAssignOnNullTopicPartition() {
-        try (KafkaConsumer<byte[], byte[]> consumer = newConsumer()) {
+        try (KafkaConsumer<byte[], byte[]> consumer = getConsumer()) {
             consumer.assign(null);
         }
     }
 
     @Test
     public void testAssignOnEmptyTopicPartition() {
-        try (KafkaConsumer<byte[], byte[]> consumer = newConsumer()) {
+        try (KafkaConsumer<byte[], byte[]> consumer = getConsumer()) {
             consumer.assign(Collections.<TopicPartition>emptyList());
             assertTrue(consumer.subscription().isEmpty());
             assertTrue(consumer.assignment().isEmpty());
@@ -265,14 +265,14 @@ public class KafkaConsumerTest {
 
     @Test(expected = IllegalArgumentException.class)
     public void testAssignOnNullTopicInPartition() {
-        try (KafkaConsumer<byte[], byte[]> consumer = newConsumer()) {
+        try (KafkaConsumer<byte[], byte[]> consumer = getConsumer()) {
             consumer.assign(singleton(new TopicPartition(null, 0)));
         }
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void testAssignOnEmptyTopicInPartition() {
-        try (KafkaConsumer<byte[], byte[]> consumer = newConsumer()) {
+        try (KafkaConsumer<byte[], byte[]> consumer = getConsumer()) {
             consumer.assign(singleton(new TopicPartition("  ", 0)));
         }
     }
@@ -304,7 +304,7 @@ public class KafkaConsumerTest {
 
     @Test
     public void testPause() {
-        KafkaConsumer<byte[], byte[]> consumer = newConsumer();
+        KafkaConsumer<byte[], byte[]> consumer = getConsumer();
 
         consumer.assign(singletonList(tp0));
         assertEquals(singleton(tp0), consumer.assignment());
@@ -322,15 +322,15 @@ public class KafkaConsumerTest {
         consumer.close();
     }
 
-    private KafkaConsumer<byte[], byte[]> newConsumer() {
+    private KafkaConsumer<byte[], byte[]> getConsumer() {
         Properties props = new Properties();
         props.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "my.consumer");
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         props.setProperty(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
-        return newConsumer(props);
+        return getConsumer(props);
     }
 
-    private KafkaConsumer<byte[], byte[]> newConsumer(Properties props) {
+    private KafkaConsumer<byte[], byte[]> getConsumer(Properties props) {
         return new KafkaConsumer<>(props, new ByteArrayDeserializer(), new ByteArrayDeserializer());
     }
 
@@ -347,7 +347,7 @@ public class KafkaConsumerTest {
         client.setNode(node);
         PartitionAssignor assignor = new RoundRobinAssignor();
 
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, true);
+        KafkaConsumer<String, String> consumer = getConsumer(time, client, metadata, assignor, true);
         consumer.subscribe(singleton(topic), getConsumerRebalanceListener(consumer));
         Node coordinator = prepareRebalance(client, node, assignor, singletonList(tp0), null);
 
@@ -388,7 +388,7 @@ public class KafkaConsumerTest {
         client.setNode(node);
         PartitionAssignor assignor = new RoundRobinAssignor();
 
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, true);
+        KafkaConsumer<String, String> consumer = getConsumer(time, client, metadata, assignor, true);
         consumer.subscribe(singleton(topic), getConsumerRebalanceListener(consumer));
         Node coordinator = prepareRebalance(client, node, assignor, singletonList(tp0), null);
 
@@ -425,7 +425,7 @@ public class KafkaConsumerTest {
         client.setNode(node);
         final PartitionAssignor assignor = new RoundRobinAssignor();
 
-        final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, true);
+        final KafkaConsumer<String, String> consumer = getConsumer(time, client, metadata, assignor, true);
         consumer.subscribe(singleton(topic), getConsumerRebalanceListener(consumer));
         prepareRebalance(client, node, assignor, singletonList(tp0), null);
 
@@ -449,7 +449,7 @@ public class KafkaConsumerTest {
         client.setNode(node);
         final PartitionAssignor assignor = new RoundRobinAssignor();
 
-        final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, true);
+        final KafkaConsumer<String, String> consumer = getConsumer(time, client, metadata, assignor, true);
         consumer.subscribe(singleton(topic), getConsumerRebalanceListener(consumer));
         prepareRebalance(client, node, assignor, singletonList(tp0), null);
 
@@ -476,7 +476,7 @@ public class KafkaConsumerTest {
         client.setNode(node);
         PartitionAssignor assignor = new RoundRobinAssignor();
 
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, true);
+        KafkaConsumer<String, String> consumer = getConsumer(time, client, metadata, assignor, true);
         consumer.assign(singleton(tp0));
         consumer.seekToBeginning(singleton(tp0));
 
@@ -506,7 +506,7 @@ public class KafkaConsumerTest {
         MockClient client = new MockClient(time, metadata);
         client.setNode(node);
 
-        KafkaConsumer<String, String> consumer = newConsumerNoAutoCommit(time, client, metadata);
+        KafkaConsumer<String, String> consumer = getNoAutoCommitConsumer(time, client, metadata);
         consumer.assign(Arrays.asList(tp0, tp1));
         consumer.seekToEnd(singleton(tp0));
         consumer.seekToBeginning(singleton(tp1));
@@ -552,7 +552,7 @@ public class KafkaConsumerTest {
         client.setNode(node);
         PartitionAssignor assignor = new RoundRobinAssignor();
 
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
+        KafkaConsumer<String, String> consumer = getConsumer(time, client, metadata, assignor,
                 OffsetResetStrategy.NONE, true);
         consumer.assign(singletonList(tp0));
 
@@ -577,7 +577,7 @@ public class KafkaConsumerTest {
         client.setNode(node);
         PartitionAssignor assignor = new RoundRobinAssignor();
 
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
+        KafkaConsumer<String, String> consumer = getConsumer(time, client, metadata, assignor,
                 OffsetResetStrategy.NONE, true);
         consumer.assign(singletonList(tp0));
 
@@ -603,7 +603,7 @@ public class KafkaConsumerTest {
         client.setNode(node);
         PartitionAssignor assignor = new RoundRobinAssignor();
 
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
+        KafkaConsumer<String, String> consumer = getConsumer(time, client, metadata, assignor,
                 OffsetResetStrategy.LATEST, true);
         consumer.assign(singletonList(tp0));
 
@@ -634,7 +634,7 @@ public class KafkaConsumerTest {
         client.setNode(node);
         PartitionAssignor assignor = new RoundRobinAssignor();
 
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, true);
+        KafkaConsumer<String, String> consumer = getConsumer(time, client, metadata, assignor, true);
         consumer.assign(singletonList(tp0));
 
         // lookup coordinator
@@ -673,7 +673,7 @@ public class KafkaConsumerTest {
         client.setNode(node);
         PartitionAssignor assignor = new RoundRobinAssignor();
 
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, true);
+        KafkaConsumer<String, String> consumer = getConsumer(time, client, metadata, assignor, true);
         consumer.subscribe(singleton(topic), getConsumerRebalanceListener(consumer));
         Node coordinator = prepareRebalance(client, node, assignor, singletonList(tp0), null);
 
@@ -715,7 +715,7 @@ public class KafkaConsumerTest {
         client.setNode(node);
         PartitionAssignor assignor = new RoundRobinAssignor();
 
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, true);
+        KafkaConsumer<String, String> consumer = getConsumer(time, client, metadata, assignor, true);
         prepareRebalance(client, node, singleton(topic), assignor, singletonList(tp0), null);
 
         consumer.subscribe(Pattern.compile(topic), getConsumerRebalanceListener(consumer));
@@ -753,7 +753,7 @@ public class KafkaConsumerTest {
 
         metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
 
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, false);
+        KafkaConsumer<String, String> consumer = getConsumer(time, client, metadata, assignor, false);
 
         Node coordinator = prepareRebalance(client, node, singleton(topic), assignor, singletonList(tp0), null);
         consumer.subscribe(Pattern.compile(topic), getConsumerRebalanceListener(consumer));
@@ -786,7 +786,7 @@ public class KafkaConsumerTest {
         client.setNode(node);
         PartitionAssignor assignor = new RoundRobinAssignor();
 
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, true);
+        KafkaConsumer<String, String> consumer = getConsumer(time, client, metadata, assignor, true);
         consumer.subscribe(singleton(topic), getConsumerRebalanceListener(consumer));
         prepareRebalance(client, node, assignor, singletonList(tp0), null);
 
@@ -838,7 +838,7 @@ public class KafkaConsumerTest {
         client.setNode(node);
         final PartitionAssignor assignor = new RoundRobinAssignor();
 
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, false);
+        KafkaConsumer<String, String> consumer = getConsumer(time, client, metadata, assignor, false);
         consumer.subscribe(singleton(topic), getConsumerRebalanceListener(consumer));
         prepareRebalance(client, node, assignor, singletonList(tp0), null);
 
@@ -871,7 +871,7 @@ public class KafkaConsumerTest {
         client.setNode(node);
         PartitionAssignor assignor = new RangeAssignor();
 
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, true);
+        KafkaConsumer<String, String> consumer = getConsumer(time, client, metadata, assignor, true);
         consumer.subscribe(singletonList(topic), getConsumerRebalanceListener(consumer));
 
         prepareRebalance(client, node, assignor, singletonList(tp0), null);
@@ -913,7 +913,7 @@ public class KafkaConsumerTest {
         client.setNode(node);
         PartitionAssignor assignor = new RangeAssignor();
 
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, true);
+        KafkaConsumer<String, String> consumer = getConsumer(time, client, metadata, assignor, true);
 
         // initial subscription
         consumer.subscribe(Arrays.asList(topic, topic2), getConsumerRebalanceListener(consumer));
@@ -1029,7 +1029,7 @@ public class KafkaConsumerTest {
         client.setNode(node);
         PartitionAssignor assignor = new RangeAssignor();
 
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, false);
+        KafkaConsumer<String, String> consumer = getConsumer(time, client, metadata, assignor, false);
 
         // initial subscription
         consumer.subscribe(singleton(topic), getConsumerRebalanceListener(consumer));
@@ -1093,7 +1093,7 @@ public class KafkaConsumerTest {
         client.setNode(node);
         PartitionAssignor assignor = new RangeAssignor();
 
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, true);
+        KafkaConsumer<String, String> consumer = getConsumer(time, client, metadata, assignor, true);
 
         // lookup coordinator
         client.prepareResponseFrom(new FindCoordinatorResponse(Errors.NONE, node), node);
@@ -1150,7 +1150,7 @@ public class KafkaConsumerTest {
         client.setNode(node);
         PartitionAssignor assignor = new RangeAssignor();
 
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, false);
+        KafkaConsumer<String, String> consumer = getConsumer(time, client, metadata, assignor, false);
 
         // lookup coordinator
         client.prepareResponseFrom(new FindCoordinatorResponse(Errors.NONE, node), node);
@@ -1205,7 +1205,7 @@ public class KafkaConsumerTest {
         client.setNode(node);
         PartitionAssignor assignor = new RangeAssignor();
 
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, true);
+        KafkaConsumer<String, String> consumer = getConsumer(time, client, metadata, assignor, true);
 
         // lookup coordinator
         client.prepareResponseFrom(new FindCoordinatorResponse(Errors.NONE, node), node);
@@ -1248,14 +1248,14 @@ public class KafkaConsumerTest {
 
     @Test(expected = IllegalStateException.class)
     public void testPollWithNoSubscription() {
-        try (KafkaConsumer<byte[], byte[]> consumer = newConsumer()) {
+        try (KafkaConsumer<byte[], byte[]> consumer = getConsumer()) {
             consumer.poll(Duration.ZERO);
         }
     }
 
     @Test(expected = IllegalStateException.class)
     public void testPollWithEmptySubscription() {
-        try (KafkaConsumer<byte[], byte[]> consumer = newConsumer()) {
+        try (KafkaConsumer<byte[], byte[]> consumer = getConsumer()) {
             consumer.subscribe(Collections.<String>emptyList());
             consumer.poll(Duration.ZERO);
         }
@@ -1263,7 +1263,7 @@ public class KafkaConsumerTest {
 
     @Test(expected = IllegalStateException.class)
     public void testPollWithEmptyUserAssignment() {
-        try (KafkaConsumer<byte[], byte[]> consumer = newConsumer()) {
+        try (KafkaConsumer<byte[], byte[]> consumer = getConsumer()) {
             consumer.assign(Collections.<TopicPartition>emptySet());
             consumer.poll(Duration.ZERO);
         }
@@ -1303,7 +1303,7 @@ public class KafkaConsumerTest {
 
     @Test
     public void closeShouldBeIdempotent() {
-        KafkaConsumer<byte[], byte[]> consumer = newConsumer();
+        KafkaConsumer<byte[], byte[]> consumer = getConsumer();
         consumer.close();
         consumer.close();
         consumer.close();
@@ -1336,7 +1336,7 @@ public class KafkaConsumerTest {
         client.setNode(node);
         PartitionAssignor assignor = new RoundRobinAssignor();
 
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, false);
+        KafkaConsumer<String, String> consumer = getConsumer(time, client, metadata, assignor, false);
         consumer.subscribe(singleton(topic), getConsumerRebalanceListener(consumer));
         client.prepareResponseFrom(new FindCoordinatorResponse(Errors.NONE, node), node);
         Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
@@ -1409,7 +1409,7 @@ public class KafkaConsumerTest {
         client.setNode(node);
         PartitionAssignor assignor = new RoundRobinAssignor();
 
-        final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, false);
+        final KafkaConsumer<String, String> consumer = getConsumer(time, client, metadata, assignor, false);
         consumer.subscribe(singleton(topic), getConsumerRebalanceListener(consumer));
         Node coordinator = prepareRebalance(client, node, assignor, singletonList(tp0), null);
 
@@ -1551,7 +1551,7 @@ public class KafkaConsumerTest {
         PartitionAssignor assignor = new RangeAssignor();
 
         client.createPendingAuthenticationError(node, 0);
-        return newConsumer(time, client, metadata, assignor, false);
+        return getConsumer(time, client, metadata, assignor, false);
     }
 
     private ConsumerRebalanceListener getConsumerRebalanceListener(final KafkaConsumer<String, String> consumer) {
@@ -1724,21 +1724,21 @@ public class KafkaConsumerTest {
         return fetchResponse(Collections.singletonMap(partition, fetchInfo));
     }
 
-    private KafkaConsumer<String, String> newConsumer(Time time,
+    private KafkaConsumer<String, String> getConsumer(Time time,
                                                       KafkaClient client,
                                                       Metadata metadata,
                                                       PartitionAssignor assignor,
                                                       boolean autoCommitEnabled) {
-        return newConsumer(time, client, metadata, assignor, OffsetResetStrategy.EARLIEST, autoCommitEnabled);
+        return getConsumer(time, client, metadata, assignor, OffsetResetStrategy.EARLIEST, autoCommitEnabled);
     }
 
-    private KafkaConsumer<String, String> newConsumerNoAutoCommit(Time time,
+    private KafkaConsumer<String, String> getNoAutoCommitConsumer(Time time,
                                                                   KafkaClient client,
                                                                   Metadata metadata) {
-        return newConsumer(time, client, metadata, new RangeAssignor(), OffsetResetStrategy.EARLIEST, false);
+        return getConsumer(time, client, metadata, new RangeAssignor(), OffsetResetStrategy.EARLIEST, false);
     }
 
-    private KafkaConsumer<String, String> newConsumer(Time time,
+    private KafkaConsumer<String, String> getConsumer(Time time,
                                                       KafkaClient client,
                                                       Metadata metadata,
                                                       PartitionAssignor assignor,
@@ -1758,7 +1758,7 @@ public class KafkaConsumerTest {
         int maxPollRecords = Integer.MAX_VALUE;
         boolean checkCrcs = true;
         int rebalanceTimeoutMs = 60000;
-        
+
         Deserializer<String> keyDeserializer = new StringDeserializer();
         Deserializer<String> valueDeserializer = new StringDeserializer();
 

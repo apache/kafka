@@ -599,7 +599,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
   }
 
   @Test(expected = classOf[joptsimple.OptionException])
-  def testDescribeWithUnrecognizedNewConsumerOption() {
+  def testDescribeWithUnrecognizedConsumerOption() {
     val cgcArgs = Array("--new-consumer", "--bootstrap-server", brokerList, "--describe", "--group", group)
     getConsumerGroupService(cgcArgs)
     fail("Expected an error due to presence of unrecognized --new-consumer option")

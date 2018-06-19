@@ -1127,14 +1127,14 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       val testGroupId = "test_group_id"
       val testClientId = "test_client_id"
       val fakeGroupId = "fake_group_id"
-      val newConsumerConfig = new Properties(consumerConfig)
-      newConsumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, testGroupId)
-      newConsumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, testClientId)
+      val consumerConf = new Properties(consumerConfig)
+      consumerConf.setProperty(ConsumerConfig.GROUP_ID_CONFIG, testGroupId)
+      consumerConf.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, testClientId)
       val consumer = TestUtils.createConsumer(brokerList,
         securityProtocol = this.securityProtocol,
         trustStoreFile = this.trustStoreFile,
         saslProperties = this.clientSaslProperties,
-        props = Some(newConsumerConfig))
+        props = Some(consumerConf))
       try {
         // Start a consumer in a thread that will subscribe to a new group.
         val consumerThread = new Thread {

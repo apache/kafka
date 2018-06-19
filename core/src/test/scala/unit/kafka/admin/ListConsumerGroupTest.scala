@@ -40,7 +40,7 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
   }
 
   @Test(expected = classOf[OptionException])
-  def testListWithUnrecognizedNewConsumerOption() {
+  def testListWithUnrecognizedConsumerOption() {
     val cgcArgs = Array("--new-consumer", "--bootstrap-server", brokerList, "--list")
     getConsumerGroupService(cgcArgs)
   }
