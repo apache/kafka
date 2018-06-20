@@ -105,7 +105,7 @@ public class SegmentsTest {
 
     @Test
     public void shouldNotCreateSegmentThatIsAlreadyExpired() {
-        updateStreamTimeAndGetOrCreateSegment(7);
+        updateStreamTimeAndCreateSegment(7);
         assertNull(segments.getOrCreateSegmentIfLive(0, context));
         assertFalse(new File(context.stateDir(), "test/test.0").exists());
     }
@@ -171,11 +171,11 @@ public class SegmentsTest {
 
     @Test
     public void shouldGetSegmentsWithinTimeRange() {
-        updateStreamTimeAndGetOrCreateSegment(0);
-        updateStreamTimeAndGetOrCreateSegment(1);
-        updateStreamTimeAndGetOrCreateSegment(2);
-        updateStreamTimeAndGetOrCreateSegment(3);
-        updateStreamTimeAndGetOrCreateSegment(4);
+        updateStreamTimeAndCreateSegment(0);
+        updateStreamTimeAndCreateSegment(1);
+        updateStreamTimeAndCreateSegment(2);
+        updateStreamTimeAndCreateSegment(3);
+        updateStreamTimeAndCreateSegment(4);
         segments.getOrCreateSegmentIfLive(0, context);
         segments.getOrCreateSegmentIfLive(1, context);
         segments.getOrCreateSegmentIfLive(2, context);
@@ -191,11 +191,11 @@ public class SegmentsTest {
 
     @Test
     public void shouldGetSegmentsWithinTimeRangeOutOfOrder() throws Exception {
-        updateStreamTimeAndGetOrCreateSegment(4);
-        updateStreamTimeAndGetOrCreateSegment(2);
-        updateStreamTimeAndGetOrCreateSegment(0);
-        updateStreamTimeAndGetOrCreateSegment(1);
-        updateStreamTimeAndGetOrCreateSegment(3);
+        updateStreamTimeAndCreateSegment(4);
+        updateStreamTimeAndCreateSegment(2);
+        updateStreamTimeAndCreateSegment(0);
+        updateStreamTimeAndCreateSegment(1);
+        updateStreamTimeAndCreateSegment(3);
 
         final List<Segment> segments = this.segments.segments(0, 2 * 60 * 1000);
         assertEquals(3, segments.size());
@@ -206,23 +206,41 @@ public class SegmentsTest {
 
     @Test
     public void shouldRollSegments() {
-        updateStreamTimeAndGetOrCreateSegment(0);
+        updateStreamTimeAndCreateSegment(0);
         verifyCorrectSegments(0, 1);
-        updateStreamTimeAndGetOrCreateSegment(1);
+        updateStreamTimeAndCreateSegment(1);
         verifyCorrectSegments(0, 2);
-        updateStreamTimeAndGetOrCreateSegment(2);
+        updateStreamTimeAndCreateSegment(2);
         verifyCorrectSegments(0, 3);
-        updateStreamTimeAndGetOrCreateSegment(3);
+        updateStreamTimeAndCreateSegment(3);
         verifyCorrectSegments(0, 4);
-        updateStreamTimeAndGetOrCreateSegment(4);
+        updateStreamTimeAndCreateSegment(4);
         verifyCorrectSegments(0, 5);
-        updateStreamTimeAndGetOrCreateSegment(5);
+        updateStreamTimeAndCreateSegment(5);
         verifyCorrectSegments(1, 5);
-        updateStreamTimeAndGetOrCreateSegment(6);
+        updateStreamTimeAndCreateSegment(6);
         verifyCorrectSegments(2, 5);
     }
 
-    private void updateStreamTimeAndGetOrCreateSegment(final int segment) {
+    @Test
+    public void futureEventsShouldNotCauseSegmentRoll() {
+        updateStreamTimeAndCreateSegment(0);
+        verifyCorrectSegments(0, 1);
+        updateStreamTimeAndCreateSegment(1);
+        verifyCorrectSegments(0, 2);
+        updateStreamTimeAndCreateSegment(2);
+        verifyCorrectSegments(0, 3);
+        updateStreamTimeAndCreateSegment(3);
+        verifyCorrectSegments(0, 4);
+        updateStreamTimeAndCreateSegment(4);
+        verifyCorrectSegments(0, 5);
+        segments.getOrCreateSegmentIfLive(5, context);
+        verifyCorrectSegments(0, 6);
+        segments.getOrCreateSegmentIfLive(6, context);
+        verifyCorrectSegments(0, 7);
+    }
+
+    private void updateStreamTimeAndCreateSegment(final int segment) {
         context.setStreamTime(segmentInterval * segment);
         segments.getOrCreateSegmentIfLive(segment, context);
     }
