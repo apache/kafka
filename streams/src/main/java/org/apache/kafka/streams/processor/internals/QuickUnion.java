@@ -43,14 +43,14 @@ public class QuickUnion<T> {
         }
         T parent = ids.get(current);
         if (parent == null) {
-            throw new NoSuchElementException("id: " + id.toString());
+            throw new NoSuchElementException("the parent of the node id: " + id.toString());
         }
         List<T> subNodes = new LinkedList<>();
         while (!current.equals(parent)) {
             subNodes.add(current);
             current = parent;
             if (current == null) {
-                throw new NoSuchElementException("id: " + id.toString());
+                throw new NoSuchElementException("the parent of the node id: " + id.toString());
             }
             parent = ids.get(current);
         }
