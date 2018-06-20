@@ -25,7 +25,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
 
 import com.yammer.metrics.core.Gauge
-import kafka.api.{ApiVersion, KAFKA_0_10_1_IV0, KAFKA_2_0_IV2}
+import kafka.api.{ApiVersion, KAFKA_0_10_1_IV0, KAFKA_2_1_IV0}
 import kafka.common.{MessageFormatter, OffsetAndMetadata}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.ReplicaManager
@@ -1090,7 +1090,7 @@ object GroupMetadataManager {
                                        apiVersion: ApiVersion): Array[Byte] = {
     // generate commit value according to schema version
     val (version, value) = {
-      if (apiVersion < KAFKA_2_0_IV2 || offsetAndMetadata.expireTimestamp.nonEmpty)
+      if (apiVersion < KAFKA_2_1_IV0 || offsetAndMetadata.expireTimestamp.nonEmpty)
         // if an older version of the API is used, or if an explicit expiration is provided, use the older schema
         (1.toShort, new Struct(OFFSET_COMMIT_VALUE_SCHEMA_V1))
       else
@@ -1131,7 +1131,7 @@ object GroupMetadataManager {
     val (version, value) = {
       if (apiVersion < KAFKA_0_10_1_IV0)
         (0.toShort, new Struct(GROUP_METADATA_VALUE_SCHEMA_V0))
-      else if (apiVersion < KAFKA_2_0_IV2)
+      else if (apiVersion < KAFKA_2_1_IV0)
         (1.toShort, new Struct(GROUP_METADATA_VALUE_SCHEMA_V1))
       else
         (2.toShort, new Struct(CURRENT_GROUP_VALUE_SCHEMA))

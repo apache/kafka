@@ -17,7 +17,7 @@
 
 package kafka.coordinator.group
 
-import kafka.api.{ApiVersion, KAFKA_1_1_IV0, KAFKA_2_0_IV2}
+import kafka.api.{ApiVersion, KAFKA_1_1_IV0, KAFKA_2_1_IV0}
 import kafka.cluster.Partition
 import kafka.common.OffsetAndMetadata
 import kafka.log.{Log, LogAppendInfo}
@@ -1718,7 +1718,7 @@ class GroupMetadataManagerTest {
     val memberProtocols = List((protocol, Array.emptyByteArray))
     val member = new MemberMetadata(memberId, groupId, "clientId", "clientHost", 30000, 10000, protocolType, memberProtocols)
     val group = GroupMetadata.loadGroup(groupId, Stable, generation, protocolType, protocol, memberId,
-      if (apiVersion >= KAFKA_2_0_IV2) Some(time.milliseconds()) else None, Seq(member), time)
+      if (apiVersion >= KAFKA_2_1_IV0) Some(time.milliseconds()) else None, Seq(member), time)
     val groupMetadataKey = GroupMetadataManager.groupMetadataKey(groupId)
     val groupMetadataValue = GroupMetadataManager.groupMetadataValue(group, Map(memberId -> Array.empty[Byte]), apiVersion)
     new SimpleRecord(groupMetadataKey, groupMetadataValue)
