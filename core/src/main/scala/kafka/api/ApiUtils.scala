@@ -16,8 +16,9 @@
  */
 package kafka.api
 
-import java.nio._
-import kafka.common._
+import java.nio.ByteBuffer
+
+import org.apache.kafka.common.KafkaException
 
 /**
  * Helper functions specific to parsing or serializing requests and responses

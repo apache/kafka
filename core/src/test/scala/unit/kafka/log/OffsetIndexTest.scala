@@ -29,7 +29,7 @@ import org.scalatest.junit.JUnitSuite
 import scala.collection._
 import scala.util.Random
 import kafka.utils.TestUtils
-import kafka.common.InvalidOffsetException
+import org.apache.kafka.common.errors.InvalidOffsetException
 
 class OffsetIndexTest extends JUnitSuite {
   

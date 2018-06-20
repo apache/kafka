@@ -36,6 +36,8 @@ import scala.collection._
 import scala.collection.JavaConverters._
 import org.apache.kafka.common.TopicPartition
 
+@deprecated("This is an internal class that is no longer used by Kafka and will be removed in a future release. Please " +
+  "use org.apache.kafka.clients.admin.AdminClient instead.", since = "2.0.0")
 object ZkUtils {
 
   private val UseDefaultAcls = new java.util.ArrayList[ACL]
@@ -183,6 +185,8 @@ object ZkUtils {
 /**
  * Legacy class for interacting with ZooKeeper. Whenever possible, ``KafkaZkClient`` should be used instead.
  */
+@deprecated("This is an internal class that is no longer used by Kafka and will be removed in a future release. Please " +
+  "use org.apache.kafka.clients.admin.AdminClient instead.", since = "2.0.0")
 class ZkUtils(val zkClient: ZkClient,
               val zkConnection: ZkConnection,
               val isSecure: Boolean) extends Logging {

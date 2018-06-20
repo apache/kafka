@@ -42,9 +42,10 @@ import scala.util.{Failure, Success, Try}
 
 /**
   * A Scala administrative client for Kafka which supports managing and inspecting topics, brokers,
-  * and configurations.  This client is deprecated, and will be replaced by KafkaAdminClient.
-  * @see KafkaAdminClient
+  * and configurations. This client is deprecated, and will be replaced by org.apache.kafka.clients.admin.AdminClient.
   */
+@deprecated("This class is deprecated in favour of org.apache.kafka.clients.admin.AdminClient and it will be removed in " +
+  "a future release.", since = "0.11.0")
 class AdminClient(val time: Time,
                   val requestTimeoutMs: Int,
                   val retryBackoffMs: Long,
@@ -364,6 +365,8 @@ class CompositeFuture[T](time: Time,
   }
 }
 
+@deprecated("This class is deprecated in favour of org.apache.kafka.clients.admin.AdminClient and it will be removed in " +
+  "a future release.", since = "0.11.0")
 object AdminClient {
   val DefaultConnectionMaxIdleMs = 9 * 60 * 1000
   val DefaultRequestTimeoutMs = 5000

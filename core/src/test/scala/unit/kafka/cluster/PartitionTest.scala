@@ -22,10 +22,9 @@ import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 
 import kafka.common.UnexpectedAppendOffsetException
-import kafka.log.{Log, LogConfig, LogManager, CleanerConfig}
+import kafka.log.{LogConfig, LogManager, CleanerConfig}
 import kafka.server._
 import kafka.utils.{MockTime, TestUtils, MockScheduler}
-import kafka.utils.timer.MockTimer
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.ReplicaNotAvailableException
 import org.apache.kafka.common.metrics.Metrics
