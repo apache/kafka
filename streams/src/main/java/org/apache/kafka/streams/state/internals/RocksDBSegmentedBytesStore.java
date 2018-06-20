@@ -129,7 +129,7 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
 
         keySchema.init(ProcessorStateManager.storeChangelogTopic(context.applicationId(), root.name()));
 
-        segments.openExisting((InternalProcessorContext) context);
+        segments.openExisting(this.context);
 
         // register and possibly restore the state from the logs
         context.register(root, new StateRestoreCallback() {
