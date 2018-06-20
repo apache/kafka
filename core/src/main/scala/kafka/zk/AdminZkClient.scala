@@ -93,7 +93,6 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
                                                      update: Boolean = false) {
     validateCreateOrUpdateTopic(topic, partitionReplicaAssignment, config, update)
 
-    // Configs only matter if a topic is being created. Changing configs via AlterTopic is not supported
     if (!update) {
       // write out the config if there is any, this isn't transactional with the partition assignments
       zkClient.setOrCreateEntityConfigs(ConfigType.Topic, topic, config)
