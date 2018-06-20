@@ -817,10 +817,23 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     verifyAddListener("SASL_PLAINTEXT", SecurityProtocol.SASL_PLAINTEXT, Seq("GSSAPI"))
     //verifyRemoveListener("SASL_SSL", SecurityProtocol.SASL_SSL, Seq("SCRAM-SHA-512", "SCRAM-SHA-256", "PLAIN"))
     verifyRemoveListener("SASL_PLAINTEXT", SecurityProtocol.SASL_PLAINTEXT, Seq("GSSAPI"))
+
+    // Verify that a listener added to a subset of servers doesn't cause any issues
+    // when metadata is processed by the client.
+    addListener(servers.tail, "SCRAM_LISTENER", SecurityProtocol.SASL_PLAINTEXT, Seq("SCRAM-SHA-256"))
+    val bootstrap = TestUtils.bootstrapServers(servers.tail, new ListenerName("SCRAM_LISTENER"))
+    val producer = ProducerBuilder().bootstrapServers(bootstrap)
+      .securityProtocol(SecurityProtocol.SASL_PLAINTEXT)
+      .saslMechanism("SCRAM-SHA-256")
+      .maxRetries(1000)
+      .build()
+    val partitions = producer.partitionsFor(topic).asScala
+    assertEquals(0, partitions.count(p => p.leader != null && p.leader.id == servers.head.config.brokerId))
+    assertTrue("Did not find partitions with no leader", partitions.exists(_.leader == null))
   }
 
-  private def verifyAddListener(listenerName: String, securityProtocol: SecurityProtocol,
-                                saslMechanisms: Seq[String]): Unit = {
+  private def addListener(servers: Seq[KafkaServer], listenerName: String, securityProtocol: SecurityProtocol,
+                          saslMechanisms: Seq[String]): Unit = {
     val config = servers.head.config
     val existingListenerCount = config.listeners.size
     val listeners = config.listeners
@@ -860,14 +873,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       }
     }), "Listener not created")
 
-    if (saslMechanisms.nonEmpty)
-      saslMechanisms.foreach { mechanism =>
-        verifyListener(securityProtocol, Some(mechanism), s"add-listener-group-$securityProtocol-$mechanism")
-      }
-    else
-      verifyListener(securityProtocol, None, s"add-listener-group-$securityProtocol")
-
-    val brokerConfigs = describeConfig(adminClients.head).entries.asScala
+    val brokerConfigs = describeConfig(adminClients.head, servers).entries.asScala
     props.asScala.foreach { case (name, value) =>
       val entry = brokerConfigs.find(_.name == name).getOrElse(throw new IllegalArgumentException(s"Config not found $name"))
       if (DynamicBrokerConfig.isPasswordConfig(name) || name == unknownConfig)
@@ -875,6 +881,17 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       else
         assertEquals(value, entry.value)
     }
+  }
+
+  private def verifyAddListener(listenerName: String, securityProtocol: SecurityProtocol,
+                                saslMechanisms: Seq[String]): Unit = {
+    addListener(servers, listenerName, securityProtocol, saslMechanisms)
+    if (saslMechanisms.nonEmpty)
+      saslMechanisms.foreach { mechanism =>
+        verifyListener(securityProtocol, Some(mechanism), s"add-listener-group-$securityProtocol-$mechanism")
+      }
+    else
+      verifyListener(securityProtocol, None, s"add-listener-group-$securityProtocol")
   }
 
   private def verifyRemoveListener(listenerName: String, securityProtocol: SecurityProtocol,
@@ -1006,7 +1023,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     }
   }
 
-  private def describeConfig(adminClient: AdminClient): Config = {
+  private def describeConfig(adminClient: AdminClient, servers: Seq[KafkaServer] = this.servers): Config = {
     val configResources = servers.map { server =>
       new ConfigResource(ConfigResource.Type.BROKER, server.config.brokerId.toString)
     }
