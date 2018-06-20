@@ -112,7 +112,6 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
     val principal = session.principal
     val host = session.clientAddress.getHostAddress
-    val acls = getMatchingAcls(resource.resourceType, resource.name)
 
     val authorized = if (isSuperUser(operation, resource, principal, host)) {
       // Check if the user is a superuser to avoid needlessly checking all ACLs
@@ -122,7 +121,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
       // User is no superuser, load ACLs
       // To avoid unnecessarily loading ACLs for super users we need to nest this as a second if
       // statement to allow loading ACLs before this check buf after performing the superuser check
-      val acls = getAcls(resource) ++ getAcls(new Resource(resource.resourceType, Resource.WildCardResource))
+      val acls = getMatchingAcls(resource.resourceType, resource.name)
 
       if (acls.isEmpty) {
         // No ACLs found for this resource, permission is determined by value of config allow.everyone.if.no.acl.found
