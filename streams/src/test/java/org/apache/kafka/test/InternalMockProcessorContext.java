@@ -58,11 +58,11 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
     private final Map<String, StateStore> storeMap = new LinkedHashMap<>();
     private final Map<String, StateRestoreCallback> restoreFuncs = new HashMap<>();
     private final ToInternal toInternal = new ToInternal();
-    private final AtomicLong streamTimeSupplier = new AtomicLong();
 
     private Serde<?> keySerde;
     private Serde<?> valSerde;
     private long timestamp = -1L;
+    private long streamTime = -1;
 
     public InternalMockProcessorContext() {
         this(null,
@@ -182,12 +182,12 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
     public void initialized() {}
 
     public void setStreamTime(final long time) {
-        streamTimeSupplier.set(time);
+        streamTime = time;
     }
 
     @Override
     public Long streamTime() {
-        return streamTimeSupplier.get();
+        return streamTime;
     }
 
     @Override
