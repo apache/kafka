@@ -20,7 +20,6 @@ package kafka.integration
 import java.io.File
 import java.util.Arrays
 
-import kafka.common.KafkaException
 import kafka.server._
 import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
@@ -30,6 +29,7 @@ import org.junit.{After, Before}
 import scala.collection.mutable.{ArrayBuffer, Buffer}
 import java.util.Properties
 
+import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.utils.Time
 

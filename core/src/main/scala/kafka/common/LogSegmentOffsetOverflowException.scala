@@ -26,5 +26,5 @@ import kafka.log.LogSegment
  * do not have any segments with offset overflow.
  */
 class LogSegmentOffsetOverflowException(val segment: LogSegment, val offset: Long)
-  extends KafkaException(s"Detected offset overflow at offset $offset in segment $segment") {
+  extends org.apache.kafka.common.KafkaException(s"Detected offset overflow at offset $offset in segment $segment") {
 }
