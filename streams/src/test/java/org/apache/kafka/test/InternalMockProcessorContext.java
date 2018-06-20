@@ -49,7 +49,6 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicLong;
 
 public class InternalMockProcessorContext extends AbstractProcessorContext implements RecordCollector.Supplier {
 
