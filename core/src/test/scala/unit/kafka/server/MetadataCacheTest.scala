@@ -185,7 +185,6 @@ class MetadataCacheTest {
     assertEquals(0, partitionMetadata.replicas.get(0).id)
   }
 
-
   @Test
   def getTopicMetadataReplicaNotAvailable() {
     val topic = "topic"
