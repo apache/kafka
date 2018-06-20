@@ -46,7 +46,7 @@ public class SegmentsTest {
     private static final int NUM_SEGMENTS = 5;
     private InternalMockProcessorContext context;
     private Segments segments;
-    private long segmentInterval;
+    private final long segmentInterval = 60_000L;
     private File stateDirectory;
     private String storeName = "test";
     private final int retentionPeriod =  4 * 60 * 1000;
@@ -59,7 +59,6 @@ public class SegmentsTest {
                                            Serdes.Long(),
                                            new NoOpRecordCollector(),
                                            new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())));
-        segmentInterval = Segments.segmentInterval(retentionPeriod, NUM_SEGMENTS);
         segments = new Segments(storeName, retentionPeriod, segmentInterval);
     }
 
@@ -78,7 +77,7 @@ public class SegmentsTest {
 
     @Test
     public void shouldBaseSegmentIntervalOnRetentionAndNumSegments() {
-        final Segments segments = new Segments("test", 8 * 60 * 1000, Segments.segmentInterval(8 * 60 * 1000, 5));
+        final Segments segments = new Segments("test", 8 * 60 * 1000, 120_000);
         assertEquals(0, segments.segmentId(0));
         assertEquals(0, segments.segmentId(60000));
         assertEquals(1, segments.segmentId(120000));
@@ -160,7 +159,7 @@ public class SegmentsTest {
         // close existing.
         segments.close();
 
-        segments = new Segments("test", 4 * 60 * 1000, Segments.segmentInterval(4 * 60 * 1000, 5));
+        segments = new Segments("test", 4 * 60 * 1000, 60_000);
         segments.openExisting(context);
 
         assertTrue(segments.getSegmentForTimestamp(0).isOpen());

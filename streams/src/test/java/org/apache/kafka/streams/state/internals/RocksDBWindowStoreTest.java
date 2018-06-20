@@ -69,9 +69,9 @@ public class RocksDBWindowStoreTest {
     private final int numSegments = 3;
     private final long windowSize = 3L;
     private final String windowName = "window";
-    private final long segmentSize = Segments.MIN_SEGMENT_INTERVAL;
+    private final long segmentSize = 60_000;
     private final long retentionPeriod = segmentSize * (numSegments - 1);
-    private final Segments segments = new Segments(windowName, retentionPeriod, Segments.segmentInterval(retentionPeriod, numSegments));
+    private final Segments segments = new Segments(windowName, retentionPeriod, segmentSize);
     private final StateSerdes<Integer, String> serdes = new StateSerdes<>("", Serdes.Integer(), Serdes.String());
 
     private final List<KeyValue<byte[], byte[]>> changeLog = new ArrayList<>();
@@ -444,7 +444,6 @@ public class RocksDBWindowStoreTest {
         windowStore = createWindowStore(context, false);
 
         // to validate segments
-        final Segments segments = new Segments(windowName, retentionPeriod, Segments.segmentInterval(retentionPeriod, numSegments));
         final long startTime = segmentSize * 2;
         final long increment = segmentSize / 2;
         setCurrentTime(startTime);

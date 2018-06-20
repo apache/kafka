@@ -36,11 +36,11 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
 
     RocksDBSegmentedBytesStore(final String name,
                                final long retention,
-                               final int numSegments,
+                               final long segmentInterval,
                                final KeySchema keySchema) {
         this.name = name;
         this.keySchema = keySchema;
-        this.segments = new Segments(name, retention, Segments.segmentInterval(retention, numSegments));
+        this.segments = new Segments(name, retention, segmentInterval);
     }
 
     @Override

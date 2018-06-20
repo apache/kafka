@@ -39,11 +39,6 @@ import java.util.TreeMap;
  */
 class Segments {
     private static final Logger log = LoggerFactory.getLogger(Segments.class);
-    static final long MIN_SEGMENT_INTERVAL = 60 * 1000L;
-
-    static long segmentInterval(final long retentionPeriod, final int numSegments) {
-        return Math.max(retentionPeriod / (numSegments - 1), MIN_SEGMENT_INTERVAL);
-    }
 
     private final TreeMap<Long, Segment> segments = new TreeMap<>();
     private final String name;
