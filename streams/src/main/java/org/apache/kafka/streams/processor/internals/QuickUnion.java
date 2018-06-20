@@ -47,11 +47,11 @@ public class QuickUnion<T> {
         }
         List<T> subNodes = new LinkedList<>();
         while (!current.equals(parent)) {
+            if (parent == null) {
+                throw new NoSuchElementException("the parent of the node id: " + current.toString());
+            }
             subNodes.add(current);
             current = parent;
-            if (current == null) {
-                throw new NoSuchElementException("the parent of the node id: " + id.toString());
-            }
             parent = ids.get(current);
         }
         for (T node : subNodes) {
