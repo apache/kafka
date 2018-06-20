@@ -739,13 +739,9 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       .bootstrapServers(bootstrap)
       .build()
 
-    try {
+    assertTrue(intercept[ExecutionException] {
       producer1.send(new ProducerRecord(topic, "key", "value")).get(2, TimeUnit.SECONDS)
-      fail("Send should have failed with invalid advertised listener")
-    } catch {
-      case e: ExecutionException =>
-        assertEquals(classOf[org.apache.kafka.common.errors.TimeoutException], e.getCause.getClass)
-    }
+    }.getCause.isInstanceOf[org.apache.kafka.common.errors.TimeoutException])
 
     alterAdvertisedListener(adminClient, externalAdminClient, invalidHost, "localhost")
     servers.foreach(validateEndpointsInZooKeeper(_, endpoints => !endpoints.contains(invalidHost)))
