@@ -246,7 +246,7 @@ class Log(@volatile var dir: File,
     // The earliest leader epoch may not be flushed during a hard failure. Recover it here.
     _leaderEpochCache.clearAndFlushEarliest(logStartOffset)
 
-    loadProducerState(logEndOffset, reloadFromCleanShutdown = hasCleanShutdownFile)
+    loadProducerState(logEndOffset, reloadFromCleanShutdown = hasCleanShutdownFile, producerStateManager)
 
     info(s"Completed load of log with ${segments.size} segments, log start offset $logStartOffset and " +
       s"log end offset $logEndOffset in ${time.milliseconds() - startMs} ms")
@@ -399,11 +399,11 @@ class Log(@volatile var dir: File,
           case _: NoSuchFileException =>
             error(s"Could not find offset index file corresponding to log file ${segment.log.file.getAbsolutePath}, " +
               "recovering segment and rebuilding index files...")
-            recoverSegment(segment)
+            segment.recover(new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs))
           case e: CorruptIndexException =>
             warn(s"Found a corrupted index file corresponding to log file ${segment.log.file.getAbsolutePath} due " +
               s"to ${e.getMessage}}, recovering segment and rebuilding index files...")
-            recoverSegment(segment)
+            segment.recover(new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs))
         }
         addSegment(segment)
       }
@@ -417,10 +417,11 @@ class Log(@volatile var dir: File,
    * @return The number of bytes truncated from the segment
    * @throws LogSegmentOffsetOverflowException if the segment contains messages that cause index offset overflow
    */
-  private def recoverSegment(segment: LogSegment, leaderEpochCache: Option[LeaderEpochCache] = None): Int = lock synchronized {
-    loadProducerState(segment.baseOffset, reloadFromCleanShutdown = false)
+  private def recoverSegmentAndReloadProducerState(segment: LogSegment,
+                                                   leaderEpochCache: Option[LeaderEpochCache] = None): Int = lock synchronized {
+    val producerStateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs)
+    loadProducerState(segment.baseOffset, reloadFromCleanShutdown = false, producerStateManager)
     val bytesTruncated = segment.recover(producerStateManager, leaderEpochCache)
-
     // once we have recovered the segment's data, take a snapshot to ensure that we won't
     // need to reload the same segment again while recovering another segment.
     producerStateManager.takeSnapshot()
@@ -447,7 +448,7 @@ class Log(@volatile var dir: File,
         time = time,
         fileSuffix = SwapFileSuffix)
       info(s"Found log file ${swapFile.getPath} from interrupted swap operation, repairing.")
-      recoverSegment(swapSegment)
+      swapSegment.recover(new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs))
 
       // We create swap files for two cases:
       // (1) Log cleaning where multiple segments are merged into one, and
@@ -534,7 +535,7 @@ class Log(@volatile var dir: File,
         info(s"Recovering unflushed segment ${segment.baseOffset}")
         val truncatedBytes =
           try {
-            recoverSegment(segment, Some(_leaderEpochCache))
+            recoverSegmentAndReloadProducerState(segment, Some(_leaderEpochCache))
           } catch {
             case _: InvalidOffsetException =>
               val startOffset = segment.baseOffset
@@ -553,7 +554,9 @@ class Log(@volatile var dir: File,
     recoveryPoint
   }
 
-  private def loadProducerState(lastOffset: Long, reloadFromCleanShutdown: Boolean): Unit = lock synchronized {
+  private def loadProducerState(lastOffset: Long,
+                                reloadFromCleanShutdown: Boolean,
+                                producerStateManager: ProducerStateManager): Unit = lock synchronized {
     checkIfMemoryMappedBufferClosed()
     val messageFormatVersion = config.messageFormatVersion.recordVersion.value
     info(s"Loading producer state from offset $lastOffset with message format version $messageFormatVersion")
@@ -1624,7 +1627,7 @@ class Log(@volatile var dir: File,
             this.recoveryPoint = math.min(targetOffset, this.recoveryPoint)
             this.logStartOffset = math.min(targetOffset, this.logStartOffset)
             _leaderEpochCache.clearAndFlushLatest(targetOffset)
-            loadProducerState(targetOffset, reloadFromCleanShutdown = false)
+            loadProducerState(targetOffset, reloadFromCleanShutdown = false, producerStateManager)
           }
           true
         }
