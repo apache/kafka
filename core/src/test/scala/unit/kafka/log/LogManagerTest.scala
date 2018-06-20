@@ -67,6 +67,29 @@ class LogManagerTest {
   @Test
   def testCreateLog() {
     val log = logManager.getOrCreateLog(new TopicPartition(name, 0), logConfig)
+    assertEquals(1, logManager.liveLogDirs.size)
+
+    val logFile = new File(logDir, name + "-0")
+    assertTrue(logFile.exists)
+    log.appendAsLeader(TestUtils.singletonRecords("test".getBytes()), leaderEpoch = 0)
+  }
+
+  /**
+   * Test that getOrCreateLog on a non-existent log creates a new log and that we can append to the new log.
+   * The LogManager is configured with one invalid log directory which should be marked as offline.
+   */
+  @Test
+  def testCreateLogWithInvalidLogDir() {
+    // Configure the log dir with the Nul character as the path, which causes dir.getCanonicalPath() to throw an
+    // IOException. This simulates the scenario where the disk is not properly mounted (which is hard to achieve in
+    // a unit test)
+    val dirs = Seq(logDir, new File("\u0000"))
+
+    logManager.shutdown()
+    logManager = createLogManager(dirs)
+    logManager.startup()
+
+    val log = logManager.getOrCreateLog(new TopicPartition(name, 0), logConfig, isNew = true)
     val logFile = new File(logDir, name + "-0")
     assertTrue(logFile.exists)
     log.appendAsLeader(TestUtils.singletonRecords("test".getBytes()), leaderEpoch = 0)
