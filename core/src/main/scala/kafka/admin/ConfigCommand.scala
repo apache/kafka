@@ -22,7 +22,6 @@ import java.util.{Collections, Properties}
 
 import joptsimple._
 import kafka.common.Config
-import kafka.common.InvalidConfigException
 import kafka.log.LogConfig
 import kafka.server.{ConfigEntityName, ConfigType, Defaults, DynamicBrokerConfig, DynamicConfig, KafkaConfig}
 import kafka.utils.{CommandLineUtils, Exit, PasswordEncoder}
@@ -32,6 +31,7 @@ import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.{AlterConfigsOptions, ConfigEntry, DescribeConfigsOptions, AdminClient => JAdminClient, Config => JConfig}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.types.Password
+import org.apache.kafka.common.errors.InvalidConfigurationException
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.scram.internals.{ScramCredentialUtils, ScramFormatter, ScramMechanism}
 import org.apache.kafka.common.utils.{Sanitizer, Time, Utils}
@@ -83,7 +83,7 @@ object ConfigCommand extends Config {
         processBrokerConfig(opts)
       }
     } catch {
-      case e @ (_: IllegalArgumentException | _: InvalidConfigException | _: OptionException) =>
+      case e @ (_: IllegalArgumentException | _: InvalidConfigurationException | _: OptionException) =>
         logger.debug(s"Failed config command with args '${args.mkString(" ")}'", e)
         System.err.println(e.getMessage)
         Exit.exit(1)
@@ -145,7 +145,7 @@ object ConfigCommand extends Config {
     // fail the command if any of the configs to be deleted does not exist
     val invalidConfigs = configsToBeDeleted.filterNot(configs.containsKey(_))
     if (invalidConfigs.nonEmpty)
-      throw new InvalidConfigException(s"Invalid config(s): ${invalidConfigs.mkString(",")}")
+      throw new InvalidConfigurationException(s"Invalid config(s): ${invalidConfigs.mkString(",")}")
 
     configs ++= configsToBeAdded
     configsToBeDeleted.foreach(configs.remove(_))
@@ -307,12 +307,12 @@ object ConfigCommand extends Config {
     // fail the command if any of the configs to be deleted does not exist
     val invalidConfigs = configsToBeDeleted.filterNot(oldConfig.contains)
     if (invalidConfigs.nonEmpty)
-      throw new InvalidConfigException(s"Invalid config(s): ${invalidConfigs.mkString(",")}")
+      throw new InvalidConfigurationException(s"Invalid config(s): ${invalidConfigs.mkString(",")}")
 
     val newEntries = oldConfig ++ configsToBeAdded -- configsToBeDeleted
     val sensitiveEntries = newEntries.filter(_._2.value == null)
     if (sensitiveEntries.nonEmpty)
-      throw new InvalidConfigException(s"All sensitive broker config entries must be specified for --alter, missing entries: ${sensitiveEntries.keySet}")
+      throw new InvalidConfigurationException(s"All sensitive broker config entries must be specified for --alter, missing entries: ${sensitiveEntries.keySet}")
     val newConfig = new JConfig(newEntries.asJava.values)
 
     val alterOptions = new AlterConfigsOptions().timeoutMs(30000).validateOnly(false)
