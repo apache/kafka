@@ -250,7 +250,7 @@ class Partition(val topic: String,
           case None =>
             // Future replica is removed by a non-ReplicaAlterLogDirsThread before this method is called
             // In this case the partition should have been removed from state of the ReplicaAlterLogDirsThread
-            // Return false so that ReplicaAlterLogDirsThread do not have to remove this partition from the state again to avoid race condition
+            // Return false so that ReplicaAlterLogDirsThread does not have to remove this partition from the state again to avoid race condition
             false
         }
       }

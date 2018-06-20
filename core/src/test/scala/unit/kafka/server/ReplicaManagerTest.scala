@@ -69,11 +69,11 @@ class ReplicaManagerTest {
   }
 
   @Test
+  // Verify that alterReplicaLogDirs() works while ReplicaAlterLogDirsThread is replacing current replica with future replica
   def testAlterReplicaLogDirs() {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, logDirCount = 3)
     val config = KafkaConfig.fromProps(props)
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)))
-    val workerThread = Thread.currentThread()
 
     val replicaManager = new ReplicaManager(config, metrics, time, kafkaZkClient, new MockScheduler(time), mockLogMgr,
       new AtomicBoolean(false), QuotaFactory.instantiate(config, metrics, time, ""), new BrokerTopicStats,
@@ -82,7 +82,10 @@ class ReplicaManagerTest {
       override def getReplica(topicPartition: TopicPartition, replicaId: Int): Option[Replica] = {
         val replica = super.getReplica(topicPartition, replicaId)
 
-        // Wait for ReplicaAlterLogDirsThread to move the replica. Do not block the ReplicaAlterLogDirsThread
+        // This is to simulate a corner case in which request handler threads tries to stop current replica movement
+        // as part of ReplicaManager.alterReplicaLogDirs() while the ReplicaAlterLogDirsThread is replacing
+        // current replica with the future replica
+        // This method blocks non-ReplicaAlterLogDirsThread when there is ongoing replica movement between log directories.
         if (!replicaAlterLogDirsManager.fetcherThreadMap.values.toSet.contains(Thread.currentThread())) {
           TestUtils.waitUntilTrue(() =>
             replicaAlterLogDirsManager.fetcherThreadMap.values.forall(_.partitionStates.size() == 0), "Timed out waiting for replica log dir to be altered ", 600000
