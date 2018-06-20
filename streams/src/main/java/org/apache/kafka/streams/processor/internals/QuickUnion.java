@@ -34,24 +34,25 @@ public class QuickUnion<T> {
     }
 
     /**
-     * @throws NoSuchElementException if the parent of this node is null
+     * @throws NoSuchElementException if this node or the parent of this node is null
      */
     public T root(T id) {
         T current = id;
         if (current == null) {
-            return null;
-        }
-        if (current.equals(ids.get(current))) {
-            return current;
+            throw new NoSuchElementException("id: " + id.toString());
         }
         T parent = ids.get(current);
         if (parent == null) {
             throw new NoSuchElementException("id: " + id.toString());
         }
         List<T> subNodes = new LinkedList<>();
-        while (!current.equals(ids.get(current))) {
+        while (!current.equals(parent)) {
             subNodes.add(current);
-            current = ids.get(current);
+            current = parent;
+            if (current == null) {
+                throw new NoSuchElementException("id: " + id.toString());
+            }
+            parent = ids.get(current);
         }
         for (T node : subNodes) {
             ids.put(node, current);
