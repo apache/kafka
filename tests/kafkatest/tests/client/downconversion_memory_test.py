@@ -106,7 +106,7 @@ class DownconversionMemoryTest(Test):
         for topic in self.topics:
             consumer = ConsumerPerformanceService(self.test_context, self.num_consumers, self.kafka, topic=topic,
                                                   messages=self.max_messages, version=self.consumer_version,
-                                                  config={"fetch.max.bytes": self.max_fetch_size},
+                                                  consumer_config={"fetch.max.bytes": self.max_fetch_size},
                                                   timeout_sec=consumer_timeout_sec)
             consumer.run()
 

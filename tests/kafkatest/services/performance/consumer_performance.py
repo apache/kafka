@@ -70,7 +70,7 @@ class ConsumerPerformanceService(PerformanceService):
             "collect_default": True}
     }
 
-    def __init__(self, context, num_nodes, kafka, topic, messages, version=DEV_BRANCH, new_consumer=True, settings={}, config={}, timeout_sec=None):
+    def __init__(self, context, num_nodes, kafka, topic, messages, version=DEV_BRANCH, new_consumer=True, settings={}, consumer_config={}, timeout_sec=None):
         super(ConsumerPerformanceService, self).__init__(context, num_nodes)
         self.kafka = kafka
         self.security_config = kafka.security_config.client_config()
@@ -78,7 +78,7 @@ class ConsumerPerformanceService(PerformanceService):
         self.messages = messages
         self.new_consumer = new_consumer
         self.settings = settings
-        self.config = config
+        self.consumer_config = consumer_config
         self.timeout_sec = timeout_sec
 
         assert version >= V_0_9_0_0 or (not new_consumer), \
@@ -172,14 +172,13 @@ class ConsumerPerformanceService(PerformanceService):
         node.account.ssh("mkdir -p %s" % ConsumerPerformanceService.PERSISTENT_ROOT, allow_fail=False)
 
         log_config = self.render('tools_log4j.properties', log_file=ConsumerPerformanceService.LOG_FILE)
-        node.account.create_file(ConsumerPerformanceService.LOG4J_CONFIG, log_config)
-        node.account.create_file(ConsumerPerformanceService.CONFIG_FILE, str(self.security_config))
-        self.security_config.setup_node(node)
+        consumer_config = str(self.security_config) + "\n"
+        for key, value in self.consumer_config.items():
+            consumer_config += "%s=%s\n" % (key, str(value))
 
-        # Add additional configs to config file
-        for key, value in self.config.items():
-            node.account.ssh("echo \"%s=%s\" >> %s" % (key, str(value), ConsumerPerformanceService.CONFIG_FILE),
-                             allow_fail=False)
+        node.account.create_file(ConsumerPerformanceService.LOG4J_CONFIG, log_config)
+        node.account.create_file(ConsumerPerformanceService.CONFIG_FILE, consumer_config)
+        self.security_config.setup_node(node)
 
         cmd = self.start_cmd(node)
         self.logger.debug("Consumer performance %d command: %s", idx, cmd)
