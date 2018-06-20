@@ -66,11 +66,16 @@ import java.util.Objects;
 public final class SessionWindows {
 
     private final long gapMs;
-    private long maintainDurationMs;
+    private final long maintainDurationMs;
 
     private SessionWindows(final long gapMs) {
         this.gapMs = gapMs;
-        maintainDurationMs = Windows.DEFAULT_MAINTAIN_DURATION_MS;
+        maintainDurationMs = 24 * 60 * 60 * 1000L; // one day
+    }
+
+    private SessionWindows(final long gapMs, final long maintainDurationMs) {
+        this.gapMs = gapMs;
+        this.maintainDurationMs = maintainDurationMs;
     }
 
     /**
@@ -99,9 +104,8 @@ public final class SessionWindows {
         if (durationMs < gapMs) {
             throw new IllegalArgumentException("Window retention time (durationMs) cannot be smaller than window gap.");
         }
-        maintainDurationMs = durationMs;
 
-        return this;
+        return new SessionWindows(gapMs, durationMs);
     }
 
     /**

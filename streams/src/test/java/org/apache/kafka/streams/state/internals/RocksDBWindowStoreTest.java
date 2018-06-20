@@ -107,12 +107,7 @@ public class RocksDBWindowStoreTest {
 
     private WindowStore<Integer, String> createWindowStore(final ProcessorContext context, final boolean retainDuplicates) {
         final WindowStore<Integer, String> store = Stores.windowStoreBuilder(
-            Stores.persistentWindowStore(
-                windowName,
-                retentionPeriod,
-                numSegments,
-                windowSize,
-                retainDuplicates),
+            Stores.persistentWindowStore(windowName, retentionPeriod, windowSize, retainDuplicates, segmentSize),
             Serdes.Integer(),
             Serdes.String()).build();
 
@@ -768,13 +763,9 @@ public class RocksDBWindowStoreTest {
     public void shouldFetchAndIterateOverExactKeys() {
         final long windowSize = 0x7a00000000000000L;
         final long retentionPeriod = 0x7a00000000000000L;
+
         final WindowStore<String, String> windowStore = Stores.windowStoreBuilder(
-            Stores.persistentWindowStore(
-                windowName,
-                retentionPeriod,
-                2,
-                windowSize,
-                true),
+            Stores.persistentWindowStore(windowName, retentionPeriod, windowSize, true),
             Serdes.String(),
             Serdes.String()).build();
 
@@ -850,12 +841,7 @@ public class RocksDBWindowStoreTest {
     @Test
     public void shouldFetchAndIterateOverExactBinaryKeys() {
         final WindowStore<Bytes, String> windowStore = Stores.windowStoreBuilder(
-            Stores.persistentWindowStore(
-                windowName,
-                60000,
-                2,
-                60000,
-                true),
+            Stores.persistentWindowStore(windowName, 60_000L, 60_000L, true),
             Serdes.Bytes(),
             Serdes.String()).build();
 

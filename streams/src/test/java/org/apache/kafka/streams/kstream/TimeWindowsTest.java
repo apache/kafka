@@ -47,7 +47,7 @@ public class TimeWindowsTest {
 
     @Test
     public void shouldUseWindowSizeAsRentitionTimeIfWindowSizeIsLargerThanDefaultRetentionTime() {
-        final long windowSize = 2 * Windows.DEFAULT_MAINTAIN_DURATION_MS;
+        final long windowSize = 2 * TimeWindows.of(1).maintainMs();
         assertEquals(windowSize, TimeWindows.of(windowSize).maintainMs());
     }
 
