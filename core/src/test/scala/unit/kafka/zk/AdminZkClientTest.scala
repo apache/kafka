@@ -156,19 +156,15 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
     val props = new Properties
     props.setProperty(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2")
     def createTopic(): Unit = {
-      try {
-        adminZkClient.createTopic(topic, 3, 1, props)
-        val (_, partitionAssignment) = zkClient.getPartitionAssignmentForTopics(Set(topic)).head
-        assertEquals(3, partitionAssignment.size)
-        partitionAssignment.foreach { case (partition, replicas) =>
-          assertEquals(s"Unexpected replication factor for $partition", 1, replicas.size)
-        }
-        val savedProps = zkClient.getEntityConfigs(ConfigType.Topic, topic)
-        assertEquals(props, savedProps)
+      try adminZkClient.createTopic(topic, 3, 1, props)
+      catch { case _: TopicExistsException => () }
+      val (_, partitionAssignment) = zkClient.getPartitionAssignmentForTopics(Set(topic)).head
+      assertEquals(3, partitionAssignment.size)
+      partitionAssignment.foreach { case (partition, replicas) =>
+        assertEquals(s"Unexpected replication factor for $partition", 1, replicas.size)
       }
-      catch {
-        case _: TopicExistsException => ()
-      }
+      val savedProps = zkClient.getEntityConfigs(ConfigType.Topic, topic)
+      assertEquals(props, savedProps)
     }
 
     TestUtils.assertConcurrent("Concurrent topic creation failed", Seq(createTopic, createTopic),
