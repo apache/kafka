@@ -20,16 +20,18 @@ package org.apache.kafka.common.errors;
  * The leader does not have an endpoint corresponding to the listener on which metadata was requested.
  * This could indicate a broker configuration error or a transient error when listeners are updated
  * dynamically and client requests are processed before all brokers have updated their listeners.
+ * This is currently used only for missing listeners on leader brokers, but may be used for followers
+ * in future.
  */
-public class ListenerNotFoundOnLeaderException extends InvalidMetadataException {
+public class ListenerNotFoundException extends InvalidMetadataException {
 
     private static final long serialVersionUID = 1L;
 
-    public ListenerNotFoundOnLeaderException(String message) {
+    public ListenerNotFoundException(String message) {
         super(message);
     }
 
-    public ListenerNotFoundOnLeaderException(String message, Throwable cause) {
+    public ListenerNotFoundException(String message, Throwable cause) {
         super(message, cause);
     }
 

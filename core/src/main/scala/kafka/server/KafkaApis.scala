@@ -1069,7 +1069,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     // while in higher versions we simply don't include the broker in the returned broker list
     val errorUnavailableEndpoints = requestVersion == 0
     // In versions 5 and below, we returned LEADER_NOT_AVAILABLE if a matching listener was not found on the leader.
-    // From version 6 onwards, we return LISTENER_NOT_FOUND_ON_LEADER to enable diagnosis of configuration errors.
+    // From version 6 onwards, we return LISTENER_NOT_FOUND to enable diagnosis of configuration errors.
     val errorUnavailableListeners = requestVersion >= 6
     val topicMetadata =
       if (authorizedTopics.isEmpty)

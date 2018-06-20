@@ -30,7 +30,7 @@ import org.apache.kafka.common.errors.DelegationTokenDisabledException;
 import org.apache.kafka.common.errors.DelegationTokenExpiredException;
 import org.apache.kafka.common.errors.DelegationTokenNotFoundException;
 import org.apache.kafka.common.errors.DelegationTokenOwnerMismatchException;
-import org.apache.kafka.common.errors.ListenerNotFoundOnLeaderException;
+import org.apache.kafka.common.errors.ListenerNotFoundException;
 import org.apache.kafka.common.errors.FetchSessionIdNotFoundException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
@@ -626,11 +626,11 @@ public enum Errors {
                 return new InvalidFetchSessionEpochException(message);
             }
     }),
-    LISTENER_NOT_FOUND_ON_LEADER(72, "There is no listener on the leader broker that matches the listener on which metadata request was processed",
+    LISTENER_NOT_FOUND(72, "There is no listener on the leader broker that matches the listener on which metadata request was processed",
         new ApiExceptionBuilder() {
             @Override
             public ApiException build(String message) {
-                return new ListenerNotFoundOnLeaderException(message);
+                return new ListenerNotFoundException(message);
             }
     }),;
 

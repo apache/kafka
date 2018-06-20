@@ -115,7 +115,9 @@ class MetadataCacheTest {
     val listenerName = ListenerName.forSecurityProtocol(securityProtocol)
     val brokers = Set(new Broker(0, Seq(new EndPoint("foo", 9092, securityProtocol, listenerName)).asJava, null))
     verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(brokers, listenerName,
-      leader = 1, Errors.LEADER_NOT_AVAILABLE)
+      leader = 1, Errors.LEADER_NOT_AVAILABLE, errorUnavailableListeners = false)
+    verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(brokers, listenerName,
+      leader = 1, Errors.LEADER_NOT_AVAILABLE, errorUnavailableListeners = true)
   }
 
   @Test
@@ -128,7 +130,7 @@ class MetadataCacheTest {
     val broker1Endpoints = Seq(new EndPoint("host1", 9092, SecurityProtocol.PLAINTEXT, plaintextListenerName))
     val brokers = Set(new Broker(0, broker0Endpoints.asJava, null), new Broker(1, broker1Endpoints.asJava, null))
     verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(brokers, sslListenerName,
-      leader = 1, Errors.LISTENER_NOT_FOUND_ON_LEADER)
+      leader = 1, Errors.LISTENER_NOT_FOUND, errorUnavailableListeners = true)
   }
 
   @Test
@@ -141,13 +143,14 @@ class MetadataCacheTest {
     val broker1Endpoints = Seq(new EndPoint("host1", 9092, SecurityProtocol.PLAINTEXT, plaintextListenerName))
     val brokers = Set(new Broker(0, broker0Endpoints.asJava, null), new Broker(1, broker1Endpoints.asJava, null))
     verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(brokers, sslListenerName,
-      leader = 1, Errors.LEADER_NOT_AVAILABLE)
+      leader = 1, Errors.LEADER_NOT_AVAILABLE, errorUnavailableListeners = false)
   }
 
   private def verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(brokers: Set[Broker],
                                                                        listenerName: ListenerName,
                                                                        leader: Int,
-                                                                       expectedError: Errors): Unit = {
+                                                                       expectedError: Errors,
+                                                                       errorUnavailableListeners: Boolean): Unit = {
     val topic = "topic"
 
     val cache = new MetadataCache(1)
@@ -165,7 +168,6 @@ class MetadataCacheTest {
       partitionStates.asJava, brokers.asJava).build()
     cache.updateCache(15, updateMetadataRequest)
 
-    val errorUnavailableListeners = expectedError == Errors.LISTENER_NOT_FOUND_ON_LEADER
     val topicMetadatas = cache.getTopicMetadata(Set(topic), listenerName, errorUnavailableListeners = errorUnavailableListeners)
     assertEquals(1, topicMetadatas.size)
 
