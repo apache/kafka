@@ -23,10 +23,13 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 
 class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
+    private final static Logger LOG = LoggerFactory.getLogger(RocksDBSegmentedBytesStore.class);
 
     private final String name;
     private final Segments segments;
@@ -99,7 +102,9 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
     public void put(final Bytes key, final byte[] value) {
         final long segmentId = segments.segmentId(keySchema.segmentTimestamp(key));
         final Segment segment = segments.getOrCreateSegmentIfLive(segmentId, context);
-        if (segment != null) {
+        if (segment == null) {
+            LOG.debug("Skipping record for expired segment.");
+        } else {
             segment.put(key, value);
         }
     }
