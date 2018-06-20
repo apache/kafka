@@ -76,13 +76,13 @@ class LogManagerTest {
 
   /**
    * Test that getOrCreateLog on a non-existent log creates a new log and that we can append to the new log.
-   * The LogManager is configured with one invalid log directory which should be marked as offline
+   * The LogManager is configured with one invalid log directory which should be marked as offline.
    */
   @Test
   def testCreateLogWithInvalidLogDir() {
-    // We would like to simulate the scenario that the disk is not properly mounted. But it is not easy to achieve in the unit test.
-    // Thus we configure a log dir path with Nul character which can cause dir.getCanonicalPath() to throw IOException
-    // as an alternative approach to simulate the scenario that the disk is that not properly mounted
+    // Configure the log dir with the Nul character as the path, which causes dir.getCanonicalPath() to throw an
+    // IOException. This simulates the scenario where the disk is not properly mounted (which is hard to achieve in
+    // a unit test)
     val dirs = Seq(logDir, new File("\u0000"))
 
     logManager.shutdown()
