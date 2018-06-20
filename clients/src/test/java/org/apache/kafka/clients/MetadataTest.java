@@ -63,6 +63,7 @@ public class MetadataTest {
         time += refreshBackoffMs;
         assertTrue("Update needed now that backoff time expired", metadata.timeToNextUpdate(time) == 0);
         String topic = "my-topic";
+        Cluster cluster = TestUtils.singletonCluster(topic, 1);
         Thread t1 = asyncFetch(topic, 500);
         Thread t2 = asyncFetch(topic, 500);
         assertTrue("Awaiting update", t1.isAlive());
@@ -71,7 +72,7 @@ public class MetadataTest {
         // This simulates the metadata update sequence in KafkaProducer
         while (t1.isAlive() || t2.isAlive()) {
             if (metadata.timeToNextUpdate(time) == 0) {
-                metadata.update(TestUtils.singletonCluster(topic, 1), Collections.<String>emptySet(), time);
+                metadata.update(cluster, Collections.<String>emptySet(), time);
                 time += refreshBackoffMs;
             }
             Thread.sleep(1);

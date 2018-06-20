@@ -85,7 +85,7 @@ public final class Cluster {
         List<Node> copy = new ArrayList<>(nodes);
         Collections.shuffle(copy);
         this.nodes = Collections.unmodifiableList(copy);
-        this.nodesById = new HashMap<>();
+        this.nodesById = new HashMap<>(nodes.size());
         for (Node node : nodes)
             this.nodesById.put(node.id(), node);
 
@@ -97,8 +97,8 @@ public final class Cluster {
         // index the partitions by topic and node respectively, and make the lists
         // unmodifiable so we can hand them out in user-facing apis without risk
         // of the client modifying the contents
-        HashMap<String, List<PartitionInfo>> partsForTopic = new HashMap<>();
-        HashMap<Integer, List<PartitionInfo>> partsForNode = new HashMap<>();
+        HashMap<String, List<PartitionInfo>> partsForTopic = new HashMap<>(partitions.size());
+        HashMap<Integer, List<PartitionInfo>> partsForNode = new HashMap<>(this.nodes.size());
         for (Node n : this.nodes) {
             partsForNode.put(n.id(), new ArrayList<PartitionInfo>());
         }
@@ -172,7 +172,7 @@ public final class Cluster {
     public List<Node> nodes() {
         return this.nodes;
     }
-    
+
     /**
      * Get the node by the node id (or null if no such node exists)
      * @param id The id of the node
