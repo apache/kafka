@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.utils;
 
+import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -59,5 +60,9 @@ public interface Time {
 
     default Timer timer(long timeoutMs) {
         return new Timer(this, timeoutMs);
+    }
+
+    default Timer timer(Duration timeout) {
+        return timer(timeout.toMillis());
     }
 }

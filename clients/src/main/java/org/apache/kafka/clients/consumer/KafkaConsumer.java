@@ -1154,7 +1154,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public ConsumerRecords<K, V> poll(final Duration timeout) {
-        return poll(time.timer(timeout.toMillis()), true);
+        return poll(time.timer(timeout), true);
     }
 
     private ConsumerRecords<K, V> poll(final Timer timer, final boolean includeMetadataInTimeout) {
@@ -1317,7 +1317,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public void commitSync(Duration timeout) {
         acquireAndEnsureOpen();
         try {
-            if (!coordinator.commitOffsetsSync(subscriptions.allConsumed(), time.timer(timeout.toMillis()))) {
+            if (!coordinator.commitOffsetsSync(subscriptions.allConsumed(), time.timer(timeout))) {
                 throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before successfully " +
                         "committing the current consumed offsets");
             }
@@ -1399,7 +1399,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public void commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets, final Duration timeout) {
         acquireAndEnsureOpen();
         try {
-            if (!coordinator.commitOffsetsSync(new HashMap<>(offsets), time.timer(timeout.toMillis()))) {
+            if (!coordinator.commitOffsetsSync(new HashMap<>(offsets), time.timer(timeout))) {
                 throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before successfully " +
                         "committing offsets " + offsets);
             }
@@ -1611,7 +1611,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             if (!this.subscriptions.isAssigned(partition))
                 throw new IllegalStateException("You can only check the position for partitions assigned to this consumer.");
 
-            Timer timer = time.timer(timeout.toMillis());
+            Timer timer = time.timer(timeout);
             do {
                 Long offset = this.subscriptions.position(partition);
                 if (offset != null)
@@ -1680,7 +1680,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         acquireAndEnsureOpen();
         try {
             Map<TopicPartition, OffsetAndMetadata> offsets = coordinator.fetchCommittedOffsets(
-                    Collections.singleton(partition), time.timer(timeout.toMillis()));
+                    Collections.singleton(partition), time.timer(timeout));
             if (offsets == null) {
                 throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before the last " +
                         "committed offset for partition " + partition + " could be determined");
@@ -1796,7 +1796,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public Map<String, List<PartitionInfo>> listTopics(Duration timeout) {
         acquireAndEnsureOpen();
         try {
-            return fetcher.getAllTopicMetadata(time.timer(timeout.toMillis()));
+            return fetcher.getAllTopicMetadata(time.timer(timeout));
         } finally {
             release();
         }
@@ -1917,7 +1917,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     throw new IllegalArgumentException("The target time for partition " + entry.getKey() + " is " +
                             entry.getValue() + ". The target time cannot be negative.");
             }
-            return fetcher.offsetsByTimes(timestampsToSearch, time.timer(timeout.toMillis()));
+            return fetcher.offsetsByTimes(timestampsToSearch, time.timer(timeout));
         } finally {
             release();
         }
@@ -1962,7 +1962,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions, Duration timeout) {
         acquireAndEnsureOpen();
         try {
-            return fetcher.beginningOffsets(partitions, time.timer(timeout.toMillis()));
+            return fetcher.beginningOffsets(partitions, time.timer(timeout));
         } finally {
             release();
         }
@@ -2017,7 +2017,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions, Duration timeout) {
         acquireAndEnsureOpen();
         try {
-            return fetcher.endOffsets(partitions, time.timer(timeout.toMillis()));
+            return fetcher.endOffsets(partitions, time.timer(timeout));
         } finally {
             release();
         }
