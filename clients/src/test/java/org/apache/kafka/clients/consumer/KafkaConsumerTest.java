@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import java.util.ArrayList;
+import java.util.concurrent.ExecutionException;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.Metadata;
@@ -32,9 +34,11 @@ import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
@@ -1759,7 +1763,7 @@ public class KafkaConsumerTest {
         int maxPollRecords = Integer.MAX_VALUE;
         boolean checkCrcs = true;
         int rebalanceTimeoutMs = 60000;
-        
+
         Deserializer<String> keyDeserializer = new StringDeserializer();
         Deserializer<String> valueDeserializer = new StringDeserializer();
 
@@ -1853,5 +1857,42 @@ public class KafkaConsumerTest {
         EasyMock.replay(consumer);
         consumer.close(1, TimeUnit.SECONDS);
         EasyMock.verify(consumer);
+    }
+
+    @Test
+    public void testInvalidTopicName() throws Exception {
+        Time time = new MockTime();
+        Cluster cluster = TestUtils.singletonCluster();
+        Node node = cluster.nodes().get(0);
+
+        Metadata metadata = createMetadata();
+        metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
+
+        MockClient client = new MockClient(time, metadata);
+        client.setNode(node);
+        PartitionAssignor assignor = new RoundRobinAssignor();
+
+        String invalidTopicName = "topic abc";  // Invalid topic name due to space
+
+        Set<String> invalidTopic = new HashSet<String>();
+        invalidTopic.add(invalidTopicName);
+        Cluster metaDataUpdateResponseCluster = new Cluster(cluster.clusterResource().clusterId(),
+                                                            cluster.nodes(),
+                                                            new ArrayList<PartitionInfo>(0),
+                                                            Collections.<String>emptySet(),
+                                                            invalidTopic,
+                                                            cluster.internalTopics(),
+                                                            cluster.controller());
+        client.prepareMetadataUpdate(metaDataUpdateResponseCluster, Collections.<String>emptySet());
+
+
+        KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, true);
+        consumer.subscribe(singleton(invalidTopicName), getConsumerRebalanceListener(consumer));
+
+        try {
+            consumer.updateAssignmentMetadataIfNeeded(0L);
+        } catch (InvalidTopicException e) {
+            // expected
+        }
     }
 }

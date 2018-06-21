@@ -636,11 +636,11 @@ public class KafkaProducerTest {
             ProducerConfig.addSerializerToConfig(props, new StringSerializer(), new StringSerializer())),
             new StringSerializer(), new StringSerializer(), metadata, client);
 
-        String topic = "topic 10";
-        ProducerRecord<String, String> record = new ProducerRecord<>(topic, "HelloKafka");
+        String invalidTopicName = "topic abc";  // Invalid topic name due to space
+        ProducerRecord<String, String> record = new ProducerRecord<>(invalidTopicName, "HelloKafka");
 
         Set<String> invalidTopic = new HashSet<String>();
-        invalidTopic.add(topic);
+        invalidTopic.add(invalidTopicName);
         Cluster metaDataUpdateResponseCluster = new Cluster(cluster.clusterResource().clusterId(),
                                                             cluster.nodes(),
                                                             new ArrayList<PartitionInfo>(0),

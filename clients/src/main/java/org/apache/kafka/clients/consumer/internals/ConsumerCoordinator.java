@@ -206,7 +206,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
                 // if we encounter any invalid topics, raise an exception to the user
                 if (!cluster.invalidTopics().isEmpty())
-                    throw new InvalidTopicException();
+                    throw new InvalidTopicException(cluster.invalidTopics());
 
                 if (subscriptions.hasPatternSubscription())
                     updatePatternSubscription(cluster);
