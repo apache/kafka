@@ -55,7 +55,7 @@ class ReplicaFetchTest extends ZooKeeperTestHarness  {
     }
 
     // send test messages to leader
-    val producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(brokers),
+    val producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(brokers),
                                                retries = 5,
                                                keySerializer = new StringSerializer,
                                                valueSerializer = new StringSerializer)

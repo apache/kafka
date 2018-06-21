@@ -53,7 +53,6 @@ import java.util.List;
 import java.util.Set;
 import java.util.SimpleTimeZone;
 
-import static org.apache.kafka.streams.state.internals.Segments.segmentInterval;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
@@ -65,6 +64,7 @@ import static org.junit.Assert.assertTrue;
 public class RocksDBSegmentedBytesStoreTest {
 
     private final long retention = 1000;
+    private final long segmentInterval = 60_000;
     private final int numSegments = 3;
     private InternalMockProcessorContext context;
     private final String storeName = "bytes-store";
@@ -102,7 +102,7 @@ public class RocksDBSegmentedBytesStoreTest {
 
         bytesStore = new RocksDBSegmentedBytesStore(storeName,
                 retention,
-                numSegments,
+                segmentInterval,
                 schema);
 
         stateDir = TestUtils.tempDirectory();
@@ -163,7 +163,7 @@ public class RocksDBSegmentedBytesStoreTest {
     @Test
     public void shouldRollSegments() {
         // just to validate directories
-        final Segments segments = new Segments(storeName, retention, numSegments);
+        final Segments segments = new Segments(storeName, retention, segmentInterval);
         final String key = "a";
 
         bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(50));
@@ -186,7 +186,7 @@ public class RocksDBSegmentedBytesStoreTest {
     @Test
     public void shouldGetAllSegments() {
         // just to validate directories
-        final Segments segments = new Segments(storeName, retention, numSegments);
+        final Segments segments = new Segments(storeName, retention, segmentInterval);
         final String key = "a";
 
         bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(50L));
@@ -206,7 +206,7 @@ public class RocksDBSegmentedBytesStoreTest {
     @Test
     public void shouldFetchAllSegments() {
         // just to validate directories
-        final Segments segments = new Segments(storeName, retention, numSegments);
+        final Segments segments = new Segments(storeName, retention, segmentInterval);
         final String key = "a";
 
         bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(50L));
@@ -225,7 +225,7 @@ public class RocksDBSegmentedBytesStoreTest {
 
     @Test
     public void shouldLoadSegementsWithOldStyleDateFormattedName() {
-        final Segments segments = new Segments(storeName, retention, numSegments);
+        final Segments segments = new Segments(storeName, retention, segmentInterval);
         final String key = "a";
 
         bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(50L));
@@ -237,7 +237,7 @@ public class RocksDBSegmentedBytesStoreTest {
         final Long segmentId = Long.parseLong(nameParts[1]);
         final SimpleDateFormat formatter = new SimpleDateFormat("yyyyMMddHHmm");
         formatter.setTimeZone(new SimpleTimeZone(0, "UTC"));
-        final String formatted = formatter.format(new Date(segmentId * segmentInterval(retention, numSegments)));
+        final String formatted = formatter.format(new Date(segmentId * segmentInterval));
         final File parent = new File(stateDir, storeName);
         final File oldStyleName = new File(parent, nameParts[0] + "-" + formatted);
         assertTrue(new File(parent, firstSegmentName).renameTo(oldStyleName));
@@ -256,7 +256,7 @@ public class RocksDBSegmentedBytesStoreTest {
 
     @Test
     public void shouldLoadSegementsWithOldStyleColonFormattedName() {
-        final Segments segments = new Segments(storeName, retention, numSegments);
+        final Segments segments = new Segments(storeName, retention, segmentInterval);
         final String key = "a";
 
         bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(50L));

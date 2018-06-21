@@ -19,6 +19,7 @@ package org.apache.kafka.common.record;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.record.FileLogInputStream.FileChannelRecordBatch;
+import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 
@@ -108,14 +109,12 @@ public class FileRecords extends AbstractRecords implements Closeable {
      *
      * @param buffer The buffer to write the batches to
      * @param position Position in the buffer to read from
-     * @return The same buffer
      * @throws IOException If an I/O error occurs, see {@link FileChannel#read(ByteBuffer, long)} for details on the
      * possible exceptions
      */
-    public ByteBuffer readInto(ByteBuffer buffer, int position) throws IOException {
+    public void readInto(ByteBuffer buffer, int position) throws IOException {
         Utils.readFully(channel, buffer, position + this.start);
         buffer.flip();
-        return buffer;
     }
 
     /**
@@ -130,7 +129,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * @param size The number of bytes after the start position to include
      * @return A sliced wrapper on this message set limited based on the given position and size
      */
-    public FileRecords read(int position, int size) throws IOException {
+    public FileRecords slice(int position, int size) throws IOException {
         if (position < 0)
             throw new IllegalArgumentException("Invalid position: " + position + " in read from " + file);
         if (size < 0)
@@ -239,8 +238,8 @@ public class FileRecords extends AbstractRecords implements Closeable {
 
     @Override
     public ConvertedRecords<? extends Records> downConvert(byte toMagic, long firstOffset, Time time) {
-        ConvertedRecords<MemoryRecords> convertedRecords = downConvert(batches, toMagic, firstOffset, time);
-        if (convertedRecords.recordsProcessingStats().numRecordsConverted() == 0) {
+        ConvertedRecords<MemoryRecords> convertedRecords = RecordsUtil.downConvert(batches, toMagic, firstOffset, time);
+        if (convertedRecords.recordConversionStats().numRecordsConverted() == 0) {
             // This indicates that the message is too large, which means that the buffer is not large
             // enough to hold a full record batch. We just return all the bytes in this instance.
             // Even though the record batch does not have the right format version, we expect old clients
@@ -248,7 +247,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
             // are not enough available bytes in the response to read it fully. Note that this is
             // only possible prior to KIP-74, after which the broker was changed to always return at least
             // one full record batch, even if it requires exceeding the max fetch size requested by the client.
-            return new ConvertedRecords<>(this, RecordsProcessingStats.EMPTY);
+            return new ConvertedRecords<>(this, RecordConversionStats.EMPTY);
         } else {
             return convertedRecords;
         }
@@ -355,7 +354,14 @@ public class FileRecords extends AbstractRecords implements Closeable {
                 ")";
     }
 
-    private Iterable<FileChannelRecordBatch> batchesFrom(final int start) {
+    /**
+     * Get an iterator over the record batches in the file, starting at a specific position. This is similar to
+     * {@link #batches()} except that callers specify a particular position to start reading the batches from. This
+     * method must be used with caution: the start position passed in must be a known start of a batch.
+     * @param start The position to start record iteration from; must be a known position for start of a batch
+     * @return An iterator over batches starting from {@code start}
+     */
+    public Iterable<FileChannelRecordBatch> batchesFrom(final int start) {
         return new Iterable<FileChannelRecordBatch>() {
             @Override
             public Iterator<FileChannelRecordBatch> iterator() {
@@ -364,7 +370,12 @@ public class FileRecords extends AbstractRecords implements Closeable {
         };
     }
 
-    private Iterator<FileChannelRecordBatch> batchIterator(int start) {
+    @Override
+    public AbstractIterator<FileChannelRecordBatch> batchIterator() {
+        return batchIterator(start);
+    }
+
+    private AbstractIterator<FileChannelRecordBatch> batchIterator(int start) {
         final int end;
         if (isSlice)
             end = this.end;
@@ -510,5 +521,4 @@ public class FileRecords extends AbstractRecords implements Closeable {
                     ')';
         }
     }
-
 }

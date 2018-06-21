@@ -72,7 +72,7 @@ class TransactionMarkerRequestCompletionHandlerTest {
     EasyMock.replay(markerChannelManager)
 
     handler.onComplete(new ClientResponse(new RequestHeader(ApiKeys.PRODUCE, 0, "client", 1),
-      null, null, 0, 0, true, null, null))
+      null, null, 0, 0, true, null, null, null))
 
     EasyMock.verify(markerChannelManager)
   }
@@ -86,7 +86,7 @@ class TransactionMarkerRequestCompletionHandlerTest {
 
     try {
       handler.onComplete(new ClientResponse(new RequestHeader(ApiKeys.PRODUCE, 0, "client", 1),
-        null, null, 0, 0, false, null, response))
+        null, null, 0, 0, false, null, null, response))
       fail("should have thrown illegal argument exception")
     } catch {
       case _: IllegalStateException => // ok
@@ -204,7 +204,7 @@ class TransactionMarkerRequestCompletionHandlerTest {
 
     val response = new WriteTxnMarkersResponse(createProducerIdErrorMap(error))
     handler.onComplete(new ClientResponse(new RequestHeader(ApiKeys.PRODUCE, 0, "client", 1),
-      null, null, 0, 0, false, null, response))
+      null, null, 0, 0, false, null, null, response))
 
     assertEquals(txnMetadata.topicPartitions, mutable.Set[TopicPartition](topicPartition))
     EasyMock.verify(markerChannelManager)
@@ -216,7 +216,7 @@ class TransactionMarkerRequestCompletionHandlerTest {
     val response = new WriteTxnMarkersResponse(createProducerIdErrorMap(error))
     try {
       handler.onComplete(new ClientResponse(new RequestHeader(ApiKeys.PRODUCE, 0, "client", 1),
-        null, null, 0, 0, false, null, response))
+        null, null, 0, 0, false, null, null, response))
       fail("should have thrown illegal state exception")
     } catch {
       case _: IllegalStateException => // ok
@@ -237,7 +237,7 @@ class TransactionMarkerRequestCompletionHandlerTest {
 
     val response = new WriteTxnMarkersResponse(createProducerIdErrorMap(error))
     handler.onComplete(new ClientResponse(new RequestHeader(ApiKeys.PRODUCE, 0, "client", 1),
-      null, null, 0, 0, false, null, response))
+      null, null, 0, 0, false, null, null, response))
 
     assertTrue(txnMetadata.topicPartitions.isEmpty)
     assertTrue(completed)
@@ -257,7 +257,7 @@ class TransactionMarkerRequestCompletionHandlerTest {
 
     val response = new WriteTxnMarkersResponse(createProducerIdErrorMap(error))
     handler.onComplete(new ClientResponse(new RequestHeader(ApiKeys.PRODUCE, 0, "client", 1),
-      null, null, 0, 0, false, null, response))
+      null, null, 0, 0, false, null, null, response))
 
     assertTrue(removed)
   }

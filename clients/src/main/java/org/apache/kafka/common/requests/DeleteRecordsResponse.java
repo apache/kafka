@@ -64,8 +64,13 @@ public class DeleteRecordsResponse extends AbstractResponse {
             THROTTLE_TIME_MS,
             new Field(TOPICS_KEY_NAME, new ArrayOf(DELETE_RECORDS_RESPONSE_TOPIC_V0)));
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema DELETE_RECORDS_RESPONSE_V1 = DELETE_RECORDS_RESPONSE_V0;
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{DELETE_RECORDS_RESPONSE_V0};
+        return new Schema[]{DELETE_RECORDS_RESPONSE_V0, DELETE_RECORDS_RESPONSE_V1};
     }
 
     private final int throttleTimeMs;
@@ -152,6 +157,7 @@ public class DeleteRecordsResponse extends AbstractResponse {
         return struct;
     }
 
+    @Override
     public int throttleTimeMs() {
         return throttleTimeMs;
     }
@@ -170,5 +176,10 @@ public class DeleteRecordsResponse extends AbstractResponse {
 
     public static DeleteRecordsResponse parse(ByteBuffer buffer, short version) {
         return new DeleteRecordsResponse(ApiKeys.DELETE_RECORDS.responseSchema(version).read(buffer));
+    }
+
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 1;
     }
 }

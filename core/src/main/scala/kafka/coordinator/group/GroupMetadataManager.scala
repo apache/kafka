@@ -26,14 +26,14 @@ import java.util.concurrent.locks.ReentrantLock
 
 import com.yammer.metrics.core.Gauge
 import kafka.api.{ApiVersion, KAFKA_0_10_1_IV0}
-import kafka.common.{KafkaException, MessageFormatter, OffsetAndMetadata}
+import kafka.common.{MessageFormatter, OffsetAndMetadata}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.ReplicaManager
 import kafka.utils.CoreUtils.inLock
 import kafka.utils._
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.consumer.ConsumerRecord
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.protocol.types.Type._
@@ -135,13 +135,14 @@ class GroupMetadataManager(brokerId: Int,
       })
     })
 
-  def enableMetadataExpiration() {
+  def startup(enableMetadataExpiration: Boolean) {
     scheduler.startup()
-
-    scheduler.schedule(name = "delete-expired-group-metadata",
-      fun = cleanupGroupMetadata,
-      period = config.offsetsRetentionCheckIntervalMs,
-      unit = TimeUnit.MILLISECONDS)
+    if (enableMetadataExpiration) {
+      scheduler.schedule(name = "delete-expired-group-metadata",
+        fun = cleanupGroupMetadata,
+        period = config.offsetsRetentionCheckIntervalMs,
+        unit = TimeUnit.MILLISECONDS)
+    }
   }
 
   def currentGroups: Iterable[GroupMetadata] = groupMetadataCache.values
@@ -464,7 +465,7 @@ class GroupMetadataManager(brokerId: Int,
               }
 
             case Some(topicPartitions) =>
-              topicPartitionsOpt.getOrElse(Seq.empty[TopicPartition]).map { topicPartition =>
+              topicPartitions.map { topicPartition =>
                 val partitionData = group.offset(topicPartition) match {
                   case None =>
                     new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET, "", Errors.NONE)
@@ -531,8 +532,8 @@ class GroupMetadataManager(brokerId: Int,
             case records: MemoryRecords => records
             case fileRecords: FileRecords =>
               buffer.clear()
-              val bufferRead = fileRecords.readInto(buffer, 0)
-              MemoryRecords.readableRecords(bufferRead)
+              fileRecords.readInto(buffer, 0)
+              MemoryRecords.readableRecords(buffer)
           }
 
           memRecords.batches.asScala.foreach { batch =>
@@ -793,7 +794,20 @@ class GroupMetadataManager(brokerId: Int,
     offsetsRemoved
   }
 
-  def handleTxnCompletion(producerId: Long, completedPartitions: Set[Int], isCommit: Boolean) {
+  /**
+   * Complete pending transactional offset commits of the groups of `producerId` from the provided
+   * `completedPartitions`. This method is invoked when a commit or abort marker is fully written
+   * to the log. It may be invoked when a group lock is held by the caller, for instance when delayed
+   * operations are completed while appending offsets for a group. Since we need to acquire one or
+   * more group metadata locks to handle transaction completion, this operation is scheduled on
+   * the scheduler thread to avoid deadlocks.
+   */
+  def scheduleHandleTxnCompletion(producerId: Long, completedPartitions: Set[Int], isCommit: Boolean): Unit = {
+    scheduler.schedule(s"handleTxnCompletion-$producerId", () =>
+      handleTxnCompletion(producerId, completedPartitions, isCommit))
+  }
+
+  private[group] def handleTxnCompletion(producerId: Long, completedPartitions: Set[Int], isCommit: Boolean): Unit = {
     val pendingGroups = groupsBelongingToPartitions(producerId, completedPartitions)
     pendingGroups.foreach { case (groupId) =>
       getGroup(groupId) match {
@@ -802,7 +816,7 @@ class GroupMetadataManager(brokerId: Int,
             group.completePendingTxnOffsetCommit(producerId, isCommit)
             removeProducerGroup(producerId, groupId)
           }
-       }
+        }
         case _ =>
           info(s"Group $groupId has moved away from $brokerId after transaction marker was written but before the " +
             s"cache was updated. The cache on the new group owner will be updated instead.")
@@ -1198,7 +1212,7 @@ object GroupMetadataManager {
   }
 
   /**
-   * Decodes the group metadata messages' payload and retrieves its member metadatafrom it
+   * Decodes the group metadata messages' payload and retrieves its member metadata from it
    *
    * @param buffer input byte-buffer
    * @return a group metadata object from the message

@@ -101,6 +101,9 @@
       <subpackage name="scram">
         <allow pkg="javax.crypto" />
       </subpackage>
+      <subpackage name="oauthbearer">
+        <allow pkg="com.fasterxml.jackson.databind" />
+      </subpackage>
     </subpackage>
 
     <subpackage name="protocol">
@@ -108,6 +111,7 @@
       <allow pkg="org.apache.kafka.common.protocol.types" />
       <allow pkg="org.apache.kafka.common.record" />
       <allow pkg="org.apache.kafka.common.requests" />
+      <allow pkg="org.apache.kafka.common.resource" />
     </subpackage>
 
     <subpackage name="record">
@@ -143,7 +147,7 @@
     </subpackage>
 
     <subpackage name="utils">
-      <allow pkg="org.apache.kafka.common.metrics" />
+      <allow pkg="org.apache.kafka.common" />
     </subpackage>
   </subpackage>
 
@@ -207,6 +211,8 @@
     <allow pkg="org.apache.kafka.clients"/>
     <allow pkg="org.apache.kafka.clients.producer" exact-match="true"/>
     <allow pkg="org.apache.kafka.clients.consumer" exact-match="true"/>
+    <!-- Temporary until EosTestDriver migrates to the Java AdminClient -->
+    <allow pkg="kafka.admin" exact-match="true"/>
 
     <allow pkg="org.apache.kafka.streams"/>
 
@@ -285,6 +291,7 @@
     <allow pkg="org.apache.kafka.connect.data" />
     <allow pkg="org.apache.kafka.connect.errors" />
     <allow pkg="org.apache.kafka.connect.header" />
+    <allow pkg="org.apache.kafka.connect.components"/>
     <allow pkg="org.apache.kafka.clients" />
     <allow pkg="org.apache.kafka.test"/>
 
@@ -302,7 +309,16 @@
     <subpackage name="converters">
       <allow pkg="org.apache.kafka.connect.storage" />
     </subpackage>
-    
+
+    <subpackage name="rest">
+      <allow pkg="org.apache.kafka.connect.health" />
+      <allow pkg="javax.ws.rs" />
+      <allow pkg= "javax.security.auth"/>
+      <subpackage name="basic">
+        <allow pkg="org.apache.kafka.connect.rest"/>
+      </subpackage>
+    </subpackage>
+
     <subpackage name="runtime">
       <allow pkg="org.apache.kafka.connect" />
       <allow pkg="org.reflections"/>
@@ -321,6 +337,8 @@
         <allow pkg="org.apache.maven.artifact.versioning" />
       </subpackage>
     </subpackage>
+
+
 
     <subpackage name="cli">
       <allow pkg="org.apache.kafka.connect.runtime" />

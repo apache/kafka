@@ -19,10 +19,10 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.streams.Consumed;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.StreamsBuilderTest;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
@@ -93,14 +93,14 @@ public class KStreamKTableLeftJoinTest {
 
     private void pushNullValueToTable(final int messageCount) {
         for (int i = 0; i < messageCount; i++) {
-            driver.pipeInput(recordFactory.create(tableTopic, expectedKeys[i], null));
+            driver.pipeInput(recordFactory.create(tableTopic, expectedKeys[i], (String) null));
         }
     }
 
     @Test
     public void shouldRequireCopartitionedStreams() {
 
-        final Collection<Set<String>> copartitionGroups = StreamsBuilderTest.getCopartitionedGroups(builder);
+        final Collection<Set<String>> copartitionGroups = TopologyWrapper.getInternalTopologyBuilder(builder.build()).copartitionGroups();
 
         assertEquals(1, copartitionGroups.size());
         assertEquals(new HashSet<>(Arrays.asList(streamTopic, tableTopic)), copartitionGroups.iterator().next());

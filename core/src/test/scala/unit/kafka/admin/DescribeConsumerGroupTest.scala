@@ -16,6 +16,7 @@
  */
 package kafka.admin
 
+import joptsimple.OptionException
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.RoundRobinAssignor
 import org.apache.kafka.common.TopicPartition
@@ -33,70 +34,6 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
   private val describeTypes = describeTypeOffsets ++ describeTypeMembers ++ describeTypeState
 
   @Test
-  @deprecated("This test has been deprecated and will be removed in a future release.", "0.11.0.0")
-  def testDescribeNonExistingGroupWithOldConsumer() {
-    TestUtils.createOffsetsTopic(zkClient, servers)
-    createOldConsumer()
-    val service = getConsumerGroupService(Array("--zookeeper", zkConnect, "--describe", "--group", "missing.group"))
-    TestUtils.waitUntilTrue(() => service.collectGroupOffsets()._2.isEmpty, "Expected no rows in describe group results.")
-  }
-
-  @Test
-  @deprecated("This test has been deprecated and will be removed in a future release.", "0.11.0.0")
-  def testDescribeExistingGroupWithOldConsumer() {
-    TestUtils.createOffsetsTopic(zkClient, servers)
-    createOldConsumer()
-    val service = getConsumerGroupService(Array("--zookeeper", zkConnect, "--describe", "--group", group))
-
-    TestUtils.waitUntilTrue(() => {
-      val (_, assignments) = service.collectGroupOffsets()
-      assignments.isDefined &&
-      assignments.get.count(_.group == group) == 1 &&
-      assignments.get.filter(_.group == group).head.consumerId.exists(_.trim != ConsumerGroupCommand.MISSING_COLUMN_VALUE)
-    }, "Expected rows and a consumer id column in describe group results.")
-  }
-
-  @Test
-  @deprecated("This test has been deprecated and will be removed in a future release.", "0.11.0.0")
-  def testDescribeExistingGroupWithNoMembersWithOldConsumer() {
-    TestUtils.createOffsetsTopic(zkClient, servers)
-    createOldConsumer()
-    val service = getConsumerGroupService(Array("--zookeeper", zkConnect, "--describe", "--group", group))
-
-    TestUtils.waitUntilTrue(() => {
-      val (_, assignments) = service.collectGroupOffsets()
-      assignments.isDefined &&
-      assignments.get.count(_.group == group) == 1 &&
-      assignments.get.filter(_.group == group).head.consumerId.exists(_.trim != ConsumerGroupCommand.MISSING_COLUMN_VALUE)
-    }, "Expected rows and a consumer id column in describe group results.")
-    stopRandomOldConsumer()
-
-    TestUtils.waitUntilTrue(() => {
-      val (_, assignments) = service.collectGroupOffsets()
-      assignments.isDefined &&
-      assignments.get.count(_.group == group) == 1 &&
-      assignments.get.filter(_.group == group).head.consumerId.exists(_.trim == ConsumerGroupCommand.MISSING_COLUMN_VALUE) // the member should be gone
-    }, "Expected no active member in describe group results.")
-  }
-
-  @Test
-  @deprecated("This test has been deprecated and will be removed in a future release.", "0.11.0.0")
-  def testDescribeConsumersWithNoAssignedPartitionsWithOldConsumer() {
-    TestUtils.createOffsetsTopic(zkClient, servers)
-    createOldConsumer()
-    createOldConsumer()
-    val service = getConsumerGroupService(Array("--zookeeper", zkConnect, "--describe", "--group", group))
-
-    TestUtils.waitUntilTrue(() => {
-      val (_, assignments) = service.collectGroupOffsets()
-      assignments.isDefined &&
-      assignments.get.count(_.group == group) == 2 &&
-      assignments.get.count { x => x.group == group && x.partition.isDefined } == 1 &&
-      assignments.get.count { x => x.group == group && x.partition.isEmpty } == 1
-    }, "Expected rows for consumers with no assigned partitions in describe group results.")
-  }
-
-  @Test
   def testDescribeNonExistingGroup() {
     TestUtils.createOffsetsTopic(zkClient, servers)
     val missingGroup = "missing.group"
@@ -112,12 +49,11 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     }
   }
 
-  @Test(expected = classOf[joptsimple.OptionException])
+  @Test(expected = classOf[OptionException])
   def testDescribeWithMultipleSubActions() {
     TestUtils.createOffsetsTopic(zkClient, servers)
     val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group, "--members", "--state")
     getConsumerGroupService(cgcArgs)
-    fail("Expected an error due to presence of mutually exclusive options")
   }
 
   @Test
@@ -662,6 +598,12 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     }
   }
 
+  @Test(expected = classOf[joptsimple.OptionException])
+  def testDescribeWithUnrecognizedNewConsumerOption() {
+    val cgcArgs = Array("--new-consumer", "--bootstrap-server", brokerList, "--describe", "--group", group)
+    getConsumerGroupService(cgcArgs)
+    fail("Expected an error due to presence of unrecognized --new-consumer option")
+  }
 
 }
 

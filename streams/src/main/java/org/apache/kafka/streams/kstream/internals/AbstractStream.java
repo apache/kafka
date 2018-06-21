@@ -17,13 +17,15 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.ValueJoiner;
-import org.apache.kafka.streams.kstream.ValueTransformer;
-import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
-import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
-import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.ValueMapperWithKey;
+import org.apache.kafka.streams.kstream.ValueTransformer;
+import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
+import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
+import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
+import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
 import java.util.HashSet;
 import java.util.Objects;
@@ -33,7 +35,8 @@ public abstract class AbstractStream<K> {
 
     protected final InternalStreamsBuilder builder;
     protected final String name;
-    final Set<String> sourceNodes;
+    protected final Set<String> sourceNodes;
+    protected final StreamsGraphNode parentGraphNode;
 
     // This copy-constructor will allow to extend KStream
     // and KTable APIs with new methods without impacting the public interface.
@@ -41,9 +44,13 @@ public abstract class AbstractStream<K> {
         this.builder = stream.builder;
         this.name = stream.name;
         this.sourceNodes = stream.sourceNodes;
+        this.parentGraphNode = stream.parentGraphNode;
     }
 
-    AbstractStream(final InternalStreamsBuilder builder, String name, final Set<String> sourceNodes) {
+    AbstractStream(final InternalStreamsBuilder builder,
+                   final String name,
+                   final Set<String> sourceNodes,
+                   final StreamsGraphNode parentGraphNode) {
         if (sourceNodes == null || sourceNodes.isEmpty()) {
             throw new IllegalArgumentException("parameter <sourceNodes> must not be null or empty");
         }
@@ -51,8 +58,21 @@ public abstract class AbstractStream<K> {
         this.builder = builder;
         this.name = name;
         this.sourceNodes = sourceNodes;
+        this.parentGraphNode = parentGraphNode;
     }
 
+    protected void addGraphNode(final StreamsGraphNode newNode) {
+        //TODO remove this once actually building the topology with Graph
+        if (parentGraphNode != null) {
+            parentGraphNode.addChildNode(newNode);
+        }
+    }
+
+    // This method allows to expose the InternalTopologyBuilder instance
+    // to subclasses that extend AbstractStream class.
+    protected InternalTopologyBuilder internalTopologyBuilder() {
+        return builder.internalTopologyBuilder;
+    }
 
     Set<String> ensureJoinableWith(final AbstractStream<K> other) {
         Set<String> allSourceNodes = new HashSet<>();

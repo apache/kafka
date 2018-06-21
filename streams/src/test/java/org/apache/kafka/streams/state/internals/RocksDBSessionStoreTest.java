@@ -154,7 +154,7 @@ public class RocksDBSessionStoreTest {
     @Test
     public void shouldFetchExactKeys() {
         final RocksDBSegmentedBytesStore bytesStore =
-                new RocksDBSegmentedBytesStore("session-store", 0x7a00000000000000L, 2, new SessionKeySchema());
+                new RocksDBSegmentedBytesStore("session-store", 0x7a00000000000000L, 0x7a00000000000000L, new SessionKeySchema());
 
         sessionStore = new RocksDBSessionStore<>(bytesStore,
                                                  Serdes.String(),

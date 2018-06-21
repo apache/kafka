@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
@@ -40,6 +41,7 @@ class StandbyContextImpl extends AbstractProcessorContext implements RecordColle
         public <K, V> void send(final String topic,
                                 final K key,
                                 final V value,
+                                final Headers headers,
                                 final Integer partition,
                                 final Long timestamp,
                                 final Serializer<K> keySerializer,
@@ -50,6 +52,7 @@ class StandbyContextImpl extends AbstractProcessorContext implements RecordColle
         public <K, V> void send(final String topic,
                                 final K key,
                                 final V value,
+                                final Headers headers,
                                 final Long timestamp,
                                 final Serializer<K> keySerializer,
                                 final Serializer<V> valueSerializer,
@@ -188,7 +191,7 @@ class StandbyContextImpl extends AbstractProcessorContext implements RecordColle
      * @throws UnsupportedOperationException on every invocation
      */
     @Override
-    public RecordContext recordContext() {
+    public ProcessorRecordContext recordContext() {
         throw new UnsupportedOperationException("this should not happen: recordContext not supported in standby tasks.");
     }
 
@@ -196,7 +199,7 @@ class StandbyContextImpl extends AbstractProcessorContext implements RecordColle
      * @throws UnsupportedOperationException on every invocation
      */
     @Override
-    public void setRecordContext(final RecordContext recordContext) {
+    public void setRecordContext(final ProcessorRecordContext recordContext) {
         throw new UnsupportedOperationException("this should not happen: setRecordContext not supported in standby tasks.");
     }
 
@@ -211,6 +214,11 @@ class StandbyContextImpl extends AbstractProcessorContext implements RecordColle
     @Override
     public ProcessorNode currentNode() {
         throw new UnsupportedOperationException("this should not happen: currentNode not supported in standby tasks.");
+    }
+
+    @Override
+    public Long streamTime() {
+        throw new RuntimeException("Stream time is not implemented for the standby context.");
     }
 
 }

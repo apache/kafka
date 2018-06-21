@@ -189,7 +189,7 @@ object DumpLogSegments {
 
     for(i <- 0 until index.entries) {
       val entry = index.entry(i)
-      val slice = fileRecords.read(entry.position, maxMessageSize)
+      val slice = fileRecords.slice(entry.position, maxMessageSize)
       val firstRecord = slice.records.iterator.next()
       if (firstRecord.offset != entry.offset + index.baseOffset) {
         var misMatchesSeq = misMatchesForIndexFilesMap.getOrElse(file.getAbsolutePath, List[(Long, Long)]())
@@ -227,7 +227,7 @@ object DumpLogSegments {
     for(i <- 0 until timeIndex.entries) {
       val entry = timeIndex.entry(i)
       val position = index.lookup(entry.offset + timeIndex.baseOffset).position
-      val partialFileRecords = fileRecords.read(position, Int.MaxValue)
+      val partialFileRecords = fileRecords.slice(position, Int.MaxValue)
       val batches = partialFileRecords.batches.asScala
       var maxTimestamp = RecordBatch.NO_TIMESTAMP
       // We first find the message by offset then check if the timestamp is correct.

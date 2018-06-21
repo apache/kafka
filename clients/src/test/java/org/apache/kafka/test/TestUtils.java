@@ -22,7 +22,6 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.utils.Base64;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,6 +32,7 @@ import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -293,7 +293,7 @@ public class TestUtils {
 
         // Convert into normal variant and add padding at the end.
         String originalClusterId = String.format("%s==", clusterId.replace("_", "/").replace("-", "+"));
-        byte[] decodedUuid = Base64.decoder().decode(originalClusterId);
+        byte[] decodedUuid = Base64.getDecoder().decode(originalClusterId);
 
         // We expect 16 bytes, same as the input UUID.
         assertEquals(decodedUuid.length, 16);

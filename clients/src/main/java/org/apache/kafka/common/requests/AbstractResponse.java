@@ -73,7 +73,7 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
             case PRODUCE:
                 return new ProduceResponse(struct);
             case FETCH:
-                return new FetchResponse(struct);
+                return FetchResponse.parse(struct);
             case LIST_OFFSETS:
                 return new ListOffsetResponse(struct);
             case METADATA:
@@ -160,6 +160,19 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseResponse`, the " +
                         "code should be updated to do so.", apiKey));
         }
+    }
+
+    /**
+     * Returns whether or not client should throttle upon receiving a response of the specified version with a non-zero
+     * throttle time. Client-side throttling is needed when communicating with a newer version of broker which, on
+     * quota violation, sends out responses before throttling.
+     */
+    public boolean shouldClientThrottle(short version) {
+        return false;
+    }
+
+    public int throttleTimeMs() {
+        return DEFAULT_THROTTLE_TIME;
     }
 
     public String toString(short version) {

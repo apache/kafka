@@ -29,7 +29,7 @@ import scala.collection.JavaConverters._
 
 
 /**
- * Integration tests for the new consumer that cover basic usage as well as server failures
+ * Integration tests for the consumer that cover basic usage as well as server failures
  */
 class ConsumerBounceTest extends IntegrationTestHarness with Logging {
 
@@ -355,7 +355,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
 
   private def createConsumer(groupId: String) : KafkaConsumer[Array[Byte], Array[Byte]] = {
     this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId)
-    val consumer = createNewConsumer
+    val consumer = super.createConsumer
     consumers += consumer
     consumer
   }

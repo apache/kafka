@@ -161,13 +161,15 @@ public class Stores {
         if (retentionPeriod < 0) {
             throw new IllegalArgumentException("retentionPeriod cannot be negative");
         }
-        if (numSegments < 1) {
-            throw new IllegalArgumentException("numSegments cannot must smaller than 1");
+        if (numSegments < 2) {
+            throw new IllegalArgumentException("numSegments cannot must smaller than 2");
         }
         if (windowSize < 0) {
             throw new IllegalArgumentException("windowSize cannot be negative");
         }
-        return new RocksDbWindowBytesStoreSupplier(name, retentionPeriod, numSegments, windowSize, retainDuplicates);
+        final long segmentIntervalMs = Math.max(retentionPeriod / (numSegments - 1), 60_000L);
+
+        return new RocksDbWindowBytesStoreSupplier(name, retentionPeriod, segmentIntervalMs, windowSize, retainDuplicates);
     }
 
     /**

@@ -24,8 +24,8 @@ import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
-import org.apache.kafka.streams.processor.internals.RecordContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.WindowStore;
@@ -107,7 +107,7 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
                               final Windowed<K> windowedKey,
                               final InternalProcessorContext context) {
         if (flushListener != null) {
-            final RecordContext current = context.recordContext();
+            final ProcessorRecordContext current = context.recordContext();
             context.setRecordContext(entry.recordContext());
             try {
                 final V oldValue = sendOldValues ? fetchPrevious(key, windowedKey.window().start()) : null;
@@ -150,8 +150,15 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
         validateStoreOpen();
         
         final Bytes keyBytes = WindowKeySchema.toStoreKeyBinary(key, timestamp, 0);
-        final LRUCacheEntry entry = new LRUCacheEntry(value, true, context.offset(),
-                                                      timestamp, context.partition(), context.topic());
+        final LRUCacheEntry entry =
+            new LRUCacheEntry(
+                value,
+                context.headers(),
+                true,
+                context.offset(),
+                timestamp,
+                context.partition(),
+                context.topic());
         cache.put(name, cacheFunction.cacheKey(keyBytes), entry);
     }
 
@@ -167,7 +174,7 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
         if (entry == null) {
             return underlying.fetch(key, timestamp);
         } else {
-            return entry.value;
+            return entry.value();
         }
     }
 

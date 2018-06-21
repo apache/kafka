@@ -45,6 +45,7 @@ import java.util.Properties;
 import static org.apache.kafka.common.requests.IsolationLevel.READ_COMMITTED;
 import static org.apache.kafka.common.requests.IsolationLevel.READ_UNCOMMITTED;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
+import static org.apache.kafka.streams.StreamsConfig.TOPOLOGY_OPTIMIZATION;
 import static org.apache.kafka.streams.StreamsConfig.adminClientPrefix;
 import static org.apache.kafka.streams.StreamsConfig.consumerPrefix;
 import static org.apache.kafka.streams.StreamsConfig.producerPrefix;
@@ -583,6 +584,27 @@ public class StreamsConfigTest {
         }
     }
 
+    @Test
+    public void shouldSpecifyNoOptimizationWhenNotExplicitlyAddedToConfigs() {
+        final String expectedOptimizeConfig = "none";
+        final String actualOptimizedConifig = streamsConfig.getString(TOPOLOGY_OPTIMIZATION);
+        assertEquals("Optimization should be \"none\"", expectedOptimizeConfig, actualOptimizedConifig);
+    }
+
+    @Test
+    public void shouldSpecifyOptimizationWhenNotExplicitlyAddedToConfigs() {
+        final String expectedOptimizeConfig = "all";
+        props.put(TOPOLOGY_OPTIMIZATION, "all");
+        final StreamsConfig config = new StreamsConfig(props);
+        final String actualOptimizedConifig = config.getString(TOPOLOGY_OPTIMIZATION);
+        assertEquals("Optimization should be \"all\"", expectedOptimizeConfig, actualOptimizedConifig);
+    }
+
+    @Test(expected = ConfigException.class)
+    public void shouldThrowConfigExceptionWhenOptimizationConfigNotValueInRange() {
+        props.put(TOPOLOGY_OPTIMIZATION, "maybe");
+        new StreamsConfig(props);
+    }
 
     static class MisconfiguredSerde implements Serde {
         @Override

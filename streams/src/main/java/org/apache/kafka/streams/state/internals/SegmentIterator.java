@@ -66,7 +66,7 @@ class SegmentIterator implements KeyValueIterator<Bytes, byte[]> {
     @Override
     public boolean hasNext() {
         boolean hasNext = false;
-        while ((currentIterator == null || !(hasNext = hasNextCondition.hasNext(currentIterator)) || !currentSegment.isOpen())
+        while ((currentIterator == null || !(hasNext = hasNextConditionHasNext()) || !currentSegment.isOpen())
                 && segments.hasNext()) {
             close();
             currentSegment = segments.next();
@@ -81,6 +81,16 @@ class SegmentIterator implements KeyValueIterator<Bytes, byte[]> {
             }
         }
         return currentIterator != null && hasNext;
+    }
+
+    private boolean hasNextConditionHasNext() {
+        boolean hasNext = false;
+        try {
+            hasNext = hasNextCondition.hasNext(currentIterator);
+        } catch (InvalidStateStoreException e) {
+            //already closed so ignore
+        }
+        return hasNext;
     }
 
     public KeyValue<Bytes, byte[]> next() {

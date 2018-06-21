@@ -112,6 +112,17 @@ public final class Utils {
     }
 
     /**
+     * Read a UTF8 string from the current position till the end of a byte buffer. The position of the byte buffer is
+     * not affected by this method.
+     *
+     * @param buffer The buffer to read from
+     * @return The UTF8 string
+     */
+    public static String utf8(ByteBuffer buffer) {
+        return utf8(buffer, buffer.remaining());
+    }
+
+    /**
      * Read a UTF8 string from a byte buffer at a given offset. Note that the position of the byte buffer
      * is not affected by this method.
      *
@@ -151,7 +162,7 @@ public final class Utils {
      * @param rest The remaining values to compare
      * @return The minimum of all passed values
      */
-    public static long min(long first, long ... rest) {
+    public static long min(long first, long... rest) {
         long min = first;
         for (long r : rest) {
             if (r < min)
@@ -166,7 +177,7 @@ public final class Utils {
      * @param rest The remaining values to compare
      * @return The maximum of all passed values
      */
-    public static long max(long first, long ... rest) {
+    public static long max(long first, long... rest) {
         long max = first;
         for (long r : rest) {
             if (r > max)

@@ -51,17 +51,17 @@ public class ClusterConnectionStatesTest {
         connectionStates.connecting(nodeId1, time.milliseconds());
         assertEquals(connectionStates.connectionState(nodeId1), ConnectionState.CONNECTING);
         assertTrue(connectionStates.isConnecting(nodeId1));
-        assertFalse(connectionStates.isReady(nodeId1));
+        assertFalse(connectionStates.isReady(nodeId1, time.milliseconds()));
         assertFalse(connectionStates.isBlackedOut(nodeId1, time.milliseconds()));
-        assertFalse(connectionStates.hasReadyNodes());
+        assertFalse(connectionStates.hasReadyNodes(time.milliseconds()));
 
         time.sleep(100);
 
         // Successful connection
         connectionStates.ready(nodeId1);
         assertEquals(connectionStates.connectionState(nodeId1), ConnectionState.READY);
-        assertTrue(connectionStates.isReady(nodeId1));
-        assertTrue(connectionStates.hasReadyNodes());
+        assertTrue(connectionStates.isReady(nodeId1, time.milliseconds()));
+        assertTrue(connectionStates.hasReadyNodes(time.milliseconds()));
         assertFalse(connectionStates.isConnecting(nodeId1));
         assertFalse(connectionStates.isBlackedOut(nodeId1, time.milliseconds()));
         assertEquals(connectionStates.connectionDelay(nodeId1, time.milliseconds()), Long.MAX_VALUE);
@@ -74,7 +74,7 @@ public class ClusterConnectionStatesTest {
         assertTrue(connectionStates.isDisconnected(nodeId1));
         assertTrue(connectionStates.isBlackedOut(nodeId1, time.milliseconds()));
         assertFalse(connectionStates.isConnecting(nodeId1));
-        assertFalse(connectionStates.hasReadyNodes());
+        assertFalse(connectionStates.hasReadyNodes(time.milliseconds()));
         assertFalse(connectionStates.canConnect(nodeId1, time.milliseconds()));
 
         // After disconnecting we expect a backoff value equal to the reconnect.backoff.ms setting (plus minus 20% jitter)
@@ -92,29 +92,29 @@ public class ClusterConnectionStatesTest {
         // Check initial state, allowed to connect to all nodes, but no nodes shown as ready
         assertTrue(connectionStates.canConnect(nodeId1, time.milliseconds()));
         assertTrue(connectionStates.canConnect(nodeId2, time.milliseconds()));
-        assertFalse(connectionStates.hasReadyNodes());
+        assertFalse(connectionStates.hasReadyNodes(time.milliseconds()));
 
         // Start connecting one node and check that the pool only shows ready nodes after
         // successful connect
         connectionStates.connecting(nodeId2, time.milliseconds());
-        assertFalse(connectionStates.hasReadyNodes());
+        assertFalse(connectionStates.hasReadyNodes(time.milliseconds()));
         time.sleep(1000);
         connectionStates.ready(nodeId2);
-        assertTrue(connectionStates.hasReadyNodes());
+        assertTrue(connectionStates.hasReadyNodes(time.milliseconds()));
 
         // Connect second node and check that both are shown as ready, pool should immediately
         // show ready nodes, since node2 is already connected
         connectionStates.connecting(nodeId1, time.milliseconds());
-        assertTrue(connectionStates.hasReadyNodes());
+        assertTrue(connectionStates.hasReadyNodes(time.milliseconds()));
         time.sleep(1000);
         connectionStates.ready(nodeId1);
-        assertTrue(connectionStates.hasReadyNodes());
+        assertTrue(connectionStates.hasReadyNodes(time.milliseconds()));
 
         time.sleep(12000);
 
         // disconnect nodes and check proper state of pool throughout
         connectionStates.disconnected(nodeId2, time.milliseconds());
-        assertTrue(connectionStates.hasReadyNodes());
+        assertTrue(connectionStates.hasReadyNodes(time.milliseconds()));
         assertTrue(connectionStates.isBlackedOut(nodeId2, time.milliseconds()));
         assertFalse(connectionStates.isBlackedOut(nodeId1, time.milliseconds()));
         time.sleep(connectionStates.connectionDelay(nodeId2, time.milliseconds()));
@@ -122,7 +122,7 @@ public class ClusterConnectionStatesTest {
         connectionStates.disconnected(nodeId1, time.milliseconds() + 1);
         assertTrue(connectionStates.isBlackedOut(nodeId1, time.milliseconds()));
         assertFalse(connectionStates.isBlackedOut(nodeId2, time.milliseconds()));
-        assertFalse(connectionStates.hasReadyNodes());
+        assertFalse(connectionStates.hasReadyNodes(time.milliseconds()));
     }
 
     @Test
@@ -136,7 +136,7 @@ public class ClusterConnectionStatesTest {
         time.sleep(1000);
         assertEquals(connectionStates.connectionState(nodeId1), ConnectionState.AUTHENTICATION_FAILED);
         assertTrue(connectionStates.authenticationException(nodeId1) instanceof AuthenticationException);
-        assertFalse(connectionStates.hasReadyNodes());
+        assertFalse(connectionStates.hasReadyNodes(time.milliseconds()));
         assertFalse(connectionStates.canConnect(nodeId1, time.milliseconds()));
 
         time.sleep(connectionStates.connectionDelay(nodeId1, time.milliseconds()) + 1);
@@ -199,5 +199,31 @@ public class ClusterConnectionStatesTest {
             assertEquals(expectedBackoff, currentBackoff, reconnectBackoffJitter * expectedBackoff);
             time.sleep(connectionStates.connectionDelay(nodeId1, time.milliseconds()) + 1);
         }
+    }
+
+    @Test
+    public void testThrottled() {
+        connectionStates.connecting(nodeId1, time.milliseconds());
+        time.sleep(1000);
+        connectionStates.ready(nodeId1);
+        time.sleep(10000);
+
+        // Initially not throttled.
+        assertEquals(0, connectionStates.throttleDelayMs(nodeId1, time.milliseconds()));
+
+        // Throttle for 100ms from now.
+        connectionStates.throttle(nodeId1, time.milliseconds() + 100);
+        assertEquals(100, connectionStates.throttleDelayMs(nodeId1, time.milliseconds()));
+
+        // Still throttled after 50ms. The remaining delay is 50ms. The poll delay should be same as throttling delay.
+        time.sleep(50);
+        assertEquals(50, connectionStates.throttleDelayMs(nodeId1, time.milliseconds()));
+        assertEquals(50, connectionStates.pollDelayMs(nodeId1, time.milliseconds()));
+
+        // Not throttled anymore when the deadline is reached. The poll delay should be same as connection delay.
+        time.sleep(50);
+        assertEquals(0, connectionStates.throttleDelayMs(nodeId1, time.milliseconds()));
+        assertEquals(connectionStates.connectionDelay(nodeId1, time.milliseconds()),
+            connectionStates.pollDelayMs(nodeId1, time.milliseconds()));
     }
 }

@@ -21,46 +21,10 @@ from ducktape.cluster.remoteaccount import RemoteCommandError
 
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.monitor.jmx import JmxMixin
-from kafkatest.version import DEV_BRANCH, LATEST_0_8_2, LATEST_0_9, LATEST_0_10_0, V_0_10_0_0, V_0_11_0_0
+from kafkatest.version import DEV_BRANCH, LATEST_0_8_2, LATEST_0_9, LATEST_0_10_0, V_0_9_0_0, V_0_10_0_0, V_0_11_0_0, V_2_0_0
 
 """
-0.8.2.1 ConsoleConsumer options
-
 The console consumer is a tool that reads data from Kafka and outputs it to standard output.
-Option                                  Description
-------                                  -----------
---blacklist <blacklist>                 Blacklist of topics to exclude from
-                                          consumption.
---consumer.config <config file>         Consumer config properties file.
---csv-reporter-enabled                  If set, the CSV metrics reporter will
-                                          be enabled
---delete-consumer-offsets               If specified, the consumer path in
-                                          zookeeper is deleted when starting up
---formatter <class>                     The name of a class to use for
-                                          formatting kafka messages for
-                                          display. (default: kafka.tools.
-                                          DefaultMessageFormatter)
---from-beginning                        If the consumer does not already have
-                                          an established offset to consume
-                                          from, start with the earliest
-                                          message present in the log rather
-                                          than the latest message.
---max-messages <Integer: num_messages>  The maximum number of messages to
-                                          consume before exiting. If not set,
-                                          consumption is continual.
---metrics-dir <metrics dictory>         If csv-reporter-enable is set, and
-                                          this parameter isset, the csv
-                                          metrics will be outputed here
---property <prop>
---skip-message-on-error                 If there is an error when processing a
-                                          message, skip it instead of halt.
---topic <topic>                         The topic id to consume on.
---whitelist <whitelist>                 Whitelist of topics to include for
-                                          consumption.
---zookeeper <urls>                      REQUIRED: The connection string for
-                                          the zookeeper connection in the form
-                                          host:port. Multiple URLS can be
-                                          given to allow fail-over.
 """
 
 
@@ -191,13 +155,18 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
               "--topic %(topic)s --consumer.config %(config_file)s" % args
 
         if self.new_consumer:
+            assert node.version >= V_0_9_0_0, \
+                "new_consumer is only supported if version >= 0.9.0.0, version %s" % str(node.version)
             if node.version <= LATEST_0_10_0:
                 cmd += " --new-consumer"
             cmd += " --bootstrap-server %(broker_list)s" % args
             if node.version >= V_0_11_0_0:
                 cmd += " --isolation-level %s" % self.isolation_level
         else:
+            assert node.version < V_2_0_0, \
+                "new_consumer==false is only supported if version < 2.0.0, version %s" % str(node.version)
             cmd += " --zookeeper %(zk_connect)s" % args
+
         if self.from_beginning:
             cmd += " --from-beginning"
 

@@ -43,11 +43,11 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   def testHeaders() {
     val numRecords = 1
     val record = new ProducerRecord(tp.topic, tp.partition, null, "key".getBytes, "value".getBytes)
-    
+
     record.headers().add("headerKey", "headerValue".getBytes)
-    
+
     this.producers.head.send(record)
-    
+
     assertEquals(0, this.consumers.head.assignment.size)
     this.consumers.head.assign(List(tp).asJava)
     assertEquals(1, this.consumers.head.assignment.size)
@@ -63,23 +63,23 @@ class PlaintextConsumerTest extends BaseConsumerTest {
       assertEquals("headerValue", if (header == null) null else new String(header.value()))
     }
   }
-  
+
   @Test
   def testHeadersExtendedSerializerDeserializer() {
     val numRecords = 1
     val record = new ProducerRecord(tp.topic, tp.partition, null, "key".getBytes, "value".getBytes)
 
     val extendedSerializer = new ExtendedSerializer[Array[Byte]] {
-      
+
       var serializer = new ByteArraySerializer()
-      
+
       override def serialize(topic: String, headers: Headers, data: Array[Byte]): Array[Byte] = {
         headers.add("content-type", "application/octet-stream".getBytes)
         serializer.serialize(topic, data)
       }
 
       override def configure(configs: util.Map[String, _], isKey: Boolean): Unit = serializer.configure(configs, isKey)
-      
+
       override def close(): Unit = serializer.close()
 
       override def serialize(topic: String, data: Array[Byte]): Array[Byte] = {
@@ -90,9 +90,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
 
     val extendedDeserializer = new ExtendedDeserializer[Array[Byte]] {
-      
+
       var deserializer = new ByteArrayDeserializer()
-      
+
       override def deserialize(topic: String, headers: Headers, data: Array[Byte]): Array[Byte] = {
         val header = headers.lastHeader("content-type")
         assertEquals("application/octet-stream", if (header == null) null else new String(header.value()))
@@ -110,7 +110,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
       }
 
     }
-    
+
     val producer0 = new KafkaProducer(this.producerConfig, new ByteArraySerializer(), extendedSerializer)
     producers += producer0
     producer0.send(record)
@@ -127,7 +127,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     assertEquals(numRecords, records.size)
   }
-  
+
   @Test
   def testMaxPollRecords() {
     val maxPollRecords = 2
@@ -618,7 +618,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val producerProps = new Properties()
     producerProps.setProperty(ProducerConfig.COMPRESSION_TYPE_CONFIG, CompressionType.GZIP.name)
     producerProps.setProperty(ProducerConfig.LINGER_MS_CONFIG, Long.MaxValue.toString)
-    val producer = TestUtils.createNewProducer(brokerList, securityProtocol = securityProtocol, trustStoreFile = trustStoreFile,
+    val producer = TestUtils.createProducer(brokerList, securityProtocol = securityProtocol, trustStoreFile = trustStoreFile,
         saslProperties = clientSaslProperties, retries = 0, lingerMs = Long.MaxValue, props = Some(producerProps))
     (0 until numRecords).foreach { i =>
       producer.send(new ProducerRecord(tp.topic, tp.partition, i.toLong, s"key $i".getBytes, s"value $i".getBytes))
@@ -633,7 +633,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertNull(this.consumers.head.committed(new TopicPartition(topic, 15)))
 
     // position() on a partition that we aren't subscribed to throws an exception
-    intercept[IllegalArgumentException] {
+    intercept[IllegalStateException] {
       this.consumers.head.position(new TopicPartition(topic, 15))
     }
 
@@ -1534,10 +1534,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
       val fetchLag = consumer.metrics.get(new MetricName("records-lag", "consumer-fetch-manager-metrics", "", tags))
       assertNotNull(fetchLag)
 
-      val oldTags = Collections.singletonMap("client-id", "testPerPartitionLagMetricsCleanUpWithAssign")
-      val oldFetchLag = consumer.metrics.get(new MetricName(tp + ".records-lag", "consumer-fetch-manager-metrics", "", oldTags))
-      assertEquals(fetchLag.metricValue(), oldFetchLag.metricValue())
-
       val expectedLag = numMessages - records.count
       assertEquals(s"The lag should be $expectedLag", expectedLag, fetchLag.value, epsilon)
 
@@ -1594,15 +1590,12 @@ class PlaintextConsumerTest extends BaseConsumerTest {
         records = consumer.poll(100)
         !records.isEmpty
       }, "Consumer did not consume any message before timeout.")
-      val oldTags = Collections.singletonMap("client-id", "testPerPartitionLagWithMaxPollRecords")
-      val oldLag = consumer.metrics.get(new MetricName(tp + ".records-lag", "consumer-fetch-manager-metrics", "", oldTags))
 
       val tags = new util.HashMap[String, String]()
       tags.put("client-id", "testPerPartitionLagWithMaxPollRecords")
       tags.put("topic", tp.topic())
       tags.put("partition", String.valueOf(tp.partition()))
       val lag = consumer.metrics.get(new MetricName("records-lag", "consumer-fetch-manager-metrics", "", tags))
-      assertEquals(oldLag.metricValue(), lag.metricValue())
 
       assertEquals(s"The lag should be ${numMessages - records.count}", numMessages - records.count, lag.value, epsilon)
     } finally {
@@ -1778,9 +1771,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
                                                    subscriptions: Set[TopicPartition]): Unit = {
     assertTrue(consumerGroup.size + numOfConsumersToAdd <= subscriptions.size)
     for (_ <- 0 until numOfConsumersToAdd) {
-      val newConsumer = new KafkaConsumer[Array[Byte], Array[Byte]](this.consumerConfig)
-      consumerGroup += newConsumer
-      consumerPollers += subscribeConsumerAndStartPolling(newConsumer, topicsToSubscribe)
+      val consumer = new KafkaConsumer[Array[Byte], Array[Byte]](this.consumerConfig)
+      consumerGroup += consumer
+      consumerPollers += subscribeConsumerAndStartPolling(consumer, topicsToSubscribe)
     }
 
     // wait until topics get re-assigned and validate assignment

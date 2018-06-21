@@ -100,6 +100,10 @@ class KTableKTableRightJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R,
             context().forward(key, new Change<>(newValue, oldValue));
         }
 
+        @Override
+        public void close() {
+            valueGetter.close();
+        }
     }
 
     private class KTableKTableRightJoinValueGetter implements KTableValueGetter<K, R> {
@@ -131,6 +135,11 @@ class KTableKTableRightJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R,
             }
         }
 
+        @Override
+        public void close() {
+            valueGetter1.close();
+            valueGetter2.close();
+        }
     }
 
 }

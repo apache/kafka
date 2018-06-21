@@ -160,12 +160,11 @@ class ReplicationTest(ProduceConsumeValidateTest):
         self.kafka.interbroker_security_protocol = security_protocol
         self.kafka.client_sasl_mechanism = client_sasl_mechanism
         self.kafka.interbroker_sasl_mechanism = interbroker_sasl_mechanism
-        new_consumer = False if self.kafka.security_protocol == "PLAINTEXT" else True
         self.enable_idempotence = enable_idempotence
         compression_types = None if not compression_type else [compression_type] * self.num_producers
         self.producer = VerifiableProducer(self.test_context, self.num_producers, self.kafka, self.topic,
                                            throughput=self.producer_throughput, compression_types=compression_types,
                                            enable_idempotence=enable_idempotence)
-        self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka, self.topic, new_consumer=new_consumer, consumer_timeout_ms=60000, message_validator=is_int)
+        self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka, self.topic, consumer_timeout_ms=60000, message_validator=is_int)
         self.kafka.start()
         self.run_produce_consume_validate(core_test_action=lambda: failures[failure_mode](self, broker_type))

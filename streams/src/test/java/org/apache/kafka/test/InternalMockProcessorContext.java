@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.test;
 
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
@@ -59,6 +61,7 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
     private Serde<?> keySerde;
     private Serde<?> valSerde;
     private long timestamp = -1L;
+    private long streamTime = -1;
 
     public InternalMockProcessorContext() {
         this(null,
@@ -74,6 +77,13 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
     public InternalMockProcessorContext(final File stateDir,
                                         final StreamsConfig config) {
         this(stateDir, null, null, new StreamsMetricsImpl(new Metrics(), "mock"), config, null, null);
+    }
+
+    public InternalMockProcessorContext(final File stateDir,
+                                        final Serde<?> keySerde,
+                                        final Serde<?> valSerde,
+                                        final StreamsConfig config) {
+        this(stateDir, keySerde, valSerde, new StreamsMetricsImpl(new Metrics(), "mock"), config, null, null);
     }
 
     public InternalMockProcessorContext(final StateSerdes<?, ?> serdes,
@@ -170,6 +180,15 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
     @Override
     public void initialized() {}
 
+    public void setStreamTime(final long time) {
+        streamTime = time;
+    }
+
+    @Override
+    public Long streamTime() {
+        return streamTime;
+    }
+
     @Override
     public File stateDir() {
         if (stateDir == null) {
@@ -242,7 +261,7 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
     // and also not throwing exceptions if record context is not available.
     public void setTime(final long timestamp) {
         if (recordContext != null) {
-            recordContext = new ProcessorRecordContext(timestamp, recordContext.offset(), recordContext.partition(), recordContext.topic());
+            recordContext = new ProcessorRecordContext(timestamp, recordContext.offset(), recordContext.partition(), recordContext.topic(), recordContext.headers());
         }
         this.timestamp = timestamp;
     }
@@ -279,14 +298,26 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
         return recordContext.offset();
     }
 
+    @Override
+    public Headers headers() {
+        if (recordContext == null) {
+            return new RecordHeaders();
+        }
+        return recordContext.headers();
+    }
+
     Map<String, StateStore> allStateStores() {
         return Collections.unmodifiableMap(storeMap);
     }
 
-    public void restore(final String storeName, final Iterable<KeyValue<byte[], byte[]>> changeLog) {
-
+    public StateRestoreListener getRestoreListener(final String storeName) {
         final BatchingStateRestoreCallback restoreCallback = getBatchingRestoreCallback(restoreFuncs.get(storeName));
-        final StateRestoreListener restoreListener = getStateRestoreListener(restoreCallback);
+        return getStateRestoreListener(restoreCallback);
+    }
+
+    public void restore(final String storeName, final Iterable<KeyValue<byte[], byte[]>> changeLog) {
+        final BatchingStateRestoreCallback restoreCallback = getBatchingRestoreCallback(restoreFuncs.get(storeName));
+        final StateRestoreListener restoreListener = getRestoreListener(storeName);
 
         restoreListener.onRestoreStart(null, storeName, 0L, 0L);
 

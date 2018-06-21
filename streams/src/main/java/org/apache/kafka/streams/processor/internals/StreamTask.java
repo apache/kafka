@@ -189,7 +189,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         final Map<TopicPartition, RecordQueue> partitionQueues = new HashMap<>();
 
         // initialize the topology with its own context
-        processorContext = new ProcessorContextImpl(id, this, config, this.recordCollector, stateMgr, metrics, cache);
+        final ProcessorContextImpl processorContextImpl = new ProcessorContextImpl(id, this, config, this.recordCollector, stateMgr, metrics, cache);
+        processorContext = processorContextImpl;
 
         final TimestampExtractor defaultTimestampExtractor = config.defaultTimestampExtractor();
         final DeserializationExceptionHandler defaultDeserializationExceptionHandler = config.defaultDeserializationExceptionHandler();
@@ -209,6 +210,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
         recordInfo = new PartitionGroup.RecordInfo();
         partitionGroup = new PartitionGroup(partitionQueues);
+        processorContextImpl.setStreamTimeSupplier(partitionGroup::timestamp);
 
         stateMgr.registerGlobalStateStores(topology.globalStateStores());
 
@@ -343,7 +345,13 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     }
 
     private void updateProcessorContext(final StampedRecord record, final ProcessorNode currNode) {
-        processorContext.setRecordContext(new ProcessorRecordContext(record.timestamp, record.offset(), record.partition(), record.topic()));
+        processorContext.setRecordContext(
+            new ProcessorRecordContext(
+                record.timestamp,
+                record.offset(),
+                record.partition(),
+                record.topic(),
+                record.headers()));
         processorContext.setCurrentNode(currNode);
     }
 
@@ -374,7 +382,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         flushState();
 
         if (!eosEnabled) {
-            stateMgr.checkpoint(recordCollectorOffsets());
+            stateMgr.checkpoint(activeTaskCheckpointableOffsets());
         }
 
         commitOffsets(startNewTransaction);
@@ -385,8 +393,13 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     }
 
     @Override
-    protected Map<TopicPartition, Long> recordCollectorOffsets() {
-        return recordCollector.offsets();
+    protected Map<TopicPartition, Long> activeTaskCheckpointableOffsets() {
+        final Map<TopicPartition, Long> checkpointableOffsets = recordCollector.offsets();
+        for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
+            checkpointableOffsets.putIfAbsent(entry.getKey(), entry.getValue());
+        }
+
+        return checkpointableOffsets;
     }
 
     @Override
@@ -418,19 +431,19 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
                 if (eosEnabled) {
                     producer.sendOffsetsToTransaction(consumedOffsetsAndMetadata, applicationId);
-                    producer.commitTransaction();
-                    transactionInFlight = false;
-                    if (startNewTransaction) {
-                        producer.beginTransaction();
-                        transactionInFlight = true;
-                    }
                 } else {
                     consumer.commitSync(consumedOffsetsAndMetadata);
                 }
                 commitOffsetNeeded = false;
-            } else if (eosEnabled && !startNewTransaction && transactionInFlight) { // need to make sure to commit txn for suspend case
+            }
+
+            if (eosEnabled) {
                 producer.commitTransaction();
                 transactionInFlight = false;
+                if (startNewTransaction) {
+                    producer.beginTransaction();
+                    transactionInFlight = true;
+                }
             }
         } catch (final CommitFailedException | ProducerFencedException fatal) {
             throw new TaskMigratedException(this, fatal);
@@ -741,5 +754,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     // visible for testing only
     RecordCollector recordCollector() {
         return recordCollector;
+    }
+
+    Producer<byte[], byte[]> getProducer() {
+        return producer;
     }
 }

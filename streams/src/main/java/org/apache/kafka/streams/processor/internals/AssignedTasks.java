@@ -40,15 +40,15 @@ abstract class AssignedTasks<T extends Task> {
     private final Logger log;
     private final String taskTypeName;
     private final TaskAction<T> commitAction;
-    private Map<TaskId, T> created = new HashMap<>();
-    private Map<TaskId, T> suspended = new HashMap<>();
-    private Map<TaskId, T> restoring = new HashMap<>();
-    private Set<TopicPartition> restoredPartitions = new HashSet<>();
-    private Set<TaskId> previousActiveTasks = new HashSet<>();
+    private final Map<TaskId, T> created = new HashMap<>();
+    private final Map<TaskId, T> suspended = new HashMap<>();
+    private final Map<TaskId, T> restoring = new HashMap<>();
+    private final Set<TopicPartition> restoredPartitions = new HashSet<>();
+    private final Set<TaskId> previousActiveTasks = new HashSet<>();
     // IQ may access this map.
-    Map<TaskId, T> running = new ConcurrentHashMap<>();
-    private Map<TopicPartition, T> runningByPartition = new HashMap<>();
-    Map<TopicPartition, T> restoringByPartition = new HashMap<>();
+    final Map<TaskId, T> running = new ConcurrentHashMap<>();
+    private final Map<TopicPartition, T> runningByPartition = new HashMap<>();
+    final Map<TopicPartition, T> restoringByPartition = new HashMap<>();
 
     AssignedTasks(final LogContext logContext,
                   final String taskTypeName) {
@@ -176,7 +176,7 @@ abstract class AssignedTasks<T extends Task> {
 
     private RuntimeException suspendTasks(final Collection<T> tasks) {
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
-        for (Iterator<T> it = tasks.iterator(); it.hasNext(); ) {
+        for (final Iterator<T> it = tasks.iterator(); it.hasNext(); ) {
             final T task = it.next();
             try {
                 task.suspend();
@@ -249,10 +249,10 @@ abstract class AssignedTasks<T extends Task> {
 
     private void addToRestoring(final T task) {
         restoring.put(task.id(), task);
-        for (TopicPartition topicPartition : task.partitions()) {
+        for (final TopicPartition topicPartition : task.partitions()) {
             restoringByPartition.put(topicPartition, task);
         }
-        for (TopicPartition topicPartition : task.changelogPartitions()) {
+        for (final TopicPartition topicPartition : task.changelogPartitions()) {
             restoringByPartition.put(topicPartition, task);
         }
     }
@@ -264,10 +264,10 @@ abstract class AssignedTasks<T extends Task> {
         log.debug("transitioning {} {} to running", taskTypeName, task.id());
         running.put(task.id(), task);
         task.initializeTopology();
-        for (TopicPartition topicPartition : task.partitions()) {
+        for (final TopicPartition topicPartition : task.partitions()) {
             runningByPartition.put(topicPartition, task);
         }
-        for (TopicPartition topicPartition : task.changelogPartitions()) {
+        for (final TopicPartition topicPartition : task.changelogPartitions()) {
             runningByPartition.put(topicPartition, task);
         }
     }
@@ -356,7 +356,7 @@ abstract class AssignedTasks<T extends Task> {
     void applyToRunningTasks(final TaskAction<T> action) {
         RuntimeException firstException = null;
 
-        for (Iterator<T> it = running().iterator(); it.hasNext(); ) {
+        for (final Iterator<T> it = running().iterator(); it.hasNext(); ) {
             final T task = it.next();
             try {
                 action.apply(task);
