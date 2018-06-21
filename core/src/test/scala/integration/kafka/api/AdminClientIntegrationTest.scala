@@ -1089,7 +1089,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     val config = createConfig()
     config.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "100000000")
     val factory = new KafkaAdminClientTest.FailureInjectingTimeoutProcessorFactory()
-    val client = KafkaAdminClientTest.createInternal(new AdminClientConfig(config), factory)
+    client = KafkaAdminClientTest.createInternal(new AdminClientConfig(config), factory)
     val future = client.createTopics(Seq("mytopic", "mytopic2").map(new NewTopic(_, 1, 1)).asJava,
         new CreateTopicsOptions().validateOnly(true)).all()
     assertFutureExceptionTypeEquals(future, classOf[TimeoutException])
@@ -1105,7 +1105,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
   @Test
   def testConsumerGroups(): Unit = {
     val config = createConfig()
-    val client = AdminClient.create(config)
+    client = AdminClient.create(config)
     try {
       // Verify that initially there are no consumer groups to list.
       val list1 = client.listConsumerGroups()
