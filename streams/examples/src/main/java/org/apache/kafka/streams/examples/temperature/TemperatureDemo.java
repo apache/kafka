@@ -23,10 +23,7 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KeyValueMapper;
-import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.Produced;
-import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.WindowedSerdes;
@@ -71,7 +68,7 @@ public class TemperatureDemo {
     // window size within which the filtering is applied
     private static final int TEMPERATURE_WINDOW_SIZE = 5;
 
-    public static void main(String[] args) throws Exception {
+    public static void main(String[] args) {
 
         Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-temperature");
@@ -89,30 +86,17 @@ public class TemperatureDemo {
         KStream<Windowed<String>, String> max = source
             // temperature values are sent without a key (null), so in order
             // to group and reduce them, a key is needed ("temp" has been chosen)
-            .selectKey(new KeyValueMapper<String, String, String>() {
-                @Override
-                public String apply(String key, String value) {
-                    return "temp";
-                }
-            })
+            .selectKey((key, value) -> "temp")
             .groupByKey()
             .windowedBy(TimeWindows.of(TimeUnit.SECONDS.toMillis(TEMPERATURE_WINDOW_SIZE)))
-            .reduce(new Reducer<String>() {
-                @Override
-                public String apply(String value1, String value2) {
-                    if (Integer.parseInt(value1) > Integer.parseInt(value2))
-                        return value1;
-                    else
-                        return value2;
-                }
+            .reduce((value1, value2) -> {
+                if (Integer.parseInt(value1) > Integer.parseInt(value2))
+                    return value1;
+                else
+                    return value2;
             })
             .toStream()
-            .filter(new Predicate<Windowed<String>, String>() {
-                @Override
-                public boolean test(Windowed<String> key, String value) {
-                    return Integer.parseInt(value) > TEMPERATURE_THRESHOLD;
-                }
-            });
+            .filter((key, value) -> Integer.parseInt(value) > TEMPERATURE_THRESHOLD);
 
         Serde<Windowed<String>> windowedSerde = WindowedSerdes.timeWindowedSerdeFrom(String.class);
 
