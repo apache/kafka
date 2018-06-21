@@ -49,7 +49,6 @@ class LogCompactionTest(Test):
             interbroker_security_protocol=interbroker_security_protocol,
             server_prop_overides=[
                 [config_property.LOG_SEGMENT_BYTES, "1073000"],
-                [config_property.LOG_CLEANUP_POLICY, "compact"]
             ])
         self.kafka.start()
 

@@ -35,7 +35,6 @@ LOG_SEGMENT_BYTES = "log.segment.bytes"
 LOG_RETENTION_CHECK_INTERVAL_MS = "log.retention.check.interval.ms"
 LOG_RETENTION_MS = "log.retention.ms"
 LOG_CLEANER_ENABLE = "log.cleaner.enable"
-LOG_CLEANUP_POLICY = "log.cleanup.policy"
 
 AUTO_CREATE_TOPICS_ENABLE = "auto.create.topics.enable"
 

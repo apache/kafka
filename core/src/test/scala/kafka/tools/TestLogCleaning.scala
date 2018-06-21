@@ -26,16 +26,18 @@ import java.util.{Properties, Random}
 import joptsimple.OptionParser
 import kafka.log.Log
 import kafka.utils._
+import org.apache.kafka.clients.admin.NewTopic
+import org.apache.kafka.clients.{CommonClientConfigs, admin}
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record.FileRecords
 import org.apache.kafka.common.utils.Utils
 
 import scala.collection.JavaConverters._
 
 /**
- * This is a torture test that runs against an existing broker which is configured with log compaction.
- * (configure log.cleanup.policy=compact)
+ * This is a torture test that runs against an existing broker
  *
  * Here is how it works:
  *
@@ -117,6 +119,7 @@ object TestLogCleaning {
 
     val testId = new Random().nextInt(Int.MaxValue)
     val topics = (0 until topicCount).map("log-cleaner-test-" + testId + "-" + _).toArray
+    createTopics(brokerUrl, topics.toSeq)
 
     println("Producing %d messages..to topics %s".format(messages, topics.mkString(",")))
     val producedDataFile = produceMessages(brokerUrl, topics, messages, compressionType, dups, percentDeletes)
@@ -136,6 +139,23 @@ object TestLogCleaning {
     Utils.delete(consumedDataFile)
     //if you change this line, we need to update test_log_compaction_tool.py system test
     println("Data verification is completed")
+  }
+
+  def createTopics(brokerUrl: String, topics: Seq[String]): Unit = {
+    val adminConfig = new Properties
+    adminConfig.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokerUrl)
+    val adminClient = admin.AdminClient.create(adminConfig)
+
+    val topicConfigs = Map(TopicConfig.CLEANUP_POLICY_CONFIG -> TopicConfig.CLEANUP_POLICY_COMPACT)
+    val newTopics = topics.map(name => new NewTopic(name, 1, 1).configs(topicConfigs.asJava)).asJava
+    adminClient.createTopics(newTopics).all.get()
+
+    TestUtils.waitUntilTrue(() => {
+        val newTopics = adminClient.listTopics.names.get()
+        topics.forall(topicName => newTopics.contains(topicName))
+    }, "timed out waiting for topics")
+
+    adminClient.close()
   }
 
   def dumpLog(dir: File) {
@@ -286,7 +306,7 @@ object TestLogCleaning {
     producedFile
   }
 
-  def makeConsumer(brokerUrl: String): KafkaConsumer[String, String] = {
+  def createConsumer(brokerUrl: String): KafkaConsumer[String, String] = {
     val consumerProps = new Properties
     consumerProps.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "log-cleaner-test-" + new Random().nextInt(Int.MaxValue))
     consumerProps.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerUrl)
@@ -297,7 +317,7 @@ object TestLogCleaning {
   }
 
   def consumeMessages(brokerUrl: String, topics: Array[String]): File = {
-    val consumer = makeConsumer(brokerUrl)
+    val consumer = createConsumer(brokerUrl)
     consumer.subscribe(topics.seq.asJava)
     val consumedFile = File.createTempFile("kafka-log-cleaner-consumed-", ".txt")
     println("Logging consumed messages to " + consumedFile.getAbsolutePath)
