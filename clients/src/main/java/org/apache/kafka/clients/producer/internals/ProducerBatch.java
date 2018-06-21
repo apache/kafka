@@ -20,7 +20,6 @@ import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.RecordBatchTooLargeException;
-import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.record.AbstractRecords;
 import org.apache.kafka.common.record.CompressionRatioEstimator;
@@ -58,7 +57,7 @@ public final class ProducerBatch {
 
     private enum FinalState { ABORTED, FAILED, SUCCEEDED }
 
-    public final long createdMs;
+    final long createdMs;
     final TopicPartition topicPartition;
     final ProduceRequestResult produceFuture;
 
@@ -77,13 +76,13 @@ public final class ProducerBatch {
     private boolean retry;
     private boolean reopened = false;
 
-    public ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long creationTime) {
-        this(tp, recordsBuilder, creationTime, false);
+    public ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long createdMs) {
+        this(tp, recordsBuilder, createdMs, false);
     }
 
-    public ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long creationTime, boolean isSplitBatch) {
-        this.createdMs = creationTime;
-        this.lastAttemptMs = creationTime;
+    public ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long createdMs, boolean isSplitBatch) {
+        this.createdMs = createdMs;
+        this.lastAttemptMs = createdMs;
         this.recordsBuilder = recordsBuilder;
         this.topicPartition = tp;
         this.lastAppendTime = createdMs;
@@ -181,7 +180,7 @@ public final class ProducerBatch {
         if (tryFinalState == FinalState.SUCCEEDED) {
             log.trace("Successfully produced messages to {} with base offset {}.", topicPartition, baseOffset);
         } else {
-            log.trace("Failed to produce messages to {}.", topicPartition, exception);
+            log.trace("Failed to produce messages to {} with base offset {}.", topicPartition, baseOffset, exception);
         }
 
         if (this.finalState.compareAndSet(null, tryFinalState)) {
@@ -192,15 +191,17 @@ public final class ProducerBatch {
         if (this.finalState.get() != FinalState.SUCCEEDED) {
             if (tryFinalState == FinalState.SUCCEEDED) {
                 // Log if a previously unsuccessful batch succeeded later on.
-                log.debug("ProduceResponse returned {} for {} after batch had already been {}.", tryFinalState,
-                    topicPartition, this.finalState.get());
+                log.debug("ProduceResponse returned {} for {} after batch with base offset {} had already been {}.",
+                    tryFinalState, topicPartition, baseOffset, this.finalState.get());
+            } else {
+                // FAILED --> FAILED and ABORTED --> FAILED transitions are ignored.
+                log.debug("Ignored state transition {} -> {} for {} batch with base offset {}",
+                    this.finalState.get(), tryFinalState, topicPartition, baseOffset);
             }
-            // FAILED --> ABORTED and ABORTED --> FAILED transitions are ignored.
         } else {
             // A SUCCESSFUL batch must not attempt another state change.
             throw new IllegalStateException("A " + this.finalState.get() + " batch must not attempt another state change to " + tryFinalState);
         }
-
         return false;
     }
 
@@ -315,45 +316,12 @@ public final class ProducerBatch {
         return "ProducerBatch(topicPartition=" + topicPartition + ", recordCount=" + recordCount + ")";
     }
 
-    /**
-     * Expire the batch if current time has passed the delivery timeout of the batch.
-     * The delivery timeout is measured from batch creation time instead of batch close time
-     * because in some cases batch close may be arbitrarily delayed.
-     * This methods closes this batch and sets {@code expiryErrorMessage} if the batch has timed out.
-     */
-    //boolean maybeExpire(long deliveryTimeoutMs, long now) {
-    //    if (deliveryTimeoutMs <= (now - this.createdMs)) {
-    //        expire(now);
-    //        return true;
-    //    }
-    //   return false;
-    //}
-
     boolean hasReachedDeliveryTimeout(long deliveryTimeoutMs, long now) {
-        return  deliveryTimeoutMs <= now - this.createdMs;
-    }
-
-    /**
-     * Expire the batch. This methods closes this batch and sets {@code expiryErrorMessage}.
-     */
-    void expire(long now) {
-        expiryErrorMessage = (now - this.createdMs) + " ms has passed since batch creation";
-        abortRecordAppends();
+        return deliveryTimeoutMs <= now - this.createdMs;
     }
 
     public FinalState finalState() {
         return this.finalState.get();
-    }
-
-    /**
-     * If {@link #hasReachedDeliveryTimeout(long, long)} returned true, the sender will fail the batch with
-     * the exception returned by this method.
-     * @return An exception indicating the batch expired.
-     */
-    TimeoutException timeoutException() {
-        if (expiryErrorMessage == null)
-            throw new IllegalStateException("Batch has not expired");
-        return new TimeoutException("Expiring " + recordCount + " record(s) for " + topicPartition + ": " + expiryErrorMessage);
     }
 
     int attempts() {
@@ -369,10 +337,6 @@ public final class ProducerBatch {
 
     long queueTimeMs() {
         return drainedMs - createdMs;
-    }
-
-    long createdTimeMs(long nowMs) {
-        return Math.max(0, nowMs - createdMs);
     }
 
     long waitedTimeMs(long nowMs) {
@@ -490,11 +454,5 @@ public final class ProducerBatch {
 
     public boolean sequenceHasBeenReset() {
         return reopened;
-    }
-
-    boolean soonToExpire(long deliveryTimeoutMs, long now, int requestTimeoutMs) {
-        // We don't add anything in deliveryTimeoutMs because it may overflow
-        // when deliveryTimeoutMs==Long.MAX_VALUE
-        return deliveryTimeoutMs <= now + requestTimeoutMs - createdMs;
     }
 }

@@ -23,12 +23,9 @@ import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.kafka.clients.ApiVersions;
@@ -77,7 +74,6 @@ public final class RecordAccumulator {
     private final CompressionType compression;
     private final long lingerMs;
     private final long retryBackoffMs;
-    private final int requestTimeoutMs;
     private final long deliveryTimeoutMs;
     private final BufferPool free;
     private final Time time;
@@ -88,10 +84,7 @@ public final class RecordAccumulator {
     private final Map<TopicPartition, Long> muted;
     private int drainIndex;
     private final TransactionManager transactionManager;
-
-    // A per-partition queue of batches ordered by creation time for quick access of the oldest batch
-    private final ConcurrentMap<TopicPartition, List<ProducerBatch>> soonToExpireInFlightBatches;
-    private long nextBatchExpiryTimeMs; // the earliest time (absolute) a batch will expire.
+    private long nextBatchExpiryTimeMs = Long.MAX_VALUE; // the earliest time (absolute) a batch will expire.
 
     /**
      * Create a new record accumulator
@@ -115,7 +108,6 @@ public final class RecordAccumulator {
                              CompressionType compression,
                              long lingerMs,
                              long retryBackoffMs,
-                             int requestTimeoutMs,
                              long deliveryTimeoutMs,
                              Metrics metrics,
                              String metricGrpName,
@@ -132,9 +124,7 @@ public final class RecordAccumulator {
         this.compression = compression;
         this.lingerMs = lingerMs;
         this.retryBackoffMs = retryBackoffMs;
-        this.requestTimeoutMs = requestTimeoutMs;
         this.deliveryTimeoutMs = deliveryTimeoutMs;
-        this.nextBatchExpiryTimeMs = Long.MAX_VALUE;
         this.batches = new CopyOnWriteMap<>();
         this.free = bufferPool;
         this.incomplete = new IncompleteBatches();
@@ -142,7 +132,6 @@ public final class RecordAccumulator {
         this.time = time;
         this.apiVersions = apiVersions;
         this.transactionManager = transactionManager;
-        this.soonToExpireInFlightBatches = new ConcurrentHashMap<>();
         registerMetrics(metrics, metricGrpName);
     }
 
@@ -239,7 +228,6 @@ public final class RecordAccumulator {
 
                 // Don't deallocate this buffer in the finally block as it's being used in the record batch
                 buffer = null;
-
                 return new RecordAppendResult(future, dq.size() > 1 || batch.isFull(), true);
             }
         } finally {
@@ -266,7 +254,7 @@ public final class RecordAccumulator {
      *  if it is expired, or when the producer is closed.
      */
     private RecordAppendResult tryAppend(long timestamp, byte[] key, byte[] value, Header[] headers,
-        Callback callback, Deque<ProducerBatch> deque) {
+                                         Callback callback, Deque<ProducerBatch> deque) {
         ProducerBatch last = deque.peekLast();
         if (last != null) {
             FutureRecordMetadata future = last.tryAppend(timestamp, key, value, headers, callback, time.milliseconds());
@@ -285,14 +273,19 @@ public final class RecordAccumulator {
         return result;
     }
 
-    private void maybeUpdateNextBatchExpiryTime(ProducerBatch batch) {
-        // We determine the earliest time any batch may expire. We use
-        // this value later on to determine the max time we can sleep in poll.
-        // We assume that the batch at the front of the deque will always be the next to expire.
-        // This may not be true if max.in.flight.requests.per.connection > 1 and retries happen.
-        // Watch for overflow in createdMs + deliveryTimeoutMs when deliveryTimeoutMs is Long.MAX_VALUE
-        nextBatchExpiryTimeMs = (batch.createdMs + deliveryTimeoutMs < 0) ? nextBatchExpiryTimeMs
-            : Math.min(nextBatchExpiryTimeMs, batch.createdMs + deliveryTimeoutMs);
+    public void maybeUpdateNextBatchExpiryTime(ProducerBatch batch) {
+        if (batch.createdMs + deliveryTimeoutMs  > 0) {
+            // the non-negative check is to guard us against potential overflow due to setting
+            // a large value for deliveryTimeoutMs
+            nextBatchExpiryTimeMs = Math.min(nextBatchExpiryTimeMs, batch.createdMs + deliveryTimeoutMs);
+        } else {
+            log.warn("Skipping next batch expiry time update due to addition overflow: "
+                + "batch.createMs={}, deliveryTimeoutMs={}", batch.createdMs, deliveryTimeoutMs);
+        }
+    }
+
+    public Set<TopicPartition> getTopicPartitions() {
+        return this.batches.keySet();
     }
 
     /**
@@ -301,20 +294,15 @@ public final class RecordAccumulator {
     public List<ProducerBatch> expiredBatches(long now) {
         List<ProducerBatch> expiredBatches = new ArrayList<>();
         for (Map.Entry<TopicPartition, Deque<ProducerBatch>> entry : this.batches.entrySet()) {
-            // Expire inflight batches in the order of draining. Expire if the final state of the
-            // batch is not known by (batch's creation time + deliveryTimeoutMs).
-            List<ProducerBatch> mayExpireBatches = soonToExpireInFlightBatches.get(entry.getKey());
-            if (mayExpireBatches != null) {
-                Iterator<ProducerBatch> iter = mayExpireBatches.iterator();
-                while (iter.hasNext()) {
-                    ProducerBatch batch = iter.next();
-
+            // expire the batches in the order of sending
+            Deque<ProducerBatch> deque = entry.getValue();
+            synchronized (deque) {
+                while (!deque.isEmpty()) {
+                    ProducerBatch batch = deque.getFirst();
                     if (batch.hasReachedDeliveryTimeout(deliveryTimeoutMs, now)) {
-                        iter.remove();
-                        if (batch.finalState() == null) {
-                            batch.expire(now);
-                            expiredBatches.add(batch);
-                        }
+                        deque.poll();
+                        batch.abortRecordAppends();
+                        expiredBatches.add(batch);
                     } else {
                         maybeUpdateNextBatchExpiryTime(batch);
                         break;
@@ -325,26 +313,22 @@ public final class RecordAccumulator {
         return expiredBatches;
     }
 
+    public long getDeliveryTimeoutMs() {
+        return deliveryTimeoutMs;
+    }
+
     /**
-     * Re-enqueue the given record batch in the accumulator to retry.
-     * Remove the batch from the list of inflight batches.
+     * Re-enqueue the given record batch in the accumulator. In Sender.completeBatch method, we check
+     * whether the batch has reached deliveryTimeoutMs or not. Hence we do not do the delivery timeout check here.
      */
     public void reenqueue(ProducerBatch batch, long now) {
         batch.reenqueued(now);
-        maybeRemoveFromSoonToExpire(batch);
         Deque<ProducerBatch> deque = getOrCreateDeque(batch.topicPartition);
         synchronized (deque) {
             if (transactionManager != null)
                 insertInSequenceOrder(deque, batch);
             else
                 deque.addFirst(batch);
-        }
-    }
-
-    private void maybeRemoveFromSoonToExpire(ProducerBatch batch) {
-        List<ProducerBatch> soonToExpireBatches = soonToExpireInFlightBatches.get(batch.topicPartition);
-        if (soonToExpireBatches != null) {
-            soonToExpireBatches.remove(batch);
         }
     }
 
@@ -357,7 +341,7 @@ public final class RecordAccumulator {
         // is bigger. There are several different ways to do the reset. We chose the most conservative one to ensure
         // the split doesn't happen too often.
         CompressionRatioEstimator.setEstimation(bigBatch.topicPartition.topic(), compression,
-            Math.max(1.0f, (float) bigBatch.compressionRatio()));
+                                                Math.max(1.0f, (float) bigBatch.compressionRatio()));
         Deque<ProducerBatch> dq = bigBatch.split(this.batchSize);
         int numSplitBatches = dq.size();
         Deque<ProducerBatch> partitionDequeue = getOrCreateDeque(bigBatch.topicPartition);
@@ -489,7 +473,6 @@ public final class RecordAccumulator {
                 }
             }
         }
-
         return new ReadyCheckResult(readyNodes, nextReadyCheckDelayMs, unknownLeaderTopics);
     }
 
@@ -507,8 +490,7 @@ public final class RecordAccumulator {
         return false;
     }
 
-
-    private boolean shouldStop(ProducerBatch first, TopicPartition tp) {
+    private boolean shouldStopDrainBatchesForPartition(ProducerBatch first, TopicPartition tp) {
         ProducerIdAndEpoch producerIdAndEpoch = null;
         if (transactionManager != null) {
             if (!transactionManager.isSendToPartitionAllowed(tp))
@@ -573,7 +555,7 @@ public final class RecordAccumulator {
                     // compression; in this case we will still eventually send this batch in a single request
                     break;
                 } else {
-                    if (shouldStop(first, tp))
+                    if (shouldStopDrainBatchesForPartition(first, tp))
                         break;
 
                     boolean isTransactional = transactionManager != null ? transactionManager.isTransactional() : false;
@@ -597,29 +579,16 @@ public final class RecordAccumulator {
 
                         transactionManager.addInFlightBatch(batch);
                     }
-
                     batch.close();
                     size += batch.records().sizeInBytes();
                     ready.add(batch);
-                    // Put this batch in the list of soon-to-expire-inflight-batches because we might have to expire
-                    // it if we don't know its final state by deliveryTimeoutMs. If the expiry is farther than
-                    // requestTimeoutMs, we don't have to keep track of this batch because it will either succeed or
-                    // fail (due to request timeout) much sooner.
-                    if (batch.soonToExpire(deliveryTimeoutMs, now, requestTimeoutMs)) {
-                        List<ProducerBatch> inflightBatchList = soonToExpireInFlightBatches.get(batch.topicPartition);
-                        if (inflightBatchList == null) {
-                            inflightBatchList = new LinkedList<>();
-                            soonToExpireInFlightBatches.put(tp, inflightBatchList);
-                        }
-                        inflightBatchList.add(batch);
-                    }
+
                     batch.drained(now);
                 }
             }
         } while (start != drainIndex);
         return ready;
     }
-
 
     /**
      * Drain all the data for the given nodes and collate them into a list of batches that will fit within the specified
@@ -640,8 +609,6 @@ public final class RecordAccumulator {
             List<ProducerBatch> ready = drainBatchesForOneNode(cluster, node, maxSize, now);
             batches.put(node.id(), ready);
         }
-
-        maybeUpdateNextExpiryTime(now);
         return batches;
     }
 
@@ -650,22 +617,6 @@ public final class RecordAccumulator {
      */
     public Long nextExpiryTimeMs() {
         return this.nextBatchExpiryTimeMs;
-    }
-
-    /**
-     *  If there are batches to soon to expire, but now is past the last known earliest expiry time,
-     *  we reset the expiry time to now, because it's the smallest possible valid absolute time in future.
-     *  This could happen when there were no ready nodes for a while and clock went past the last known earliest
-     *  expiry time. If there're no batches to soon expire, we simply reset it to the largest possible value.
-     *  This ensures that next delivery timeout keeps moving ahead.
-     */
-    void maybeUpdateNextExpiryTime(long now) {
-        if (now >= nextBatchExpiryTimeMs)
-            nextBatchExpiryTimeMs = soonToExpireInFlightBatches.isEmpty() ? Long.MAX_VALUE : now;
-    }
-
-    ConcurrentMap<TopicPartition, List<ProducerBatch>> soonToExpireInFlightBatches() {
-        return soonToExpireInFlightBatches;
     }
 
     private Deque<ProducerBatch> getDeque(TopicPartition tp) {
@@ -858,5 +809,4 @@ public final class RecordAccumulator {
             this.unknownLeaderTopics = unknownLeaderTopics;
         }
     }
-
 }

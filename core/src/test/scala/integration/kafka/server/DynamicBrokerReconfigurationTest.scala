@@ -1368,11 +1368,11 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
   private case class ProducerBuilder() extends ClientBuilder[KafkaProducer[String, String]] {
     private var _retries = 0
     private var _acks = -1
-    private var _requestTimeoutMs = 30000L
+    private var _requestTimeoutMs = 30000
 
     def maxRetries(retries: Int): ProducerBuilder = { _retries = retries; this }
     def acks(acks: Int): ProducerBuilder = { _acks = acks; this }
-    def requestTimeoutMs(timeoutMs: Long): ProducerBuilder = { _requestTimeoutMs = timeoutMs; this }
+    def requestTimeoutMs(timeoutMs: Int): ProducerBuilder = { _requestTimeoutMs = timeoutMs; this }
 
     override def build(): KafkaProducer[String, String] = {
       val producer = TestUtils.createProducer(bootstrapServers,

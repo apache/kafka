@@ -595,10 +595,8 @@ public class ConfigDef {
         if (!configKeys.containsKey(name)) {
             return;
         }
-
         ConfigKey key = configKeys.get(name);
         ConfigValue value = configs.get(name);
-
         if (key.recommender != null) {
             try {
                 List<Object> recommendedValues = key.recommender.validValues(name, parsed);
@@ -845,9 +843,14 @@ public class ConfigDef {
         private final Number min;
         private final Number max;
 
-        private Range(Number min, Number maxInclusive) {
+        /**
+         *  A numeric range with inclusive upper bound and inclusive lower bound
+         * @param min  the lower bound
+         * @param max  the upper bound
+         */
+        private Range(Number min, Number max) {
             this.min = min;
-            this.max = maxInclusive;
+            this.max = max;
         }
 
         /**

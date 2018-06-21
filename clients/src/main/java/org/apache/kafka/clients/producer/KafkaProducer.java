@@ -393,15 +393,14 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             int retries = configureRetries(config, transactionManager != null, log);
             int maxInflightRequests = configureInflightRequests(config, transactionManager != null);
             short acks = configureAcks(config, transactionManager != null, log);
-            long deliveryTimeoutMs = configureDeliveryTimeout(config);
+            int deliveryTimeoutMs = configureDeliveryTimeout(config, log);
 
             this.apiVersions = new ApiVersions();
             this.accumulator = new RecordAccumulator(logContext,
                     config.getInt(ProducerConfig.BATCH_SIZE_CONFIG),
                     this.compressionType,
-                    config.getLong(ProducerConfig.LINGER_MS_CONFIG),
+                    config.getInt(ProducerConfig.LINGER_MS_CONFIG),
                     retryBackoffMs,
-                    this.requestTimeoutMs,
                     deliveryTimeoutMs,
                     metrics,
                     PRODUCER_METRIC_GROUP_NAME,
@@ -464,29 +463,30 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         }
     }
 
-    private static long configureDeliveryTimeout(ProducerConfig config) {
-        long deliveryTimeoutMs = config.getLong(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG);
-        long lingerMs = config.getLong(ProducerConfig.LINGER_MS_CONFIG);
+    private static int configureDeliveryTimeout(ProducerConfig config, Logger log) {
+        int deliveryTimeoutMs = config.getInt(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG);
+        int lingerMs = config.getInt(ProducerConfig.LINGER_MS_CONFIG);
         int requestTimeoutMs = config.getInt(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG);
 
-        // when the sum of lingerMs and requestTimeoutMs overflows a long we make sure deliveryTimeoutMs is at least
-        // equal to lingerMs.
-        boolean overflow = lingerMs + requestTimeoutMs < 0L;
-        boolean invalid = overflow ? deliveryTimeoutMs < lingerMs : deliveryTimeoutMs < lingerMs + requestTimeoutMs;
-
-        if (invalid) {
-            throw new ConfigException("Must set " + ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG + " higher than " +
-                ProducerConfig.LINGER_MS_CONFIG + " + " +
-                ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG);
+        if (deliveryTimeoutMs < Integer.MAX_VALUE && deliveryTimeoutMs < lingerMs + requestTimeoutMs) {
+            if (config.originals().containsKey(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG)) {
+                // throw an exception if the user explicitly set an inconsistent value
+                throw new ConfigException(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG
+                    + " should be equal to or larger than " + ProducerConfig.LINGER_MS_CONFIG
+                    + " + " + ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG);
+            } else {
+                // override deliveryTimeoutMs default value to lingerMs + requestTimeoutMs for backward compatibility
+                deliveryTimeoutMs = lingerMs + requestTimeoutMs;
+                log.warn("{} should be equal to or larger than {} + {}. Setting it to {}.",
+                    ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, ProducerConfig.LINGER_MS_CONFIG,
+                    ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, deliveryTimeoutMs);
+            }
         }
-
         return deliveryTimeoutMs;
     }
 
     private static TransactionManager configureTransactionState(ProducerConfig config, LogContext logContext, Logger log) {
-
         TransactionManager transactionManager = null;
-
         boolean userConfiguredIdempotence = false;
         if (config.originals().containsKey(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG))
             userConfiguredIdempotence = true;
