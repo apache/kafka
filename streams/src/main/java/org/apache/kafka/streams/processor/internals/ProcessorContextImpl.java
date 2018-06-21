@@ -28,11 +28,13 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.util.List;
+import java.util.function.Supplier;
 
 public class ProcessorContextImpl extends AbstractProcessorContext implements RecordCollector.Supplier {
 
     private final StreamTask task;
     private final RecordCollector collector;
+    private Supplier<Long> streamTimeSupplier;
     private final ToInternal toInternal = new ToInternal();
     private final static To SEND_TO_ALL = To.all();
 
@@ -151,6 +153,15 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     @Override
     public Cancellable schedule(final long interval, final PunctuationType type, final Punctuator callback) {
         return task.schedule(interval, type, callback);
+    }
+
+    void setStreamTimeSupplier(final Supplier<Long> streamTimeSupplier) {
+        this.streamTimeSupplier = streamTimeSupplier;
+    }
+
+    @Override
+    public Long streamTime() {
+        return this.streamTimeSupplier.get();
     }
 
 }

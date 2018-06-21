@@ -24,23 +24,18 @@ import org.apache.kafka.streams.state.WindowStore;
 public class RocksDbWindowBytesStoreSupplier implements WindowBytesStoreSupplier {
     private final String name;
     private final long retentionPeriod;
-    private final int segments;
+    private final long segmentInterval;
     private final long windowSize;
     private final boolean retainDuplicates;
 
-    private static final int MIN_SEGMENTS = 2;
-
     public RocksDbWindowBytesStoreSupplier(final String name,
                                            final long retentionPeriod,
-                                           final int segments,
+                                           final long segmentInterval,
                                            final long windowSize,
                                            final boolean retainDuplicates) {
-        if (segments < MIN_SEGMENTS) {
-            throw new IllegalArgumentException("numSegments must be >= " + MIN_SEGMENTS);
-        }
         this.name = name;
         this.retentionPeriod = retentionPeriod;
-        this.segments = segments;
+        this.segmentInterval = segmentInterval;
         this.windowSize = windowSize;
         this.retainDuplicates = retainDuplicates;
     }
@@ -55,7 +50,7 @@ public class RocksDbWindowBytesStoreSupplier implements WindowBytesStoreSupplier
         final RocksDBSegmentedBytesStore segmentedBytesStore = new RocksDBSegmentedBytesStore(
                 name,
                 retentionPeriod,
-                segments,
+                segmentInterval,
                 new WindowKeySchema()
         );
         return new RocksDBWindowStore<>(segmentedBytesStore,
@@ -73,7 +68,7 @@ public class RocksDbWindowBytesStoreSupplier implements WindowBytesStoreSupplier
 
     @Override
     public int segments() {
-        return segments;
+        return (int) (retentionPeriod / segmentInterval) + 1;
     }
 
     @Override

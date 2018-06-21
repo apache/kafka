@@ -216,5 +216,10 @@ public class AbstractProcessorContextTest {
 
         @Override
         public void commit() {}
+
+        @Override
+        public Long streamTime() {
+            throw new RuntimeException("not implemented");
+        }
     }
 }
