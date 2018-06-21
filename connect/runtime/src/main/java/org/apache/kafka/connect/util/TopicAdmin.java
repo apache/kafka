@@ -122,7 +122,9 @@ public class TopicAdmin implements AutoCloseable {
          *
          * @param configs the desired topic configuration properties, or null if all existing properties should be cleared
          * @return this builder to allow methods to be chained; never null
+         * @deprecated deprecated in 2.0.0, use {@link #configs(Map<String, String>)}
          */
+        @Deprecated
         public NewTopicBuilder config(Map<String, Object> configs) {
             if (configs != null) {
                 for (Map.Entry<String, Object> entry : configs.entrySet()) {
@@ -132,6 +134,19 @@ public class TopicAdmin implements AutoCloseable {
             } else {
                 this.configs.clear();
             }
+            return this;
+        }
+
+        /**
+         * Specify the configuration properties for the topic, overwriting any previously-set properties.
+         * NOTED: if the passed configs is null, the previously-set properties will be cleared
+         *
+         * @param configs the desired topic configuration properties, or null if all existing properties should be cleared
+         * @return this builder to allow methods to be chained; never null
+         */
+        public NewTopicBuilder configs(Map<String, String> configs) {
+            if (configs == null) this.configs.clear();
+            else this.configs.putAll(configs);
             return this;
         }
 

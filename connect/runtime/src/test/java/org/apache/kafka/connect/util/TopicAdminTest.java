@@ -117,6 +117,37 @@ public class TopicAdminTest {
         }
     }
 
+    @Test
+    public void testAddConfigs() {
+        Map<String, String> configs0 = new HashMap<>();
+        configs0.put("key_0", "value_0");
+        configs0.put("key_1", "value_1");
+        configs0.put("key_2", null);
+        Map<String, Object> configs1 = new HashMap<>(configs0);
+
+        assertTrue(TopicAdmin.defineTopic("testAddConfigs")
+                .configs(configs0)
+                .build()
+                .configs().equals(configs0));
+
+        assertTrue(TopicAdmin.defineTopic("testAddConfigs")
+                .configs(configs0)
+                .configs(null)
+                .build()
+                .configs().isEmpty());
+
+        assertTrue(TopicAdmin.defineTopic("testAddConfigs")
+                .config(configs1)
+                .build()
+                .configs().equals(configs1));
+
+        assertTrue(TopicAdmin.defineTopic("testAddConfigs")
+                .config(configs1)
+                .config(null)
+                .build()
+                .configs().isEmpty());
+    }
+
     private Cluster createCluster(int numNodes) {
         HashMap<Integer, Node> nodes = new HashMap<>();
         for (int i = 0; i < numNodes; ++i) {
