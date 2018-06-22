@@ -390,5 +390,4 @@ public class MockAdminClient extends AdminClient {
             this.configs = configs != null ? configs : Collections.<String, String>emptyMap();
         }
     }
-
 }

@@ -46,7 +46,6 @@ import org.apache.kafka.common.resource.{ResourcePattern, ResourcePatternFilter,
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.{KafkaException, Node, TopicPartition, requests}
 import org.apache.kafka.test.{TestUtils => JTestUtils}
-
 import org.junit.Assert._
 import org.junit.{After, Assert, Before, Test}
 
@@ -107,6 +106,8 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   val consumerCount = 2
   val producerConfig = new Properties
   val numRecords = 1
+
+  val adminClients = Buffer[AdminClient]()
 
   override def propertyOverrides(properties: Properties): Unit = {
     properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[SimpleAclAuthorizer].getName)
@@ -261,6 +262,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     producers.foreach(_.close())
     consumers.foreach(_.wakeup())
     consumers.foreach(_.close())
+    adminClients.foreach(_.close())
     removeAllAcls()
     super.tearDown()
   }
@@ -1005,14 +1007,14 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @Test(expected = classOf[GroupAuthorizationException])
   def testDescribeGroupApiWithNoGroupAcl() {
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Describe)), topicResource)
-    AdminClient.createSimplePlaintext(brokerList).describeConsumerGroup(group)
+    createAdminClient().describeConsumerGroup(group)
   }
 
   @Test
   def testDescribeGroupApiWithGroupDescribe() {
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Describe)), groupResource)
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Describe)), topicResource)
-    AdminClient.createSimplePlaintext(brokerList).describeConsumerGroup(group)
+    createAdminClient().describeConsumerGroup(group)
   }
 
   @Test
@@ -1034,7 +1036,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Delete)), groupResource)
     this.consumers.head.assign(List(tp).asJava)
     this.consumers.head.commitSync(Map(tp -> new OffsetAndMetadata(5, "")).asJava)
-    val result = AdminClient.createSimplePlaintext(brokerList).deleteConsumerGroups(List(group))
+    val result = createAdminClient().deleteConsumerGroups(List(group))
     assert(result.size == 1 && result.keySet.contains(group) && result.get(group).contains(Errors.NONE))
   }
 
@@ -1044,13 +1046,13 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Read)), topicResource)
     this.consumers.head.assign(List(tp).asJava)
     this.consumers.head.commitSync(Map(tp -> new OffsetAndMetadata(5, "")).asJava)
-    val result = AdminClient.createSimplePlaintext(brokerList).deleteConsumerGroups(List(group))
+    val result = createAdminClient().deleteConsumerGroups(List(group))
     assert(result.size == 1 && result.keySet.contains(group) && result.get(group).contains(Errors.GROUP_AUTHORIZATION_FAILED))
   }
 
   @Test
   def testDeleteGroupApiWithNoDeleteGroupAcl2() {
-    val result = AdminClient.createSimplePlaintext(brokerList).deleteConsumerGroups(List(group))
+    val result = createAdminClient().deleteConsumerGroups(List(group))
     assert(result.size == 1 && result.keySet.contains(group) && result.get(group).contains(Errors.GROUP_AUTHORIZATION_FAILED))
   }
 
@@ -1457,6 +1459,12 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       props = Some(idempotentProperties))
     producers += producer
     producer
+  }
+
+  private def createAdminClient(): AdminClient = {
+    val adminClient = AdminClient.createSimplePlaintext(brokerList)
+    adminClients += adminClient
+    adminClient
   }
 
 }
