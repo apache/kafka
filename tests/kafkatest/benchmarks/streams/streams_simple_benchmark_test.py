@@ -50,17 +50,6 @@ class StreamsSimpleBenchmarkTest(Test):
 
         self.replication = 1
 
-
-    @cluster(num_nodes=12)
-    @matrix(test=["streamcount", "streamcountwindowed"], scale=[1])
-    def test_count_benchmark(self, test, scale):
-        """
-        Run count Kafka Streams benchmarks
-        """
-
-        return self.test_simple_benchmark(test, scale)
-
-
     @cluster(num_nodes=12)
     @matrix(test=["consume", "consumeproduce", "streams-simple", "streams-count", "streams-join"], scale=[1])
     def test_simple_benchmark(self, test, scale):
