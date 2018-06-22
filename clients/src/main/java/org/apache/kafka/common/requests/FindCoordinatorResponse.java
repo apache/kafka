@@ -107,6 +107,10 @@ public class FindCoordinatorResponse extends AbstractResponse {
         return throttleTimeMs;
     }
 
+    public boolean hasError() {
+        return this.error != Errors.NONE;
+    }
+
     public Errors error() {
         return error;
     }

@@ -29,12 +29,13 @@ import kafka.log.LogConfig
 import kafka.server.{Defaults, KafkaConfig, KafkaServer}
 import org.apache.kafka.clients.admin._
 import kafka.utils.{Logging, TestUtils}
+import kafka.utils.TestUtils._
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.admin.NewTopic
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.producer.ProducerRecord
-import org.apache.kafka.common.{ConsumerGroupState, KafkaFuture, TopicPartition, TopicPartitionReplica}
+import org.apache.kafka.common.{ConsumerGroupState, TopicPartition, TopicPartitionReplica}
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors._
@@ -123,18 +124,6 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
         expectedPresent.forall(topicName => topics.contains(topicName)) &&
           expectedMissing.forall(topicName => !topics.contains(topicName))
       }, "timed out waiting for topics")
-  }
-
-  def assertFutureExceptionTypeEquals(future: KafkaFuture[_], clazz: Class[_ <: Throwable]): Unit = {
-    try {
-      future.get()
-      fail("Expected CompletableFuture.get to return an exception")
-    } catch {
-      case e: ExecutionException =>
-        val cause = e.getCause()
-        assertTrue("Expected an exception of type " + clazz.getName + "; got type " +
-            cause.getClass().getName, clazz.isInstance(cause))
-    }
   }
 
   @Test

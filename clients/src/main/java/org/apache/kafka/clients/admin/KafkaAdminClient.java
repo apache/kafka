@@ -2610,6 +2610,14 @@ public class KafkaAdminClient extends AdminClient {
             void handleResponse(AbstractResponse abstractResponse) {
                 final FindCoordinatorResponse response = (FindCoordinatorResponse) abstractResponse;
 
+                Errors error = response.error();
+                if (error == Errors.COORDINATOR_NOT_AVAILABLE) {
+                    throw error.exception();
+                } else if (response.hasError()) {
+                    groupOffsetListingFuture.completeExceptionally(response.error().exception());
+                    return;
+                }
+
                 final long nowListConsumerGroupOffsets = time.milliseconds();
 
                 final int nodeId = response.node().id();
@@ -2695,6 +2703,14 @@ public class KafkaAdminClient extends AdminClient {
                 @Override
                 void handleResponse(AbstractResponse abstractResponse) {
                     final FindCoordinatorResponse response = (FindCoordinatorResponse) abstractResponse;
+
+                    Errors error = response.error();
+                    if (error == Errors.COORDINATOR_NOT_AVAILABLE) {
+                        throw error.exception();
+                    } else if (response.hasError()) {
+                        futures.get(groupId).completeExceptionally(response.error().exception());
+                        return;
+                    }
 
                     final long nowDeleteConsumerGroups = time.milliseconds();
 
