@@ -332,33 +332,25 @@ class KafkaApis(val requestChannel: RequestChannel,
       } else {
         // for version 1 and beyond store offsets in offset manager
 
-        // compute the retention time based on the request version:
-        // if it is v1 or not specified by user, we can use the default retention
-        val offsetRetention =
-          if (header.apiVersion <= 1 ||
-            offsetCommitRequest.retentionTime == OffsetCommitRequest.DEFAULT_RETENTION_TIME)
-            groupCoordinator.offsetConfig.offsetsRetentionMs
-          else
-            offsetCommitRequest.retentionTime
-
         // commit timestamp is always set to now.
         // "default" expiration timestamp is now + retention (and retention may be overridden if v2)
         // expire timestamp is computed differently for v1 and v2.
-        //   - If v1 and no explicit commit timestamp is provided we use default expiration timestamp.
+        //   - If v1 and no explicit commit timestamp is provided we treat it the same as v5.
         //   - If v1 and explicit commit timestamp is provided we calculate retention from that explicit commit timestamp
-        //   - If v2 we use the default expiration timestamp
+        //   - If v2/v3/v4 (no explicit commit timestamp) we treat it the same as v5.
+        //   - For v5 and beyond there is no per partition expiration timestamp, so this field is no longer in effect
         val currentTimestamp = time.milliseconds
-        val defaultExpireTimestamp = offsetRetention + currentTimestamp
         val partitionData = authorizedTopicRequestInfo.mapValues { partitionData =>
           val metadata = if (partitionData.metadata == null) OffsetMetadata.NoMetadata else partitionData.metadata
           new OffsetAndMetadata(
             offsetMetadata = OffsetMetadata(partitionData.offset, metadata),
-            commitTimestamp = currentTimestamp,
-            expireTimestamp = {
-              if (partitionData.timestamp == OffsetCommitRequest.DEFAULT_TIMESTAMP)
-                defaultExpireTimestamp
-              else
-                offsetRetention + partitionData.timestamp
+            commitTimestamp = partitionData.timestamp match {
+              case OffsetCommitRequest.DEFAULT_TIMESTAMP => currentTimestamp
+              case customTimestamp => customTimestamp
+            },
+            expireTimestamp = offsetCommitRequest.retentionTime match {
+              case OffsetCommitRequest.DEFAULT_RETENTION_TIME => None
+              case retentionTime => Some(currentTimestamp + retentionTime)
             }
           )
         }
@@ -1912,7 +1904,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       topicPartition -> new OffsetAndMetadata(
         offsetMetadata = OffsetMetadata(partitionData.offset, metadata),
         commitTimestamp = currentTimestamp,
-        expireTimestamp = defaultExpireTimestamp)
+        expireTimestamp = Some(defaultExpireTimestamp))
     }
   }
 

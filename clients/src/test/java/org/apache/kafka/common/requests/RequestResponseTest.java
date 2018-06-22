@@ -141,9 +141,6 @@ public class RequestResponseTest {
         checkErrorResponse(createMetadataRequest(3, singletonList("topic1")), new UnknownServerException());
         checkResponse(createMetadataResponse(), 4);
         checkErrorResponse(createMetadataRequest(4, singletonList("topic1")), new UnknownServerException());
-        checkRequest(createOffsetCommitRequest(2));
-        checkErrorResponse(createOffsetCommitRequest(2), new UnknownServerException());
-        checkResponse(createOffsetCommitResponse(), 0);
         checkRequest(OffsetFetchRequest.forAllPartitions("group1"));
         checkErrorResponse(OffsetFetchRequest.forAllPartitions("group1"), new NotCoordinatorException("Not Coordinator"));
         checkRequest(createOffsetFetchRequest(0));
@@ -210,6 +207,16 @@ public class RequestResponseTest {
         checkErrorResponse(createOffsetCommitRequest(0), new UnknownServerException());
         checkRequest(createOffsetCommitRequest(1));
         checkErrorResponse(createOffsetCommitRequest(1), new UnknownServerException());
+        checkRequest(createOffsetCommitRequest(2));
+        checkErrorResponse(createOffsetCommitRequest(2), new UnknownServerException());
+        checkRequest(createOffsetCommitRequest(3));
+        checkErrorResponse(createOffsetCommitRequest(3), new UnknownServerException());
+        checkRequest(createOffsetCommitRequest(4));
+        checkErrorResponse(createOffsetCommitRequest(4), new UnknownServerException());
+        checkResponse(createOffsetCommitResponse(), 4);
+        checkRequest(createOffsetCommitRequest(5));
+        checkErrorResponse(createOffsetCommitRequest(5), new UnknownServerException());
+        checkResponse(createOffsetCommitResponse(), 5);
         checkRequest(createJoinGroupRequest(0));
         checkRequest(createUpdateMetadataRequest(0, null));
         checkErrorResponse(createUpdateMetadataRequest(0, null), new UnknownServerException());
@@ -817,7 +824,6 @@ public class RequestResponseTest {
         return new OffsetCommitRequest.Builder("group1", commitData)
                 .setGenerationId(100)
                 .setMemberId("consumer1")
-                .setRetentionTime(1000000)
                 .build((short) version);
     }
 

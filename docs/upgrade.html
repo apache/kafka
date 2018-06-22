@@ -19,6 +19,18 @@
 
 <script id="upgrade-template" type="text/x-handlebars-template">
 
+<h4><a id="upgrade_2_1_0" href="#upgrade_2_1_0">Upgrading from 0.8.x, 0.9.x, 0.10.0.x, 0.10.1.x, 0.10.2.x, 0.11.0.x, 1.0.x, 1.1.x, or 2.0.0 to 2.1.0</a></h4>
+<p><b>Additional Upgrade Notes:</b></p>
+
+<ol>
+    <li>Offset expiration semantics has slightly changed in this version. According to the new semantics, offsets of partitions in a group will
+        not be removed while the group is subscribed to the corresponding topic and is still active (has active consumers). If group becomes
+        empty all its offsets will be removed after default offset retention period (or the one set by broker) has passed (unless the group becomes
+        active again). Offsets associated with standalone (simple) consumers, that do not use Kafka group management, will be removed after default
+        offset retention period (or the one set by broker) has passed since their last commit.</li>
+</ol>
+
+
 <h4><a id="upgrade_2_0_0" href="#upgrade_2_0_0">Upgrading from 0.8.x, 0.9.x, 0.10.0.x, 0.10.1.x, 0.10.2.x, 0.11.0.x, 1.0.x, or 1.1.x to 2.0.0</a></h4>
 <p>Kafka 2.0.0 introduces wire protocol changes. By following the recommended rolling upgrade plan below,
     you guarantee no downtime during the upgrade. However, please review the <a href="#upgrade_200_notable">notable changes in 2.0.0</a> before upgrading.
@@ -66,6 +78,9 @@
         until all brokers in the cluster have been updated.
         <p><b>NOTE:</b> any prefixed ACLs added to a cluster, even after the cluster is fully upgraded, will be ignored should the cluster be downgraded again.
     </li>
+    <li>The default for console consumer's <code>enable.auto.commit</code> property when no <code>group.id</code> is provided is now set to <code>false</code>.
+        This is to avoid polluting the consumer coordinator cache as the auto-generated group is not likely to be used by other consumers.
+    </li>
 </ol>
 
 <h5><a id="upgrade_200_notable" href="#upgrade_200_notable">Notable changes in 2.0.0</a></h5>
@@ -112,9 +127,9 @@
         <code>beginningOffsets</code>, <code>endOffsets</code> and <code>close</code> that take in a <code>Duration</code>.</li>
     <li>Also as part of KIP-266, the default value of <code>request.timeout.ms</code> has been changed to 30 seconds.
         The previous value was a little higher than 5 minutes to account for maximum time that a rebalance would take.
-        Now we treat the JoinGroup request in the rebalance as a special case and use a value derived from 
+        Now we treat the JoinGroup request in the rebalance as a special case and use a value derived from
         <code>max.poll.interval.ms</code> for the request timeout. All other request types use the timeout defined
-        by <code>request.timeout.ms</code></li> 
+        by <code>request.timeout.ms</code></li>
     <li>The internal method <code>kafka.admin.AdminClient.deleteRecordsBefore</code> has been removed. Users are encouraged to migrate to <code>org.apache.kafka.clients.admin.AdminClient.deleteRecords</code>.</li>
     <li>The AclCommand tool <code>--producer</code> convenience option uses the <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-277+-+Fine+Grained+ACL+for+CreateTopics+API">KIP-277</a> finer grained ACL on the given topic. </li>
     <li><a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-176%3A+Remove+deprecated+new-consumer+option+for+tools">KIP-176</a> removes

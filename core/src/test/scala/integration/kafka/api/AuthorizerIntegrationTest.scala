@@ -334,7 +334,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   private def createOffsetCommitRequest = {
     new requests.OffsetCommitRequest.Builder(
       group, Map(tp -> new requests.OffsetCommitRequest.PartitionData(0, "metadata")).asJava).
-      setMemberId("").setGenerationId(1).setRetentionTime(1000).
+      setMemberId("").setGenerationId(1).
       build()
   }
 

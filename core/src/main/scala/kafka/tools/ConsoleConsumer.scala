@@ -368,6 +368,10 @@ object ConsoleConsumer extends Logging {
         consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, group)
       case None =>
         consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, s"console-consumer-${new Random().nextInt(100000)}")
+        // By default, avoid unnecessary expansion of the coordinator cache since
+        // the auto-generated group and its offsets is not intended to be used again
+        if (!consumerProps.containsKey(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG))
+          consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
         groupIdPassed = false
     }
 
