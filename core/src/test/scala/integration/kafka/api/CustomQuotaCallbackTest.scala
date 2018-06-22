@@ -89,6 +89,7 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
     producers.clear()
     consumers.foreach(_.close(0, TimeUnit.MILLISECONDS))
     consumers.clear()
+    adminClients.foreach(_.close())
     super.tearDown()
   }
 
