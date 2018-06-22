@@ -113,40 +113,40 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     val principal = session.principal
     val host = session.clientAddress.getHostAddress
 
-    val authorized = if (isSuperUser(operation, resource, principal, host)) {
-      // Check if the user is a superuser to avoid needlessly checking all ACLs
-      // for superusers
-      true
-    } else {
-      // User is no superuser, load ACLs
-      // To avoid unnecessarily loading ACLs for super users we need to nest this as a second if
-      // statement to allow loading ACLs before this check buf after performing the superuser check
-      val acls = getMatchingAcls(resource.resourceType, resource.name)
-
+    def isEmptyAclAndAuthorized(acls: Set[Acl]): Boolean = {
       if (acls.isEmpty) {
         // No ACLs found for this resource, permission is determined by value of config allow.everyone.if.no.acl.found
         authorizerLogger.debug(s"No acl found for resource $resource, authorized = $shouldAllowEveryoneIfNoAclIsFound")
         shouldAllowEveryoneIfNoAclIsFound
-      } else {
-        // ACLs found for this resource
-        // Check if there is any Deny acl match that would disallow this operation.
-        val denyMatch = aclMatch(operation, resource, principal, host, Deny, acls)
-
-        // Check if there are any Allow ACLs which would allow this operation.
-        // Allowing read, write, delete, or alter implies allowing describe.
-        // See #{org.apache.kafka.common.acl.AclOperation} for more details about ACL inheritance.
-        val allowOps = operation match {
-          case Describe => Set[Operation](Describe, Read, Write, Delete, Alter)
-          case DescribeConfigs => Set[Operation](DescribeConfigs, AlterConfigs)
-          case _ => Set[Operation](operation)
-        }
-        val allowMatch = allowOps.exists(operation => aclMatch(operation, resource, principal, host, Allow, acls))
-
-        //we allow an operation if no acls are found and user has configured to allow all users
-        //when no acls are found or if no deny acls are found and at least one allow acls matches.
-        !denyMatch && allowMatch
-      }
+      } else false
     }
+
+    def denyAclExists(acls: Set[Acl]): Boolean = {
+      // Check if there are any Deny ACLs which would forbid this operation.
+      aclMatch(operation, resource, principal, host, Deny, acls)
+    }
+
+    def allowAclExists(acls: Set[Acl]): Boolean = {
+      // Check if there are any Allow ACLs which would allow this operation.
+      // Allowing read, write, delete, or alter implies allowing describe.
+      // See #{org.apache.kafka.common.acl.AclOperation} for more details about ACL inheritance.
+      val allowOps = operation match {
+        case Describe => Set[Operation](Describe, Read, Write, Delete, Alter)
+        case DescribeConfigs => Set[Operation](DescribeConfigs, AlterConfigs)
+        case _ => Set[Operation](operation)
+      }
+      allowOps.exists(operation => aclMatch(operation, resource, principal, host, Allow, acls))
+    }
+
+    def aclsAllowAccess = {
+      //we allow an operation if no acls are found and user has configured to allow all users
+      //when no acls are found or if no deny acls are found and at least one allow acls matches.
+      val acls = getMatchingAcls(resource.resourceType, resource.name)
+      isEmptyAclAndAuthorized(acls) || (!denyAclExists(acls) && allowAclExists(acls))
+    }
+
+    // Evaluate if operation is allowed
+    val authorized = isSuperUser(operation, resource, principal, host) || aclsAllowAccess
 
     logAuditMessage(principal, authorized, operation, resource, host)
     authorized
