@@ -314,8 +314,8 @@ class DelegationTokenManagerTest extends ZooKeeperTestHarness  {
     expiryTimeStamp = timeStamp
   }
 
-  private def  createDelegationTokenManager(config: KafkaConfig, tokenCache: DelegationTokenCache,
-                                         time: Time, zkClient: KafkaZkClient): DelegationTokenManager = {
+  private def createDelegationTokenManager(config: KafkaConfig, tokenCache: DelegationTokenCache,
+                                           time: Time, zkClient: KafkaZkClient): DelegationTokenManager = {
     val tokenManager = new DelegationTokenManager(config, tokenCache, time, zkClient)
     tokenManagers += tokenManager
     tokenManager
