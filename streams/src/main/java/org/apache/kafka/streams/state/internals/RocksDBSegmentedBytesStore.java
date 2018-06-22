@@ -205,7 +205,7 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
         return writeBatchMap;
     }
 
-    private void toggleForBulkLoaidng(final boolean prepareForBulkload) {
+    private void toggleForBulkLoading(final boolean prepareForBulkload) {
         for (Segment segment: segments.allSegments()) {
             segment.toggleDbForBulkLoading(prepareForBulkload);
         }
@@ -223,14 +223,14 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
                                    final String storeName,
                                    final long startingOffset,
                                    final long endingOffset) {
-            toggleForBulkLoaidng(true);
+            toggleForBulkLoading(true);
         }
 
         @Override
         public void onRestoreEnd(final TopicPartition topicPartition,
                                  final String storeName,
                                  final long totalRestored) {
-            toggleForBulkLoaidng(false);
+            toggleForBulkLoading(false);
         }
     }
 }
