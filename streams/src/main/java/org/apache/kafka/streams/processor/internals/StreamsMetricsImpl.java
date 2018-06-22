@@ -24,19 +24,20 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Count;
 import org.apache.kafka.common.metrics.stats.Max;
-import org.apache.kafka.common.metrics.stats.Meter;
+import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Objects;
-import java.util.List;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.TimeUnit;
 
 public class StreamsMetricsImpl implements StreamsMetrics {
     private static final Logger log = LoggerFactory.getLogger(StreamsMetricsImpl.class);
@@ -176,7 +177,9 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         MetricName totalMetricName = metrics.metricName(opName + "-total", groupNameFromScope(scopeName),
                 "The total number of occurrence of " + opName + " operations.", tags);
         if (!metrics.metrics().containsKey(rateMetricName) && !metrics.metrics().containsKey(totalMetricName)) {
-            sensor.add(new Meter(new Count(), rateMetricName, totalMetricName));
+            sensor.add(rateMetricName, new Rate(TimeUnit.SECONDS, new Count()));
+            sensor.add(totalMetricName, new Count());
+
         } else {
             log.trace("Trying to add metric twice: {} {}", rateMetricName, totalMetricName);
         }
