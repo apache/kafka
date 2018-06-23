@@ -22,7 +22,7 @@ import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 
-public class StatefulProcessorNode<K, V> extends StatelessProcessorNode<K, V> {
+public class StatefulProcessorNode<K, V> extends ProcessorNode<K, V> {
 
     private final String[] storeNames;
     private final StoreBuilder<KeyValueStore<K, V>> storeBuilder;

@@ -28,7 +28,7 @@ import java.util.List;
  * map, mapValues, flatMap, flatMapValues, filter, filterNot, branch
  *
  */
-public class StatelessProcessorNode<K, V> extends StreamsGraphNode {
+public class ProcessorNode<K, V> extends StreamsGraphNode {
 
     private final ProcessorParameters<K, V> processorParameters;
 
@@ -40,9 +40,9 @@ public class StatelessProcessorNode<K, V> extends StreamsGraphNode {
     private List<String> multipleParentNames = new ArrayList<>();
 
 
-    public StatelessProcessorNode(final String nodeName,
-                                  final ProcessorParameters processorParameters,
-                                  final boolean repartitionRequired) {
+    public ProcessorNode(final String nodeName,
+                         final ProcessorParameters processorParameters,
+                         final boolean repartitionRequired) {
 
         super(nodeName,
               repartitionRequired);
@@ -50,17 +50,22 @@ public class StatelessProcessorNode<K, V> extends StreamsGraphNode {
         this.processorParameters = processorParameters;
     }
 
-    public StatelessProcessorNode(final String nodeName,
-                           final ProcessorParameters processorParameters,
-                           final boolean repartitionRequired,
-                           final List<String> multipleParentNames) {
+    public ProcessorNode(final String nodeName,
+                         final ProcessorParameters processorParameters) {
+        this(nodeName, processorParameters, false);
+    }
+
+    public ProcessorNode(final String nodeName,
+                         final ProcessorParameters processorParameters,
+                         final boolean repartitionRequired,
+                         final List<String> multipleParentNames) {
 
         this(nodeName, processorParameters, repartitionRequired);
 
         this.multipleParentNames = new ArrayList<>(multipleParentNames);
     }
 
-    ProcessorParameters processorParameters() {
+    public ProcessorParameters processorParameters() {
         return processorParameters;
     }
 

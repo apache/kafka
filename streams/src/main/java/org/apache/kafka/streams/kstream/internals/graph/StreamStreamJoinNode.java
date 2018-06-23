@@ -33,10 +33,6 @@ public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
     private final StoreBuilder<WindowStore<K, V1>> thisWindowStoreBuilder;
     private final StoreBuilder<WindowStore<K, V2>> otherWindowStoreBuilder;
     private final Joined<K, V1, V2> joined;
-    private StreamsGraphNode leftHandSideGraphNode;
-    private StreamsGraphNode otherSideGraphNode;
-    private StreamsGraphNode lhsGraphParentNode;
-    private StreamsGraphNode otherSideGraphParentNode;
 
 
     StreamStreamJoinNode(final String nodeName,
@@ -44,13 +40,11 @@ public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
                          final ProcessorParameters<K, V1> joinThisProcessorParameters,
                          final ProcessorParameters<K, V2> joinOtherProcessParameters,
                          final ProcessorParameters<K, VR> joinMergeProcessorParameters,
-                         final ProcessorParameters<K, V1> thisWindowedStreamProcessorParameters,
-                         final ProcessorParameters<K, V2> otherWindowedStreamProcessorParameters,
                          final StoreBuilder<WindowStore<K, V1>> thisWindowStoreBuilder,
                          final StoreBuilder<WindowStore<K, V2>> otherWindowStoreBuilder,
                          final Joined<K, V1, V2> joined,
-                         final StreamsGraphNode leftHandSideGraphNode,
-                         final StreamsGraphNode otherSideGraphNode) {
+                         final StreamsGraphNode lhsWindowedStreamsNode,
+                         final StreamsGraphNode otherWindowedStreamsGraphNode) {
 
         super(nodeName,
               valueJoiner,
@@ -60,65 +54,19 @@ public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
               null,
               null);
 
-        this.thisWindowedStreamProcessorParameters = thisWindowedStreamProcessorParameters;
-        this.otherWindowedStreamProcessorParameters = otherWindowedStreamProcessorParameters;
         this.thisWindowStoreBuilder = thisWindowStoreBuilder;
         this.otherWindowStoreBuilder = otherWindowStoreBuilder;
         this.joined = joined;
-        this.leftHandSideGraphNode = leftHandSideGraphNode;
-        this.otherSideGraphNode = otherSideGraphNode;
-
-        /*
-           When building topology via DSL if a repartition is required for either
-           KStream instance involved in the join a repartition operation is created
-           and becomes a child node of the original StreamsGraphNode representing the
-           original KStream.
-
-           During optimization these individual repartition operations are removed in
-           favor of using a single repartition operation.  So we need to grab the
-           StreamsGraphNode parent (the original StreamsGraphNode involved in the join)
-
-         */
-
-        if (leftHandSideGraphNode instanceof BaseRepartitionNode) {
-            lhsGraphParentNode = leftHandSideGraphNode.parentNode();
-        }
-
-        if (otherSideGraphNode instanceof BaseRepartitionNode) {
-            otherSideGraphParentNode = otherSideGraphNode.parentNode();
-        }
-
+        this.thisWindowedStreamProcessorParameters = ((ProcessorNode) lhsWindowedStreamsNode).processorParameters();
+        this.otherWindowedStreamProcessorParameters = ((ProcessorNode) otherWindowedStreamsGraphNode).processorParameters();
 
     }
 
-    private String getLeftHandSideGraphNodeName() {
-        return getPrecedingProcessorName(leftHandSideGraphNode, lhsGraphParentNode);
-    }
 
-    private String getOtherSideGraphNodeName() {
-        return getPrecedingProcessorName(otherSideGraphNode, otherSideGraphParentNode);
-    }
-
-
-    private String getPrecedingProcessorName(final StreamsGraphNode streamsJoinGraphNode,
-                                             final StreamsGraphNode streamsJoinParentGraphNode) {
-        if (possibleRepartitionNodeRemovedByOptimization(streamsJoinGraphNode)) {
-            return streamsJoinParentGraphNode.nodeName();
-        }
-
-        return streamsJoinGraphNode.nodeName();
-    }
-
-    private boolean possibleRepartitionNodeRemovedByOptimization(final StreamsGraphNode graphNodeFromTopologyConstruction) {
-        return graphNodeFromTopologyConstruction instanceof OptimizableRepartitionNode
-               && graphNodeFromTopologyConstruction.parentNode() == null
-               && graphNodeFromTopologyConstruction.children().isEmpty();
-    }
 
     @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
-        topologyBuilder.addProcessor(thisWindowedStreamProcessorParameters.processorName(), thisWindowedStreamProcessorParameters.processorSupplier(), getLeftHandSideGraphNodeName());
-        topologyBuilder.addProcessor(otherWindowedStreamProcessorParameters.processorName(), otherWindowedStreamProcessorParameters.processorSupplier(), getOtherSideGraphNodeName());
+
         topologyBuilder.addProcessor(thisProcessorParameters().processorName(), thisProcessorParameters().processorSupplier(), thisWindowedStreamProcessorParameters.processorName());
         topologyBuilder.addProcessor(otherProcessorParameters().processorName(), otherProcessorParameters().processorSupplier(), otherWindowedStreamProcessorParameters.processorName());
         topologyBuilder.addProcessor(mergeProcessorParameters().processorName(), mergeProcessorParameters().processorSupplier(), thisProcessorParameters().processorName(), otherProcessorParameters().processorName());
@@ -137,8 +85,6 @@ public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
         private ProcessorParameters<K, V1> joinThisProcessorParameters;
         private ProcessorParameters<K, V2> joinOtherProcessorParameters;
         private ProcessorParameters<K, VR> joinMergeProcessorParameters;
-        private ProcessorParameters<K, V1> thisWindowedStreamProcessorParameters;
-        private ProcessorParameters<K, V2> otherWindowedStreamProcessorParameters;
         private StoreBuilder<WindowStore<K, V1>> thisWindowStoreBuilder;
         private StoreBuilder<WindowStore<K, V2>> otherWindowStoreBuilder;
         private Joined<K, V1, V2> joined;
@@ -160,11 +106,6 @@ public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
             return this;
         }
 
-        public StreamStreamJoinNodeBuilder<K, V1, V2, VR> withThisWindowedStreamProcessorParameters(final ProcessorParameters<K, V1> thisWindowedStreamProcessorParameters) {
-            this.thisWindowedStreamProcessorParameters = thisWindowedStreamProcessorParameters;
-            return this;
-        }
-
         public StreamStreamJoinNodeBuilder<K, V1, V2, VR> withNodeName(final String nodeName) {
             this.nodeName = nodeName;
             return this;
@@ -175,23 +116,17 @@ public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
             return this;
         }
 
-        public StreamStreamJoinNodeBuilder<K, V1, V2, VR> withOtherWindowedStreamProcessorParameters(
-            final ProcessorParameters<K, V2> otherWindowedStreamProcessorParameters) {
-            this.otherWindowedStreamProcessorParameters = otherWindowedStreamProcessorParameters;
-            return this;
-        }
-
         public StreamStreamJoinNodeBuilder<K, V1, V2, VR> withJoinMergeProcessorParameters(final ProcessorParameters<K, VR> joinMergeProcessorParameters) {
             this.joinMergeProcessorParameters = joinMergeProcessorParameters;
             return this;
         }
 
-        public StreamStreamJoinNodeBuilder<K, V1, V2, VR> withLeftHandSideStreamName(final StreamsGraphNode leftHandSideGraphNode) {
+        public StreamStreamJoinNodeBuilder<K, V1, V2, VR> withLeftHandWindowedStreamsGraphNode(final StreamsGraphNode leftHandSideGraphNode) {
             this.leftHandSideGraphNode = leftHandSideGraphNode;
             return this;
         }
 
-        public StreamStreamJoinNodeBuilder<K, V1, V2, VR> withOtherStreamName(final StreamsGraphNode otherSideGraphNode) {
+        public StreamStreamJoinNodeBuilder<K, V1, V2, VR> withOtherWindowedStreamsGraphNode(final StreamsGraphNode otherSideGraphNode) {
             this.otherSideGraphNode = otherSideGraphNode;
             return this;
         }
@@ -218,8 +153,6 @@ public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
                                               joinThisProcessorParameters,
                                               joinOtherProcessorParameters,
                                               joinMergeProcessorParameters,
-                                              thisWindowedStreamProcessorParameters,
-                                              otherWindowedStreamProcessorParameters,
                                               thisWindowStoreBuilder,
                                               otherWindowStoreBuilder,
                                               joined,

@@ -31,8 +31,8 @@ import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.ValueMapperWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.kstream.internals.graph.KTableKTableJoinNode;
+import org.apache.kafka.streams.kstream.internals.graph.ProcessorNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
-import org.apache.kafka.streams.kstream.internals.graph.StatelessProcessorNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.TableProcessorNode;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
@@ -310,9 +310,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         ProcessorSupplier kStreamMapValues = new KStreamMapValues<>((ValueMapperWithKey<K, Change<V>, V>) (key, change) -> change.newValue);
         ProcessorParameters processorParameters = new ProcessorParameters<K, V>(kStreamMapValues, name);
 
-        final StatelessProcessorNode<K, V> toStreamNode = new StatelessProcessorNode<>(name,
-                                                                                       processorParameters,
-                                                                                       false);
+        final ProcessorNode<K, V> toStreamNode = new ProcessorNode<>(name,
+                                                                     processorParameters,
+                                                                     false);
 
         addGraphNode(toStreamNode);
 
@@ -484,10 +484,10 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         ProcessorParameters processorParameters = new ProcessorParameters<>(selectSupplier, selectName);
 
         // select the aggregate key and values (old and new), it would require parent to send old values
-        final StatelessProcessorNode<K1, V1> graphNode = new StatelessProcessorNode<>(selectName,
-                                                                                      processorParameters,
-                                                                                      false,
-                                                                                      Collections.<String>emptyList());
+        final ProcessorNode<K1, V1> graphNode = new ProcessorNode<>(selectName,
+                                                                    processorParameters,
+                                                                    false,
+                                                                    Collections.<String>emptyList());
 
         addGraphNode(graphNode);
 
