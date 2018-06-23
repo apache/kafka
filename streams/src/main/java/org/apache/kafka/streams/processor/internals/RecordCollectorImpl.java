@@ -110,7 +110,7 @@ public class RecordCollectorImpl implements RecordCollector {
                             if (sendException == null) {
                                 log.error("Error sending record (key {} value {} timestamp {}) to topic {} due to {}; " +
                                                 "No more records will be sent and no more offsets will be recorded for this task.",
-                                        key, value, timestamp, topic, exception);
+                                        key, value, timestamp, topic, exception.toString());
                                 if (exception instanceof ProducerFencedException) {
                                     sendException = new ProducerFencedException(String.format("%sAbort sending since producer got fenced with a previous record (key %s value %s timestamp %d) to topic %s, error message: %s",
                                             logPrefix, key, value, timestamp, topic, exception.getMessage()));
