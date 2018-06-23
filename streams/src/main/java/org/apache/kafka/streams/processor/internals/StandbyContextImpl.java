@@ -217,7 +217,7 @@ class StandbyContextImpl extends AbstractProcessorContext implements RecordColle
     }
 
     @Override
-    public Long streamTime() {
+    public long streamTime() {
         throw new RuntimeException("Stream time is not implemented for the standby context.");
     }
 

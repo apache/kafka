@@ -28,13 +28,12 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.util.List;
-import java.util.function.Supplier;
 
 public class ProcessorContextImpl extends AbstractProcessorContext implements RecordCollector.Supplier {
 
     private final StreamTask task;
     private final RecordCollector collector;
-    private Supplier<Long> streamTimeSupplier;
+    private TimestampSupplier streamTimeSupplier;
     private final ToInternal toInternal = new ToInternal();
     private final static To SEND_TO_ALL = To.all();
 
@@ -56,7 +55,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
     @Override
     public RecordCollector recordCollector() {
-        return this.collector;
+        return collector;
     }
 
     /**
@@ -155,13 +154,13 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         return task.schedule(interval, type, callback);
     }
 
-    void setStreamTimeSupplier(final Supplier<Long> streamTimeSupplier) {
+    void setStreamTimeSupplier(final TimestampSupplier streamTimeSupplier) {
         this.streamTimeSupplier = streamTimeSupplier;
     }
 
     @Override
-    public Long streamTime() {
-        return this.streamTimeSupplier.get();
+    public long streamTime() {
+        return streamTimeSupplier.get();
     }
 
 }

@@ -64,5 +64,5 @@ public interface InternalProcessorContext extends ProcessorContext {
      */
     void uninitialize();
 
-    Long streamTime();
+    long streamTime();
 }
