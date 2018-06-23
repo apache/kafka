@@ -768,7 +768,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                         serializedInternal.keySerde(),
                                         serializedInternal.valueSerde(),
                                         this.repartitionRequired,
-                                        parentGraphNode);
+                                        streamsGraphNode);
 
     }
 
@@ -853,8 +853,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                 .withOtherWindowedStreamProcessorParameters(otherWindowStreamProcessorParams)
                 .withThisWindowStoreBuilder(thisWindow)
                 .withOtherWindowStoreBuilder(otherWindow)
-                .withLeftHandSideStreamName(((AbstractStream) lhs).parentGraphNode)
-                .withOtherStreamName(((AbstractStream) other).parentGraphNode)
+                .withLeftHandSideStreamName(((AbstractStream) lhs).streamsGraphNode)
+                .withOtherStreamName(((AbstractStream) other).streamsGraphNode)
                 .withValueJoiner(joiner)
                 .withNodeName(joinMergeName);
 

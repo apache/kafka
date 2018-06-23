@@ -165,7 +165,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
                                              keySerde,
                                              valSerde,
                                              repartitionRequired,
-                                             parentGraphNode);
+                                             streamsGraphNode);
     }
 
     @Override
@@ -177,7 +177,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
                                                 keySerde,
                                                 valSerde,
                                                 aggregateBuilder,
-                                                parentGraphNode);
+                                                streamsGraphNode);
     }
 
     private <T> KTable<K, T> doAggregate(final KStreamAggProcessorSupplier<K, ?, V, T> aggregateSupplier,

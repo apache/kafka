@@ -36,7 +36,7 @@ public abstract class AbstractStream<K> {
     protected final InternalStreamsBuilder builder;
     protected final String name;
     protected final Set<String> sourceNodes;
-    protected final StreamsGraphNode parentGraphNode;
+    protected final StreamsGraphNode streamsGraphNode;
 
     // This copy-constructor will allow to extend KStream
     // and KTable APIs with new methods without impacting the public interface.
@@ -44,13 +44,13 @@ public abstract class AbstractStream<K> {
         this.builder = stream.builder;
         this.name = stream.name;
         this.sourceNodes = stream.sourceNodes;
-        this.parentGraphNode = stream.parentGraphNode;
+        this.streamsGraphNode = stream.streamsGraphNode;
     }
 
     AbstractStream(final InternalStreamsBuilder builder,
                    final String name,
                    final Set<String> sourceNodes,
-                   final StreamsGraphNode parentGraphNode) {
+                   final StreamsGraphNode streamsGraphNode) {
         if (sourceNodes == null || sourceNodes.isEmpty()) {
             throw new IllegalArgumentException("parameter <sourceNodes> must not be null or empty");
         }
@@ -58,11 +58,11 @@ public abstract class AbstractStream<K> {
         this.builder = builder;
         this.name = name;
         this.sourceNodes = sourceNodes;
-        this.parentGraphNode = parentGraphNode;
+        this.streamsGraphNode = streamsGraphNode;
     }
 
     protected void addGraphNode(final StreamsGraphNode newNode) {
-        parentGraphNode.addChildNode(newNode);
+        streamsGraphNode.addChildNode(newNode);
         builder.maybeAddNodeForOptimizationMetadata(newNode);
 
     }
