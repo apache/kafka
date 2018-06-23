@@ -448,7 +448,7 @@ public class Sender implements Runnable {
                 transactionManager.transitionToFatalError(e);
                 break;
             } catch (IOException e) {
-                log.debug("Broker {} disconnected while awaiting InitProducerId response", e);
+                log.debug("Broker disconnected while awaiting InitProducerId response: {}", e);
             }
             log.trace("Retry InitProducerIdRequest in {}ms.", retryBackoffMs);
             time.sleep(retryBackoffMs);
