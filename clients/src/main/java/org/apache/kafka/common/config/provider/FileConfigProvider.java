@@ -19,11 +19,8 @@ package org.apache.kafka.common.config.provider;
 import org.apache.kafka.common.config.ConfigData;
 import org.apache.kafka.common.config.ConfigException;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.io.Reader;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.Enumeration;
@@ -98,7 +95,7 @@ public class FileConfigProvider implements ConfigProvider {
 
     // visible for testing
     protected Reader reader(String path) throws IOException {
-        return new BufferedReader(new InputStreamReader(Files.newInputStream(Paths.get(path)), StandardCharsets.UTF_8));
+        return Files.newBufferedReader(Paths.get(path));
     }
 
     public void close() {
