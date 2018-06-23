@@ -25,11 +25,11 @@ import org.slf4j.LoggerFactory;
 
 import java.io.EOFException;
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.ObjectOutputStream;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -79,7 +79,7 @@ public class FileOffsetBackingStore extends MemoryOffsetBackingStore {
                 ByteBuffer value = (mapEntry.getValue() != null) ? ByteBuffer.wrap(mapEntry.getValue()) : null;
                 data.put(key, value);
             }
-        } catch (FileNotFoundException | EOFException e) {
+        } catch (NoSuchFileException | EOFException e) {
             // FileNotFoundException: Ignore, may be new.
             // EOFException: Ignore, this means the file was missing or corrupt
         } catch (IOException | ClassNotFoundException e) {

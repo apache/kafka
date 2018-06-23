@@ -23,12 +23,12 @@ import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.EOFException;
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -150,7 +150,7 @@ public class OffsetCheckpoint {
                     default:
                         throw new IllegalArgumentException("Unknown offset checkpoint version: " + version);
                 }
-            } catch (final FileNotFoundException e) {
+            } catch (final NoSuchFileException e) {
                 return Collections.emptyMap();
             }
         }

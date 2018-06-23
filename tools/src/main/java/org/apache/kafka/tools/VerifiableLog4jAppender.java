@@ -25,7 +25,6 @@ import org.apache.kafka.common.utils.Exit;
 import org.apache.log4j.Logger;
 import org.apache.log4j.PropertyConfigurator;
 
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -162,7 +161,7 @@ public class VerifiableLog4jAppender {
      * we use VerifiableProducer from the development tools package, and run it against 0.8.X.X kafka jars.
      * Since this method is not in Utils in the 0.8.X.X jars, we have to cheat a bit and duplicate.
      */
-    public static Properties loadProps(String filename) throws IOException, FileNotFoundException {
+    public static Properties loadProps(String filename) throws IOException {
         Properties props = new Properties();
         try (InputStream propStream = Files.newInputStream(Paths.get(filename))) {
             props.load(propStream);
