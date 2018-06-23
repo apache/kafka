@@ -423,8 +423,9 @@ public class Sender implements Runnable {
 
     private void maybeWaitForProducerId() {
         while (!transactionManager.hasProducerId() && !transactionManager.hasError()) {
+            Node node = null;
             try {
-                Node node = awaitLeastLoadedNodeReady(requestTimeoutMs);
+                node = awaitLeastLoadedNodeReady(requestTimeoutMs);
                 if (node != null) {
                     ClientResponse response = sendAndAwaitInitProducerIdRequest(node);
                     InitProducerIdResponse initProducerIdResponse = (InitProducerIdResponse) response.responseBody();
@@ -448,7 +449,7 @@ public class Sender implements Runnable {
                 transactionManager.transitionToFatalError(e);
                 break;
             } catch (IOException e) {
-                log.debug("Broker disconnected while awaiting InitProducerId response: {}", e);
+                log.debug("Broker {} disconnected while awaiting InitProducerId response: {}", node, e);
             }
             log.trace("Retry InitProducerIdRequest in {}ms.", retryBackoffMs);
             time.sleep(retryBackoffMs);
