@@ -93,6 +93,12 @@ public class RepartitionOptimizingIntegrationTest {
 
     @Test
     public void shouldSendCorrectRecordsWithOptimization() throws Exception {
+       final MaybeOptimizedIntegrationTestRusults optimizedResults = runIntegrationTest(StreamsConfig.OPTIMIZE);
+
+    }
+
+
+    private MaybeOptimizedIntegrationTestRusults runIntegrationTest(final String optimizationConfig) throws Exception {
 
         Initializer<Integer> initializer = () -> 0;
         Aggregator<String, String, Integer> aggregator = (k, v, agg) -> agg + v.length();
@@ -109,7 +115,7 @@ public class RepartitionOptimizingIntegrationTest {
         mappedStream.groupByKey().aggregate(initializer, aggregator, Materialized.with(Serdes.String(), Serdes.Integer())).toStream().to(AGGREGATION_TOPIC, Produced.with(Serdes.String(), Serdes.Integer()));
         mappedStream.groupByKey().reduce(reducer, Materialized.with(Serdes.String(), Serdes.String())).toStream().to(REDUCE_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
 
-        streamsConfiguration.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);
+        streamsConfiguration.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION, optimizationConfig);
 
         final Properties producerConfig = TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, StringSerializer.class);
 
@@ -146,7 +152,14 @@ public class RepartitionOptimizingIntegrationTest {
         assertThat(receivedReduceKeyValues, equalTo(expectedReduceKeyValues));
 
         streams.close(5, TimeUnit.SECONDS);
+
+        return new MaybeOptimizedIntegrationTestRusults(receivedCountKeyValues,
+                                                        receivedAggKeyValues,
+                                                        receivedReduceKeyValues,
+                                                        topology.describe().toString());
+
     }
+
 
 
     private void deleteAndCreateTopicsAndCleanStreamsState() throws Exception {
