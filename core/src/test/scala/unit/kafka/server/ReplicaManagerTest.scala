@@ -24,10 +24,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kafka.log.LogConfig
 import kafka.utils.{MockScheduler, MockTime, TestUtils}
 import TestUtils.createBroker
-import kafka.api.Request
 import kafka.utils.timer.MockTimer
 import kafka.zk.KafkaZkClient
-import kafka.cluster.Replica
 import org.I0Itec.zkclient.ZkClient
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -66,74 +64,6 @@ class ReplicaManagerTest {
   @After
   def tearDown() {
     metrics.close()
-  }
-
-  @Test
-  // Verify that alterReplicaLogDirs() works while ReplicaAlterLogDirsThread is replacing current replica with future replica
-  def testAlterReplicaLogDirs() {
-    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, logDirCount = 3)
-    val config = KafkaConfig.fromProps(props)
-    val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)))
-
-    val replicaManager = new ReplicaManager(config, metrics, time, kafkaZkClient, new MockScheduler(time), mockLogMgr,
-      new AtomicBoolean(false), QuotaFactory.instantiate(config, metrics, time, ""), new BrokerTopicStats,
-      new MetadataCache(config.brokerId), new LogDirFailureChannel(config.logDirs.size)) {
-
-      override def getReplica(topicPartition: TopicPartition, replicaId: Int): Option[Replica] = {
-        val replica = super.getReplica(topicPartition, replicaId)
-
-        // This is to simulate a corner case in which request handler threads tries to stop current replica movement
-        // as part of ReplicaManager.alterReplicaLogDirs() while the ReplicaAlterLogDirsThread is replacing
-        // current replica with the future replica
-        // This method blocks non-ReplicaAlterLogDirsThread when there is ongoing replica movement between log directories.
-        if (!replicaAlterLogDirsManager.fetcherThreadMap.values.toSet.contains(Thread.currentThread())) {
-          TestUtils.waitUntilTrue(() =>
-            replicaAlterLogDirsManager.fetcherThreadMap.values.forall(_.partitionStates.size() == 0), "Timed out waiting for replica log dir to be altered ", 600000
-          )
-        }
-
-        replica
-      }
-    }
-
-    try {
-      val logDirs = config.logDirs.map(new File(_).getAbsolutePath)
-      val tp = new TopicPartition(topic, 0)
-      val partition = replicaManager.getOrCreatePartition(tp)
-      val brokerList = Seq[Integer](0).asJava
-
-      // Create replica in the first log dir
-      replicaManager.alterReplicaLogDirs(Map(tp -> logDirs(0)))
-      partition.getOrCreateReplica()
-
-      // Make this replica the leader.
-      val leaderAndIsrRequest1 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0,
-        collection.immutable.Map(tp -> new LeaderAndIsrRequest.PartitionState(0, 0, 0, brokerList, 0, brokerList, false)).asJava,
-        Set(new Node(0, "host1", 0)).asJava).build()
-      replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest1, (_, _) => ())
-      replicaManager.getLeaderReplicaIfLocal(new TopicPartition(topic, 0))
-
-      // Write a few batches
-      val numRecords = 10
-      val epoch = 5.toShort
-
-      for (sequence <- 0 until numRecords) {
-        val records = MemoryRecords.withRecords(CompressionType.NONE, epoch, new SimpleRecord(s"message $sequence".getBytes))
-        appendRecords(replicaManager, tp, records).onFire { response =>
-          assertEquals(Errors.NONE, response.error)
-        }
-      }
-
-      // Move replica to the second log dir
-      assertTrue(replicaManager.getReplica(tp, Request.FutureLocalReplicaId).isEmpty)
-      assertEquals(Map(tp -> Errors.NONE), replicaManager.alterReplicaLogDirs(Map(tp -> logDirs(1))))
-
-      // Move replica to the third log dir hopefully before the ongoing movement finishes
-      assertEquals(Map(tp -> Errors.NONE), replicaManager.alterReplicaLogDirs(Map(tp -> logDirs(2))))
-    } finally {
-      // shutdown the replica manager upon test completion
-      replicaManager.shutdown(false)
-    }
   }
 
   @Test
