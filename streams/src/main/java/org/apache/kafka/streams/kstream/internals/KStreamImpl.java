@@ -868,8 +868,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                 .withJoinOtherProcessorParameters(joinOtherProcessorParams)
                 .withThisWindowStoreBuilder(thisWindowStore)
                 .withOtherWindowStoreBuilder(otherWindowStore)
-                .withLeftHandWindowedStreamsGraphNode(thisWindowedStreamsNode)
-                .withOtherWindowedStreamsGraphNode(otherWindowedStreamsNode)
+                .withThisWindowedStreamProcessorParameters(thisWindowStreamProcessorParams)
+                .withOtherWindowedStreamProcessorParameters(otherWindowStreamProcessorParams)
                 .withValueJoiner(joiner)
                 .withNodeName(joinMergeName);
 

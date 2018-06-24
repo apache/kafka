@@ -40,11 +40,11 @@ public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
                          final ProcessorParameters<K, V1> joinThisProcessorParameters,
                          final ProcessorParameters<K, V2> joinOtherProcessParameters,
                          final ProcessorParameters<K, VR> joinMergeProcessorParameters,
+                         final ProcessorParameters<K, V1> thisWindowedStreamProcessorParameters,
+                         final ProcessorParameters<K, V2> otherWindowedStreamProcessorParameters,
                          final StoreBuilder<WindowStore<K, V1>> thisWindowStoreBuilder,
                          final StoreBuilder<WindowStore<K, V2>> otherWindowStoreBuilder,
-                         final Joined<K, V1, V2> joined,
-                         final StreamsGraphNode lhsWindowedStreamsNode,
-                         final StreamsGraphNode otherWindowedStreamsGraphNode) {
+                         final Joined<K, V1, V2> joined) {
 
         super(nodeName,
               valueJoiner,
@@ -57,8 +57,8 @@ public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
         this.thisWindowStoreBuilder = thisWindowStoreBuilder;
         this.otherWindowStoreBuilder = otherWindowStoreBuilder;
         this.joined = joined;
-        this.thisWindowedStreamProcessorParameters = ((ProcessorNode) lhsWindowedStreamsNode).processorParameters();
-        this.otherWindowedStreamProcessorParameters = ((ProcessorNode) otherWindowedStreamsGraphNode).processorParameters();
+        this.thisWindowedStreamProcessorParameters = thisWindowedStreamProcessorParameters;
+        this.otherWindowedStreamProcessorParameters =  otherWindowedStreamProcessorParameters;
 
     }
 
@@ -85,11 +85,11 @@ public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
         private ProcessorParameters<K, V1> joinThisProcessorParameters;
         private ProcessorParameters<K, V2> joinOtherProcessorParameters;
         private ProcessorParameters<K, VR> joinMergeProcessorParameters;
+        private ProcessorParameters<K, V1> thisWindowedStreamProcessorParameters;
+        private ProcessorParameters<K, V2> otherWindowedStreamProcessorParameters;
         private StoreBuilder<WindowStore<K, V1>> thisWindowStoreBuilder;
         private StoreBuilder<WindowStore<K, V2>> otherWindowStoreBuilder;
         private Joined<K, V1, V2> joined;
-        private StreamsGraphNode leftHandSideGraphNode;
-        private StreamsGraphNode otherSideGraphNode;
 
 
         private StreamStreamJoinNodeBuilder() {
@@ -121,13 +121,14 @@ public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
             return this;
         }
 
-        public StreamStreamJoinNodeBuilder<K, V1, V2, VR> withLeftHandWindowedStreamsGraphNode(final StreamsGraphNode leftHandSideGraphNode) {
-            this.leftHandSideGraphNode = leftHandSideGraphNode;
+        public StreamStreamJoinNodeBuilder<K, V1, V2, VR> withThisWindowedStreamProcessorParameters(final ProcessorParameters<K, V1> thisWindowedStreamProcessorParameters) {
+            this.thisWindowedStreamProcessorParameters = thisWindowedStreamProcessorParameters;
             return this;
         }
 
-        public StreamStreamJoinNodeBuilder<K, V1, V2, VR> withOtherWindowedStreamsGraphNode(final StreamsGraphNode otherSideGraphNode) {
-            this.otherSideGraphNode = otherSideGraphNode;
+        public StreamStreamJoinNodeBuilder<K, V1, V2, VR> withOtherWindowedStreamProcessorParameters(
+            final ProcessorParameters<K, V2> otherWindowedStreamProcessorParameters) {
+            this.otherWindowedStreamProcessorParameters = otherWindowedStreamProcessorParameters;
             return this;
         }
 
@@ -153,11 +154,11 @@ public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
                                               joinThisProcessorParameters,
                                               joinOtherProcessorParameters,
                                               joinMergeProcessorParameters,
+                                              thisWindowedStreamProcessorParameters,
+                                              otherWindowedStreamProcessorParameters,
                                               thisWindowStoreBuilder,
                                               otherWindowStoreBuilder,
-                                              joined,
-                                              leftHandSideGraphNode,
-                                              otherSideGraphNode);
+                                              joined);
 
 
         }
