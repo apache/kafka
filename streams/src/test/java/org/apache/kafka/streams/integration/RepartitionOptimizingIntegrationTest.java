@@ -41,7 +41,6 @@ import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
-import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
@@ -75,17 +74,6 @@ public class RepartitionOptimizingIntegrationTest {
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
     private final MockTime mockTime = CLUSTER.time;
 
-
-    @BeforeClass
-    public static void startKafkaCluster() throws InterruptedException {
-        CLUSTER.createTopics(INPUT_TOPIC,
-                             COUNT_TOPIC,
-                             AGGREGATION_TOPIC,
-                             REDUCE_TOPIC);
-
-    }
-
-
     @Before
     public void setUp() throws Exception {
         Properties props = new Properties();
@@ -99,8 +87,7 @@ public class RepartitionOptimizingIntegrationTest {
             BYTE_ARRAY_SERDES_CLASS_NAME,
             props);
 
-        // Remove any state from previous test runs
-        IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
+        deleteAndCreateTopicsAndCleanStreamsState();
     }
 
 
@@ -162,6 +149,16 @@ public class RepartitionOptimizingIntegrationTest {
     }
 
 
+    private void deleteAndCreateTopicsAndCleanStreamsState() throws Exception {
+        CLUSTER.deleteAndRecreateTopics(INPUT_TOPIC,
+                                        COUNT_TOPIC,
+                                        AGGREGATION_TOPIC,
+                                        REDUCE_TOPIC);
+
+        // Remove any state from previous test runs
+        IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
+    }
+
     private List<KeyValue<String, String>> getKeyValues() {
         List<KeyValue<String, String>> keyValueList = new ArrayList<>();
         String[] keys = new String[]{"a", "b", "c"};
@@ -172,6 +169,26 @@ public class RepartitionOptimizingIntegrationTest {
             }
         }
         return keyValueList;
+    }
+
+
+    private static class MaybeOptimizedIntegrationTestRusults {
+
+        final List<KeyValue<String, Long>> receivedCountKeyValues;
+        final List<KeyValue<String, Integer>> receivedAggKeyValues;
+        final List<KeyValue<String, Integer>> receivedReduceKeyValues;
+        final String topology;
+
+        public MaybeOptimizedIntegrationTestRusults(final List<KeyValue<String, Long>> receivedCountKeyValues,
+                                                    final List<KeyValue<String, Integer>> receivedAggKeyValues,
+                                                    final List<KeyValue<String, Integer>> receivedReduceKeyValues,
+                                                    final String topology) {
+
+            this.receivedCountKeyValues = new ArrayList<>(receivedCountKeyValues);
+            this.receivedAggKeyValues = new ArrayList<>(receivedAggKeyValues);
+            this.receivedReduceKeyValues = new ArrayList<>(receivedReduceKeyValues);
+            this.topology = topology;
+        }
     }
 
 }
